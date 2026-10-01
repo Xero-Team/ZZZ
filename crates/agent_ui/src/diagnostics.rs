@@ -4,7 +4,7 @@ use i18n as app_i18n;
 use language::{Anchor, BufferSnapshot, DiagnosticEntryRef, DiagnosticSeverity, ToOffset};
 use project::{DiagnosticSummary, Project};
 use rope::Point;
-use std::{fmt::Write, ops::RangeInclusive, path::Path};
+use std::{ops::RangeInclusive, path::Path};
 use text::OffsetRangeExt;
 use util::ResultExt;
 use util::paths::PathMatcher;
@@ -17,22 +17,24 @@ pub fn codeblock_fence_for_path(
     path: Option<&str>,
     row_range: Option<RangeInclusive<u32>>,
 ) -> String {
-    let mut text = String::new();
-    write!(text, "```").expect("value should be present");
+    let mut text = "```".to_owned();
 
     if let Some(path) = path {
         if let Some(extension) = Path::new(path).extension().and_then(|ext| ext.to_str()) {
-            write!(text, "{} ", extension).expect("value should be present");
+            text.push_str(extension);
+            text.push(' ');
         }
 
-        write!(text, "{path}").expect("value should be present");
+        text.push_str(path);
     } else {
-        write!(text, "untitled").expect("value should be present");
+        text.push_str("untitled");
     }
 
     if let Some(row_range) = row_range {
-        write!(text, ":{}-{}", row_range.start() + 1, row_range.end() + 1)
-            .expect("value should be present");
+        text.push(':');
+        text.push_str(&(row_range.start() + 1).to_string());
+        text.push('-');
+        text.push_str(&(row_range.end() + 1).to_string());
     }
 
     text.push('\n');
@@ -94,10 +96,13 @@ pub fn collect_diagnostics(
 
         let mut text = String::new();
         if let Some(error_source) = error_source.as_ref() {
-            writeln!(text, "{}: {}", diagnostics_label, error_source)
-                .expect("value should be present");
+            text.push_str(&diagnostics_label);
+            text.push_str(": ");
+            text.push_str(error_source);
+            text.push('\n');
         } else {
-            writeln!(text, "{}", diagnostics_label).expect("value should be present");
+            text.push_str(&diagnostics_label);
+            text.push('\n');
         }
 
         let mut found_any_diagnostics = false;
@@ -115,26 +120,16 @@ pub fn collect_diagnostics(
                 continue;
             }
 
-            if options.include_errors {
-                project_summary.error_count += summary.error_count;
-            }
-            if options.include_warnings {
-                project_summary.warning_count += summary.warning_count;
-            }
-
             let file_path = path.display(path_style).to_string();
-            if !glob_is_exact_file_match {
-                writeln!(&mut text, "{file_path}").expect("value should be present");
-            }
-
             if let Some(buffer) = project_handle
                 .update(cx, |project, cx| project.open_buffer(project_path, cx))?
                 .await
                 .log_err()
             {
                 let snapshot = cx.read_entity(&buffer, |buffer, _| buffer.snapshot());
+                let mut buffer_diagnostics = String::new();
                 if collect_buffer_diagnostics(
-                    &mut text,
+                    &mut buffer_diagnostics,
                     &snapshot,
                     options.include_warnings,
                     options.include_errors,
@@ -142,6 +137,17 @@ pub fn collect_diagnostics(
                     &error_label,
                 ) {
                     found_any_diagnostics = true;
+                    if options.include_errors {
+                        project_summary.error_count += summary.error_count;
+                    }
+                    if options.include_warnings {
+                        project_summary.warning_count += summary.warning_count;
+                    }
+                    if !glob_is_exact_file_match {
+                        text.push_str(&file_path);
+                        text.push('\n');
+                    }
+                    text.push_str(&buffer_diagnostics);
                 }
             }
         }
@@ -152,43 +158,36 @@ pub fn collect_diagnostics(
 
         let mut label = diagnostics_title;
         if let Some(source) = error_source {
-            write!(label, " ({})", source).expect("value should be present");
+            label.push_str(" (");
+            label.push_str(source);
+            label.push(')');
         }
 
         if project_summary.error_count > 0 || project_summary.warning_count > 0 {
             label.push(':');
 
             if project_summary.error_count > 0 {
-                write!(
-                    label,
-                    " {}",
-                    errors_count_template.replacen(
-                        "{}",
-                        &project_summary.error_count.to_string(),
-                        1
-                    )
-                )
-                .expect("value should be present");
+                label.push(' ');
+                label.push_str(&errors_count_template.replacen(
+                    "{}",
+                    &project_summary.error_count.to_string(),
+                    1,
+                ));
                 if project_summary.warning_count > 0 {
                     label.push(',');
                 }
             }
 
             if project_summary.warning_count > 0 {
-                write!(
-                    label,
-                    " {}",
-                    warnings_count_template.replacen(
-                        "{}",
-                        &project_summary.warning_count.to_string(),
-                        1
-                    )
-                )
-                .expect("value should be present");
+                label.push(' ');
+                label.push_str(&warnings_count_template.replacen(
+                    "{}",
+                    &project_summary.warning_count.to_string(),
+                    1,
+                ));
             }
         }
 
-        // Prepend the summary label to the output.
         text.insert_str(0, &format!("{label}\n"));
 
         Ok(Some(text))
@@ -276,21 +275,25 @@ fn collect_diagnostic(
 
     for (i, line) in buffer_text.lines().enumerate() {
         let line_number = start_row + i as u32 + 1;
-        writeln!(text, "{}", line).expect("value should be present");
+        text.push_str(line);
+        text.push('\n');
 
         if line_number == diagnostic_row_number {
             text.push_str("//");
             let marker_start = text.len();
-            write!(text, " {}: ", ty).expect("value should be present");
+            text.push(' ');
+            text.push_str(ty);
+            text.push_str(": ");
             let padding = text.len() - marker_start;
 
             let message = util::truncate(&entry.diagnostic.message, MAX_MESSAGE_LENGTH)
                 .replace('\n', format!("\n//{:padding$}", "").as_str());
 
-            writeln!(text, "{message}").expect("value should be present");
+            text.push_str(&message);
+            text.push('\n');
         }
     }
 
-    writeln!(text, "```").expect("value should be present");
+    text.push_str("```\n");
     true
 }
