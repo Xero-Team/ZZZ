@@ -611,6 +611,12 @@ impl TelegramPanel {
         self.engine.send(Command::Start);
     }
 
+    /// Sends a command to the engine and schedules a re-render.
+    fn dispatch(&mut self, command: Command, cx: &mut Context<Self>) {
+        self.engine.send(command);
+        cx.notify();
+    }
+
     /// The current chat list, used by the forward picker.
     pub fn chats(&self) -> &[ChatSnapshot] {
         &self.view_model.chats
@@ -2132,10 +2138,9 @@ impl TelegramPanel {
                             "Use phone number instead",
                         ),
                     )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.engine.send(Command::CancelLogin);
-                        cx.notify();
-                    })),
+                    .on_click(
+                        cx.listener(|this, _, _, cx| this.dispatch(Command::CancelLogin, cx)),
+                    ),
                 );
             }
             AuthState::AwaitingCode { phone } => {
@@ -2210,10 +2215,9 @@ impl TelegramPanel {
                             "telegram_panel.error.dismiss",
                             "Dismiss",
                         )))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.engine.send(Command::DismissError);
-                            cx.notify();
-                        })),
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.dispatch(Command::DismissError, cx)),
+                        ),
                 )
                 .into_any_element(),
         )
@@ -2497,8 +2501,7 @@ fn render_message(
                         if let Some(local_id) = local_id {
                             panel
                                 .update(cx, |panel, cx| {
-                                    panel.engine.send(Command::RetrySend { chat_id, local_id });
-                                    cx.notify();
+                                    panel.dispatch(Command::RetrySend { chat_id, local_id }, cx)
                                 })
                                 .ok();
                         }
@@ -2560,8 +2563,7 @@ fn wrap_in_context_menu(
                         move |_, cx| {
                             panel
                                 .update(cx, |panel, cx| {
-                                    panel.engine.send(Command::MarkRead { chat_id });
-                                    cx.notify();
+                                    panel.dispatch(Command::MarkRead { chat_id }, cx)
                                 })
                                 .ok();
                         }
@@ -2587,11 +2589,13 @@ fn wrap_in_context_menu(
                     move |_, cx| {
                         panel
                             .update(cx, |panel, cx| {
-                                panel.engine.send(Command::DeleteMessage {
-                                    chat_id,
-                                    message_id,
-                                });
-                                cx.notify();
+                                panel.dispatch(
+                                    Command::DeleteMessage {
+                                        chat_id,
+                                        message_id,
+                                    },
+                                    cx,
+                                )
                             })
                             .ok();
                     }
@@ -2607,11 +2611,13 @@ fn wrap_in_context_menu(
                 move |_, cx| {
                     panel
                         .update(cx, |panel, cx| {
-                            panel.engine.send(Command::SetPinned {
-                                chat_id,
-                                pinned: !is_pinned,
-                            });
-                            cx.notify();
+                            panel.dispatch(
+                                Command::SetPinned {
+                                    chat_id,
+                                    pinned: !is_pinned,
+                                },
+                                cx,
+                            )
                         })
                         .ok();
                 }
@@ -2837,11 +2843,13 @@ fn render_media_preview(
                     } else {
                         panel
                             .update(cx, |panel, cx| {
-                                panel.engine.send(Command::DownloadMedia {
-                                    chat_id,
-                                    message_id,
-                                });
-                                cx.notify();
+                                panel.dispatch(
+                                    Command::DownloadMedia {
+                                        chat_id,
+                                        message_id,
+                                    },
+                                    cx,
+                                )
                             })
                             .ok();
                     }
@@ -2936,11 +2944,13 @@ fn render_media_action(
         this.on_click(move |_, _, cx| {
             panel
                 .update(cx, |panel, cx| {
-                    panel.engine.send(Command::DownloadMedia {
-                        chat_id,
-                        message_id,
-                    });
-                    cx.notify();
+                    panel.dispatch(
+                        Command::DownloadMedia {
+                            chat_id,
+                            message_id,
+                        },
+                        cx,
+                    )
                 })
                 .ok();
         })
@@ -4160,12 +4170,12 @@ pub fn register(workspace: &mut Workspace, _cx: &mut Context<Workspace>) {
 
 fn with_panel(
     workspace: &mut Workspace,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut Context<Workspace>,
     f: impl FnOnce(&mut TelegramPanel, &mut Window, &mut Context<TelegramPanel>),
 ) {
     if let Some(panel) = workspace.panel::<TelegramPanel>(cx) {
-        panel.update(cx, |panel, cx| f(panel, _window, cx));
+        panel.update(cx, |panel, cx| f(panel, window, cx));
     }
 }
 
