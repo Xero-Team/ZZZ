@@ -1726,10 +1726,17 @@ impl PickerDelegate for DebugDelegate {
 }
 
 pub(crate) fn resolve_path(path: &mut String) {
-    if path.starts_with('~') {
-        let home = paths::home_dir().to_string_lossy().into_owned();
-        let trimmed_path = path.trim().to_owned();
-        *path = trimmed_path.replacen('~', &home, 1);
+    let trimmed_path = path.trim();
+    if trimmed_path == "~" {
+        *path = paths::home_dir().to_string_lossy().into_owned();
+    } else if let Some(relative_path) = trimmed_path
+        .strip_prefix('~')
+        .and_then(|path| path.strip_prefix(std::path::MAIN_SEPARATOR))
+    {
+        *path = paths::home_dir()
+            .join(relative_path)
+            .to_string_lossy()
+            .into_owned();
     } else if let Some(strip_path) = path.strip_prefix(&format!(".{}", std::path::MAIN_SEPARATOR)) {
         *path = format!(
             "$ZZZ_WORKTREE_ROOT{}{}",

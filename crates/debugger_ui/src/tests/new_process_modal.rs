@@ -74,6 +74,7 @@ async fn test_debug_session_substitutes_variables_and_relativizes_paths(
                 .to_string()
                 .leak(),
         ),
+        ("~other/src/program", "~other/src/program"),
         // Path with $ZZZ_WORKTREE_ROOT - should be substituted without double appending
         (
             format!(
