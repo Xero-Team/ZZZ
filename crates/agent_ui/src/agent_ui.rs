@@ -141,16 +141,14 @@ pub(crate) fn open_abs_path_at_point(
             let Some(editor) = item.downcast::<Editor>() else {
                 return Ok(());
             };
-            editor
-                .update_in(cx, |editor, window, cx| {
-                    editor.change_selections(
-                        SelectionEffects::scroll(Autoscroll::center()),
-                        window,
-                        cx,
-                        |selections| selections.select_ranges([point..point]),
-                    );
-                })
-                .ok();
+            editor.update_in(cx, |editor, window, cx| {
+                editor.change_selections(
+                    SelectionEffects::scroll(Autoscroll::center()),
+                    window,
+                    cx,
+                    |selections| selections.select_ranges([point..point]),
+                );
+            })?;
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);
@@ -591,7 +589,7 @@ pub(crate) fn humanize_token_count(count: u64) -> String {
     }
 }
 
-/// Initializes the `agent` crate.
+/// Initializes the `agent_ui` crate.
 pub fn init(
     fs: Arc<dyn Fs>,
     language_registry: Arc<LanguageRegistry>,
