@@ -57,6 +57,16 @@ register_feature_flag!(DebuggerHistoryFeatureFlag);
 
 const DEBUG_PANEL_KEY: &str = "DebugPanel";
 
+fn scenario_definition_row(content: &str, label: &str) -> Option<usize> {
+    content
+        .lines()
+        .enumerate()
+        .filter_map(|(row, text)| {
+            (text.contains(label) && text.contains("\"label\": ")).then_some(row)
+        })
+        .last()
+}
+
 pub struct DebugPanel {
     active_session: Option<Entity<DebugSession>>,
     project: Entity<Project>,
@@ -1177,17 +1187,9 @@ impl DebugPanel {
                 .update(|_, cx| editor.act_as::<Editor>(cx))?
                 .context("expected editor")?;
 
-            // unfortunately debug tasks don't have an easy way to globally
-            // identify them. to jump to the one that you just created or an
-            // old one that you're choosing to edit we use a heuristic of searching for a line with `label:  <your label>` from the end rather than the start so we bias towards more renctly
             editor.update_in(cx, |editor, window, cx| {
-                let row = editor.text(cx).lines().enumerate().find_map(|(row, text)| {
-                    if text.contains(scenario.label.as_ref()) && text.contains("\"label\": ") {
-                        Some(row)
-                    } else {
-                        None
-                    }
-                });
+                // Debug tasks lack stable IDs, so prefer the latest matching label.
+                let row = scenario_definition_row(&editor.text(cx), scenario.label.as_ref());
                 if let Some(row) = row {
                     editor.go_to_singleton_buffer_point(
                         text::Point::new(row as u32, 4),
@@ -2038,6 +2040,22 @@ impl Render for DebugPanel {
                 }
             })
             .into_any()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scenario_definition_row;
+
+    #[test]
+    fn scenario_definition_row_prefers_the_last_matching_label() {
+        let content = r#"[
+  { "label": "Debug App", "program": "old" },
+  { "label": "Other", "program": "other" },
+  { "label": "Debug App", "program": "new" }
+]"#;
+
+        assert_eq!(scenario_definition_row(content, "Debug App"), Some(3));
     }
 }
 
