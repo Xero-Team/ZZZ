@@ -816,11 +816,11 @@ impl AgentPanel {
         mut cx: AsyncWindowContext,
     ) -> Task<Result<Entity<Self>>> {
         let prompt_store = cx.update(|_window, cx| PromptStore::global(cx));
-        let kvp = cx.update(|_window, cx| KeyValueStore::global(cx)).ok();
+        let kvp = cx.update(|_window, cx| KeyValueStore::global(cx)).log_err();
         cx.spawn(async move |cx| {
-            let prompt_store = match prompt_store {
-                Ok(prompt_store) => prompt_store.await.ok(),
-                Err(_) => None,
+            let prompt_store = match prompt_store.log_err() {
+                Some(prompt_store) => prompt_store.await.log_err(),
+                None => None,
             };
             let workspace_id = workspace
                 .read_with(cx, |workspace, _| workspace.database_id())
@@ -1455,10 +1455,10 @@ impl AgentPanel {
                         let agent_buffer_font_size =
                             ThemeSettings::get_global(cx).agent_buffer_font_size(cx) + delta;
 
-                        let _ = settings.theme.agent_ui_font_size.insert(
+                        settings.theme.agent_ui_font_size = Some(
                             f32::from(theme_settings::clamp_font_size(agent_ui_font_size)).into(),
                         );
-                        let _ = settings.theme.agent_buffer_font_size.insert(
+                        settings.theme.agent_buffer_font_size = Some(
                             f32::from(theme_settings::clamp_font_size(agent_buffer_font_size))
                                 .into(),
                         );
@@ -1750,7 +1750,9 @@ impl AgentPanel {
         };
 
         let json = thread_metadata_to_debug_json(cx, &metadata);
-        let text = serde_json::to_string_pretty(&json).unwrap_or_default();
+        let Some(text) = serde_json::to_string_pretty(&json).log_err() else {
+            return;
+        };
         let title = app_i18n::tr(
             cx,
             "agent_ui.panel.thread_metadata_title",
@@ -1796,7 +1798,9 @@ impl AgentPanel {
             .collect();
 
         let json = serde_json::Value::Array(entries);
-        let text = serde_json::to_string_pretty(&json).unwrap_or_default();
+        let Some(text) = serde_json::to_string_pretty(&json).log_err() else {
+            return;
+        };
 
         self.open_json_buffer(
             app_i18n::tr(
@@ -1823,7 +1827,7 @@ impl AgentPanel {
 
         window
             .spawn(cx, async move |cx| {
-                let json_language = json_language.await.ok();
+                let json_language = json_language.await.log_err();
 
                 let buffer = project
                     .update(cx, |project, cx| {
@@ -3107,24 +3111,6 @@ impl AgentPanel {
         };
 
         let use_v2_empty_toolbar = is_empty_state && !is_in_history_or_config;
-        let empty_thread_title = use_v2_empty_toolbar.then(|| {
-            self.active_thread_id(cx)
-                .and_then(|thread_id| self.editor_text(thread_id, cx))
-                .and_then(|text| crate::thread_title_from_prompt(&text))
-                .map_or_else(
-                    || {
-                        Label::new(
-                            tr(cx, "agent_ui.panel.new_thread_for_agent", "New {} Thread")
-                                .replacen("{}", selected_agent_label.as_ref(), 1),
-                        )
-                        .color(Color::Muted)
-                        .truncate()
-                        .into_any_element()
-                    },
-                    |title| Label::new(title).truncate().into_any_element(),
-                )
-        });
-
         let max_content_width = AgentSettings::get_global(cx).max_content_width;
 
         let base_container = h_flex()
@@ -3155,6 +3141,22 @@ impl AgentPanel {
                 .anchor(Anchor::TopRight)
                 .with_handle(self.new_thread_menu_handle.clone())
                 .menu(move |window, cx| new_thread_menu_builder(window, cx));
+            let empty_thread_title = self
+                .active_thread_id(cx)
+                .and_then(|thread_id| self.editor_text(thread_id, cx))
+                .and_then(|text| crate::thread_title_from_prompt(&text))
+                .map_or_else(
+                    || {
+                        Label::new(
+                            tr(cx, "agent_ui.panel.new_thread_for_agent", "New {} Thread")
+                                .replacen("{}", selected_agent_label.as_ref(), 1),
+                        )
+                        .color(Color::Muted)
+                        .truncate()
+                        .into_any_element()
+                    },
+                    |title| Label::new(title).truncate().into_any_element(),
+                );
 
             base_container
                 .child(
@@ -3163,7 +3165,7 @@ impl AgentPanel {
                         .gap(DynamicSpacing::Base04.rems(cx))
                         .pl(DynamicSpacing::Base04.rems(cx))
                         .child(selected_agent.into_any_element())
-                        .child(empty_thread_title.expect("empty toolbar should have a title")),
+                        .child(empty_thread_title),
                 )
                 .child(
                     h_flex()
@@ -3233,23 +3235,6 @@ impl AgentPanel {
             .border_b_1()
             .border_color(cx.theme().colors().border)
             .child(toolbar_content)
-    }
-
-    fn should_render_trial_end_upsell(&self, cx: &mut Context<Self>) -> bool {
-        let _ = cx;
-        false
-    }
-
-    fn render_trial_end_upsell(
-        &self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement> {
-        if !self.should_render_trial_end_upsell(cx) {
-            return None;
-        }
-
-        None::<Div>
     }
 
     fn render_drag_target(&self, cx: &Context<Self>) -> Div {
@@ -3393,8 +3378,7 @@ impl Render for AgentPanel {
                 VisibleSurface::Configuration(configuration) => {
                     parent.children(configuration.cloned())
                 }
-            })
-            .children(self.render_trial_end_upsell(window, cx));
+            });
 
         match self.visible_font_size() {
             WhichFontSize::AgentFont => {
@@ -3560,6 +3544,7 @@ mod tests {
     use gpui::{App, TestAppContext, UpdateGlobal as _, VisualTestContext};
     use parking_lot::Mutex;
     use project::Project;
+    use project::agent_server_store::CustomAgentServerSettings;
     use std::any::Any;
 
     use serde_json::json;
@@ -3567,6 +3552,32 @@ mod tests {
     use std::sync::Arc;
     use std::time::Instant;
     use workspace::MultiWorkspace;
+
+    fn register_test_agents(cx: &mut TestAppContext, agent_ids: &[&str]) {
+        cx.update(|cx| {
+            AllAgentServersSettings::override_global(
+                AllAgentServersSettings(
+                    agent_ids
+                        .iter()
+                        .map(|agent_id| {
+                            (
+                                (*agent_id).to_owned(),
+                                CustomAgentServerSettings::Registry {
+                                    env: HashMap::default(),
+                                    default_mode: None,
+                                    default_model: None,
+                                    favorite_models: Vec::new(),
+                                    default_config_options: HashMap::default(),
+                                    favorite_config_option_values: HashMap::default(),
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
+                cx,
+            );
+        });
+    }
 
     #[derive(Clone, Default)]
     struct SessionTrackingConnection {
@@ -3717,6 +3728,7 @@ mod tests {
     #[gpui::test]
     async fn test_active_thread_serialize_and_load_round_trip(cx: &mut TestAppContext) {
         init_test(cx);
+        register_test_agents(cx, &["Test", "claude-acp"]);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
         });
@@ -5225,6 +5237,7 @@ mod tests {
     #[gpui::test]
     async fn test_new_workspace_inherits_global_last_used_agent(cx: &mut TestAppContext) {
         init_test(cx);
+        register_test_agents(cx, &["my-preferred-agent"]);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
             // Use an isolated DB so parallel tests can't overwrite our global key.
@@ -5277,6 +5290,7 @@ mod tests {
     #[gpui::test]
     async fn test_workspaces_maintain_independent_agent_selection(cx: &mut TestAppContext) {
         init_test(cx);
+        register_test_agents(cx, &["agent-alpha", "agent-beta"]);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
         });
@@ -5426,6 +5440,7 @@ mod tests {
     #[gpui::test]
     async fn test_draft_replaced_when_selected_agent_changes(cx: &mut TestAppContext) {
         init_test(cx);
+        register_test_agents(cx, &["first-agent", "second-agent"]);
         let fs = FakeFs::new(cx.executor());
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
@@ -5455,23 +5470,26 @@ mod tests {
             panel
         });
 
-        // Create a draft with the default state (NativeAgent is the stale-data default that shows onboarding).
+        let first_agent = Agent::Custom {
+            id: "first-agent".into(),
+        };
         panel.update_in(cx, |panel, window, cx| {
+            panel.selected_agent = first_agent.clone();
             panel.activate_draft(true, "agent_panel", window, cx);
         });
 
         let first_draft_id = panel.read_with(cx, |panel, cx| {
             assert!(panel.draft_thread.is_some());
-            assert_eq!(panel.selected_agent, Agent::Absent);
+            assert_eq!(panel.selected_agent, first_agent);
             let draft = panel.draft_thread.as_ref().unwrap();
-            assert_eq!(*draft.read(cx).agent_key(), Agent::Absent);
+            assert_eq!(*draft.read(cx).agent_key(), first_agent);
             draft.entity_id()
         });
 
-        // Switch selected_agent to a custom agent, then activate_draft again.
-        // The stale NativeAgent draft should be replaced.
+        // Switch to another agent, then activate_draft again.
+        // The first agent's draft should be replaced.
         let custom_agent = Agent::Custom {
-            id: "my-custom-agent".into(),
+            id: "second-agent".into(),
         };
         panel.update_in(cx, |panel, window, cx| {
             panel.selected_agent = custom_agent.clone();
@@ -6602,6 +6620,7 @@ mod tests {
     #[gpui::test]
     async fn test_initialize_from_source_transfers_draft_to_fresh_panel(cx: &mut TestAppContext) {
         init_test(cx);
+        register_test_agents(cx, &["Test"]);
         cx.update(|cx| {
             agent::ThreadStore::init_global(cx);
         });
