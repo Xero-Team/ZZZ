@@ -58,14 +58,16 @@ impl ModuleList {
 
     fn schedule_rebuild(&mut self, cx: &mut Context<Self>) {
         self._rebuild_task = Some(cx.spawn(async move |this, cx| {
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, cx| {
                 let modules = this
                     .session
                     .update(cx, |session, cx| session.modules(cx).to_owned());
                 this.entries = modules;
                 cx.notify();
-            })
-            .ok();
+            });
         }));
     }
 
@@ -118,7 +120,7 @@ impl ModuleList {
 
             anyhow::Ok(())
         })
-        .detach();
+        .detach_and_log_err(cx);
     }
 
     fn render_entry(&mut self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
