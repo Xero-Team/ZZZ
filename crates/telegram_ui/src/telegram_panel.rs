@@ -42,7 +42,9 @@ use ui::{
 use ui::{ContextMenu, ContextMenuEntry, right_click_menu};
 use workspace::dock::{DockPosition, Panel, PanelEvent};
 use workspace::notifications::NotificationId;
-use workspace::{DraggedSelection, DraggedTab, HideStatusItem, OpenOptions, Toast, Workspace};
+use workspace::{
+    DraggedSelection, DraggedTab, HideStatusItem, ItemHandle, OpenOptions, Toast, Workspace,
+};
 
 use crate::telegram_panel_settings::{TelegramPanelSettings, TelegramSettings};
 
@@ -173,7 +175,6 @@ pub struct TelegramPanel {
     engine: Arc<EngineHandle>,
     view_model: Arc<ViewModel>,
     mode: ViewMode,
-    started: bool,
     chat_list_state: ListState,
     history_list_state: ListState,
     search_list_state: ListState,
@@ -335,7 +336,6 @@ impl TelegramPanel {
             engine,
             view_model: Arc::new(ViewModel::default()),
             mode: ViewMode::ChatList,
-            started: false,
             chat_list_state: ListState::new(0, ListAlignment::Top, px(100.)),
             history_list_state: ListState::new(0, ListAlignment::Bottom, px(2048.)),
             search_list_state: ListState::new(0, ListAlignment::Top, px(100.)),
@@ -608,9 +608,6 @@ impl TelegramPanel {
     }
 
     fn start_engine(&mut self) {
-        if !self.started {
-            self.started = true;
-        }
         self.engine.send(Command::Start);
     }
 
@@ -1161,7 +1158,6 @@ impl TelegramPanel {
         if phone.trim().is_empty() {
             return;
         }
-        self.started = true;
         self.engine.send(Command::Start);
         self.engine.send(Command::SubmitPhone {
             phone: phone.trim().to_owned(),
@@ -1737,8 +1733,10 @@ impl TelegramPanel {
         let layout = self.history_layout.clone();
         let markdown = Arc::new(self.markdown_cache.clone());
         let panel = cx.entity().downgrade();
-        let outgoing_background = cx.theme().colors().element_background;
-        let incoming_background = cx.theme().colors().editor_background;
+        let colors = MessageBubbleColors {
+            outgoing: cx.theme().colors().element_background,
+            incoming: cx.theme().colors().editor_background,
+        };
         let max_content_width = TelegramPanelSettings::get_global(cx).max_content_width;
 
         let transcript = list(self.history_list_state.clone(), move |index, window, cx| {
@@ -1751,8 +1749,7 @@ impl TelegramPanel {
                 &message_layout,
                 &markdown,
                 &panel,
-                outgoing_background,
-                incoming_background,
+                colors,
                 window,
                 cx,
             );
@@ -2102,7 +2099,6 @@ impl TelegramPanel {
                         tr(cx, "telegram_panel.auth.qr_sign_in", "Sign in with QR code"),
                     )
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.started = true;
                         this.engine.send(Command::Start);
                         this.engine.send(Command::StartQrLogin);
                         cx.notify();
@@ -2406,14 +2402,19 @@ fn build_qr_image(url: &str) -> Option<Arc<RenderImage>> {
     Some(Arc::new(RenderImage::new(vec![image::Frame::new(buffer)])))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The bubble background for outgoing and incoming messages.
+#[derive(Clone, Copy)]
+struct MessageBubbleColors {
+    outgoing: Hsla,
+    incoming: Hsla,
+}
+
 fn render_message(
     message: &MessageSnapshot,
     layout: &MessageLayout,
     markdown: &HashMap<MessageKey, Entity<Markdown>>,
     panel: &WeakEntity<TelegramPanel>,
-    outgoing_background: gpui::Hsla,
-    incoming_background: gpui::Hsla,
+    colors: MessageBubbleColors,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -2430,9 +2431,9 @@ fn render_message(
     }
 
     let background = if message.outgoing {
-        outgoing_background
+        colors.outgoing
     } else {
-        incoming_background
+        colors.incoming
     };
 
     let mut bubble = v_flex()
@@ -3394,38 +3395,58 @@ fn expand_code_reference(reference: &CodeReference) -> String {
     )
 }
 
+/// A piece of composer text: a literal run or a `[#id]` token. The id is `None`
+/// when the digits do not parse; consumers keep such a token literal.
+enum ComposerSegment<'a> {
+    Text(&'a str),
+    Token { id: Option<u64>, literal: &'a str },
+}
+
+/// Walks composer text, splitting it into literal runs and `[#id]` tokens. An
+/// unterminated `[#` and the rest of the text are yielded as one final literal
+/// run.
+fn composer_segments(text: &str) -> Vec<ComposerSegment<'_>> {
+    let mut segments = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find(COMPOSER_TOKEN_PREFIX) {
+        if start > 0 {
+            segments.push(ComposerSegment::Text(&rest[..start]));
+        }
+        let after = &rest[start + COMPOSER_TOKEN_PREFIX.len()..];
+        let Some(close) = after.find(']') else {
+            segments.push(ComposerSegment::Text(&rest[start..]));
+            return segments;
+        };
+        let token_end = start + COMPOSER_TOKEN_PREFIX.len() + close + 1;
+        segments.push(ComposerSegment::Token {
+            id: after[..close].parse::<u64>().ok(),
+            literal: &rest[start..token_end],
+        });
+        rest = &rest[token_end..];
+    }
+    if !rest.is_empty() {
+        segments.push(ComposerSegment::Text(rest));
+    }
+    segments
+}
+
 /// Splits the composer's text into ordered blocks, expanding staged code
 /// references and lifting out attachments at their inline token positions.
 fn composer_blocks(text: &str, items: &BTreeMap<u64, ComposerItem>) -> Vec<ComposerBlock> {
     let mut blocks = Vec::new();
-    let mut rest = text;
-    while let Some(start) = rest.find(COMPOSER_TOKEN_PREFIX) {
-        if start > 0 {
-            blocks.push(ComposerBlock::Text(rest[..start].to_owned()));
+    for segment in composer_segments(text) {
+        match segment {
+            ComposerSegment::Text(text) => blocks.push(ComposerBlock::Text(text.to_owned())),
+            ComposerSegment::Token { id, literal } => match id.and_then(|id| items.get(&id)) {
+                Some(ComposerItem::Code(reference)) => {
+                    blocks.push(ComposerBlock::Text(expand_code_reference(reference)));
+                }
+                Some(ComposerItem::Attachment(attachment)) => {
+                    blocks.push(ComposerBlock::Attachment(attachment.clone()));
+                }
+                None => blocks.push(ComposerBlock::Text(literal.to_owned())),
+            },
         }
-        let after = &rest[start + COMPOSER_TOKEN_PREFIX.len()..];
-        let Some(close) = after.find(']') else {
-            blocks.push(ComposerBlock::Text(rest[start..].to_owned()));
-            return blocks;
-        };
-        let token_end = start + COMPOSER_TOKEN_PREFIX.len() + close + 1;
-        let item = after[..close]
-            .parse::<u64>()
-            .ok()
-            .and_then(|id| items.get(&id));
-        match item {
-            Some(ComposerItem::Code(reference)) => {
-                blocks.push(ComposerBlock::Text(expand_code_reference(reference)));
-            }
-            Some(ComposerItem::Attachment(attachment)) => {
-                blocks.push(ComposerBlock::Attachment(attachment.clone()));
-            }
-            None => blocks.push(ComposerBlock::Text(rest[start..token_end].to_owned())),
-        }
-        rest = &rest[token_end..];
-    }
-    if !rest.is_empty() {
-        blocks.push(ComposerBlock::Text(rest.to_owned()));
     }
     blocks
 }
@@ -3439,24 +3460,16 @@ fn composer_draft_text(text: &str, items: &BTreeMap<u64, ComposerItem>) -> Strin
         return text.to_owned();
     }
     let mut result = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find(COMPOSER_TOKEN_PREFIX) {
-        result.push_str(&rest[..start]);
-        let after = &rest[start + COMPOSER_TOKEN_PREFIX.len()..];
-        let Some(close) = after.find(']') else {
-            result.push_str(&rest[start..]);
-            return result;
-        };
-        let token_end = start + COMPOSER_TOKEN_PREFIX.len() + close + 1;
-        let known = after[..close]
-            .parse::<u64>()
-            .is_ok_and(|id| items.contains_key(&id));
-        if !known {
-            result.push_str(&rest[start..token_end]);
+    for segment in composer_segments(text) {
+        match segment {
+            ComposerSegment::Text(text) => result.push_str(text),
+            ComposerSegment::Token { id, literal } => {
+                if !id.is_some_and(|id| items.contains_key(&id)) {
+                    result.push_str(literal);
+                }
+            }
         }
-        rest = &rest[token_end..];
     }
-    result.push_str(rest);
     result
 }
 
@@ -3715,19 +3728,8 @@ fn open_abs_path_at_point(
                     })?
                     .await?
             };
-            if let Some(point) = point
-                && let Some(editor) = item.downcast::<Editor>()
-            {
-                editor
-                    .update_in(cx, |editor, window, cx| {
-                        editor.change_selections(
-                            SelectionEffects::scroll(Autoscroll::center()),
-                            window,
-                            cx,
-                            |selections| selections.select_ranges([point..point]),
-                        );
-                    })
-                    .ok();
+            if let Some(point) = point {
+                reveal_point_in_item(item.as_ref(), point, cx);
             }
             anyhow::Ok(())
         })
@@ -3782,24 +3784,31 @@ fn open_project_reference(
                     workspace.open_path(project_path, None, true, window, cx)
                 })?
                 .await?;
-            if let Some(point) = point
-                && let Some(editor) = item.downcast::<Editor>()
-            {
-                editor
-                    .update_in(cx, |editor, window, cx| {
-                        editor.change_selections(
-                            SelectionEffects::scroll(Autoscroll::center()),
-                            window,
-                            cx,
-                            |selections| selections.select_ranges([point..point]),
-                        );
-                    })
-                    .ok();
+            if let Some(point) = point {
+                reveal_point_in_item(item.as_ref(), point, cx);
             }
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);
     true
+}
+
+/// Places the cursor at `point` in the opened item, scrolling it into view.
+/// Does nothing when the opened item is not an editor.
+fn reveal_point_in_item(item: &dyn ItemHandle, point: Point, cx: &mut gpui::AsyncWindowContext) {
+    let Some(editor) = item.downcast::<Editor>() else {
+        return;
+    };
+    editor
+        .update_in(cx, |editor, window, cx| {
+            editor.change_selections(
+                SelectionEffects::scroll(Autoscroll::center()),
+                window,
+                cx,
+                |selections| selections.select_ranges([point..point]),
+            );
+        })
+        .ok();
 }
 
 fn local_offset() -> UtcOffset {
