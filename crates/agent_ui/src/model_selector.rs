@@ -71,6 +71,7 @@ pub struct ModelPickerDelegate {
     selected_model: Option<AgentModelInfo>,
     favorites: HashSet<AgentModelId>,
     _refresh_models_task: Task<()>,
+    _select_model_task: Option<Task<()>>,
     _settings_subscription: Subscription,
     focus_handle: FocusHandle,
 }
@@ -99,10 +100,16 @@ impl ModelPickerDelegate {
 
                         let (models, selected_model) =
                             futures::join!(models_task, selected_model_task);
+                        let models = models.log_err();
+                        let selected_model = selected_model.log_err();
 
                         this.update_in(cx, |this, window, cx| {
-                            this.delegate.models = models.ok();
-                            this.delegate.selected_model = selected_model.ok();
+                            if let Some(models) = models {
+                                this.delegate.models = Some(models);
+                            }
+                            if let Some(selected_model) = selected_model {
+                                this.delegate.selected_model = Some(selected_model);
+                            }
                             this.refresh(window, cx)
                         })
                     }
@@ -139,6 +146,7 @@ impl ModelPickerDelegate {
             selected_description: None,
             favorites,
             _refresh_models_task: refresh_models_task,
+            _select_model_task: None,
             _settings_subscription: settings_subscription,
             focus_handle,
         }
@@ -149,61 +157,72 @@ impl ModelPickerDelegate {
     }
 
     pub fn favorites_count(&self) -> usize {
-        self.favorites.len()
+        self.favorite_models().len()
     }
 
-    pub fn cycle_favorite_models(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        if self.favorites.is_empty() {
-            return;
-        }
-
+    fn favorite_models(&self) -> Vec<&AgentModelInfo> {
         let Some(models) = &self.models else {
-            return;
+            return Vec::new();
         };
-
         let all_models: Vec<&AgentModelInfo> = match models {
             AgentModelList::Flat(list) => list.iter().collect(),
             AgentModelList::Grouped(index_map) => index_map.values().flatten().collect(),
         };
-
-        let favorite_models: Vec<_> = all_models
+        all_models
             .into_iter()
             .filter(|model| self.favorites.contains(&model.id))
             .unique_by(|model| &model.id)
-            .collect();
+            .collect()
+    }
 
+    fn select_model(
+        &mut self,
+        model: AgentModelInfo,
+        window: &mut Window,
+        cx: &mut Context<Picker<Self>>,
+    ) {
+        let model_id = model.id.clone();
+        let select_model_task = self.selector.select_model(model_id.clone(), cx);
+        self._select_model_task = Some(cx.spawn_in(window, async move |this, cx| {
+            if let Err(error) = select_model_task.await {
+                log::error!(
+                    "Failed to select agent model {}: {error:#}",
+                    model_id.as_ref()
+                );
+                return;
+            }
+            let Some(this) = this.upgrade() else {
+                return;
+            };
+            this.update_in(cx, move |this, window, cx| {
+                this.delegate.selected_model = Some(model);
+                if let Some(new_index) = this.delegate.filtered_entries.iter().position(|entry| {
+                    matches!(entry, ModelPickerEntry::Model(model_info, _) if this.delegate.selected_model.as_ref().is_some_and(|selected| model_info.id == selected.id))
+                }) {
+                    this.delegate.set_selected_index(new_index, window, cx);
+                } else {
+                    cx.notify();
+                }
+            })
+            .log_err();
+        }));
+    }
+
+    pub fn cycle_favorite_models(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) {
+        let favorite_models = self.favorite_models();
         if favorite_models.is_empty() {
             return;
         }
 
         let current_id = self.selected_model.as_ref().map(|m| &m.id);
-
-        let current_index_in_favorites = current_id
+        let next_index = current_id
             .and_then(|id| favorite_models.iter().position(|m| &m.id == id))
-            .unwrap_or(usize::MAX);
+            .map_or(0, |current_index| {
+                (current_index + 1) % favorite_models.len()
+            });
 
-        let next_index = if current_index_in_favorites == usize::MAX {
-            0
-        } else {
-            (current_index_in_favorites + 1) % favorite_models.len()
-        };
-
-        let next_model = favorite_models[next_index].clone();
-
-        self.selector
-            .select_model(next_model.id.clone(), cx)
-            .detach_and_log_err(cx);
-
-        self.selected_model = Some(next_model);
-
-        // Keep the picker selection aligned with the newly-selected model
-        if let Some(new_index) = self.filtered_entries.iter().position(|entry| {
-            matches!(entry, ModelPickerEntry::Model(model_info, _) if self.selected_model.as_ref().is_some_and(|selected| model_info.id == selected.id))
-        }) {
-            self.set_selected_index(new_index, window, cx);
-        } else {
-            cx.notify();
-        }
+        let next_model = (*favorite_models[next_index]).clone();
+        self.select_model(next_model, window, cx);
     }
 }
 
@@ -247,17 +266,16 @@ impl PickerDelegate for ModelPickerDelegate {
         let favorites = self.favorites.clone();
 
         cx.spawn_in(window, async move |this, cx| {
-            let filtered_models = match this
-                .read_with(cx, |this, cx| {
-                    this.delegate.models.clone().map(move |models| {
-                        fuzzy_search(models, query, cx.background_executor().clone())
-                    })
+            let Ok(Some(search_task)) = this.read_with(cx, |this, cx| {
+                this.delegate.models.clone().map(move |models| {
+                    fuzzy_search(models, query, cx.background_executor().clone())
                 })
-                .ok()
-                .flatten()
-            {
-                Some(task) => task.await,
-                None => AgentModelList::Flat(vec![]),
+            }) else {
+                return;
+            };
+            let filtered_models = search_task.await;
+            let Some(this) = this.upgrade() else {
+                return;
             };
 
             this.update_in(cx, |this, window, cx| {
@@ -281,7 +299,7 @@ impl PickerDelegate for ModelPickerDelegate {
                 this.set_selected_index(new_index, Some(picker::Direction::Down), true, window, cx);
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
     }
 
@@ -289,13 +307,8 @@ impl PickerDelegate for ModelPickerDelegate {
         if let Some(ModelPickerEntry::Model(model_info, _)) =
             self.filtered_entries.get(self.selected_index)
         {
-            self.selector
-                .select_model(model_info.id.clone(), cx)
-                .detach_and_log_err(cx);
-            self.selected_model = Some(model_info.clone());
-            let current_index = self.selected_index;
-            self.set_selected_index(current_index, window, cx);
-
+            let model_info = model_info.clone();
+            self.select_model(model_info, window, cx);
             cx.emit(DismissEvent);
         }
     }
@@ -591,6 +604,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = settings::SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
         });
@@ -620,10 +634,51 @@ mod tests {
         );
     }
 
+    #[gpui::test]
+    fn failed_model_selection_keeps_active_model(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            i18n::init(cx);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+            editor::init(cx);
+        });
+
+        let model_selector = Rc::new(TestModelSelector::rejecting_selections());
+        let window_handle = cx.add_window({
+            let model_selector = model_selector.clone();
+            move |window, cx| {
+                let selector: Rc<dyn AgentModelSelector> = model_selector;
+                acp_model_selector(selector, cx.focus_handle(), window, cx)
+            }
+        });
+        cx.run_until_parked();
+
+        let mut cx = VisualTestContext::from_window(window_handle.into(), cx);
+        window_handle
+            .update(&mut cx, |picker, window, cx| {
+                picker.delegate.set_selected_index(1, window, cx);
+                picker.delegate.confirm(false, window, cx);
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        window_handle
+            .read_with(&cx, |picker, _cx| {
+                assert_eq!(
+                    picker.delegate.active_model().map(|model| &model.id),
+                    Some(&AgentModelId::new("auto"))
+                );
+            })
+            .unwrap();
+        assert!(model_selector.selected_models.borrow().is_empty());
+    }
+
     struct TestModelSelector {
         models: Vec<AgentModelInfo>,
         selected_model: RefCell<AgentModelInfo>,
         selected_models: RefCell<Vec<AgentModelId>>,
+        reject_selections: bool,
     }
 
     impl TestModelSelector {
@@ -651,6 +706,14 @@ mod tests {
                 selected_model: RefCell::new(models[0].clone()),
                 models,
                 selected_models: RefCell::new(Vec::new()),
+                reject_selections: false,
+            }
+        }
+
+        fn rejecting_selections() -> Self {
+            Self {
+                reject_selections: true,
+                ..Self::new()
             }
         }
     }
@@ -661,6 +724,9 @@ mod tests {
         }
 
         fn select_model(&self, model_id: AgentModelId, _cx: &mut App) -> Task<Result<()>> {
+            if self.reject_selections {
+                return Task::ready(Err(anyhow::anyhow!("model selection rejected")));
+            }
             self.selected_models.borrow_mut().push(model_id.clone());
             if let Some(model) = self.models.iter().find(|model| model.id == model_id) {
                 *self.selected_model.borrow_mut() = model.clone();
