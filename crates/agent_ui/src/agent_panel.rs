@@ -824,7 +824,7 @@ impl AgentPanel {
             };
             let workspace_id = workspace
                 .read_with(cx, |workspace, _| workspace.database_id())
-                .ok()
+                .log_err()
                 .flatten();
 
             let (serialized_panel, global_last_used_agent) = cx
@@ -3287,10 +3287,13 @@ impl AgentPanel {
                             paths.push(project_path);
                         }
                     }
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
                     this.update_in(cx, |this, window, cx| {
                         this.handle_drop(paths, added_worktrees, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 })
                 .detach();
             }))
