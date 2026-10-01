@@ -38,7 +38,7 @@ use ui::{
 };
 use util::redact::redact_command;
 use util::rel_path::RelPath;
-use util::{ResultExt, debug_panic, maybe};
+use util::{debug_panic, maybe};
 use workspace::SplitDirection;
 use workspace::item::SaveOptions;
 use workspace::{
@@ -189,24 +189,14 @@ impl DebugPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let dap_store = self.project.read(cx).dap_store();
         let Some(adapter) = DapRegistry::global(cx).adapter(&scenario.adapter) else {
+            log::error!("debug adapter {} is not registered", scenario.adapter);
             return;
         };
         let quirks = SessionQuirks {
             compact: adapter.compact_child_session(),
             prefer_thread_name: adapter.prefer_thread_name(),
         };
-        let session = dap_store.update(cx, |dap_store, cx| {
-            dap_store.new_session(
-                Some(scenario.label.clone()),
-                DebugAdapterName(scenario.adapter.clone()),
-                task_context.clone(),
-                None,
-                quirks,
-                cx,
-            )
-        });
         let worktree = worktree_id.or_else(|| {
             active_buffer
                 .as_ref()
@@ -218,9 +208,20 @@ impl DebugPanel {
             .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
             .or_else(|| self.project.read(cx).visible_worktrees(cx).next())
         else {
-            log::debug!("Could not find a worktree to spawn the debug session in");
+            log::error!("could not find a worktree to spawn the debug session in");
             return;
         };
+        let dap_store = self.project.read(cx).dap_store();
+        let session = dap_store.update(cx, |dap_store, cx| {
+            dap_store.new_session(
+                Some(scenario.label.clone()),
+                DebugAdapterName(scenario.adapter.clone()),
+                task_context.clone(),
+                None,
+                quirks,
+                cx,
+            )
+        });
 
         self.debug_scenario_scheduled_last = true;
         if let Some(inventory) = self
@@ -389,11 +390,10 @@ impl DebugPanel {
         let label = curr_session.read(cx).label();
         let quirks = curr_session.read(cx).quirks();
         let adapter = curr_session.read(cx).adapter();
-        let binary = curr_session
-            .read(cx)
-            .binary()
-            .cloned()
-            .expect("cloned should be present");
+        let Some(binary) = curr_session.read(cx).binary().cloned() else {
+            log::error!("attempted to restart a session without a binary");
+            return;
+        };
         let task_context = curr_session.read(cx).task_context().clone();
 
         let curr_session_id = curr_session.read(cx).session_id();
@@ -404,7 +404,7 @@ impl DebugPanel {
         });
 
         cx.spawn_in(window, async move |this, cx| {
-            task.await.log_err();
+            task.await?;
 
             let (session, task) = dap_store_handle.update(cx, |dap_store, cx| {
                 let session = dap_store.new_session(label, adapter, task_context, None, quirks, cx);
@@ -528,8 +528,8 @@ impl DebugPanel {
                     None,
                     &[yes.as_str(), no.as_str()],
                 );
-                if response.await == Ok(1) {
-                    return;
+                if response.await? != 0 {
+                    return anyhow::Ok(());
                 }
             }
             session.update(cx, |session, cx| session.shutdown(cx));
@@ -546,10 +546,10 @@ impl DebugPanel {
                     this.active_session = this.sessions_with_children.keys().next().cloned();
                 }
                 cx.notify()
-            })
-            .ok();
+            })?;
+            anyhow::Ok(())
         })
-        .detach();
+        .detach_and_log_err(cx);
     }
 
     pub(crate) fn deploy_context_menu(
