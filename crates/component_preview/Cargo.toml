@@ -41,6 +41,7 @@ workspace.workspace = true
 
 [dev-dependencies]
 assets.workspace = true
+db = { workspace = true, features = ["test-support"] }
 editor.workspace = true
 env_logger.workspace = true
 gpui_platform = { workspace = true, features = ["screen-capture", "font-kit", "wayland", "x11"] }

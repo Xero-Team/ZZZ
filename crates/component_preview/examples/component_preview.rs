@@ -133,7 +133,6 @@ fn main() {
                                 window,
                                 cx,
                             )
-                            .expect("Failed to create component preview")
                         });
 
                         workspace.add_item_to_active_pane(

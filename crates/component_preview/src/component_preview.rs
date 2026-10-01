@@ -45,7 +45,6 @@ pub fn init(app_state: Arc<AppState>, cx: &mut App) {
                         window,
                         cx,
                     )
-                    .expect("Failed to create component preview")
                 });
 
                 workspace.add_item_to_active_pane(
@@ -117,7 +116,7 @@ impl ComponentPreview {
         active_page: Option<PreviewPage>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let component_registry = Arc::new(components());
         let sorted_components = component_registry.sorted_components();
         let selected_index = selected_index.into().unwrap_or(0);
@@ -160,7 +159,7 @@ impl ComponentPreview {
         let focus_handle = component_preview.filter_editor.read(cx).focus_handle(cx);
         window.focus(&focus_handle, cx);
 
-        Ok(component_preview)
+        component_preview
     }
 
     pub fn active_page_id(&self, _cx: &App) -> ActivePageId {
@@ -734,7 +733,7 @@ impl Item for ComponentPreview {
         let selected_index = self.cursor_index;
         let active_page = self.active_page.clone();
 
-        let self_result = Self::new(
+        let preview = Self::new(
             weak_workspace,
             project,
             language_registry,
@@ -745,13 +744,7 @@ impl Item for ComponentPreview {
             cx,
         );
 
-        Task::ready(match self_result {
-            Ok(preview) => Some(cx.new(|_cx| preview)),
-            Err(e) => {
-                log::error!("Failed to clone component preview: {}", e);
-                None
-            }
-        })
+        Task::ready(Some(cx.new(|_cx| preview)))
     }
 
     fn to_item_events(event: &Self::Event, f: &mut dyn FnMut(workspace::item::ItemEvent)) {
@@ -830,7 +823,6 @@ impl SerializableItem for ComponentPreview {
                         window,
                         cx,
                     )
-                    .expect("Failed to create component preview")
                 }))
             })?
         })
