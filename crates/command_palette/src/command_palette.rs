@@ -748,7 +748,7 @@ pub fn humanize_action_name(name: &str) -> String {
         } else if char == '_' {
             result.push(' ');
         } else if char.is_uppercase() {
-            if !result.ends_with(' ') {
+            if !result.is_empty() && !result.ends_with(' ') {
                 result.push(' ');
             }
             result.extend(char.to_lowercase());
@@ -794,6 +794,7 @@ mod tests {
             humanize_action_name("go_to_line::Deploy"),
             "go to line: deploy"
         );
+        assert_eq!(humanize_action_name("ToggleFocus"), "toggle focus");
     }
 
     #[test]
