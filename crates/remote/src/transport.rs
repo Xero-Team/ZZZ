@@ -70,8 +70,31 @@ pub(crate) fn remote_server_binary_version(
     commit: Option<&AppCommitSha>,
 ) -> String {
     match release_channel {
-        ReleaseChannel::Dev => commit.map_or_else(|| "build".to_owned(), AppCommitSha::full),
+        ReleaseChannel::Dev => development_commit(commit).unwrap_or_else(|| "build".to_owned()),
         ReleaseChannel::Stable => version.to_string(),
+    }
+}
+
+fn development_commit(commit: Option<&AppCommitSha>) -> Option<String> {
+    let commit = commit?.full();
+    let commit = commit.trim();
+    (!commit.is_empty()).then(|| commit.to_owned())
+}
+
+fn expected_remote_server_reported_version(
+    release_channel: ReleaseChannel,
+    version: &Version,
+    commit: Option<&AppCommitSha>,
+) -> Option<String> {
+    match release_channel {
+        ReleaseChannel::Stable => {
+            let reported_version = version.to_string();
+            let reported_version = reported_version
+                .split_once('+')
+                .map_or(reported_version.as_str(), |(version, _)| version);
+            Some(reported_version.to_owned())
+        }
+        ReleaseChannel::Dev => development_commit(commit),
     }
 }
 
@@ -98,25 +121,40 @@ pub(crate) fn remote_server_version_matches(
 
     match release_channel {
         ReleaseChannel::Stable => {
-            let expected = version.to_string();
-            let expected = expected
-                .split_once('+')
-                .map_or(expected.as_str(), |(version, _)| version);
-            actual == expected
+            expected_remote_server_reported_version(release_channel, version, commit)
+                .is_some_and(|expected| actual == expected)
         }
         ReleaseChannel::Dev => {
-            let Some(commit) = commit else {
+            let Some(expected) =
+                expected_remote_server_reported_version(release_channel, version, commit)
+            else {
                 // Test and custom builds without a git revision cannot perform
                 // an identity check. Preserve the previous behavior for them.
                 return true;
             };
-            let expected = commit.full();
             actual == expected
                 || actual
                     .rsplit_once('+')
                     .is_some_and(|(_, actual_commit)| actual_commit == expected)
         }
     }
+}
+
+pub(crate) fn ensure_remote_server_version_matches(
+    release_channel: ReleaseChannel,
+    version: &Version,
+    commit: Option<&AppCommitSha>,
+    output: &str,
+) -> Result<()> {
+    let expected = expected_remote_server_reported_version(release_channel, version, commit)
+        .unwrap_or_else(|| "any non-empty development version".to_owned());
+    anyhow::ensure!(
+        remote_server_version_matches(release_channel, version, commit, output),
+        "remote server reported version {:?}, expected {:?}",
+        output.trim(),
+        expected,
+    );
+    Ok(())
 }
 
 /// Parses the output of `uname -sm` to determine the remote platform.
@@ -543,7 +581,10 @@ async fn build_remote_server_from_source(
             "--target",
             &triple,
         ])
-        .env("RUSTFLAGS", &rust_flags);
+        .env("RUSTFLAGS", &rust_flags)
+        // Runtime builds must identify the current checkout rather than inherit
+        // commit metadata from the client build environment.
+        .env_remove("ZZZ_COMMIT_SHA");
     if matches!(remote_build_mode, RemoteServerBuildMode::Zig) {
         apply_tmpfs_zig_cache(&mut command);
     }
@@ -687,6 +728,9 @@ mod tests {
     fn test_remote_server_binary_version() {
         let version = Version::new(1, 23, 0);
         let commit = AppCommitSha::new("53604c81da82a0e99c3ee3d6077ca152446403c7".to_owned());
+        let empty_commit = AppCommitSha::new(String::new());
+        let padded_commit =
+            AppCommitSha::new(" 53604c81da82a0e99c3ee3d6077ca152446403c7 ".to_owned());
 
         assert_eq!(
             remote_server_binary_version(ReleaseChannel::Dev, &version, Some(&commit)),
@@ -695,6 +739,14 @@ mod tests {
         assert_eq!(
             remote_server_binary_version(ReleaseChannel::Dev, &version, None),
             "build"
+        );
+        assert_eq!(
+            remote_server_binary_version(ReleaseChannel::Dev, &version, Some(&empty_commit)),
+            "build"
+        );
+        assert_eq!(
+            remote_server_binary_version(ReleaseChannel::Dev, &version, Some(&padded_commit)),
+            commit.full()
         );
         assert_eq!(
             remote_server_binary_version(ReleaseChannel::Stable, &version, Some(&commit)),
@@ -706,6 +758,7 @@ mod tests {
     fn test_remote_server_version_matches() {
         let version = Version::new(1, 23, 0);
         let commit = AppCommitSha::new("53604c81da82a0e99c3ee3d6077ca152446403c7".to_owned());
+        let empty_commit = AppCommitSha::new(String::new());
         let stable_version = Version::parse("1.23.0+stable").expect("valid test version");
 
         assert!(remote_server_version_matches(
@@ -727,6 +780,24 @@ mod tests {
             "28d60b8f28a9448fea506fc18aeeaf4698d047e9\n"
         ));
         assert!(remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            None,
+            "dev\n"
+        ));
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            Some(&empty_commit),
+            "dev\n"
+        ));
+        assert!(!remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            None,
+            "\n"
+        ));
+        assert!(remote_server_version_matches(
             ReleaseChannel::Stable,
             &stable_version,
             None,
@@ -738,5 +809,29 @@ mod tests {
             None,
             "1.22.0\n"
         ));
+    }
+
+    #[test]
+    fn test_ensure_remote_server_version_matches() {
+        let version = Version::new(1, 23, 0);
+        let commit = AppCommitSha::new("53604c81da82a0e99c3ee3d6077ca152446403c7".to_owned());
+
+        ensure_remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            Some(&commit),
+            "53604c81da82a0e99c3ee3d6077ca152446403c7\n",
+        )
+        .expect("matching version should be accepted");
+
+        let error = ensure_remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            Some(&commit),
+            "28d60b8f28a9448fea506fc18aeeaf4698d047e9\n",
+        )
+        .expect_err("mismatched version should be rejected");
+        assert!(error.to_string().contains("28d60b8f"));
+        assert!(error.to_string().contains("53604c81"));
     }
 }

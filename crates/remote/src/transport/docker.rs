@@ -173,6 +173,47 @@ impl DockerExecConnection {
         parse_platform(&uname)
     }
 
+    async fn remote_server_version(
+        &self,
+        remote_binary_path: &RelPath,
+        remote_dir_for_server: &str,
+    ) -> Result<String> {
+        self.run_docker_exec(
+            &remote_binary_path.display(self.path_style()),
+            Some(remote_dir_for_server),
+            &Default::default(),
+            &["version"],
+        )
+        .await
+    }
+
+    async fn validate_installed_server_binary(
+        &self,
+        remote_binary_path: &RelPath,
+        remote_dir_for_server: &str,
+        release_channel: ReleaseChannel,
+        version: &SemanticVersion,
+        commit: Option<&AppCommitSha>,
+    ) -> Result<()> {
+        let remote_version = self
+            .remote_server_version(remote_binary_path, remote_dir_for_server)
+            .await
+            .with_context(|| {
+                format!(
+                    "running the installed remote server at {remote_binary_path:?} to check its version"
+                )
+            })?;
+        super::ensure_remote_server_version_matches(
+            release_channel,
+            version,
+            commit,
+            &remote_version,
+        )
+        .with_context(|| {
+            format!("validating the installed remote server at {remote_binary_path:?}")
+        })
+    }
+
     async fn ensure_server_binary(
         &self,
         delegate: &Arc<dyn RemoteClientDelegate>,
@@ -194,12 +235,7 @@ impl DockerExecConnection {
             .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
         let binary_exists_on_server = match self
-            .run_docker_exec(
-                &dst_path.display(self.path_style()),
-                Some(&remote_dir_for_server),
-                &Default::default(),
-                &["version"],
-            )
+            .remote_server_version(&dst_path, remote_dir_for_server)
             .await
         {
             Ok(remote_version) => {
@@ -257,6 +293,14 @@ impl DockerExecConnection {
             .await?;
             self.extract_server_binary(&dst_path, &tmp_path, &remote_dir_for_server, delegate, cx)
                 .await?;
+            self.validate_installed_server_binary(
+                &dst_path,
+                remote_dir_for_server,
+                release_channel,
+                &version,
+                commit.as_ref(),
+            )
+            .await?;
             return Ok(dst_path);
         }
 
@@ -291,6 +335,14 @@ impl DockerExecConnection {
             )
             .await
             .context("extracting embedded server binary")?;
+            self.validate_installed_server_binary(
+                &dst_path,
+                remote_dir_for_server,
+                release_channel,
+                &version,
+                commit.as_ref(),
+            )
+            .await?;
             return Ok(dst_path);
         }
 

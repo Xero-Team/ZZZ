@@ -241,7 +241,8 @@ the server. The filename must match the ZZZ version you are using, for example
 `~/.zzz_server/zzz-remote-server-dev-<commit-sha>` for Dev or
 `~/.zzz_server/zzz-remote-server-stable-1.19.0` for Stable. The Dev filename
 uses the client commit SHA so a server built from an older checkout is not
-reused accidentally.
+reused accidentally. Dev clients built without commit metadata use
+`~/.zzz_server/zzz-remote-server-dev-build` instead.
 
 ## Maintaining the SSH connection
 

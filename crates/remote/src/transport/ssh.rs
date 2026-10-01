@@ -819,6 +819,43 @@ impl SshRemoteConnection {
         Ok(this)
     }
 
+    async fn remote_server_version(&self, remote_binary_path: &RelPath) -> Result<String> {
+        self.socket
+            .run_command(
+                self.ssh_shell_kind,
+                &remote_binary_path.display(self.path_style()),
+                &["version"],
+                true,
+            )
+            .await
+    }
+
+    async fn validate_installed_server_binary(
+        &self,
+        remote_binary_path: &RelPath,
+        release_channel: ReleaseChannel,
+        version: &Version,
+        commit: Option<&AppCommitSha>,
+    ) -> Result<()> {
+        let remote_version = self
+            .remote_server_version(remote_binary_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "running the installed remote server at {remote_binary_path:?} to check its version"
+                )
+            })?;
+        super::ensure_remote_server_version_matches(
+            release_channel,
+            version,
+            commit,
+            &remote_version,
+        )
+        .with_context(|| {
+            format!("validating the installed remote server at {remote_binary_path:?}")
+        })
+    }
+
     async fn ensure_server_binary(
         &self,
         delegate: &Arc<dyn RemoteClientDelegate>,
@@ -837,16 +874,7 @@ impl SshRemoteConnection {
         let dst_path = paths::remote_server_dir_relative()
             .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
-        let binary_exists_on_server = match self
-            .socket
-            .run_command(
-                self.ssh_shell_kind,
-                &dst_path.display(self.path_style()),
-                &["version"],
-                true,
-            )
-            .await
-        {
+        let binary_exists_on_server = match self.remote_server_version(&dst_path).await {
             Ok(remote_version) => {
                 let matches = super::remote_server_version_matches(
                     release_channel,
@@ -897,6 +925,13 @@ impl SshRemoteConnection {
                 .await?;
             self.extract_server_binary(&dst_path, &tmp_path, delegate, cx)
                 .await?;
+            self.validate_installed_server_binary(
+                &dst_path,
+                release_channel,
+                &version,
+                commit.as_ref(),
+            )
+            .await?;
             return Ok(dst_path);
         }
 
@@ -925,6 +960,13 @@ impl SshRemoteConnection {
             self.extract_server_binary(&dst_path, &tmp_path_compressed, delegate, cx)
                 .await
                 .context("extracting embedded server binary")?;
+            self.validate_installed_server_binary(
+                &dst_path,
+                release_channel,
+                &version,
+                commit.as_ref(),
+            )
+            .await?;
             return Ok(dst_path);
         }
 

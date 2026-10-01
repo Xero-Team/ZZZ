@@ -171,6 +171,40 @@ impl WslRemoteConnection {
         .map(|_| ())
     }
 
+    async fn remote_server_version(&self, remote_binary_path: &RelPath) -> Result<String> {
+        self.run_wsl_command_with_output(
+            &remote_binary_path.display(PathStyle::Posix),
+            &["version"],
+        )
+        .await
+    }
+
+    async fn validate_installed_server_binary(
+        &self,
+        remote_binary_path: &RelPath,
+        release_channel: ReleaseChannel,
+        version: &Version,
+        commit: Option<&AppCommitSha>,
+    ) -> Result<()> {
+        let remote_version = self
+            .remote_server_version(remote_binary_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "running the installed remote server at {remote_binary_path:?} to check its version"
+                )
+            })?;
+        super::ensure_remote_server_version_matches(
+            release_channel,
+            version,
+            commit,
+            &remote_version,
+        )
+        .with_context(|| {
+            format!("validating the installed remote server at {remote_binary_path:?}")
+        })
+    }
+
     async fn ensure_server_binary(
         &self,
         delegate: &Arc<dyn RemoteClientDelegate>,
@@ -196,10 +230,7 @@ impl WslRemoteConnection {
                 .map_err(|e| anyhow!("Failed to create directory: {}", e))?;
         }
 
-        let binary_exists_on_server = match self
-            .run_wsl_command_with_output(&dst_path.display(PathStyle::Posix), &["version"])
-            .await
-        {
+        let binary_exists_on_server = match self.remote_server_version(&dst_path).await {
             Ok(remote_version) => {
                 let matches = super::remote_server_version_matches(
                     release_channel,
@@ -250,6 +281,13 @@ impl WslRemoteConnection {
                 .await?;
             self.extract_and_install(&tmp_path, &dst_path, delegate, cx)
                 .await?;
+            self.validate_installed_server_binary(
+                &dst_path,
+                release_channel,
+                &version,
+                commit.as_ref(),
+            )
+            .await?;
             return Ok(dst_path);
         }
 
@@ -268,6 +306,13 @@ impl WslRemoteConnection {
                 .await?;
             self.extract_and_install(&tmp_path, &dst_path, delegate, cx)
                 .await?;
+            self.validate_installed_server_binary(
+                &dst_path,
+                release_channel,
+                &version,
+                commit.as_ref(),
+            )
+            .await?;
             return Ok(dst_path);
         }
 
