@@ -14,7 +14,7 @@ use futures::{
 use gpui::{App, AppContext as _, AsyncApp, Task};
 use parking_lot::Mutex;
 use paths::remote_server_dir_relative;
-use release_channel::{AppVersion, ReleaseChannel};
+use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rpc::proto::Envelope;
 use semver::Version;
 pub use settings::SshPortForwardOption;
@@ -804,10 +804,15 @@ impl SshRemoteConnection {
             ssh_default_system_shell,
         };
 
-        let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+        let (release_channel, version, commit) = cx.update(|cx| {
+            (
+                ReleaseChannel::global(cx),
+                AppVersion::global(cx),
+                AppCommitSha::try_global(cx),
+            )
+        });
         this.remote_binary_path = Some(
-            this.ensure_server_binary(&delegate, release_channel, version, cx)
+            this.ensure_server_binary(&delegate, release_channel, version, commit, cx)
                 .await?,
         );
 
@@ -819,12 +824,11 @@ impl SshRemoteConnection {
         delegate: &Arc<dyn RemoteClientDelegate>,
         release_channel: ReleaseChannel,
         version: Version,
+        commit: Option<AppCommitSha>,
         cx: &mut AsyncApp,
     ) -> Result<Arc<RelPath>> {
-        let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_owned(),
-            _ => version.to_string(),
-        };
+        let version_str =
+            super::remote_server_binary_version(release_channel, &version, commit.as_ref());
         let binary_name = paths::remote_server_binary_name(
             release_channel.dev_name(),
             &version_str,
@@ -833,7 +837,7 @@ impl SshRemoteConnection {
         let dst_path = paths::remote_server_dir_relative()
             .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
-        let binary_exists_on_server = self
+        let binary_exists_on_server = match self
             .socket
             .run_command(
                 self.ssh_shell_kind,
@@ -842,7 +846,32 @@ impl SshRemoteConnection {
                 true,
             )
             .await
-            .is_ok();
+        {
+            Ok(remote_version) => {
+                let matches = super::remote_server_version_matches(
+                    release_channel,
+                    &version,
+                    commit.as_ref(),
+                    &remote_version,
+                );
+                if !matches {
+                    log::info!(
+                        "remote server binary at {:?} has version {:?}, expected client version {:?}; replacing it",
+                        dst_path,
+                        remote_version.trim(),
+                        version_str,
+                    );
+                }
+                matches
+            }
+            Err(error) => {
+                log::debug!(
+                    "remote server binary at {:?} is unavailable: {error:#}",
+                    dst_path
+                );
+                false
+            }
+        };
 
         #[cfg(any(debug_assertions, feature = "build-remote-server-binary"))]
         if let Some(remote_server_path) = super::build_remote_server_from_source(

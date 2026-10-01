@@ -238,8 +238,10 @@ Debug `cargo run` builds do not embed archives.
 If you'd like to maintain the server binary yourself, build it with
 `cargo build -p remote_server --release` and upload it to `~/.zzz_server` on
 the server. The filename must match the ZZZ version you are using, for example
-`~/.zzz_server/zzz-remote-server-dev-build` for Dev or
-`~/.zzz_server/zzz-remote-server-stable-1.19.0` for Stable.
+`~/.zzz_server/zzz-remote-server-dev-<commit-sha>` for Dev or
+`~/.zzz_server/zzz-remote-server-stable-1.19.0` for Stable. The Dev filename
+uses the client commit SHA so a server built from an older checkout is not
+reused accidentally.
 
 ## Maintaining the SSH connection
 

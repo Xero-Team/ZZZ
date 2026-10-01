@@ -179,23 +179,21 @@ impl DockerExecConnection {
         release_channel: ReleaseChannel,
         version: SemanticVersion,
         remote_dir_for_server: &str,
-        _commit: Option<AppCommitSha>,
+        commit: Option<AppCommitSha>,
         cx: &mut AsyncApp,
     ) -> Result<Arc<RelPath>> {
         let remote_platform = self
             .remote_platform
             .context("No remote platform defined; cannot proceed.")?;
 
-        let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_owned(),
-            ReleaseChannel::Stable => version.to_string(),
-        };
+        let version_str =
+            super::remote_server_binary_version(release_channel, &version, commit.as_ref());
         let binary_name =
             paths::remote_server_binary_name(release_channel.dev_name(), &version_str, false);
         let dst_path = paths::remote_server_dir_relative()
             .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
 
-        let binary_exists_on_server = self
+        let binary_exists_on_server = match self
             .run_docker_exec(
                 &dst_path.display(self.path_style()),
                 Some(&remote_dir_for_server),
@@ -203,7 +201,32 @@ impl DockerExecConnection {
                 &["version"],
             )
             .await
-            .is_ok();
+        {
+            Ok(remote_version) => {
+                let matches = super::remote_server_version_matches(
+                    release_channel,
+                    &version,
+                    commit.as_ref(),
+                    &remote_version,
+                );
+                if !matches {
+                    log::info!(
+                        "remote server binary at {:?} has version {:?}, expected client version {:?}; replacing it",
+                        dst_path,
+                        remote_version.trim(),
+                        version_str,
+                    );
+                }
+                matches
+            }
+            Err(error) => {
+                log::debug!(
+                    "remote server binary at {:?} is unavailable: {error:#}",
+                    dst_path
+                );
+                false
+            }
+        };
         #[cfg(any(debug_assertions, feature = "build-remote-server-binary"))]
         if let Some(remote_server_path) = super::build_remote_server_from_source(
             &remote_platform,

@@ -12,7 +12,9 @@ use futures::{
     channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
 };
 use gpui::{AppContext as _, AsyncApp, Task};
+use release_channel::{AppCommitSha, ReleaseChannel};
 use rpc::proto::Envelope;
+use semver::Version;
 use util::command::Child;
 
 pub mod docker;
@@ -55,6 +57,66 @@ pub(crate) fn materialize_embedded_remote_server(
 pub(crate) fn embedded_remote_server_extension(platform: RemotePlatform) -> Option<&'static str> {
     remote_server_embed::compressed_archive(platform.os.as_str(), platform.arch.as_str())
         .map(|(_, extension)| extension)
+}
+
+/// Returns the cache key used in the remote server binary filename.
+///
+/// Development server binaries are keyed by the client commit so a server
+/// built from an older checkout cannot be reused for a newer client. Stable
+/// binaries continue to use the semantic application version.
+pub(crate) fn remote_server_binary_version(
+    release_channel: ReleaseChannel,
+    version: &Version,
+    commit: Option<&AppCommitSha>,
+) -> String {
+    match release_channel {
+        ReleaseChannel::Dev => commit.map_or_else(|| "build".to_owned(), AppCommitSha::full),
+        ReleaseChannel::Stable => version.to_string(),
+    }
+}
+
+/// Checks that the output of a remote server's `version` command belongs to
+/// the client that is about to connect to it.
+///
+/// Shell startup files may write to stdout, so only the last non-empty line is
+/// considered. Dev servers print either `<sha>` or `<build-id>+<sha>`;
+/// stable servers print their semantic version.
+pub(crate) fn remote_server_version_matches(
+    release_channel: ReleaseChannel,
+    version: &Version,
+    commit: Option<&AppCommitSha>,
+    output: &str,
+) -> bool {
+    let Some(actual) = output
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+    else {
+        return false;
+    };
+
+    match release_channel {
+        ReleaseChannel::Stable => {
+            let expected = version.to_string();
+            let expected = expected
+                .split_once('+')
+                .map_or(expected.as_str(), |(version, _)| version);
+            actual == expected
+        }
+        ReleaseChannel::Dev => {
+            let Some(commit) = commit else {
+                // Test and custom builds without a git revision cannot perform
+                // an identity check. Preserve the previous behavior for them.
+                return true;
+            };
+            let expected = commit.full();
+            actual == expected
+                || actual
+                    .rsplit_once('+')
+                    .is_some_and(|(_, actual_commit)| actual_commit == expected)
+        }
+    }
 }
 
 /// Parses the output of `uname -sm` to determine the remote platform.
@@ -619,5 +681,62 @@ mod tests {
         );
         assert_eq!(parse_shell("", "sh"), "sh");
         assert_eq!(parse_shell("\n", "sh"), "sh");
+    }
+
+    #[test]
+    fn test_remote_server_binary_version() {
+        let version = Version::new(1, 23, 0);
+        let commit = AppCommitSha::new("53604c81da82a0e99c3ee3d6077ca152446403c7".to_owned());
+
+        assert_eq!(
+            remote_server_binary_version(ReleaseChannel::Dev, &version, Some(&commit)),
+            commit.full()
+        );
+        assert_eq!(
+            remote_server_binary_version(ReleaseChannel::Dev, &version, None),
+            "build"
+        );
+        assert_eq!(
+            remote_server_binary_version(ReleaseChannel::Stable, &version, Some(&commit)),
+            "1.23.0"
+        );
+    }
+
+    #[test]
+    fn test_remote_server_version_matches() {
+        let version = Version::new(1, 23, 0);
+        let commit = AppCommitSha::new("53604c81da82a0e99c3ee3d6077ca152446403c7".to_owned());
+        let stable_version = Version::parse("1.23.0+stable").expect("valid test version");
+
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            Some(&commit),
+            "shell init output\n53604c81da82a0e99c3ee3d6077ca152446403c7\n"
+        ));
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            Some(&commit),
+            "12345+53604c81da82a0e99c3ee3d6077ca152446403c7\n"
+        ));
+        assert!(!remote_server_version_matches(
+            ReleaseChannel::Dev,
+            &version,
+            Some(&commit),
+            "28d60b8f28a9448fea506fc18aeeaf4698d047e9\n"
+        ));
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            None,
+            "shell init output\n1.23.0\n"
+        ));
+        assert!(!remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            None,
+            "1.22.0\n"
+        ));
     }
 }
