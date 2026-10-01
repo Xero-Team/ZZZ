@@ -23,6 +23,7 @@ use search::{SearchOption, SearchOptions, SearchSource};
 use settings::Settings as _;
 use theme_settings::ThemeSettings;
 use ui::{IconButtonShape, Tooltip, prelude::*};
+use util::ResultExt as _;
 use util::paths::PathMatcher;
 
 use super::thread_view::ThreadView;
@@ -249,8 +250,11 @@ impl ThreadSearchBar {
     fn schedule_update_matches(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self._update_matches_task = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(SEARCH_UPDATE_DEBOUNCE).await;
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update_in(cx, |this, window, cx| this.update_matches(window, cx))
-                .ok();
+                .log_err();
         }));
     }
 
@@ -428,6 +432,9 @@ impl ThreadSearchBar {
                         .collect::<Vec<_>>()
                 })
                 .await;
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update_in(cx, |this, window, cx| {
                 this.apply_search_results(
                     scanned,
@@ -437,7 +444,7 @@ impl ThreadSearchBar {
                     cx,
                 );
             })
-            .ok();
+            .log_err();
         }));
     }
 
