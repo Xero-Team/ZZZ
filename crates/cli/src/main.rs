@@ -937,8 +937,8 @@ fn run() -> Result<()> {
         })
         .collect::<Result<_>>()?;
 
-    if args.foreground {
-        app.run_foreground(url, user_data_dir.as_deref())?;
+    let foreground_exit_status = if args.foreground {
+        Some(app.run_foreground(url, user_data_dir.as_deref())?)
     } else {
         app.launch(url, user_data_dir.as_deref())?;
         sender
@@ -954,6 +954,14 @@ fn run() -> Result<()> {
                 .join()
                 .map_err(|_| anyhow::anyhow!("CLI anonymous fd copy thread panicked"))??;
         }
+        None
+    };
+
+    if let Some(exit_status) = foreground_exit_status {
+        if exit_status.success() {
+            return Ok(());
+        }
+        std::process::exit(exit_status.code().unwrap_or(1));
     }
 
     if let Some(exit_status) = exit_status.lock().take() {
