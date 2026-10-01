@@ -5,6 +5,7 @@ use extension::Extension;
 use gpui::{BackgroundExecutor, SharedString};
 use std::sync::Arc;
 use task::{DebugScenario, SpawnInTerminal, TaskTemplate};
+use util::ResultExt as _;
 
 pub(crate) struct ExtensionLocatorAdapter {
     extension: Arc<dyn Extension>,
@@ -40,7 +41,7 @@ impl DapLocator for ExtensionLocatorAdapter {
                 adapter.0.as_ref().to_owned(),
             )
             .await
-            .ok()
+            .log_err()
             .flatten()
     }
 
