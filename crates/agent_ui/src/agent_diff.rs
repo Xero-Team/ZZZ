@@ -1579,12 +1579,13 @@ impl AgentDiff {
     ) {
         if !AgentSettings::get_global(cx).single_file_review {
             for (editor, _) in self.reviewing_editors.drain() {
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.end_temporary_diff_override(cx);
-                        editor.unregister_addon::<EditorAgentDiffAddon>();
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    continue;
+                };
+                editor.update(cx, |editor, cx| {
+                    editor.end_temporary_diff_override(cx);
+                    editor.unregister_addon::<EditorAgentDiffAddon>();
+                });
             }
             return;
         }
@@ -1670,21 +1671,22 @@ impl AgentDiff {
             // Note: We could avoid this check by storing `reviewing_editors` by Workspace,
             // but that would add another lookup in `AgentDiff::editor_state`
             // which gets called much more frequently.
-            let in_workspace = editor
-                .read_with(cx, |editor, _cx| editor.workspace())
-                .ok()
-                .flatten()
+            let Some(editor_entity) = editor.upgrade() else {
+                self.reviewing_editors.remove(&editor);
+                continue;
+            };
+            let in_workspace = editor_entity
+                .read(cx)
+                .workspace()
                 .is_some_and(|editor_workspace| {
                     editor_workspace.entity_id() == workspace.entity_id()
                 });
 
             if in_workspace {
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.end_temporary_diff_override(cx);
-                        editor.unregister_addon::<EditorAgentDiffAddon>();
-                    })
-                    .ok();
+                editor_entity.update(cx, |editor, cx| {
+                    editor.end_temporary_diff_override(cx);
+                    editor.unregister_addon::<EditorAgentDiffAddon>();
+                });
                 self.reviewing_editors.remove(&editor);
             }
         }
