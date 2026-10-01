@@ -250,12 +250,17 @@ impl Lamport {
 
     pub fn tick(&mut self) -> Self {
         let timestamp = *self;
-        self.value += 1;
+        self.value = self
+            .value
+            .checked_add(1)
+            .expect("Lamport sequence exhausted");
         timestamp
     }
 
     pub fn observe(&mut self, timestamp: Self) {
-        self.value = cmp::max(self.value, timestamp.value) + 1;
+        self.value = cmp::max(self.value, timestamp.value)
+            .checked_add(1)
+            .expect("Lamport sequence exhausted");
     }
 }
 
@@ -321,6 +326,16 @@ mod tests {
             first.as_u64(),
             ((first.value as u64) << 32) | replica.as_u16() as u64
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "Lamport sequence exhausted")]
+    fn lamport_tick_rejects_sequence_overflow() {
+        let mut lamport = Lamport {
+            replica_id: ReplicaId::LOCAL,
+            value: Seq::MAX,
+        };
+        lamport.tick();
     }
 
     #[test]
