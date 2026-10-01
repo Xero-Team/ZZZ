@@ -1,4 +1,4 @@
-use anyhow::{Context as _, bail};
+use anyhow::Context as _;
 use collections::{FxHashMap, HashMap, HashSet};
 use language::{LanguageName, LanguageRegistry};
 use std::{
@@ -257,7 +257,7 @@ impl NewProcessModal {
                             anyhow::Ok(())
                         }
                     })
-                    .detach();
+                    .detach_and_log_err(cx);
 
                     Self {
                         debug_picker,
@@ -275,7 +275,7 @@ impl NewProcessModal {
 
             anyhow::Ok(())
         })
-        .detach();
+        .detach_and_log_err(cx);
     }
 
     fn render_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl ui::IntoElement {
@@ -310,7 +310,7 @@ impl NewProcessModal {
         }
     }
 
-    fn debug_scenario(&self, debugger: &str, cx: &App) -> Task<Option<DebugScenario>> {
+    fn debug_scenario(&self, debugger: &str, cx: &App) -> Task<anyhow::Result<DebugScenario>> {
         let request = match self.mode {
             NewProcessMode::Launch => {
                 DebugRequest::Launch(self.configure_mode.read(cx).debug_request(cx))
@@ -318,7 +318,12 @@ impl NewProcessModal {
             NewProcessMode::Attach => {
                 DebugRequest::Attach(self.attach_mode.read(cx).debug_request())
             }
-            _ => return Task::ready(None),
+            _ => {
+                return Task::ready(Err(anyhow::anyhow!(
+                    "cannot create a debug scenario in {} mode",
+                    self.mode
+                )));
+            }
         };
         let label = suggested_label(&request, debugger);
 
@@ -335,11 +340,16 @@ impl NewProcessModal {
             stop_on_entry,
         };
 
-        let adapter = cx
+        let Some(adapter) = cx
             .global::<DapRegistry>()
-            .adapter(&session_scenario.adapter);
+            .adapter(&session_scenario.adapter)
+        else {
+            return Task::ready(Err(anyhow::anyhow!(
+                "debug adapter {debugger} is not registered"
+            )));
+        };
 
-        cx.spawn(async move |_| adapter?.config_from_zzz_format(session_scenario).await.ok())
+        cx.spawn(async move |_| adapter.config_from_zzz_format(session_scenario).await)
     }
 
     fn start_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -375,14 +385,10 @@ impl NewProcessModal {
             .unwrap_or_default()
             .into();
         let worktree_id = task_contexts.worktree();
-        let mode = self.mode;
         cx.spawn_in(window, async move |this, cx| {
-            let Some(config) = this
+            let config = this
                 .update(cx, |this, cx| this.debug_scenario(&debugger, cx))?
-                .await
-            else {
-                bail!("debug config not found in mode: {mode}");
-            };
+                .await?;
 
             debug_panel.update_in(cx, |debug_panel, window, cx| {
                 debug_panel.start_session(config, task_context, None, worktree_id, window, cx)
@@ -436,7 +442,7 @@ impl NewProcessModal {
         };
         let scenario = self.debug_scenario(adapter, cx);
         cx.spawn_in(window, async move |this, cx| {
-            let scenario = scenario.await.context("no scenario to save")?;
+            let scenario = scenario.await?;
             let worktree_id = task_contexts
                 .context("no task contexts")?
                 .worktree()
@@ -1470,8 +1476,9 @@ impl PickerDelegate for DebugDelegate {
             return;
         };
         let locators = cx.global::<DapRegistry>().locators();
+        let debug_panel = self.debug_panel.clone();
         cx.spawn_in(window, async move |this, cx| {
-            let Some(debug_scenario) = cx
+            let debug_scenario = cx
                 .background_spawn(async move {
                     for locator in locators {
                         if let Some(scenario) =
@@ -1487,29 +1494,17 @@ impl PickerDelegate for DebugDelegate {
                     None
                 })
                 .await
-            else {
-                return;
-            };
+                .context("no debug adapter locator accepted the one-off task")?;
 
-            this.update_in(cx, |this, window, cx| {
-                this.delegate
-                    .debug_panel
-                    .update(cx, |panel, cx| {
-                        panel.start_session(
-                            debug_scenario,
-                            task_context,
-                            None,
-                            worktree_id,
-                            window,
-                            cx,
-                        );
-                    })
-                    .ok();
+            debug_panel.update_in(cx, |panel, window, cx| {
+                panel.start_session(debug_scenario, task_context, None, worktree_id, window, cx);
+            })?;
+            this.update(cx, |_, cx| {
                 cx.emit(DismissEvent);
-            })
-            .ok();
+            })?;
+            anyhow::Ok(())
         })
-        .detach();
+        .detach_and_log_err(cx);
     }
 
     fn confirm(
@@ -1557,7 +1552,7 @@ impl PickerDelegate for DebugDelegate {
                     .await?;
                 anyhow::Ok(())
             })
-            .detach();
+            .detach_and_log_err(cx);
         } else {
             self.debug_panel
                 .update(cx, |panel, cx| {
