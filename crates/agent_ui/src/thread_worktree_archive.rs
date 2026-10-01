@@ -581,16 +581,26 @@ pub async fn persist_worktree_state(root: &RootPlan, cx: &mut AsyncApp) -> Resul
 /// commits will be garbage-collected once the ref is removed.
 pub async fn rollback_persist(archived_worktree_id: i64, root: &RootPlan, cx: &mut AsyncApp) {
     // Delete the git ref on main repo
-    if let Ok((main_repo, _temp_project)) =
-        find_or_create_repository(&root.main_repo_path, root.remote_connection.as_ref(), cx).await
+    match find_or_create_repository(&root.main_repo_path, root.remote_connection.as_ref(), cx).await
     {
-        let ref_name = archived_worktree_ref_name(archived_worktree_id);
-        let rx = main_repo.update(cx, |repo, _cx| repo.delete_ref(ref_name));
-        rx.await.ok().and_then(|r| r.log_err());
-        // See note in `remove_root_after_worktree_removal`: this may be a
-        // live or temporary project; dropping only matters in the temporary
-        // case.
-        drop(_temp_project);
+        Ok((main_repo, _temp_project)) => {
+            let ref_name = archived_worktree_ref_name(archived_worktree_id);
+            let rx = main_repo.update(cx, |repo, _cx| repo.delete_ref(ref_name));
+            match rx.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    log::error!("Failed to delete archive ref during rollback: {error:#}");
+                }
+                Err(_) => log::error!("Archive ref deletion was canceled during rollback"),
+            }
+            // See note in `remove_root_after_worktree_removal`: this may be a
+            // live or temporary project; dropping only matters in the temporary
+            // case.
+            drop(_temp_project);
+        }
+        Err(error) => {
+            log::error!("Failed to open main repo during archive rollback: {error:#}");
+        }
     }
 
     // Delete the DB record
@@ -781,7 +791,17 @@ async fn remove_new_worktree_on_error(
         let rx = main_repo.update(cx, |repo, _cx| {
             repo.remove_worktree(worktree_path.clone(), true)
         });
-        rx.await.ok().and_then(|r| r.log_err());
+        match rx.await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                log::error!(
+                    "Failed to remove newly-created worktree after restore error: {error:#}"
+                );
+            }
+            Err(_) => {
+                log::error!("New worktree removal was canceled after restore error");
+            }
+        }
     }
 }
 
@@ -793,20 +813,23 @@ pub async fn cleanup_archived_worktree_record(
     cx: &mut AsyncApp,
 ) {
     // Delete the git ref from the main repo
-    if let Ok((main_repo, _temp_project)) =
-        find_or_create_repository(&row.main_repo_path, remote_connection, cx).await
-    {
-        let ref_name = archived_worktree_ref_name(row.id);
-        let rx = main_repo.update(cx, |repo, _cx| repo.delete_ref(ref_name));
-        match rx.await {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => log::warn!("Failed to delete archive ref: {error}"),
-            Err(_) => log::warn!("Archive ref deletion was canceled"),
+    match find_or_create_repository(&row.main_repo_path, remote_connection, cx).await {
+        Ok((main_repo, _temp_project)) => {
+            let ref_name = archived_worktree_ref_name(row.id);
+            let rx = main_repo.update(cx, |repo, _cx| repo.delete_ref(ref_name));
+            match rx.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => log::warn!("Failed to delete archive ref: {error}"),
+                Err(_) => log::warn!("Archive ref deletion was canceled"),
+            }
+            // See note in `remove_root_after_worktree_removal`: this may be a
+            // live or temporary project; dropping only matters in the temporary
+            // case.
+            drop(_temp_project);
         }
-        // See note in `remove_root_after_worktree_removal`: this may be a
-        // live or temporary project; dropping only matters in the temporary
-        // case.
-        drop(_temp_project);
+        Err(error) => {
+            log::warn!("Failed to open main repo while cleaning archive ref: {error:#}");
+        }
     }
 
     // Delete the DB records
