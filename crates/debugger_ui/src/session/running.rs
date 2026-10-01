@@ -65,6 +65,27 @@ use workspace::{
 static PROCESS_ID_PLACEHOLDER: LazyLock<String> =
     LazyLock::new(|| task::VariableName::PickProcessId.template_value());
 
+fn apply_run_in_terminal_environment(
+    environment: &mut HashMap<String, String>,
+    overrides: Option<&Value>,
+) {
+    let Some(Value::Object(overrides)) = overrides else {
+        return;
+    };
+
+    for (name, value) in overrides {
+        match value {
+            Value::String(value) => {
+                environment.insert(name.clone(), value.clone());
+            }
+            Value::Null => {
+                environment.remove(name);
+            }
+            _ => {}
+        }
+    }
+}
+
 pub struct RunningState {
     session: Entity<Session>,
     thread_id: Option<ThreadId>,
@@ -1246,25 +1267,11 @@ impl RunningState {
 
         let cwd = (!request.cwd.is_empty())
             .then(|| PathBuf::from(&request.cwd))
-            .or_else(|| {
-                session
-                    .binary()
-                    .expect("binary should be present")
-                    .cwd
-                    .clone()
-            });
+            .or_else(|| session.binary().and_then(|binary| binary.cwd.clone()));
 
         let mut envs: HashMap<String, String> =
             self.session.read(cx).task_context().project_env.clone();
-        if let Some(Value::Object(env)) = &request.env {
-            for (key, value) in env {
-                let (_, Value::String(value_str)) = (key.as_str(), value) else {
-                    continue;
-                };
-
-                envs.insert(key.clone(), value_str.clone());
-            }
-        }
+        apply_run_in_terminal_environment(&mut envs, request.env.as_ref());
 
         let mut args = request.args.clone();
         let command = if envs.contains_key("VSCODE_INSPECTOR_OPTIONS") {
@@ -1274,13 +1281,7 @@ impl RunningState {
             // This prevents the NodeJS REPL from appearing, which is not the desired behavior
             // The expected usage is for users to provide their own Node command, e.g., `node test.js`
             // This allows the NodeJS debug client to attach correctly
-            if args
-                .iter()
-                .filter(|arg| !arg.starts_with("--"))
-                .collect::<Vec<_>>()
-                .len()
-                > 1
-            {
+            if args.iter().filter(|arg| !arg.starts_with("--")).count() > 1 {
                 Some(args.remove(0))
             } else {
                 None
@@ -2002,6 +2003,27 @@ mod tests {
     use project::{FakeFs, Project};
     use serde_json::json;
     use util::path;
+
+    #[test]
+    fn run_in_terminal_environment_applies_strings_and_removes_nulls() {
+        let mut environment = HashMap::from_iter([
+            ("KEEP".to_owned(), "old".to_owned()),
+            ("REMOVE".to_owned(), "old".to_owned()),
+        ]);
+
+        apply_run_in_terminal_environment(
+            &mut environment,
+            Some(&json!({
+                "KEEP": "new",
+                "REMOVE": null,
+                "IGNORE": 1,
+            })),
+        );
+
+        assert_eq!(environment.get("KEEP").map(String::as_str), Some("new"));
+        assert!(!environment.contains_key("REMOVE"));
+        assert!(!environment.contains_key("IGNORE"));
+    }
 
     #[gpui::test]
     async fn stale_subview_host_during_tab_drop_does_not_read_updating_source_pane(
