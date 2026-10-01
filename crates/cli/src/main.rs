@@ -590,6 +590,13 @@ mod tests {
         assert!(is_memfd_link(Path::new("memfd:zzz-test")));
         assert!(!is_memfd_link(Path::new("/tmp/zzz-test (deleted)")));
     }
+
+    #[test]
+    fn test_parse_path_in_wsl_rejects_empty_distribution() {
+        let error = parse_path_in_wsl("file.txt", "user@")
+            .expect_err("an empty WSL distribution should be rejected");
+        assert_eq!(error.to_string(), "distribution is empty in wsl argument");
+    }
 }
 
 fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
@@ -603,6 +610,10 @@ fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
     } else {
         (None, wsl)
     };
+    anyhow::ensure!(
+        !distro_name.is_empty(),
+        "distribution is empty in wsl argument"
+    );
 
     let mut args = vec!["--distribution", distro_name];
     if let Some(user) = user {
@@ -621,16 +632,22 @@ fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
         .arg("--exec")
         .args(&command)
         .output()?;
-    let result = if output.status.success() {
-        String::from_utf8_lossy(&output.stdout).to_string()
+    let output = if output.status.success() {
+        output
     } else {
-        let fallback = util::command::new_std_command("wsl.exe")
+        util::command::new_std_command("wsl.exe")
             .args(&args)
             .arg("--")
             .args(&command)
-            .output()?;
-        String::from_utf8_lossy(&fallback.stdout).to_string()
+            .output()?
     };
+    anyhow::ensure!(
+        output.status.success(),
+        "failed to resolve WSL path {}: {}",
+        source.path.display(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    let result = String::from_utf8_lossy(&output.stdout);
 
     source.path = Path::new(result.trim()).to_owned();
 
@@ -1261,15 +1278,38 @@ mod flatpak {
                 return None;
             }
 
-            let install_dir = Command::new("/usr/bin/flatpak-spawn")
+            let output = match Command::new("/usr/bin/flatpak-spawn")
                 .arg("--host")
                 .arg("flatpak")
                 .arg("info")
                 .arg("--show-location")
                 .arg(flatpak_id)
                 .output()
-                .ok()?;
-            let install_dir = String::from_utf8(install_dir.stdout).ok()?;
+            {
+                Ok(output) => output,
+                Err(error) => {
+                    eprintln!("failed to query flatpak installation: {error}");
+                    return None;
+                }
+            };
+            if !output.status.success() {
+                eprintln!(
+                    "failed to query flatpak installation: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+                return None;
+            }
+            let install_dir = match String::from_utf8(output.stdout) {
+                Ok(install_dir) => install_dir,
+                Err(error) => {
+                    eprintln!("flatpak installation path is not valid UTF-8: {error}");
+                    return None;
+                }
+            };
+            if install_dir.trim().is_empty() {
+                eprintln!("flatpak installation path is empty");
+                return None;
+            }
             Some(PathBuf::from(install_dir.trim()).join("files"))
         } else {
             None
