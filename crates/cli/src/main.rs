@@ -1144,12 +1144,10 @@ mod flatpak {
             paths.push(extra_path.into());
         }
 
-        unsafe {
-            env::set_var(
-                "LD_LIBRARY_PATH",
-                env::join_paths(paths).expect("environment variable should be set"),
-            )
-        };
+        match env::join_paths(paths) {
+            Ok(joined) => unsafe { env::set_var("LD_LIBRARY_PATH", joined) },
+            Err(error) => eprintln!("failed to set LD_LIBRARY_PATH: {error}"),
+        }
     }
 
     /// Restarts outside of the sandbox if currently running within it
@@ -1161,10 +1159,7 @@ mod flatpak {
             args.push(
                 format!(
                     "--env={EXTRA_LIB_ENV_NAME}={}",
-                    flatpak_dir
-                        .join("lib")
-                        .to_str()
-                        .expect("path should be valid UTF-8")
+                    flatpak_dir.join("lib").to_string_lossy()
                 )
                 .into(),
             );
@@ -1207,13 +1202,9 @@ mod flatpak {
                 .arg("--show-location")
                 .arg(flatpak_id)
                 .output()
-                .expect("output should be present");
-            let install_dir = PathBuf::from(
-                String::from_utf8(install_dir.stdout)
-                    .expect("from_utf8 should be present")
-                    .trim(),
-            );
-            Some(install_dir.join("files"))
+                .ok()?;
+            let install_dir = String::from_utf8(install_dir.stdout).ok()?;
+            Some(PathBuf::from(install_dir.trim()).join("files"))
         } else {
             None
         }
