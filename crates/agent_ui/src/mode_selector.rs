@@ -3,7 +3,7 @@ use agent_client_protocol::schema::v1 as acp;
 use agent_servers::AgentServer;
 
 use fs::Fs;
-use gpui::{Context, Entity, WeakEntity, Window, prelude::*};
+use gpui::{Context, Entity, Task, WeakEntity, Window, prelude::*};
 use i18n as app_i18n;
 
 use std::{rc::Rc, sync::Arc};
@@ -27,6 +27,7 @@ pub struct ModeSelector {
     menu_handle: PopoverMenuHandle<ContextMenu>,
     fs: Arc<dyn Fs>,
     setting_mode: bool,
+    _setting_mode_task: Option<Task<()>>,
 }
 
 impl ModeSelector {
@@ -41,6 +42,7 @@ impl ModeSelector {
             menu_handle: PopoverMenuHandle::default(),
             fs,
             setting_mode: false,
+            _setting_mode_task: None,
         }
     }
 
@@ -52,13 +54,15 @@ impl ModeSelector {
         let all_modes = self.connection.all_modes();
         let current_mode = self.connection.current_mode();
 
-        let current_index = all_modes
-            .iter()
-            .position(|mode| mode.id.0 == current_mode.0)
-            .unwrap_or(0);
+        let next_mode = match all_modes.iter().position(|mode| mode.id == current_mode) {
+            Some(current_index) => all_modes.get((current_index + 1) % all_modes.len()),
+            None => all_modes.first(),
+        };
+        let Some(next_mode) = next_mode else {
+            return;
+        };
 
-        let next_index = (current_index + 1) % all_modes.len();
-        self.set_mode(all_modes[next_index].id.clone(), cx);
+        self.set_mode(next_mode.id.clone(), cx);
     }
 
     pub fn mode(&self) -> acp::SessionModeId {
@@ -68,19 +72,20 @@ impl ModeSelector {
     pub fn set_mode(&mut self, mode: acp::SessionModeId, cx: &mut Context<Self>) {
         let task = self.connection.set_mode(mode, cx);
         self.setting_mode = true;
+        self._setting_mode_task =
+            Some(cx.spawn(async move |this: WeakEntity<ModeSelector>, cx| {
+                if let Err(err) = task.await {
+                    log::error!("Failed to set session mode: {:?}", err);
+                }
+                let Some(this) = this.upgrade() else {
+                    return;
+                };
+                this.update(cx, |this, cx| {
+                    this.setting_mode = false;
+                    cx.notify();
+                });
+            }));
         cx.notify();
-
-        cx.spawn(async move |this: WeakEntity<ModeSelector>, cx| {
-            if let Err(err) = task.await {
-                log::error!("Failed to set session mode: {:?}", err);
-            }
-            this.update(cx, |this, cx| {
-                this.setting_mode = false;
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
     }
 
     fn build_context_menu(
@@ -123,23 +128,24 @@ impl ModeSelector {
                     let mode_id = mode.id.clone();
                     let weak_self = weak_self.clone();
                     move |window, cx| {
-                        weak_self
-                            .update(cx, |this, cx| {
-                                if window.modifiers().secondary() {
-                                    this.agent_server.set_default_mode(
-                                        if is_default {
-                                            None
-                                        } else {
-                                            Some(mode_id.clone())
-                                        },
-                                        this.fs.clone(),
-                                        cx,
-                                    );
-                                }
+                        let Some(this) = weak_self.upgrade() else {
+                            return;
+                        };
+                        this.update(cx, |this, cx| {
+                            if window.modifiers().secondary() {
+                                this.agent_server.set_default_mode(
+                                    if is_default {
+                                        None
+                                    } else {
+                                        Some(mode_id.clone())
+                                    },
+                                    this.fs.clone(),
+                                    cx,
+                                );
+                            }
 
-                                this.set_mode(mode_id.clone(), cx);
-                            })
-                            .ok();
+                            this.set_mode(mode_id.clone(), cx);
+                        });
                     }
                 }));
             }
@@ -220,8 +226,8 @@ impl Render for ModeSelector {
                 y: px(-2.0),
             })
             .menu(move |window, cx| {
-                this.update(cx, |this, cx| this.build_context_menu(window, cx))
-                    .ok()
+                let this = this.upgrade()?;
+                Some(this.update(cx, |this, cx| this.build_context_menu(window, cx)))
             })
     }
 }
