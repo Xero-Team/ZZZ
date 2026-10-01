@@ -43,7 +43,8 @@ use ui::{ContextMenu, ContextMenuEntry, right_click_menu};
 use workspace::dock::{DockPosition, Panel, PanelEvent};
 use workspace::notifications::NotificationId;
 use workspace::{
-    DraggedSelection, DraggedTab, HideStatusItem, ItemHandle, OpenOptions, Toast, Workspace,
+    DraggedSelection, DraggedTab, HideStatusItem, ItemHandle, NotificationWindowData,
+    NotificationWindowDisplay, NotificationWindowManager, OpenOptions, Toast, Workspace,
 };
 
 use crate::telegram_panel_settings::{TelegramPanelSettings, TelegramSettings};
@@ -148,6 +149,13 @@ impl MessageKey {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PendingScroll {
+    conversation_chat_id: i64,
+    message_chat_id: i64,
+    message_id: i32,
+}
+
 /// A code reference staged in the composer. Its [`target`](Self::target) is a
 /// remote permalink when the file belongs to a repository with a remote, or a
 /// worktree-relative path otherwise.
@@ -180,7 +188,7 @@ pub struct TelegramPanel {
     search_list_state: ListState,
     chat_count: usize,
     search_count: usize,
-    history_ids: Vec<i32>,
+    history_ids: Vec<MessageKey>,
     history_layout: Arc<Vec<MessageLayout>>,
     markdown_cache: HashMap<MessageKey, Entity<Markdown>>,
     composer: Entity<Editor>,
@@ -199,10 +207,11 @@ pub struct TelegramPanel {
     qr_cache: Option<(String, Arc<RenderImage>)>,
     _composer_subscription: Subscription,
     _search_subscription: Subscription,
+    _notification_release: Subscription,
     _search_task: Option<Task<()>>,
     _snapshot_task: Task<()>,
     voice_playback: Option<audio::PlaybackHandle>,
-    playing_voice: Option<i32>,
+    playing_voice: Option<MessageKey>,
     /// Drives playhead updates and resets the bar when playback ends.
     _voice_task: Option<Task<()>>,
     /// The moment the current flood-wait pause ends, when one is active.
@@ -217,7 +226,8 @@ pub struct TelegramPanel {
     /// The selected chat of the previous snapshot, to detect chat switches.
     selected_chat: Option<i64>,
     /// A message to reveal once its chat history has loaded.
-    pending_scroll: Option<(i64, i32)>,
+    pending_scroll: Option<PendingScroll>,
+    notification_windows: NotificationWindowManager,
 }
 
 impl TelegramPanel {
@@ -312,6 +322,10 @@ impl TelegramPanel {
             },
         );
 
+        let _notification_release = cx.on_release(|this, cx| {
+            this.notification_windows.dismiss_all(cx);
+        });
+
         let _snapshot_task = cx.spawn_in(window, async move |this, cx| {
             loop {
                 if snapshot_rx.changed().await.is_err() {
@@ -357,6 +371,7 @@ impl TelegramPanel {
             qr_cache: None,
             _composer_subscription,
             _search_subscription,
+            _notification_release,
             _search_task: None,
             _snapshot_task,
             voice_playback: None,
@@ -369,6 +384,7 @@ impl TelegramPanel {
             last_unread_total: 0,
             selected_chat: None,
             pending_scroll: None,
+            notification_windows: NotificationWindowManager::default(),
         };
         let panel = cx.entity().downgrade();
         this.history_list_state
@@ -394,7 +410,7 @@ impl TelegramPanel {
     ) {
         let previous_chats = self.view_model.chats.clone();
         self.view_model = snapshot;
-        self.notify_new_messages(&previous_chats, cx);
+        self.notify_new_messages(&previous_chats, window, cx);
         self.sync_chat_list();
         self.sync_history();
         self.rebuild_markdown(cx);
@@ -414,12 +430,6 @@ impl TelegramPanel {
             return;
         }
         self.selected_chat = selected;
-        if self
-            .pending_scroll
-            .is_some_and(|(chat_id, _)| Some(chat_id) != selected)
-        {
-            self.pending_scroll = None;
-        }
         self.clear_composer_items(cx);
         let draft = self.view_model.draft.clone();
         if self.composer.read(cx).text(cx) != draft {
@@ -460,24 +470,26 @@ impl TelegramPanel {
     /// Scrolls the history list to a message requested from search once it has
     /// loaded into history.
     fn reveal_pending_message(&mut self) {
-        let Some((chat_id, message_id)) = self.pending_scroll else {
+        let Some(pending) = self.pending_scroll else {
             return;
         };
-        if self.view_model.selected_chat != Some(chat_id) {
+        if self.view_model.selected_chat != Some(pending.conversation_chat_id) {
             return;
         }
-        if let Some(index) = self
-            .view_model
-            .history
-            .iter()
-            .position(|message| message.id == message_id)
-        {
+        if let Some(index) = self.view_model.history.iter().position(|message| {
+            message.chat_id == pending.message_chat_id && message.id == pending.message_id
+        }) {
             self.history_list_state.scroll_to_reveal_item(index);
             self.pending_scroll = None;
         }
     }
 
-    fn notify_new_messages(&mut self, previous_chats: &[ChatSnapshot], cx: &mut Context<Self>) {
+    fn notify_new_messages(
+        &mut self,
+        previous_chats: &[ChatSnapshot],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let previous_total = self.last_unread_total;
         self.last_unread_total = self.view_model.unread_total;
         if !self.view_model.auth.is_signed_in() {
@@ -486,12 +498,11 @@ impl TelegramPanel {
         if self.view_model.unread_total <= previous_total {
             return;
         }
-        if cx.active_window().is_none() {
+        if (window.is_window_active() && self.focus_handle.contains_focused(window, cx))
+            || !self.notification_windows.is_empty()
+        {
             return;
         }
-        let Some(workspace) = self.workspace.upgrade() else {
-            return;
-        };
         let Some(chat) = self
             .view_model
             .chats
@@ -510,17 +521,39 @@ impl TelegramPanel {
         let title = chat.title.clone();
         let body = chat_preview_text(&chat, cx);
         let open_label = tr(cx, "telegram_panel.toast.open", "Open");
-        workspace.update(cx, |workspace, cx| {
-            let toast = Toast::new(
-                NotificationId::unique::<TelegramPanel>(),
-                format!("{title}: {body}"),
-            )
-            .on_click(open_label, move |_, cx| {
-                cx.dispatch_action(&ToggleFocus);
-            })
-            .autohide();
-            workspace.show_toast(toast, cx);
-        });
+        let dismiss_label = tr(cx, "telegram_panel.toast.dismiss", "Dismiss");
+        let workspace_handle = self.workspace.clone();
+        self.notification_windows.show(
+            NotificationWindowData {
+                title: title.into(),
+                caption: body.into(),
+                context: None,
+                icon: IconName::Telegram,
+                view_label: open_label.into(),
+                dismiss_label: dismiss_label.into(),
+            },
+            NotificationWindowDisplay::Primary,
+            false,
+            window,
+            cx,
+            move |this, event, window, cx| match event {
+                ui::NotificationWindowEvent::Accepted => {
+                    cx.activate(true);
+                    window.activate_window();
+                    if let Some(workspace) = workspace_handle.upgrade() {
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.reveal_panel::<TelegramPanel>(window, cx);
+                            workspace.focus_panel::<TelegramPanel>(window, cx);
+                        });
+                    }
+                    this.notification_windows.dismiss_all(cx);
+                }
+                ui::NotificationWindowEvent::Dismissed => {
+                    this.notification_windows.dismiss_all(cx);
+                }
+            },
+            |_, _, _| Vec::new(),
+        );
     }
 
     fn sync_chat_list(&mut self) {
@@ -532,11 +565,11 @@ impl TelegramPanel {
     }
 
     fn sync_history(&mut self) {
-        let new_ids: Vec<i32> = self
+        let new_ids: Vec<MessageKey> = self
             .view_model
             .history
             .iter()
-            .map(|message| message.id)
+            .map(MessageKey::for_message)
             .collect();
         let previous = std::mem::replace(&mut self.history_ids, new_ids.clone());
         if previous == new_ids {
@@ -638,6 +671,12 @@ impl TelegramPanel {
     }
 
     fn open_chat(&mut self, chat_id: i64, cx: &mut Context<Self>) {
+        if self
+            .pending_scroll
+            .is_some_and(|pending| pending.conversation_chat_id != chat_id)
+        {
+            self.pending_scroll = None;
+        }
         self.start_engine();
         self.mode = ViewMode::Conversation;
         self.engine.send(Command::SelectChat { chat_id });
@@ -647,11 +686,19 @@ impl TelegramPanel {
 
     /// Opens a chat from a search hit and reveals the matched message once its
     /// history is loaded.
-    fn open_chat_at(&mut self, chat_id: i64, message_id: i32, cx: &mut Context<Self>) {
+    fn open_chat_at(&mut self, chat_id: i64, message: MessageSnapshot, cx: &mut Context<Self>) {
         self.search_open = false;
         self.engine.send(Command::ClearSearch);
-        self.pending_scroll = Some((chat_id, message_id));
-        self.open_chat(chat_id, cx);
+        self.pending_scroll = Some(PendingScroll {
+            conversation_chat_id: chat_id,
+            message_chat_id: message.chat_id,
+            message_id: message.id,
+        });
+        self.start_engine();
+        self.mode = ViewMode::Conversation;
+        self.engine.send(Command::SelectChatAt { chat_id, message });
+        self.history_list_state.set_follow_mode(FollowMode::Tail);
+        cx.notify();
         self.reveal_pending_message();
     }
 
@@ -1257,7 +1304,13 @@ impl TelegramPanel {
     }
 
     /// Plays a downloaded voice message, replacing any current playback.
-    fn start_voice_playback(&mut self, message_id: i32, path: &Path, cx: &mut Context<Self>) {
+    fn start_voice_playback(
+        &mut self,
+        chat_id: i64,
+        message_id: i32,
+        path: &Path,
+        cx: &mut Context<Self>,
+    ) {
         self.stop_voice_playback();
         let file = match std::fs::File::open(path) {
             Ok(file) => file,
@@ -1277,9 +1330,10 @@ impl TelegramPanel {
         };
         match audio::Audio::play_source(source, cx) {
             Ok(playback) => {
+                let message_key = MessageKey::Remote(chat_id, message_id);
                 self.voice_playback = Some(playback);
-                self.playing_voice = Some(message_id);
-                self.spawn_voice_tick(message_id, cx);
+                self.playing_voice = Some(message_key);
+                self.spawn_voice_tick(message_key, cx);
             }
             Err(error) => log::warn!("failed to play voice message: {error}"),
         }
@@ -1297,13 +1351,13 @@ impl TelegramPanel {
 
     /// Refreshes the voice playhead while playing and clears it once playback
     /// finishes so the bar returns to its idle state.
-    fn spawn_voice_tick(&mut self, message_id: i32, cx: &mut Context<Self>) {
+    fn spawn_voice_tick(&mut self, message_key: MessageKey, cx: &mut Context<Self>) {
         self._voice_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(VOICE_TICK).await;
                 let keep_going = this
                     .update(cx, |panel, cx| {
-                        if panel.playing_voice != Some(message_id) {
+                        if panel.playing_voice != Some(message_key) {
                             return false;
                         }
                         let (finished, paused) = match panel.voice_playback.as_ref() {
@@ -1336,7 +1390,8 @@ impl TelegramPanel {
         path: Option<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        if self.playing_voice == Some(message_id) {
+        let message_key = MessageKey::Remote(chat_id, message_id);
+        if self.playing_voice == Some(message_key) {
             if let Some(playback) = &self.voice_playback {
                 if playback.is_paused() {
                     playback.resume();
@@ -1348,7 +1403,7 @@ impl TelegramPanel {
             return;
         }
         if let Some(path) = path {
-            self.start_voice_playback(message_id, &path, cx);
+            self.start_voice_playback(chat_id, message_id, &path, cx);
         } else {
             self.pending_voice = Some((chat_id, message_id));
             self.engine.send(Command::DownloadMedia {
@@ -1379,7 +1434,7 @@ impl TelegramPanel {
             (Some(path), _) => {
                 let path = path.clone();
                 self.pending_voice = None;
-                self.start_voice_playback(message_id, &path, cx);
+                self.start_voice_playback(chat_id, message_id, &path, cx);
             }
             (None, DownloadState::Failed) => self.pending_voice = None,
             _ => {}
@@ -2283,7 +2338,7 @@ impl TelegramPanel {
                         return div().into_any_element();
                     };
                     let chat_id = hit.chat_id;
-                    let message_id = hit.message.as_ref().map_or(0, |message| message.id);
+                    let matched_message = hit.message.clone();
                     let panel = panel.clone();
                     let click_panel = panel.clone();
                     let markdown = markdown.clone();
@@ -2291,14 +2346,19 @@ impl TelegramPanel {
                         format!("telegram-search-hit-{index}").into(),
                     ))
                     .spacing(ListItemSpacing::Sparse)
-                    .on_click(move |_, _, cx| {
-                        if message_id == 0 {
+                    .on_click(move |_, _, cx| match matched_message.clone() {
+                        Some(message) => {
                             click_panel
-                                .update(cx, |panel, cx| panel.open_chat(chat_id, cx))
+                                .update(cx, |panel, cx| panel.open_chat_at(chat_id, message, cx))
                                 .ok();
-                        } else {
+                        }
+                        None => {
                             click_panel
-                                .update(cx, |panel, cx| panel.open_chat_at(chat_id, message_id, cx))
+                                .update(cx, |panel, cx| {
+                                    panel.search_open = false;
+                                    panel.engine.send(Command::ClearSearch);
+                                    panel.open_chat(chat_id, cx);
+                                })
                                 .ok();
                         }
                     })
@@ -2677,7 +2737,7 @@ fn render_media(
     let message_id = message.id;
 
     if media.kind == MediaKind::WebPage {
-        return render_webpage(media, message_id, cx);
+        return render_webpage(media, chat_id, message_id, cx);
     }
 
     let icon = match media.kind {
@@ -2712,7 +2772,7 @@ fn render_media(
     card = card.child(
         h_flex()
             .id(ElementId::Name(
-                format!("telegram-media-header-{message_id}").into(),
+                format!("telegram-media-header-{chat_id}-{message_id}").into(),
             ))
             .w_full()
             .min_w_0()
@@ -2750,7 +2810,9 @@ fn render_media(
             .child(
                 div().flex_none().child(
                     Disclosure::new(
-                        ElementId::Name(format!("telegram-media-disclosure-{message_id}").into()),
+                        ElementId::Name(
+                            format!("telegram-media-disclosure-{chat_id}-{message_id}").into(),
+                        ),
                         is_expanded,
                     )
                     .on_toggle_expanded(toggle),
@@ -2834,7 +2896,7 @@ fn render_media_preview(
             let open_path = media.downloaded_path.clone();
             v_flex()
                 .id(ElementId::Name(
-                    format!("telegram-video-{message_id}").into(),
+                    format!("telegram-video-{chat_id}-{message_id}").into(),
                 ))
                 .relative()
                 .cursor_pointer()
@@ -2929,7 +2991,7 @@ fn render_media_action(
     let path = media.downloaded_path.clone();
     let panel = panel.clone();
     Button::new(
-        ElementId::Name(format!("telegram-media-action-{message_id}").into()),
+        ElementId::Name(format!("telegram-media-action-{chat_id}-{message_id}").into()),
         if downloading {
             tr(cx, "telegram_panel.media.downloading", "Downloading…")
         } else if media.downloaded_path.is_some() {
@@ -2973,7 +3035,7 @@ fn render_voice_action(
     let (is_playing, is_paused, playhead_ratio) =
         panel.upgrade().map_or((false, false, 0.0), |panel| {
             panel.read_with(cx, |panel, _| {
-                let playing = panel.playing_voice == Some(message_id);
+                let playing = panel.playing_voice == Some(MessageKey::Remote(chat_id, message_id));
                 let playback = if playing {
                     panel.voice_playback.as_ref()
                 } else {
@@ -3003,7 +3065,7 @@ fn render_voice_action(
         .items_center()
         .child(
             IconButton::new(
-                ElementId::Name(format!("telegram-voice-{message_id}").into()),
+                ElementId::Name(format!("telegram-voice-{chat_id}-{message_id}").into()),
                 if downloading {
                     IconName::LoadCircle
                 } else if is_playing && !is_paused {
@@ -3151,7 +3213,12 @@ fn media_display_size(media: &MediaSnapshot) -> Option<(Pixels, Pixels)> {
     Some((px(display_width), px(display_height)))
 }
 
-fn render_webpage(media: &MediaSnapshot, message_id: i32, cx: &mut App) -> AnyElement {
+fn render_webpage(
+    media: &MediaSnapshot,
+    chat_id: i64,
+    message_id: i32,
+    cx: &mut App,
+) -> AnyElement {
     let Some(webpage) = &media.webpage else {
         return div().into_any_element();
     };
@@ -3160,7 +3227,7 @@ fn render_webpage(media: &MediaSnapshot, message_id: i32, cx: &mut App) -> AnyEl
     let description = webpage.description.clone().unwrap_or_default();
     v_flex()
         .id(ElementId::Name(
-            format!("telegram-link-{message_id}").into(),
+            format!("telegram-link-{chat_id}-{message_id}").into(),
         ))
         .w_full()
         .min_w_0()
@@ -4117,6 +4184,7 @@ impl Panel for TelegramPanel {
     fn set_active(&mut self, active: bool, _window: &mut Window, cx: &mut Context<Self>) {
         if active {
             self.start_engine();
+            self.notification_windows.dismiss_all(cx);
         }
         cx.notify();
     }
@@ -4433,11 +4501,17 @@ mod tests {
     }
 
     #[test]
-    fn markdown_keys_separate_optimistic_sends() {
+    fn message_keys_separate_peer_local_and_optimistic_ids() {
         use super::MessageKey;
 
         let remote = message(7, "Ada", 0);
         assert_eq!(MessageKey::for_message(&remote), MessageKey::Remote(1, 7));
+        let mut migrated_remote = remote.clone();
+        migrated_remote.chat_id = 2;
+        assert_ne!(
+            MessageKey::for_message(&remote),
+            MessageKey::for_message(&migrated_remote)
+        );
 
         let mut first = message(0, "", 0);
         first.local_id = Some(1);

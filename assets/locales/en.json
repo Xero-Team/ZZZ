@@ -3423,6 +3423,7 @@
     "telegram_panel.media.attachment": "Attachment",
     "telegram_panel.back": "Back",
     "telegram_panel.toast.open": "Open",
+    "telegram_panel.toast.dismiss": "Dismiss",
     "telegram_panel.search.searching": "Searching…",
     "telegram_panel.search.no_results": "No results",
     "telegram_panel.search.close": "Close search",

@@ -3423,6 +3423,7 @@
     "telegram_panel.media.attachment": "附件",
     "telegram_panel.back": "返回",
     "telegram_panel.toast.open": "打开",
+    "telegram_panel.toast.dismiss": "关闭",
     "telegram_panel.search.searching": "正在搜索…",
     "telegram_panel.search.no_results": "无结果",
     "telegram_panel.search.close": "关闭搜索",
