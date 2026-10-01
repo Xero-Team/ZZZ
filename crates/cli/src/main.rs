@@ -556,6 +556,40 @@ mod tests {
             ["../libexec/zzz-editor", "../lib/zzz/zzz-editor", "./zzz"]
         );
     }
+
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
+    #[test]
+    fn test_duplicate_file_descriptor_preserves_original() {
+        use std::{
+            io::{Read as _, Seek as _, Write as _},
+            os::fd::AsRawFd as _,
+        };
+
+        let mut original = tempfile::tempfile().expect("temporary file should be created");
+        original
+            .write_all(b"contents")
+            .expect("temporary file should be writable");
+        let duplicate = duplicate_file_descriptor(original.as_raw_fd())
+            .expect("file descriptor should be duplicated");
+        drop(duplicate);
+
+        original
+            .rewind()
+            .expect("original descriptor should remain open");
+        let mut contents = String::new();
+        original
+            .read_to_string(&mut contents)
+            .expect("original descriptor should remain readable");
+        assert_eq!(contents, "contents");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_memfd_link_detection() {
+        assert!(is_memfd_link(Path::new("/memfd:zzz-test (deleted)")));
+        assert!(is_memfd_link(Path::new("memfd:zzz-test")));
+        assert!(!is_memfd_link(Path::new("/tmp/zzz-test (deleted)")));
+    }
 }
 
 fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
@@ -919,25 +953,21 @@ fn run() -> Result<()> {
 fn anonymous_fd(path: &str) -> Option<fs::File> {
     #[cfg(target_os = "linux")]
     {
-        use std::os::fd::{self, FromRawFd};
+        use std::os::fd;
 
         let fd_str = path.strip_prefix("/proc/self/fd/")?;
 
         let link = fs::read_link(path).ok()?;
-        if !link.starts_with("memfd:") {
+        if !is_memfd_link(&link) {
             return None;
         }
 
         let fd: fd::RawFd = fd_str.parse().ok()?;
-        let file = unsafe { fs::File::from_raw_fd(fd) };
-        Some(file)
+        duplicate_file_descriptor(fd)
     }
     #[cfg(any(target_os = "macos", target_os = "freebsd"))]
     {
-        use std::os::{
-            fd::{self, FromRawFd},
-            unix::fs::FileTypeExt,
-        };
+        use std::os::{fd, unix::fs::FileTypeExt};
 
         let fd_str = path.strip_prefix("/dev/fd/")?;
 
@@ -947,8 +977,7 @@ fn anonymous_fd(path: &str) -> Option<fs::File> {
             return None;
         }
         let fd: fd::RawFd = fd_str.parse().ok()?;
-        let file = unsafe { fs::File::from_raw_fd(fd) };
-        Some(file)
+        duplicate_file_descriptor(fd)
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd")))]
     {
@@ -956,6 +985,23 @@ fn anonymous_fd(path: &str) -> Option<fs::File> {
         // not implemented for bsd, windows. Could be, but isn't yet
         None
     }
+}
+
+#[cfg(target_os = "linux")]
+fn is_memfd_link(link: &Path) -> bool {
+    link.file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(|name| name.starts_with("memfd:"))
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
+fn duplicate_file_descriptor(fd: std::os::fd::RawFd) -> Option<fs::File> {
+    use std::os::fd::BorrowedFd;
+
+    // SAFETY: The descriptor is borrowed only long enough to duplicate it.
+    // The caller retains ownership of the original descriptor.
+    let borrowed_fd = unsafe { BorrowedFd::borrow_raw(fd) };
+    borrowed_fd.try_clone_to_owned().ok().map(fs::File::from)
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
