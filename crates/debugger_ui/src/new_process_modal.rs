@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use collections::{FxHashMap, HashMap, HashSet};
+use collections::{FxHashMap, HashSet};
 use language::{LanguageName, LanguageRegistry};
 use std::{
     borrow::Cow,
@@ -73,6 +73,41 @@ fn suggested_label(request: &DebugRequest, debugger: &str) -> SharedString {
         )
         .into(),
     }
+}
+
+fn is_valid_environment_variable_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|byte| byte == b'_' || byte.is_ascii_alphabetic())
+        && bytes.all(|byte| byte == b'_' || byte.is_ascii_alphanumeric())
+}
+
+fn parse_posix_command(command: String) -> (String, Vec<String>, FxHashMap<String, String>) {
+    let Some(arguments) = ShellKind::Posix.split(&command) else {
+        return (command, Vec::new(), FxHashMap::default());
+    };
+    let mut arguments = arguments.into_iter().peekable();
+    let mut environment = FxHashMap::default();
+
+    while let Some(argument) = arguments.peek() {
+        let Some((name, value)) = argument.split_once('=') else {
+            break;
+        };
+        if !is_valid_environment_variable_name(name) {
+            break;
+        }
+
+        let name = name.to_owned();
+        let value = value.to_owned();
+        arguments.next();
+        environment.insert(name, value);
+    }
+
+    let Some(program) = arguments.next() else {
+        return (command, Vec::new(), FxHashMap::default());
+    };
+    (program, arguments.collect(), environment)
 }
 
 impl NewProcessModal {
@@ -959,27 +994,7 @@ impl ConfigureMode {
                 env: Default::default(),
             };
         }
-        let command = self.program.read(cx).text(cx);
-        let mut args = ShellKind::Posix
-            .split(&command)
-            .into_iter()
-            .flatten()
-            .peekable();
-        let mut env = FxHashMap::default();
-        while args.peek().is_some_and(|arg| arg.contains('=')) {
-            let arg = args.next().expect("iterator should yield an item");
-            let (lhs, rhs) = arg.split_once('=').expect("split_once should be present");
-            env.insert(lhs.to_owned(), rhs.to_owned());
-        }
-
-        let program = if let Some(program) = args.next() {
-            program
-        } else {
-            env = FxHashMap::default();
-            command
-        };
-
-        let args = args.collect::<Vec<_>>();
+        let (program, args, env) = parse_posix_command(self.program.read(cx).text(cx));
 
         task::LaunchRequest {
             program,
@@ -1420,26 +1435,7 @@ impl PickerDelegate for DebugDelegate {
             })
             .unwrap_or_default();
 
-        let mut args = ShellKind::Posix
-            .split(&text)
-            .into_iter()
-            .flatten()
-            .peekable();
-        let mut env = HashMap::default();
-        while args.peek().is_some_and(|arg| arg.contains('=')) {
-            let arg = args.next().expect("iterator should yield an item");
-            let (lhs, rhs) = arg.split_once('=').expect("split_once should be present");
-            env.insert(lhs.to_owned(), rhs.to_owned());
-        }
-
-        let program = if let Some(program) = args.next() {
-            program
-        } else {
-            env = HashMap::default();
-            text
-        };
-
-        let args = args.collect::<Vec<_>>();
+        let (program, args, env) = parse_posix_command(text);
         let task = task::TaskTemplate {
             label: tr(cx, "debugger_ui.new_process_modal.one_off_label", "one-off"), // TODO: rename using command as label
             env,
@@ -1741,6 +1737,31 @@ pub(crate) fn resolve_path(path: &mut String) {
             strip_path
         );
     };
+}
+
+#[cfg(test)]
+mod command_line_tests {
+    use super::parse_posix_command;
+
+    #[test]
+    fn parses_environment_variables_without_consuming_programs_with_equals() {
+        let (program, arguments, environment) =
+            parse_posix_command("ENV=value /tmp/app=debug --flag=value".to_owned());
+
+        assert_eq!(program, "/tmp/app=debug");
+        assert_eq!(arguments, ["--flag=value"]);
+        assert_eq!(environment.get("ENV").map(String::as_str), Some("value"));
+    }
+
+    #[test]
+    fn rejects_invalid_environment_variable_names() {
+        let (program, arguments, environment) =
+            parse_posix_command("9ENV=value program".to_owned());
+
+        assert_eq!(program, "9ENV=value");
+        assert_eq!(arguments, ["program"]);
+        assert!(environment.is_empty());
+    }
 }
 
 #[cfg(test)]
