@@ -820,7 +820,7 @@ fn run() -> Result<()> {
     // files (e.g., when RPC-ing into an already-running instance). The files
     // live in the OS temp directory and will be cleaned up on reboot.
     for temp_dir in temp_dirs {
-        let _ = temp_dir.keep();
+        drop(temp_dir.keep());
     }
 
     #[cfg(target_os = "windows")]
@@ -858,7 +858,7 @@ fn run() -> Result<()> {
         .stack_size(10 * 1024 * 1024)
         .thread_name(|ix| format!("RayonWorker{}", ix))
         .build_global()
-        .expect("build_global should be present");
+        .context("initializing CLI rayon thread pool")?;
 
     let sender: JoinHandle<anyhow::Result<()>> = thread::Builder::new()
         .name("CliReceiver".to_owned())
@@ -885,12 +885,16 @@ fn run() -> Result<()> {
                     env,
                     user_data_dir: user_data_dir_for_thread,
                     dev_container: args.dev_container,
-                    cwd: env::current_dir().ok(),
+                    cwd: Some(
+                        env::current_dir()
+                            .context("retrieving current directory for open request")?,
+                    ),
                 };
 
                 tx.send(open_request)?;
 
-                while let Ok(response) = rx.recv() {
+                loop {
+                    let response = rx.recv().context("receiving response from ZZZ")?;
                     match response {
                         CliResponse::Ping => {}
                         CliResponse::Stdout { message } => println!("{message}"),
@@ -901,25 +905,27 @@ fn run() -> Result<()> {
                         }
                     }
                 }
-
-                Ok(())
             }
         })
-        .expect("value should be present");
+        .context("spawning CLI receiver thread")?;
 
     let stdin_pipe_handle: Option<JoinHandle<anyhow::Result<()>>> =
-        stdin_tmp_file.map(|mut tmp_file| {
-            thread::Builder::new()
-                .name("CliStdin".to_owned())
-                .spawn(move || {
-                    let mut stdin = std::io::stdin().lock();
-                    if !io::IsTerminal::is_terminal(&stdin) {
-                        io::copy(&mut stdin, &mut tmp_file)?;
-                    }
-                    Ok(())
-                })
-                .expect("value should be present")
-        });
+        if let Some(mut tmp_file) = stdin_tmp_file {
+            Some(
+                thread::Builder::new()
+                    .name("CliStdin".to_owned())
+                    .spawn(move || {
+                        let mut stdin = std::io::stdin().lock();
+                        if !io::IsTerminal::is_terminal(&stdin) {
+                            io::copy(&mut stdin, &mut tmp_file)?;
+                        }
+                        Ok(())
+                    })
+                    .context("spawning CLI stdin copy thread")?,
+            )
+        } else {
+            None
+        };
 
     let anonymous_fd_pipe_handles: Vec<_> = anonymous_fd_tmp_files
         .into_iter()
@@ -927,20 +933,26 @@ fn run() -> Result<()> {
             thread::Builder::new()
                 .name("CliAnonymousFd".to_owned())
                 .spawn(move || io::copy(&mut file, &mut tmp_file))
-                .expect("value should be present")
+                .context("spawning CLI anonymous fd copy thread")
         })
-        .collect();
+        .collect::<Result<_>>()?;
 
     if args.foreground {
         app.run_foreground(url, user_data_dir.as_deref())?;
     } else {
         app.launch(url, user_data_dir.as_deref())?;
-        sender.join().expect("join should be present")?;
+        sender
+            .join()
+            .map_err(|_| anyhow::anyhow!("CLI receiver thread panicked"))??;
         if let Some(handle) = stdin_pipe_handle {
-            handle.join().expect("join should be present")?;
+            handle
+                .join()
+                .map_err(|_| anyhow::anyhow!("CLI stdin copy thread panicked"))??;
         }
         for handle in anonymous_fd_pipe_handles {
-            handle.join().expect("join should be present")?;
+            handle
+                .join()
+                .map_err(|_| anyhow::anyhow!("CLI anonymous fd copy thread panicked"))??;
         }
     }
 
