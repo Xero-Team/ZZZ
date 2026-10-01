@@ -3,7 +3,7 @@ use agent_client_protocol::schema::v1 as acp;
 use anyhow::{Result, anyhow};
 use futures::{FutureExt, future::Shared};
 use gpui::{App, Context, Entity, Global, Task, prelude::*};
-use util::path_list::PathList;
+use util::{ResultExt as _, path_list::PathList};
 
 struct GlobalThreadStore(Entity<ThreadStore>);
 
@@ -103,10 +103,14 @@ impl ThreadStore {
     fn spawn_reload(cx: &mut Context<Self>) -> Shared<Task<()>> {
         let database_connection = ThreadsDatabase::connect(cx);
         cx.spawn(async move |this, cx| {
-            let Ok(database) = database_connection.await.map_err(|err| anyhow!(err)) else {
+            let Some(database) = database_connection
+                .await
+                .map_err(|error| anyhow!(error))
+                .log_err()
+            else {
                 return;
             };
-            let Ok(all_threads) = database.list_threads().await else {
+            let Some(all_threads) = database.list_threads().await.log_err() else {
                 return;
             };
             this.update(cx, |this, cx| {

@@ -2,7 +2,6 @@ use anyhow::Result;
 use gpui::{AsyncApp, Entity};
 use language::{Buffer, OutlineItem};
 use regex::Regex;
-use std::fmt::Write;
 use text::Point;
 
 /// For files over this size, instead of reading them (or including them in context),
@@ -124,16 +123,14 @@ async fn render_outline(
     };
 
     // Add pagination information
-    if has_more {
-        writeln!(&mut output, "\nShowing symbols {page_start}-{page_end} (there were more symbols found; use offset: {page_end} to see next page)",
+    let pagination = if has_more {
+        format!(
+            "\nShowing symbols {page_start}-{page_end} (there were more symbols found; use offset: {page_end} to see next page)\n"
         )
     } else {
-        writeln!(
-            &mut output,
-            "\nShowing symbols {page_start}-{page_end} (total symbols: {total_symbols})",
-        )
-    }
-    .ok();
+        format!("\nShowing symbols {page_start}-{page_end} (total symbols: {total_symbols})\n")
+    };
+    output.push_str(&pagination);
 
     Ok(output)
 }
@@ -156,9 +153,9 @@ fn render_entries(
         let end_line = item.range.end.row + 1;
 
         if start_line == end_line {
-            writeln!(output, " [L{}]", start_line).ok();
+            output.push_str(&format!(" [L{start_line}]\n"));
         } else {
-            writeln!(output, " [L{}-{}]", start_line, end_line).ok();
+            output.push_str(&format!(" [L{start_line}-{end_line}]\n"));
         }
         entries_rendered += 1;
     }

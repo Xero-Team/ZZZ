@@ -16,6 +16,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use settings::{Settings, SettingsStore, ToolPermissionMode, update_settings_file};
 use std::{marker::PhantomData, sync::Arc};
+use util::ResultExt as _;
 
 #[derive(Debug)]
 pub enum ThreadEvent {
@@ -309,7 +310,7 @@ impl<T: DeserializeOwned> ToolInput<T> {
 
     pub fn ready(value: serde_json::Value) -> Self {
         let (tx, rx) = mpsc::unbounded();
-        tx.unbounded_send(ToolInputPayload::Full(value)).ok();
+        tx.unbounded_send(ToolInputPayload::Full(value)).log_err();
         Self {
             rx,
             _phantom: PhantomData,
@@ -319,7 +320,7 @@ impl<T: DeserializeOwned> ToolInput<T> {
     pub fn invalid_json(error_message: String) -> Self {
         let (tx, rx) = mpsc::unbounded();
         tx.unbounded_send(ToolInputPayload::InvalidJson { error_message })
-            .ok();
+            .log_err();
         Self {
             rx,
             _phantom: PhantomData,
@@ -398,17 +399,19 @@ impl ToolInputSender {
     pub fn send_partial(&mut self, payload: serde_json::Value) {
         self.tx
             .unbounded_send(ToolInputPayload::Partial(payload))
-            .ok();
+            .log_err();
     }
 
     pub fn send_full(&mut self, payload: serde_json::Value) {
-        self.tx.unbounded_send(ToolInputPayload::Full(payload)).ok();
+        self.tx
+            .unbounded_send(ToolInputPayload::Full(payload))
+            .log_err();
     }
 
     pub fn send_invalid_json(&mut self, error_message: String) {
         self.tx
             .unbounded_send(ToolInputPayload::InvalidJson { error_message })
-            .ok();
+            .log_err();
     }
 }
 
@@ -648,7 +651,7 @@ impl ThreadEventStream {
                     .meta(meta)
                     .into(),
             )))
-            .ok();
+            .log_err();
     }
 
     fn resolve_tool_call_authorization(
@@ -661,11 +664,11 @@ impl ThreadEventStream {
                 tool_call_id: acp::ToolCallId::new(tool_use_id.to_string()),
                 outcome,
             }))
-            .ok();
+            .log_err();
     }
 
     fn send_plan(&self, plan: acp::Plan) {
-        self.0.unbounded_send(Ok(ThreadEvent::Plan(plan))).ok();
+        self.0.unbounded_send(Ok(ThreadEvent::Plan(plan))).log_err();
     }
 }
 
@@ -706,7 +709,7 @@ impl ToolCallEventStream {
     /// Signal cancellation for this event stream. Only available in tests.
     #[cfg(any(test, feature = "test-support"))]
     pub fn signal_cancellation_with_sender(cancellation_tx: &mut watch::Sender<bool>) {
-        cancellation_tx.send(true).ok();
+        cancellation_tx.send(true).log_err();
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -781,14 +784,14 @@ impl ToolCallEventStream {
                 }
                 .into(),
             )))
-            .ok();
+            .log_err();
     }
 
     pub fn subagent_spawned(&self, id: acp::SessionId) {
         self.stream
             .0
             .unbounded_send(Ok(ThreadEvent::SubagentSpawned(id)))
-            .ok();
+            .log_err();
     }
 
     pub fn update_plan(&self, plan: acp::Plan) {
@@ -974,7 +977,7 @@ impl ToolCallEventStream {
             let (mut settings_tx, mut settings_rx) = watch::channel(());
             let _settings_subscription = cx.update(|cx| {
                 cx.observe_global::<SettingsStore>(move |_cx| {
-                    settings_tx.send(()).ok();
+                    settings_tx.send(()).log_err();
                 })
             });
 
