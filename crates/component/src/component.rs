@@ -78,7 +78,7 @@ impl ComponentRegistry {
 
     pub fn sorted_previews(&self) -> Vec<ComponentMetadata> {
         let mut previews: Vec<ComponentMetadata> = self.previews().into_iter().cloned().collect();
-        previews.sort_by_key(|a| a.name());
+        previews.sort_by_key(|component| component.sort_name());
         previews
     }
 
@@ -89,7 +89,7 @@ impl ComponentRegistry {
     pub fn sorted_components(&self) -> Vec<ComponentMetadata> {
         let mut components: Vec<ComponentMetadata> =
             self.components().into_iter().cloned().collect();
-        components.sort_by_key(|a| a.name());
+        components.sort_by_key(|component| component.sort_name());
         components
     }
 
@@ -326,4 +326,48 @@ pub enum ComponentScope {
     Utilities,
     #[strum(serialize = "Version Control")]
     VersionControl,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ComponentId, ComponentMetadata, ComponentRegistry, ComponentScope, ComponentStatus,
+    };
+    use gpui::SharedString;
+
+    fn metadata(
+        id: &'static str,
+        name: &'static str,
+        sort_name: &'static str,
+    ) -> ComponentMetadata {
+        ComponentMetadata {
+            id: ComponentId(id),
+            description: None,
+            name: SharedString::new_static(name),
+            preview: None,
+            scope: ComponentScope::None,
+            sort_name: SharedString::new_static(sort_name),
+            status: ComponentStatus::Live,
+        }
+    }
+
+    #[test]
+    fn registry_uses_component_sort_names() {
+        let mut registry = ComponentRegistry::default();
+        registry.components.insert(
+            ComponentId("alphabetical-first"),
+            metadata("alphabetical-first", "Alpha", "Zulu"),
+        );
+        registry.components.insert(
+            ComponentId("alphabetical-last"),
+            metadata("alphabetical-last", "Zulu", "Alpha"),
+        );
+
+        let names = registry
+            .sorted_components()
+            .into_iter()
+            .map(|component| component.name())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["Zulu", "Alpha"]);
+    }
 }
