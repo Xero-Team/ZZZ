@@ -70,7 +70,7 @@ impl Render for Breadcrumbs {
                 breadcrumb_font,
                 prefix_element,
                 active_item.as_ref(),
-                false,
+                self.pane_focused,
                 window,
                 cx,
             )
@@ -100,6 +100,9 @@ impl ToolbarItemView for Breadcrumbs {
             cx,
             Box::new(move |event, _, cx| {
                 if event == ItemEvent::UpdateBreadcrumbs {
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
                     this.update(cx, |this, cx| {
                         cx.notify();
                         if let Some(active_item) = this.active_item.as_ref() {
@@ -107,8 +110,7 @@ impl ToolbarItemView for Breadcrumbs {
                                 active_item.breadcrumb_location(cx),
                             ))
                         }
-                    })
-                    .ok();
+                    });
                 }
             }),
         ));
@@ -120,8 +122,12 @@ impl ToolbarItemView for Breadcrumbs {
         &mut self,
         pane_focused: bool,
         _window: &mut Window,
-        _: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
+        if self.pane_focused == pane_focused {
+            return;
+        }
         self.pane_focused = pane_focused;
+        cx.notify();
     }
 }
