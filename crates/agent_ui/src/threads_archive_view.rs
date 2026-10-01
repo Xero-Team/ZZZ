@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::agent_connection_store::AgentConnectionStore;
 
@@ -1190,6 +1191,7 @@ impl Render for ThreadsArchiveView {
 
 struct ProjectPickerModal {
     picker: Entity<Picker<ProjectPickerDelegate>>,
+    _load_workspaces_task: Task<()>,
     _subscription: Subscription,
 }
 
@@ -1231,26 +1233,29 @@ impl ProjectPickerModal {
             });
 
         let db = WorkspaceDb::global(cx);
-        cx.spawn_in(window, async move |this, cx| {
+        let load_workspaces_task = cx.spawn_in(window, async move |this, cx| {
             let workspaces = db
                 .recent_project_workspaces(fs.as_ref())
                 .await
                 .log_err()
                 .unwrap_or_default();
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update_in(cx, move |this, window, cx| {
                 this.picker.update(cx, move |picker, cx| {
                     picker.delegate.workspaces = workspaces;
                     picker.update_matches(picker.query(cx), window, cx)
                 })
             })
-            .ok();
-        })
-        .detach();
+            .log_err();
+        });
 
         picker.focus_handle(cx).focus(window, cx);
 
         Self {
             picker,
+            _load_workspaces_task: load_workspaces_task,
             _subscription,
         }
     }
@@ -1335,6 +1340,15 @@ impl ProjectPickerDelegate {
             ProjectPickerEntry::Workspace(hit) => Some(hit),
             ProjectPickerEntry::Header(_) => None,
         }
+    }
+
+    fn set_filtered_entries(&mut self, entries: Vec<ProjectPickerEntry>) {
+        self.filtered_entries = entries;
+        self.selected_index = self
+            .filtered_entries
+            .iter()
+            .position(|entry| matches!(entry, ProjectPickerEntry::Workspace(_)))
+            .unwrap_or(0);
     }
 
     fn open_local_folder(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -1432,12 +1446,62 @@ impl PickerDelegate for ProjectPickerDelegate {
     fn update_matches(
         &mut self,
         query: String,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
-        let query = query.trim_start();
+        let query = query.trim_start().to_owned();
         let smart_case = query.chars().any(|c| c.is_uppercase());
-        let is_empty_query = query.is_empty();
+        if query.is_empty() {
+            let mut entries = Vec::new();
+            if self
+                .workspaces
+                .iter()
+                .any(|workspace| self.is_sibling_workspace(workspace.workspace_id))
+            {
+                entries.push(ProjectPickerEntry::Header(tr(
+                    cx,
+                    "agent_ui.threads_archive.this_window",
+                    "This Window",
+                )));
+                for (id, workspace) in self.workspaces.iter().enumerate() {
+                    if self.is_sibling_workspace(workspace.workspace_id) {
+                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
+                            candidate_id: id,
+                            score: 0.0,
+                            positions: Vec::new(),
+                            string: String::new(),
+                        }));
+                    }
+                }
+            }
+
+            if self.workspaces.iter().any(|workspace| {
+                !self.is_current_workspace(workspace.workspace_id)
+                    && !self.is_sibling_workspace(workspace.workspace_id)
+            }) {
+                entries.push(ProjectPickerEntry::Header(tr(
+                    cx,
+                    "agent_ui.threads_archive.recent_projects",
+                    "Recent Projects",
+                )));
+                for (id, workspace) in self.workspaces.iter().enumerate() {
+                    if !self.is_current_workspace(workspace.workspace_id)
+                        && !self.is_sibling_workspace(workspace.workspace_id)
+                    {
+                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
+                            candidate_id: id,
+                            score: 0.0,
+                            positions: Vec::new(),
+                            string: String::new(),
+                        }));
+                    }
+                }
+            }
+
+            self.set_filtered_entries(entries);
+            cx.notify();
+            return Task::ready(());
+        }
 
         let sibling_candidates: Vec<_> = self
             .workspaces
@@ -1453,23 +1517,6 @@ impl PickerDelegate for ProjectPickerDelegate {
                 StringMatchCandidate::new(id, &combined_string)
             })
             .collect();
-
-        let mut sibling_matches = gpui::block_on(fuzzy::match_strings(
-            &sibling_candidates,
-            query,
-            smart_case,
-            true,
-            100,
-            &Default::default(),
-            cx.background_executor().clone(),
-        ));
-
-        sibling_matches.sort_unstable_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.candidate_id.cmp(&b.candidate_id))
-        });
 
         let recent_candidates: Vec<_> = self
             .workspaces
@@ -1488,99 +1535,78 @@ impl PickerDelegate for ProjectPickerDelegate {
                 StringMatchCandidate::new(id, &combined_string)
             })
             .collect();
+        let background_executor = cx.background_executor().clone();
 
-        let mut recent_matches = gpui::block_on(fuzzy::match_strings(
-            &recent_candidates,
-            query,
-            smart_case,
-            true,
-            100,
-            &Default::default(),
-            cx.background_executor().clone(),
-        ));
+        cx.spawn_in(window, async move |this, cx| {
+            let sibling_cancel = AtomicBool::new(false);
+            let recent_cancel = AtomicBool::new(false);
+            let (mut sibling_matches, mut recent_matches) = futures::join!(
+                fuzzy::match_strings(
+                    &sibling_candidates,
+                    &query,
+                    smart_case,
+                    true,
+                    100,
+                    &sibling_cancel,
+                    background_executor.clone(),
+                ),
+                fuzzy::match_strings(
+                    &recent_candidates,
+                    &query,
+                    smart_case,
+                    true,
+                    100,
+                    &recent_cancel,
+                    background_executor,
+                ),
+            );
 
-        recent_matches.sort_unstable_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.candidate_id.cmp(&b.candidate_id))
-        });
+            let sort_matches = |matches: &mut Vec<StringMatch>| {
+                matches.sort_unstable_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.candidate_id.cmp(&b.candidate_id))
+                });
+            };
+            sort_matches(&mut sibling_matches);
+            sort_matches(&mut recent_matches);
 
-        let mut entries = Vec::new();
-
-        let has_siblings_to_show = if is_empty_query {
-            !sibling_candidates.is_empty()
-        } else {
-            !sibling_matches.is_empty()
-        };
-
-        if has_siblings_to_show {
-            entries.push(ProjectPickerEntry::Header(tr(
-                cx,
-                "agent_ui.threads_archive.this_window",
-                "This Window",
-            )));
-
-            if is_empty_query {
-                for (id, workspace) in self.workspaces.iter().enumerate() {
-                    if self.is_sibling_workspace(workspace.workspace_id) {
-                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
-                            candidate_id: id,
-                            score: 0.0,
-                            positions: Vec::new(),
-                            string: String::new(),
-                        }));
-                    }
+            let Some(this) = this.upgrade() else {
+                return;
+            };
+            this.update_in(cx, move |this, _window, cx| {
+                let mut entries = Vec::new();
+                if !sibling_matches.is_empty() {
+                    entries.push(ProjectPickerEntry::Header(tr(
+                        cx,
+                        "agent_ui.threads_archive.this_window",
+                        "This Window",
+                    )));
+                    entries.extend(
+                        sibling_matches
+                            .into_iter()
+                            .map(ProjectPickerEntry::Workspace),
+                    );
                 }
-            } else {
-                for m in sibling_matches {
-                    entries.push(ProjectPickerEntry::Workspace(m));
+                if !recent_matches.is_empty() {
+                    entries.push(ProjectPickerEntry::Header(tr(
+                        cx,
+                        "agent_ui.threads_archive.recent_projects",
+                        "Recent Projects",
+                    )));
+                    entries.extend(
+                        recent_matches
+                            .into_iter()
+                            .map(ProjectPickerEntry::Workspace),
+                    );
                 }
-            }
-        }
 
-        let has_recent_to_show = if is_empty_query {
-            !recent_candidates.is_empty()
-        } else {
-            !recent_matches.is_empty()
-        };
-
-        if has_recent_to_show {
-            entries.push(ProjectPickerEntry::Header(tr(
-                cx,
-                "agent_ui.threads_archive.recent_projects",
-                "Recent Projects",
-            )));
-
-            if is_empty_query {
-                for (id, workspace) in self.workspaces.iter().enumerate() {
-                    if !self.is_current_workspace(workspace.workspace_id)
-                        && !self.is_sibling_workspace(workspace.workspace_id)
-                    {
-                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
-                            candidate_id: id,
-                            score: 0.0,
-                            positions: Vec::new(),
-                            string: String::new(),
-                        }));
-                    }
-                }
-            } else {
-                for m in recent_matches {
-                    entries.push(ProjectPickerEntry::Workspace(m));
-                }
-            }
-        }
-
-        self.filtered_entries = entries;
-
-        self.selected_index = self
-            .filtered_entries
-            .iter()
-            .position(|e| matches!(e, ProjectPickerEntry::Workspace(_)))
-            .unwrap_or(0);
-
-        Task::ready(())
+                this.delegate.set_filtered_entries(entries);
+                cx.notify();
+            })
+            .log_err();
+        })
     }
 
     fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
