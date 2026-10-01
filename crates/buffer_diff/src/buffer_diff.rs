@@ -1611,21 +1611,23 @@ impl BufferDiff {
     }
 
     pub fn clear_pending_hunks(&mut self, cx: &mut Context<Self>) {
-        if self.secondary_diff.is_some() {
-            self.inner.pending_hunks = SumTree::from_summary(DiffHunkSummary {
-                buffer_range: Anchor::min_min_range_for_buffer(self.buffer_id),
-                diff_base_byte_range: 0..0,
-                added_rows: 0,
-                removed_rows: 0,
-            });
-            let changed_range = Some(Anchor::min_max_range_for_buffer(self.buffer_id));
-            let base_text_range = Some(0..self.base_text(cx).len());
-            cx.emit(BufferDiffEvent::DiffChanged(DiffChanged {
-                changed_range: changed_range.clone(),
-                base_text_changed_range: base_text_range,
-                extended_range: changed_range,
-            }));
-        }
+        let Some((first, last)) = self
+            .inner
+            .pending_hunks
+            .first()
+            .zip(self.inner.pending_hunks.last())
+        else {
+            return;
+        };
+        let changed_range = first.buffer_range.start..last.buffer_range.end;
+        let base_text_changed_range =
+            first.diff_base_byte_range.start..last.diff_base_byte_range.end;
+        self.inner.pending_hunks = SumTree::new(&self.inner.buffer_snapshot);
+        cx.emit(BufferDiffEvent::DiffChanged(DiffChanged {
+            changed_range: Some(changed_range.clone()),
+            base_text_changed_range: Some(base_text_changed_range),
+            extended_range: Some(changed_range),
+        }));
     }
 
     pub fn stage_or_unstage_hunks(
@@ -2680,6 +2682,76 @@ mod tests {
                 );
             });
         }
+    }
+
+    #[gpui::test]
+    async fn test_clear_pending_hunks(cx: &mut TestAppContext) {
+        let head_text = "one\ntwo\nthree\n";
+        let buffer = Buffer::new(
+            ReplicaId::LOCAL,
+            BufferId::new(1).unwrap(),
+            "one\nTWO\nthree\n".to_owned(),
+        );
+        let secondary_diff = cx.new(|cx| BufferDiff::new_with_base_text(head_text, &buffer, cx));
+        let diff = cx.new(|cx| {
+            let mut diff = BufferDiff::new_with_base_text(head_text, &buffer, cx);
+            diff.set_secondary_diff(secondary_diff);
+            diff
+        });
+
+        let hunk = diff.update(cx, |diff, cx| {
+            let hunk = diff
+                .snapshot(cx)
+                .hunks(&buffer)
+                .next()
+                .expect("buffer should contain a changed hunk");
+            assert_eq!(
+                hunk.secondary_status,
+                DiffHunkSecondaryStatus::HasSecondaryHunk
+            );
+            diff.stage_or_unstage_hunks(true, std::slice::from_ref(&hunk), &buffer, true, cx);
+            hunk
+        });
+
+        let (tx, rx) = mpsc::channel();
+        let subscription = cx.update(|cx| {
+            cx.subscribe(&diff, move |_, event, _| {
+                tx.send(event.clone())
+                    .expect("event receiver should remain connected");
+            })
+        });
+
+        diff.update(cx, |diff, cx| diff.clear_pending_hunks(cx));
+        let event = rx
+            .try_recv()
+            .expect("clearing pending hunks should emit a change event");
+        match event {
+            BufferDiffEvent::DiffChanged(change) => {
+                assert_eq!(change.changed_range, Some(hunk.buffer_range.clone()));
+                assert_eq!(
+                    change.base_text_changed_range,
+                    Some(hunk.diff_base_byte_range.clone())
+                );
+                assert_eq!(change.extended_range, Some(hunk.buffer_range));
+            }
+            event => panic!("unexpected event: {event:?}"),
+        }
+        assert!(rx.try_recv().is_err());
+
+        diff.update(cx, |diff, cx| {
+            let hunk = diff
+                .snapshot(cx)
+                .hunks(&buffer)
+                .next()
+                .expect("buffer should still contain the changed hunk");
+            assert_eq!(
+                hunk.secondary_status,
+                DiffHunkSecondaryStatus::HasSecondaryHunk
+            );
+            diff.clear_pending_hunks(cx);
+        });
+        assert!(rx.try_recv().is_err());
+        drop(subscription);
     }
 
     #[gpui::test]
