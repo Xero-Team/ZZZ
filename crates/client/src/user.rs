@@ -258,7 +258,9 @@ impl Collaborator {
     pub fn from_proto(message: proto::Collaborator) -> Result<Self> {
         Ok(Self {
             peer_id: message.peer_id.context("invalid peer id")?,
-            replica_id: ReplicaId::new(message.replica_id as u16),
+            replica_id: ReplicaId::new(
+                u16::try_from(message.replica_id).context("invalid replica id")?,
+            ),
             user_id: message.user_id as UserId,
             is_host: message.is_host,
             committer_name: message.committer_name,
@@ -271,7 +273,7 @@ impl Collaborator {
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::User;
+    use super::{Collaborator, User, proto};
 
     #[test]
     fn user_ordering_distinguishes_equal_logins() {
@@ -289,5 +291,17 @@ mod tests {
         assert_ne!(first, second);
         assert_ne!(first.cmp(&second), std::cmp::Ordering::Equal);
         assert_eq!(BTreeSet::from([first, second]).len(), 2);
+    }
+
+    #[test]
+    fn collaborator_rejects_out_of_range_replica_id() {
+        let error = Collaborator::from_proto(proto::Collaborator {
+            peer_id: Some(proto::PeerId { owner_id: 1, id: 2 }),
+            replica_id: u32::from(u16::MAX) + 1,
+            ..Default::default()
+        })
+        .expect_err("replica ids larger than u16 should be rejected");
+
+        assert_eq!(error.to_string(), "invalid replica id");
     }
 }
