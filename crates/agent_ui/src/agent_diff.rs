@@ -78,8 +78,9 @@ impl AgentDiffPane {
             workspace.activate_item(&existing_diff, true, true, window, cx);
             existing_diff
         } else {
-            let agent_diff = cx
-                .new(|cx| AgentDiffPane::new(thread.clone(), workspace.weak_handle(), window, cx));
+            let workspace_entity = cx.entity();
+            let agent_diff =
+                cx.new(|cx| AgentDiffPane::new(thread.clone(), workspace_entity, window, cx));
             workspace.add_item_to_center(Box::new(agent_diff.clone()), window, cx);
             agent_diff
         }
@@ -87,7 +88,7 @@ impl AgentDiffPane {
 
     pub fn new(
         thread: Entity<AcpThread>,
-        workspace: WeakEntity<Workspace>,
+        workspace: Entity<Workspace>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -95,18 +96,21 @@ impl AgentDiffPane {
         let multibuffer = cx.new(|_| MultiBuffer::new(Capability::ReadWrite));
 
         let project = thread.read(cx).project().clone();
+        let workspace_weak = workspace.downgrade();
+        let workspace_for_controls = workspace_weak.clone();
         let editor = cx.new(|cx| {
-            let workspace_entity = workspace.upgrade().expect("workspace must exist");
             let diff_display_editor = SplittableEditor::new(
                 EditorSettings::get_global(cx).diff_view_style,
                 multibuffer.clone(),
                 project.clone(),
-                workspace_entity,
+                workspace,
                 window,
                 cx,
             );
-            diff_display_editor
-                .set_render_diff_hunk_controls(diff_hunk_controls(&thread, workspace.clone()), cx);
+            diff_display_editor.set_render_diff_hunk_controls(
+                diff_hunk_controls(&thread, workspace_for_controls),
+                cx,
+            );
             diff_display_editor.update_editors(cx, |editor, _cx| {
                 editor.register_addon(AgentDiffAddon);
             });
@@ -128,7 +132,7 @@ impl AgentDiffPane {
             editor,
             thread,
             focus_handle,
-            workspace,
+            workspace: workspace_weak,
         };
         this.update_excerpts(window, cx);
         this
@@ -594,9 +598,12 @@ impl Item for AgentDiffPane {
     where
         Self: Sized,
     {
-        Task::ready(Some(cx.new(|cx| {
-            Self::new(self.thread.clone(), self.workspace.clone(), window, cx)
-        })))
+        let Some(workspace) = self.workspace.upgrade() else {
+            return Task::ready(None);
+        };
+        Task::ready(Some(
+            cx.new(|cx| Self::new(self.thread.clone(), workspace, window, cx)),
+        ))
     }
 
     fn is_dirty(&self, cx: &App) -> bool {
@@ -1922,7 +1929,7 @@ mod tests {
             cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
         let workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
         let agent_diff = cx.new_window_entity(|window, cx| {
-            AgentDiffPane::new(thread.clone(), workspace.downgrade(), window, cx)
+            AgentDiffPane::new(thread.clone(), workspace.clone(), window, cx)
         });
         let editor = agent_diff.read_with(cx, |diff, cx| diff.editor.read(cx).rhs_editor().clone());
 
