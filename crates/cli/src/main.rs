@@ -283,8 +283,7 @@ fn expand_directory_pair(
     rel_paths.extend(left_files.keys().cloned());
     rel_paths.extend(right_files.keys().cloned());
 
-    let mut temp_dir = TempDir::new()?;
-    let mut temp_dir_used = false;
+    let mut temp_dir = None;
     let mut pairs = Vec::new();
 
     for rel in rel_paths {
@@ -297,7 +296,6 @@ fn expand_directory_pair(
             }
             (Some(left_path), None) => {
                 let stub = create_empty_stub(&mut temp_dir, &rel)?;
-                temp_dir_used = true;
                 pairs.push([
                     left_path.to_string_lossy().into_owned(),
                     stub.to_string_lossy().into_owned(),
@@ -305,7 +303,6 @@ fn expand_directory_pair(
             }
             (None, Some(right_path)) => {
                 let stub = create_empty_stub(&mut temp_dir, &rel)?;
-                temp_dir_used = true;
                 pairs.push([
                     stub.to_string_lossy().into_owned(),
                     right_path.to_string_lossy().into_owned(),
@@ -315,7 +312,6 @@ fn expand_directory_pair(
         }
     }
 
-    let temp_dir = if temp_dir_used { Some(temp_dir) } else { None };
     Ok((pairs, temp_dir))
 }
 
@@ -337,7 +333,11 @@ fn collect_files(root: &Path) -> anyhow::Result<BTreeMap<PathBuf, PathBuf>> {
     Ok(files)
 }
 
-fn create_empty_stub(temp_dir: &mut TempDir, rel: &Path) -> anyhow::Result<PathBuf> {
+fn create_empty_stub(temp_dir: &mut Option<TempDir>, rel: &Path) -> anyhow::Result<PathBuf> {
+    let temp_dir = match temp_dir {
+        Some(temp_dir) => temp_dir,
+        None => temp_dir.insert(TempDir::new()?),
+    };
     let stub_path = temp_dir.path().join(rel);
     if let Some(parent) = stub_path.parent() {
         fs::create_dir_all(parent)?;
@@ -491,6 +491,37 @@ mod tests {
                 .to_str()
                 .expect("temporary new path should be valid UTF-8")
         ));
+    }
+
+    #[test]
+    fn test_directory_diff_creates_stubs_only_for_missing_files() {
+        let root = tempfile::tempdir().expect("temporary directory should be created");
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        fs::create_dir_all(&left).expect("left directory should be created");
+        fs::create_dir_all(&right).expect("right directory should be created");
+        fs::write(left.join("shared.txt"), "left").expect("left shared file should be created");
+        fs::write(right.join("shared.txt"), "right").expect("right shared file should be created");
+
+        let (pairs, temp_dir) =
+            expand_directory_pair(&left, &right).expect("directory diff should expand");
+        assert_eq!(pairs.len(), 1);
+        assert!(temp_dir.is_none());
+
+        fs::write(left.join("left-only.txt"), "left only")
+            .expect("left-only file should be created");
+        let (pairs, temp_dir) =
+            expand_directory_pair(&left, &right).expect("directory diff should expand");
+        let temp_dir = temp_dir.expect("a missing counterpart should require a stub directory");
+        let [_, stub_path] = pairs
+            .iter()
+            .find(|[left_path, _]| left_path.ends_with("left-only.txt"))
+            .expect("left-only file should have a diff pair");
+        assert!(Path::new(stub_path).starts_with(temp_dir.path()));
+        assert_eq!(
+            fs::read_to_string(stub_path).expect("stub file should be readable"),
+            ""
+        );
     }
 
     // NOTE:
