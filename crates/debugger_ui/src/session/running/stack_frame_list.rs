@@ -12,7 +12,7 @@ use gpui::{
 };
 use i18n::tr;
 use util::{
-    debug_panic,
+    ResultExt as _, debug_panic,
     paths::{PathStyle, is_absolute},
 };
 
@@ -66,6 +66,24 @@ pub(crate) fn stack_frame_filter_key(
 ) -> String {
     let database_id: i64 = workspace_id.into();
     format!("stack-frame-list-filter-{}-{}", adapter_name.0, database_id)
+}
+
+fn path_is_within(path: &str, prefix: &str, path_style: PathStyle) -> bool {
+    let Some(candidate_prefix) = path.get(..prefix.len()) else {
+        return false;
+    };
+    let prefix_matches = if path_style.is_windows() {
+        candidate_prefix.eq_ignore_ascii_case(prefix)
+    } else {
+        candidate_prefix == prefix
+    };
+    if !prefix_matches {
+        return false;
+    }
+
+    path.len() == prefix.len()
+        || prefix.ends_with(path_style.separators_ch())
+        || path[prefix.len()..].starts_with(path_style.separators_ch())
 }
 
 pub struct StackFrameList {
@@ -125,7 +143,7 @@ impl StackFrameList {
                 let key = stack_frame_filter_key(&session.read(cx).adapter(), database_id);
                 KeyValueStore::global(cx)
                     .read_kvp(&key)
-                    .ok()
+                    .log_err()
                     .flatten()
                     .map(StackFrameFilter::from_str_or_default)
             })
@@ -266,7 +284,10 @@ impl StackFrameList {
         let mut first_stack_frame_with_path = None;
 
         let stack_frames = match self.stack_frames(cx) {
-            Ok(stack_frames) => stack_frames,
+            Ok(stack_frames) => {
+                self.error = None;
+                stack_frames
+            }
             Err(e) => {
                 self.error = Some(format!("{}", e).into());
                 self.entries.clear();
@@ -279,15 +300,18 @@ impl StackFrameList {
             }
         };
 
-        let worktree_prefixes: Vec<_> = self
+        let (path_style, worktree_prefixes) = self
             .workspace
             .read_with(cx, |workspace, cx| {
-                workspace
-                    .visible_worktrees(cx)
-                    .map(|tree| tree.read(cx).abs_path())
-                    .collect()
+                (
+                    workspace.project().read(cx).path_style(cx),
+                    workspace
+                        .visible_worktrees(cx)
+                        .map(|tree| tree.read(cx).abs_path())
+                        .collect::<Vec<_>>(),
+                )
             })
-            .unwrap_or_default();
+            .unwrap_or((PathStyle::local(), Vec::new()));
 
         let mut filter_entries_indices = Vec::default();
         for stack_frame in &stack_frames {
@@ -296,7 +320,7 @@ impl StackFrameList {
                     worktree_prefixes
                         .iter()
                         .filter_map(|tree| tree.to_str())
-                        .any(|tree| path.starts_with(tree))
+                        .any(|tree| path_is_within(path, tree, path_style))
                 })
             });
 
@@ -313,7 +337,7 @@ impl StackFrameList {
                 _ => {
                     let collapsed_entries = std::mem::take(&mut collapsed_entries);
                     if !collapsed_entries.is_empty() {
-                        entries.push(StackFrameEntry::Collapsed(collapsed_entries.clone()));
+                        entries.push(StackFrameEntry::Collapsed(collapsed_entries));
                     }
 
                     first_stack_frame.get_or_insert(entries.len());
@@ -763,19 +787,65 @@ impl StackFrameList {
         cx.notify();
     }
 
-    fn select_next(&mut self, _: &menu::SelectNext, _window: &mut Window, cx: &mut Context<Self>) {
-        let ix = match self.selected_ix {
-            _ if self.entries.is_empty() => None,
-            None => Some(0),
-            Some(ix) => {
-                if ix == self.entries.len() - 1 {
-                    Some(0)
-                } else {
-                    Some(ix + 1)
-                }
+    fn visible_entry_count(&self) -> usize {
+        match self.list_filter {
+            StackFrameFilter::All => self.entries.len(),
+            StackFrameFilter::OnlyUserFrames => self.filter_entries_indices.len(),
+        }
+    }
+
+    fn entry_index_for_visible_position(&self, position: usize) -> Option<usize> {
+        match self.list_filter {
+            StackFrameFilter::All => (position < self.entries.len()).then_some(position),
+            StackFrameFilter::OnlyUserFrames => self.filter_entries_indices.get(position).copied(),
+        }
+    }
+
+    fn selected_visible_position(&self) -> Option<usize> {
+        let selected_ix = self.selected_ix?;
+        match self.list_filter {
+            StackFrameFilter::All => (selected_ix < self.entries.len()).then_some(selected_ix),
+            StackFrameFilter::OnlyUserFrames => {
+                self.filter_entries_indices.binary_search(&selected_ix).ok()
             }
+        }
+    }
+
+    fn select_next_entry(&mut self, cx: &mut Context<Self>) {
+        let visible_count = self.visible_entry_count();
+        let visible_position = match self.selected_visible_position() {
+            _ if visible_count == 0 => None,
+            None => Some(0),
+            Some(position) => Some((position + 1) % visible_count),
         };
+        self.select_ix(
+            visible_position.and_then(|position| self.entry_index_for_visible_position(position)),
+            cx,
+        );
+    }
+
+    fn select_first_entry(&mut self, cx: &mut Context<Self>) {
+        let ix = self.entry_index_for_visible_position(0);
         self.select_ix(ix, cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn select_first_entry_for_test(&mut self, cx: &mut Context<Self>) {
+        self.select_first_entry(cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn select_next_entry_for_test(&mut self, cx: &mut Context<Self>) {
+        self.select_next_entry(cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected_ix_for_test(&self) -> Option<usize> {
+        self.selected_ix
+    }
+
+    fn select_next(&mut self, _: &menu::SelectNext, _window: &mut Window, cx: &mut Context<Self>) {
+        self.select_next_entry(cx);
     }
 
     fn select_previous(
@@ -784,18 +854,17 @@ impl StackFrameList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let ix = match self.selected_ix {
-            _ if self.entries.is_empty() => None,
-            None => Some(self.entries.len() - 1),
-            Some(ix) => {
-                if ix == 0 {
-                    Some(self.entries.len() - 1)
-                } else {
-                    Some(ix - 1)
-                }
-            }
+        let visible_count = self.visible_entry_count();
+        let visible_position = match self.selected_visible_position() {
+            _ if visible_count == 0 => None,
+            None => Some(visible_count - 1),
+            Some(0) => Some(visible_count - 1),
+            Some(position) => Some(position - 1),
         };
-        self.select_ix(ix, cx);
+        self.select_ix(
+            visible_position.and_then(|position| self.entry_index_for_visible_position(position)),
+            cx,
+        );
     }
 
     fn select_first(
@@ -804,20 +873,14 @@ impl StackFrameList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let ix = if self.entries.is_empty() {
-            None
-        } else {
-            Some(0)
-        };
-        self.select_ix(ix, cx);
+        self.select_first_entry(cx);
     }
 
     fn select_last(&mut self, _: &menu::SelectLast, _window: &mut Window, cx: &mut Context<Self>) {
-        let ix = if self.entries.is_empty() {
-            None
-        } else {
-            Some(self.entries.len() - 1)
-        };
+        let ix = self
+            .visible_entry_count()
+            .checked_sub(1)
+            .and_then(|position| self.entry_index_for_visible_position(position));
         self.select_ix(ix, cx);
     }
 
@@ -866,7 +929,7 @@ impl StackFrameList {
             let kvp = KeyValueStore::global(cx);
             let filter: String = self.list_filter.into();
             cx.background_spawn(async move { kvp.write_kvp(key, filter).await })
-                .detach();
+                .detach_and_log_err(cx);
         }
 
         if thread_status == Some(ThreadStatus::Stopped) {
@@ -885,15 +948,12 @@ impl StackFrameList {
                 }
             }
 
-            if let Some(ix) = self.selected_ix {
-                let scroll_to = match self.list_filter {
-                    StackFrameFilter::All => ix,
-                    StackFrameFilter::OnlyUserFrames => self
-                        .filter_entries_indices
-                        .binary_search_by_key(&ix, |ix| *ix)
-                        .expect("This index will always exist"),
-                };
-                self.list_state.scroll_to_reveal_item(scroll_to);
+            if self.selected_ix.is_some() {
+                if let Some(scroll_to) = self.selected_visible_position() {
+                    self.list_state.scroll_to_reveal_item(scroll_to);
+                } else {
+                    self.selected_ix = None;
+                }
             }
 
             cx.emit(StackFrameListEvent::BuiltEntries);
@@ -982,3 +1042,27 @@ impl Focusable for StackFrameList {
 }
 
 impl EventEmitter<StackFrameListEvent> for StackFrameList {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_membership_requires_a_component_boundary() {
+        assert!(path_is_within(
+            "/project/src/main.rs",
+            "/project",
+            PathStyle::Posix
+        ));
+        assert!(!path_is_within(
+            "/project-other/src/main.rs",
+            "/project",
+            PathStyle::Posix
+        ));
+        assert!(path_is_within(
+            r"C:\Project\src\main.rs",
+            r"c:\project",
+            PathStyle::Windows
+        ));
+    }
+}

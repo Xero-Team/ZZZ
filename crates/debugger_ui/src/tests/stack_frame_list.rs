@@ -1088,6 +1088,13 @@ async fn test_stack_frame_filter(executor: BackgroundExecutor, cx: &mut TestAppC
             ],
             "Expanded entries should remain expanded after toggling filter"
         );
+
+        stack_frame_list.select_first_entry_for_test(cx);
+        assert_eq!(stack_frame_list.selected_ix_for_test(), Some(0));
+        stack_frame_list.select_next_entry_for_test(cx);
+        assert_eq!(stack_frame_list.selected_ix_for_test(), Some(4));
+        stack_frame_list.select_next_entry_for_test(cx);
+        assert_eq!(stack_frame_list.selected_ix_for_test(), Some(0));
     });
 }
 
