@@ -973,20 +973,23 @@ impl Client {
 
         cx.spawn({
             let this = self.clone();
-            async move |cx| match handle_io.await {
-                Ok(()) => {
-                    if *this.status().borrow()
-                        == (Status::Connected {
-                            connection_id,
-                            peer_id,
-                        })
-                    {
-                        this.set_status(Status::SignedOut, cx);
-                    }
+            async move |cx| {
+                let result = handle_io.await;
+                if *this.status().borrow()
+                    != (Status::Connected {
+                        connection_id,
+                        peer_id,
+                    })
+                {
+                    return;
                 }
-                Err(err) => {
-                    log::error!("connection error: {:?}", err);
-                    this.set_status(Status::ConnectionLost, cx);
+
+                match result {
+                    Ok(()) => this.set_status(Status::SignedOut, cx),
+                    Err(err) => {
+                        log::error!("connection error: {:?}", err);
+                        this.set_status(Status::ConnectionLost, cx);
+                    }
                 }
             }
         })
@@ -1453,6 +1456,32 @@ mod tests {
         cx.executor().advance_clock(Duration::from_secs(10));
         while !matches!(status.next().await, Some(Status::Connected { .. })) {}
         assert_eq!(server.auth_count(), 2); // Client re-authenticated due to an invalid token
+    }
+
+    #[gpui::test]
+    async fn test_explicit_disconnect_stays_signed_out(cx: &mut TestAppContext) {
+        init_test(cx);
+        let client = cx.update(|cx| {
+            Client::new(
+                Arc::new(FakeSystemClock::new()),
+                FakeHttpClient::with_404_response(),
+                cx,
+            )
+        });
+        let server = FakeServer::for_client(5, &client, cx).await;
+        let mut status = client.status();
+        assert!(matches!(
+            status.next().await,
+            Some(Status::Connected { .. })
+        ));
+
+        server.forbid_connections();
+        server.disconnect();
+        client.disconnect(&cx.to_async());
+        cx.run_until_parked();
+
+        assert_eq!(*client.status().borrow(), Status::SignedOut);
+        assert_eq!(server.auth_count(), 1);
     }
 
     #[gpui::test(iterations = 10)]
