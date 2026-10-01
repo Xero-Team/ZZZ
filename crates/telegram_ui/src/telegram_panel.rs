@@ -2042,10 +2042,16 @@ impl TelegramPanel {
             }))
             .on_drop(
                 cx.listener(|this, selection: &DraggedSelection, window, cx| {
+                    let Some(project) = this
+                        .workspace
+                        .upgrade()
+                        .map(|workspace| workspace.read(cx).project().clone())
+                    else {
+                        return;
+                    };
                     let paths = selection
                         .items()
                         .filter_map(|entry| {
-                            let project = this.workspace.upgrade()?.read(cx).project().clone();
                             let project_path =
                                 project.read(cx).path_for_entry(entry.entry_id, cx)?;
                             project.read(cx).absolutize(&project_path, cx)
