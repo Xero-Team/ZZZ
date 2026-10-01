@@ -7455,7 +7455,7 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
-    fn telegram_panel_section() -> [SettingsPageItem; 12] {
+    fn telegram_panel_section() -> [SettingsPageItem; 13] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.telegram.panel",
@@ -7693,6 +7693,34 @@ fn panels_page() -> SettingsPage {
                             .telegram_panel
                             .get_or_insert_default()
                             .max_content_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.telegram.composer.minimum.lines",
+                    "Telegram Composer Minimum Lines",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.minimum.number.of.lines.the.telegram.composer.shows.before.it.grows",
+                    "Minimum number of lines the Telegram composer shows before it grows.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("telegram_panel.composer_min_lines"),
+                    pick: |settings_content| {
+                        settings_content
+                            .telegram_panel
+                            .as_ref()?
+                            .composer_min_lines
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .telegram_panel
+                            .get_or_insert_default()
+                            .composer_min_lines = value;
                     },
                 }),
                 metadata: None,

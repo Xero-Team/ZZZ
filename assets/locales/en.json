@@ -916,6 +916,8 @@
     "settings_ui.page_data.description.limit.the.width.of.telegram.messages.the.chat.header.and.the.composer": "Limit the width of messages, the chat header, and the composer.",
     "settings_ui.page_data.title.telegram.panel.max.content.width": "Telegram Panel Max Content Width",
     "settings_ui.page_data.description.maximum.content.width.in.pixels.for.the.telegram.panel": "Maximum content width in pixels. Content is centered when the panel is wider than this value.",
+    "settings_ui.page_data.title.telegram.composer.minimum.lines": "Telegram Composer Minimum Lines",
+    "settings_ui.page_data.description.minimum.number.of.lines.the.telegram.composer.shows.before.it.grows": "Minimum number of lines the Telegram composer shows before it grows.",
     "settings_ui.page_data.title.telegram.proxy": "Telegram Proxy",
     "settings_ui.page_data.description.a.dedicated.socks5.proxy.for.telegram": "A dedicated SOCKS5 proxy for Telegram. Telegram cannot use HTTP or HTTPS proxies.",
     "settings_ui.page_data.section.guides": "Guides",

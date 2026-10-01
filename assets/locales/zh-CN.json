@@ -916,6 +916,8 @@
     "settings_ui.page_data.description.limit.the.width.of.telegram.messages.the.chat.header.and.the.composer": "限制消息、会话标题和输入框的宽度。",
     "settings_ui.page_data.title.telegram.panel.max.content.width": "Telegram 面板最大内容宽度",
     "settings_ui.page_data.description.maximum.content.width.in.pixels.for.the.telegram.panel": "最大内容宽度（像素）。当面板宽于此值时内容将居中。",
+    "settings_ui.page_data.title.telegram.composer.minimum.lines": "Telegram 输入框最小行数",
+    "settings_ui.page_data.description.minimum.number.of.lines.the.telegram.composer.shows.before.it.grows": "Telegram 输入框在增长前显示的最小行数。",
     "settings_ui.page_data.title.telegram.proxy": "Telegram 代理",
     "settings_ui.page_data.description.a.dedicated.socks5.proxy.for.telegram": "为 Telegram 专用的 SOCKS5 代理。Telegram 无法使用 HTTP 或 HTTPS 代理。",
     "settings_ui.page_data.section.guides": "参考线",
