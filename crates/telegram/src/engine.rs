@@ -624,11 +624,11 @@ impl EngineState {
             Command::DownloadMedia {
                 chat_id,
                 message_id,
-            } => self.download_media(chat_id, message_id),
+            } => self.download(chat_id, message_id, DownloadTarget::Original),
             Command::DownloadThumbnail {
                 chat_id,
                 message_id,
-            } => self.download_thumbnail(chat_id, message_id),
+            } => self.download(chat_id, message_id, DownloadTarget::Thumbnail),
             Command::DeleteMessage {
                 chat_id,
                 message_id,
@@ -1673,21 +1673,25 @@ impl EngineState {
         }
     }
 
-    fn download_media(&mut self, chat_id: i64, message_id: i32) {
+    /// Schedules a media or thumbnail download, reusing an existing cache file.
+    fn download(&mut self, chat_id: i64, message_id: i32, target: DownloadTarget) {
         let Some(index) = self.current_message_index(chat_id, message_id) else {
             return;
         };
         let Some(media) = self.view.history[index].media.as_ref() else {
             return;
         };
-        if !media.is_downloadable() {
+        if !target.is_eligible(media) {
             return;
         }
-        let path = self.media_path(chat_id, message_id, media);
+        let path = match target {
+            DownloadTarget::Original => self.media_path(chat_id, message_id, media),
+            DownloadTarget::Thumbnail => self.thumbnail_path(chat_id, message_id),
+        };
         if path.is_file() {
             if let Some(media) = self.view.history[index].media.as_mut() {
-                media.download_state = DownloadState::Downloaded;
-                media.downloaded_path = Some(path);
+                set_download_state(media, target, DownloadState::Downloaded);
+                set_download_path(media, target, path);
             }
             self.publish();
             return;
@@ -1697,21 +1701,33 @@ impl EngineState {
             return;
         };
         if let Some(media) = self.view.history[index].media.as_mut() {
-            media.download_state = DownloadState::Downloading;
+            set_download_state(media, target, DownloadState::Downloading);
         }
         self.publish();
 
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
-            let result = download_media_file(&client, peer_ref, message_id, path).await;
-            if event_tx
-                .send(EngineEvent::MediaLoaded {
+            let result = match target {
+                DownloadTarget::Original => {
+                    download_media_file(&client, peer_ref, message_id, path).await
+                }
+                DownloadTarget::Thumbnail => {
+                    download_thumbnail_file(&client, peer_ref, message_id, path).await
+                }
+            };
+            let event = match target {
+                DownloadTarget::Original => EngineEvent::MediaLoaded {
                     chat_id,
                     message_id,
                     result,
-                })
-                .is_err()
-            {
+                },
+                DownloadTarget::Thumbnail => EngineEvent::ThumbnailLoaded {
+                    chat_id,
+                    message_id,
+                    result,
+                },
+            };
+            if event_tx.send(event).is_err() {
                 log::debug!("telegram event receiver has been dropped");
             }
         });
@@ -1729,24 +1745,21 @@ impl EngineState {
                     media.download_state = DownloadState::Downloaded;
                     media.downloaded_path = Some(path.clone());
                 });
+                self.publish();
             }
             Ok(None) => {
                 self.update_media_snapshot(chat_id, message_id, |media| {
                     media.download_state = DownloadState::NotDownloaded;
                 });
+                self.publish();
             }
             Err(error) => {
                 self.update_media_snapshot(chat_id, message_id, |media| {
                     media.download_state = DownloadState::Failed;
                 });
-                self.view.flood_wait_seconds = match &error {
-                    EngineError::FloodWait { seconds } => Some(*seconds),
-                    _ => None,
-                };
-                self.view.error = Some(error);
+                self.set_error(error);
             }
         }
-        self.publish();
     }
 
     fn media_path(&self, chat_id: i64, message_id: i32, media: &MediaSnapshot) -> PathBuf {
@@ -1755,60 +1768,6 @@ impl EngineState {
 
     fn thumbnail_path(&self, chat_id: i64, message_id: i32) -> PathBuf {
         thumbnail_file_path(&self.thumbnail_dir, chat_id, message_id)
-    }
-
-    /// Schedules a small preview fetch for an image-like attachment. The bytes
-    /// are cached under the thumbnail cache root and re-fetched on a miss.
-    fn download_thumbnail(&mut self, chat_id: i64, message_id: i32) {
-        let Some(index) = self.current_message_index(chat_id, message_id) else {
-            return;
-        };
-        let Some(media) = self.view.history[index].media.as_ref() else {
-            return;
-        };
-        if !matches!(
-            media.kind,
-            MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
-        ) {
-            return;
-        }
-        if media.thumbnail_path.is_some() || media.thumbnail_state == DownloadState::Downloading {
-            return;
-        }
-
-        let path = self.thumbnail_path(chat_id, message_id);
-        if path.is_file() {
-            if let Some(media) = self.view.history[index].media.as_mut() {
-                media.thumbnail_path = Some(path);
-                media.thumbnail_state = DownloadState::Downloaded;
-            }
-            self.publish();
-            return;
-        }
-
-        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
-            return;
-        };
-
-        if let Some(media) = self.view.history[index].media.as_mut() {
-            media.thumbnail_state = DownloadState::Downloading;
-        }
-        self.publish();
-
-        let event_tx = self.event_tx.clone();
-        tokio::spawn(async move {
-            let result = download_thumbnail_file(&client, peer_ref, message_id, path).await;
-            if event_tx
-                .send(EngineEvent::ThumbnailLoaded {
-                    chat_id,
-                    message_id,
-                    result,
-                })
-                .is_err()
-            {
-                log::debug!("telegram event receiver has been dropped");
-            }
-        });
     }
 
     fn apply_thumbnail_loaded(
@@ -1993,10 +1952,10 @@ impl EngineState {
             }
             EngineEvent::Update(Update::Raw(raw)) => self.handle_raw_update(&raw.raw).await,
             EngineEvent::Update(Update::MessageDeleted(deletion)) => {
+                let ids: HashSet<i32> = deletion.messages().iter().copied().collect();
                 if let Some(chat_id) = deletion.channel_id().and_then(|channel_id| {
                     PeerId::channel(channel_id).and_then(PeerId::bot_api_dialog_id)
                 }) {
-                    let ids: HashSet<i32> = deletion.messages().iter().copied().collect();
                     if let Some(cached) = self.histories.get_mut(&chat_id) {
                         cached.messages.retain(|message| !ids.contains(&message.id));
                     }
@@ -2007,7 +1966,6 @@ impl EngineState {
                     }
                     self.publish();
                 } else {
-                    let ids: HashSet<i32> = deletion.messages().iter().copied().collect();
                     self.view
                         .history
                         .retain(|message| !ids.contains(&message.id));
@@ -2272,6 +2230,46 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
         send_state: SendState::Sent,
         local_id: None,
         edited: message.edit_date().is_some(),
+    }
+}
+
+/// Which cached artifact a download request targets.
+#[derive(Clone, Copy)]
+enum DownloadTarget {
+    /// The original media file.
+    Original,
+    /// The small preview thumbnail.
+    Thumbnail,
+}
+
+impl DownloadTarget {
+    /// Whether `media` can be downloaded for this target. A thumbnail that is
+    /// already cached or in flight is skipped.
+    fn is_eligible(self, media: &MediaSnapshot) -> bool {
+        match self {
+            Self::Original => media.is_downloadable(),
+            Self::Thumbnail => {
+                matches!(
+                    media.kind,
+                    MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
+                ) && media.thumbnail_path.is_none()
+                    && media.thumbnail_state != DownloadState::Downloading
+            }
+        }
+    }
+}
+
+fn set_download_state(media: &mut MediaSnapshot, target: DownloadTarget, state: DownloadState) {
+    match target {
+        DownloadTarget::Original => media.download_state = state,
+        DownloadTarget::Thumbnail => media.thumbnail_state = state,
+    }
+}
+
+fn set_download_path(media: &mut MediaSnapshot, target: DownloadTarget, path: PathBuf) {
+    match target {
+        DownloadTarget::Original => media.downloaded_path = Some(path),
+        DownloadTarget::Thumbnail => media.thumbnail_path = Some(path),
     }
 }
 
@@ -2853,10 +2851,10 @@ fn current_unix_timestamp() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        DownloadState, EngineConfig, EngineState, MediaKind, MediaSnapshot, MessageSnapshot,
-        SendState, ViewModel, avatar_initials, current_unix_timestamp, evict_cache_with,
-        media_extension, media_file_path, merge_tail, normalize_phone, thumbnail_extension,
-        thumbnail_file_path,
+        DownloadState, DownloadTarget, EngineConfig, EngineState, MediaKind, MediaSnapshot,
+        MessageSnapshot, SendState, ViewModel, avatar_initials, current_unix_timestamp,
+        evict_cache_with, media_extension, media_file_path, merge_tail, normalize_phone,
+        thumbnail_extension, thumbnail_file_path,
     };
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
@@ -3052,7 +3050,7 @@ mod tests {
         snapshot.media = Some(media);
         engine.view.history.push(snapshot);
 
-        engine.download_media(1, 7);
+        engine.download(1, 7, DownloadTarget::Original);
 
         let stored = engine.view.history[0].media.as_ref().expect("media");
         assert_eq!(stored.download_state, DownloadState::Downloaded);
