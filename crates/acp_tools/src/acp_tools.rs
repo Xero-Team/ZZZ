@@ -6,9 +6,9 @@ use agent_ui::agent_connection_store::AgentConnectionStatus;
 use agent_ui::{Agent, AgentConnectionStore, AgentPanel};
 use collections::HashMap;
 use gpui::{
-    App, Empty, Entity, EventEmitter, FocusHandle, Focusable, ListAlignment, ListState,
-    SharedString, StyleRefinement, Subscription, Task, TextStyleRefinement, WeakEntity, Window,
-    actions, list, prelude::*,
+    App, ClipboardItem, Empty, Entity, EventEmitter, FocusHandle, Focusable, ListAlignment,
+    ListState, SharedString, StyleRefinement, Subscription, Task, TextStyleRefinement, WeakEntity,
+    Window, actions, list, prelude::*,
 };
 use i18n as app_i18n;
 use language::LanguageRegistry;
@@ -21,9 +21,7 @@ use ui::{
     prelude::*,
 };
 use util::ResultExt as _;
-use workspace::{
-    Item, ItemHandle, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace,
-};
+use workspace::{Item, Workspace};
 
 actions!(dev, [OpenAcpLogs]);
 
@@ -275,8 +273,8 @@ impl AcpTools {
     }
 
     fn selected_watched_connection_mut(&mut self) -> Option<&mut WatchedConnection> {
-        let selected_connection = self.selected_connection.clone()?;
-        self.watched_connections.get_mut(&selected_connection)
+        let selected_connection = self.selected_connection.as_ref()?;
+        self.watched_connections.get_mut(selected_connection)
     }
 
     fn connection_menu_entries(&self) -> Vec<SharedString> {
@@ -366,7 +364,7 @@ impl AcpTools {
                 let params = match &message.params {
                     Ok(Some(params)) => params.clone(),
                     Ok(None) => serde_json::Value::Null,
-                    Err(err) => serde_json::to_value(err).ok()?,
+                    Err(error) => serde_json::to_value(error).log_err()?,
                 };
                 Some(serde_json::json!({
                     "_direction": match message.direction {
@@ -382,7 +380,7 @@ impl AcpTools {
             })
             .collect();
 
-        serde_json::to_string_pretty(&messages).ok()
+        serde_json::to_string_pretty(&messages).log_err()
     }
 
     fn clear_messages(&mut self, cx: &mut Context<Self>) {
@@ -485,8 +483,6 @@ impl AcpTools {
                             .map(|req_id| div().child(ui::Chip::new(req_id.to_string()))),
                     ),
             )
-            // I'm aware using markdown is a hack. Trying to get something working for the demo.
-            // Will clean up soon!
             .when_some(
                 if expanded {
                     message.expanded_params_md.clone()
@@ -590,11 +586,11 @@ fn push_stream_message_for_connection(
         request_id,
         direction: stream_message.direction,
         collapsed_params_md: match &params {
-            Ok(Some(params)) => Some(collapsed_params_md(params, &language_registry, cx)),
+            Ok(Some(params)) => collapsed_params_md(params, &language_registry, cx),
             Ok(None) => None,
-            Err(err) => serde_json::to_value(err)
-                .ok()
-                .map(|err| collapsed_params_md(&err, &language_registry, cx)),
+            Err(error) => serde_json::to_value(error)
+                .log_err()
+                .and_then(|error| collapsed_params_md(&error, &language_registry, cx)),
         },
         expanded_params_md: None,
         params,
@@ -617,11 +613,11 @@ struct WatchedConnectionMessage {
 impl WatchedConnectionMessage {
     fn expanded(&mut self, language_registry: Arc<LanguageRegistry>, cx: &mut App) {
         let params_md = match &self.params {
-            Ok(Some(params)) => Some(expanded_params_md(params, &language_registry, cx)),
-            Err(err) => serde_json::to_value(err)
+            Ok(Some(params)) => expanded_params_md(params, &language_registry, cx),
+            Err(error) => serde_json::to_value(error)
                 .log_err()
                 .as_ref()
-                .map(|err| expanded_params_md(&err, &language_registry, cx)),
+                .and_then(|error| expanded_params_md(error, &language_registry, cx)),
             _ => None,
         };
         self.expanded_params_md = params_md;
@@ -632,32 +628,20 @@ fn collapsed_params_md(
     params: &serde_json::Value,
     language_registry: &Arc<LanguageRegistry>,
     cx: &mut App,
-) -> Entity<Markdown> {
-    let params_json = serde_json::to_string(params).unwrap_or_default();
-    let mut spaced_out_json = String::with_capacity(params_json.len() + params_json.len() / 4);
-
-    for ch in params_json.chars() {
-        match ch {
-            '{' => spaced_out_json.push_str("{ "),
-            '}' => spaced_out_json.push_str(" }"),
-            ':' => spaced_out_json.push_str(": "),
-            ',' => spaced_out_json.push_str(", "),
-            c => spaced_out_json.push(c),
-        }
-    }
-
-    let params_md = format!("```json\n{}\n```", spaced_out_json);
-    cx.new(|cx| Markdown::new(params_md.into(), Some(language_registry.clone()), None, cx))
+) -> Option<Entity<Markdown>> {
+    let params_json = serde_json::to_string(params).log_err()?;
+    let params_md = format!("```json\n{params_json}\n```");
+    Some(cx.new(|cx| Markdown::new(params_md.into(), Some(language_registry.clone()), None, cx)))
 }
 
 fn expanded_params_md(
     params: &serde_json::Value,
     language_registry: &Arc<LanguageRegistry>,
     cx: &mut App,
-) -> Entity<Markdown> {
-    let params_json = serde_json::to_string_pretty(params).unwrap_or_default();
+) -> Option<Entity<Markdown>> {
+    let params_json = serde_json::to_string_pretty(params).log_err()?;
     let params_md = format!("```json\n{}\n```", params_json);
-    cx.new(|cx| Markdown::new(params_md.into(), Some(language_registry.clone()), None, cx))
+    Some(cx.new(|cx| Markdown::new(params_md.into(), Some(language_registry.clone()), None, cx)))
 }
 
 enum MessageType {
@@ -735,7 +719,7 @@ impl Render for AcpTools {
             self.selected_connection_status(cx),
             Some(status) if status != AgentConnectionStatus::Connecting
         );
-        let copied_messages = self.serialize_observed_messages().unwrap_or_default();
+        let acp_tools = cx.entity().downgrade();
 
         v_flex()
             .track_focus(&self.focus_handle)
@@ -777,13 +761,27 @@ impl Render for AcpTools {
                                     })),
                             )
                             .child(
-                                CopyButton::new("copy-all-messages", copied_messages)
+                                CopyButton::new("copy-all-messages", "")
                                     .tooltip_label(app_i18n::tr(
                                         cx,
                                         "acp_tools.copy_all_messages",
                                         "Copy All Messages",
                                     ))
-                                    .disabled(!has_messages),
+                                    .disabled(!has_messages)
+                                    .custom_on_click(move |_window, cx| {
+                                        cx.stop_propagation();
+                                        let messages = acp_tools
+                                            .read_with(cx, |this, _cx| {
+                                                this.serialize_observed_messages()
+                                            })
+                                            .log_err()
+                                            .flatten();
+                                        if let Some(messages) = messages {
+                                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                                messages,
+                                            ));
+                                        }
+                                    }),
                             )
                             .child(
                                 IconButton::new("clear_messages", IconName::Trash)
@@ -851,45 +849,5 @@ impl Render for AcpTools {
                         .into_any(),
                 },
             })
-    }
-}
-
-pub struct AcpToolsToolbarItemView {
-    acp_tools: Option<Entity<AcpTools>>,
-}
-
-impl AcpToolsToolbarItemView {
-    pub fn new() -> Self {
-        Self { acp_tools: None }
-    }
-}
-
-impl Render for AcpToolsToolbarItemView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let _ = (&self.acp_tools, cx);
-        Empty.into_any_element()
-    }
-}
-
-impl EventEmitter<ToolbarItemEvent> for AcpToolsToolbarItemView {}
-
-impl ToolbarItemView for AcpToolsToolbarItemView {
-    fn set_active_pane_item(
-        &mut self,
-        active_pane_item: Option<&dyn ItemHandle>,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> ToolbarItemLocation {
-        if let Some(item) = active_pane_item
-            && let Some(acp_tools) = item.downcast::<AcpTools>()
-        {
-            self.acp_tools = Some(acp_tools);
-            cx.notify();
-            return ToolbarItemLocation::Hidden;
-        }
-        if self.acp_tools.take().is_some() {
-            cx.notify();
-        }
-        ToolbarItemLocation::Hidden
     }
 }
