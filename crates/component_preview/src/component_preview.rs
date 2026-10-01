@@ -150,11 +150,13 @@ impl ComponentPreview {
             _view_scroll_handle: ScrollHandle::new(),
         };
 
-        if component_preview.cursor_index > 0 {
-            component_preview.scroll_to_preview(component_preview.cursor_index, cx);
-        }
-
         component_preview.update_component_list(cx);
+        if component_preview.cursor_index > 0 {
+            let cursor_index = component_preview
+                .cursor_index
+                .min(component_preview.entries.len().saturating_sub(1));
+            component_preview.scroll_to_preview(cursor_index, cx);
+        }
 
         let focus_handle = component_preview.filter_editor.read(cx).focus_handle(cx);
         window.focus(&focus_handle, cx);
@@ -786,7 +788,10 @@ impl SerializableItem for ComponentPreview {
                         ActivePageId::default()
                     }
                 }
-                Err(_) => ActivePageId::default(),
+                Err(error) => {
+                    log::error!("Failed to load component preview state: {error}");
+                    ActivePageId::default()
+                }
             };
 
         let user_store = project.read(cx).user_store();
