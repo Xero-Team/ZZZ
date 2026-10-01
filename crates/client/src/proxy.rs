@@ -41,17 +41,27 @@ enum ProxyType<'t> {
 
 fn parse_proxy_type(proxy: &Url) -> Option<((String, u16), ProxyType<'_>)> {
     let scheme = proxy.scheme();
+    if !is_supported_proxy_scheme(scheme) {
+        return None;
+    }
     let host = proxy.host()?.to_string();
     let port = proxy.port_or_known_default()?;
     let proxy_type = match scheme {
         "socks4" | "socks4a" | "socks5" | "socks5h" => {
-            Some(ProxyType::SocksProxy(parse_socks_proxy(scheme, proxy)))
+            ProxyType::SocksProxy(parse_socks_proxy(scheme, proxy))
         }
-        "http" | "https" => Some(ProxyType::HttpProxy(parse_http_proxy(scheme, proxy))),
-        _ => None,
-    }?;
+        "http" | "https" => ProxyType::HttpProxy(parse_http_proxy(scheme, proxy)),
+        _ => unreachable!("proxy scheme should have been validated"),
+    };
 
     Some(((host, port), proxy_type))
+}
+
+pub(crate) fn is_supported_proxy_scheme(scheme: &str) -> bool {
+    matches!(
+        scheme,
+        "http" | "https" | "socks4" | "socks4a" | "socks5" | "socks5h"
+    )
 }
 
 pub(crate) trait AsyncReadWrite:
@@ -65,12 +75,13 @@ impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> A
 
 #[cfg(test)]
 mod tests {
-    use super::parse_proxy_type;
+    use super::{is_supported_proxy_scheme, parse_proxy_type};
     use url::Url;
 
     #[test]
     fn accepts_only_documented_proxy_schemes() {
         for scheme in ["http", "https", "socks4", "socks4a", "socks5", "socks5h"] {
+            assert!(is_supported_proxy_scheme(scheme));
             let proxy = Url::parse(&format!("{scheme}://proxy.example.com:1080"))
                 .expect("documented proxy URL should parse");
             assert!(
@@ -80,6 +91,7 @@ mod tests {
         }
 
         for scheme in ["httpx", "socks", "socks6", "ftp"] {
+            assert!(!is_supported_proxy_scheme(scheme));
             let proxy = Url::parse(&format!("{scheme}://proxy.example.com:1080"))
                 .expect("test proxy URL should parse");
             assert!(

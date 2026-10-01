@@ -130,10 +130,22 @@ impl ProxySettings {
             .map(str::trim)
             .filter(|input| !input.is_empty())
             .and_then(|input| {
-                input
-                    .parse::<Url>()
-                    .inspect_err(|e| log::error!("Error parsing proxy settings: {}", e))
-                    .ok()
+                let input = if input.contains("://") {
+                    input.to_owned()
+                } else {
+                    format!("{}://{input}", "http")
+                };
+                match input.parse::<Url>() {
+                    Ok(url) if proxy::is_supported_proxy_scheme(url.scheme()) => Some(url),
+                    Ok(url) => {
+                        log::error!("Unsupported proxy scheme: {}", url.scheme());
+                        None
+                    }
+                    Err(error) => {
+                        log::error!("Error parsing proxy settings: {error}");
+                        None
+                    }
+                }
             })
             .or_else(read_proxy_from_env)
     }
@@ -1376,6 +1388,15 @@ mod tests {
             ProxySettings::from_settings(&content).proxy.as_deref(),
             Some("http://127.0.0.1:10809")
         );
+
+        let proxy = ProxySettings {
+            proxy: Some("127.0.0.1:10809".to_owned()),
+        }
+        .proxy_url()
+        .expect("a proxy without a scheme should default to HTTP");
+        assert_eq!(proxy.scheme(), "http");
+        assert_eq!(proxy.host_str(), Some("127.0.0.1"));
+        assert_eq!(proxy.port(), Some(10809));
     }
 
     #[test]
