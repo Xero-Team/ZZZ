@@ -337,7 +337,7 @@ fn insert_project_path_as_context(
             cx,
         )
     })
-    .ok()
+    .log_err()
     .flatten()
 }
 

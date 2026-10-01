@@ -337,14 +337,16 @@ impl MentionSet {
             let result = task.await.notify_workspace_async_err(workspace, &mut cx);
             drop(tx);
             if result.is_none() {
+                let Some(this) = this.upgrade() else {
+                    return;
+                };
                 this.update(cx, |this, cx| {
                     editor.update(cx, |editor, cx| {
                         // Remove mention
                         editor.edit([(start_anchor..end_anchor, "")], cx);
                     });
                     this.mentions.remove(&crease_id);
-                })
-                .ok();
+                });
             }
         })
     }
