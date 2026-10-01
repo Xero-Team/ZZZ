@@ -78,14 +78,20 @@ impl StdioTransport {
     {
         let mut stdin = BufReader::new(stdin);
         let mut line = String::new();
-        while let Ok(n) = stdin.read_line(&mut line).await {
-            if n == 0 {
-                break;
+        loop {
+            match stdin.read_line(&mut line).await {
+                Ok(0) => break,
+                Ok(_) => {
+                    if inbound_rx.send(line.clone()).await.is_err() {
+                        break;
+                    }
+                    line.clear();
+                }
+                Err(error) => {
+                    log::error!("Failed to read MCP server stdout: {error}");
+                    break;
+                }
             }
-            if inbound_rx.send(line.clone()).await.is_err() {
-                break;
-            }
-            line.clear();
         }
     }
 
@@ -114,14 +120,20 @@ impl StdioTransport {
     {
         let mut stderr = BufReader::new(stderr);
         let mut line = String::new();
-        while let Ok(n) = stderr.read_line(&mut line).await {
-            if n == 0 {
-                break;
+        loop {
+            match stderr.read_line(&mut line).await {
+                Ok(0) => break,
+                Ok(_) => {
+                    if stderr_tx.send(line.clone()).await.is_err() {
+                        break;
+                    }
+                    line.clear();
+                }
+                Err(error) => {
+                    log::error!("Failed to read MCP server stderr: {error}");
+                    break;
+                }
             }
-            if stderr_tx.send(line.clone()).await.is_err() {
-                break;
-            }
-            line.clear();
         }
     }
 }
@@ -143,6 +155,8 @@ impl Transport for StdioTransport {
 
 impl Drop for StdioTransport {
     fn drop(&mut self) {
-        let _ = self.server.kill();
+        if let Err(error) = self.server.kill() {
+            log::debug!("Failed to stop MCP server process: {error}");
+        }
     }
 }
