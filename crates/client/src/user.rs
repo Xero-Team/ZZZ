@@ -104,7 +104,9 @@ impl UserStore {
                     };
                     match status {
                         Status::SignedOut => {
-                            current_user_tx.send(None).await.ok();
+                            if current_user_tx.send(None).await.is_err() {
+                                return Ok(());
+                            }
                             this.update(cx, |_this, cx| {
                                 cx.emit(Event::PrivateUserInfoUpdated);
                                 cx.notify();
