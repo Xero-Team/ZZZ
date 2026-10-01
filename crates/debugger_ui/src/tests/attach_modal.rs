@@ -221,10 +221,10 @@ async fn test_attach_with_pick_pid_variable(executor: BackgroundExecutor, cx: &m
                 workspace.start_debug_session(
                     DebugTaskDefinition {
                         adapter: FakeAdapter::ADAPTER_NAME.into(),
-                        label: "attach with picker".into(),
+                        label: format!("attach with picker {pick_pid_placeholder}").into(),
                         config: json!({
                             "request": "attach",
-                            "process_id": pick_pid_placeholder,
+                            "process_id": pick_pid_placeholder.clone(),
                         }),
                         tcp_connection: None,
                     }
@@ -315,6 +315,14 @@ async fn test_attach_with_pick_pid_variable(executor: BackgroundExecutor, cx: &m
             assert!(
                 workspace.active_modal::<AttachModal>(cx).is_none(),
                 "Attach modal should be dismissed after selection"
+            );
+            let label = workspace
+                .panel::<DebugPanel>(cx)
+                .and_then(|panel| panel.read(cx).active_session())
+                .and_then(|session| session.update(cx, |session, cx| session.label(cx)));
+            assert_eq!(
+                label.as_deref(),
+                Some(format!("attach with picker {}", u32::MAX).as_str())
             );
         })
         .unwrap();

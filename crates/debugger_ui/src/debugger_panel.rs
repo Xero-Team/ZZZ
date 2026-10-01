@@ -280,6 +280,10 @@ impl DebugPanel {
                         })
                     })?
                     .await?;
+                session.update(cx, |session, cx| {
+                    session.set_label(Some(definition.label.clone()), cx);
+                });
+                debug_session.update(cx, |_, cx| cx.notify());
                 dap_store
                     .update(cx, |dap_store, cx| {
                         dap_store.boot_session(session.clone(), definition, worktree, cx)

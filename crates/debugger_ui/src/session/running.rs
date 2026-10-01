@@ -1042,7 +1042,7 @@ impl RunningState {
         cx.spawn_in(window, async move |this, cx| {
             let DebugScenario {
                 adapter,
-                label,
+                mut label,
                 build,
                 mut config,
                 tcp_connection,
@@ -1079,6 +1079,9 @@ impl RunningState {
                     })?;
 
                 Self::substitute_process_id_in_config(&mut config, process_id);
+                label = label
+                    .replace(PROCESS_ID_PLACEHOLDER.as_str(), &process_id.to_string())
+                    .into();
             }
 
             let request_type = match dap_registry

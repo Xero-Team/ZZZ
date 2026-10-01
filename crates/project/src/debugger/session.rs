@@ -1083,6 +1083,13 @@ impl Session {
         self.label.clone()
     }
 
+    pub fn set_label(&mut self, label: Option<SharedString>, cx: &mut Context<Self>) {
+        if self.label != label {
+            self.label = label;
+            cx.notify();
+        }
+    }
+
     pub fn is_terminated(&self) -> bool {
         self.is_session_terminated
     }
