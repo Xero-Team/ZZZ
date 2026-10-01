@@ -65,6 +65,12 @@ impl Drag {
             self.end_address..=self.start_address
         }
     }
+
+    fn byte_count(&self) -> u64 {
+        self.end_address
+            .abs_diff(self.start_address)
+            .saturating_add(1)
+    }
 }
 #[derive(Clone, Debug)]
 enum SelectedMemoryRange {
@@ -129,6 +135,14 @@ impl ViewState {
     }
     fn schedule_scroll_up(&mut self) {
         self.base_row = self.base_row.saturating_sub(1);
+    }
+
+    fn page_down(&mut self) {
+        self.base_row = self.base_row.saturating_add(self.row_count());
+    }
+
+    fn page_up(&mut self) {
+        self.base_row = self.base_row.saturating_sub(self.row_count());
     }
 
     fn set_offset(&mut self, point: Point<Pixels>) {
@@ -208,11 +222,16 @@ impl MemoryView {
             view_state.row_count() as usize,
             move |range, _, cx| {
                 let mut line_buffer = Vec::with_capacity(view_state.line_width.width as usize);
-                let memory_start =
-                    (view_state.base_row + range.start as u64) * view_state.line_width.width as u64;
-                let memory_end = (view_state.base_row + range.end as u64)
-                    * view_state.line_width.width as u64
-                    - 1;
+                let line_width = view_state.line_width.width as u64;
+                let memory_start = view_state
+                    .base_row
+                    .saturating_add(range.start as u64)
+                    .saturating_mul(line_width);
+                let memory_end = view_state
+                    .base_row
+                    .saturating_add(range.end as u64)
+                    .saturating_mul(line_width)
+                    .saturating_sub(1);
                 let mut memory = session.update(cx, |this, cx| {
                     this.read_memory(memory_start..=memory_end, cx)
                 });
@@ -266,11 +285,11 @@ impl MemoryView {
             },
         );
         cx.spawn(async move |this, cx| {
-            let access_size = access_size.await.unwrap_or(1);
+            let access_size = access_size.await.unwrap_or(1).max(1);
             this.update(cx, |this, cx| {
                 this.view_state().selection = Some(SelectedMemoryRange::DragComplete(Drag {
                     start_address: as_address,
-                    end_address: as_address + access_size - 1,
+                    end_address: as_address.saturating_add(access_size - 1),
                 }));
                 this.jump_to_address(as_address, cx);
             })
@@ -351,7 +370,8 @@ impl MemoryView {
                                     // We're converting down.
                                     let shift = view_state.line_width.width.trailing_zeros()
                                         - width.width.trailing_zeros();
-                                    view_state.base_row <<= shift;
+                                    view_state.base_row =
+                                        view_state.base_row.saturating_mul(1_u64 << shift);
                                 }
                                 _ => {}
                             }
@@ -375,18 +395,12 @@ impl MemoryView {
 
     fn page_down(&mut self, _: &menu::SelectLast, _: &mut Window, cx: &mut Context<Self>) {
         let mut view_state = self.view_state();
-        view_state.base_row = view_state
-            .base_row
-            .overflowing_add(view_state.row_count())
-            .0;
+        view_state.page_down();
         cx.notify();
     }
     fn page_up(&mut self, _: &menu::SelectFirst, _: &mut Window, cx: &mut Context<Self>) {
         let mut view_state = self.view_state();
-        view_state.base_row = view_state
-            .base_row
-            .overflowing_sub(view_state.row_count())
-            .0;
+        view_state.page_up();
         cx.notify();
     }
 
@@ -445,7 +459,7 @@ impl MemoryView {
         let range = selection.memory_range();
         let context = Arc::new(DataBreakpointContext::Address {
             address: range.start().to_string(),
-            bytes: Some(*range.end() - *range.start()),
+            bytes: Some(selection.byte_count()),
         });
 
         self.session.update(cx, |this, cx| {
@@ -644,7 +658,8 @@ impl MemoryView {
     ) {
         let session = self.session.clone();
         let context_menu = ContextMenu::build(window, cx, |menu, _, cx| {
-            let range_too_large = range.end() - range.start() > std::mem::size_of::<u64>() as u64;
+            let range_too_large = range.end().abs_diff(*range.start()).saturating_add(1)
+                > std::mem::size_of::<u64>() as u64;
             let caps = session.read(cx).capabilities();
             let supports_data_breakpoints = caps.supports_data_breakpoints.unwrap_or_default()
                 && caps.supports_data_breakpoint_bytes.unwrap_or_default();
@@ -730,7 +745,10 @@ fn render_single_memory_view_line(
     let Ok(view_state) = weak.update(cx, |this, _| this.view_state().clone()) else {
         return div().into_any();
     };
-    let base_address = (view_state.base_row + ix) * view_state.line_width.width as u64;
+    let base_address = view_state
+        .base_row
+        .saturating_add(ix)
+        .saturating_mul(view_state.line_width.width as u64);
 
     h_flex()
         .id((
@@ -974,5 +992,41 @@ impl Render for MemoryView {
                         cx,
                     ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_pages_saturate_at_address_boundaries() {
+        let mut view_state = ViewState::new(0, WIDTHS[4].clone());
+        view_state.page_up();
+        assert_eq!(view_state.base_row, 0);
+
+        view_state.base_row = u64::MAX - 1;
+        view_state.page_down();
+        assert_eq!(view_state.base_row, u64::MAX);
+    }
+
+    #[test]
+    fn memory_selection_byte_count_is_inclusive() {
+        assert_eq!(
+            Drag {
+                start_address: 10,
+                end_address: 10,
+            }
+            .byte_count(),
+            1
+        );
+        assert_eq!(
+            Drag {
+                start_address: 18,
+                end_address: 10,
+            }
+            .byte_count(),
+            9
+        );
     }
 }
