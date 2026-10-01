@@ -1531,14 +1531,10 @@ async fn register_session_inner(
             },
         )
         .detach();
-    })
-    .ok();
-    let serialized_layout = this
-        .update(cx, |_, cx| {
-            persistence::get_serialized_layout(&adapter_name, &db::kvp::KeyValueStore::global(cx))
-        })
-        .ok()
-        .flatten();
+    })?;
+    let serialized_layout = this.update(cx, |_, cx| {
+        persistence::get_serialized_layout(&adapter_name, &db::kvp::KeyValueStore::global(cx))
+    })?;
     let debug_session = this.update_in(cx, |this, window, cx| {
         let parent_session = this
             .sessions_with_children
