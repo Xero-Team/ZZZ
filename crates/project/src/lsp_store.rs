@@ -196,6 +196,28 @@ pub(super) async fn race_superseded<T>(
     }
 }
 
+/// Installs a fresh supersede signal, firing the previous one so the request it
+/// belonged to stops. Returns the receiver to race with [`race_superseded`].
+pub(super) fn supersede(cancel: &mut Option<oneshot::Sender<()>>) -> oneshot::Receiver<()> {
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    if let Some(previous) = cancel.replace(cancel_tx) {
+        previous.send(()).ok();
+    }
+    cancel_rx
+}
+
+/// Clears a versioned in-flight request only when it still belongs to
+/// `queried_for`, so a completing stale request does not drop a newer one's
+/// handle.
+pub(super) fn clear_update_if_current<T>(update: &mut Option<(Global, T)>, queried_for: &Global) {
+    if update
+        .as_ref()
+        .is_some_and(|(version, _)| version == queried_for)
+    {
+        *update = None;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub enum ProgressToken {
     Number(i32),

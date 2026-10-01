@@ -128,10 +128,7 @@ impl LspStore {
             .latest_lsp_data(buffer, cx)
             .code_lens
             .get_or_insert_default();
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        if let Some(previous_cancel) = lens_lsp_data.update_cancel.replace(cancel_tx) {
-            previous_cancel.send(()).ok();
-        }
+        let cancel_rx = super::supersede(&mut lens_lsp_data.update_cancel);
         let buffer = buffer.clone();
         let query_version_queried_for = version_queried_for.clone();
         let new_task = cx
@@ -161,11 +158,11 @@ impl LspStore {
                                     .lsp_data
                                     .get_mut(&buffer_id)
                                     .and_then(|lsp_data| lsp_data.code_lens.as_mut())
-                                    && lens_lsp_data.update.as_ref().is_some_and(|(version, _)| {
-                                        version == &query_version_queried_for
-                                    })
                                 {
-                                    lens_lsp_data.update = None;
+                                    super::clear_update_if_current(
+                                        &mut lens_lsp_data.update,
+                                        &query_version_queried_for,
+                                    );
                                 }
                             })
                             .ok();
@@ -177,13 +174,10 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.current_lsp_data(buffer_id)?;
                         let code_lens = lsp_data.code_lens.as_mut()?;
-                        if code_lens
-                            .update
-                            .as_ref()
-                            .is_some_and(|(version, _)| version == &query_version_queried_for)
-                        {
-                            code_lens.update = None;
-                        }
+                        super::clear_update_if_current(
+                            &mut code_lens.update,
+                            &query_version_queried_for,
+                        );
                         if let Some(fetched_lens) = fetched_lens {
                             if lsp_data.buffer_version == query_version_queried_for {
                                 code_lens.lens.extend(fetched_lens);

@@ -90,10 +90,7 @@ impl LspStore {
             }
         }
 
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        if let Some(previous_cancel) = folding_lsp_data.ranges_update_cancel.replace(cancel_tx) {
-            previous_cancel.send(()).ok();
-        }
+        let cancel_rx = super::supersede(&mut folding_lsp_data.ranges_update_cancel);
 
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
@@ -124,12 +121,11 @@ impl LspStore {
                                     .lsp_data
                                     .get_mut(&buffer_id)
                                     .and_then(|lsp_data| lsp_data.folding_ranges.as_mut())
-                                    && folding_ranges
-                                        .ranges_update
-                                        .as_ref()
-                                        .is_some_and(|(version, _)| version == &query_version)
                                 {
-                                    folding_ranges.ranges_update = None;
+                                    super::clear_update_if_current(
+                                        &mut folding_ranges.ranges_update,
+                                        &query_version,
+                                    );
                                 }
                             })
                             .ok();
@@ -141,13 +137,7 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let folding = lsp_data.folding_ranges.get_or_insert_default();
-                        if folding
-                            .ranges_update
-                            .as_ref()
-                            .is_some_and(|(version, _)| version == &query_version)
-                        {
-                            folding.ranges_update = None;
-                        }
+                        super::clear_update_if_current(&mut folding.ranges_update, &query_version);
 
                         if let Some(fetched_ranges) = fetched {
                             if lsp_data.buffer_version == query_version {

@@ -93,10 +93,7 @@ impl LspStore {
         {
             return Some(running_update.clone());
         }
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        if let Some(previous_cancel) = color_lsp_data.colors_update_cancel.replace(cancel_tx) {
-            previous_cancel.send(()).ok();
-        }
+        let cancel_rx = super::supersede(&mut color_lsp_data.colors_update_cancel);
         let buffer_version_queried_for = version_queried_for.clone();
         let new_task = cx
             .spawn(async move |lsp_store, cx| {
@@ -130,11 +127,11 @@ impl LspStore {
                                     .lsp_data
                                     .get_mut(&buffer_id)
                                     .and_then(|lsp_data| lsp_data.document_colors.as_mut())
-                                    && document_colors.colors_update.as_ref().is_some_and(
-                                        |(version, _)| version == &buffer_version_queried_for,
-                                    )
                                 {
-                                    document_colors.colors_update = None;
+                                    super::clear_update_if_current(
+                                        &mut document_colors.colors_update,
+                                        &buffer_version_queried_for,
+                                    );
                                 }
                             })
                             .ok();
@@ -146,13 +143,10 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let lsp_colors = lsp_data.document_colors.get_or_insert_default();
-                        if lsp_colors
-                            .colors_update
-                            .as_ref()
-                            .is_some_and(|(version, _)| version == &buffer_version_queried_for)
-                        {
-                            lsp_colors.colors_update = None;
-                        }
+                        super::clear_update_if_current(
+                            &mut lsp_colors.colors_update,
+                            &buffer_version_queried_for,
+                        );
 
                         if let Some(fetched_colors) = fetched_colors {
                             if lsp_data.buffer_version == buffer_version_queried_for {

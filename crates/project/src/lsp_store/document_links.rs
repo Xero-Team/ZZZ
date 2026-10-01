@@ -111,10 +111,7 @@ impl LspStore {
             return cx.background_spawn(async move { running.await.ok().flatten() });
         }
 
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        if let Some(previous_cancel) = links_lsp_data.links_update_cancel.replace(cancel_tx) {
-            previous_cancel.send(()).ok();
-        }
+        let cancel_rx = super::supersede(&mut links_lsp_data.links_update_cancel);
 
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
@@ -145,12 +142,11 @@ impl LspStore {
                                     .lsp_data
                                     .get_mut(&buffer_id)
                                     .and_then(|lsp_data| lsp_data.document_links.as_mut())
-                                    && document_links
-                                        .links_update
-                                        .as_ref()
-                                        .is_some_and(|(version, _)| version == &query_version)
                                 {
-                                    document_links.links_update = None;
+                                    super::clear_update_if_current(
+                                        &mut document_links.links_update,
+                                        &query_version,
+                                    );
                                 }
                             })
                             .ok();
@@ -162,13 +158,10 @@ impl LspStore {
                     .update(cx, |lsp_store, cx| {
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let links_data = lsp_data.document_links.get_or_insert_default();
-                        if links_data
-                            .links_update
-                            .as_ref()
-                            .is_some_and(|(version, _)| version == &query_version)
-                        {
-                            links_data.links_update = None;
-                        }
+                        super::clear_update_if_current(
+                            &mut links_data.links_update,
+                            &query_version,
+                        );
 
                         let Some(fetched_links) = fetched else {
                             return None;

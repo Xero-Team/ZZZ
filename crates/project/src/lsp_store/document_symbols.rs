@@ -99,10 +99,7 @@ impl LspStore {
             }
         }
 
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        if let Some(previous_cancel) = doc_symbols_data.symbols_update_cancel.replace(cancel_tx) {
-            previous_cancel.send(()).ok();
-        }
+        let cancel_rx = super::supersede(&mut doc_symbols_data.symbols_update_cancel);
 
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
@@ -135,12 +132,11 @@ impl LspStore {
                                     .lsp_data
                                     .get_mut(&buffer_id)
                                     .and_then(|lsp_data| lsp_data.document_symbols.as_mut())
-                                    && document_symbols
-                                        .symbols_update
-                                        .as_ref()
-                                        .is_some_and(|(version, _)| version == &query_version)
                                 {
-                                    document_symbols.symbols_update = None;
+                                    super::clear_update_if_current(
+                                        &mut document_symbols.symbols_update,
+                                        &query_version,
+                                    );
                                 }
                             })
                             .ok();
@@ -153,13 +149,10 @@ impl LspStore {
                         let snapshot = buffer.read(cx).snapshot();
                         let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                         let doc_symbols = lsp_data.document_symbols.get_or_insert_default();
-                        if doc_symbols
-                            .symbols_update
-                            .as_ref()
-                            .is_some_and(|(version, _)| version == &query_version)
-                        {
-                            doc_symbols.symbols_update = None;
-                        }
+                        super::clear_update_if_current(
+                            &mut doc_symbols.symbols_update,
+                            &query_version,
+                        );
 
                         if let Some(fetched_symbols) = fetched {
                             let converted = fetched_symbols

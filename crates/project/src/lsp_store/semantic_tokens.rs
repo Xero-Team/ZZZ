@@ -126,10 +126,7 @@ impl LspStore {
             return task.clone();
         }
 
-        let (cancel_tx, cancel_rx) = oneshot::channel();
-        if let Some(previous_cancel) = semantic_tokens_data.update_cancel.replace(cancel_tx) {
-            previous_cancel.send(()).ok();
-        }
+        let cancel_rx = super::supersede(&mut semantic_tokens_data.update_cancel);
 
         let for_server = refresh.map(|refresh| refresh.server_id);
         let new_tokens = self.fetch_semantic_tokens_for_buffer(&buffer, for_server, cx);
