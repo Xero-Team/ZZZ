@@ -89,14 +89,20 @@ impl ClientSettings {
     /// The local-first default deliberately does not point at any hosted service.
     /// A remote server is enabled only when the user explicitly configures one.
     pub fn remote_server_enabled(&self) -> bool {
-        let value = self.server_url.trim_end_matches('/');
-        !value.is_empty()
-            && !value.starts_with("http://127.0.0.1")
-            && !value.starts_with("http://localhost")
-            && !value.starts_with("http://[::1]")
-            && !value.starts_with("https://127.0.0.1")
-            && !value.starts_with("https://localhost")
-            && !value.starts_with("https://[::1]")
+        let value = self.server_url.trim();
+        if value.is_empty() {
+            return false;
+        }
+
+        let Ok(url) = Url::parse(value) else {
+            return true;
+        };
+        match url.host() {
+            Some(url::Host::Domain(domain)) => !domain.eq_ignore_ascii_case("localhost"),
+            Some(url::Host::Ipv4(address)) => !address.is_loopback(),
+            Some(url::Host::Ipv6(address)) => !address.is_loopback(),
+            None => true,
+        }
     }
 }
 
@@ -1415,6 +1421,18 @@ mod tests {
             credentials_url: None,
         };
         assert!(remote.remote_server_enabled());
+
+        let loopback = ClientSettings {
+            server_url: format!("{}://{}", "http", "127.0.0.2:7331"),
+            credentials_url: None,
+        };
+        assert!(!loopback.remote_server_enabled());
+
+        let localhost_subdomain = ClientSettings {
+            server_url: format!("{}://{}", "https", "localhost.example.invalid"),
+            credentials_url: None,
+        };
+        assert!(localhost_subdomain.remote_server_enabled());
     }
 
     #[gpui::test(iterations = 10)]
