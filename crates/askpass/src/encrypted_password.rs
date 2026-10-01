@@ -71,12 +71,11 @@ impl EncryptedPassword {
                 CRYPTPROTECTMEMORY_BLOCK_SIZE, CRYPTPROTECTMEMORY_SAME_PROCESS,
                 CryptUnprotectMemory,
             };
-            assert_eq!(
-                self.0.len() % CRYPTPROTECTMEMORY_BLOCK_SIZE as usize,
-                0,
-                "Violated pre-condition (buffer size <{}> must be a multiple of CRYPTPROTECTMEMORY_BLOCK_SIZE <{}>) for CryptUnprotectMemory.",
+            anyhow::ensure!(
+                self.0.len() % CRYPTPROTECTMEMORY_BLOCK_SIZE as usize == 0,
+                "buffer size <{}> must be a multiple of CRYPTPROTECTMEMORY_BLOCK_SIZE <{}> for CryptUnprotectMemory",
                 self.0.len(),
-                CRYPTPROTECTMEMORY_BLOCK_SIZE
+                CRYPTPROTECTMEMORY_BLOCK_SIZE,
             );
             if self.1 != 0 {
                 unsafe {
@@ -88,10 +87,8 @@ impl EncryptedPassword {
                     .context("while decrypting a SSH password")?
                 };
 
-                {
-                    // Remove padding
-                    _ = self.0.drain(self.1 as usize..);
-                }
+                // Remove padding.
+                self.0.truncate(self.1 as usize);
             }
 
             Ok(String::from_utf8(std::mem::take(&mut self.0))?)

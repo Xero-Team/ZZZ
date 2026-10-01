@@ -121,7 +121,7 @@ impl AskPassSession {
                         {
                             askpass_secret
                                 .lock()
-                                .expect("lock should not be poisoned")
+                                .unwrap_or_else(|poisoned| poisoned.into_inner())
                                 .replace(password.clone());
                         }
                         ControlFlow::Continue(Ok(password))
@@ -158,11 +158,13 @@ impl AskPassSession {
     // commands that may legitimately run for a long time without prompting (e.g. git) should pass
     // `None` and rely on the command's own completion instead.
     pub async fn run(&mut self, timeout: Option<Duration>) -> AskPassResult {
-        let askpass_opened_rx = self.askpass_opened_rx.take().expect("Only call run once");
-        let askpass_kill_master_rx = self
-            .askpass_kill_master_rx
-            .take()
-            .expect("Only call run once");
+        let (Some(askpass_opened_rx), Some(askpass_kill_master_rx)) = (
+            self.askpass_opened_rx.take(),
+            self.askpass_kill_master_rx.take(),
+        ) else {
+            debug_panic!("AskPassSession::run may only be called once");
+            return AskPassResult::CancelledByUser;
+        };
         let executor = self.executor.clone();
         let timer = async move {
             match timeout {
@@ -187,7 +189,10 @@ impl AskPassSession {
     /// This will return the password that was last set by the askpass script.
     #[cfg(target_os = "windows")]
     pub fn get_password(&self) -> Option<EncryptedPassword> {
-        self.secret.lock().ok()?.clone()
+        self.secret
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     pub fn script_path(&self) -> impl AsRef<OsStr> {
@@ -230,24 +235,38 @@ impl PasswordProxy {
         let askpass_script = generate_askpass_script(shell_kind, askpass_program, &askpass_socket)?;
         let _task = executor.spawn(async move {
             maybe!(async move {
+                let _temp_dir = temp_dir;
                 let listener =
                     UnixListener::bind(&askpass_socket).context("creating askpass socket")?;
 
-                while let Ok((mut stream, _)) = listener.accept().await {
+                loop {
+                    let connection = listener
+                        .accept()
+                        .await
+                        .context("accepting askpass connection");
+                    let (mut stream, _) = match connection {
+                        Ok(connection) => connection,
+                        Err(error) => break Result::<(), anyhow::Error>::Err(error),
+                    };
                     let mut buffer = Vec::new();
                     let mut reader = BufReader::new(&mut stream);
-                    if reader.read_until(b'\0', &mut buffer).await.is_err() {
-                        buffer.clear();
+                    if let Err(error) = reader.read_until(b'\0', &mut buffer).await {
+                        log::warn!("Failed to read askpass prompt: {error:#}");
+                        continue;
                     }
                     let prompt = String::from_utf8_lossy(&buffer).into_owned();
                     let password = get_password(prompt).await;
                     match password {
                         ControlFlow::Continue(password) => {
-                            if let Ok(password) = password
-                                && let Ok(decrypted) =
-                                    password.decrypt(IKnowWhatIAmDoingAndIHaveReadTheDocs)
-                            {
-                                stream.write_all(decrypted.as_bytes()).await.log_err();
+                            match password.and_then(|password| {
+                                password.decrypt(IKnowWhatIAmDoingAndIHaveReadTheDocs)
+                            }) {
+                                Ok(decrypted) => {
+                                    stream.write_all(decrypted.as_bytes()).await.log_err();
+                                }
+                                Err(error) => {
+                                    log::error!("Failed to resolve askpass password: {error:#}");
+                                }
                             }
                         }
                         ControlFlow::Break(()) => {
@@ -259,8 +278,6 @@ impl PasswordProxy {
                         }
                     }
                 }
-                drop(temp_dir);
-                Result::<_, anyhow::Error>::Ok(())
             })
             .await
             .log_err();
