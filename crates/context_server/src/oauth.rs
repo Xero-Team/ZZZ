@@ -1161,63 +1161,77 @@ pub async fn start_callback_server() -> Result<(
     // `tiny_http` is blocking, so we run it on a background thread.
     // The `recv_timeout` loop lets us check for cancellation (the receiver
     // being dropped) and enforce an overall timeout.
-    std::thread::spawn(move || {
-        let deadline = std::time::Instant::now() + CALLBACK_TIMEOUT;
+    std::thread::Builder::new()
+        .name("McpOAuthCallback".to_owned())
+        .spawn(move || {
+            let deadline = std::time::Instant::now() + CALLBACK_TIMEOUT;
 
-        loop {
-            if tx.is_canceled() {
-                return;
-            }
-            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-            if remaining.is_zero() {
-                return;
-            }
-
-            let timeout = remaining.min(Duration::from_millis(500));
-            let Ok(request) = server.recv_timeout(timeout) else {
-                let _ = tx.send(Err(anyhow!("OAuth callback server I/O error")));
-                return;
-            };
-
-            let Some(request) = request else {
-                // Timeout with no request — loop back and check cancellation.
-                continue;
-            };
-
-            let result = handle_callback_request(&request);
-
-            let (status_code, body) = match &result {
-                Ok(_) => (
-                    200,
-                    "<html><body><h1>Authorization successful</h1>\
-                     <p>You can close this tab and return to ZZZ.</p></body></html>",
-                ),
-                Err(err) => {
-                    log::error!("OAuth callback error: {}", err);
-                    (
-                        400,
-                        "<html><body><h1>Authorization failed</h1>\
-                         <p>Something went wrong. Please try again from ZZZ.</p></body></html>",
-                    )
+            loop {
+                if tx.is_canceled() {
+                    return;
                 }
-            };
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    if tx.send(Err(anyhow!("OAuth callback timed out"))).is_err() {
+                        log::debug!("OAuth callback receiver was dropped after timeout");
+                    }
+                    return;
+                }
 
-            let response = tiny_http::Response::from_string(body)
-                .with_status_code(status_code)
-                .with_header(
-                    tiny_http::Header::from_str("Content-Type: text/html")
-                        .expect("failed to construct response header"),
-                )
-                .with_header(
-                    tiny_http::Header::from_str("Keep-Alive: timeout=0,max=0")
-                        .expect("failed to construct response header"),
-                );
-            request.respond(response).log_err();
+                let timeout = remaining.min(Duration::from_millis(500));
+                let request = match server.recv_timeout(timeout) {
+                    Ok(request) => request,
+                    Err(error) => {
+                        let error = anyhow!(error).context("OAuth callback server I/O error");
+                        if tx.send(Err(error)).is_err() {
+                            log::debug!("OAuth callback receiver was dropped after I/O failure");
+                        }
+                        return;
+                    }
+                };
 
-            let _ = tx.send(result);
-            return;
-        }
-    });
+                let Some(request) = request else {
+                    // Timeout with no request — loop back and check cancellation.
+                    continue;
+                };
+
+                let result = handle_callback_request(&request);
+
+                let (status_code, body) = match &result {
+                    Ok(_) => (
+                        200,
+                        "<html><body><h1>Authorization successful</h1>\
+                     <p>You can close this tab and return to ZZZ.</p></body></html>",
+                    ),
+                    Err(err) => {
+                        log::error!("OAuth callback error: {}", err);
+                        (
+                            400,
+                            "<html><body><h1>Authorization failed</h1>\
+                         <p>Something went wrong. Please try again from ZZZ.</p></body></html>",
+                        )
+                    }
+                };
+
+                let response = tiny_http::Response::from_string(body)
+                    .with_status_code(status_code)
+                    .with_header(
+                        tiny_http::Header::from_str("Content-Type: text/html")
+                            .expect("failed to construct response header"),
+                    )
+                    .with_header(
+                        tiny_http::Header::from_str("Keep-Alive: timeout=0,max=0")
+                            .expect("failed to construct response header"),
+                    );
+                request.respond(response).log_err();
+
+                if tx.send(result).is_err() {
+                    log::debug!("OAuth callback receiver was dropped before delivery");
+                }
+                return;
+            }
+        })
+        .context("Failed to spawn OAuth callback server thread")?;
 
     Ok((redirect_uri, rx))
 }
