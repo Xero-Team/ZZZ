@@ -47,7 +47,7 @@ impl Assets {
                 let font_bytes = cx
                     .asset_source()
                     .load(&font_path)?
-                    .expect("Assets should never return None");
+                    .with_context(|| format!("font asset missing at path {font_path:?}"))?;
                 embedded_fonts.push(font_bytes);
             }
         }
