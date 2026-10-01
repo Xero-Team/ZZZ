@@ -100,6 +100,14 @@ fn topological_sort<'a>(
     let mut sorted: Vec<&DomainMigration> = Vec::new();
     let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let mut visiting: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut registered_names = std::collections::HashSet::new();
+    for registration in registrations {
+        anyhow::ensure!(
+            registered_names.insert(registration.name),
+            "database migration domain {:?} is registered more than once",
+            registration.name
+        );
+    }
 
     fn visit<'a>(
         name: &str,
@@ -362,6 +370,27 @@ mod tests {
             .err()
             .expect("migration dependency cycles should be rejected");
         assert!(error.to_string().contains("cycle"));
+    }
+
+    #[test]
+    fn migration_sort_rejects_duplicate_domains() {
+        let first = DomainMigration {
+            name: "duplicate",
+            migrations: &[],
+            dependencies: &[],
+            should_allow_migration_change: reject_migration_change,
+        };
+        let second = DomainMigration {
+            name: "duplicate",
+            migrations: &[],
+            dependencies: &[],
+            should_allow_migration_change: reject_migration_change,
+        };
+
+        let error = topological_sort(&[&first, &second])
+            .err()
+            .expect("duplicate migration domains should be rejected");
+        assert!(error.to_string().contains("more than once"));
     }
 
     // Test bad migration panics
