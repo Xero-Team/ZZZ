@@ -274,10 +274,12 @@ impl fmt::Debug for Lamport {
 impl fmt::Debug for Global {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Global {{")?;
+        let mut first = true;
         for timestamp in self.iter().filter(|t| t.value > 0) {
-            if timestamp.replica_id.0 > 0 {
+            if !first {
                 write!(f, ", ")?;
             }
+            first = false;
             write!(f, "{:?}: {}", timestamp.replica_id, timestamp.value)?;
         }
         write!(f, "}}")
@@ -360,6 +362,16 @@ mod tests {
         assert_eq!(left.get(ReplicaId::FIRST_COLLAB_ID), 7);
         assert!(left.observed_any(&right));
         assert!(left.changed_since(&Global::from_iter([local])));
+    }
+
+    #[test]
+    fn global_debug_does_not_prefix_remote_entries_with_a_comma() {
+        let global = Global::from_iter([Lamport {
+            replica_id: ReplicaId::REMOTE_SERVER,
+            value: 2,
+        }]);
+
+        assert_eq!(format!("{global:?}"), "Global {<remote>: 2}");
     }
 
     #[test]
