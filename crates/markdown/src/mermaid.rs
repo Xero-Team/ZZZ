@@ -113,7 +113,9 @@ impl CachedMermaidDiagram {
                         .map_err(|error| anyhow::anyhow!("{error}"))
                 })
                 .await;
-            let _ = render_image_clone.set(value);
+            if render_image_clone.set(value).is_err() {
+                log::debug!("mermaid render result was already initialized");
+            }
             this.update(cx, |_, cx| {
                 cx.notify();
             })
