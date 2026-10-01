@@ -659,7 +659,7 @@ impl PermissionOptions {
             .iter()
             .enumerate()
             .filter(|(index, _)| checked_indices.contains(index))
-            .map(|(_, cp)| cp.pattern.clone())
+            .map(|(_, pattern)| pattern.pattern.clone())
             .collect();
 
         if checked_patterns.is_empty() {

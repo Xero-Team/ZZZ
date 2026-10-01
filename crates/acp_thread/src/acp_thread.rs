@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::{Formatter, Write};
+use std::fmt::Formatter;
 use std::ops::Range;
 use std::process::ExitStatus;
 use std::rc::Rc;
@@ -142,7 +142,7 @@ pub fn sandbox_authorization_details_from_meta(
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SubagentSessionInfo {
-    /// The session id of the subagent sessiont that was spawned
+    /// The session id of the subagent session that was spawned
     pub session_id: acp::SessionId,
     /// The index of the message of the start of the "turn" run by this tool call
     pub message_start_index: usize,
@@ -177,20 +177,16 @@ pub struct Checkpoint {
 
 impl UserMessage {
     fn to_markdown(&self, cx: &App) -> String {
-        let mut markdown = String::new();
-        if self
+        let heading = if self
             .checkpoint
             .as_ref()
             .is_some_and(|checkpoint| checkpoint.show)
         {
-            writeln!(markdown, "## User (checkpoint)").expect("value should be present");
+            "## User (checkpoint)"
         } else {
-            writeln!(markdown, "## User").expect("value should be present");
-        }
-        writeln!(markdown).expect("value should be present");
-        writeln!(markdown, "{}", self.content.to_markdown(cx)).expect("value should be present");
-        writeln!(markdown).expect("value should be present");
-        markdown
+            "## User"
+        };
+        format!("{heading}\n\n{}\n\n", self.content.to_markdown(cx))
     }
 }
 
@@ -1782,9 +1778,9 @@ impl TokenUsage {
     pub fn ratio(&self) -> TokenUsageRatio {
         #[cfg(debug_assertions)]
         let warning_threshold: f32 = std::env::var("ZZZ_THREAD_WARNING_THRESHOLD")
-            .unwrap_or(TOKEN_USAGE_WARNING_THRESHOLD.to_string())
-            .parse()
-            .expect("value should parse");
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(TOKEN_USAGE_WARNING_THRESHOLD);
         #[cfg(not(debug_assertions))]
         let warning_threshold: f32 = TOKEN_USAGE_WARNING_THRESHOLD;
 
@@ -2965,7 +2961,7 @@ impl AcpThread {
                             let new_position = location.position.to_point(&snapshot);
 
                             // ignore this so that when we get updates from the edit tool
-                            // the position doesn't reset to the startof line
+                            // the position doesn't reset to the start of line
                             old_position.row == new_position.row
                                 && old_position.column > new_position.column
                         } else {
@@ -4503,10 +4499,12 @@ mod tests {
         // Create a real PTY terminal that runs a command which prints output then sleeps
         // We use printf instead of echo and chain with && sleep to ensure proper execution
         let (completion_tx, _completion_rx) = async_channel::unbounded();
-        let (program, args) = ShellBuilder::new(&Shell::System, false).build(
-            Some("printf 'output_before_kill\\n' && sleep 60".to_owned()),
-            &[],
-        );
+        let (program, args) = ShellBuilder::new(&Shell::System, false)
+            .non_interactive()
+            .build(
+                Some("printf 'output_before_kill\\n' && sleep 60".to_owned()),
+                &[],
+            );
 
         let builder = cx
             .update(|cx| {

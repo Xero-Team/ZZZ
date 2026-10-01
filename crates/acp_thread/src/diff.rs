@@ -24,7 +24,7 @@ impl Diff {
     ) -> Self {
         let multibuffer = cx.new(|_cx| MultiBuffer::without_headers(Capability::ReadOnly));
         let new_buffer = cx.new(|cx| Buffer::local(new_text, cx));
-        let base_text = old_text.clone().unwrap_or(String::new()).into();
+        let base_text = old_text.clone().unwrap_or_default().into();
         let task = cx.spawn({
             let multibuffer = multibuffer.clone();
             let path = path.clone();
@@ -39,7 +39,7 @@ impl Diff {
                 buffer.update(cx, |buffer, _| buffer.parsing_idle()).await;
 
                 let diff = build_buffer_diff(
-                    old_text.unwrap_or(String::new()).into(),
+                    old_text.unwrap_or_default().into(),
                     &buffer,
                     Some(language_registry.clone()),
                     cx,

@@ -75,33 +75,6 @@ impl MentionUri {
             .and_then(|input| input.strip_suffix('`'))
             .unwrap_or(input);
 
-        fn parse_line_range(fragment: &str) -> Result<RangeInclusive<u32>> {
-            let range = fragment.strip_prefix("L").unwrap_or(fragment);
-
-            let (start, end) = if let Some((start, end)) = range.split_once(":") {
-                (start, end)
-            } else if let Some((start, end)) = range.split_once("-") {
-                // Also handle L10-20 or L10-L20 format
-                (start, end.strip_prefix("L").unwrap_or(end))
-            } else {
-                // Single line number like L1872 - treat as a range of one line
-                (range, range)
-            };
-
-            let start_line = start
-                .parse::<u32>()
-                .context("Parsing line range start")?
-                .checked_sub(1)
-                .context("Line numbers should be 1-based")?;
-            let end_line = end
-                .parse::<u32>()
-                .context("Parsing line range end")?
-                .checked_sub(1)
-                .context("Line numbers should be 1-based")?;
-
-            Ok(start_line..=end_line)
-        }
-
         let parse_column =
             |input: Option<String>| -> Option<u32> { input?.parse::<u32>().ok()?.checked_sub(1) };
         let validate_query_params = |url: &Url, allowed: &[&str]| -> Result<()> {
