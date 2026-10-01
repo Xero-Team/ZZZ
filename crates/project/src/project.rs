@@ -2564,6 +2564,30 @@ impl Project {
         })
     }
 
+    /// Reads a remote worktree file and writes it to a temporary local file so a
+    /// decoder that needs a filesystem path can open it. The returned
+    /// `TempPath` deletes the file on drop.
+    pub fn stage_file_to_temp(
+        &mut self,
+        worktree_id: WorktreeId,
+        path: Arc<RelPath>,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<(PathBuf, tempfile::TempPath)>> {
+        let read = self.read_file_bytes(worktree_id, path, cx);
+        cx.spawn(async move |_this, cx| {
+            let bytes = read.await?;
+            cx.background_spawn(async move {
+                use std::io::Write as _;
+                let mut file = tempfile::NamedTempFile::new()?;
+                file.write_all(&bytes)?;
+                let temp_path = file.into_temp_path();
+                let path = temp_path.to_path_buf();
+                anyhow::Ok((path, temp_path))
+            })
+            .await
+        })
+    }
+
     /// Registers a remote file transfer under a fresh id and starts its
     /// `DownloadFileByPath` request. Chunks are delivered to `destination` by the
     /// project's update handler. A failed request drops its registration so

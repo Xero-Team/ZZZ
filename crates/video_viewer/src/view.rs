@@ -326,8 +326,17 @@ impl VideoView {
             let (path, staged_file) = if let Some(local_path) = local_path {
                 (local_path, None)
             } else if !project.read_with(cx, |project, _cx| project.is_local()) {
-                match stage_remote_file(project.clone(), project_path, cx).await {
-                    Ok(staged) => staged,
+                let staged = project
+                    .update(cx, |project, cx| {
+                        project.stage_file_to_temp(
+                            project_path.worktree_id,
+                            project_path.path.clone(),
+                            cx,
+                        )
+                    })
+                    .await;
+                match staged {
+                    Ok((path, temp_path)) => (path, Some(temp_path)),
                     Err(error) => {
                         Self::set_error(&this, error.to_string(), cx);
                         return;
@@ -1041,32 +1050,6 @@ async fn refill_frames(
         }
     }
     true
-}
-
-/// Fetch a remote worktree file and materialize it as a temporary local file
-/// so the video decoder can read it. The returned `TempPath` keeps the file
-/// alive and deletes it on drop.
-async fn stage_remote_file(
-    project: gpui::Entity<Project>,
-    project_path: ProjectPath,
-    cx: &mut gpui::AsyncApp,
-) -> anyhow::Result<(PathBuf, Option<tempfile::TempPath>)> {
-    let bytes = project
-        .update(cx, |project, cx| {
-            project.read_file_bytes(project_path.worktree_id, project_path.path.clone(), cx)
-        })
-        .await?;
-
-    cx.background_spawn(async move {
-        use std::io::Write as _;
-        let mut file = tempfile::NamedTempFile::new()?;
-        file.write_all(&bytes)?;
-        let temp_path = file.into_temp_path();
-        let path = temp_path.to_path_buf();
-        anyhow::Ok((path, temp_path))
-    })
-    .await
-    .map(|(path, temp_path)| (path, Some(temp_path)))
 }
 
 fn next_decoder_frame(decoder: &Arc<Mutex<VideoDecoder>>) -> anyhow::Result<Option<VideoFrame>> {
