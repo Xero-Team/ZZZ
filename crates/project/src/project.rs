@@ -2533,67 +2533,12 @@ impl Project {
         destination_path: PathBuf,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        log::debug!(
-            "download_file called: worktree_id={:?}, path={:?}, destination={:?}",
+        self.start_download(
             worktree_id,
             path,
-            destination_path
-        );
-
-        let Some(remote_client) = &self.remote_client else {
-            log::error!("download_file: not a remote project");
-            return Task::ready(Err(anyhow!("not a remote project")));
-        };
-
-        let proto_client = remote_client.read(cx).proto_client();
-        // For SSH remote projects, use REMOTE_SERVER_PROJECT_ID instead of remote_id()
-        // because SSH projects have client_state: Local but still need to communicate with remote server
-        let project_id = self.remote_id().unwrap_or(REMOTE_SERVER_PROJECT_ID);
-        let downloading_files = self.downloading_files.clone();
-        let path_str = path.to_proto();
-
-        let file_id = NEXT_DOWNLOAD_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        // Register BEFORE sending request to avoid race condition. The transfer
-        // is keyed by the request's file id so concurrent transfers (including
-        // multiple reads of the same path) stay independent.
-        downloading_files.lock().insert(
-            file_id,
-            DownloadingFile {
-                destination: DownloadDestination::File(destination_path),
-                chunks: Vec::new(),
-                total_size: 0,
-            },
-        );
-        log::debug!(
-            "download_file: sending DownloadFileByPath request, path_str={}",
-            path_str
-        );
-
-        cx.spawn(async move |_this, _cx| {
-            log::debug!("download_file: sending request with file_id={}...", file_id);
-            let response = match proto_client
-                .request(proto::DownloadFileByPath {
-                    project_id,
-                    worktree_id: worktree_id.to_proto(),
-                    path: path_str.clone(),
-                    file_id,
-                })
-                .await
-            {
-                Ok(response) => response,
-                Err(error) => {
-                    // Drop the pre-registered transfer so a failed request does
-                    // not leak an entry in `downloading_files`.
-                    downloading_files.lock().remove(&file_id);
-                    return Err(error);
-                }
-            };
-
-            log::debug!("download_file: got response, file_id={}", response.file_id);
-            // The file_id is set from the State message, we just confirm the request succeeded
-            Ok(())
-        })
+            DownloadDestination::File(destination_path),
+            cx,
+        )
     }
 
     /// Read a remote worktree file into memory, returning its raw bytes. This
@@ -2606,23 +2551,49 @@ impl Project {
         path: Arc<RelPath>,
         cx: &mut Context<Self>,
     ) -> Task<Result<Vec<u8>>> {
+        let (completion_tx, completion_rx) = futures::channel::oneshot::channel();
+        let request = self.start_download(
+            worktree_id,
+            path,
+            DownloadDestination::Memory(completion_tx),
+            cx,
+        );
+        cx.spawn(async move |_this, _cx| {
+            request.await?;
+            completion_rx.await.context("file download was cancelled")?
+        })
+    }
+
+    /// Registers a remote file transfer under a fresh id and starts its
+    /// `DownloadFileByPath` request. Chunks are delivered to `destination` by the
+    /// project's update handler. A failed request drops its registration so
+    /// `downloading_files` does not leak an entry.
+    fn start_download(
+        &mut self,
+        worktree_id: WorktreeId,
+        path: Arc<RelPath>,
+        destination: DownloadDestination,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
         let Some(remote_client) = &self.remote_client else {
             return Task::ready(Err(anyhow!("not a remote project")));
         };
-
         let proto_client = remote_client.read(cx).proto_client();
+        // For SSH remote projects, use REMOTE_SERVER_PROJECT_ID instead of
+        // remote_id() because SSH projects have client_state: Local but still
+        // need to communicate with the remote server.
         let project_id = self.remote_id().unwrap_or(REMOTE_SERVER_PROJECT_ID);
         let downloading_files = self.downloading_files.clone();
         let path_str = path.to_proto();
-
         let file_id = NEXT_DOWNLOAD_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let key = file_id;
-        let (completion_tx, completion_rx) = futures::channel::oneshot::channel();
+        // Register before sending the request: the update handler looks the
+        // entry up by file id and an empty file finishes from the State message,
+        // which can arrive before this task is scheduled.
         downloading_files.lock().insert(
-            key,
+            file_id,
             DownloadingFile {
-                destination: DownloadDestination::Memory(completion_tx),
+                destination,
                 chunks: Vec::new(),
                 total_size: 0,
             },
@@ -2635,13 +2606,11 @@ impl Project {
                 path: path_str,
                 file_id,
             });
-
             if let Err(error) = request.await {
-                downloading_files.lock().remove(&key);
+                downloading_files.lock().remove(&file_id);
                 return Err(error);
             }
-
-            completion_rx.await.context("file download was cancelled")?
+            Ok(())
         })
     }
 
