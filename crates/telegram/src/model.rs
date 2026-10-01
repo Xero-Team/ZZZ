@@ -32,7 +32,7 @@ pub enum AuthState {
 
 impl AuthState {
     pub fn is_signed_in(&self) -> bool {
-        matches!(self, Self::SignedIn { .. })
+        matches!(self, Self::SignedIn)
     }
 }
 
