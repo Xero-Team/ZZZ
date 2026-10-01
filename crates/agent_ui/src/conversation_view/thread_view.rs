@@ -675,7 +675,7 @@ impl ThreadView {
                 &placeholder,
                 editor::EditorMode::AutoHeight {
                     min_lines: AgentSettings::get_global(cx).message_editor_min_lines,
-                    max_lines: Some(AgentSettings::get_global(cx).set_message_editor_max_lines()),
+                    max_lines: Some(AgentSettings::get_global(cx).message_editor_max_lines()),
                 },
                 window,
                 cx,
@@ -1727,7 +1727,7 @@ impl ThreadView {
                 editor.set_mode(
                     EditorMode::AutoHeight {
                         min_lines: agent_settings.message_editor_min_lines,
-                        max_lines: Some(agent_settings.set_message_editor_max_lines()),
+                        max_lines: Some(agent_settings.message_editor_max_lines()),
                     },
                     cx,
                 )
@@ -5612,7 +5612,7 @@ impl ThreadView {
         } else {
             EditorMode::AutoHeight {
                 min_lines: AgentSettings::get_global(cx).message_editor_min_lines,
-                max_lines: Some(AgentSettings::get_global(cx).set_message_editor_max_lines()),
+                max_lines: Some(AgentSettings::get_global(cx).message_editor_max_lines()),
             }
         };
         self.message_editor.update(cx, |editor, cx| {
