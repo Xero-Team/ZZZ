@@ -206,6 +206,7 @@ impl QueryHistory {
         self.history.get_or_insert_with(|| {
             CommandPaletteDB::global(cx)
                 .list_recent_queries()
+                .log_err()
                 .unwrap_or_default()
                 .into_iter()
                 .collect()
@@ -361,22 +362,21 @@ impl CommandPaletteDelegate {
     /// We only account for commands triggered directly via command palette and not by e.g. keystrokes because
     /// if a user already knows a keystroke for a command, they are unlikely to use a command palette to look for it.
     fn command_usage(&self, cx: &App) -> HashMap<String, CommandUsage> {
-        if let Ok(commands) = CommandPaletteDB::global(cx).list_commands_used() {
-            commands
-                .into_iter()
-                .map(|command| {
-                    (
-                        command.command_name,
-                        CommandUsage {
-                            last_invoked: command.last_invoked.unix_timestamp(),
-                            invocations: command.invocations,
-                        },
-                    )
-                })
-                .collect()
-        } else {
-            HashMap::new()
-        }
+        CommandPaletteDB::global(cx)
+            .list_commands_used()
+            .log_err()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|command| {
+                (
+                    command.command_name,
+                    CommandUsage {
+                        last_invoked: command.last_invoked.unix_timestamp(),
+                        invocations: command.invocations,
+                    },
+                )
+            })
+            .collect()
     }
 
     fn selected_command(&self) -> Option<&Command> {
@@ -554,13 +554,14 @@ impl PickerDelegate for CommandPaletteDelegate {
                 return;
             };
 
-            picker
-                .update(cx, |picker, cx| {
-                    picker
-                        .delegate
-                        .matches_updated(query, commands, matches, intercept_result, cx)
-                })
-                .ok();
+            let Some(picker) = picker.upgrade() else {
+                return;
+            };
+            picker.update(cx, |picker, cx| {
+                picker
+                    .delegate
+                    .matches_updated(query, commands, matches, intercept_result, cx)
+            });
         })
     }
 
@@ -588,9 +589,10 @@ impl PickerDelegate for CommandPaletteDelegate {
     }
 
     fn dismissed(&mut self, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.command_palette
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .ok();
+        let Some(command_palette) = self.command_palette.upgrade() else {
+            return;
+        };
+        command_palette.update(cx, |_, cx| cx.emit(DismissEvent));
     }
 
     fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
