@@ -375,9 +375,11 @@ impl DebugPanel {
 
             this.workspace.clone()
         })?;
-        workspace.update_in(cx, |workspace, window, cx| {
-            workspace.focus_panel::<Self>(window, cx);
-        })?;
+        if focus {
+            workspace.update_in(cx, |workspace, window, cx| {
+                workspace.focus_panel::<Self>(window, cx);
+            })?;
+        }
         Ok(debug_session)
     }
 
