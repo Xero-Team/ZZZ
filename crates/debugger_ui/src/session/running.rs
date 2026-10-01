@@ -20,7 +20,7 @@ use crate::{
     session::running::memory_view::MemoryView,
 };
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow};
 use breakpoint_list::BreakpointList;
 use collections::{HashMap, IndexMap};
 use console::Console;
@@ -1066,11 +1066,17 @@ impl RunningState {
                             cx,
                         )
                     });
-                }).ok();
+                })?;
 
-                let Some(process_id) = rx.await.ok().flatten() else {
-                    bail!("No process selected with config that contains {}", PROCESS_ID_PLACEHOLDER.as_str())
-                };
+                let process_id = rx
+                    .await
+                    .context("process picker closed before returning a selection")?
+                    .with_context(|| {
+                        format!(
+                            "No process selected with config that contains {}",
+                            PROCESS_ID_PLACEHOLDER.as_str()
+                        )
+                    })?;
 
                 Self::substitute_process_id_in_config(&mut config, process_id);
             }
@@ -1127,20 +1133,14 @@ impl RunningState {
                                 cx,
                             )
 
-                        });
-                    if let Ok(t) = task {
-                        t.await.and_then(|scenario| {
-                            extra_config = scenario.config;
-                            match scenario.build {
-                                Some(BuildTaskDefinition::Template {
-                                    locator_name, ..
-                                }) => locator_name,
-                                _ => None,
-                            }
-                        })
-                    } else {
-                        None
-                    }
+                        })?;
+                    task.await.and_then(|scenario| {
+                        extra_config = scenario.config;
+                        match scenario.build {
+                            Some(BuildTaskDefinition::Template { locator_name, .. }) => locator_name,
+                            _ => None,
+                        }
+                    })
 
                 } else {
                     None
@@ -1583,7 +1583,7 @@ impl RunningState {
                     };
                     list.go_to_stack_frame(stack_frame_id, window, cx)
                 })
-                .detach();
+                .detach_and_log_err(cx);
         }
     }
 
@@ -1625,17 +1625,17 @@ impl RunningState {
     ) {
         self.ensure_pane_item(item, window, cx);
 
-        let (variable_list_position, pane) = self
-            .panes
-            .panes()
-            .into_iter()
-            .find_map(|pane| {
+        let Some((variable_list_position, pane)) =
+            self.panes.panes().into_iter().find_map(|pane| {
                 pane.read(cx)
                     .items_of_type::<SubView>()
                     .position(|view| view.read(cx).view_kind() == item)
                     .map(|view| (view, pane))
             })
-            .expect("value should be present");
+        else {
+            log::error!("failed to locate debugger pane item {item:?}");
+            return;
+        };
 
         pane.update(cx, |this, cx| {
             this.activate_item(variable_list_position, true, true, window, cx);
