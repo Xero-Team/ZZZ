@@ -205,7 +205,10 @@ impl AcpDebugLog {
     }
 
     fn trailing_stderr(&self) -> Option<String> {
-        let state = self.state.lock().ok()?;
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut lines = state
             .messages
             .iter()
@@ -559,7 +562,7 @@ impl AgentSessionList for AcpSessionList {
                         title: s.title.map(Into::into),
                         updated_at: s.updated_at.and_then(|date_str| {
                             chrono::DateTime::parse_from_rfc3339(&date_str)
-                                .ok()
+                                .log_err()
                                 .map(|dt| dt.with_timezone(&chrono::Utc))
                         }),
                         created_at: None,
@@ -676,7 +679,6 @@ fn connect_client_future(
     Client
         .builder()
         .name(name)
-        // --- Request handlers (agent→client) ---
         .on_receive_request(
             on_request!(handle_request_permission),
             agent_client_protocol::on_receive_request!(),
@@ -713,7 +715,6 @@ fn connect_client_future(
             on_request!(handle_create_elicitation),
             agent_client_protocol::on_receive_request!(),
         )
-        // --- Notification handlers (agent→client) ---
         .on_receive_notification(
             on_notification!(handle_session_notification),
             agent_client_protocol::on_receive_notification!(),
@@ -734,10 +735,7 @@ fn connect_client_future(
         )
 }
 
-fn client_capabilities_for_agent(
-    agent_id: &AgentId,
-    _supports_boolean_config_options: bool,
-) -> acp::ClientCapabilities {
+fn client_capabilities_for_agent(agent_id: &AgentId) -> acp::ClientCapabilities {
     let mut meta = acp::Meta::from_iter([
         ("terminal_output".into(), true.into()),
         ("terminal-auth".into(), true.into()),
@@ -934,7 +932,6 @@ impl AcpConnection {
             }
         };
 
-        // Set up the foreground dispatch loop to process work items from handlers.
         let dispatch_context = ClientContext {
             sessions: sessions.clone(),
             pending_sessions: pending_sessions.clone(),
@@ -973,10 +970,7 @@ impl AcpConnection {
 
         let initialize_response = connection.send_request(
             acp::InitializeRequest::new(ProtocolVersion::V1)
-                .client_capabilities(client_capabilities_for_agent(
-                    &agent_id,
-                    cx.update(|cx| cx.has_flag::<AcpBetaFeatureFlag>()),
-                ))
+                .client_capabilities(client_capabilities_for_agent(&agent_id))
                 .client_info(
                     acp::Implementation::new("zzz", version)
                         .title(release_channel.map(ToOwned::to_owned)),
@@ -1440,7 +1434,7 @@ fn emit_load_error_to_all_sessions(
     for thread in threads {
         thread
             .update(cx, |thread, cx| thread.emit_load_error(error.clone(), cx))
-            .ok();
+            .log_err();
     }
 }
 
@@ -2567,7 +2561,7 @@ mod tests {
 
     #[test]
     fn cursor_client_capabilities_include_parameterized_model_picker_meta() {
-        let capabilities = client_capabilities_for_agent(&AgentId::new(CURSOR_ID), false);
+        let capabilities = client_capabilities_for_agent(&AgentId::new(CURSOR_ID));
         let meta = capabilities
             .meta
             .expect("expected client capabilities meta");
@@ -2582,7 +2576,7 @@ mod tests {
 
     #[test]
     fn non_cursor_client_capabilities_do_not_include_parameterized_model_picker_meta() {
-        let capabilities = client_capabilities_for_agent(&AgentId::new("codex-acp"), false);
+        let capabilities = client_capabilities_for_agent(&AgentId::new("codex-acp"));
         let meta = capabilities
             .meta
             .expect("expected client capabilities meta");
@@ -3893,7 +3887,7 @@ impl acp_thread::AgentSessionConfigOptions for AcpSessionConfigOptions {
             .await?;
 
             *state.borrow_mut() = response.config_options.clone();
-            watch_tx.borrow_mut().send(()).ok();
+            watch_tx.borrow_mut().send(()).log_err();
             Ok(response.config_options)
         })
     }
@@ -3902,11 +3896,6 @@ impl acp_thread::AgentSessionConfigOptions for AcpSessionConfigOptions {
         Some(self.watch_rx.clone())
     }
 }
-
-// ---------------------------------------------------------------------------
-// Handler functions dispatched from background handler closures to the
-// foreground thread via the ForegroundWork channel.
-// ---------------------------------------------------------------------------
 
 fn session_thread(
     ctx: &ClientContext,
@@ -4077,7 +4066,7 @@ fn handle_complete_elicitation(
                 .update(cx, |thread, cx| {
                     thread.complete_url_elicitation(&elicitation_id, cx);
                 })
-                .ok();
+                .log_err();
         }
         request_elicitations.update(cx, |store, cx| {
             store.complete_url_elicitation(&elicitation_id, cx);
@@ -4160,7 +4149,7 @@ fn handle_session_notification(
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
-    // Extract everything we need from the session while briefly borrowing.
+    // Release the sessions borrow before applying updates that may re-enter connection state.
     let (thread, session_modes, config_opts_data) = {
         let sessions = ctx.sessions.borrow();
         if let Some(session) = sessions.get(&notification.session_id) {
@@ -4199,9 +4188,6 @@ fn handle_session_notification(
             return;
         }
     };
-    // Borrow is dropped here.
-
-    // Apply mode/config/session_list updates without holding the borrow.
     if let acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate {
         current_mode_id, ..
     }) = &notification.update
@@ -4217,7 +4203,7 @@ fn handle_session_notification(
     {
         if let Some((config_opts_cell, tx_cell)) = &config_opts_data {
             *config_opts_cell.borrow_mut() = config_options.clone();
-            tx_cell.borrow_mut().send(()).ok();
+            tx_cell.borrow_mut().send(()).log_err();
         }
     }
 
@@ -4227,7 +4213,7 @@ fn handle_session_notification(
         session_list.send_info_update(notification.session_id.clone(), info_update.clone());
     }
 
-    // Pre-handle: if a ToolCall carries terminal_info, create/register a display-only terminal.
+    // Register the terminal before forwarding the tool call so its content can resolve it.
     if let acp::SessionUpdate::ToolCall(tc) = &notification.update {
         if let Some(meta) = &tc.meta {
             if let Some(terminal_info) = meta.get("terminal_info") {
@@ -4266,7 +4252,6 @@ fn handle_session_notification(
         }
     }
 
-    // Forward the update to the acp_thread as usual.
     if let Err(err) = thread
         .update(cx, |thread, cx| {
             thread.handle_session_update(notification.update.clone(), cx)
@@ -4279,7 +4264,7 @@ fn handle_session_notification(
         );
     }
 
-    // Post-handle: stream terminal output/exit if present on ToolCallUpdate meta.
+    // Apply output after forwarding the update so the terminal entry already exists.
     if let acp::SessionUpdate::ToolCallUpdate(tcu) = &notification.update {
         if let Some(meta) = &tcu.meta {
             if let Some(term_out) = meta.get("terminal_output") {
