@@ -69,12 +69,13 @@ use settings::Settings;
 /// When deciding what to render from a collection of mediatypes, we need to rank them in order of importance
 fn rank_mime_type(mimetype: &MimeType) -> usize {
     match mimetype {
-        MimeType::DataTable(_) => 7,
-        MimeType::Html(_) => 6,
-        MimeType::Json(_) => 5,
-        MimeType::Png(_) => 4,
-        MimeType::Jpeg(_) => 3,
-        MimeType::Markdown(_) => 2,
+        MimeType::DataTable(_) => 8,
+        MimeType::Html(_) => 7,
+        MimeType::Json(_) => 6,
+        MimeType::Png(_) => 5,
+        MimeType::Jpeg(_) => 4,
+        MimeType::Markdown(_) => 3,
+        MimeType::Latex(_) => 2,
         MimeType::Plain(_) => 1,
         // All other media types are not supported in ZZZ at this time
         _ => 0,
@@ -438,6 +439,13 @@ impl Output {
             },
             Some(MimeType::Markdown(text)) => {
                 let content = cx.new(|cx| MarkdownView::from(text.clone(), cx));
+                Output::Markdown {
+                    content,
+                    display_id,
+                }
+            }
+            Some(MimeType::Latex(text)) => {
+                let content = cx.new(|cx| MarkdownView::from_latex(text.clone(), cx));
                 Output::Markdown {
                     content,
                     display_id,
@@ -937,14 +945,16 @@ mod tests {
         let png = MimeType::Png(String::new());
         let jpeg = MimeType::Jpeg(String::new());
         let markdown = MimeType::Markdown(String::new());
+        let latex = MimeType::Latex(String::new());
         let plain = MimeType::Plain(String::new());
 
-        assert_eq!(rank_mime_type(&data_table), 7);
-        assert_eq!(rank_mime_type(&html), 6);
-        assert_eq!(rank_mime_type(&json), 5);
-        assert_eq!(rank_mime_type(&png), 4);
-        assert_eq!(rank_mime_type(&jpeg), 3);
-        assert_eq!(rank_mime_type(&markdown), 2);
+        assert_eq!(rank_mime_type(&data_table), 8);
+        assert_eq!(rank_mime_type(&html), 7);
+        assert_eq!(rank_mime_type(&json), 6);
+        assert_eq!(rank_mime_type(&png), 5);
+        assert_eq!(rank_mime_type(&jpeg), 4);
+        assert_eq!(rank_mime_type(&markdown), 3);
+        assert_eq!(rank_mime_type(&latex), 2);
         assert_eq!(rank_mime_type(&plain), 1);
 
         assert!(rank_mime_type(&data_table) > rank_mime_type(&html));
@@ -952,16 +962,16 @@ mod tests {
         assert!(rank_mime_type(&json) > rank_mime_type(&png));
         assert!(rank_mime_type(&png) > rank_mime_type(&jpeg));
         assert!(rank_mime_type(&jpeg) > rank_mime_type(&markdown));
+        assert!(rank_mime_type(&markdown) > rank_mime_type(&latex));
+        assert!(rank_mime_type(&latex) > rank_mime_type(&plain));
         assert!(rank_mime_type(&markdown) > rank_mime_type(&plain));
     }
 
     #[test]
     fn test_rank_mime_type_unsupported_returns_zero() {
         let svg = MimeType::Svg(String::new());
-        let latex = MimeType::Latex(String::new());
 
         assert_eq!(rank_mime_type(&svg), 0);
-        assert_eq!(rank_mime_type(&latex), 0);
     }
 
     async fn init_test(
@@ -970,6 +980,7 @@ mod tests {
         cx.update(|cx| {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
         let fs = project::FakeFs::new(cx.background_executor.clone());
@@ -1081,6 +1092,22 @@ mod tests {
             assert_eq!(item.text().as_deref(), Some("Title\nHello world"));
             assert_eq!(item.html().map(String::as_str), Some(html.as_str()));
         });
+    }
+
+    #[gpui::test]
+    async fn test_latex_output_renders_as_markdown(cx: &mut TestAppContext) {
+        let (mut cx, _workspace) = init_test(cx).await;
+        let bundle = Media::new(vec![
+            MimeType::Latex(r"\frac{1}{2}".to_string()),
+            MimeType::Plain("1/2".to_string()),
+        ]);
+
+        let output = cx.update(|window, cx| Output::new(&bundle, None, window, cx));
+
+        assert!(
+            matches!(output, Output::Markdown { .. }),
+            "LaTeX MIME output should use the math-enabled Markdown renderer"
+        );
     }
 
     #[gpui::test]

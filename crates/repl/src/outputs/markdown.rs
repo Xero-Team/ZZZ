@@ -1,6 +1,6 @@
 use gpui::{App, AppContext, ClipboardItem, Context, Entity, Window, div, prelude::*};
 use language::Buffer;
-use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
+use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownOptions, MarkdownStyle};
 
 use crate::outputs::OutputContent;
 
@@ -11,7 +11,25 @@ pub struct MarkdownView {
 
 impl MarkdownView {
     pub fn from(text: String, cx: &mut Context<Self>) -> Self {
-        Self::from_with_clipboard_html(text, None, cx)
+        Self::new(
+            text,
+            None,
+            MarkdownOptions {
+                render_math: true,
+                ..Default::default()
+            },
+            cx,
+        )
+    }
+
+    pub fn from_latex(text: String, cx: &mut Context<Self>) -> Self {
+        let trimmed = text.trim();
+        let markdown = if has_outer_math_delimiters(trimmed) {
+            trimmed.to_owned()
+        } else {
+            format!("$$\n{trimmed}\n$$")
+        };
+        Self::from(markdown, cx)
     }
 
     pub fn from_with_clipboard_html(
@@ -19,13 +37,36 @@ impl MarkdownView {
         clipboard_html: Option<String>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let markdown = cx.new(|cx| Markdown::new(text.clone().into(), None, None, cx));
+        Self::new(text, clipboard_html, MarkdownOptions::default(), cx)
+    }
+
+    fn new(
+        text: String,
+        clipboard_html: Option<String>,
+        options: MarkdownOptions,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let markdown =
+            cx.new(|cx| Markdown::new_with_options(text.clone().into(), None, None, options, cx));
 
         Self {
             markdown,
             clipboard_html,
         }
     }
+}
+
+fn has_outer_math_delimiters(text: &str) -> bool {
+    let display_dollars = text.len() >= 4 && text.starts_with("$$") && text.ends_with("$$");
+    let inline_dollars = text.len() >= 2
+        && text.starts_with('$')
+        && !text.starts_with("$$")
+        && text.ends_with('$')
+        && !text.ends_with("$$");
+    let display_backslashes = text.len() >= 4 && text.starts_with(r"\[") && text.ends_with(r"\]");
+    let inline_backslashes = text.len() >= 4 && text.starts_with(r"\(") && text.ends_with(r"\)");
+
+    display_dollars || inline_dollars || display_backslashes || inline_backslashes
 }
 
 impl OutputContent for MarkdownView {
