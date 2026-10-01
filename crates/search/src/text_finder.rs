@@ -512,6 +512,7 @@ mod tests {
             cx.set_global(settings);
             cx.set_global(db::AppDatabase::test_new());
 
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
 
             editor::init(cx);
