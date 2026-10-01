@@ -214,16 +214,10 @@ impl ConfigOptionsView {
                 }
 
                 let current_value = get_current_select_value(&self.config_options, config_id);
-                let current_index = current_value
+                let next_index = current_value
                     .as_ref()
                     .and_then(|current| options.iter().position(|option| &option.value == current))
-                    .unwrap_or(usize::MAX);
-
-                let next_index = if current_index == usize::MAX {
-                    0
-                } else {
-                    (current_index + 1) % options.len()
-                };
+                    .map_or(0, |current_index| (current_index + 1) % options.len());
 
                 Some(acp::SessionConfigOptionValue::value_id(
                     options[next_index].value.clone(),
@@ -317,7 +311,6 @@ struct ConfigOptionSelector {
     fs: Arc<dyn Fs>,
     picker_handle: Option<PopoverMenuHandle<Picker<ConfigOptionPickerDelegate>>>,
     picker: Option<Entity<Picker<ConfigOptionPickerDelegate>>>,
-    setting_value: bool,
 }
 
 impl ConfigOptionSelector {
@@ -378,7 +371,6 @@ impl ConfigOptionSelector {
             fs,
             picker_handle,
             picker,
-            setting_value: false,
         }
     }
 
@@ -470,7 +462,6 @@ impl ConfigOptionSelector {
             },
         )
         .end_icon(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
-        .disabled(self.setting_value)
     }
 }
 
@@ -648,7 +639,6 @@ impl Render for ConfigOptionSelector {
                         .label(option_name)
                         .label_position(SwitchLabelPosition::Start)
                         .label_size(LabelSize::Small)
-                        .disabled(self.setting_value)
                         .on_click(move |state, _window, cx| {
                             let next_value = matches!(state, ToggleState::Selected);
                             agent_server.set_default_config_option(
@@ -800,21 +790,16 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
         let all_options = self.all_options.clone();
+        let background_executor = cx.background_executor().clone();
 
         cx.spawn_in(window, async move |this, cx| {
-            let filtered_options = match this
-                .read_with(cx, |_, cx| {
-                    if query.is_empty() {
-                        None
-                    } else {
-                        Some((all_options.clone(), query.clone(), cx.background_executor().clone()))
-                    }
-                })
-                .ok()
-                .flatten()
-            {
-                Some((options, q, executor)) => fuzzy_search_options(options, &q, executor).await,
-                None => all_options,
+            let filtered_options = if query.is_empty() {
+                all_options
+            } else {
+                fuzzy_search_options(all_options, &query, background_executor).await
+            };
+            let Some(this) = this.upgrade() else {
+                return;
             };
 
             this.update_in(cx, |this, window, cx| {
@@ -833,7 +818,7 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                 this.set_selected_index(new_index, Some(picker::Direction::Down), true, window, cx);
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
     }
 
