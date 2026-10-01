@@ -90,7 +90,7 @@ pub enum DiffHunkSecondaryStatus {
     NoSecondaryHunk,
     /// We are unstaging
     SecondaryHunkAdditionPending,
-    /// We are stagind
+    /// We are staging
     SecondaryHunkRemovalPending,
 }
 
@@ -1789,10 +1789,12 @@ impl BufferDiff {
         });
         cx.spawn(async move |this, cx| {
             fut.await;
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |_, cx| {
                 cx.emit(BufferDiffEvent::LanguageChanged);
-            })
-            .ok();
+            });
         })
         .detach();
     }
@@ -1962,14 +1964,17 @@ impl BufferDiff {
 
         cx.spawn(async move |this, cx| {
             let result = fut.await;
+            let changed_range = result.change.changed_range.clone();
+            let Some(this) = this.upgrade() else {
+                return changed_range;
+            };
             this.update(cx, |_, cx| {
                 if result.base_text_changed {
                     cx.emit(BufferDiffEvent::BaseTextChanged);
                 }
                 cx.emit(BufferDiffEvent::DiffChanged(result.change.clone()));
-            })
-            .ok();
-            result.change.changed_range
+            });
+            changed_range
         })
     }
 
@@ -2007,7 +2012,9 @@ impl BufferDiff {
     ) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
         let complete_on_drop = util::defer(|| {
-            tx.send(()).ok();
+            if tx.send(()).is_err() {
+                log::debug!("buffer diff completion receiver was dropped");
+            }
         });
         cx.spawn(async move |this, cx| {
             let Some(state) = this
