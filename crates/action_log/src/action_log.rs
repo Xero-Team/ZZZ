@@ -201,7 +201,7 @@ impl ActionLog {
                         async move |this, cx| {
                             Self::maintain_diff(this, buffer, diff_update_rx, cx)
                                 .await
-                                .ok();
+                                .log_err();
                         }
                     }),
                     _subscription: cx.subscribe(&buffer, Self::handle_buffer_event),
@@ -290,13 +290,13 @@ impl ActionLog {
                 })
             })?
             .await
-            .ok();
+            .log_err();
         let (mut git_diff_updates_tx, mut git_diff_updates_rx) = watch::channel(());
         let _diff_subscription = if let Some(git_diff) = git_diff.as_ref() {
             cx.update(|cx| {
                 Some(cx.subscribe(git_diff, move |_, event, _cx| {
                     if matches!(event, buffer_diff::BufferDiffEvent::BaseTextChanged) {
-                        git_diff_updates_tx.send(()).ok();
+                        git_diff_updates_tx.send(()).log_err();
                     }
                 }))
             })
@@ -353,7 +353,7 @@ impl ActionLog {
                         );
                     }
 
-                    (Arc::from(base_text.to_string().as_str()), base_text)
+                    (Arc::<str>::from(base_text.to_string()), base_text)
                 }
             });
 
@@ -450,7 +450,7 @@ impl ActionLog {
                     }
 
                     (
-                        Arc::from(new_agent_diff_base.to_string().as_str()),
+                        Arc::<str>::from(new_agent_diff_base.to_string()),
                         new_agent_diff_base,
                     )
                 }))
@@ -1233,7 +1233,7 @@ impl TrackedBuffer {
     fn schedule_diff_update(&self, author: ChangeAuthor, cx: &App) {
         self.diff_update
             .unbounded_send((author, self.buffer.read(cx).text_snapshot()))
-            .ok();
+            .log_err();
     }
 }
 
