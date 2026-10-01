@@ -24,9 +24,11 @@ pub(super) struct HttpProxyAuthorization<'t> {
 }
 
 pub(super) fn parse_http_proxy<'t>(scheme: &str, proxy: &'t Url) -> HttpProxyType<'t> {
-    let auth = proxy.password().map(|password| HttpProxyAuthorization {
-        username: proxy.username(),
-        password,
+    let username = proxy.username();
+    let password = proxy.password();
+    let auth = (!username.is_empty() || password.is_some()).then(|| HttpProxyAuthorization {
+        username,
+        password: password.unwrap_or_default(),
     });
     if scheme.starts_with("https") {
         HttpProxyType::HTTPS(auth)
@@ -187,6 +189,21 @@ mod tests {
             HttpProxyType::HTTP(Some(HttpProxyAuthorization {
                 username: "username",
                 password: "password"
+            }))
+        ))
+    }
+
+    #[test]
+    fn test_parse_http_proxy_with_empty_password() {
+        let proxy = Url::parse("http://username@proxy.example.com:1080").unwrap();
+        let scheme = proxy.scheme();
+
+        let version = parse_http_proxy(scheme, &proxy);
+        assert!(matches!(
+            version,
+            HttpProxyType::HTTP(Some(HttpProxyAuthorization {
+                username: "username",
+                password: ""
             }))
         ))
     }

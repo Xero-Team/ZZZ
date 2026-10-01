@@ -47,10 +47,13 @@ pub(super) fn parse_socks_proxy<'t>(scheme: &str, proxy: &'t Url) -> SocksVersio
             identification,
         }
     } else {
-        let authorization = proxy.password().map(|password| Socks5Authorization {
-            username: proxy.username(),
-            password,
-        });
+        let username = proxy.username();
+        let password = proxy.password();
+        let authorization =
+            (!username.is_empty() || password.is_some()).then(|| Socks5Authorization {
+                username,
+                password: password.unwrap_or_default(),
+            });
         SocksVersion::V5 {
             local_dns: scheme != "socks5h",
             authorization,
@@ -204,6 +207,24 @@ mod tests {
                 authorization: Some(Socks5Authorization {
                     username: "username",
                     password: "password"
+                })
+            }
+        ))
+    }
+
+    #[test]
+    fn parse_socks5_with_empty_password() {
+        let proxy = Url::parse("socks5://username@proxy.example.com:1080").unwrap();
+        let scheme = proxy.scheme();
+
+        let version = parse_socks_proxy(scheme, &proxy);
+        assert!(matches!(
+            version,
+            SocksVersion::V5 {
+                local_dns: true,
+                authorization: Some(Socks5Authorization {
+                    username: "username",
+                    password: ""
                 })
             }
         ))
