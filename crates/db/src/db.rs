@@ -48,7 +48,7 @@ pub struct AppMigrator;
 impl Migrator for AppMigrator {
     fn migrate(connection: &sqlez::connection::Connection) -> anyhow::Result<()> {
         let registrations: Vec<&DomainMigration> = inventory::iter::<DomainMigration>().collect();
-        let sorted = topological_sort(&registrations);
+        let sorted = topological_sort(&registrations)?;
         for reg in &sorted {
             let mut should_allow = reg.should_allow_migration_change;
             connection.migrate(reg.name, reg.migrations, &mut should_allow)?;
@@ -94,32 +94,51 @@ impl AppDatabase {
     }
 }
 
-fn topological_sort<'a>(registrations: &[&'a DomainMigration]) -> Vec<&'a DomainMigration> {
+fn topological_sort<'a>(
+    registrations: &[&'a DomainMigration],
+) -> anyhow::Result<Vec<&'a DomainMigration>> {
     let mut sorted: Vec<&DomainMigration> = Vec::new();
     let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut visiting: std::collections::HashSet<&str> = std::collections::HashSet::new();
 
     fn visit<'a>(
         name: &str,
         registrations: &[&'a DomainMigration],
         sorted: &mut Vec<&'a DomainMigration>,
         visited: &mut std::collections::HashSet<&'a str>,
-    ) {
+        visiting: &mut std::collections::HashSet<&'a str>,
+    ) -> anyhow::Result<()> {
         if visited.contains(name) {
-            return;
+            return Ok(());
         }
-        if let Some(reg) = registrations.iter().find(|r| r.name == name) {
-            for dep in reg.dependencies {
-                visit(dep, registrations, sorted, visited);
-            }
-            visited.insert(reg.name);
-            sorted.push(reg);
+        let reg = registrations
+            .iter()
+            .find(|registration| registration.name == name)
+            .with_context(|| format!("database migration dependency {name:?} is not registered"))?;
+        anyhow::ensure!(
+            visiting.insert(reg.name),
+            "database migration dependency cycle includes {:?}",
+            reg.name
+        );
+        for dependency in reg.dependencies {
+            visit(dependency, registrations, sorted, visited, visiting)?;
         }
+        visiting.remove(reg.name);
+        visited.insert(reg.name);
+        sorted.push(reg);
+        Ok(())
     }
 
     for reg in registrations {
-        visit(reg.name, registrations, &mut sorted, &mut visited);
+        visit(
+            reg.name,
+            registrations,
+            &mut sorted,
+            &mut visited,
+            &mut visiting,
+        )?;
     }
-    sorted
+    Ok(sorted)
 }
 
 /// Shared fallback `AppDatabase` used when no per-App global is set.
@@ -303,7 +322,47 @@ mod tests {
     use sqlez::domain::Domain;
     use sqlez_macros::sql;
 
-    use crate::open_db;
+    use crate::{DomainMigration, open_db, topological_sort};
+
+    fn reject_migration_change(_: usize, _: &str, _: &str) -> bool {
+        false
+    }
+
+    #[test]
+    fn migration_sort_rejects_missing_dependencies() {
+        let migration = DomainMigration {
+            name: "dependent",
+            migrations: &[],
+            dependencies: &["missing"],
+            should_allow_migration_change: reject_migration_change,
+        };
+
+        let error = topological_sort(&[&migration])
+            .err()
+            .expect("missing migration dependencies should be rejected");
+        assert!(error.to_string().contains("missing"));
+    }
+
+    #[test]
+    fn migration_sort_rejects_dependency_cycles() {
+        let first = DomainMigration {
+            name: "first",
+            migrations: &[],
+            dependencies: &["second"],
+            should_allow_migration_change: reject_migration_change,
+        };
+        let second = DomainMigration {
+            name: "second",
+            migrations: &[],
+            dependencies: &["first"],
+            should_allow_migration_change: reject_migration_change,
+        };
+
+        let error = topological_sort(&[&first, &second])
+            .err()
+            .expect("migration dependency cycles should be rejected");
+        assert!(error.to_string().contains("cycle"));
+    }
 
     // Test bad migration panics
     #[gpui::test]
