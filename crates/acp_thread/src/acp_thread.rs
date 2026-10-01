@@ -1314,11 +1314,7 @@ impl ContentBlock {
                 content.into(),
                 Some(language_registry.clone()),
                 None,
-                MarkdownOptions {
-                    render_mermaid_diagrams: true,
-                    render_metadata_blocks: true,
-                    ..Default::default()
-                },
+                acp_markdown_options(),
                 cx,
             )
         })
@@ -1750,10 +1746,27 @@ pub struct PlanEntry {
 impl PlanEntry {
     pub fn from_acp(entry: acp::PlanEntry, cx: &mut App) -> Self {
         Self {
-            content: cx.new(|cx| Markdown::new(entry.content.into(), None, None, cx)),
+            content: cx.new(|cx| {
+                Markdown::new_with_options(
+                    entry.content.into(),
+                    None,
+                    None,
+                    acp_markdown_options(),
+                    cx,
+                )
+            }),
             priority: entry.priority,
             status: entry.status,
         }
+    }
+}
+
+fn acp_markdown_options() -> MarkdownOptions {
+    MarkdownOptions {
+        render_mermaid_diagrams: true,
+        render_math: true,
+        render_metadata_blocks: true,
+        ..Default::default()
     }
 }
 
