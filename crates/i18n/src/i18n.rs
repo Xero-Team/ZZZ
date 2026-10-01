@@ -62,6 +62,15 @@ pub struct I18nService {
     active_catalog: LocaleCatalog,
 }
 
+impl I18nService {
+    /// Looks a key up in the active catalog, then the fallback catalog.
+    fn lookup(&self, key: &str) -> Option<&str> {
+        self.active_catalog
+            .lookup(key)
+            .or_else(|| self.fallback_catalog.lookup(key))
+    }
+}
+
 struct GlobalI18nService(Arc<RwLock<I18nService>>);
 
 impl Global for GlobalI18nService {}
@@ -69,11 +78,7 @@ impl Global for GlobalI18nService {}
 pub fn init(cx: &mut App) {
     let configured_locale = resolve_locale(DisplayLanguageSetting::get_global(cx));
     let fallback_catalog = load_catalog(DEFAULT_LOCALE).expect("missing default locale catalog");
-    let active_catalog = if configured_locale == ActiveLocale::English {
-        fallback_catalog.clone()
-    } else {
-        load_catalog(configured_locale.code()).unwrap_or_else(|_| fallback_catalog.clone())
-    };
+    let active_catalog = catalog_for(configured_locale, &fallback_catalog);
 
     cx.set_global(GlobalI18nService(Arc::new(RwLock::new(I18nService {
         active_locale: configured_locale,
@@ -92,13 +97,18 @@ pub fn reload(cx: &mut App) -> bool {
     }
 
     service.active_locale = configured_locale;
-    service.active_catalog = if configured_locale == ActiveLocale::English {
-        service.fallback_catalog.clone()
-    } else {
-        load_catalog(configured_locale.code()).unwrap_or_else(|_| service.fallback_catalog.clone())
-    };
+    service.active_catalog = catalog_for(configured_locale, &service.fallback_catalog);
 
     true
+}
+
+/// Loads the catalog for `locale`, falling back to English when it is missing.
+fn catalog_for(locale: ActiveLocale, fallback: &LocaleCatalog) -> LocaleCatalog {
+    if locale == ActiveLocale::English {
+        fallback.clone()
+    } else {
+        load_catalog(locale.code()).unwrap_or_else(|_| fallback.clone())
+    }
 }
 
 pub fn active_locale(cx: &App) -> ActiveLocale {
@@ -108,18 +118,14 @@ pub fn active_locale(cx: &App) -> ActiveLocale {
 pub fn t(cx: &App, key: &str) -> String {
     let service = cx.global::<GlobalI18nService>().0.read();
     service
-        .active_catalog
         .lookup(key)
-        .or_else(|| service.fallback_catalog.lookup(key))
         .map_or_else(|| key.to_owned(), ToOwned::to_owned)
 }
 
 pub fn tr(cx: &App, key: &str, fallback: &str) -> String {
     let service = cx.global::<GlobalI18nService>().0.read();
     service
-        .active_catalog
         .lookup(key)
-        .or_else(|| service.fallback_catalog.lookup(key))
         .map_or_else(|| fallback.to_owned(), ToOwned::to_owned)
 }
 
