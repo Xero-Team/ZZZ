@@ -408,7 +408,7 @@ impl StackFrameList {
             .find(|stack_frame| stack_frame.id == stack_frame_id)
             .cloned()
         else {
-            return Task::ready(Err(anyhow!("No stack frame for ID")));
+            return Task::ready(Err(anyhow!("No stack frame for ID {stack_frame_id}")));
         };
         self.go_to_stack_frame_inner(stack_frame, window, cx)
     }
@@ -421,16 +421,16 @@ impl StackFrameList {
     ) -> Task<Result<()>> {
         let stack_frame_id = stack_frame.id;
         self.opened_stack_frame_id = Some(stack_frame_id);
+        cx.emit(StackFrameListEvent::SelectedStackFrameChanged(
+            stack_frame_id,
+        ));
         let Some(abs_path) = Self::abs_path_from_stack_frame(&stack_frame) else {
             return Task::ready(Err(anyhow!(
                 "no absolute source path in stack frame {stack_frame_id}, source: {:?}",
                 stack_frame.source
             )));
         };
-        let row = stack_frame.line.saturating_sub(1) as u32;
-        cx.emit(StackFrameListEvent::SelectedStackFrameChanged(
-            stack_frame_id,
-        ));
+        let row = u32::try_from(stack_frame.line.saturating_sub(1)).unwrap_or(u32::MAX);
         cx.spawn_in(window, async move |this, cx| {
             let (worktree, relative_path) = this
                 .update(cx, |this, cx| {
@@ -705,8 +705,10 @@ impl StackFrameList {
         let entries = std::mem::take(stack_frames)
             .into_iter()
             .map(StackFrameEntry::Normal);
-        // HERE
         let entries_len = entries.len();
+        if entries_len == 0 {
+            return;
+        }
         self.entries.splice(ix..=ix, entries);
         let (Ok(filtered_indices_start) | Err(filtered_indices_start)) =
             self.filter_entries_indices.binary_search(&ix);
@@ -724,10 +726,12 @@ impl StackFrameList {
     fn render_collapsed_entry(
         &self,
         ix: usize,
-        stack_frames: &Vec<dap::StackFrame>,
+        stack_frames: &[dap::StackFrame],
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let first_stack_frame = &stack_frames[0];
+        let Some(first_stack_frame) = stack_frames.first() else {
+            return div().into_any();
+        };
         let is_selected = Some(ix) == self.selected_ix;
 
         h_flex()
