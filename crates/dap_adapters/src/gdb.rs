@@ -1,4 +1,4 @@
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use collections::HashMap;
 use dap::{StartDebuggingRequestArguments, adapters::DebugTaskDefinition};
@@ -193,22 +193,18 @@ impl DebugAdapter for GdbDebugAdapter {
         let gdb_path = if let Some(path) = gdb_path_from_config {
             path
         } else {
-            // Original logic: use user_installed_path or search in system path
             let user_setting_path = user_installed_path
                 .filter(|p| p.exists())
                 .and_then(|p| p.to_str().map(|s| s.to_owned()));
-
-            let gdb_path_result = delegate
-                .which(OsStr::new("gdb"))
-                .await
-                .and_then(|p| p.to_str().map(|s| s.to_owned()))
-                .context("Could not find gdb in path");
-
-            if gdb_path_result.is_err() && user_setting_path.is_none() {
-                bail!("Could not find gdb path or it's not installed");
+            if let Some(path) = user_setting_path {
+                path
+            } else {
+                delegate
+                    .which(OsStr::new("gdb"))
+                    .await
+                    .and_then(|path| path.to_str().map(ToOwned::to_owned))
+                    .context("Could not find gdb path or it's not installed")?
             }
-
-            user_setting_path.unwrap_or_else(|| gdb_path_result.expect("value should be present"))
         };
 
         // Arguments: use gdb_args from config if present, else user_args, else default
