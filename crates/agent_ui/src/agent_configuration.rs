@@ -6,7 +6,7 @@ mod tool_picker;
 use std::{ops::Range, rc::Rc, sync::Arc};
 
 use agent::ContextServerRegistry;
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use collections::HashMap;
 use context_server::ContextServerId;
 use editor::{Editor, MultiBufferOffset, SelectionEffects, scroll::Autoscroll};
@@ -81,7 +81,7 @@ impl AgentConfiguration {
             cx.subscribe(&context_server_store, |_, _, _, cx| cx.notify()),
         ];
 
-        let this = Self {
+        Self {
             fs,
             language_registry,
             workspace,
@@ -92,9 +92,7 @@ impl AgentConfiguration {
             context_server_registry,
             _subscriptions: subscriptions,
             scroll_handle: ScrollHandle::new(),
-        };
-
-        this
+        }
     }
 }
 
@@ -360,10 +358,6 @@ impl AgentConfiguration {
             ContextServerStatus::Authenticating => AiSettingItemStatus::Authenticating,
         };
 
-        let is_remote = server_configuration.as_ref().is_some_and(|config| {
-            matches!(config.as_ref(), ContextServerConfiguration::Http { .. })
-        });
-
         let should_show_logout_button = server_configuration.as_ref().is_some_and(|config| {
             matches!(config.as_ref(), ContextServerConfiguration::Http { .. })
                 && !config.has_static_auth_header()
@@ -398,42 +392,30 @@ impl AgentConfiguration {
                 let context_server_store = context_server_store.clone();
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
-                        menu.entry(
-                            configure_server_label.clone(),
-                            None,
-                            {
+                        menu.entry(configure_server_label.clone(), None, {
                             let context_server_id = context_server_id.clone();
                             let language_registry = language_registry.clone();
                             let workspace = workspace.clone();
                             move |window, cx| {
-                                if is_remote {
-                                    crate::agent_configuration::configure_context_server_modal::ConfigureContextServerModal::show_modal_for_existing_server(
-                                        context_server_id.clone(),
-                                        language_registry.clone(),
-                                        workspace.clone(),
-                                        window,
-                                        cx,
-                                    )
-                                    .detach();
-                                } else {
-                                    ConfigureContextServerModal::show_modal_for_existing_server(
-                                        context_server_id.clone(),
-                                        language_registry.clone(),
-                                        workspace.clone(),
-                                        window,
-                                        cx,
-                                    )
-                                    .detach();
-                                }
+                                ConfigureContextServerModal::show_modal_for_existing_server(
+                                    context_server_id.clone(),
+                                    language_registry.clone(),
+                                    workspace.clone(),
+                                    window,
+                                    cx,
+                                )
+                                .detach_and_log_err(cx);
                             }
-                        },
-                        )
+                        })
                         .when(tool_count > 0, |this| this.entry(view_tools_label.clone(), None, {
                             let context_server_id = context_server_id.clone();
                             let context_server_registry = context_server_registry.clone();
                             let workspace = workspace.clone();
                             move |window, cx| {
                                 let context_server_id = context_server_id.clone();
+                                let Some(workspace) = workspace.upgrade() else {
+                                    return;
+                                };
                                 workspace.update(cx, |workspace, cx| {
                                     ConfigureContextServerToolsModal::toggle(
                                         context_server_id,
@@ -442,8 +424,7 @@ impl AgentConfiguration {
                                         window,
                                         cx,
                                     );
-                                })
-                                .ok();
+                                });
                             }
                         }))
                         .when(should_show_logout_button, |this| {
@@ -646,7 +627,7 @@ impl AgentConfiguration {
                                         window,
                                         cx,
                                     )
-                                    .detach();
+                                    .detach_and_log_err(cx);
                                 }
                             }),
                     )
@@ -1164,7 +1145,7 @@ async fn open_new_agent_servers_entry_in_settings_editor(
         })?
         .await?
         .downcast::<Editor>()
-        .expect("downcast should succeed");
+        .context("settings file did not open in an editor")?;
 
     settings_editor
         .downgrade()
