@@ -6,6 +6,7 @@ use gpui::BackgroundExecutor;
 use http_client::{AsyncBody, HttpClient, Request, Response, http::Method};
 use parking_lot::Mutex as SyncMutex;
 use std::{pin::Pin, sync::Arc};
+use util::ResultExt;
 
 use crate::oauth::{self, OAuthTokenProvider, WwwAuthenticate};
 use crate::transport::Transport;
@@ -323,7 +324,11 @@ impl HttpTransport {
                             }
                         }
                         Err(e) => {
-                            let _ = error_tx.send(format!("SSE stream error: {}", e)).await;
+                            if let Err(send_error) =
+                                error_tx.send(format!("SSE stream error: {e}")).await
+                            {
+                                log::debug!("Failed to report SSE stream error: {send_error}");
+                            }
                             break;
                         }
                     }
@@ -399,7 +404,7 @@ impl Drop for HttpTransport {
                     let request = request_builder.body(AsyncBody::empty());
 
                     if let Ok(request) = request {
-                        let _ = http_client.send(request).await;
+                        http_client.send(request).await.log_err();
                     }
                 })
                 .detach();

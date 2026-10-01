@@ -6,7 +6,10 @@ use serde_json::{Value, json};
 use smol::{io::AsyncReadExt, process::Stdio as SmolStdio};
 use std::time::Duration;
 use task::{BuildTaskDefinition, DebugScenario, ShellBuilder, SpawnInTerminal, TaskTemplate};
-use util::command::{Stdio, new_command};
+use util::{
+    ResultExt,
+    command::{Stdio, new_command},
+};
 
 pub(crate) struct CargoLocator;
 
@@ -50,7 +53,7 @@ async fn find_best_executable(
                 }
             }
         }
-        let _ = child.kill();
+        child.kill().log_err();
     }
     None
 }

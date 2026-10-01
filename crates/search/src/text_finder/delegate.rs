@@ -909,13 +909,15 @@ impl PickerDelegate for Delegate {
                 )
                 .await;
 
-                let _ = signal_done.send(());
+                if signal_done.send(()).is_err() {
+                    tracing::trace!("search result waiter was dropped");
+                }
                 res
             }));
 
         cx.notify();
         cx.spawn(async move |_, _| {
-            let _ = match_updating_done.await;
+            match_updating_done.await.log_err();
         })
     }
 

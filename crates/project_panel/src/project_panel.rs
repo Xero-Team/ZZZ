@@ -2323,7 +2323,7 @@ impl ProjectPanel {
                         .ok()
                         .flatten()
                     {
-                        let _ = open_task.await?;
+                        open_task.await?;
                     }
                 }
             }

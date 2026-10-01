@@ -1713,7 +1713,7 @@ impl Session {
             let task = cx
                 .background_executor()
                 .spawn(async move {
-                    let _ = task.await?;
+                    task.await?;
                     Some(())
                 })
                 .shared();
@@ -2298,11 +2298,12 @@ impl Session {
 
         cx.spawn(async move |this, cx| {
             task.await;
-            let _ = this.update(cx, |this, _| {
+            this.update(cx, |this, _| {
                 if let Some(adapter_client) = this.adapter_client() {
                     adapter_client.kill();
                 }
-            });
+            })
+            .log_err();
         })
     }
 

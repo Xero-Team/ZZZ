@@ -17,7 +17,7 @@ use rpc::{
 };
 use std::{hash::Hash, ops::Range, path::Path, sync::Arc};
 use text::{Bias, Point, PointUtf16, Unclipped};
-use util::maybe;
+use util::{ResultExt, maybe};
 
 use crate::{ProjectPath, buffer_store::BufferStore, worktree_store::WorktreeStore};
 
@@ -319,21 +319,23 @@ impl BreakpointStore {
     pub(crate) fn broadcast(&self) {
         if let Some((client, project_id)) = &self.downstream_client {
             for (path, breakpoint_set) in &self.breakpoints {
-                let _ = client.send(proto::BreakpointsForFile {
-                    project_id: *project_id,
-                    path: path.to_string_lossy().into_owned(),
-                    breakpoints: breakpoint_set
-                        .breakpoints
-                        .iter()
-                        .filter_map(|breakpoint| {
-                            breakpoint.bp.bp.to_proto(
-                                path,
-                                breakpoint.position(),
-                                &breakpoint.session_state,
-                            )
-                        })
-                        .collect(),
-                });
+                client
+                    .send(proto::BreakpointsForFile {
+                        project_id: *project_id,
+                        path: path.to_string_lossy().into_owned(),
+                        breakpoints: breakpoint_set
+                            .breakpoints
+                            .iter()
+                            .filter_map(|breakpoint| {
+                                breakpoint.bp.bp.to_proto(
+                                    path,
+                                    breakpoint.position(),
+                                    &breakpoint.session_state,
+                                )
+                            })
+                            .collect(),
+                    })
+                    .log_err();
             }
         }
     }
@@ -601,11 +603,13 @@ impl BreakpointStore {
                 })
                 .unwrap_or_default();
 
-            let _ = client.send(proto::BreakpointsForFile {
-                project_id: *project_id,
-                path: abs_path.to_string_lossy().into_owned(),
-                breakpoints,
-            });
+            client
+                .send(proto::BreakpointsForFile {
+                    project_id: *project_id,
+                    path: abs_path.to_string_lossy().into_owned(),
+                    breakpoints,
+                })
+                .log_err();
         }
 
         cx.emit(BreakpointStoreEvent::BreakpointsUpdated(

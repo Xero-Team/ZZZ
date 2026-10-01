@@ -188,7 +188,7 @@ pub async fn get_recent_projects(
 }
 
 pub async fn delete_recent_project(workspace_id: WorkspaceId, db: &WorkspaceDb) {
-    let _ = db.delete_workspace_by_id(workspace_id).await;
+    db.delete_workspace_by_id(workspace_id).await.log_err();
 }
 
 fn get_open_folders(workspace: &Workspace, cx: &App) -> Vec<OpenFolderEntry> {
@@ -363,14 +363,15 @@ pub fn init(cx: &mut App) {
                         .update(|_, cx| i18n::tr(cx, "zzz.common.ok", "Ok"))
                         .unwrap_or_else(|_| "Ok".to_owned());
 
-                    let _ = cx
+                    cx
                         .prompt(
                             gpui::PromptLevel::Critical,
                             &title,
                             Some(&message),
                             &[ok_label.as_str()],
                         )
-                        .await;
+                        .await
+                        .log_err();
                     return;
                 }
 

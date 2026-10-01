@@ -365,7 +365,11 @@ impl http_client::HttpClient for ReqwestClient {
                         Ok(None) => return,
                         Err(error) => {
                             let error = io::Error::other(redact_error(error));
-                            let _ = body_tx.send(Err(error)).await;
+                            if body_tx.send(Err(error)).await.is_err() {
+                                log::debug!(
+                                    "response body receiver dropped before the stream error was delivered"
+                                );
+                            }
                             return;
                         }
                     }

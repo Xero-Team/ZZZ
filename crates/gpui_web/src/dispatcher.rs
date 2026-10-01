@@ -121,7 +121,9 @@ impl MainThreadMailbox {
                             .expect("waitAsync result missing 'value'")
                             .unchecked_into();
 
-                    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                    if let Err(error) = wasm_bindgen_futures::JsFuture::from(promise).await {
+                        log::debug!("Atomics.waitAsync promise rejected: {error:?}");
+                    }
                 }
 
                 mailbox.drain(&window);

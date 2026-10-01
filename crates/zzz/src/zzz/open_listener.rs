@@ -884,7 +884,9 @@ async fn open_local_workspace(
             item_release_futures.push(release_rx);
             subscriptions.push(workspace.update(cx, |_, _, cx| {
                 cx.on_release(move |_, _| {
-                    let _ = release_tx.send(());
+                    if release_tx.send(()).is_err() {
+                        tracing::trace!("release waiter was dropped");
+                    }
                 })
             }));
         }
@@ -900,7 +902,9 @@ async fn open_local_workspace(
                         item.on_release(
                             cx,
                             Box::new(move |_| {
-                                release_tx.send(()).ok();
+                                if release_tx.send(()).is_err() {
+                                    tracing::trace!("release waiter was dropped");
+                                }
                             }),
                         )
                     })));
@@ -922,7 +926,7 @@ async fn open_local_workspace(
     if open_options.wait {
         let wait = async move {
             let _subscriptions = subscriptions;
-            let _ = future::try_join_all(item_release_futures).await;
+            future::try_join_all(item_release_futures).await.log_err();
         }
         .fuse();
         futures::pin_mut!(wait);
@@ -1690,7 +1694,7 @@ mod tests {
                     &mut cx,
                 )
                 .await;
-                let _ = done_tx.send(errored);
+                done_tx.send(errored).log_err();
             }
         })
         .detach();

@@ -158,10 +158,12 @@ impl Peer {
                 response_channels.lock().take();
                 if let Some(channels) = stream_response_channels.lock().take() {
                     for channel in channels.values() {
-                        let _ = channel.unbounded_send((
+                        if let Err(error) = channel.unbounded_send((
                             Err(anyhow!("connection closed")),
                             oneshot::channel().0,
-                        ));
+                        )) {
+                            tracing::trace!(%connection_id, ?error, "stream response channel closed");
+                        }
                     }
                 }
                 this.connections.write().remove(&connection_id);
@@ -297,7 +299,15 @@ impl Peer {
                             responding_to,
                             "incoming response: waiting to resume requester"
                         );
-                        let _ = requester_resumed.1.await;
+                        if let Err(error) = requester_resumed.1.await {
+                            tracing::trace!(
+                                %connection_id,
+                                message_id,
+                                responding_to,
+                                ?error,
+                                "requester dropped before resuming response handling",
+                            );
+                        }
                         tracing::trace!(
                             %connection_id,
                             message_id,
@@ -322,7 +332,15 @@ impl Peer {
                             responding_to,
                             "incoming stream response: waiting to resume requester"
                         );
-                        let _ = requester_resumed.1.await;
+                        if let Err(error) = requester_resumed.1.await {
+                            tracing::trace!(
+                                %connection_id,
+                                message_id,
+                                responding_to,
+                                ?error,
+                                "requester dropped before resuming stream handling",
+                            );
+                        }
                         tracing::debug!(
                             %connection_id,
                             message_id,

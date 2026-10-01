@@ -826,17 +826,22 @@ impl DapStore {
         cx.emit(DapStoreEvent::DebugClientShutdown(session_id));
 
         cx.background_spawn(async move {
-            if !shutdown_children.is_empty() {
-                let _ = join_all(shutdown_children).await;
-            }
+            let child_error = join_all(shutdown_children)
+                .await
+                .into_iter()
+                .find_map(Result::err);
 
             shutdown_task.await;
 
-            if let Some(parent_task) = shutdown_parent_task {
-                parent_task.await?;
-            }
+            let parent_result = match shutdown_parent_task {
+                Some(parent_task) => parent_task.await,
+                None => Ok(()),
+            };
 
-            Ok(())
+            match child_error {
+                Some(error) => Err(error),
+                None => parent_result,
+            }
         })
     }
 
