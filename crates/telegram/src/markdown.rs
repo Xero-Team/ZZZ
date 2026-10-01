@@ -194,57 +194,65 @@ fn utf16_offset_to_byte(text: &str, utf16_offset: i32) -> Option<usize> {
     (units == target).then_some(text.len())
 }
 
-/// Each event is `(position, is_open, span_start, span_end, text)`.
+/// A delimiter to emit at a byte position, carrying the span it belongs to so
+/// markers that share a boundary can be nested correctly.
+struct MarkerEvent {
+    position: usize,
+    is_open: bool,
+    span_start: usize,
+    span_end: usize,
+    text: String,
+}
+
 fn render_markers(text: &str, markers: Vec<Marker>) -> String {
-    let mut events: Vec<(usize, bool, usize, usize, String)> =
-        Vec::with_capacity(markers.len() * 2);
+    let mut events = Vec::with_capacity(markers.len() * 2);
     for marker in markers {
-        events.push((
-            marker.start_byte,
-            true,
-            marker.start_byte,
-            marker.end_byte,
-            marker.open,
-        ));
-        events.push((
-            marker.end_byte,
-            false,
-            marker.start_byte,
-            marker.end_byte,
-            marker.close,
-        ));
+        events.push(MarkerEvent {
+            position: marker.start_byte,
+            is_open: true,
+            span_start: marker.start_byte,
+            span_end: marker.end_byte,
+            text: marker.open,
+        });
+        events.push(MarkerEvent {
+            position: marker.end_byte,
+            is_open: false,
+            span_start: marker.start_byte,
+            span_end: marker.end_byte,
+            text: marker.close,
+        });
     }
     events.sort_by(|left, right| {
-        left.0
-            .cmp(&right.0)
+        left.position
+            .cmp(&right.position)
             // A closing delimiter at a position is emitted before an opening
             // one, so adjacent spans do not interfere.
-            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| left.is_open.cmp(&right.is_open))
             .then_with(|| {
                 // Nest markers that share a boundary: the outer span (larger
                 // end) opens first, and the inner span (later start) closes
                 // first. Emitting them by declaration order can produce
                 // crossing delimiters that render literally.
-                if left.1 {
-                    right.3.cmp(&left.3)
+                if left.is_open {
+                    right.span_end.cmp(&left.span_end)
                 } else {
-                    right.2.cmp(&left.2)
+                    right.span_start.cmp(&left.span_start)
                 }
             })
-            .then_with(|| left.4.cmp(&right.4))
+            .then_with(|| left.text.cmp(&right.text))
     });
 
     let mut output = String::with_capacity(text.len() + events.len() * 2);
     let mut cursor = 0;
     let mut event_index = 0;
     while event_index < events.len() {
-        let position = events[event_index].0.min(text.len());
+        let position = events[event_index].position.min(text.len());
         if position > cursor {
             output.push_str(&text[cursor..position]);
             cursor = position;
         }
-        while event_index < events.len() && events[event_index].0 == position {
-            output.push_str(&events[event_index].4);
+        while event_index < events.len() && events[event_index].position == position {
+            output.push_str(&events[event_index].text);
             event_index += 1;
         }
     }
