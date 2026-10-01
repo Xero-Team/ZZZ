@@ -188,6 +188,8 @@ fn parse_cat_numbered_code(code: &str) -> Option<ParsedCatNumberedCode> {
             if number != expected {
                 return None;
             }
+        } else if first_number.is_some() {
+            return None;
         } else {
             first_number = Some(number);
         }
@@ -232,8 +234,6 @@ fn render_cat_numbered_code_block(
     copy_button_id: String,
     cx: &App,
 ) -> AnyElement {
-    use std::fmt::Write as _;
-
     let ParsedCatNumberedCode {
         code,
         first_number,
@@ -256,8 +256,11 @@ fn render_cat_numbered_code_block(
             gutter.push('\n');
         }
         let line_number = first_number.saturating_add(u32::try_from(i).unwrap_or(u32::MAX));
-        // Writes to a `String` are infallible, so the `Result` can be ignored.
-        let _ = write!(&mut gutter, "{line_number:>gutter_width$}");
+        let line_number = line_number.to_string();
+        for _ in line_number.len()..gutter_width {
+            gutter.push(' ');
+        }
+        gutter.push_str(&line_number);
     }
 
     let mut code_text_style = markdown_style.base_text_style.clone();
@@ -408,6 +411,11 @@ mod numbered_code_block_tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn rejects_numbered_code_after_maximum_line_number() {
+        assert!(parse_cat_numbered_code(&format!("{}\tlast\n1\twrapped", u32::MAX)).is_none());
     }
 
     #[test]
