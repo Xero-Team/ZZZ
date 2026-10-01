@@ -205,8 +205,9 @@ async fn test_attach_with_pick_pid_variable(executor: BackgroundExecutor, cx: &m
                 let raw = &args.raw;
                 assert_eq!(raw["request"], "attach");
                 assert_eq!(
-                    raw["process_id"], "42",
-                    "verify process id has been replaced"
+                    raw["process_id"],
+                    u32::MAX.to_string(),
+                    "verify process id has been replaced without truncation"
                 );
 
                 Ok(())
@@ -265,7 +266,7 @@ async fn test_attach_with_pick_pid_variable(executor: BackgroundExecutor, cx: &m
                             command: vec![],
                         },
                         Candidate {
-                            pid: 42,
+                            pid: u32::MAX,
                             name: "target-process".into(),
                             command: vec![],
                         },
@@ -302,7 +303,7 @@ async fn test_attach_with_pick_pid_variable(executor: BackgroundExecutor, cx: &m
         .update(cx, |_, _, cx| {
             let names = attach_modal.update(cx, |modal, cx| attach_modal::process_names(modal, cx));
             assert_eq!(names.len(), 1);
-            assert_eq!(names[0], " 42 target-process");
+            assert_eq!(names[0], format!(" {} target-process", u32::MAX));
         })
         .unwrap();
 

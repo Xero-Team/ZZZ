@@ -704,7 +704,7 @@ impl RunningState {
         }
     }
 
-    pub(crate) fn substitute_process_id_in_config(config: &mut serde_json::Value, process_id: i32) {
+    pub(crate) fn substitute_process_id_in_config(config: &mut serde_json::Value, process_id: u32) {
         match config {
             serde_json::Value::Object(obj) => {
                 obj.values_mut().for_each(|value| {
@@ -1030,7 +1030,7 @@ impl RunningState {
             Self::substitute_variables_in_config(&mut config, &task_context);
 
             if Self::contains_substring(&config, PROCESS_ID_PLACEHOLDER.as_str()) || label.as_ref().contains(PROCESS_ID_PLACEHOLDER.as_str()) {
-                let (tx, rx) = futures::channel::oneshot::channel::<Option<i32>>();
+                let (tx, rx) = futures::channel::oneshot::channel::<Option<u32>>();
 
                 let weak_workspace_clone = weak_workspace.clone();
                 weak_workspace.update_in(cx, |workspace, window, cx| {

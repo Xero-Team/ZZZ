@@ -27,7 +27,7 @@ pub(super) struct Candidate {
 }
 
 pub(crate) enum ModalIntent {
-    ResolveProcessId(Option<oneshot::Sender<Option<i32>>>),
+    ResolveProcessId(Option<oneshot::Sender<Option<u32>>>),
     AttachToProcess(ZZZDebugConfig),
 }
 
@@ -231,9 +231,7 @@ impl PickerDelegate for AttachModalDelegate {
                 cx.emit(DismissEvent);
 
                 if let Some(sender) = sender.take() {
-                    sender
-                        .send(candidate.map(|candidate| candidate.pid as i32))
-                        .ok();
+                    sender.send(candidate.map(|candidate| candidate.pid)).ok();
                 }
             }
             ModalIntent::AttachToProcess(definition) => {
