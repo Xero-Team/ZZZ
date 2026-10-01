@@ -2899,54 +2899,60 @@ impl KeybindingEditorModal {
                 self.creating.not().then_some(self.editing_keybind_idx),
             );
 
-        conflicting_indices.map_or(Ok(()), |KeybindConflict {
-            first_conflict_index,
-            remaining_conflict_amount,
-        }|
-        {
-            let conflicting_action_name = self
-                .keymap_editor
-                .read(cx)
-                .keybindings
-                .get(first_conflict_index)
-                .map(|keybind| keybind.action().name);
+        conflicting_indices.map_or(
+            Ok(()),
+            |KeybindConflict {
+                 first_conflict_index,
+                 remaining_conflict_amount,
+             }| {
+                let conflicting_action_name = self
+                    .keymap_editor
+                    .read(cx)
+                    .keybindings
+                    .get(first_conflict_index)
+                    .map(|keybind| keybind.action().name);
 
-            let warning_message = if let Some(name) = conflicting_action_name {
-                if remaining_conflict_amount > 0 {
-                    tr(
+                let warning_message = if let Some(name) = conflicting_action_name {
+                    if remaining_conflict_amount > 0 {
+                        tr(
                         cx,
                         "keymap_editor.warning.conflict_with_action_and_bindings",
                         "Your keybind would conflict with the \"{}\" action and {} other bindings",
                     )
                     .replacen("{}", &name, 1)
                     .replacen("{}", &remaining_conflict_amount.to_string(), 1)
+                    } else {
+                        tr(
+                            cx,
+                            "keymap_editor.warning.conflict_with_action",
+                            "Your keybind would conflict with the \"{}\" action",
+                        )
+                        .replacen("{}", &name, 1)
+                    }
                 } else {
+                    log::info!(
+                        "Could not find action in keybindings with index {}",
+                        first_conflict_index
+                    );
                     tr(
                         cx,
-                        "keymap_editor.warning.conflict_with_action",
-                        "Your keybind would conflict with the \"{}\" action",
+                        "keymap_editor.warning.conflict_with_other_actions",
+                        "Your keybind would conflict with other actions",
                     )
-                    .replacen("{}", &name, 1)
-                }
-            } else {
-                log::info!(
-                    "Could not find action in keybindings with index {}",
-                    first_conflict_index
-                );
-                tr(
-                    cx,
-                    "keymap_editor.warning.conflict_with_other_actions",
-                    "Your keybind would conflict with other actions",
-                )
-            };
+                };
 
-            let warning = InputError::warning(warning_message);
-            if self.error.as_ref().is_some_and(|old_error| *old_error == warning) {
-                Ok(())
-           } else {
-                Err(warning)
-            }
-        })?;
+                let warning = InputError::warning(warning_message);
+                if self
+                    .error
+                    .as_ref()
+                    .is_some_and(|old_error| *old_error == warning)
+                {
+                    Ok(())
+                } else {
+                    Err(warning)
+                }
+            },
+        )?;
 
         let create = self.creating;
         let keyboard_mapper = cx.keyboard_mapper().clone();

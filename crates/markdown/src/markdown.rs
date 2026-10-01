@@ -2455,12 +2455,9 @@ impl Element for MarkdownElement {
                                 &parsed_markdown.events[index..],
                                 parsed_markdown.source.as_ref(),
                             );
-                            let failed_to_load_label: SharedString = tr(
-                                cx,
-                                "markdown.image.failed_to_load",
-                                "Failed to Load: {}",
-                            )
-                            .into();
+                            let failed_to_load_label: SharedString =
+                                tr(cx, "markdown.image.failed_to_load", "Failed to Load: {}")
+                                    .into();
                             let failed_to_load_tooltip: SharedString = tr(
                                 cx,
                                 "markdown.image.failed_to_load_tooltip",

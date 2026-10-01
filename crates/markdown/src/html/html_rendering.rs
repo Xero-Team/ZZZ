@@ -1,8 +1,8 @@
 use std::ops::Range;
 
 use gpui::{
-    App, FontStyle, FontWeight, StrikethroughStyle, TextAlign, TextStyleRefinement, UnderlineStyle,
-    SharedString,
+    App, FontStyle, FontWeight, SharedString, StrikethroughStyle, TextAlign, TextStyleRefinement,
+    UnderlineStyle,
 };
 use i18n::tr;
 use pulldown_cmark::Alignment;

@@ -1894,11 +1894,11 @@ impl Render for GutterButtonTooltip {
 
         tooltip_container(cx, move |this, _| {
             this.child(h_flex().justify_between().child(title).child(key_binding))
-            .child(
-                Label::new(meta_text)
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
-            )
+                .child(
+                    Label::new(meta_text)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                )
         })
     }
 }
