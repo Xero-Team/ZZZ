@@ -18,35 +18,16 @@ fn main() {
         println!("cargo:rustc-link-arg=-Wl,-weak_framework,ScreenCaptureKit");
     }
 
-    // Populate git sha environment variable if git is available
+    // Deterministic builds inject the commit because their source trees may omit .git.
     println!("cargo:rerun-if-changed=../../.git/logs/HEAD");
+    println!("cargo:rerun-if-env-changed=ZZZ_COMMIT_SHA");
     println!(
         "cargo:rustc-env=TARGET={}",
         std::env::var("TARGET").unwrap()
     );
 
-    let git_sha = match std::env::var("ZZZ_COMMIT_SHA").ok() {
-        Some(git_sha) => {
-            // In deterministic build environments such as Nix, we inject the commit sha into the build script.
-            Some(git_sha)
-        }
-        None => {
-            if let Some(output) = Command::new("git")
-                .args(["rev-parse", "HEAD"])
-                .output()
-                .ok()
-                && output.status.success()
-            {
-                let git_sha = String::from_utf8_lossy(&output.stdout);
-                Some(git_sha.trim().to_owned())
-            } else {
-                None
-            }
-        }
-    };
-
-    if let Some(git_sha) = git_sha {
-        println!("cargo:rustc-env=ZZZ_COMMIT_SHA={git_sha}");
+    if let Some(commit_sha) = commit_sha() {
+        println!("cargo:rustc-env=ZZZ_COMMIT_SHA={commit_sha}");
 
         if let Some(build_identifier) = option_env!("GITHUB_RUN_NUMBER") {
             println!("cargo:rustc-env=ZZZ_BUILD_ID={build_identifier}");
@@ -83,6 +64,26 @@ fn main() {
     if targeting_linux_or_freebsd() {
         prepare_app_icon_x11();
     }
+}
+
+fn commit_sha() -> Option<String> {
+    if let Ok(commit_sha) = std::env::var("ZZZ_COMMIT_SHA") {
+        let commit_sha = commit_sha.trim();
+        if !commit_sha.is_empty() {
+            return Some(commit_sha.to_owned());
+        }
+    }
+
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let commit_sha = String::from_utf8_lossy(&output.stdout);
+    let commit_sha = commit_sha.trim();
+    (!commit_sha.is_empty()).then(|| commit_sha.to_owned())
 }
 
 fn targeting_windows() -> bool {

@@ -108,8 +108,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
             match release_channel {
                 ReleaseChannel::Stable => println!("{}", env!("ZZZ_PKG_VERSION")),
                 ReleaseChannel::Dev => {
-                    let commit_sha =
-                        option_env!("ZZZ_COMMIT_SHA").unwrap_or(release_channel.dev_name());
+                    let commit_sha = embedded_commit_sha().unwrap_or(release_channel.dev_name());
                     let build_id = option_env!("ZZZ_BUILD_ID");
                     if let Some(build_id) = build_id {
                         println!("{}+{}", build_id, commit_sha)
@@ -126,7 +125,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
 pub static VERSION: LazyLock<String> = LazyLock::new(|| match *RELEASE_CHANNEL {
     ReleaseChannel::Stable => env!("ZZZ_PKG_VERSION").to_owned(),
     ReleaseChannel::Dev => {
-        let commit_sha = option_env!("ZZZ_COMMIT_SHA").unwrap_or("missing-zzz-commit-sha");
+        let commit_sha = embedded_commit_sha().unwrap_or("missing-zzz-commit-sha");
         let build_identifier = option_env!("ZZZ_BUILD_ID");
         if let Some(build_id) = build_identifier {
             format!("{build_id}+{commit_sha}")
@@ -135,6 +134,10 @@ pub static VERSION: LazyLock<String> = LazyLock::new(|| match *RELEASE_CHANNEL {
         }
     }
 });
+
+fn embedded_commit_sha() -> Option<&'static str> {
+    option_env!("ZZZ_COMMIT_SHA").filter(|commit_sha| !commit_sha.trim().is_empty())
+}
 
 fn init_logging_proxy() {
     env_logger::builder()
@@ -442,7 +445,8 @@ pub fn execute_run(
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let run = move |cx: &mut _| {
         settings::init(cx);
-        let app_commit_sha = option_env!("ZZZ_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
+        let app_commit_sha =
+            embedded_commit_sha().map(|commit_sha| AppCommitSha::new(commit_sha.to_owned()));
         let app_version = AppVersion::load(
             env!("ZZZ_PKG_VERSION"),
             option_env!("ZZZ_BUILD_ID"),

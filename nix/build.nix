@@ -230,7 +230,6 @@ let
         };
         ZZZ_UPDATE_EXPLANATION = "ZZZ has been installed using Nix. Auto-updates have thus been disabled.";
         RELEASE_VERSION = version;
-        ZZZ_COMMIT_SHA = lib.optionalString (commitSha != null) "${commitSha}";
         PROTOC = "${protobuf}/bin/protoc";
 
         CARGO_PROFILE = profile;
@@ -248,6 +247,9 @@ let
         }";
 
         NIX_OUTPATH_USED_AS_RANDOM_SEED = "norebuilds";
+      }
+      // lib.optionalAttrs (commitSha != null) {
+        ZZZ_COMMIT_SHA = commitSha;
       }
       // lib.optionalAttrs stdenv'.hostPlatform.isDarwin {
         # Link with lld on Darwin. nixpkgs' classic open-source ld64 fails to insert

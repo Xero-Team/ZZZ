@@ -283,8 +283,9 @@ fn main() {
     util::increase_open_file_limit().log_err();
 
     let version = option_env!("ZZZ_BUILD_ID");
-    let app_commit_sha =
-        option_env!("ZZZ_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_owned()));
+    let app_commit_sha = option_env!("ZZZ_COMMIT_SHA")
+        .filter(|commit_sha| !commit_sha.trim().is_empty())
+        .map(|commit_sha| AppCommitSha::new(commit_sha.to_owned()));
     let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), version, app_commit_sha.clone());
 
     if args.system_specs {
