@@ -101,18 +101,27 @@ pub struct ComponentExampleGroup {
 
 impl RenderOnce for ComponentExampleGroup {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let ComponentExampleGroup {
+            title,
+            examples,
+            width,
+            grow,
+            vertical,
+        } = self;
+
         div()
             .flex_col()
+            .when(grow, |this| this.flex_1())
             .text_sm()
             .text_color(cx.theme().colors().text_muted)
             .map(|this| {
-                if let Some(width) = self.width {
+                if let Some(width) = width {
                     this.w(width)
                 } else {
                     this.w_full()
                 }
             })
-            .when_some(self.title, |this, title| {
+            .when_some(title, |this, title| {
                 this.gap_4().child(
                     div()
                         .flex()
@@ -138,11 +147,11 @@ impl RenderOnce for ComponentExampleGroup {
             .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .when(vertical, |this| this.flex_col())
                     .items_start()
                     .w_full()
                     .gap_6()
-                    .children(self.examples)
+                    .children(examples)
                     .into_any_element(),
             )
             .into_any_element()
