@@ -753,7 +753,7 @@ fn render_single_memory_view_line(
     h_flex()
         .id((
             "memory-view-row-full",
-            ix * view_state.line_width.width as u64,
+            ix.saturating_mul(view_state.line_width.width as u64),
         ))
         .size_full()
         .gap_x_2()
@@ -773,16 +773,17 @@ fn render_single_memory_view_line(
             h_flex()
                 .id((
                     "memory-view-row-raw-memory",
-                    ix * view_state.line_width.width as u64,
+                    ix.saturating_mul(view_state.line_width.width as u64),
                 ))
                 .px_1()
                 .children(memory.iter().enumerate().map(|(cell_ix, cell)| {
                     let weak = weak.clone();
+                    let address = base_address.saturating_add(cell_ix as u64);
                     div()
                         .id(("memory-view-row-raw-memory-cell", cell_ix as u64))
                         .px_0p5()
                         .when_some(view_state.selection.as_ref(), |this, selection| {
-                            this.when(selection.contains(base_address + cell_ix as u64), |this| {
+                            this.when(selection.contains(address), |this| {
                                 let weak = weak.clone();
 
                                 this.bg(Color::Selected.color(cx).opacity(0.2)).when(
@@ -818,8 +819,8 @@ fn render_single_memory_view_line(
                         )
                         .on_drag(
                             Drag {
-                                start_address: base_address + cell_ix as u64,
-                                end_address: base_address + cell_ix as u64,
+                                start_address: address,
+                                end_address: address,
                             },
                             {
                                 let weak = weak.clone();
@@ -840,7 +841,7 @@ fn render_single_memory_view_line(
                                     this.view_state().selection =
                                         Some(SelectedMemoryRange::DragComplete(Drag {
                                             start_address: drag.start_address,
-                                            end_address: base_address + cell_ix as u64,
+                                            end_address: address,
                                         }));
                                 });
                             }
@@ -850,7 +851,7 @@ fn render_single_memory_view_line(
                                 this.view_state().selection =
                                     Some(SelectedMemoryRange::DragUnderway(Drag {
                                         start_address: drag.start_address,
-                                        end_address: base_address + cell_ix as u64,
+                                        end_address: address,
                                     }));
                             });
 
@@ -862,7 +863,7 @@ fn render_single_memory_view_line(
             h_flex()
                 .id((
                     "memory-view-row-ascii-memory",
-                    ix * view_state.line_width.width as u64,
+                    ix.saturating_mul(view_state.line_width.width as u64),
                 ))
                 .h_full()
                 .px_1()
@@ -871,6 +872,7 @@ fn render_single_memory_view_line(
                 .border_x_1()
                 .border_color(Color::Muted.color(cx))
                 .children(memory.iter().enumerate().map(|(ix, cell)| {
+                    let address = base_address.saturating_add(ix as u64);
                     let as_character = char::from(cell.0.unwrap_or(0));
                     let as_visible = if as_character.is_ascii_graphic() {
                         as_character
@@ -880,7 +882,7 @@ fn render_single_memory_view_line(
                     div()
                         .px_0p5()
                         .when_some(view_state.selection.as_ref(), |this, selection| {
-                            this.when(selection.contains(base_address + ix as u64), |this| {
+                            this.when(selection.contains(address), |this| {
                                 this.bg(Color::Selected.color(cx).opacity(0.2))
                             })
                         })
