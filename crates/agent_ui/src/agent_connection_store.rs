@@ -163,44 +163,41 @@ impl AgentConnectionStore {
         cx.spawn({
             let key = key.clone();
             let entry = entry.downgrade();
-            async move |this, cx| match connect_task.await {
-                Ok(connected_state) => {
-                    this.update(cx, move |this, cx| {
-                        if this.entries.get(&key) != entry.upgrade().as_ref() {
-                            return;
-                        }
+            async move |this, cx| {
+                let connect_result = connect_task.await;
+                let Some(this) = this.upgrade() else {
+                    return;
+                };
+                let Some(entry) = entry.upgrade() else {
+                    return;
+                };
 
-                        entry
-                            .update(cx, move |entry, cx| {
+                this.update(cx, move |this, cx| {
+                    if this.entries.get(&key) != Some(&entry) {
+                        return;
+                    }
+
+                    match connect_result {
+                        Ok(connected_state) => {
+                            entry.update(cx, move |entry, cx| {
                                 if let AgentConnectionEntry::Connecting { .. } = entry {
                                     *entry = AgentConnectionEntry::Connected(connected_state);
                                     cx.notify();
                                 }
-                            })
-                            .ok();
-                        cx.notify();
-                    })
-                    .ok();
-                }
-                Err(error) => {
-                    this.update(cx, move |this, cx| {
-                        if this.entries.get(&key) != entry.upgrade().as_ref() {
-                            return;
+                            });
                         }
-
-                        entry
-                            .update(cx, move |entry, cx| {
+                        Err(error) => {
+                            entry.update(cx, move |entry, cx| {
                                 if let AgentConnectionEntry::Connecting { .. } = entry {
                                     *entry = AgentConnectionEntry::Error { error };
                                     cx.notify();
                                 }
-                            })
-                            .ok();
-                        this.entries.remove(&key);
-                        cx.notify();
-                    })
-                    .ok();
-                }
+                            });
+                            this.entries.remove(&key);
+                        }
+                    }
+                    cx.notify();
+                });
             }
         })
         .detach();
@@ -212,23 +209,26 @@ impl AgentConnectionStore {
                     let Some(version) = version else {
                         continue;
                     };
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
+                    let Some(entry) = entry.upgrade() else {
+                        return;
+                    };
 
                     this.update(cx, move |this, cx| {
-                        if this.entries.get(&key) != entry.upgrade().as_ref() {
+                        if this.entries.get(&key) != Some(&entry) {
                             return;
                         }
 
-                        entry
-                            .update(cx, move |_entry, cx| {
-                                cx.emit(AgentConnectionEntryEvent::NewVersionAvailable(
-                                    version.into(),
-                                ));
-                            })
-                            .ok();
+                        entry.update(cx, move |_entry, cx| {
+                            cx.emit(AgentConnectionEntryEvent::NewVersionAvailable(
+                                version.into(),
+                            ));
+                        });
                         this.entries.remove(&key);
                         cx.notify();
-                    })
-                    .ok();
+                    });
                     break;
                 }
             }
