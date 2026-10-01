@@ -18,7 +18,6 @@ use smallvec::SmallVec;
 use std::{
     cmp::Reverse,
     collections::HashSet,
-    fmt::Write,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -77,6 +76,14 @@ fn tr_args(
     tr(cx, key, fallback)
         .replacen("{}", first, 1)
         .replacen("{}", second, 1)
+}
+
+fn format_server_names(names: &[LanguageServerName]) -> String {
+    names
+        .iter()
+        .map(|name| name.as_ref())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 struct Content {
@@ -396,7 +403,9 @@ impl ActivityIndicator {
                 let mut message = progress.title.clone().unwrap_or(progress_token.to_string());
 
                 if let Some(percentage) = progress.percentage {
-                    write!(&mut message, " ({}%)", percentage).expect("value should be present");
+                    message.push_str(" (");
+                    message.push_str(&percentage.to_string());
+                    message.push_str("%)");
                 }
 
                 if let Some(progress_message) = progress.message.as_ref() {
@@ -538,17 +547,7 @@ impl ActivityIndicator {
         });
 
         if !downloading.is_empty() {
-            let downloading_list =
-                downloading
-                    .iter()
-                    .map(|name| name.as_ref())
-                    .fold(String::new(), |mut acc, s| {
-                        if !acc.is_empty() {
-                            acc.push_str(", ");
-                        }
-                        acc.push_str(s);
-                        acc
-                    });
+            let downloading_list = format_server_names(&downloading);
             return Some(Content {
                 icon: Some(
                     Icon::new(IconName::Download)
@@ -571,16 +570,7 @@ impl ActivityIndicator {
         }
 
         if !checking_for_update.is_empty() {
-            let checking_for_update_list = checking_for_update
-                .iter()
-                .map(|name| name.as_ref())
-                .fold(String::new(), |mut acc, s| {
-                    if !acc.is_empty() {
-                        acc.push_str(", ");
-                    }
-                    acc.push_str(s);
-                    acc
-                });
+            let checking_for_update_list = format_server_names(&checking_for_update);
             return Some(Content {
                 icon: Some(
                     Icon::new(IconName::Download)
@@ -603,17 +593,7 @@ impl ActivityIndicator {
         }
 
         if !failed.is_empty() {
-            let failed_list =
-                failed
-                    .iter()
-                    .map(|name| name.as_ref())
-                    .fold(String::new(), |mut acc, s| {
-                        if !acc.is_empty() {
-                            acc.push_str(", ");
-                        }
-                        acc.push_str(s);
-                        acc
-                    });
+            let failed_list = format_server_names(&failed);
             return Some(Content {
                 icon: Some(
                     Icon::new(IconName::Warning)
@@ -687,13 +667,9 @@ impl ActivityIndicator {
                 })
                 .collect::<Vec<_>>()
                 .join(" ");
-            let mut altered_message = single_line_message != message;
-            let truncated_message = truncate_and_trailoff(
-                &single_line_message,
-                MAX_MESSAGE_LEN.saturating_sub(health_str.len()),
-            );
-            altered_message |= truncated_message != single_line_message;
-            let final_message = format!("{health_str}{truncated_message}");
+            let full_message = format!("{health_str}{single_line_message}");
+            let final_message = truncate_and_trailoff(&full_message, MAX_MESSAGE_LEN);
+            let altered_message = single_line_message != message || final_message != full_message;
 
             let tooltip_message = if altered_message {
                 Some(format!("{health_str}{message}"))
@@ -797,12 +773,13 @@ impl Render for ActivityIndicator {
             return result.into_any_element();
         };
         let activity_indicator = cx.entity().downgrade();
-        let truncate_content = content.message.len() > MAX_MESSAGE_LEN;
+        let truncated_message = truncate_and_trailoff(&content.message, MAX_MESSAGE_LEN);
+        let truncate_content = truncated_message != content.message;
 
         let base_button = Button::new(
             "activity-indicator-trigger",
             if truncate_content {
-                truncate_and_trailoff(&content.message, MAX_MESSAGE_LEN)
+                truncated_message
             } else {
                 content.message.clone()
             },
