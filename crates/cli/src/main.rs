@@ -1078,11 +1078,9 @@ mod linux {
         env,
         ffi::OsString,
         io,
-        os::unix::net::{SocketAddr, UnixDatagram},
+        os::unix::net::UnixDatagram,
         path::{Path, PathBuf},
         process::{self, ExitStatus},
-        thread,
-        time::Duration,
     };
 
     use anyhow::{Context as _, anyhow};
@@ -1205,20 +1203,6 @@ mod linux {
                 }
                 Err(_) => Err(anyhow!(io::Error::last_os_error())),
             }
-        }
-
-        fn wait_for_socket(
-            &self,
-            sock_addr: &SocketAddr,
-            sock: &mut UnixDatagram,
-        ) -> Result<(), std::io::Error> {
-            for _ in 0..100 {
-                thread::sleep(Duration::from_millis(10));
-                if sock.connect_addr(sock_addr).is_ok() {
-                    return Ok(());
-                }
-            }
-            sock.connect_addr(sock_addr)
         }
     }
 }
