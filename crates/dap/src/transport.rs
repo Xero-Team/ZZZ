@@ -315,7 +315,7 @@ impl TransportDelegate {
                         break Err(e.into());
                     }
                 }
-                Err(error) => break Err(error.into()),
+                Err(_) => break Ok(()),
             }
         };
 

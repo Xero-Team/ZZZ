@@ -113,6 +113,14 @@ impl DebugAdapterClient {
             .pending_requests
             .lock()
             .insert(sequence_id, callback_tx)?;
+        let _remove_pending_request = util::defer({
+            let pending_requests = self.transport_delegate.pending_requests.clone();
+            move || {
+                if let Err(error) = pending_requests.lock().remove(sequence_id) {
+                    log::debug!("Failed to clean up DAP request {sequence_id}: {error}");
+                }
+            }
+        });
 
         log::debug!(
             "Client {} send `{}` request with sequence_id: {}",
