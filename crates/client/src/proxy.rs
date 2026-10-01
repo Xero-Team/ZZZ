@@ -44,12 +44,10 @@ fn parse_proxy_type(proxy: &Url) -> Option<((String, u16), ProxyType<'_>)> {
     let host = proxy.host()?.to_string();
     let port = proxy.port_or_known_default()?;
     let proxy_type = match scheme {
-        scheme if scheme.starts_with("socks") => {
+        "socks4" | "socks4a" | "socks5" | "socks5h" => {
             Some(ProxyType::SocksProxy(parse_socks_proxy(scheme, proxy)))
         }
-        scheme if scheme.starts_with("http") => {
-            Some(ProxyType::HttpProxy(parse_http_proxy(scheme, proxy)))
-        }
+        "http" | "https" => Some(ProxyType::HttpProxy(parse_http_proxy(scheme, proxy))),
         _ => None,
     }?;
 
@@ -63,4 +61,31 @@ pub(crate) trait AsyncReadWrite:
 impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> AsyncReadWrite
     for T
 {
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_proxy_type;
+    use url::Url;
+
+    #[test]
+    fn accepts_only_documented_proxy_schemes() {
+        for scheme in ["http", "https", "socks4", "socks4a", "socks5", "socks5h"] {
+            let proxy = Url::parse(&format!("{scheme}://proxy.example.com:1080"))
+                .expect("documented proxy URL should parse");
+            assert!(
+                parse_proxy_type(&proxy).is_some(),
+                "scheme {scheme} should be supported"
+            );
+        }
+
+        for scheme in ["httpx", "socks", "socks6", "ftp"] {
+            let proxy = Url::parse(&format!("{scheme}://proxy.example.com:1080"))
+                .expect("test proxy URL should parse");
+            assert!(
+                parse_proxy_type(&proxy).is_none(),
+                "scheme {scheme} should be rejected"
+            );
+        }
+    }
 }
