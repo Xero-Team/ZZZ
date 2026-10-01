@@ -569,28 +569,25 @@ impl TelegramPanel {
             .workspace
             .upgrade()
             .map(|workspace| workspace.read(cx).project().read(cx).languages().clone());
-        let mut sources: Vec<(MessageKey, SharedString)> = Vec::new();
-        for message in &self.view_model.history {
-            if let Some(markdown) = &message.markdown {
-                sources.push((
-                    MessageKey::for_message(message),
-                    SharedString::from(markdown.clone()),
-                ));
-            }
-        }
-        for message in self
+        let sources: Vec<(MessageKey, SharedString)> = self
             .view_model
-            .search_results
+            .history
             .iter()
-            .filter_map(|hit| hit.message.as_ref())
-        {
-            if let Some(markdown) = &message.markdown {
-                sources.push((
-                    MessageKey::for_message(message),
-                    SharedString::from(markdown.clone()),
-                ));
-            }
-        }
+            .chain(
+                self.view_model
+                    .search_results
+                    .iter()
+                    .filter_map(|hit| hit.message.as_ref()),
+            )
+            .filter_map(|message| {
+                message.markdown.as_ref().map(|markdown| {
+                    (
+                        MessageKey::for_message(message),
+                        SharedString::from(markdown.clone()),
+                    )
+                })
+            })
+            .collect();
 
         let live: HashSet<MessageKey> = sources.iter().map(|(key, _)| *key).collect();
         for (key, source) in sources {
