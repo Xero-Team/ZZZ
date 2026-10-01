@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use base64::Engine as _;
-use grammers_client::client::{LoginToken, PasswordToken, UpdatesConfiguration};
+use grammers_client::client::{
+    GlobalSearchIter, LoginToken, PasswordToken, SearchIter, UpdatesConfiguration,
+};
 use grammers_client::media::{InputMedia, Media, PhotoSize};
 use grammers_client::message::{InputMessage, Message};
 use grammers_client::peer::{Dialog, Peer};
@@ -20,7 +22,7 @@ use grammers_client::session::SessionData;
 use grammers_client::session::types::{PeerId, PeerRef};
 use grammers_client::tl;
 use grammers_client::update::Update;
-use grammers_client::{Client, SignInError};
+use grammers_client::{Client, InvocationError, SignInError};
 use tokio::sync::{mpsc, watch};
 
 use crate::compose::{
@@ -44,6 +46,9 @@ const SEARCH_LIMIT: usize = 50;
 const MEDIA_CACHE_MAX_BYTES: u64 = 512 * 1024 * 1024;
 /// Maximum age for on-disk media before it is evicted.
 const MEDIA_CACHE_MAX_AGE: Duration = Duration::from_hours(30 * 24);
+/// How many data-center migrations a QR login token may trigger before the
+/// engine gives up and reports [`EngineError::QrTooManyMigrations`].
+const QR_MIGRATION_LIMIT: usize = 3;
 
 /// Requests sent from the UI thread to the engine thread.
 #[derive(Clone)]
@@ -552,6 +557,29 @@ impl EngineState {
         self.view.flood_wait_seconds = None;
     }
 
+    /// Resolves the peer and connected client for a chat, returning `None` when
+    /// the chat is unknown or the engine is offline.
+    fn chat_context(&self, chat_id: i64) -> Option<(PeerRef, Client)> {
+        let peer_ref = self.peer_refs.get(&chat_id).copied()?;
+        let client = self.client.clone()?;
+        Some((peer_ref, client))
+    }
+
+    /// Like [`Self::chat_context`], but reports the missing half to the panel as
+    /// a user-visible error. Used by the send paths, where a dropped message
+    /// must be surfaced.
+    fn sending_context(&mut self, chat_id: i64) -> Option<(PeerRef, Client)> {
+        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
+            self.set_error(EngineError::ChatUnavailable);
+            return None;
+        };
+        let Some(client) = self.client.clone() else {
+            self.set_error(EngineError::NotConnected);
+            return None;
+        };
+        Some((peer_ref, client))
+    }
+
     async fn handle_command(&mut self, command: Command) {
         match command {
             Command::Start => self.ensure_connected().await,
@@ -790,7 +818,7 @@ impl EngineState {
         &mut self,
         mut result: Result<tl::enums::auth::LoginToken, EngineError>,
     ) {
-        for _ in 0..3 {
+        for _ in 0..QR_MIGRATION_LIMIT {
             match result {
                 Ok(tl::enums::auth::LoginToken::Token(token)) => {
                     let url = qr_login_url(&token.token);
@@ -1221,13 +1249,7 @@ impl EngineState {
 
     /// Sorts history oldest-first, keeping optimistic (id `0`) sends at the end.
     fn sort_history(&mut self) {
-        self.view.history.sort_by_key(|message| {
-            if message.id == 0 {
-                i32::MAX
-            } else {
-                message.id
-            }
-        });
+        self.view.history.sort_by_key(history_sort_key);
     }
 
     fn schedule_gap_fill(&mut self, chat_id: i64, after_id: i32, before_id: i32) {
@@ -1314,12 +1336,7 @@ impl EngineState {
     }
 
     async fn send_text_item(&mut self, chat_id: i64, text: String) {
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            self.set_error(EngineError::ChatUnavailable);
-            return;
-        };
-        let Some(client) = self.client.clone() else {
-            self.set_error(EngineError::NotConnected);
+        let Some((peer_ref, client)) = self.sending_context(chat_id) else {
             return;
         };
 
@@ -1340,24 +1357,12 @@ impl EngineState {
         attachment: StagedAttachment,
         caption: Option<String>,
     ) {
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            self.set_error(EngineError::ChatUnavailable);
-            return;
-        };
-        let Some(client) = self.client.clone() else {
-            self.set_error(EngineError::NotConnected);
+        let Some((peer_ref, client)) = self.sending_context(chat_id) else {
             return;
         };
 
         let local_id = rand::random::<u64>();
-        let media = MediaSnapshot {
-            kind: attachment.kind.media_kind(),
-            file_name: Some(attachment.file_name.clone()),
-            size: Some(attachment.size),
-            downloaded_path: Some(attachment.path.clone()),
-            download_state: DownloadState::Downloaded,
-            ..Default::default()
-        };
+        let media = optimistic_media(&attachment);
         self.push_optimistic(
             chat_id,
             local_id,
@@ -1398,12 +1403,7 @@ impl EngineState {
 
     /// Sends a group of previewable attachments as a single Telegram album.
     async fn send_album_item(&mut self, chat_id: i64, items: Vec<AlbumItem>) {
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            self.set_error(EngineError::ChatUnavailable);
-            return;
-        };
-        let Some(client) = self.client.clone() else {
-            self.set_error(EngineError::NotConnected);
+        let Some((peer_ref, client)) = self.sending_context(chat_id) else {
             return;
         };
         let Some(first) = items.first() else {
@@ -1411,14 +1411,7 @@ impl EngineState {
         };
 
         let local_id = rand::random::<u64>();
-        let media = MediaSnapshot {
-            kind: first.attachment.kind.media_kind(),
-            file_name: Some(first.attachment.file_name.clone()),
-            size: Some(first.attachment.size),
-            downloaded_path: Some(first.attachment.path.clone()),
-            download_state: DownloadState::Downloaded,
-            ..Default::default()
-        };
+        let media = optimistic_media(&first.attachment);
         self.push_optimistic(
             chat_id,
             local_id,
@@ -1700,10 +1693,7 @@ impl EngineState {
             return;
         }
 
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            return;
-        };
-        let Some(client) = self.client.clone() else {
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
             return;
         };
         if let Some(media) = self.view.history[index].media.as_mut() {
@@ -1763,8 +1753,8 @@ impl EngineState {
         media_file_path(&self.media_dir, chat_id, message_id, media)
     }
 
-    fn thumbnail_path(&self, chat_id: i64, message_id: i32, media: &MediaSnapshot) -> PathBuf {
-        thumbnail_file_path(&self.thumbnail_dir, chat_id, message_id, media)
+    fn thumbnail_path(&self, chat_id: i64, message_id: i32) -> PathBuf {
+        thumbnail_file_path(&self.thumbnail_dir, chat_id, message_id)
     }
 
     /// Schedules a small preview fetch for an image-like attachment. The bytes
@@ -1786,7 +1776,7 @@ impl EngineState {
             return;
         }
 
-        let path = self.thumbnail_path(chat_id, message_id, media);
+        let path = self.thumbnail_path(chat_id, message_id);
         if path.is_file() {
             if let Some(media) = self.view.history[index].media.as_mut() {
                 media.thumbnail_path = Some(path);
@@ -1796,10 +1786,7 @@ impl EngineState {
             return;
         }
 
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            return;
-        };
-        let Some(client) = self.client.clone() else {
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
             return;
         };
 
@@ -1883,10 +1870,7 @@ impl EngineState {
     }
 
     async fn delete_message(&mut self, chat_id: i64, message_id: i32) {
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            return;
-        };
-        let Some(client) = self.client.clone() else {
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
             return;
         };
         match client.delete_messages(peer_ref, &[message_id]).await {
@@ -1927,10 +1911,7 @@ impl EngineState {
     }
 
     async fn set_pinned(&mut self, chat_id: i64, pinned: bool) {
-        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
-            return;
-        };
-        let Some(client) = self.client.clone() else {
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
             return;
         };
         let input_peer: tl::enums::InputPeer = peer_ref.into();
@@ -2199,14 +2180,17 @@ fn merge_tail(existing: &[MessageSnapshot], page: Vec<MessageSnapshot>) -> Vec<M
             merged.push(message.clone());
         }
     }
-    merged.sort_by_key(|message| {
-        if message.id == 0 {
-            i32::MAX
-        } else {
-            message.id
-        }
-    });
+    merged.sort_by_key(history_sort_key);
     merged
+}
+
+/// Orders history oldest-first, keeping optimistic (id `0`) sends last.
+fn history_sort_key(message: &MessageSnapshot) -> i32 {
+    if message.id == 0 {
+        i32::MAX
+    } else {
+        message.id
+    }
 }
 
 fn dialog_to_snapshot(dialog: &Dialog) -> Option<ChatSnapshot> {
@@ -2288,6 +2272,19 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
         send_state: SendState::Sent,
         local_id: None,
         edited: message.edit_date().is_some(),
+    }
+}
+
+/// Builds the media snapshot shown for an attachment that is being sent, before
+/// the server echoes the real message back.
+fn optimistic_media(attachment: &StagedAttachment) -> MediaSnapshot {
+    MediaSnapshot {
+        kind: attachment.kind.media_kind(),
+        file_name: Some(attachment.file_name.clone()),
+        size: Some(attachment.size),
+        downloaded_path: Some(attachment.path.clone()),
+        download_state: DownloadState::Downloaded,
+        ..Default::default()
     }
 }
 
@@ -2443,44 +2440,19 @@ async fn fetch_search(
     query: &str,
     titles: &HashMap<i64, String>,
 ) -> Result<Vec<SearchHit>, EngineError> {
-    let mut found: Vec<Message> = Vec::new();
-    if let Some(peer_ref) = scoped_peer {
-        let mut iterator = client
+    let found = if let Some(peer_ref) = scoped_peer {
+        let iterator = client
             .search_messages(peer_ref)
             .query(query)
             .limit(SEARCH_LIMIT);
-        loop {
-            match iterator.next().await {
-                Ok(Some(message)) => found.push(message),
-                Ok(None) => break,
-                Err(error) => {
-                    log::warn!("Telegram search failed: {error}");
-                    return Err(EngineError::from_invocation_with(
-                        &error,
-                        EngineError::SearchFailed,
-                    ));
-                }
-            }
-        }
+        collect_search_messages(SearchSource::Chat(iterator)).await?
     } else {
-        let mut iterator = client
+        let iterator = client
             .search_all_messages()
             .query(query)
             .limit(SEARCH_LIMIT);
-        loop {
-            match iterator.next().await {
-                Ok(Some(message)) => found.push(message),
-                Ok(None) => break,
-                Err(error) => {
-                    log::warn!("Telegram search failed: {error}");
-                    return Err(EngineError::from_invocation_with(
-                        &error,
-                        EngineError::SearchFailed,
-                    ));
-                }
-            }
-        }
-    }
+        collect_search_messages(SearchSource::Global(iterator)).await?
+    };
 
     Ok(found
         .into_iter()
@@ -2497,6 +2469,42 @@ async fn fetch_search(
             })
         })
         .collect())
+}
+
+/// Unifies grammers' two search iterators, which share a `next` method but no
+/// common trait.
+enum SearchSource {
+    Chat(SearchIter),
+    Global(GlobalSearchIter),
+}
+
+impl SearchSource {
+    async fn next(&mut self) -> Result<Option<Message>, InvocationError> {
+        match self {
+            Self::Chat(iterator) => iterator.next().await,
+            Self::Global(iterator) => iterator.next().await,
+        }
+    }
+}
+
+/// Drains a search iterator into a message list, mapping failures to
+/// [`EngineError::SearchFailed`].
+async fn collect_search_messages(mut source: SearchSource) -> Result<Vec<Message>, EngineError> {
+    let mut found = Vec::with_capacity(SEARCH_LIMIT);
+    loop {
+        match source.next().await {
+            Ok(Some(message)) => found.push(message),
+            Ok(None) => break,
+            Err(error) => {
+                log::warn!("Telegram search failed: {error}");
+                return Err(EngineError::from_invocation_with(
+                    &error,
+                    EngineError::SearchFailed,
+                ));
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// Fetches the messages between two known ids, oldest-first.
@@ -2667,7 +2675,7 @@ fn media_extension(media: &MediaSnapshot) -> String {
 }
 
 /// Telegram thumbnails are always JPEG, so the extension is fixed.
-fn thumbnail_extension(_media: &MediaSnapshot) -> String {
+fn thumbnail_extension() -> String {
     "jpg".to_owned()
 }
 
@@ -2678,14 +2686,9 @@ fn media_file_path(root: &Path, chat_id: i64, message_id: i32, media: &MediaSnap
 }
 
 /// Builds the sharded on-disk path for a cached thumbnail.
-fn thumbnail_file_path(
-    root: &Path,
-    chat_id: i64,
-    message_id: i32,
-    media: &MediaSnapshot,
-) -> PathBuf {
+fn thumbnail_file_path(root: &Path, chat_id: i64, message_id: i32) -> PathBuf {
     root.join(chat_id.to_string())
-        .join(format!("{message_id}.{}", thumbnail_extension(media)))
+        .join(format!("{message_id}.{}", thumbnail_extension()))
 }
 
 fn file_extension(name: &str) -> Option<String> {
@@ -2993,11 +2996,7 @@ mod tests {
 
     #[test]
     fn thumbnail_extension_is_jpeg() {
-        let media = MediaSnapshot {
-            kind: MediaKind::Photo,
-            ..Default::default()
-        };
-        assert_eq!(thumbnail_extension(&media), "jpg");
+        assert_eq!(thumbnail_extension(), "jpg");
     }
 
     #[test]
@@ -3011,7 +3010,7 @@ mod tests {
             PathBuf::from("/cache/media/42/7.jpg")
         );
         assert_eq!(
-            thumbnail_file_path(Path::new("/cache/thumbnails"), 42, 7, &media),
+            thumbnail_file_path(Path::new("/cache/thumbnails"), 42, 7),
             PathBuf::from("/cache/thumbnails/42/7.jpg")
         );
     }
