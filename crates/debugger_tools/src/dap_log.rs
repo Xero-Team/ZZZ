@@ -148,6 +148,33 @@ impl DebugAdapterState {
     }
 }
 
+const TERMINATED_SESSION_LIMIT: usize = 10;
+
+fn retain_recent_terminated_sessions(sessions: &mut BTreeMap<SessionId, DebugAdapterState>) {
+    let mut sessions_to_remove = sessions
+        .values()
+        .filter(|session| session.is_terminated)
+        .count()
+        .saturating_sub(TERMINATED_SESSION_LIMIT);
+    sessions.retain(|_, session| {
+        if !session.is_terminated || sessions_to_remove == 0 {
+            return true;
+        }
+        sessions_to_remove -= 1;
+        false
+    });
+}
+
+fn trim_log_lines_for_insert(log_lines: &mut VecDeque<SharedString>) {
+    let excess = log_lines
+        .len()
+        .saturating_add(1)
+        .saturating_sub(RpcMessages::MESSAGE_QUEUE_LIMIT);
+    if excess > 0 {
+        log_lines.drain(..excess);
+    }
+}
+
 impl LogStore {
     pub fn new(cx: &Context<Self>) -> Self {
         let (rpc_tx, mut rpc_rx) = unbounded::<LogStoreMessage>();
@@ -339,13 +366,7 @@ impl LogStore {
         kind: LogKind,
         cx: &mut Context<Self>,
     ) -> SharedString {
-        if let Some(excess) = log_lines
-            .len()
-            .checked_sub(RpcMessages::MESSAGE_QUEUE_LIMIT)
-            && excess > 0
-        {
-            log_lines.drain(..excess);
-        }
+        trim_log_lines_for_insert(log_lines);
 
         let format_messages = DebuggerSettings::get_global(cx).format_dap_log_messages;
 
@@ -453,14 +474,7 @@ impl LogStore {
 
     fn clean_sessions(&mut self, cx: &mut Context<Self>) {
         self.projects.values_mut().for_each(|project| {
-            let mut allowed_terminated_sessions = 10u32;
-            project.debug_sessions.retain(|_, session| {
-                if !session.is_terminated {
-                    return true;
-                }
-                allowed_terminated_sessions = allowed_terminated_sessions.saturating_sub(1);
-                allowed_terminated_sessions > 0
-            });
+            retain_recent_terminated_sessions(&mut project.debug_sessions);
         });
 
         cx.notify();
@@ -1155,5 +1169,48 @@ impl LogStore {
                 .clone()
                 .into()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn terminated_session(id: u32) -> DebugAdapterState {
+        let mut state = DebugAdapterState::new(
+            SessionId(id),
+            DebugAdapterName("test".into()),
+            format!("Session {id}").into(),
+            false,
+        );
+        state.is_terminated = true;
+        state
+    }
+
+    #[test]
+    fn log_queue_stays_within_limit() {
+        let mut lines = (0..RpcMessages::MESSAGE_QUEUE_LIMIT)
+            .map(|index| SharedString::from(index.to_string()))
+            .collect::<VecDeque<_>>();
+
+        trim_log_lines_for_insert(&mut lines);
+        lines.push_back("newest".into());
+
+        assert_eq!(lines.len(), RpcMessages::MESSAGE_QUEUE_LIMIT);
+        assert_eq!(lines.front().map(SharedString::as_ref), Some("1"));
+        assert_eq!(lines.back().map(SharedString::as_ref), Some("newest"));
+    }
+
+    #[test]
+    fn session_cleanup_keeps_latest_terminated_sessions() {
+        let mut sessions = (1..=12)
+            .map(|id| (SessionId(id), terminated_session(id)))
+            .collect::<BTreeMap<_, _>>();
+
+        retain_recent_terminated_sessions(&mut sessions);
+
+        assert_eq!(sessions.len(), TERMINATED_SESSION_LIMIT);
+        assert_eq!(sessions.first_key_value().map(|(id, _)| id.0), Some(3));
+        assert_eq!(sessions.last_key_value().map(|(id, _)| id.0), Some(12));
     }
 }
