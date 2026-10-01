@@ -8,7 +8,7 @@ use fs::Fs;
 use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
 use gpui::{
     Action, AnyElement, AnyView, App, BackgroundExecutor, Context, DismissEvent, Empty, Entity,
-    FocusHandle, Focusable, ForegroundExecutor, SharedString, Subscription, Task, Window,
+    FocusHandle, Focusable, SharedString, Subscription, Task, Window,
 };
 use i18n as app_i18n;
 use picker::{Picker, PickerDelegate, popover_menu::PickerPopoverMenu};
@@ -21,6 +21,7 @@ use ui::{
     DocumentationAside, HighlightedLabel, KeyBinding, LabelSize, ListItem, ListItemSpacing,
     PopoverMenuHandle, Tooltip, prelude::*,
 };
+use util::ResultExt as _;
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()
@@ -108,7 +109,6 @@ impl ProfileSelector {
                 self.fs.clone(),
                 self.provider.clone(),
                 self.profiles.clone(),
-                cx.foreground_executor().clone(),
                 cx.background_executor().clone(),
                 self.focus_handle.clone(),
                 cx,
@@ -132,7 +132,7 @@ impl ProfileSelector {
                 let query = picker.query(cx);
                 picker
                     .delegate
-                    .refresh_profiles(profiles.clone(), query, cx);
+                    .refresh_profiles(profiles.clone(), query, window, cx);
             });
             self.pending_refresh = false;
         }
@@ -279,7 +279,6 @@ enum ProfilePickerHeader {
 pub struct ProfilePickerDelegate {
     fs: Arc<dyn Fs>,
     provider: Arc<dyn ProfileProvider>,
-    foreground: ForegroundExecutor,
     background: BackgroundExecutor,
     candidates: Vec<ProfileCandidate>,
     string_candidates: Arc<Vec<StringMatchCandidate>>,
@@ -288,6 +287,7 @@ pub struct ProfilePickerDelegate {
     hovered_index: Option<usize>,
     query: String,
     cancel: Option<Arc<AtomicBool>>,
+    _refresh_search_task: Option<Task<()>>,
     focus_handle: FocusHandle,
 }
 
@@ -296,7 +296,6 @@ impl ProfilePickerDelegate {
         fs: Arc<dyn Fs>,
         provider: Arc<dyn ProfileProvider>,
         profiles: AvailableProfiles,
-        foreground: ForegroundExecutor,
         background: BackgroundExecutor,
         focus_handle: FocusHandle,
         cx: &mut Context<ProfileSelector>,
@@ -308,7 +307,6 @@ impl ProfilePickerDelegate {
         let mut this = Self {
             fs,
             provider,
-            foreground,
             background,
             candidates,
             string_candidates,
@@ -317,6 +315,7 @@ impl ProfilePickerDelegate {
             hovered_index: None,
             query: String::new(),
             cancel: None,
+            _refresh_search_task: None,
             focus_handle,
         };
 
@@ -331,23 +330,26 @@ impl ProfilePickerDelegate {
         &mut self,
         profiles: AvailableProfiles,
         query: String,
+        window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) {
         self.candidates = Self::candidates_from(profiles);
         self.string_candidates = Arc::new(Self::string_candidates(&self.candidates));
-        self.query = query;
 
-        if self.query.is_empty() {
+        if query.is_empty() {
+            self.query.clear();
             self.filtered_entries = Self::entries_from_candidates(&self.candidates);
+            self.selected_index = self
+                .index_of_profile(&self.provider.profile_id(cx))
+                .unwrap_or_else(|| self.first_selectable_index().unwrap_or(0));
+            cx.notify();
         } else {
-            let matches = self.search_blocking(&self.query);
-            self.filtered_entries = self.entries_from_matches(matches);
+            self.filtered_entries.clear();
+            self.selected_index = 0;
+            let refresh_search_task = self.update_matches(query, window, cx);
+            self._refresh_search_task = Some(refresh_search_task);
+            cx.notify();
         }
-
-        self.selected_index = self
-            .index_of_profile(&self.provider.profile_id(cx))
-            .unwrap_or_else(|| self.first_selectable_index().unwrap_or(0));
-        cx.notify();
     }
 
     fn candidates_from(profiles: AvailableProfiles) -> Vec<ProfileCandidate> {
@@ -437,33 +439,6 @@ impl ProfilePickerDelegate {
                 .is_some_and(|candidate| &candidate.id == profile_id))
         })
     }
-
-    fn search_blocking(&self, query: &str) -> Vec<StringMatch> {
-        if query.is_empty() {
-            return self
-                .string_candidates
-                .iter()
-                .map(|candidate| StringMatch {
-                    candidate_id: candidate.id,
-                    score: 0.0,
-                    positions: Vec::new(),
-                    string: candidate.string.clone(),
-                })
-                .collect();
-        }
-
-        let cancel_flag = AtomicBool::new(false);
-
-        self.foreground.block_on(match_strings(
-            self.string_candidates.as_ref(),
-            query,
-            false,
-            true,
-            100,
-            &cancel_flag,
-            self.background.clone(),
-        ))
-    }
 }
 
 impl PickerDelegate for ProfilePickerDelegate {
@@ -516,6 +491,11 @@ impl PickerDelegate for ProfilePickerDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
+        if let Some(previous_cancel) = self.cancel.take() {
+            previous_cancel.store(true, Ordering::Relaxed);
+        }
+        self._refresh_search_task = None;
+
         if query.is_empty() {
             self.query.clear();
             self.filtered_entries = Self::entries_from_candidates(&self.candidates);
@@ -526,9 +506,6 @@ impl PickerDelegate for ProfilePickerDelegate {
             return Task::ready(());
         }
 
-        if let Some(prev) = &self.cancel {
-            prev.store(true, Ordering::Relaxed);
-        }
         let cancel = Arc::new(AtomicBool::new(false));
         self.cancel = Some(cancel.clone());
 
@@ -550,6 +527,9 @@ impl PickerDelegate for ProfilePickerDelegate {
                 background,
             )
             .await;
+            let Some(this) = this.upgrade() else {
+                return;
+            };
 
             this.update_in(cx, |this, _, cx| {
                 if this.delegate.query != query {
@@ -563,7 +543,7 @@ impl PickerDelegate for ProfilePickerDelegate {
                     .unwrap_or_else(|| this.delegate.first_selectable_index().unwrap_or(0));
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
     }
 
@@ -797,7 +777,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn fuzzy_filter_returns_no_results_and_keeps_configure(cx: &mut TestAppContext) {
+    fn empty_matches_produce_no_profile_entries(cx: &mut TestAppContext) {
         let candidates = vec![ProfileCandidate {
             id: AgentProfileId("write".into()),
             name: SharedString::from("Write"),
@@ -810,7 +790,6 @@ mod tests {
             let delegate = ProfilePickerDelegate {
                 fs: FakeFs::new(cx.background_executor().clone()),
                 provider: Arc::new(TestProfileProvider::new(AgentProfileId("write".into()))),
-                foreground: cx.foreground_executor().clone(),
                 background: cx.background_executor().clone(),
                 candidates,
                 string_candidates: Arc::new(Vec::new()),
@@ -819,11 +798,12 @@ mod tests {
                 hovered_index: None,
                 query: String::new(),
                 cancel: None,
+                _refresh_search_task: None,
                 focus_handle,
             };
 
-            let matches = Vec::new(); // No matches
-            let _entries = delegate.entries_from_matches(matches);
+            let entries = delegate.entries_from_matches(Vec::new());
+            assert!(entries.is_empty());
         });
     }
 
@@ -848,7 +828,6 @@ mod tests {
             let delegate = ProfilePickerDelegate {
                 fs: FakeFs::new(cx.background_executor().clone()),
                 provider: Arc::new(TestProfileProvider::new(AgentProfileId("write".into()))),
-                foreground: cx.foreground_executor().clone(),
                 background: cx.background_executor().clone(),
                 candidates,
                 string_candidates: Arc::new(Vec::new()),
@@ -866,6 +845,7 @@ mod tests {
                 selected_index: 0,
                 query: String::new(),
                 cancel: None,
+                _refresh_search_task: None,
                 focus_handle,
             };
 
