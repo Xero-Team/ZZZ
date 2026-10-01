@@ -26,21 +26,16 @@ pub struct AudioSettings {
 /// Configuration of audio in ZZZ
 impl Settings for AudioSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let audio = &content
-            .audio
-            .as_ref()
-            .expect("value should have the expected type");
+        let audio = content.audio.as_ref();
         AudioSettings {
             auto_microphone_volume: audio
-                .auto_microphone_volume
-                .expect("auto_microphone_volume should be present"),
+                .and_then(|audio| audio.auto_microphone_volume)
+                .unwrap_or(false),
             output_audio_device: audio
-                .output_audio_device
-                .as_ref()
+                .and_then(|audio| audio.output_audio_device.as_ref())
                 .and_then(|x| x.0.as_ref().and_then(|id| DeviceId::from_str(&id).ok())),
             input_audio_device: audio
-                .input_audio_device
-                .as_ref()
+                .and_then(|audio| audio.input_audio_device.as_ref())
                 .and_then(|x| x.0.as_ref().and_then(|id| DeviceId::from_str(&id).ok())),
         }
     }
@@ -73,5 +68,5 @@ impl LiveSettings {
 /// real time and must each run in a dedicated OS thread, therefore we can not
 /// use the background executor.
 pub static LIVE_SETTINGS: LiveSettings = LiveSettings {
-    auto_microphone_volume: AtomicBool::new(true),
+    auto_microphone_volume: AtomicBool::new(false),
 };

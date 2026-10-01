@@ -195,16 +195,15 @@ pub struct ToMono<S> {
 }
 impl<S: Source> ToMono<S> {
     fn new(input: S) -> Self {
-        let channels = input.channels().min(
-            const { NonZero::<u16>::new(MAX_CHANNELS as u16).expect("value should be present") },
-        );
-        if channels < input.channels() {
-            warn!("Ignoring input channels {}..", channels.get());
+        let input_channel_count = input.channels();
+        let connected_channels = input_channel_count.min(nz!(8));
+        if connected_channels < input_channel_count {
+            warn!("Ignoring input channels {}..", connected_channels.get());
         }
 
         Self {
-            connected_channels: channels,
-            input_channel_count: channels,
+            connected_channels,
+            input_channel_count,
             inner: input,
             means: [TYPICAL_NOISE_FLOOR; MAX_CHANNELS],
         }
@@ -243,6 +242,9 @@ impl<S: Source> Iterator for ToMono<S> {
         let mut active_channels = 0;
         for channel in 0..self.input_channel_count.get() as usize {
             let sample = self.inner.next()?;
+            if channel >= MAX_CHANNELS {
+                continue;
+            }
             mono_sample += sample;
 
             update_mean(&mut self.means[channel], sample);
@@ -328,7 +330,7 @@ impl ReplayQueue {
             + self
                 .last_chunk
                 .lock()
-                .expect("Self::push_last can not poison this lock")
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .len()
     }
 
@@ -340,7 +342,7 @@ impl ReplayQueue {
         let mut last_chunk = self
             .last_chunk
             .lock()
-            .expect("Self::len can not poison this lock");
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         std::mem::swap(&mut *last_chunk, &mut samples);
     }
 
@@ -549,7 +551,7 @@ impl Replay {
     pub fn source_is_active(&self) -> bool {
         // - source could return None and not drop
         // - source could be dropped before returning None
-        self.source_is_active.load(Ordering::Relaxed) && Arc::strong_count(&self.rx) < 2
+        self.source_is_active.load(Ordering::Relaxed) && Arc::strong_count(&self.rx) > 1
     }
 
     /// Duration of what is in the buffer and can be returned without blocking.
@@ -687,8 +689,39 @@ mod tests {
         }
     }
 
+    mod to_mono {
+        use super::*;
+
+        #[test]
+        fn ignores_extra_channels_without_shifting_frames() {
+            const SAMPLES: [Sample; 20] = [
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0, 17.0, 18.0, 19.0, 20.0,
+            ];
+            let input = StaticSamplesBuffer::new(nz!(10), nz!(48_000), &SAMPLES);
+
+            let output = input
+                .possibly_disconnected_channels_to_mono()
+                .collect::<Vec<_>>();
+
+            assert_eq!(output, vec![4.5, 14.5]);
+        }
+    }
+
     mod instant_replay {
         use super::*;
+
+        #[test]
+        fn source_activity_tracks_replayable_lifetime() {
+            let input = test_source();
+            let (replay, source) = input
+                .replayable(Duration::from_secs(1))
+                .expect("longer than 100ms");
+
+            assert!(replay.source_is_active());
+            drop(source);
+            assert!(!replay.source_is_active());
+        }
 
         #[test]
         fn continues_after_history() {

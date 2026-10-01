@@ -75,11 +75,10 @@ impl Audio {
             self.output = Some((output_handle, output_mixer));
         }
 
-        Ok(self
-            .output
-            .as_ref()
-            .map(|(_, mixer)| mixer)
-            .expect("we only get here if opening the outputstream succeeded"))
+        let Some((_, mixer)) = self.output.as_ref() else {
+            anyhow::bail!("output stream was not retained after opening")
+        };
+        Ok(mixer)
     }
 
     pub fn play_sound(sound: Sound, cx: &mut App) {
@@ -510,13 +509,29 @@ impl std::fmt::Display for AudioDeviceInfo {
 }
 
 fn get_available_audio_devices() -> Vec<AudioDeviceInfo> {
-    let Some(devices) = default_host().devices().ok() else {
-        return Vec::new();
+    let devices = match default_host().devices() {
+        Ok(devices) => devices,
+        Err(error) => {
+            log::warn!("Failed to enumerate audio devices: {error}");
+            return Vec::new();
+        }
     };
     devices
         .filter_map(|device| {
-            let id = device.id().ok()?;
-            let desc = device.description().ok()?;
+            let id = match device.id() {
+                Ok(id) => id,
+                Err(error) => {
+                    log::warn!("Failed to read audio device ID: {error}");
+                    return None;
+                }
+            };
+            let desc = match device.description() {
+                Ok(description) => description,
+                Err(error) => {
+                    log::warn!("Failed to read audio device description: {error}");
+                    return None;
+                }
+            };
             Some(AudioDeviceInfo { id, desc })
         })
         .collect()
