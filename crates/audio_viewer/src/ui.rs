@@ -137,10 +137,12 @@ impl AudioView {
             .child(
                 canvas(
                     move |bounds, _window, cx| {
+                        let Some(view) = view.upgrade() else {
+                            return;
+                        };
                         view.update(cx, |view, _cx| {
                             view.waveform_bounds = Some(bounds);
-                        })
-                        .ok();
+                        });
                     },
                     {
                         let peaks = peaks.clone();
@@ -279,7 +281,7 @@ impl AudioView {
                     .h_full()
                     .rounded_full()
                     .bg(fill)
-                    .w(relative(ratio.clamp(0.02, 1.0))),
+                    .w(relative(ratio.clamp(0.0, 1.0))),
             )
             .child(bounds_capture(view, |view, bounds| {
                 view.seek_track_bounds = Some(bounds);
@@ -321,7 +323,7 @@ impl AudioView {
                     .h_full()
                     .rounded_full()
                     .bg(fill)
-                    .w(relative(volume.clamp(0.02, 1.0))),
+                    .w(relative(volume.clamp(0.0, 1.0))),
             )
             .child(bounds_capture(view, |view, bounds| {
                 view.volume_track_bounds = Some(bounds);
@@ -384,7 +386,10 @@ fn bounds_capture(
 ) -> impl IntoElement {
     canvas(
         move |bounds, _window, cx| {
-            view.update(cx, |view, _cx| assign(view, bounds)).ok();
+            let Some(view) = view.upgrade() else {
+                return;
+            };
+            view.update(cx, |view, _cx| assign(view, bounds));
         },
         |_, _, _, _| {},
     )

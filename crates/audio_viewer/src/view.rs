@@ -170,18 +170,14 @@ impl AudioView {
             };
 
             let Some(format_hint) = format_hint else {
-                this.update(cx, |view, cx| {
-                    view.load_state = LoadState::Error(
-                        tr(
-                            cx,
-                            "audio_viewer.error.missing_extension",
-                            "Audio file has no extension",
-                        )
-                        .into(),
-                    );
-                    cx.notify();
-                })
-                .ok();
+                let message = cx.update(|cx| {
+                    tr(
+                        cx,
+                        "audio_viewer.error.missing_extension",
+                        "Audio file has no extension",
+                    )
+                });
+                Self::set_error(&this, message, cx);
                 return;
             };
 
@@ -226,6 +222,9 @@ impl AudioView {
 
             match info {
                 Ok(info) => {
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
                     this.update(cx, |view, cx| {
                         view.load_state = LoadState::Loaded(Box::new(LoadedAudio {
                             path,
@@ -240,19 +239,19 @@ impl AudioView {
                         view.start_waveform(cx);
                         cx.emit(AudioViewEvent::TitleChanged);
                         cx.notify();
-                    })
-                    .ok();
+                    });
                 }
                 Err(error) => {
-                    let keep_existing = this
-                        .update(cx, |view, _cx| {
-                            matches!(view.load_state, LoadState::Loaded(_))
-                        })
-                        .unwrap_or(false);
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
+                    let keep_existing = this.update(cx, |view, _cx| {
+                        matches!(view.load_state, LoadState::Loaded(_))
+                    });
                     if keep_existing {
                         log::error!("reloading audio preview: {error:#}");
                     } else {
-                        Self::set_error(&this, error.to_string(), cx);
+                        Self::set_error(&this.downgrade(), error.to_string(), cx);
                     }
                 }
             }
@@ -265,11 +264,13 @@ impl AudioView {
         cx: &mut gpui::AsyncApp,
     ) {
         let message = message.into();
+        let Some(this) = this.upgrade() else {
+            return;
+        };
         this.update(cx, |view, cx| {
             view.load_state = LoadState::Error(message);
             cx.notify();
-        })
-        .ok();
+        });
     }
 
     fn start_waveform(&mut self, cx: &mut Context<Self>) {
@@ -291,6 +292,9 @@ impl AudioView {
                 })
                 .await;
 
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |view, cx| {
                 if let LoadState::Loaded(loaded) = &mut view.load_state {
                     loaded.analyzing = false;
@@ -306,8 +310,7 @@ impl AudioView {
                     }
                 }
                 cx.notify();
-            })
-            .ok();
+            });
         }));
     }
 
@@ -550,6 +553,7 @@ impl AudioView {
                     handle.pause();
                 }
                 self.playback = PlaybackStatus::Paused;
+                self._position_task = None;
                 cx.notify();
             }
             PlaybackStatus::Paused => {
