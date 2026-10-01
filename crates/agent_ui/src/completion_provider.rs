@@ -896,11 +896,8 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let default_branch_receiver = repo.update(cx, |repo, _| repo.default_branch(true));
 
         Some(cx.spawn(async move |_cx| {
-            let base_ref = default_branch_receiver
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .flatten()?;
+            let default_branch = default_branch_receiver.await.log_err()?;
+            let base_ref = default_branch.log_err()??;
 
             Some(BranchDiffMatch { base_ref })
         }))
@@ -1575,26 +1572,27 @@ fn confirm_completion_callback<T: PromptCompletionProviderDelegate>(
         let mention_uri = mention_uri.clone();
         let workspace = workspace.clone();
         window.defer(cx, move |window, cx| {
-            if let Some(editor) = editor.upgrade() {
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            let Some(mention_set) = mention_set.upgrade() else {
+                return;
+            };
+            mention_set.update(cx, |mention_set, cx| {
                 mention_set
-                    .clone()
-                    .update(cx, |mention_set, cx| {
-                        mention_set
-                            .confirm_mention_completion(
-                                crease_text,
-                                start,
-                                content_len,
-                                mention_uri,
-                                source.supports_images(cx),
-                                editor,
-                                &workspace,
-                                window,
-                                cx,
-                            )
-                            .detach();
-                    })
-                    .ok();
-            }
+                    .confirm_mention_completion(
+                        crease_text,
+                        start,
+                        content_len,
+                        mention_uri,
+                        source.supports_images(cx),
+                        editor,
+                        &workspace,
+                        window,
+                        cx,
+                    )
+                    .detach();
+            });
         });
         false
     })
@@ -1825,10 +1823,14 @@ fn diagnostics_label(
         )
         .replacen("{}", &parts[0], 1)
         .replacen("{}", &parts[1], 1)
+    } else if let Some(body) = parts.pop() {
+        body
     } else {
-        parts
-            .pop()
-            .expect("at least one part present after non-empty check")
+        return tr(
+            cx,
+            "agent_ui.completion_provider.diagnostics",
+            "Diagnostics",
+        );
     };
 
     tr(
@@ -2051,7 +2053,7 @@ pub(crate) fn search_symbols(
             .to_owned();
         // Note if you make changes to this filtering below, also change `project_symbols::ProjectSymbolsDelegate::filter`
         const MAX_MATCHES: usize = 100;
-        let mut visible_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
+        let mut visible_matches = fuzzy::match_strings(
             &visible_match_candidates,
             &query,
             false,
@@ -2059,8 +2061,9 @@ pub(crate) fn search_symbols(
             MAX_MATCHES,
             &cancellation_flag,
             cx.background_executor().clone(),
-        ));
-        let mut external_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
+        )
+        .await;
+        let mut external_matches = fuzzy::match_strings(
             &external_match_candidates,
             &query,
             false,
@@ -2068,7 +2071,8 @@ pub(crate) fn search_symbols(
             MAX_MATCHES - visible_matches.len().min(MAX_MATCHES),
             &cancellation_flag,
             cx.background_executor().clone(),
-        ));
+        )
+        .await;
         let sort_key_for_match = |mat: &StringMatch| {
             let symbol = &symbols[mat.candidate_id];
             (Reverse(OrderedFloat(mat.score)), symbol.label.filter_text())
@@ -2366,18 +2370,19 @@ fn completion_text_for_editor_selections(
                 if let Some(editor) = editor.upgrade()
                     && !selections.is_empty()
                 {
-                    mention_set
-                        .update(cx, |store, cx| {
-                            store.confirm_mention_for_selection(
-                                source_range.clone(),
-                                selections,
-                                editor.clone(),
-                                workspace,
-                                window,
-                                cx,
-                            )
-                        })
-                        .ok();
+                    let Some(mention_set) = mention_set.upgrade() else {
+                        return;
+                    };
+                    mention_set.update(cx, |store, cx| {
+                        store.confirm_mention_for_selection(
+                            source_range.clone(),
+                            selections,
+                            editor.clone(),
+                            workspace,
+                            window,
+                            cx,
+                        )
+                    });
                 }
             });
             false
@@ -2415,6 +2420,9 @@ fn completion_text_for_terminal_selections(
                 let Some(editor) = editor.upgrade() else {
                     return;
                 };
+                let Some(mention_set) = mention_set.upgrade() else {
+                    return;
+                };
                 for (terminal_text, terminal_range) in terminal_ranges {
                     let snapshot = editor.read(cx).buffer().read(cx).snapshot(cx);
                     let Some(start) = snapshot.anchor_in_excerpt(source_range.start) else {
@@ -2446,19 +2454,17 @@ fn completion_text_for_terminal_selections(
                         continue;
                     };
 
-                    mention_set
-                        .update(cx, |mention_set, _| {
-                            mention_set.insert_mention(
-                                crease_id,
-                                mention_uri.clone(),
-                                Task::ready(Ok(crate::mention_set::Mention::Text {
-                                    content: terminal_text,
-                                    tracked_buffers: vec![],
-                                }))
-                                .shared(),
-                            );
-                        })
-                        .ok();
+                    mention_set.update(cx, |mention_set, _| {
+                        mention_set.insert_mention(
+                            crease_id,
+                            mention_uri.clone(),
+                            Task::ready(Ok(crate::mention_set::Mention::Text {
+                                content: terminal_text,
+                                tracked_buffers: vec![],
+                            }))
+                            .shared(),
+                        );
+                    });
                 }
             });
             false
