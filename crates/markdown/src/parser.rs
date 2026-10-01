@@ -330,6 +330,7 @@ pub(crate) fn parse_markdown_with_options(
                             metadata: CodeBlockMetadata {
                                 content_range: range.clone(),
                                 line_count: 1,
+                                is_fenced_closed: false,
                             },
                         }
                     }
@@ -337,7 +338,9 @@ pub(crate) fn parse_markdown_with_options(
                         ref info,
                     )) => {
                         within_code_block = true;
-                        let content_range = extract_code_block_content_range(&text[range.clone()]);
+                        let code_block_source = &text[range.clone()];
+                        let content_range = extract_code_block_content_range(code_block_source);
+                        let is_fenced_closed = content_range.end < code_block_source.len();
                         let content_range =
                             content_range.start + range.start..content_range.end + range.start;
 
@@ -349,6 +352,7 @@ pub(crate) fn parse_markdown_with_options(
                         let metadata = CodeBlockMetadata {
                             content_range,
                             line_count,
+                            is_fenced_closed,
                         };
 
                         let info = info.trim();
@@ -893,6 +897,7 @@ pub enum CodeBlockKind {
 pub struct CodeBlockMetadata {
     pub content_range: Range<usize>,
     pub line_count: usize,
+    pub is_fenced_closed: bool,
 }
 
 fn extract_code_content_range(text: &str) -> Range<usize> {
@@ -918,17 +923,51 @@ fn extract_code_content_range(text: &str) -> Range<usize> {
 
 pub(crate) fn extract_code_block_content_range(text: &str) -> Range<usize> {
     let mut range = 0..text.len();
-    if text.starts_with("```") {
-        range.start += 3;
+    let Some(fence_character) = text
+        .as_bytes()
+        .first()
+        .copied()
+        .filter(|character| matches!(character, b'`' | b'~'))
+    else {
+        return range;
+    };
+    let opening_fence_len = text
+        .bytes()
+        .take_while(|character| *character == fence_character)
+        .count();
+    if opening_fence_len < 3 {
+        return range;
+    }
 
-        if let Some(newline_ix) = text[range.clone()].find('\n') {
-            range.start += newline_ix + 1;
+    range.start += opening_fence_len;
+    if let Some(newline_ix) = text[range.clone()].find('\n') {
+        range.start += newline_ix + 1;
+    }
+
+    let text_without_line_ending =
+        text.trim_end_matches(|character| matches!(character, '\r' | '\n'));
+    let closing_line_start = text_without_line_ending
+        .rfind('\n')
+        .map_or(0, |newline_ix| newline_ix + 1);
+    if closing_line_start >= range.start {
+        let closing_line = &text_without_line_ending[closing_line_start..];
+        let closing_fence = closing_line.trim_start_matches(' ');
+        let indentation_len = closing_line.len() - closing_fence.len();
+        let closing_fence_len = closing_fence
+            .bytes()
+            .take_while(|character| *character == fence_character)
+            .count();
+        let trailing_characters = &closing_fence[closing_fence_len..];
+        if indentation_len <= 3
+            && closing_fence_len >= opening_fence_len
+            && trailing_characters
+                .bytes()
+                .all(|character| matches!(character, b' ' | b'\t'))
+        {
+            range.end = closing_line_start;
         }
     }
 
-    if !range.is_empty() && text.ends_with("```") {
-        range.end -= 3;
-    }
     if range.start > range.end {
         range.end = range.start;
     }
@@ -1264,7 +1303,8 @@ mod tests {
                             kind: CodeBlockKind::FencedLang("rust".into()),
                             metadata: CodeBlockMetadata {
                                 content_range: 8..34,
-                                line_count: 3
+                                line_count: 3,
+                                is_fenced_closed: true,
                             }
                         })
                     ),
@@ -1292,7 +1332,8 @@ mod tests {
                             kind: CodeBlockKind::Indented,
                             metadata: CodeBlockMetadata {
                                 content_range: 4..16,
-                                line_count: 1
+                                line_count: 1,
+                                is_fenced_closed: false,
                             }
                         })
                     ),
@@ -1530,9 +1571,21 @@ mod tests {
         let input = "```python\nprint('hello')\nprint('world')\n```";
         assert_eq!(extract_code_block_content_range(input), 10..40);
 
+        let input = "~~~~mermaid\ngraph TD;\n~~~~";
+        let content_range = extract_code_block_content_range(input);
+        assert_eq!(&input[content_range], "graph TD;\n");
+
+        let input = "~~~mermaid\ngraph TD;\n    ~~~~";
+        let content_range = extract_code_block_content_range(input);
+        assert_eq!(&input[content_range], "graph TD;\n    ~~~~");
+
+        let input = "~~~mermaid\ngraph TD;\n   ~~~~ \t";
+        let content_range = extract_code_block_content_range(input);
+        assert_eq!(&input[content_range], "graph TD;\n");
+
         // Malformed input
         let input = "`````";
-        assert_eq!(extract_code_block_content_range(input), 3..3);
+        assert_eq!(extract_code_block_content_range(input), 5..5);
     }
 
     #[test]

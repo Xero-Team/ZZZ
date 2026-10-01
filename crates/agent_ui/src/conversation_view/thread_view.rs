@@ -9372,6 +9372,7 @@ impl ThreadView {
         style: MarkdownStyle,
         cx: &App,
     ) -> MarkdownElement {
+        let list_state = self.list_state.clone();
         render_agent_markdown(
             markdown,
             style,
@@ -9379,6 +9380,9 @@ impl ThreadView {
             &self.code_span_resolver,
             cx,
         )
+        .on_mermaid_zoom(move |_window, _cx| {
+            list_state.pause_following_tail();
+        })
     }
 
     fn create_copy_button(&self, message: impl Into<String>, cx: &App) -> impl IntoElement {

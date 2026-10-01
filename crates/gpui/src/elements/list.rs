@@ -607,6 +607,12 @@ impl ListState {
         )
     }
 
+    /// Pause tail-following at the current scroll position. The list remains
+    /// in tail mode and resumes following when it returns to the bottom.
+    pub fn pause_following_tail(&self) {
+        self.0.borrow_mut().follow_state.stop_following();
+    }
+
     /// Scroll the list to the given offset
     pub fn scroll_to(&self, mut scroll_top: ListOffset) {
         let state = &mut *self.0.borrow_mut();
@@ -1507,12 +1513,8 @@ impl Element for List {
         cx: &mut App,
     ) {
         let current_view = window.current_view();
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
-            for item in &mut prepaint.layout.item_layouts {
-                item.element.paint(window, cx);
-            }
-        });
-
+        // Register the list listener before painting children so child scroll
+        // handlers run first during the reverse-order bubble phase.
         let list_state = self.state.clone();
         let height = bounds.size.height;
         let scroll_top = prepaint.layout.scroll_top;
@@ -1530,6 +1532,12 @@ impl Element for List {
                     window,
                     cx,
                 )
+            }
+        });
+
+        window.with_content_mask(Some(ContentMask { bounds }), |window| {
+            for item in &mut prepaint.layout.item_layouts {
+                item.element.paint(window, cx);
             }
         });
     }
@@ -1642,8 +1650,8 @@ mod test {
     use std::rc::Rc;
 
     use crate::{
-        self as gpui, AppContext, Context, Element, FollowMode, IntoElement, ListState, Render,
-        Styled, TestAppContext, Window, div, list, point, px, size,
+        self as gpui, AppContext, Context, Element, FollowMode, InteractiveElement, IntoElement,
+        ListState, Render, Styled, TestAppContext, Window, div, list, point, px, size,
     };
 
     #[gpui::test]
@@ -1729,6 +1737,54 @@ mod test {
 
         // Test zero distance
         state.scroll_by(px(0.));
+        let offset = state.logical_scroll_top();
+        assert_eq!(offset.item_ix, 0);
+        assert_eq!(offset.offset_in_item, px(0.));
+    }
+
+    #[gpui::test]
+    fn test_child_scroll_handler_can_stop_list_scroll(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let state = ListState::new(5, crate::ListAlignment::Top, px(10.));
+        let child_saw_event = Rc::new(Cell::new(false));
+
+        struct TestView {
+            state: ListState,
+            child_saw_event: Rc<Cell<bool>>,
+        }
+        impl Render for TestView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let child_saw_event = self.child_saw_event.clone();
+                list(self.state.clone(), move |_, _, _| {
+                    let child_saw_event = child_saw_event.clone();
+                    div()
+                        .h(px(20.))
+                        .w_full()
+                        .on_scroll_wheel(move |_, _, cx| {
+                            child_saw_event.set(true);
+                            cx.stop_propagation();
+                        })
+                        .into_any()
+                })
+                .w_full()
+                .h_full()
+            }
+        }
+
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(100.)), |_, cx| {
+            cx.new(|_| TestView {
+                state: state.clone(),
+                child_saw_event: child_saw_event.clone(),
+            })
+            .into_any_element()
+        });
+        cx.simulate_event(ScrollWheelEvent {
+            position: point(px(50.), px(10.)),
+            delta: ScrollDelta::Pixels(point(px(0.), px(-30.))),
+            ..Default::default()
+        });
+
+        assert!(child_saw_event.get());
         let offset = state.logical_scroll_top();
         assert_eq!(offset.item_ix, 0);
         assert_eq!(offset.offset_in_item, px(0.));
@@ -2113,6 +2169,89 @@ mod test {
         let offset = state.logical_scroll_top();
         assert_eq!(offset.item_ix, 5);
         assert_eq!(offset.offset_in_item, px(50.));
+    }
+
+    #[gpui::test]
+    fn test_pause_following_tail_reengages_when_still_at_bottom(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let state = ListState::new(10, crate::ListAlignment::Top, px(0.));
+
+        struct TestView(ListState);
+        impl Render for TestView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                list(self.0.clone(), |_, _, _| {
+                    div().h(px(50.)).w_full().into_any()
+                })
+                .w_full()
+                .h_full()
+            }
+        }
+
+        let view = cx.update(|_, cx| cx.new(|_| TestView(state.clone())));
+        state.set_follow_mode(FollowMode::Tail);
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(200.)), |_, _| {
+            view.clone().into_any_element()
+        });
+        assert!(state.is_following_tail());
+
+        state.pause_following_tail();
+        assert!(!state.is_following_tail());
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(200.)), |_, _| {
+            view.into_any_element()
+        });
+        assert!(state.is_following_tail());
+    }
+
+    #[gpui::test]
+    fn test_pause_following_tail_freezes_off_bottom(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let item_height = Rc::new(Cell::new(50usize));
+        let state = ListState::new(10, crate::ListAlignment::Top, px(0.));
+
+        struct TestView {
+            state: ListState,
+            item_height: Rc<Cell<usize>>,
+        }
+        impl Render for TestView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let height = self.item_height.get();
+                list(self.state.clone(), move |_, _, _| {
+                    div().h(px(height as f32)).w_full().into_any()
+                })
+                .w_full()
+                .h_full()
+            }
+        }
+
+        let view = cx.update(|_, cx| {
+            cx.new(|_| TestView {
+                state: state.clone(),
+                item_height: item_height.clone(),
+            })
+        });
+        state.set_follow_mode(FollowMode::Tail);
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(200.)), |_, _| {
+            view.clone().into_any_element()
+        });
+        assert_eq!(state.logical_scroll_top().item_ix, 6);
+
+        state.pause_following_tail();
+        item_height.set(80);
+        state.remeasure();
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(200.)), |_, _| {
+            view.clone().into_any_element()
+        });
+        let offset = state.logical_scroll_top();
+        assert_eq!(offset.item_ix, 6);
+        assert_eq!(offset.offset_in_item, px(0.));
+        assert!(!state.is_following_tail());
+
+        item_height.set(50);
+        state.remeasure();
+        cx.draw(point(px(0.), px(0.)), size(px(100.), px(200.)), |_, _| {
+            view.into_any_element()
+        });
+        assert!(state.is_following_tail());
     }
 
     #[gpui::test]
