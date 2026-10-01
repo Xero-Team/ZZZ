@@ -69,8 +69,16 @@ impl McpServer {
                 let tools = tools.clone();
                 let handlers = handlers.clone();
                 async move |cx| {
-                    while let Ok((stream, _)) = listener.accept().await {
-                        Self::serve_connection(stream, tools.clone(), handlers.clone(), cx);
+                    loop {
+                        match listener.accept().await {
+                            Ok((stream, _)) => {
+                                Self::serve_connection(stream, tools.clone(), handlers.clone(), cx)
+                            }
+                            Err(error) => {
+                                log::error!("MCP listener accept failed: {error}");
+                                break;
+                            }
+                        }
                     }
                     drop(temp_dir)
                 }
@@ -207,8 +215,12 @@ impl McpServer {
         let (incoming_tx, mut incoming_rx) = unbounded();
         let (outgoing_tx, outgoing_rx) = unbounded();
 
-        cx.background_spawn(Self::handle_io(outgoing_rx, incoming_tx, write, read))
-            .detach();
+        cx.background_spawn(async move {
+            if let Err(error) = Self::handle_io(outgoing_rx, incoming_tx, write, read).await {
+                log::error!("MCP connection I/O failed: {error:#}");
+            }
+        })
+        .detach();
 
         cx.spawn(async move |cx| {
             while let Some(request) = incoming_rx.next().await {
@@ -220,18 +232,16 @@ impl McpServer {
                     Self::handle_call_tool(request_id, request.params, &tools, &outgoing_tx, cx)
                         .await;
                 } else if request.method == ListTools::METHOD {
-                    Self::handle_list_tools(
-                        request.id.expect("id should be present"),
-                        &tools,
-                        &outgoing_tx,
-                    );
+                    Self::handle_list_tools(request_id, &tools, &outgoing_tx);
                 } else if let Some(handler) = handlers.borrow().get(&request.method.as_ref()) {
                     let outgoing_tx = outgoing_tx.clone();
 
                     let task = cx.update(|cx| handler(request_id, request.params, cx));
                     cx.spawn(async move |_| {
                         let response = task.await;
-                        outgoing_tx.unbounded_send(response).ok();
+                        if outgoing_tx.unbounded_send(response).is_err() {
+                            log::debug!("MCP response receiver was dropped");
+                        }
                     })
                     .detach();
                 } else {
@@ -257,16 +267,15 @@ impl McpServer {
             meta: None,
         };
 
-        outgoing_tx
-            .unbounded_send(
-                serde_json::to_string(&Response {
-                    jsonrpc: "2.0",
-                    id: request_id,
-                    value: CspResult::Ok(Some(response)),
-                })
-                .unwrap_or_default(),
-            )
-            .ok();
+        let response = serde_json::to_string(&Response {
+            jsonrpc: "2.0",
+            id: request_id,
+            value: CspResult::Ok(Some(response)),
+        })
+        .expect("serializing a JSON-RPC response cannot fail");
+        if outgoing_tx.unbounded_send(response).is_err() {
+            log::debug!("MCP response receiver was dropped");
+        }
     }
 
     async fn handle_call_tool(
@@ -309,16 +318,15 @@ impl McpServer {
                             },
                         };
 
-                        outgoing_tx
-                            .unbounded_send(
-                                serde_json::to_string(&Response {
-                                    jsonrpc: "2.0",
-                                    id: request_id,
-                                    value: CspResult::Ok(Some(response)),
-                                })
-                                .unwrap_or_default(),
-                            )
-                            .ok();
+                        let response = serde_json::to_string(&Response {
+                            jsonrpc: "2.0",
+                            id: request_id,
+                            value: CspResult::Ok(Some(response)),
+                        })
+                        .expect("serializing a JSON-RPC response cannot fail");
+                        if outgoing_tx.unbounded_send(response).is_err() {
+                            log::debug!("MCP response receiver was dropped");
+                        }
                     })
                     .detach();
                 } else {
@@ -340,19 +348,18 @@ impl McpServer {
         message: impl Into<String>,
         outgoing_tx: &UnboundedSender<String>,
     ) {
-        outgoing_tx
-            .unbounded_send(
-                serde_json::to_string(&Response::<()> {
-                    jsonrpc: "2.0",
-                    id: request_id,
-                    value: CspResult::Error(Some(crate::client::Error {
-                        message: message.into(),
-                        code: -32601,
-                    })),
-                })
-                .expect("serializing to JSON cannot fail"),
-            )
-            .ok();
+        let response = serde_json::to_string(&Response::<()> {
+            jsonrpc: "2.0",
+            id: request_id,
+            value: CspResult::Error(Some(crate::client::Error {
+                message: message.into(),
+                code: -32601,
+            })),
+        })
+        .expect("serializing a JSON-RPC response cannot fail");
+        if outgoing_tx.unbounded_send(response).is_err() {
+            log::debug!("MCP response receiver was dropped");
+        }
     }
 
     async fn handle_io(
