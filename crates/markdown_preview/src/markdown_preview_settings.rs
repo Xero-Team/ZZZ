@@ -7,8 +7,8 @@ pub struct MarkdownPreviewSettings {
     /// The maximum width of the rendered markdown content, or `None` to render
     /// content edge to edge.
     pub max_width: Option<Pixels>,
-    /// Whether to render LaTeX math (`$...$`, `$$...$$` and fenced `math`
-    /// blocks) as typeset formulas.
+    /// Whether to render LaTeX math (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`
+    /// and fenced `math` blocks) as typeset formulas.
     pub render_math: bool,
 }
 

@@ -465,8 +465,9 @@ pub struct MarkdownOptions {
     pub parse_links_only: bool,
     pub parse_html: bool,
     pub render_mermaid_diagrams: bool,
-    /// Whether to render `$...$`, `$$...$$` and fenced math expressions as
-    /// typeset formulas. Disabled by default because `$` is ambiguous in prose.
+    /// Whether to render `$...$`, `$$...$$`, `\(...\)`, `\[...\]` and fenced
+    /// math expressions as typeset formulas. Disabled by default because `$`
+    /// is ambiguous in prose.
     pub render_math: bool,
     pub parse_heading_slugs: bool,
     pub render_metadata_blocks: bool,

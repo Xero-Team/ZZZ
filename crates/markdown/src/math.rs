@@ -1,4 +1,4 @@
-//! LaTeX math rendering for the markdown preview, backed by the pure-Rust
+//! LaTeX math rendering for Markdown surfaces, backed by the pure-Rust
 //! [`ratex`](https://github.com/erweixin/RaTeX) engine.
 //!
 //! Math expressions are extracted from the markdown source independently of
@@ -24,6 +24,10 @@ use crate::parser::{MarkdownEvent, MarkdownTag};
 /// document can trigger (a very wide formula can otherwise allocate hundreds of
 /// megabytes of SVG).
 const MAX_FORMULA_BYTES: usize = 4096;
+
+/// Maximum number of formulas rendered from one Markdown document. This keeps
+/// a hostile document from spawning an unbounded number of rasterization tasks.
+const MAX_MATH_EXPRESSIONS: usize = 512;
 
 /// Inline math delimiters.
 const INLINE_DELIMITER: u8 = b'$';
@@ -104,10 +108,11 @@ impl MathState {
         color: Hsla,
         cx: &mut Context<Markdown>,
     ) {
-        let current: HashSet<&ParsedMarkdownMathContents> =
-            expressions.iter().map(|math| &math.contents).collect();
-        self.entries
-            .retain(|key, _| current.contains(&key.contents));
+        let current: HashSet<MathCacheKey> = expressions
+            .iter()
+            .map(|math| MathCacheKey::new(math.contents.clone(), font_size, color))
+            .collect();
+        self.entries.retain(|key, _| current.contains(key));
 
         let svg_renderer = cx.svg_renderer();
         for math in expressions {
@@ -358,17 +363,20 @@ fn push_expression(
 
 /// Extract math expressions from the markdown source.
 ///
-/// Only `$...$`, `$$...$$` and ```` ```math ```` / ```` ```latex ```` fenced
-/// blocks are recognized. Code spans, code blocks, HTML tags and metadata
-/// blocks are skipped.
+/// `$...$`, `$$...$$`, `\(...\)`, `\[...\]` and ```` ```math ```` /
+/// ```` ```latex ```` fenced blocks are recognized. Code spans, code blocks,
+/// HTML tags and metadata blocks are skipped.
 pub(crate) fn extract_math_expressions(
     source: &str,
     events: &[(Range<usize>, MarkdownEvent)],
 ) -> Vec<ParsedMarkdownMath> {
-    let mut expressions = Vec::new();
+    let mut fenced_expressions = Vec::new();
     let excluded = excluded_ranges(events);
 
     for (range, event) in events {
+        if fenced_expressions.len() == MAX_MATH_EXPRESSIONS {
+            break;
+        }
         let MarkdownEvent::Start(MarkdownTag::CodeBlock { kind, metadata }) = event else {
             continue;
         };
@@ -379,7 +387,7 @@ pub(crate) fn extract_math_expressions(
             continue;
         }
         push_expression(
-            &mut expressions,
+            &mut fenced_expressions,
             source,
             metadata.content_range.clone(),
             range.clone(),
@@ -389,20 +397,55 @@ pub(crate) fn extract_math_expressions(
     }
 
     let bytes = source.as_bytes();
+    let mut inline_expressions = Vec::new();
     let mut cursor = 0;
-    while cursor < bytes.len() {
+    while cursor < bytes.len() && inline_expressions.len() < MAX_MATH_EXPRESSIONS {
         if let Some(end) = exclusion_end(&excluded, cursor) {
             cursor = end.max(cursor + 1);
             continue;
         }
         match bytes[cursor] {
+            b'\\' if bytes.get(cursor + 1) == Some(&b'(') => {
+                if let Some((content_range, source_range)) =
+                    scan_backslash_math(bytes, &excluded, cursor, b')', false)
+                {
+                    push_expression(
+                        &mut inline_expressions,
+                        source,
+                        content_range,
+                        source_range.clone(),
+                        MarkdownMathKind::Inline,
+                        false,
+                    );
+                    cursor = source_range.end;
+                } else {
+                    cursor += 2;
+                }
+            }
+            b'\\' if bytes.get(cursor + 1) == Some(&b'[') => {
+                if let Some((content_range, source_range)) =
+                    scan_backslash_math(bytes, &excluded, cursor, b']', true)
+                {
+                    push_expression(
+                        &mut inline_expressions,
+                        source,
+                        content_range,
+                        source_range.clone(),
+                        MarkdownMathKind::Display,
+                        false,
+                    );
+                    cursor = source_range.end;
+                } else {
+                    cursor += 2;
+                }
+            }
             b'\\' => cursor = (cursor + 2).min(bytes.len()),
             b'$' if bytes.get(cursor + 1) == Some(&b'$') => {
                 if let Some((content_range, source_range)) =
                     scan_display_math(bytes, &excluded, cursor)
                 {
                     push_expression(
-                        &mut expressions,
+                        &mut inline_expressions,
                         source,
                         content_range,
                         source_range.clone(),
@@ -419,7 +462,7 @@ pub(crate) fn extract_math_expressions(
                     scan_inline_math(bytes, &excluded, cursor)
                 {
                     push_expression(
-                        &mut expressions,
+                        &mut inline_expressions,
                         source,
                         content_range,
                         source_range.clone(),
@@ -435,7 +478,10 @@ pub(crate) fn extract_math_expressions(
         }
     }
 
+    let mut expressions = fenced_expressions;
+    expressions.extend(inline_expressions);
     expressions.sort_by_key(|math| math.source_range.start);
+    expressions.truncate(MAX_MATH_EXPRESSIONS);
     prepare_formulas(&mut expressions);
     expressions
 }
@@ -882,6 +928,31 @@ fn scan_inline_math(
     None
 }
 
+fn scan_backslash_math(
+    bytes: &[u8],
+    excluded: &[Range<usize>],
+    open: usize,
+    close: u8,
+    allow_newlines: bool,
+) -> Option<(Range<usize>, Range<usize>)> {
+    let content_start = open + 2;
+    let mut cursor = content_start;
+    while cursor + 1 < bytes.len() {
+        if exclusion_end(excluded, cursor).is_some() {
+            return None;
+        }
+        match bytes[cursor] {
+            b'\n' if !allow_newlines => return None,
+            b'\\' if bytes.get(cursor + 1) == Some(&close) => {
+                return Some((content_start..cursor, open..cursor + 2));
+            }
+            b'\\' => cursor = (cursor + 2).min(bytes.len()),
+            _ => cursor += 1,
+        }
+    }
+    None
+}
+
 fn excluded_ranges(events: &[(Range<usize>, MarkdownEvent)]) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     for (range, event) in events {
@@ -1079,6 +1150,57 @@ mod tests {
         });
     }
 
+    #[gpui::test]
+    fn math_cache_evicts_previous_style_variants(cx: &mut TestAppContext) {
+        struct TestWindow;
+
+        impl Render for TestWindow {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div()
+            }
+        }
+
+        ensure_theme_initialized(cx);
+        let (_, cx) = cx.add_window_view(|_, _| TestWindow);
+        let markdown = cx.new(|cx| {
+            Markdown::new_with_options(
+                "$x^2$".into(),
+                None,
+                None,
+                MarkdownOptions {
+                    render_math: true,
+                    ..Default::default()
+                },
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        let mut first_style = MarkdownStyle::default();
+        first_style.base_text_style.font_size = rems(1.0).into();
+        cx.draw(
+            Default::default(),
+            size(px(600.0), px(600.0)),
+            |_window, _cx| MarkdownElement::new(markdown.clone(), first_style),
+        );
+
+        let mut second_style = MarkdownStyle::default();
+        second_style.base_text_style.font_size = rems(2.0).into();
+        cx.draw(
+            Default::default(),
+            size(px(600.0), px(600.0)),
+            |_window, _cx| MarkdownElement::new(markdown.clone(), second_style),
+        );
+
+        markdown.update(cx, |markdown, _| {
+            assert_eq!(
+                markdown.math_state.entries.len(),
+                1,
+                "only the current font and color variant should remain cached"
+            );
+        });
+    }
+
     fn extract(markdown: &str) -> Vec<ParsedMarkdownMath> {
         let events = parse_markdown_with_options(markdown, false, false, false).events;
         extract_math_expressions(markdown, &events)
@@ -1126,6 +1248,41 @@ mod tests {
             formulas("$a$ and $b$"),
             vec![("a".to_string(), false), ("b".to_string(), false)]
         );
+    }
+
+    #[test]
+    fn extracts_backslash_delimited_math() {
+        assert_eq!(
+            formulas(r"before \(x^2\) after \[\frac{1}{2}\]"),
+            vec![
+                ("x^2".to_string(), false),
+                ("\\frac{1}{2}".to_string(), true),
+            ]
+        );
+    }
+
+    #[test]
+    fn ignores_escaped_backslash_math_delimiters() {
+        assert!(formulas(r"before \\(not math\\) after").is_empty());
+    }
+
+    #[test]
+    fn limits_the_number_of_rendered_formulas() {
+        let markdown = "$x$ ".repeat(MAX_MATH_EXPRESSIONS + 10);
+        assert_eq!(extract(&markdown).len(), MAX_MATH_EXPRESSIONS);
+    }
+
+    #[test]
+    fn formula_limit_preserves_source_order_across_fenced_and_inline_math() {
+        let markdown = format!(
+            "$first$\n{}",
+            "```math\nx\n```\n".repeat(MAX_MATH_EXPRESSIONS)
+        );
+        let expressions = extract(&markdown);
+
+        assert_eq!(expressions.len(), MAX_MATH_EXPRESSIONS);
+        assert_eq!(expressions[0].contents.formula.as_ref(), "first");
+        assert!(!expressions[0].fenced);
     }
 
     #[test]
