@@ -171,12 +171,10 @@ impl PickerDelegate for AttachModalDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> gpui::Task<()> {
         cx.spawn(async move |this, cx| {
-            let Some(processes) = this
-                .read_with(cx, |this, _| this.delegate.candidates.clone())
-                .ok()
-            else {
+            let Some(this) = this.upgrade() else {
                 return;
             };
+            let processes = this.read_with(cx, |this, _| this.delegate.candidates.clone());
 
             let matches = fuzzy::match_strings(
                 &processes
@@ -215,8 +213,7 @@ impl PickerDelegate for AttachModalDelegate {
                     delegate.selected_index =
                         delegate.selected_index.min(delegate.matches.len() - 1);
                 }
-            })
-            .ok();
+            });
         })
     }
 
@@ -254,11 +251,11 @@ impl PickerDelegate for AttachModalDelegate {
                     }
                 }
 
-                let workspace = self.workspace.clone();
-                let Some(panel) = workspace
-                    .update(cx, |workspace, cx| workspace.panel::<DebugPanel>(cx))
-                    .ok()
-                    .flatten()
+                let Some(workspace) = self.workspace.upgrade() else {
+                    return;
+                };
+                let Some(panel) =
+                    workspace.update(cx, |workspace, cx| workspace.panel::<DebugPanel>(cx))
                 else {
                     return;
                 };
@@ -266,33 +263,23 @@ impl PickerDelegate for AttachModalDelegate {
                 let Some(adapter) = cx.read_global::<DapRegistry, _>(|registry, _| {
                     registry.adapter(&definition.adapter)
                 }) else {
+                    log::error!("debug adapter {} is not registered", definition.adapter);
                     return;
                 };
 
                 let definition = definition.clone();
                 cx.spawn_in(window, async move |this, cx| {
-                    let Ok(scenario) = adapter.config_from_zzz_format(definition).await else {
-                        return;
-                    };
+                    let scenario = adapter.config_from_zzz_format(definition).await?;
 
-                    panel
-                        .update_in(cx, |panel, window, cx| {
-                            panel.start_session(
-                                scenario,
-                                Default::default(),
-                                None,
-                                None,
-                                window,
-                                cx,
-                            );
-                        })
-                        .ok();
+                    panel.update_in(cx, |panel, window, cx| {
+                        panel.start_session(scenario, Default::default(), None, None, window, cx);
+                    })?;
                     this.update(cx, |_, cx| {
                         cx.emit(DismissEvent);
-                    })
-                    .ok();
+                    })?;
+                    anyhow::Ok(())
                 })
-                .detach();
+                .detach_and_log_err(cx);
             }
         }
     }
@@ -369,14 +356,18 @@ fn get_processes_for_project(project: &Entity<Project>, cx: &mut App) -> Task<Ar
     if let Some(remote_client) = project.remote_client() {
         let proto_client = remote_client.read(cx).proto_client();
         cx.background_spawn(async move {
-            let response = proto_client
+            let response = match proto_client
                 .request(proto::GetProcesses {
                     project_id: proto::REMOTE_SERVER_PROJECT_ID,
                 })
                 .await
-                .unwrap_or_else(|_| proto::GetProcessesResponse {
-                    processes: Vec::new(),
-                });
+            {
+                Ok(response) => response,
+                Err(error) => {
+                    log::error!("failed to get remote processes: {error:#}");
+                    return Arc::<[Candidate]>::from([]);
+                }
+            };
 
             let mut processes: Vec<Candidate> = response
                 .processes
