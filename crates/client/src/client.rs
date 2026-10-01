@@ -124,6 +124,18 @@ impl Settings for ClientSettings {
     }
 }
 
+fn url_host_and_port(url: &Url) -> Result<(String, u16)> {
+    let host = match url.host().context("missing host in rpc url")? {
+        url::Host::Domain(domain) => domain.to_owned(),
+        url::Host::Ipv4(address) => address.to_string(),
+        url::Host::Ipv6(address) => address.to_string(),
+    };
+    let port = url
+        .port_or_known_default()
+        .context("missing port in rpc url")?;
+    Ok((host, port))
+}
+
 #[derive(Deserialize, Default, RegisterSetting)]
 pub struct ProxySettings {
     pub proxy: Option<String>,
@@ -1109,13 +1121,10 @@ impl Client {
             let stream = gpui_tokio::Tokio::spawn_result(cx, {
                 let rpc_url = rpc_url.clone();
                 async move {
-                    let rpc_host = rpc_url
-                        .host_str()
-                        .zip(rpc_url.port_or_known_default())
-                        .context("missing host in rpc url")?;
+                    let (rpc_host, rpc_port) = url_host_and_port(&rpc_url)?;
                     Ok(match proxy {
-                        Some(proxy) => connect_proxy_stream(&proxy, rpc_host).await?,
-                        None => Box::new(TcpStream::connect(rpc_host).await?),
+                        Some(proxy) => connect_proxy_stream(&proxy, (&rpc_host, rpc_port)).await?,
+                        None => Box::new(TcpStream::connect((rpc_host.as_str(), rpc_port)).await?),
                     })
                 }
             })
@@ -1452,6 +1461,15 @@ mod tests {
             invalid_token
                 .to_string()
                 .contains("decoding stored access token")
+        );
+    }
+
+    #[test]
+    fn rpc_host_normalizes_ipv6_addresses() {
+        let url = Url::parse("http://[::1]:7331").expect("IPv6 RPC URL should parse");
+        assert_eq!(
+            url_host_and_port(&url).expect("IPv6 RPC host should be extracted"),
+            ("::1".to_owned(), 7331)
         );
     }
 

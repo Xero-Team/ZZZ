@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use base64::Engine;
 use httparse::{EMPTY_HEADER, Response};
+use std::net::Ipv6Addr;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufStream},
     net::TcpStream,
@@ -101,8 +102,13 @@ where
 
 fn make_request(target: (&str, u16), auth: Option<HttpProxyAuthorization<'_>>) -> String {
     let (host, port) = target;
+    let authority = if host.parse::<Ipv6Addr>().is_ok() {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
     let mut request = format!(
-        "CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\nProxy-Connection: Keep-Alive\r\n"
+        "CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\nProxy-Connection: Keep-Alive\r\n"
     );
     if let Some(HttpProxyAuthorization { username, password }) = auth {
         let auth =
@@ -167,7 +173,7 @@ where
 mod tests {
     use url::Url;
 
-    use super::{HttpProxyAuthorization, HttpProxyType, parse_http_proxy};
+    use super::{HttpProxyAuthorization, HttpProxyType, make_request, parse_http_proxy};
 
     #[test]
     fn test_parse_http_proxy() {
@@ -206,5 +212,12 @@ mod tests {
                 password: ""
             }))
         ))
+    }
+
+    #[test]
+    fn test_connect_request_brackets_ipv6_addresses() {
+        let request = make_request(("::1", 7331), None);
+        assert!(request.starts_with("CONNECT [::1]:7331 HTTP/1.1\r\n"));
+        assert!(request.contains("\r\nHost: [::1]:7331\r\n"));
     }
 }
