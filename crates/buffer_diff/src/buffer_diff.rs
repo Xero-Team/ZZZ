@@ -3453,18 +3453,17 @@ mod tests {
         match events.as_slice() {
             [
                 BufferDiffEvent::DiffChanged(DiffChanged {
-                    changed_range: _,
+                    changed_range,
                     base_text_changed_range,
                     extended_range: _,
                 }),
             ] => {
-                // TODO(cole) this seems like it should pass but currently fails (see compare_hunks)
-                // assert_eq!(
-                //     *changed_range,
-                //     Some(Anchor::min_max_range_for_buffer(
-                //         buffer.read_with(cx, |buffer, _| buffer.remote_id())
-                //     ))
-                // );
+                assert_eq!(
+                    changed_range
+                        .as_ref()
+                        .map(|range| range.to_point(&snapshot)),
+                    Some(Point::zero()..snapshot.max_point())
+                );
                 assert_eq!(*base_text_changed_range, Some(0..base_text.len()));
             }
             _ => panic!("unexpected events: {:?}", events),
