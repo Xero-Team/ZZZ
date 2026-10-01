@@ -7,6 +7,7 @@ mod modal_layer;
 mod multi_workspace;
 #[cfg(test)]
 mod multi_workspace_tests;
+mod notification_window_manager;
 pub mod notifications;
 pub mod pane;
 pub mod pane_group;
@@ -34,6 +35,9 @@ pub use multi_workspace::{
     PreviousThread, ProjectGroup, ProjectGroupKey, SerializedProjectGroupState, Sidebar,
     SidebarEvent, SidebarHandle, SidebarRenderState, SidebarSide, ToggleWorkspaceSidebar,
     sidebar_side_context_menu,
+};
+pub use notification_window_manager::{
+    NotificationWindowData, NotificationWindowDisplay, NotificationWindowManager,
 };
 pub use path_list::{PathList, SerializedPathList};
 pub use remote::{

@@ -1,36 +1,38 @@
+use crate::{TintColor, prelude::*};
 use gpui::{
-    App, Context, EventEmitter, IntoElement, PlatformDisplay, Size, Window,
+    App, Context, EventEmitter, IntoElement, PlatformDisplay, Render, Size, Window,
     WindowBackgroundAppearance, WindowBounds, WindowDecorations, WindowKind, WindowOptions,
     linear_color_stop, linear_gradient, point,
 };
-use i18n as app_i18n;
 use release_channel::ReleaseChannel;
 use std::rc::Rc;
-use ui::{Render, prelude::*};
 
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
-
-pub struct AgentNotification {
+/// A transient notification rendered in a borderless popup window.
+pub struct NotificationWindow {
     title: SharedString,
     caption: SharedString,
     icon: IconName,
-    project_name: Option<SharedString>,
+    context: Option<SharedString>,
+    view_label: SharedString,
+    dismiss_label: SharedString,
 }
 
-impl AgentNotification {
+impl NotificationWindow {
     pub fn new(
         title: impl Into<SharedString>,
         caption: impl Into<SharedString>,
         icon: IconName,
-        project_name: Option<impl Into<SharedString>>,
+        context: Option<impl Into<SharedString>>,
+        view_label: impl Into<SharedString>,
+        dismiss_label: impl Into<SharedString>,
     ) -> Self {
         Self {
             title: title.into(),
             caption: caption.into(),
             icon,
-            project_name: project_name.map(|name| name.into()),
+            context: context.map(|value| value.into()),
+            view_label: view_label.into(),
+            dismiss_label: dismiss_label.into(),
         }
     }
 
@@ -72,24 +74,24 @@ impl AgentNotification {
     }
 }
 
-pub enum AgentNotificationEvent {
+pub enum NotificationWindowEvent {
     Accepted,
     Dismissed,
 }
 
-impl EventEmitter<AgentNotificationEvent> for AgentNotification {}
+impl EventEmitter<NotificationWindowEvent> for NotificationWindow {}
 
-impl AgentNotification {
+impl NotificationWindow {
     pub fn accept(&mut self, cx: &mut Context<Self>) {
-        cx.emit(AgentNotificationEvent::Accepted);
+        cx.emit(NotificationWindowEvent::Accepted);
     }
 
     pub fn dismiss(&mut self, cx: &mut Context<Self>) {
-        cx.emit(AgentNotificationEvent::Dismissed);
+        cx.emit(NotificationWindowEvent::Dismissed);
     }
 }
 
-impl Render for AgentNotification {
+impl Render for NotificationWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let ui_font = theme_settings::setup_ui_font(window, cx);
         let line_height = window.line_height();
@@ -110,7 +112,7 @@ impl Render for AgentNotification {
         };
 
         h_flex()
-            .id("agent-notification")
+            .id("notification-window")
             .size_full()
             .p_3()
             .gap_4()
@@ -152,28 +154,20 @@ impl Render for AgentNotification {
                                     .text_size(px(12.))
                                     .text_color(cx.theme().colors().text_muted)
                                     .truncate()
-                                    .when_some(
-                                        self.project_name.clone(),
-                                        |description, project_name| {
-                                            description.child(
-                                                h_flex()
-                                                    .gap_1p5()
-                                                    .child(
-                                                        div()
-                                                            .max_w_16()
-                                                            .truncate()
-                                                            .child(project_name),
-                                                    )
-                                                    .child(
-                                                        div().size(px(3.)).rounded_full().bg(cx
-                                                            .theme()
-                                                            .colors()
-                                                            .text
-                                                            .opacity(0.5)),
-                                                    ),
-                                            )
-                                        },
-                                    )
+                                    .when_some(self.context.clone(), |description, context| {
+                                        description.child(
+                                            h_flex()
+                                                .gap_1p5()
+                                                .child(div().max_w_16().truncate().child(context))
+                                                .child(
+                                                    div().size(px(3.)).rounded_full().bg(cx
+                                                        .theme()
+                                                        .colors()
+                                                        .text
+                                                        .opacity(0.5)),
+                                                ),
+                                        )
+                                    })
                                     .child(self.caption.clone())
                                     .child(gradient_overflow()),
                             ),
@@ -184,26 +178,23 @@ impl Render for AgentNotification {
                     .gap_1()
                     .items_center()
                     .child(
-                        Button::new("open", tr(cx, "agent_ui.notification.view", "View"))
-                            .style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                        Button::new("open", self.view_label.clone())
+                            .style(ButtonStyle::Tinted(TintColor::Accent))
                             .full_width()
                             .on_click({
-                                cx.listener(move |this, _event, _, cx| {
+                                cx.listener(|this, _event, _, cx| {
                                     this.accept(cx);
                                 })
                             }),
                     )
                     .child(
-                        Button::new(
-                            "dismiss",
-                            tr(cx, "agent_ui.notification.dismiss", "Dismiss"),
-                        )
-                        .full_width()
-                        .on_click({
-                            cx.listener(move |this, _event, _, cx| {
-                                this.dismiss(cx);
-                            })
-                        }),
+                        Button::new("dismiss", self.dismiss_label.clone())
+                            .full_width()
+                            .on_click({
+                                cx.listener(|this, _event, _, cx| {
+                                    this.dismiss(cx);
+                                })
+                            }),
                     ),
             )
     }

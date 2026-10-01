@@ -32,9 +32,9 @@ use futures::FutureExt as _;
 use gpui::{
     Action, Animation, AnimationExt, AnyElement, AnyView, App, ClickEvent, ClipboardItem,
     CursorStyle, ElementId, Empty, Entity, EventEmitter, FocusHandle, Focusable, Hsla, ListOffset,
-    ListState, ObjectFit, PlatformDisplay, ScrollHandle, SharedString, StyledText, Subscription,
-    Task, TextRun, TextStyle, WeakEntity, Window, WindowHandle, div, ease_in_out, img,
-    linear_color_stop, linear_gradient, list, point, pulsating_between,
+    ListState, ObjectFit, ScrollHandle, SharedString, StyledText, Subscription, Task, TextRun,
+    TextStyle, WeakEntity, Window, div, ease_in_out, img, linear_color_stop, linear_gradient, list,
+    point, pulsating_between,
 };
 use i18n as app_i18n;
 use language::{Buffer, Language, Rope};
@@ -74,7 +74,8 @@ use util::{
 };
 use workspace::PathList;
 use workspace::{
-    CollaboratorId, MultiWorkspace, NewTerminal, Workspace, path_link::sanitize_path_text,
+    CollaboratorId, MultiWorkspace, NewTerminal, NotificationWindowData, NotificationWindowDisplay,
+    NotificationWindowManager, Workspace, path_link::sanitize_path_text,
 };
 use zzz_actions::agent::{Chat, ToggleModelSelector};
 use zzz_actions::assistant::OpenRulesLibrary;
@@ -522,8 +523,7 @@ pub struct ConversationView {
     pub(crate) root_session_id: Option<acp::SessionId>,
     server_state: ServerState,
     focus_handle: FocusHandle,
-    notifications: Vec<WindowHandle<AgentNotification>>,
-    notification_subscriptions: HashMap<WindowHandle<AgentNotification>, Vec<Subscription>>,
+    notification_windows: NotificationWindowManager,
     auth_task: Option<Task<()>>,
     /// Cache + worktree snapshot for resolving paths in markdown code spans.
     /// Shared with the child [`ThreadView`] when one is constructed.
@@ -758,13 +758,7 @@ impl ConversationView {
             if let Some(connected) = this.as_connected() {
                 connected.close_all_sessions(cx).detach();
             }
-            for window in this.notifications.drain(..) {
-                window
-                    .update(cx, |_, window, _| {
-                        window.remove_window();
-                    })
-                    .ok();
-            }
+            this.notification_windows.dismiss_all(cx);
         })
         .detach();
 
@@ -794,8 +788,7 @@ impl ConversationView {
                 window,
                 cx,
             ),
-            notifications: Vec::new(),
-            notification_subscriptions: HashMap::default(),
+            notification_windows: NotificationWindowManager::default(),
             auth_task: None,
             code_span_resolver,
             request_elicitation_form_states: HashMap::default(),
@@ -2578,7 +2571,7 @@ impl ConversationView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.notifications.is_empty() {
+        if !self.notification_windows.is_empty() {
             return;
         }
 
@@ -2594,69 +2587,17 @@ impl ConversationView {
             return;
         };
         let root_thread = root_thread.read(cx).thread.read(cx);
-        let root_session_id = root_thread.session_id().clone();
-        let root_work_dirs = root_thread.work_dirs().cloned();
         let root_title = root_thread.title();
 
-        let title = root_title
-            .clone()
-            .unwrap_or_else(|| self.agent.agent_id().0);
+        let title = root_title.unwrap_or_else(|| self.agent.agent_id().0);
 
-        match settings.notify_when_agent_waiting {
-            NotifyWhenAgentWaiting::PrimaryScreen => {
-                window.request_attention();
-                if let Some(primary) = cx.primary_display() {
-                    self.pop_up(
-                        icon,
-                        caption.into(),
-                        title,
-                        root_session_id,
-                        root_work_dirs,
-                        root_title,
-                        window,
-                        primary,
-                        cx,
-                    );
-                }
-            }
-            NotifyWhenAgentWaiting::AllScreens => {
-                window.request_attention();
-                let caption = caption.into();
-                for screen in cx.displays() {
-                    self.pop_up(
-                        icon,
-                        caption.clone(),
-                        title.clone(),
-                        root_session_id.clone(),
-                        root_work_dirs.clone(),
-                        root_title.clone(),
-                        window,
-                        screen,
-                        cx,
-                    );
-                }
-            }
-            NotifyWhenAgentWaiting::Never => {
-                // Don't show anything
-            }
-        }
-    }
+        let display = match settings.notify_when_agent_waiting {
+            NotifyWhenAgentWaiting::PrimaryScreen => NotificationWindowDisplay::Primary,
+            NotifyWhenAgentWaiting::AllScreens => NotificationWindowDisplay::All,
+            NotifyWhenAgentWaiting::Never => return,
+        };
 
-    fn pop_up(
-        &mut self,
-        icon: IconName,
-        caption: SharedString,
-        title: SharedString,
-        root_session_id: acp::SessionId,
-        root_work_dirs: Option<PathList>,
-        root_title: Option<SharedString>,
-        window: &mut Window,
-        screen: Rc<dyn PlatformDisplay>,
-        cx: &mut Context<Self>,
-    ) {
-        let options = AgentNotification::window_options(screen, cx);
-
-        let project_name = self.workspace.upgrade().and_then(|workspace| {
+        let context = self.workspace.upgrade().and_then(|workspace| {
             workspace
                 .read(cx)
                 .project()
@@ -2665,127 +2606,108 @@ impl ConversationView {
                 .next()
                 .map(|worktree| worktree.read(cx).root_name_str().to_owned())
         });
+        let data = NotificationWindowData {
+            title,
+            caption: caption.into(),
+            context: context.map(Into::into),
+            icon,
+            view_label: app_i18n::tr(cx, "agent_ui.notification.view", "View").into(),
+            dismiss_label: app_i18n::tr(cx, "agent_ui.notification.dismiss", "Dismiss").into(),
+        };
 
-        if let Some(screen_window) = cx
-            .open_window(options, |_window, cx| {
-                cx.new(|_cx| {
-                    AgentNotification::new(title.clone(), caption.clone(), icon, project_name)
-                })
-            })
-            .log_err()
-            && let Some(pop_up) = screen_window.entity(cx).log_err()
+        let root_workspace = self.workspace.clone();
+        let root_workspace_for_open = root_workspace.clone();
+        let root_connection = self.connection_key.clone();
+        let root_session_id = root_thread.session_id().clone();
+        let root_work_dirs = root_thread.work_dirs().cloned();
+        let root_title = root_thread.title();
+        let on_event = move |this: &mut ConversationView,
+                             event: &AgentNotificationEvent,
+                             window: &mut Window,
+                             cx: &mut Context<ConversationView>| match event
         {
-            self.notification_subscriptions
-                .entry(screen_window)
-                .or_insert_with(Vec::new)
-                .push(cx.subscribe_in(&pop_up, window, {
-                    move |this, _, event, window, cx| match event {
-                        AgentNotificationEvent::Accepted => {
-                            let Some(handle) = window.window_handle().downcast::<MultiWorkspace>()
-                            else {
-                                log::error!("root view should be a MultiWorkspace");
-                                return;
-                            };
-                            cx.activate(true);
+            AgentNotificationEvent::Accepted => {
+                let Some(handle) = window.window_handle().downcast::<MultiWorkspace>() else {
+                    log::error!("root view should be a MultiWorkspace");
+                    return;
+                };
+                cx.activate(true);
 
-                            let workspace_handle = this.workspace.clone();
-                            let agent = this.connection_key.clone();
-                            let root_session_id = root_session_id.clone();
-                            let root_work_dirs = root_work_dirs.clone();
-                            let root_title = root_title.clone();
-
-                            cx.defer(move |cx| {
-                                handle
-                                    .update(cx, |multi_workspace, window, cx| {
-                                        window.activate_window();
-                                        if let Some(workspace) = workspace_handle.upgrade() {
-                                            multi_workspace.activate(
-                                                workspace.clone(),
-                                                None,
+                let workspace_handle = root_workspace.clone();
+                let agent = root_connection.clone();
+                let root_session_id = root_session_id.clone();
+                let root_work_dirs = root_work_dirs.clone();
+                let root_title = root_title.clone();
+                cx.defer(move |cx| {
+                    handle
+                        .update(cx, |multi_workspace, window, cx| {
+                            window.activate_window();
+                            if let Some(workspace) = workspace_handle.upgrade() {
+                                multi_workspace.activate(workspace.clone(), None, window, cx);
+                                workspace.update(cx, |workspace, cx| {
+                                    workspace.reveal_panel::<AgentPanel>(window, cx);
+                                    if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
+                                        panel.update(cx, |panel, cx| {
+                                            panel.load_agent_thread(
+                                                agent.clone(),
+                                                root_session_id.clone(),
+                                                root_work_dirs.clone(),
+                                                root_title.clone(),
+                                                true,
+                                                "agent_panel",
                                                 window,
                                                 cx,
                                             );
-                                            workspace.update(cx, |workspace, cx| {
-                                                workspace.reveal_panel::<AgentPanel>(window, cx);
-                                                if let Some(panel) =
-                                                    workspace.panel::<AgentPanel>(cx)
-                                                {
-                                                    panel.update(cx, |panel, cx| {
-                                                        panel.load_agent_thread(
-                                                            agent.clone(),
-                                                            root_session_id.clone(),
-                                                            root_work_dirs.clone(),
-                                                            root_title.clone(),
-                                                            true,
-                                                            "agent_panel",
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
-                                                workspace.focus_panel::<AgentPanel>(window, cx);
-                                            });
-                                        }
-                                    })
-                                    .log_err();
-                            });
+                                        });
+                                    }
+                                    workspace.focus_panel::<AgentPanel>(window, cx);
+                                });
+                            }
+                        })
+                        .log_err();
+                });
+                this.notification_windows.dismiss_all(cx);
+            }
+            AgentNotificationEvent::Dismissed => {
+                this.notification_windows.dismiss_all(cx);
+            }
+        };
 
-                            this.dismiss_notifications(cx);
-                        }
-                        AgentNotificationEvent::Dismissed => {
-                            this.dismiss_notifications(cx);
-                        }
-                    }
-                }));
-
-            self.notifications.push(screen_window);
-
-            let dismiss_if_visible = {
-                let pop_up_weak = pop_up.downgrade();
+        let on_open = move |pop_up: &Entity<AgentNotification>,
+                            source_window: &mut Window,
+                            cx: &mut Context<ConversationView>| {
+            let pop_up_weak = pop_up.downgrade();
+            let dismiss_if_visible =
                 move |this: &ConversationView,
                       window: &mut Window,
                       cx: &mut Context<ConversationView>| {
                     if this.agent_status_visible(window, cx)
                         && let Some(pop_up) = pop_up_weak.upgrade()
                     {
-                        pop_up.update(cx, |notification, cx| {
-                            notification.dismiss(cx);
-                        });
+                        pop_up.update(cx, |notification, cx| notification.dismiss(cx));
                     }
-                }
-            };
-
-            let subscriptions = self
-                .notification_subscriptions
-                .entry(screen_window)
-                .or_insert_with(Vec::new);
-
-            subscriptions.push({
+                };
+            let mut subscriptions = vec![cx.observe_window_activation(source_window, {
                 let dismiss_if_visible = dismiss_if_visible.clone();
-                cx.observe_window_activation(window, move |this, window, cx| {
-                    dismiss_if_visible(this, window, cx);
-                })
-            });
+                move |this, window, cx| dismiss_if_visible(this, window, cx)
+            })];
 
-            if let Some(multi_workspace) = window.root::<MultiWorkspace>().flatten() {
+            if let Some(multi_workspace) = source_window.root::<MultiWorkspace>().flatten() {
                 let dismiss_if_visible = dismiss_if_visible.clone();
                 subscriptions.push(cx.observe_in(
                     &multi_workspace,
-                    window,
-                    move |this, _, window, cx| {
-                        dismiss_if_visible(this, window, cx);
-                    },
+                    source_window,
+                    move |this, _, window, cx| dismiss_if_visible(this, window, cx),
                 ));
             }
 
-            if let Some(panel) = self
-                .workspace
+            if let Some(panel) = root_workspace_for_open
                 .upgrade()
                 .and_then(|workspace| workspace.read(cx).panel::<AgentPanel>(cx))
             {
                 subscriptions.push(cx.subscribe_in(
                     &panel,
-                    window,
+                    source_window,
                     move |this, _, event: &AgentPanelEvent, window, cx| match event {
                         AgentPanelEvent::ActiveViewChanged | AgentPanelEvent::ThreadFocused => {
                             dismiss_if_visible(this, window, cx);
@@ -2795,19 +2717,11 @@ impl ConversationView {
                     },
                 ));
             }
-        }
-    }
+            subscriptions
+        };
 
-    fn dismiss_notifications(&mut self, cx: &mut Context<Self>) {
-        for window in self.notifications.drain(..) {
-            window
-                .update(cx, |_, window, _| {
-                    window.remove_window();
-                })
-                .ok();
-
-            self.notification_subscriptions.remove(&window);
-        }
+        self.notification_windows
+            .show(data, display, true, window, cx, on_event, on_open);
     }
 
     fn agent_ui_font_size_changed(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
