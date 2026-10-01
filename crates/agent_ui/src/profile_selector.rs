@@ -90,16 +90,8 @@ impl ProfileSelector {
             return;
         }
 
-        let current_profile_id = self.provider.profile_id(cx);
-        let current_index = profiles
-            .keys()
-            .position(|id| id == &current_profile_id)
-            .unwrap_or(0);
-
-        let next_index = (current_index + 1) % profiles.len();
-
-        if let Some((next_profile_id, _)) = profiles.get_index(next_index) {
-            self.provider.set_profile(next_profile_id.clone(), cx);
+        if let Some(next_profile_id) = next_profile_id(&profiles, &self.provider.profile_id(cx)) {
+            self.provider.set_profile(next_profile_id, cx);
             cx.notify();
         }
     }
@@ -109,7 +101,9 @@ impl ProfileSelector {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<Picker<ProfilePickerDelegate>> {
-        if self.picker.is_none() {
+        let picker = if let Some(picker) = &self.picker {
+            picker.clone()
+        } else {
             let delegate = ProfilePickerDelegate::new(
                 self.fs.clone(),
                 self.provider.clone(),
@@ -127,28 +121,35 @@ impl ProfileSelector {
                     .max_height(Some(rems(20.).into()))
             });
 
-            self.picker = Some(picker);
-        }
+            self.picker = Some(picker.clone());
+            picker
+        };
 
         if self.pending_refresh {
-            if let Some(picker) = &self.picker {
-                let profiles = AgentProfile::available_profiles(cx);
-                self.profiles = profiles.clone();
-                picker.update(cx, |picker, cx| {
-                    let query = picker.query(cx);
-                    picker
-                        .delegate
-                        .refresh_profiles(profiles.clone(), query, cx);
-                });
-            }
+            let profiles = AgentProfile::available_profiles(cx);
+            self.profiles = profiles.clone();
+            picker.update(cx, |picker, cx| {
+                let query = picker.query(cx);
+                picker
+                    .delegate
+                    .refresh_profiles(profiles.clone(), query, cx);
+            });
             self.pending_refresh = false;
         }
 
-        self.picker
-            .as_ref()
-            .expect("value should have the expected type")
-            .clone()
+        picker
     }
+}
+
+fn next_profile_id(
+    profiles: &AvailableProfiles,
+    current_profile_id: &AgentProfileId,
+) -> Option<AgentProfileId> {
+    let next_index = profiles
+        .keys()
+        .position(|id| id == current_profile_id)
+        .map_or(0, |current_index| (current_index + 1) % profiles.len());
+    profiles.get_index(next_index).map(|(id, _)| id.clone())
 }
 
 impl Focusable for ProfileSelector {
@@ -740,6 +741,32 @@ mod tests {
     use super::*;
     use fs::FakeFs;
     use gpui::TestAppContext;
+
+    fn profiles(ids: &[&str]) -> AvailableProfiles {
+        ids.iter()
+            .map(|id| (AgentProfileId((*id).into()), SharedString::from(*id)))
+            .collect()
+    }
+
+    #[test]
+    fn unknown_profile_cycles_to_first_available_profile() {
+        let profiles = profiles(&["write", "ask"]);
+
+        assert_eq!(
+            next_profile_id(&profiles, &AgentProfileId("missing".into())),
+            Some(AgentProfileId("write".into()))
+        );
+    }
+
+    #[test]
+    fn last_profile_cycles_to_first_profile() {
+        let profiles = profiles(&["write", "ask"]);
+
+        assert_eq!(
+            next_profile_id(&profiles, &AgentProfileId("ask".into())),
+            Some(AgentProfileId("write".into()))
+        );
+    }
 
     #[gpui::test]
     fn entries_include_custom_profiles(_cx: &mut TestAppContext) {
