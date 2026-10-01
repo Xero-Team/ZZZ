@@ -26,7 +26,6 @@ use rope::Point;
 use std::{
     cell::RefCell,
     ffi::OsStr,
-    fmt::Write,
     ops::{Range, RangeInclusive},
     path::{Path, PathBuf},
     rc::Rc,
@@ -563,11 +562,12 @@ impl MentionSet {
             let crease_id = editor.update(cx, |editor, cx| {
                 let crease_ids = editor.insert_creases(vec![crease.clone()], cx);
                 editor.fold_creases(vec![crease], false, window, cx);
-                crease_ids
-                    .first()
-                    .copied()
-                    .expect("copied should be present")
+                crease_ids.into_iter().next()
             });
+
+            let Some(crease_id) = crease_id else {
+                continue;
+            };
 
             self.mentions.insert(
                 crease_id,
@@ -878,6 +878,26 @@ mod tests {
     }
 
     #[test]
+    fn content_type_ignores_parameters_and_case() {
+        assert_eq!(
+            classify_content_type("Application/JSON; charset=utf-8"),
+            ContentType::Json
+        );
+        assert_eq!(
+            classify_content_type("text/plain; charset=UTF-8"),
+            ContentType::Plaintext
+        );
+    }
+
+    #[test]
+    fn unknown_content_type_falls_back_to_html() {
+        assert_eq!(
+            classify_content_type("application/octet-stream"),
+            ContentType::Html
+        );
+    }
+
+    #[test]
     fn test_disambiguated_labels_dedupe_identical_uris() {
         // Mentioning the same file twice must not escalate the duplicates to
         // their full path. Distinct files sharing a base name still disambiguate.
@@ -922,14 +942,14 @@ pub(crate) async fn insert_images_as_context(
                 let snapshot = editor.snapshot(window, cx);
                 let (cursor_anchor, buffer_snapshot) = snapshot
                     .buffer_snapshot()
-                    .anchor_to_buffer_anchor(editor.selections.newest_anchor().start)
-                    .expect("value should be present");
+                    .anchor_to_buffer_anchor(editor.selections.newest_anchor().start)?;
                 let text_anchor = cursor_anchor.bias_left(buffer_snapshot);
                 let multibuffer_anchor = snapshot.buffer_snapshot().anchor_in_excerpt(text_anchor);
                 editor.insert(&format!("{replacement_text} "), window, cx);
-                (text_anchor, multibuffer_anchor)
+                Some((text_anchor, multibuffer_anchor))
             })
-            .ok()
+            .log_err()
+            .flatten()
         else {
             break;
         };
@@ -1111,7 +1131,7 @@ pub(crate) fn insert_crease_for_mention(
         let ids = editor.insert_creases(vec![crease.clone()], cx);
         editor.fold_creases(vec![crease], false, window, cx);
 
-        Some(ids[0])
+        ids.into_iter().next()
     })?;
 
     Some((crease_id, tx))
@@ -1273,7 +1293,7 @@ fn full_mention_for_directory(
                             &cx,
                         )
                         .await
-                        .ok()?;
+                        .log_err()?;
 
                         Some((rel_path, full_path, buffer_content.text, buffer))
                     })
@@ -1305,7 +1325,11 @@ fn render_directory_contents(entries: Vec<(Arc<RelPath>, String, String)>) -> St
     let mut output = String::new();
     for (_relative_path, full_path, content) in entries {
         let fence = codeblock_fence_for_path(Some(&full_path), None);
-        write!(output, "\n{fence}\n{content}\n```").expect("value should be present");
+        output.push('\n');
+        output.push_str(&fence);
+        output.push('\n');
+        output.push_str(&content);
+        output.push_str("\n```");
     }
     output
 }
@@ -1419,13 +1443,29 @@ impl Render for ImageHover {
     }
 }
 
-async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> Result<String> {
-    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-    enum ContentType {
-        Html,
-        Plaintext,
-        Json,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum ContentType {
+    Html,
+    Plaintext,
+    Json,
+}
+
+fn classify_content_type(content_type: &str) -> ContentType {
+    match content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "text/plain" => ContentType::Plaintext,
+        "application/json" => ContentType::Json,
+        _ => ContentType::Html,
     }
+}
+
+async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> Result<String> {
     use html_to_markdown::{TagHandler, convert_html_to_markdown, markdown};
 
     let url = if !url.starts_with("https://") && !url.starts_with("http://") {
@@ -1442,7 +1482,7 @@ async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> 
         .await
         .context("error reading response body")?;
 
-    if response.status().is_client_error() {
+    if !response.status().is_success() {
         let text = String::from_utf8_lossy(body.as_slice());
         anyhow::bail!(
             "status error {}, response: {text:?}",
@@ -1456,12 +1496,7 @@ async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> 
     let content_type = content_type
         .to_str()
         .context("invalid Content-Type header")?;
-    let content_type = match content_type {
-        "text/html" => ContentType::Html,
-        "text/plain" => ContentType::Plaintext,
-        "application/json" => ContentType::Json,
-        _ => ContentType::Html,
-    };
+    let content_type = classify_content_type(content_type);
 
     match content_type {
         ContentType::Html => {
