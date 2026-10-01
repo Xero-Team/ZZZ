@@ -135,8 +135,9 @@ impl McpServer {
 
                             Ok(ToolResponse {
                                 content: output.content,
-                                structured_content: serde_json::to_value(output.structured_content)
-                                    .unwrap_or_default(),
+                                structured_content: serde_json::to_value(
+                                    output.structured_content,
+                                )?,
                             })
                         }),
                         Err(err) => Task::ready(Err(err.into())),

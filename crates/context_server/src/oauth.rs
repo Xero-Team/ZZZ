@@ -1409,7 +1409,9 @@ impl OAuthTokenProvider for McpOAuthTokenProvider {
                     session.tokens = new_tokens;
 
                     if let Some(ref tx) = self.token_refresh_tx {
-                        tx.unbounded_send(session.clone()).ok();
+                        if tx.unbounded_send(session.clone()).is_err() {
+                            log::debug!("OAuth session refresh receiver was dropped");
+                        }
                     }
                 }
 

@@ -394,13 +394,14 @@ impl Client {
         timeout: Option<Duration>,
     ) -> Result<T> {
         let id = self.next_id.fetch_add(1, SeqCst);
+        let request_id = RequestId::Int(id);
         let request = serde_json::to_string(&Request {
             jsonrpc: JSON_RPC_VERSION,
-            id: RequestId::Int(id),
+            id: request_id.clone(),
             method,
             params,
         })
-        .expect("serializing to JSON cannot fail");
+        .context("serializing context server request")?;
 
         let (tx, rx) = oneshot::channel();
         let handle_response = self
@@ -410,12 +411,23 @@ impl Client {
             .context("server shut down")
             .map(|handlers| {
                 handlers.insert(
-                    RequestId::Int(id),
+                    request_id.clone(),
                     Box::new(move |result| {
-                        let _ = tx.send(result);
+                        if tx.send(result).is_err() {
+                            log::debug!("Context server response receiver was dropped");
+                        }
                     }),
                 );
             });
+        let _remove_response_handler = util::defer({
+            let response_handlers = self.response_handlers.clone();
+            let request_id = request_id.clone();
+            move || {
+                if let Some(handlers) = response_handlers.lock().as_mut() {
+                    handlers.remove(&request_id);
+                }
+            }
+        });
 
         let send = self
             .outbound_tx
@@ -492,7 +504,7 @@ impl Client {
             method,
             params,
         })
-        .expect("serializing to JSON cannot fail");
+        .context("serializing context server notification")?;
         self.outbound_tx.try_send(notification)?;
         Ok(())
     }
