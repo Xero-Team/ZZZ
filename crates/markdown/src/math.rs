@@ -69,6 +69,16 @@ struct MathCacheKey {
     color: u32,
 }
 
+impl MathCacheKey {
+    fn new(contents: ParsedMarkdownMathContents, font_size: Pixels, color: Hsla) -> Self {
+        Self {
+            contents,
+            font_size_bits: font_size.as_f32().to_bits(),
+            color: pack_color(color),
+        }
+    }
+}
+
 struct CachedMath {
     render_image: Arc<OnceLock<anyhow::Result<Arc<RenderImage>>>>,
     _task: Task<()>,
@@ -99,15 +109,9 @@ impl MathState {
         self.entries
             .retain(|key, _| current.contains(&key.contents));
 
-        let font_size_bits = font_size.as_f32().to_bits();
-        let color_bits = pack_color(color);
         let svg_renderer = cx.svg_renderer();
         for math in expressions {
-            let key = MathCacheKey {
-                contents: math.contents.clone(),
-                font_size_bits,
-                color: color_bits,
-            };
+            let key = MathCacheKey::new(math.contents.clone(), font_size, color);
             if self.entries.contains_key(&key) {
                 continue;
             }
@@ -146,7 +150,9 @@ impl CachedMath {
                     render_math_image(&contents, font_size, color, svg_renderer)
                 })
                 .await;
-            let _ = render_image_clone.set(value);
+            if render_image_clone.set(value).is_err() {
+                log::debug!("math render result was already initialized");
+            }
             this.update(cx, |_, cx| cx.notify()).ok();
         });
 
@@ -279,11 +285,7 @@ pub(crate) fn render_math(
     color: Hsla,
     cx: &App,
 ) -> AnyElement {
-    let key = MathCacheKey {
-        contents: math.contents.clone(),
-        font_size_bits: font_size.as_f32().to_bits(),
-        color: pack_color(color),
-    };
+    let key = MathCacheKey::new(math.contents.clone(), font_size, color);
 
     // Formulas that only define macros (or were otherwise reduced to nothing)
     // draw no output.
@@ -329,6 +331,31 @@ fn fallback_formula(math: &ParsedMarkdownMath) -> AnyElement {
         .into_any_element()
 }
 
+/// Record a formula unless its trimmed body is empty.
+fn push_expression(
+    expressions: &mut Vec<ParsedMarkdownMath>,
+    source: &str,
+    content_range: Range<usize>,
+    source_range: Range<usize>,
+    kind: MarkdownMathKind,
+    fenced: bool,
+) {
+    let contents = trimmed_contents(source, content_range.clone());
+    if contents.trim().is_empty() {
+        return;
+    }
+    expressions.push(ParsedMarkdownMath {
+        source_range,
+        content_range,
+        kind,
+        fenced,
+        contents: ParsedMarkdownMathContents {
+            formula: contents,
+            display: kind.is_display(),
+        },
+    });
+}
+
 /// Extract math expressions from the markdown source.
 ///
 /// Only `$...$`, `$$...$$` and ```` ```math ```` / ```` ```latex ```` fenced
@@ -351,17 +378,14 @@ pub(crate) fn extract_math_expressions(
         if !is_math_fence(info.as_ref()) {
             continue;
         }
-        let contents = trimmed_contents(source, metadata.content_range.clone());
-        expressions.push(ParsedMarkdownMath {
-            source_range: range.clone(),
-            content_range: metadata.content_range.clone(),
-            kind: MarkdownMathKind::Display,
-            fenced: true,
-            contents: ParsedMarkdownMathContents {
-                formula: contents,
-                display: true,
-            },
-        });
+        push_expression(
+            &mut expressions,
+            source,
+            metadata.content_range.clone(),
+            range.clone(),
+            MarkdownMathKind::Display,
+            true,
+        );
     }
 
     let bytes = source.as_bytes();
@@ -377,19 +401,14 @@ pub(crate) fn extract_math_expressions(
                 if let Some((content_range, source_range)) =
                     scan_display_math(bytes, &excluded, cursor)
                 {
-                    let contents = trimmed_contents(source, content_range.clone());
-                    if !contents.trim().is_empty() {
-                        expressions.push(ParsedMarkdownMath {
-                            source_range: source_range.clone(),
-                            content_range,
-                            kind: MarkdownMathKind::Display,
-                            fenced: false,
-                            contents: ParsedMarkdownMathContents {
-                                formula: contents,
-                                display: true,
-                            },
-                        });
-                    }
+                    push_expression(
+                        &mut expressions,
+                        source,
+                        content_range,
+                        source_range.clone(),
+                        MarkdownMathKind::Display,
+                        false,
+                    );
                     cursor = source_range.end;
                 } else {
                     cursor += 2;
@@ -399,19 +418,14 @@ pub(crate) fn extract_math_expressions(
                 if let Some((content_range, source_range)) =
                     scan_inline_math(bytes, &excluded, cursor)
                 {
-                    let contents = trimmed_contents(source, content_range.clone());
-                    if !contents.trim().is_empty() {
-                        expressions.push(ParsedMarkdownMath {
-                            source_range: source_range.clone(),
-                            content_range,
-                            kind: MarkdownMathKind::Inline,
-                            fenced: false,
-                            contents: ParsedMarkdownMathContents {
-                                formula: contents,
-                                display: false,
-                            },
-                        });
-                    }
+                    push_expression(
+                        &mut expressions,
+                        source,
+                        content_range,
+                        source_range.clone(),
+                        MarkdownMathKind::Inline,
+                        false,
+                    );
                     cursor = source_range.end;
                 } else {
                     cursor += 1;
