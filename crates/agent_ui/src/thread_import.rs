@@ -700,16 +700,29 @@ fn import_threads_from_other_channels_in(
 }
 
 fn channel_has_threads(database_dir: &std::path::Path, channel: ReleaseChannel) -> bool {
+    match query_channel_has_threads(database_dir, channel) {
+        Ok(has_threads) => has_threads,
+        Err(error) => {
+            log::warn!(
+                "Failed to inspect {} channel database for threads: {error:#}",
+                channel.dev_name()
+            );
+            false
+        }
+    }
+}
+
+fn query_channel_has_threads(
+    database_dir: &std::path::Path,
+    channel: ReleaseChannel,
+) -> anyhow::Result<bool> {
     let db_path = db::db_path(database_dir, channel);
     if !db_path.exists() {
-        return false;
+        return Ok(false);
     }
     let connection = sqlez::connection::Connection::open_file(&db_path.to_string_lossy());
-    connection
-        .select_row::<bool>("SELECT 1 FROM sidebar_threads LIMIT 1")
-        .ok()
-        .and_then(|mut query| query().ok().flatten())
-        .unwrap_or(false)
+    let mut query = connection.select_row::<bool>("SELECT 1 FROM sidebar_threads LIMIT 1")?;
+    Ok(query()?.unwrap_or(false))
 }
 
 fn read_threads_from_channel(
@@ -1002,6 +1015,23 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let threads = read_threads_from_channel(dir.path(), ReleaseChannel::Stable).unwrap();
         assert!(threads.is_empty());
+    }
+
+    #[test]
+    fn test_channel_has_threads_reflects_database_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!channel_has_threads(dir.path(), ReleaseChannel::Stable));
+
+        let connection = create_channel_db(dir.path(), ReleaseChannel::Stable);
+        assert!(!channel_has_threads(dir.path(), ReleaseChannel::Stable));
+
+        insert_thread(
+            &connection,
+            "Imported Thread",
+            "2025-01-15T10:00:00Z",
+            false,
+        );
+        assert!(channel_has_threads(dir.path(), ReleaseChannel::Stable));
     }
 
     #[test]
