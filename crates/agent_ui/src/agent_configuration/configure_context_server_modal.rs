@@ -53,6 +53,7 @@ enum ConfigurationTarget {
         id: ContextServerId,
         url: String,
         headers: HashMap<String, String>,
+        timeout: Option<u64>,
         oauth: Option<OAuthClientSettings>,
     },
 
@@ -96,7 +97,7 @@ impl ConfigurationSource {
         jsonc_language: Option<Arc<Language>>,
         window: &mut Window,
         cx: &mut App,
-    ) -> Self {
+    ) -> Result<Self> {
         fn create_editor(
             json: String,
             jsonc_language: Option<Arc<Language>>,
@@ -115,12 +116,12 @@ impl ConfigurationSource {
             })
         }
 
-        match target {
+        let source = match target {
             ConfigurationTarget::New { server_type } => ConfigurationSource::New {
                 editor: create_editor(
                     match server_type {
-                        ContextServerType::Remote => context_server_http_input(None, Some(cx)),
-                        ContextServerType::Local => context_server_input(None, Some(cx)),
+                        ContextServerType::Remote => context_server_http_input(None, Some(cx))?,
+                        ContextServerType::Local => context_server_input(None, Some(cx))?,
                     },
                     jsonc_language,
                     window,
@@ -130,7 +131,7 @@ impl ConfigurationSource {
             },
             ConfigurationTarget::Existing { id, command } => ConfigurationSource::Existing {
                 editor: create_editor(
-                    context_server_input(Some((id, command)), Some(cx)),
+                    context_server_input(Some((id, command)), Some(cx))?,
                     jsonc_language,
                     window,
                     cx,
@@ -141,10 +142,11 @@ impl ConfigurationSource {
                 id,
                 url,
                 headers: auth,
+                timeout,
                 oauth,
             } => ConfigurationSource::Existing {
                 editor: create_editor(
-                    context_server_http_input(Some((id, url, auth, oauth)), Some(cx)),
+                    context_server_http_input(Some((id, url, auth, timeout, oauth)), Some(cx))?,
                     jsonc_language,
                     window,
                     cx,
@@ -182,7 +184,8 @@ impl ConfigurationSource {
                     }),
                 }
             }
-        }
+        };
+        Ok(source)
     }
 
     fn output(&self, cx: &mut App) -> Result<(ContextServerId, ContextServerSettings)> {
@@ -196,14 +199,14 @@ impl ConfigurationSource {
                 server_type,
             } => match *server_type {
                 ContextServerType::Remote => parse_http_input_for_ui(&editor.read(cx).text(cx), cx)
-                    .map(|(id, url, auth, oauth)| {
+                    .map(|(id, url, auth, timeout, oauth)| {
                         (
                             id,
                             ContextServerSettings::Http {
                                 enabled: true,
                                 url,
                                 headers: auth,
-                                timeout: None,
+                                timeout,
                                 oauth,
                             },
                         )
@@ -258,36 +261,43 @@ impl ConfigurationSource {
 fn context_server_input(
     existing: Option<(ContextServerId, ContextServerCommand)>,
     cx: Option<&App>,
-) -> String {
-    let (name, command, args, env) = match existing {
+) -> Result<String> {
+    let (name, command, args, env, timeout) = match existing {
         Some((id, cmd)) => {
-            let args = serde_json::to_string(&cmd.args).expect("serializing to JSON cannot fail");
+            let name = serde_json::to_string(id.0.as_ref())
+                .context("failed to serialize context server name")?;
+            let args = serde_json::to_string(&cmd.args)
+                .context("failed to serialize context server arguments")?;
             let env = serde_json::to_string(&cmd.env.unwrap_or_default())
-                .expect("serializing to JSON cannot fail");
-            let cmd_path =
-                serde_json::to_string(&cmd.path).expect("serializing to JSON cannot fail");
-            (id.0.to_string(), cmd_path, args, env)
+                .context("failed to serialize context server environment")?;
+            let command = serde_json::to_string(&cmd.path)
+                .context("failed to serialize context server command")?;
+            (name, command, args, env, cmd.timeout)
         }
         None => (
-            "some-mcp-server".to_owned(),
+            serde_json::to_string("some-mcp-server")?,
             String::new(),
             "[]".to_owned(),
             "{}".to_owned(),
+            None,
         ),
     };
+    let timeout = timeout.map_or_else(String::new, |timeout| {
+        format!(",\n    \"timeout\": {timeout}")
+    });
 
-    format!(
+    Ok(format!(
         r#"{{
   /// {}
   ///
   /// {}
-  "{name}": {{
+  {name}: {{
     /// {}
     "command": {command},
     /// {}
     "args": {args},
     /// {}
-    "env": {env}
+    "env": {env}{timeout}
   }}
 }}"#,
         template_text(
@@ -315,7 +325,7 @@ fn context_server_input(
             "agent_ui.context_server.template_local_env",
             "The environment variables to set",
         )
-    )
+    ))
 }
 
 fn context_server_http_input(
@@ -323,17 +333,22 @@ fn context_server_http_input(
         ContextServerId,
         String,
         HashMap<String, String>,
+        Option<u64>,
         Option<OAuthClientSettings>,
     )>,
     cx: Option<&App>,
-) -> String {
-    let (name, url, headers, oauth) = match existing {
-        Some((id, url, headers, oauth)) => {
+) -> Result<String> {
+    let (name, url, headers, timeout, oauth) = match existing {
+        Some((id, url, headers, timeout, oauth)) => {
+            let name = serde_json::to_string(id.0.as_ref())
+                .context("failed to serialize context server name")?;
+            let url =
+                serde_json::to_string(&url).context("failed to serialize context server URL")?;
             let headers = if headers.is_empty() {
                 r#"// "Authorization": "Bearer <token>"#.to_owned()
             } else {
                 let json = serde_json::to_string_pretty(&headers)
-                    .expect("serializing to JSON cannot fail");
+                    .context("failed to serialize context server headers")?;
                 let mut lines = json.split("\n").collect::<Vec<_>>();
                 if lines.len() > 1 {
                     lines.remove(0);
@@ -342,20 +357,25 @@ fn context_server_http_input(
                 lines
                     .into_iter()
                     .map(|line| format!("  {}", line))
-                    .collect::<String>()
+                    .collect::<Vec<_>>()
+                    .join("\n")
             };
-            (id.0.to_string(), url, headers, oauth)
+            (name, url, headers, timeout, oauth)
         }
         None => (
-            "some-remote-server".to_owned(),
-            "https://example.com/mcp".to_owned(),
+            serde_json::to_string("some-remote-server")?,
+            serde_json::to_string("https://example.com/mcp")?,
             r#"// "Authorization": "Bearer <token>"#.to_owned(),
+            None,
             None,
         ),
     };
+    let timeout = timeout.map_or_else(String::new, |timeout| {
+        format!("\n    \"timeout\": {timeout},")
+    });
 
-    let oauth = oauth.map_or_else(
-        || {
+    let oauth = match oauth {
+        None => {
             format!(
                 r#"
     /// {}
@@ -368,18 +388,21 @@ fn context_server_http_input(
                     "Uncomment to use a pre-registered OAuth client. You can include the client secret here as well, otherwise it will be prompted interactively and saved in the system keychain.",
                 ),
             )
-        },
-
-        |oauth| {
+        }
+        Some(oauth) => {
             let mut lines = vec![
                 String::from("\n    \"oauth\": {"),
-
-                format!("      \"client_id\": {},", serde_json::to_string(&oauth.client_id).expect("serializing to JSON cannot fail")),
+                format!(
+                    "      \"client_id\": {},",
+                    serde_json::to_string(&oauth.client_id)
+                        .context("failed to serialize OAuth client ID")?
+                ),
             ];
             if let Some(client_secret) = oauth.client_secret {
                 lines.push(format!(
                     "      \"client_secret\": {}",
-                    serde_json::to_string(&client_secret).expect("serializing to JSON cannot fail")
+                    serde_json::to_string(&client_secret)
+                        .context("failed to serialize OAuth client secret")?
                 ));
             } else {
                 lines.push(format!(
@@ -394,17 +417,17 @@ fn context_server_http_input(
             lines.push(String::from("    },"));
 
             lines.join("\n")
-        },
-    );
+        }
+    };
 
-    format!(
+    Ok(format!(
         r#"{{
   /// {}
   ///
   /// {}
-  "{name}": {{
+  {name}: {{
     /// {}
-    "url": "{url}",{oauth}
+    "url": {url},{timeout}{oauth}
     "headers": {{
      /// {}
      {headers}
@@ -431,7 +454,7 @@ fn context_server_http_input(
             "agent_ui.context_server.template_remote_headers",
             "Any headers to send along",
         )
-    )
+    ))
 }
 
 fn parse_http_input(
@@ -440,6 +463,7 @@ fn parse_http_input(
     ContextServerId,
     String,
     HashMap<String, String>,
+    Option<u64>,
     Option<OAuthClientSettings>,
 )> {
     #[derive(Deserialize)]
@@ -448,6 +472,8 @@ fn parse_http_input(
         #[serde(default)]
         headers: HashMap<String, String>,
         #[serde(default)]
+        timeout: Option<u64>,
+        #[serde(default)]
         oauth: Option<OAuthClientSettings>,
     }
     let value: HashMap<String, Temp> = serde_json_lenient::from_str(text)?;
@@ -455,15 +481,15 @@ fn parse_http_input(
         anyhow::bail!("Expected exactly one context server configuration");
     }
 
-    let (key, value) = value
-        .into_iter()
-        .next()
-        .expect("iterator should yield an item");
+    let Some((key, value)) = value.into_iter().next() else {
+        anyhow::bail!("Expected exactly one context server configuration");
+    };
 
     Ok((
         ContextServerId(key.into()),
         value.url,
         value.headers,
+        value.timeout,
         value.oauth,
     ))
 }
@@ -475,6 +501,7 @@ fn parse_http_input_for_ui(
     ContextServerId,
     String,
     HashMap<String, String>,
+    Option<u64>,
     Option<OAuthClientSettings>,
 )> {
     parse_http_input(text).map_err(|error| {
@@ -664,12 +691,13 @@ impl ConfigureContextServerModal {
                     enabled: _,
                     url,
                     headers,
-                    timeout: _,
+                    timeout,
                     oauth,
                 } => Some(ConfigurationTarget::ExistingHttp {
                     id: server_id,
                     url,
                     headers,
+                    timeout,
                     oauth,
                 }),
 
@@ -682,7 +710,7 @@ impl ConfigureContextServerModal {
                                 cx,
                             )
                         })
-                        .ok()
+                        .log_err()
                     {
                         Some(task) => task.await,
                         None => None,
@@ -704,28 +732,30 @@ impl ConfigureContextServerModal {
         cx: &mut AsyncWindowContext,
     ) -> Task<Result<()>> {
         cx.spawn(async move |cx| {
-            let jsonc_language = language_registry.language_for_name("jsonc").await.ok();
-            workspace.update_in(cx, |workspace, window, cx| {
+            let jsonc_language = language_registry.language_for_name("jsonc").await.log_err();
+            workspace.update_in(cx, |workspace, window, cx| -> Result<()> {
                 let workspace_handle = cx.weak_entity();
                 let context_server_store = workspace.project().read(cx).context_server_store();
+                let original_server_id = match &target {
+                    ConfigurationTarget::Existing { id, .. } => Some(id.clone()),
+                    ConfigurationTarget::ExistingHttp { id, .. } => Some(id.clone()),
+                    ConfigurationTarget::Extension { id, .. } => Some(id.clone()),
+                    ConfigurationTarget::New { .. } => None,
+                };
+                let state = Self::initial_state(&context_server_store, &target, cx);
+                let source = ConfigurationSource::from_target(
+                    target,
+                    language_registry,
+                    jsonc_language,
+                    window,
+                    cx,
+                )?;
                 workspace.toggle_modal(window, cx, |window, cx| Self {
                     context_server_store: context_server_store.clone(),
                     workspace: workspace_handle,
-                    state: Self::initial_state(&context_server_store, &target, cx),
-
-                    original_server_id: match &target {
-                        ConfigurationTarget::Existing { id, .. } => Some(id.clone()),
-                        ConfigurationTarget::ExistingHttp { id, .. } => Some(id.clone()),
-                        ConfigurationTarget::Extension { id, .. } => Some(id.clone()),
-                        ConfigurationTarget::New { .. } => None,
-                    },
-                    source: ConfigurationSource::from_target(
-                        target,
-                        language_registry,
-                        jsonc_language,
-                        window,
-                        cx,
-                    ),
+                    state,
+                    original_server_id,
+                    source,
                     scroll_handle: ScrollHandle::new(),
                     secret_editor: cx.new(|cx| {
                         let mut editor = Editor::single_line(window, cx);
@@ -742,8 +772,10 @@ impl ConfigureContextServerModal {
                         editor
                     }),
                     _auth_subscription: None,
-                })
-            })
+                });
+                Ok(())
+            })??;
+            Ok(())
         })
     }
 
@@ -970,10 +1002,9 @@ fn parse_input(text: &str) -> Result<(ContextServerId, ContextServerCommand)> {
     let value: serde_json::Value = serde_json_lenient::from_str(text)?;
     let object = value.as_object().context("Expected object")?;
     anyhow::ensure!(object.len() == 1, "Expected exactly one key-value pair");
-    let (context_server_name, value) = object
-        .into_iter()
-        .next()
-        .expect("iterator should yield an item");
+    let Some((context_server_name, value)) = object.iter().next() else {
+        anyhow::bail!("Expected exactly one key-value pair");
+    };
     let command: ContextServerCommand = serde_json::from_value(value.clone())?;
     Ok((ContextServerId(context_server_name.clone().into()), command))
 }
@@ -1110,11 +1141,14 @@ impl ConfigureContextServerModal {
                             } = &mut this.source
                                 && *server_type != ContextServerType::Local
                             {
-                                *server_type = ContextServerType::Local;
-                                let new_text = context_server_input(None, Some(cx));
-                                editor.update(cx, |editor, cx| {
-                                    editor.set_text(new_text, window, cx);
-                                });
+                                if let Some(new_text) =
+                                    context_server_input(None, Some(cx)).log_err()
+                                {
+                                    *server_type = ContextServerType::Local;
+                                    editor.update(cx, |editor, cx| {
+                                        editor.set_text(new_text, window, cx);
+                                    });
+                                }
                             }
                         }),
                     ),
@@ -1128,11 +1162,14 @@ impl ConfigureContextServerModal {
                             } = &mut this.source
                                 && *server_type != ContextServerType::Remote
                             {
-                                *server_type = ContextServerType::Remote;
-                                let new_text = context_server_http_input(None, Some(cx));
-                                editor.update(cx, |editor, cx| {
-                                    editor.set_text(new_text, window, cx);
-                                });
+                                if let Some(new_text) =
+                                    context_server_http_input(None, Some(cx)).log_err()
+                                {
+                                    *server_type = ContextServerType::Remote;
+                                    editor.update(cx, |editor, cx| {
+                                        editor.set_text(new_text, window, cx);
+                                    });
+                                }
                             }
                         }),
                     ),
@@ -1560,23 +1597,25 @@ fn wait_for_context_server(
             return;
         }
 
+        let send_result = |result| {
+            if let Some(tx) = tx.lock().take()
+                && tx.send(result).is_err()
+            {
+                log::debug!("context server status waiter was already dropped");
+            }
+        };
+
         match status {
             ContextServerStatus::Running
             | ContextServerStatus::AuthRequired
             | ContextServerStatus::ClientSecretRequired { .. } => {
-                if let Some(tx) = tx.lock().take() {
-                    let _ = tx.send(Ok(status.clone()));
-                }
+                send_result(Ok(status.clone()));
             }
             ContextServerStatus::Stopped => {
-                if let Some(tx) = tx.lock().take() {
-                    let _ = tx.send(Err(stopped_running_message.clone()));
-                }
+                send_result(Err(stopped_running_message.clone()));
             }
             ContextServerStatus::Error(error) => {
-                if let Some(tx) = tx.lock().take() {
-                    let _ = tx.send(Err(error.clone()));
-                }
+                send_result(Err(error.clone()));
             }
             ContextServerStatus::Starting | ContextServerStatus::Authenticating => {}
         }
@@ -1633,7 +1672,7 @@ mod tests {
 
     #[test]
     fn parse_http_input_reads_oauth_settings() {
-        let (id, url, headers, oauth) = parse_http_input(
+        let (id, url, headers, timeout, oauth) = parse_http_input(
             r#"{
   "figma": {
     "url": "https://mcp.figma.com/mcp",
@@ -1652,6 +1691,7 @@ mod tests {
         assert_eq!(id, ContextServerId("figma".into()));
         assert_eq!(url, "https://mcp.figma.com/mcp");
         assert_eq!(headers.get("X-Test"), Some(&String::from("test")));
+        assert_eq!(timeout, None);
         let oauth = oauth.expect("oauth should be present");
         assert_eq!(oauth.client_id, "client-id");
         assert_eq!(oauth.client_secret.as_deref(), Some("client-secret"));
@@ -1664,17 +1704,68 @@ mod tests {
                 ContextServerId("figma".into()),
                 String::from("https://mcp.figma.com/mcp"),
                 HashMap::default(),
+                Some(90),
                 Some(OAuthClientSettings {
                     client_id: String::from("client-id"),
                     client_secret: Some(String::from("client-secret")),
                 }),
             )),
             None,
-        );
+        )
+        .expect("context server input should serialize");
 
-        let (_, _, _, oauth) = parse_http_input(&text).unwrap();
+        let (_, _, _, timeout, oauth) = parse_http_input(&text).unwrap();
+        assert_eq!(timeout, Some(90));
         let oauth = oauth.expect("oauth should be present");
         assert_eq!(oauth.client_id, "client-id");
         assert_eq!(oauth.client_secret.as_deref(), Some("client-secret"));
+    }
+
+    #[test]
+    fn context_server_inputs_round_trip_escaped_values_and_timeouts() {
+        let local_id = ContextServerId("local\"server".into());
+        let local_command = ContextServerCommand {
+            path: "path\\with\"quotes".into(),
+            args: vec![String::from("--value=\"quoted\"")],
+            env: Some(
+                [(String::from("KEY"), String::from("a\\b"))]
+                    .into_iter()
+                    .collect(),
+            ),
+            timeout: Some(45),
+        };
+        let local_text =
+            context_server_input(Some((local_id.clone(), local_command.clone())), None)
+                .expect("local context server input should serialize");
+        let (parsed_local_id, parsed_local_command) =
+            parse_input(&local_text).expect("local context server input should parse");
+        assert_eq!(parsed_local_id, local_id);
+        assert_eq!(parsed_local_command, local_command);
+
+        let remote_id = ContextServerId("remote\"server".into());
+        let remote_url = String::from("https://example.com/a\\b?value=\"quoted\"");
+        let remote_headers = [
+            (String::from("Authorization"), String::from("Bearer token")),
+            (String::from("X-Test"), String::from("a\\b")),
+        ]
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+        let remote_text = context_server_http_input(
+            Some((
+                remote_id.clone(),
+                remote_url.clone(),
+                remote_headers.clone(),
+                Some(75),
+                None,
+            )),
+            None,
+        )
+        .expect("remote context server input should serialize");
+        let (parsed_remote_id, parsed_remote_url, parsed_headers, timeout, _) =
+            parse_http_input(&remote_text).expect("remote context server input should parse");
+        assert_eq!(parsed_remote_id, remote_id);
+        assert_eq!(parsed_remote_url, remote_url);
+        assert_eq!(parsed_headers, remote_headers);
+        assert_eq!(timeout, Some(75));
     }
 }
