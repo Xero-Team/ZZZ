@@ -50,7 +50,9 @@ impl PartialOrd for User {
 
 impl Ord for User {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.github_login.cmp(&other.github_login)
+        self.github_login
+            .cmp(&other.github_login)
+            .then_with(|| self.id.cmp(&other.id))
     }
 }
 
@@ -262,5 +264,30 @@ impl Collaborator {
             committer_name: message.committer_name,
             committer_email: message.committer_email,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::User;
+
+    #[test]
+    fn user_ordering_distinguishes_equal_logins() {
+        let first = User {
+            id: 1,
+            github_login: "same-login".into(),
+            ..Default::default()
+        };
+        let second = User {
+            id: 2,
+            github_login: "same-login".into(),
+            ..Default::default()
+        };
+
+        assert_ne!(first, second);
+        assert_ne!(first.cmp(&second), std::cmp::Ordering::Equal);
+        assert_eq!(BTreeSet::from([first, second]).len(), 2);
     }
 }
