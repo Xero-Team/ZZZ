@@ -143,11 +143,9 @@ pub fn plan_outgoing(blocks: Vec<ComposerBlock>) -> Vec<OutgoingItem> {
             ComposerBlock::Text(text) => pending.push_str(&text),
             ComposerBlock::Attachment(attachment) => {
                 push_text(&mut items, &mut pending);
-                let caption = match blocks.peek() {
-                    Some(ComposerBlock::Text(_)) => match blocks.next() {
-                        Some(ComposerBlock::Text(text)) => Some(text),
-                        _ => None,
-                    },
+                let caption = match blocks.next_if(|block| matches!(block, ComposerBlock::Text(_)))
+                {
+                    Some(ComposerBlock::Text(text)) => Some(text),
                     _ => None,
                 };
                 let (caption, remainder) = match caption {
