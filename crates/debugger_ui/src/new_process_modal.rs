@@ -46,7 +46,6 @@ actions!(
 );
 
 pub(super) struct NewProcessModal {
-    workspace: WeakEntity<Workspace>,
     debug_panel: WeakEntity<DebugPanel>,
     mode: NewProcessMode,
     debug_picker: Entity<Picker<DebugDelegate>>,
@@ -302,7 +301,6 @@ impl NewProcessModal {
                         debugger: None,
                         mode,
                         debug_panel: debug_panel.downgrade(),
-                        workspace: workspace_handle,
                         _subscriptions,
                     }
                 });
@@ -509,7 +507,6 @@ impl NewProcessModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DropdownMenu {
-        let workspace = self.workspace.clone();
         let weak = cx.weak_entity();
         let active_buffer = self.task_contexts(cx).and_then(|tc| {
             tc.active_item_context
@@ -521,9 +518,7 @@ impl NewProcessModal {
             .and_then(|buffer| buffer.read(cx).language())
             .cloned();
 
-        let mut available_adapters: Vec<_> = workspace
-            .update(cx, |_, cx| DapRegistry::global(cx).enumerate_adapters())
-            .unwrap_or_default();
+        let mut available_adapters: Vec<_> = DapRegistry::global(cx).enumerate_adapters();
         if let Some(language) = active_buffer_language {
             available_adapters.sort_by_key(|adapter| {
                 language
@@ -619,12 +614,6 @@ impl NewProcessMode {
                 tr(cx, "debugger_ui.new_process_modal.mode.launch", "Launch").into()
             }
         }
-    }
-}
-
-impl Focusable for NewProcessMode {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        cx.focus_handle()
     }
 }
 
