@@ -436,7 +436,7 @@ fn insert_features_into_devcontainer_json(
         return content.to_owned();
     }
 
-    let features_value: serde_json::Value = features
+    let mut feature_entries = features
         .iter()
         .map(|f| {
             let key = format!(
@@ -447,6 +447,10 @@ fn insert_features_into_devcontainer_json(
             );
             (key, serde_json::Value::Object(Default::default()))
         })
+        .collect::<Vec<_>>();
+    feature_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    let features_value: serde_json::Value = feature_entries
+        .into_iter()
         .collect::<serde_json::Map<String, serde_json::Value>>()
         .into();
 
@@ -481,9 +485,14 @@ fn get_backup_project_name(remote_workspace_folder: &str, container_id: &str) ->
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{collections::HashSet, path::PathBuf};
 
-    use crate::devcontainer_api::{DevContainerConfig, find_configs_in_snapshot};
+    use crate::{
+        DevContainerFeature,
+        devcontainer_api::{
+            DevContainerConfig, find_configs_in_snapshot, insert_features_into_devcontainer_json,
+        },
+    };
     use fs::FakeFs;
     use gpui::TestAppContext;
     use project::Project;
@@ -496,6 +505,30 @@ mod tests {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
         });
+    }
+
+    #[test]
+    fn inserted_template_features_have_stable_order() {
+        let features = HashSet::from([
+            DevContainerFeature {
+                id: "zeta".to_owned(),
+                version: "1.0.0".to_owned(),
+                name: "Zeta".to_owned(),
+                source_repository: Some("ghcr.io/example/features".to_owned()),
+            },
+            DevContainerFeature {
+                id: "alpha".to_owned(),
+                version: "2.0.0".to_owned(),
+                name: "Alpha".to_owned(),
+                source_repository: Some("ghcr.io/example/features".to_owned()),
+            },
+        ]);
+
+        let content = insert_features_into_devcontainer_json("{}", &features);
+
+        let alpha_index = content.find("alpha:2").expect("alpha feature");
+        let zeta_index = content.find("zeta:1").expect("zeta feature");
+        assert!(alpha_index < zeta_index);
     }
 
     #[gpui::test]
