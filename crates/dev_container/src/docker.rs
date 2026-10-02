@@ -381,12 +381,13 @@ impl DockerClient for Docker {
             log::error!("Error running command {e} in container exec");
             DevContainerError::ContainerNotValid(container_id.to_owned())
         })?;
+        let std_out = String::from_utf8_lossy(&output.stdout);
+        log::debug!("Command output:\n {std_out}");
         if !output.status.success() {
             let std_err = String::from_utf8_lossy(&output.stderr);
             log::error!("Command produced a non-successful output. StdErr: {std_err}");
+            return Err(DevContainerError::DevContainerScriptsFailed);
         }
-        let std_out = String::from_utf8_lossy(&output.stdout);
-        log::debug!("Command output:\n {std_out}");
 
         Ok(())
     }
