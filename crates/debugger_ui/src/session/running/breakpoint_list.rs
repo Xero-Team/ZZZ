@@ -15,6 +15,7 @@ use project::{
     Project,
     debugger::{
         breakpoint_store::{BreakpointEditAction, BreakpointStore, SourceBreakpoint},
+        dap_command::DataBreakpointContext,
         dap_store::{DapStore, PersistedAdapterOptions},
         session::Session,
     },
@@ -70,6 +71,44 @@ enum ActiveBreakpointStripMode {
     Log,
     Condition,
     HitCondition,
+}
+
+fn data_breakpoint_label(context: &DataBreakpointContext, cx: &App) -> String {
+    match context {
+        DataBreakpointContext::Variable { name, .. } => tr(
+            cx,
+            "debugger_ui.breakpoint_list.variable_data_breakpoint",
+            "Variable: {}",
+        )
+        .replacen("{}", name, 1),
+        DataBreakpointContext::Expression { expression, .. } => tr(
+            cx,
+            "debugger_ui.breakpoint_list.expression_data_breakpoint",
+            "Expression: {}",
+        )
+        .replacen("{}", expression, 1),
+        DataBreakpointContext::Address { address, bytes } => match bytes {
+            Some(1) => tr(
+                cx,
+                "debugger_ui.breakpoint_list.address_data_breakpoint_one_byte",
+                "Address: {} (1 byte)",
+            )
+            .replacen("{}", address, 1),
+            Some(bytes) => tr(
+                cx,
+                "debugger_ui.breakpoint_list.address_data_breakpoint_many_bytes",
+                "Address: {} ({} bytes)",
+            )
+            .replacen("{}", address, 1)
+            .replacen("{}", &bytes.to_string(), 1),
+            None => tr(
+                cx,
+                "debugger_ui.breakpoint_list.address_data_breakpoint",
+                "Address: {}",
+            )
+            .replacen("{}", address, 1),
+        },
+    }
 }
 
 impl BreakpointList {
@@ -580,7 +619,7 @@ impl BreakpointList {
         uniform_list(
             "breakpoint-list",
             self.breakpoints.len(),
-            cx.processor(move |this, range: Range<usize>, _, _| {
+            cx.processor(move |this, range: Range<usize>, _, cx| {
                 range
                     .clone()
                     .zip(&mut this.breakpoints[range])
@@ -592,6 +631,7 @@ impl BreakpointList {
                                 ix,
                                 Some(ix) == selected_ix,
                                 focus_handle.clone(),
+                                cx,
                             )
                             .into_any_element()
                     })
@@ -833,7 +873,7 @@ impl Render for BreakpointList {
                     exc_bp.data.label.len() as f32 * text_pixels
                 }
                 BreakpointEntryKind::DataBreakpoint(data_bp) => {
-                    data_bp.0.context.human_readable_label().len() as f32 * text_pixels
+                    data_breakpoint_label(&data_bp.0.context, cx).len() as f32 * text_pixels
                 }
             })
             .position_max_by(|left, right| left.total_cmp(right));
@@ -1069,6 +1109,7 @@ impl DataBreakpoint {
         is_selected: bool,
         focus_handle: FocusHandle,
         list: WeakEntity<BreakpointList>,
+        cx: &App,
     ) -> ListItem {
         let color = if self.0.is_enabled {
             Color::Debugger
@@ -1137,7 +1178,7 @@ impl DataBreakpoint {
                         .justify_center()
                         .id(("data-breakpoint-label", ix))
                         .child(
-                            Label::new(self.0.context.human_readable_label())
+                            Label::new(data_breakpoint_label(&self.0.context, cx))
                                 .size(LabelSize::Small)
                                 .line_height_style(ui::LineHeightStyle::UiLabel),
                         ),
@@ -1287,6 +1328,7 @@ impl BreakpointEntry {
         ix: usize,
         is_selected: bool,
         focus_handle: FocusHandle,
+        cx: &App,
     ) -> ListItem {
         match &mut self.kind {
             BreakpointEntryKind::LineBreakpoint(line_breakpoint) => line_breakpoint.render(
@@ -1313,6 +1355,7 @@ impl BreakpointEntry {
                 is_selected,
                 focus_handle,
                 self.weak.clone(),
+                cx,
             ),
         }
     }

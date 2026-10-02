@@ -1686,28 +1686,6 @@ pub enum DataBreakpointContext {
     },
 }
 
-impl DataBreakpointContext {
-    pub fn human_readable_label(&self) -> String {
-        match self {
-            DataBreakpointContext::Variable { name, .. } => format!("Variable: {}", name),
-            DataBreakpointContext::Expression { expression, .. } => {
-                format!("Expression: {}", expression)
-            }
-            DataBreakpointContext::Address { address, bytes } => {
-                let mut label = format!("Address: {}", address);
-                if let Some(bytes) = bytes {
-                    label.push_str(&format!(
-                        " ({} byte{})",
-                        bytes,
-                        if *bytes == 1 { "" } else { "s" }
-                    ));
-                }
-                label
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct DataBreakpointInfoCommand {
     pub context: Arc<DataBreakpointContext>,
