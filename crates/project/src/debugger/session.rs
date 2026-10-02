@@ -1612,6 +1612,9 @@ impl Session {
                     }
                 }
 
+                cx.emit(SessionEvent::Modules);
+                cx.notify();
+
                 // todo(debugger): We should only send the invalidate command to downstream clients.
                 // self.invalidate_state(&ModulesCommand.into());
             }

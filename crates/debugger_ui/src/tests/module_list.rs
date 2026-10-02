@@ -125,7 +125,11 @@ async fn test_module_list(executor: BackgroundExecutor, cx: &mut TestAppContext)
 
     active_debug_session_panel(workspace, cx).update(cx, |_, cx| {
         let actual_modules = running_state.update(cx, |state, cx| {
-            state.module_list().update(cx, |list, cx| list.modules(cx))
+            state.module_list().update(cx, |list, cx| {
+                let actual_modules = list.modules(cx);
+                list.select_module(&modules[1].id, cx);
+                actual_modules
+            })
         });
 
         assert_eq!(modules, actual_modules);
@@ -189,12 +193,15 @@ async fn test_module_list(executor: BackgroundExecutor, cx: &mut TestAppContext)
     cx.run_until_parked();
 
     active_debug_session_panel(workspace, cx).update(cx, |_, cx| {
-        let actual_modules = running_state.update(cx, |state, cx| {
-            state.module_list().update(cx, |list, cx| list.modules(cx))
+        let (actual_modules, selected_module_id) = running_state.update(cx, |state, cx| {
+            state.module_list().update(cx, |list, cx| {
+                (list.modules(cx), list.selected_module_id().cloned())
+            })
         });
 
         assert_eq!(actual_modules.len(), 3);
         assert!(actual_modules.contains(&changed_module));
+        assert_eq!(selected_module_id.as_ref(), Some(&changed_module.id));
     });
 
     client
@@ -207,11 +214,14 @@ async fn test_module_list(executor: BackgroundExecutor, cx: &mut TestAppContext)
     cx.run_until_parked();
 
     active_debug_session_panel(workspace, cx).update(cx, |_, cx| {
-        let actual_modules = running_state.update(cx, |state, cx| {
-            state.module_list().update(cx, |list, cx| list.modules(cx))
+        let (actual_modules, selected_module_id) = running_state.update(cx, |state, cx| {
+            state.module_list().update(cx, |list, cx| {
+                (list.modules(cx), list.selected_module_id().cloned())
+            })
         });
 
         assert_eq!(actual_modules.len(), 2);
         assert!(!actual_modules.contains(&changed_module));
+        assert_eq!(selected_module_id, None);
     });
 }

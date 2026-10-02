@@ -65,7 +65,16 @@ impl ModuleList {
                 let modules = this
                     .session
                     .update(cx, |session, cx| session.modules(cx).to_owned());
+                let selected_module_id = this
+                    .selected_ix
+                    .and_then(|index| this.entries.get(index))
+                    .map(|module| module.id.clone());
                 this.entries = modules;
+                this.selected_ix = selected_module_id.and_then(|selected_module_id| {
+                    this.entries
+                        .iter()
+                        .position(|module| module.id == selected_module_id)
+                });
                 cx.notify();
             });
         }));
@@ -168,6 +177,22 @@ impl ModuleList {
     pub(crate) fn modules(&self, cx: &mut Context<Self>) -> Vec<dap::Module> {
         self.session
             .update(cx, |session, cx| session.modules(cx).to_vec())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn select_module(&mut self, module_id: &dap::ModuleId, cx: &mut Context<Self>) {
+        let index = self
+            .entries
+            .iter()
+            .position(|module| &module.id == module_id);
+        self.select_ix(index, cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected_module_id(&self) -> Option<&dap::ModuleId> {
+        self.selected_ix
+            .and_then(|index| self.entries.get(index))
+            .map(|module| &module.id)
     }
 
     fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
