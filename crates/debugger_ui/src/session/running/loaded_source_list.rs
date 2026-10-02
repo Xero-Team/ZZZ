@@ -63,6 +63,12 @@ impl LoadedSourceList {
             )
             .into_any()
     }
+
+    #[cfg(test)]
+    pub(crate) fn sources(&self, cx: &mut Context<Self>) -> Vec<dap::Source> {
+        self.session
+            .update(cx, |session, cx| session.loaded_sources(cx).to_vec())
+    }
 }
 
 impl Focusable for LoadedSourceList {

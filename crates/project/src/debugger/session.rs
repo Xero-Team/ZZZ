@@ -1620,6 +1620,8 @@ impl Session {
             }
             Events::LoadedSource(_) => {
                 self.invalidate_state(&LoadedSourcesCommand.into());
+                cx.emit(SessionEvent::LoadedSources);
+                cx.notify();
             }
             Events::Capabilities(event) => {
                 self.capabilities = self.capabilities.merge(event.capabilities);

@@ -23,6 +23,8 @@ mod debugger_panel;
 #[cfg(test)]
 mod inline_values;
 #[cfg(test)]
+mod loaded_source_list;
+#[cfg(test)]
 mod module_list;
 #[cfg(test)]
 mod new_process_modal;

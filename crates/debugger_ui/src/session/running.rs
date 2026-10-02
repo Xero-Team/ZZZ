@@ -1620,6 +1620,11 @@ impl RunningState {
         &self.module_list
     }
 
+    #[cfg(test)]
+    pub(crate) fn loaded_source_list(&self) -> &Entity<LoadedSourceList> {
+        &self.loaded_sources_list
+    }
+
     pub(crate) fn activate_item(
         &mut self,
         item: DebuggerPaneItem,
