@@ -670,7 +670,7 @@ pub fn open_settings_editor(
                     cx.notify();
                 }
             })
-            .ok();
+            .log_err();
         return;
     }
 
@@ -1669,7 +1669,7 @@ impl SettingsWindow {
                 cx.update_window(*existing_window, |_, window, _| {
                     window.remove_window();
                 })
-                .ok();
+                .log_err();
             }
         })
         .detach();
@@ -1719,7 +1719,7 @@ impl SettingsWindow {
                         cx.subscribe_in(&project, window, Self::handle_project_event)
                             .detach();
                     })
-                    .ok();
+                    .log_err();
             }
         })
         .detach();
@@ -1748,10 +1748,10 @@ impl SettingsWindow {
                                 })
                                 .detach();
                             })
-                            .ok();
+                            .log_err();
                     });
                 })
-                .ok();
+                .log_err();
         })
         .detach();
 
@@ -2160,7 +2160,7 @@ impl SettingsWindow {
                 this.apply_match_indices(merged_indices, &query, cx);
                 cx.notify();
             })
-            .ok();
+            .log_err();
 
             cx.background_executor().timer(Duration::from_secs(1)).await;
         }));
@@ -3818,7 +3818,7 @@ impl SettingsWindow {
                                     .detach();
                             });
                     })
-                    .ok();
+                    .log_err();
 
                 window.remove_window();
             }
@@ -3896,13 +3896,13 @@ impl SettingsWindow {
                                     window.activate_window();
                                     cx.notify();
                                 })
-                                .ok();
+                                .log_err();
 
                             Some(())
                         })
                         .detach();
                     })
-                    .ok();
+                    .log_err();
 
                 window.remove_window();
             }
@@ -4252,8 +4252,7 @@ fn open_user_settings_in_workspace(
             .update(cx, |project, cx| {
                 project.find_or_create_worktree(&config_dir, false, cx)
             })
-            .await
-            .ok();
+            .await?;
         workspace
             .update_in(cx, |workspace, window, cx| {
                 workspace.open_paths(
@@ -4392,10 +4391,12 @@ impl ProjectSettingsUpdateQueue {
                 .await
                 .context("Failed to open settings file")?;
 
-            let _ = settings_window.update(cx, |this, _cx| {
-                this.project_setting_file_buffers
-                    .insert(project_path, buffer.clone());
-            });
+            settings_window
+                .update(cx, |this, _cx| {
+                    this.project_setting_file_buffers
+                        .insert(project_path, buffer.clone());
+                })
+                .log_err();
 
             buffer
         };

@@ -7,6 +7,7 @@ use settings::Settings as _;
 use theme_settings::ThemeSettings;
 use ui::SharedString;
 use ui::{Tooltip, prelude::*, rems};
+use util::ResultExt as _;
 
 #[derive(IntoElement)]
 pub struct SettingsInputField {
@@ -205,7 +206,7 @@ impl RenderOnce for SettingsInputField {
                         .update(cx, |editor, cx| {
                             editor.set_text(new_text, window, cx);
                         })
-                        .ok();
+                        .log_err();
                 });
             }
         }

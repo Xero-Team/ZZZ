@@ -5,6 +5,7 @@ use std::sync::{Arc, OnceLock};
 use strum::{EnumMessage, IntoDiscriminant as _, VariantArray};
 use theme::SystemAppearance;
 use ui::IntoElement;
+use util::ResultExt as _;
 
 use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
@@ -1618,7 +1619,7 @@ fn keymap_page() -> SettingsPage {
                                 .dispatch_action(zzz_actions::OpenKeymap.boxed_clone(), cx);
                             original_window.activate_window();
                         })
-                        .ok();
+                        .log_err();
                     window.remove_window();
                 }),
                 files: USER,
