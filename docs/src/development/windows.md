@@ -20,6 +20,8 @@ Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
   This setup is not picked up automatically by rustup. Before compiling, initialize environment variables by launching the developer shell (cmd/PowerShell) installed in the Start menu or Windows Terminal.
 - Install the Windows 11 or 10 SDK for your system, and make sure at least `Windows 10 SDK version 2104 (10.0.20348.0)` is installed. You can download it from the [Windows SDK Archive](https://developer.microsoft.com/windows/downloads/windows-sdk/).
 - Install [CMake](https://cmake.org/download) (required by [a dependency](https://docs.rs/wasmtime-c-api-impl/latest/wasmtime_c_api/)). Or you can install it through Visual Studio Installer, then manually add the `bin` directory to your `PATH`, for example: `C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin`.
+- Install Python 3. The build scripts use it to download and verify the pinned
+  FFmpeg development package.
 
 If you cannot compile ZZZ, make sure a Visual Studio installation includes at least the following components:
 
@@ -95,6 +97,12 @@ After this, restart the `postgresql` service. Press `Win`+`R` to open the Run di
 
 Once you have the dependencies installed, you can build ZZZ using [Cargo](https://doc.rust-lang.org/cargo/).
 
+In PowerShell, prepare FFmpeg before a direct Cargo build:
+
+```powershell
+$env:FFMPEG_DIR = py -3 .\script\ffmpeg.py ensure
+```
+
 For a debug build:
 
 ```sh
@@ -144,6 +152,12 @@ Debug:
 
 Binaries land in `target/x86_64-pc-windows-msvc/release/` (or
 `debug/`). This path does not run Inno Setup or WiX.
+
+On the first build, the script downloads the pinned LGPL FFmpeg development
+package into `.deps/ffmpeg/x86_64-pc-windows-msvc`. It links against that
+package and copies the required FFmpeg DLLs next to the generated executables.
+Set `FFMPEG_DIR` to use another package, or `ZZZ_FFMPEG_ROOT` to move the
+download and cache folder.
 
 msvc-wine supplies headers, libs, and `fxc.exe`. The script compiles with
 `clang-cl` / `lld-link` / `llvm-rc` (do not set `RC` to the msvc-wine

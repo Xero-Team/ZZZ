@@ -149,6 +149,70 @@ function Get-CargoBuildArguments {
     return $Arguments
 }
 
+function PrepareFFmpeg {
+    if (-not $env:FFMPEG_DIR) {
+        $pythonCommand = $null
+        $pythonArguments = @()
+        foreach ($candidate in @('py', 'python', 'python3')) {
+            if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+                $pythonCommand = $candidate
+                if ($candidate -eq 'py') {
+                    $pythonArguments += '-3'
+                }
+                break
+            }
+        }
+        if (-not $pythonCommand) {
+            throw 'Python 3 is required to download the pinned FFmpeg package.'
+        }
+
+        $pythonArguments += @(
+            "$PSScriptRoot/ffmpeg.py",
+            'ensure',
+            '--target',
+            $target
+        )
+        $output = @(& $pythonCommand @pythonArguments)
+        if ($LASTEXITCODE -ne 0 -or $output.Count -eq 0) {
+            throw "FFmpeg setup failed for $target"
+        }
+        $env:FFMPEG_DIR = $output[-1].Trim()
+    }
+
+    $header = Join-Path $env:FFMPEG_DIR 'include/libavcodec/avcodec.h'
+    $libraryDirectory = Join-Path $env:FFMPEG_DIR 'lib'
+    if (-not (Test-Path $header) -or -not (Test-Path $libraryDirectory -PathType Container)) {
+        throw "FFmpeg development package is incomplete: $env:FFMPEG_DIR"
+    }
+    Write-Output "Using FFmpeg from $env:FFMPEG_DIR"
+}
+
+function CopyFFmpegRuntime {
+    $runtimeFiles = @()
+    foreach ($pattern in @(
+        'avcodec-*.dll',
+        'avformat-*.dll',
+        'avutil-*.dll',
+        'swscale-*.dll',
+        'swresample-*.dll'
+    )) {
+        $runtimeFiles += @(Get-ChildItem -Path (Join-Path $env:FFMPEG_DIR "bin/$pattern") -File -ErrorAction SilentlyContinue)
+    }
+    if ($runtimeFiles.Count -eq 0) {
+        throw "No FFmpeg runtime DLLs found under $env:FFMPEG_DIR/bin"
+    }
+
+    New-Item -Path $CargoOutDir -ItemType Directory -Force | Out-Null
+    foreach ($runtimeFile in $runtimeFiles) {
+        Copy-Item -Path $runtimeFile.FullName -Destination $CargoOutDir -Force
+        Copy-Item -Path $runtimeFile.FullName -Destination $innoDir -Force
+    }
+
+    $licensePath = Join-Path $env:FFMPEG_DIR 'LICENSE.txt'
+    Copy-Item -Path $licensePath -Destination "$CargoOutDir/FFmpeg-LICENSE.txt" -Force
+    Copy-Item -Path $licensePath -Destination "$innoDir/FFmpeg-LICENSE.txt" -Force
+}
+
 function Get-VSArch {
     param(
         [string]$Arch
@@ -273,6 +337,7 @@ function BuildZZZAndItsFriends {
         }
     }
     Copy-Item -Path ".\$CargoOutDir\explorer_command_injector.dll" -Destination "$innoDir\zzz_explorer_command_injector.dll" -Force
+    CopyFFmpegRuntime
 }
 
 function BuildRemoteServer {
@@ -532,6 +597,7 @@ $debugStoreKey = "$env:ZZZ_RELEASE_CHANNEL/zzz-$env:RELEASE_VERSION-$env:ZZZ_REL
 CheckEnvironmentVariables
 PrepareForBundle
 GenerateLicenses
+PrepareFFmpeg
 BuildRemoteServer
 BuildZZZAndItsFriends
 MakeAppx

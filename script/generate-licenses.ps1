@@ -62,4 +62,16 @@ foreach ($find in $replacements.keys) {
 }
 $content | Set-Content $outputFile
 
+@(
+    "`n# ###### NATIVE LIBRARY LICENSES ######`n"
+    "#### GNU Lesser General Public License version 3"
+    ""
+    "##### Used by:"
+    ""
+    "* [FFmpeg 9.0.2-22-g46d8f462ee](https://github.com/FFmpeg/FFmpeg/commit/46d8f462ee)"
+    "* Prebuilt by [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-10-01-13-06)"
+    ""
+    Get-Content script/licenses/ffmpeg-LICENSE.txt
+) | Add-Content -Path $outputFile
+
 Write-Host "generate-licenses completed. See $outputFile"

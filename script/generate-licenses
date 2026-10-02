@@ -53,4 +53,16 @@ sed -i.bak 's/&gt;/>/g' "$OUTPUT_FILE"
 
 rm -rf "${OUTPUT_FILE}.bak"
 
+{
+    echo -e "\n# ###### NATIVE LIBRARY LICENSES ######\n"
+    echo "#### GNU Lesser General Public License version 3"
+    echo
+    echo "##### Used by:"
+    echo
+    echo "* [FFmpeg 9.0.2-22-g46d8f462ee](https://github.com/FFmpeg/FFmpeg/commit/46d8f462ee)"
+    echo "* Prebuilt by [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-10-01-13-06)"
+    echo
+    cat script/licenses/ffmpeg-LICENSE.txt
+} >>"$OUTPUT_FILE"
+
 echo "generate-licenses completed. See $OUTPUT_FILE"

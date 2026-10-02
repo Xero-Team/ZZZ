@@ -79,6 +79,9 @@ Source: "{#ResourcesDir}\x64\OpenConsole.exe"; DestDir: "{code:GetInstallDir}\x6
 Source: "{#ResourcesDir}\arm64\OpenConsole.exe"; DestDir: "{code:GetInstallDir}\arm64"; Flags: ignoreversion
 #endif
 Source: "{#ResourcesDir}\conpty.dll"; DestDir: "{code:GetInstallDir}"; Flags: ignoreversion
+Source: "{#ResourcesDir}\av*.dll"; DestDir: "{code:GetInstallDir}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#ResourcesDir}\sw*.dll"; DestDir: "{code:GetInstallDir}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#ResourcesDir}\FFmpeg-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}.exe"; AppUserModelID: "{#AppUserId}"

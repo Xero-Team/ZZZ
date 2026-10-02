@@ -17,12 +17,10 @@ anyhow.workspace = true
 libc.workspace = true
 log.workspace = true
 
-# FFmpeg provides the Linux/Windows decoder backend. By default the build
-# links against the system FFmpeg via pkg-config (fast builds, runtime `.so`
-# dependency). For a self-contained binary, point `FFMPEG_DIR` at a static
-# FFmpeg built with `--disable-everything --disable-encoders` and only the
-# required decoders/demuxers, or enable the crate's `build` feature to compile
-# FFmpeg from source.
+# FFmpeg provides the Linux/Windows decoder backend. Release and cross-build
+# scripts point `FFMPEG_DIR` at the pinned package downloaded by
+# `script/ffmpeg`; direct Cargo builds can set the same variable or use the
+# platform's FFmpeg package discovery.
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 ffmpeg-the-third = { version = "6.0", default-features = false, features = [
     "codec",

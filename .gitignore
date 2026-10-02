@@ -11,6 +11,7 @@
 .DS_Store
 .blob_store
 .build
+.deps/
 .claude/settings.local.json
 .envrc
 .flatpak-builder

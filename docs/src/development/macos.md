@@ -40,6 +40,9 @@ Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
 
 Once you have the dependencies installed, you can build ZZZ using [Cargo](https://doc.rust-lang.org/cargo/).
 
+The macOS video backend uses AVFoundation, so macOS builds do not download or
+package FFmpeg.
+
 For a debug build:
 
 ```sh

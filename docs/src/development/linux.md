@@ -53,6 +53,13 @@ You can install a local build on your machine with:
 
 This builds `~/.local/bin/zzz` and the `cli` in release mode, installs the binary at `~/.local/bin/zzz`, and installs `.desktop` files to `~/.local/share`.
 
+The release bundle downloads a pinned LGPL FFmpeg package into
+`.deps/ffmpeg/<target-triple>` and includes its runtime libraries. Set
+`FFMPEG_DIR` to use another development package, or `ZZZ_FFMPEG_ROOT` to move
+the download and cache folder. Direct Cargo builds continue to use
+`FFMPEG_DIR` when set and otherwise discover a system FFmpeg through
+`pkg-config`.
+
 ## Cross-compiling Windows executables
 
 To build `zzz.exe` on Linux without an MSI, see

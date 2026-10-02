@@ -20,6 +20,8 @@ Environment:
   MSVC_ROOT           msvc-wine install root (default: /opt/msvc)
   MSVC_DIR            msvc wrapper scripts (default: ~/.local/share/msvc)
   GPUI_FXC_PATH       Override fxc.exe path
+  FFMPEG_DIR          Override the pinned FFmpeg development package
+  ZZZ_FFMPEG_ROOT     FFmpeg download/cache root (default: .deps/ffmpeg)
 EOF
 }
 
@@ -181,6 +183,15 @@ if ! rustup target list --installed | grep -qx "$triple"; then
   rustup target add "$triple"
 fi
 
+if [[ -z "${FFMPEG_DIR:-}" ]]; then
+  FFMPEG_DIR="$(script/ffmpeg ensure --target "$triple")"
+  export FFMPEG_DIR
+fi
+if [[ ! -f "${FFMPEG_DIR}/include/libavcodec/avcodec.h" || ! -d "${FFMPEG_DIR}/lib" ]]; then
+  echo "Windows FFmpeg development package is incomplete: ${FFMPEG_DIR}" >&2
+  exit 1
+fi
+
 apply_windows_env() {
   export INCLUDE="${msvc_unix}/include;${msvc_unix}/atlmfc/include;${sdk_include}/shared;${sdk_include}/ucrt;${sdk_include}/um;${sdk_include}/winrt"
   export LIB="${msvc_unix}/lib/${msvc_arch};${msvc_unix}/atlmfc/lib/${msvc_arch};${sdk_lib}/ucrt/${msvc_arch};${sdk_lib}/um/${msvc_arch}"
@@ -290,5 +301,24 @@ if [[ "$profile" == dev ]]; then
   artifact_profile=debug
 fi
 
+artifact_dir="target/${triple}/${artifact_profile}"
+ffmpeg_runtime_count=0
+for runtime in \
+  "${FFMPEG_DIR}"/bin/avcodec-*.dll \
+  "${FFMPEG_DIR}"/bin/avformat-*.dll \
+  "${FFMPEG_DIR}"/bin/avutil-*.dll \
+  "${FFMPEG_DIR}"/bin/swscale-*.dll \
+  "${FFMPEG_DIR}"/bin/swresample-*.dll; do
+  [[ -f "$runtime" ]] || continue
+  cp -f "$runtime" "$artifact_dir/"
+  ffmpeg_runtime_count=$((ffmpeg_runtime_count + 1))
+done
+if [[ "$ffmpeg_runtime_count" -eq 0 ]]; then
+  echo "No FFmpeg runtime DLLs found under ${FFMPEG_DIR}/bin" >&2
+  exit 1
+fi
+cp -f "${FFMPEG_DIR}/LICENSE.txt" "${artifact_dir}/FFmpeg-LICENSE.txt"
+
 echo "Built target/${triple}/${artifact_profile}/zzz.exe"
 echo "Built target/${triple}/${artifact_profile}/cli.exe"
+echo "Bundled ${ffmpeg_runtime_count} FFmpeg runtime DLLs"
