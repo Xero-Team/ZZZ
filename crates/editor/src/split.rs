@@ -542,20 +542,21 @@ impl SplittableEditor {
             let workspace = workspace.downgrade();
             let rhs_editor = rhs_editor.downgrade();
             move |window, cx| {
-                workspace
-                    .update(cx, |workspace, cx| {
-                        rhs_editor
-                            .update(cx, |editor, cx| {
-                                editor.added_to_workspace(workspace, window, cx);
-                            })
-                            .ok();
-                    })
-                    .ok();
+                if let (Some(workspace), Some(rhs_editor)) =
+                    (workspace.upgrade(), rhs_editor.upgrade())
+                {
+                    workspace.update(cx, |workspace, cx| {
+                        rhs_editor.update(cx, |editor, cx| {
+                            editor.added_to_workspace(workspace, window, cx);
+                        });
+                    });
+                }
                 if style == DiffViewStyle::Split {
-                    this.update(cx, |this, cx| {
-                        this.split(window, cx);
-                    })
-                    .ok();
+                    if let Some(this) = this.upgrade() {
+                        this.update(cx, |this, cx| {
+                            this.split(window, cx);
+                        });
+                    }
                 }
             }
         });
@@ -783,10 +784,11 @@ impl SplittableEditor {
                 move |cursor_position, window, cx| {
                     let this = this.clone();
                     window.defer(cx, move |window, cx| {
-                        this.update(cx, |this, cx| {
-                            this.sync_cursor_to_other_side(true, cursor_position, window, cx);
-                        })
-                        .ok();
+                        if let Some(this) = this.upgrade() {
+                            this.update(cx, |this, cx| {
+                                this.sync_cursor_to_other_side(true, cursor_position, window, cx);
+                            });
+                        }
                     })
                 },
             )));
@@ -797,10 +799,11 @@ impl SplittableEditor {
                 move |cursor_position, window, cx| {
                     let this = this.clone();
                     window.defer(cx, move |window, cx| {
-                        this.update(cx, |this, cx| {
-                            this.sync_cursor_to_other_side(false, cursor_position, window, cx);
-                        })
-                        .ok();
+                        if let Some(this) = this.upgrade() {
+                            this.update(cx, |this, cx| {
+                                this.sync_cursor_to_other_side(false, cursor_position, window, cx);
+                            });
+                        }
                     })
                 },
             )));
