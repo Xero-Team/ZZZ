@@ -1461,20 +1461,22 @@ impl EditorElement {
                     .gutter_diff_review_indicator
                     .1
                     .get_or_insert_with(|| {
-                        cx.spawn(async move |this, cx| {
+                        cx.spawn(async move |editor, cx| {
                             cx.background_executor()
                                 .timer(Duration::from_millis(200))
                                 .await;
 
-                            this.update(cx, |this, cx| {
+                            let Some(editor) = editor.upgrade() else {
+                                return;
+                            };
+                            editor.update(cx, |editor, cx| {
                                 if let Some(indicator) =
-                                    this.gutter_diff_review_indicator.0.as_mut()
+                                    editor.gutter_diff_review_indicator.0.as_mut()
                                 {
                                     indicator.is_active = true;
                                     cx.notify();
                                 }
-                            })
-                            .ok();
+                            });
                         })
                     });
             }
@@ -1527,18 +1529,20 @@ impl EditorElement {
 
                 if !is_visible {
                     editor.gutter_hover_button.1.get_or_insert_with(|| {
-                        cx.spawn(async move |this, cx| {
+                        cx.spawn(async move |editor, cx| {
                             cx.background_executor()
                                 .timer(Duration::from_millis(200))
                                 .await;
 
-                            this.update(cx, |this, cx| {
-                                if let Some(indicator) = this.gutter_hover_button.0.as_mut() {
+                            let Some(editor) = editor.upgrade() else {
+                                return;
+                            };
+                            editor.update(cx, |editor, cx| {
+                                if let Some(indicator) = editor.gutter_hover_button.0.as_mut() {
                                     indicator.is_active = true;
                                     cx.notify();
                                 }
-                            })
-                            .ok();
+                            });
                         })
                     });
                 }
@@ -1640,12 +1644,13 @@ impl EditorElement {
             key.clone(),
             cx.spawn_in(window, async move |editor, cx| {
                 cx.background_executor().timer(CURSORS_VISIBLE_FOR).await;
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.hovered_cursors.remove(&key);
-                        cx.notify();
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                editor.update(cx, |editor, cx| {
+                    editor.hovered_cursors.remove(&key);
+                    cx.notify();
+                });
             }),
         );
         cx.notify()
