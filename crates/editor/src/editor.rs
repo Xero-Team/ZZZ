@@ -21980,16 +21980,20 @@ impl Editor {
                 cx.background_executor()
                     .timer(Duration::from_millis(50))
                     .await;
-                editor
-                    .update_in(cx, |editor, window, cx| {
-                        editor.do_update_data_on_scroll(window, cx);
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                let Ok(()) = editor.update_in(cx, |editor, window, cx| {
+                    editor.do_update_data_on_scroll(window, cx);
+                }) else {
+                    return;
+                };
             });
-        } else {
-            self.post_scroll_update = Task::ready(());
-            self.do_update_data_on_scroll(window, cx);
+            return;
         }
+
+        self.post_scroll_update = Task::ready(());
+        self.do_update_data_on_scroll(window, cx);
     }
 
     fn do_update_data_on_scroll(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
