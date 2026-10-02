@@ -36,7 +36,7 @@ impl Editor {
         if !self.lsp_data_enabled() || !self.lsp_document_links.enabled {
             return;
         }
-        let Some(project) = self.project.as_ref().map(|p| p.downgrade()) else {
+        let Some(project) = self.project.as_ref().map(|project| project.downgrade()) else {
             return;
         };
 
@@ -44,11 +44,11 @@ impl Editor {
             .visible_buffers(cx)
             .into_iter()
             .filter(|buffer| self.is_lsp_relevant(buffer.read(cx).file(), cx))
-            .chain(for_buffer.and_then(|id| self.buffer.read(cx).buffer(id)))
+            .chain(for_buffer.and_then(|buffer_id| self.buffer.read(cx).buffer(buffer_id)))
             .filter(|buffer| {
-                let id = buffer.read(cx).remote_id();
-                for_buffer.is_none_or(|target| target == id)
-                    && self.registered_buffers.contains_key(&id)
+                let buffer_id = buffer.read(cx).remote_id();
+                for_buffer.is_none_or(|target| target == buffer_id)
+                    && self.registered_buffers.contains_key(&buffer_id)
             })
             .unique_by(|buffer| buffer.read(cx).remote_id())
             .collect::<Vec<_>>();
@@ -81,23 +81,24 @@ impl Editor {
             };
 
             let new_links_for_buffers = join_all(tasks_for_buffers).await;
-            editor
-                .update(cx, |editor, _| {
-                    for (buffer_id, links) in new_links_for_buffers {
-                        let Some(links) = links else {
-                            continue;
-                        };
-                        if links.is_empty() {
-                            editor.lsp_document_links.per_buffer.remove(&buffer_id);
-                        } else {
-                            editor
-                                .lsp_document_links
-                                .per_buffer
-                                .insert(buffer_id, links);
-                        }
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            editor.update(cx, |editor, _| {
+                for (buffer_id, links) in new_links_for_buffers {
+                    let Some(links) = links else {
+                        continue;
+                    };
+                    if links.is_empty() {
+                        editor.lsp_document_links.per_buffer.remove(&buffer_id);
+                    } else {
+                        editor
+                            .lsp_document_links
+                            .per_buffer
+                            .insert(buffer_id, links);
                     }
-                })
-                .ok();
+                }
+            });
         });
     }
 
@@ -173,8 +174,8 @@ impl Editor {
                 }))
                 .await;
             resolved_links.extend(pending_results.into_iter().flatten());
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     if let Some(by_server) =
                         editor.lsp_document_links.per_buffer.get_mut(&buffer_id)
                     {
@@ -188,8 +189,8 @@ impl Editor {
                         }
                     }
                     cx.notify();
-                })
-                .ok();
+                });
+            }
 
             resolved_links
                 .into_iter()
