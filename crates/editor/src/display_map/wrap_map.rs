@@ -347,19 +347,21 @@ impl WrapMap {
                         self.edits_since_sync = self.edits_since_sync.compose(&edits);
                     }
                     Err(wrap_task) => {
-                        self.background_task = Some(cx.spawn(async move |this, cx| {
+                        self.background_task = Some(cx.spawn(async move |wrap_map, cx| {
                             let (snapshot, edits) = wrap_task.await;
-                            this.update(cx, |this, cx| {
-                                this.snapshot = snapshot;
-                                this.edits_since_sync = this
+                            let Some(wrap_map) = wrap_map.upgrade() else {
+                                return;
+                            };
+                            wrap_map.update(cx, |wrap_map, cx| {
+                                wrap_map.snapshot = snapshot;
+                                wrap_map.edits_since_sync = wrap_map
                                     .edits_since_sync
-                                    .compose(mem::take(&mut this.interpolated_edits).invert())
+                                    .compose(mem::take(&mut wrap_map.interpolated_edits).invert())
                                     .compose(&edits);
-                                this.background_task = None;
-                                this.flush_edits(cx);
+                                wrap_map.background_task = None;
+                                wrap_map.flush_edits(cx);
                                 cx.notify();
-                            })
-                            .ok();
+                            });
                         }));
                     }
                 }
@@ -464,19 +466,21 @@ impl WrapMap {
                         self.edits_since_sync = self.edits_since_sync.compose(&output_edits);
                     }
                     Err(update_task) => {
-                        self.background_task = Some(cx.spawn(async move |this, cx| {
+                        self.background_task = Some(cx.spawn(async move |wrap_map, cx| {
                             let (snapshot, edits) = update_task.await;
-                            this.update(cx, |this, cx| {
-                                this.snapshot = snapshot;
-                                this.edits_since_sync = this
+                            let Some(wrap_map) = wrap_map.upgrade() else {
+                                return;
+                            };
+                            wrap_map.update(cx, |wrap_map, cx| {
+                                wrap_map.snapshot = snapshot;
+                                wrap_map.edits_since_sync = wrap_map
                                     .edits_since_sync
-                                    .compose(mem::take(&mut this.interpolated_edits).invert())
+                                    .compose(mem::take(&mut wrap_map.interpolated_edits).invert())
                                     .compose(&edits);
-                                this.background_task = None;
-                                this.flush_edits(cx);
+                                wrap_map.background_task = None;
+                                wrap_map.flush_edits(cx);
                                 cx.notify();
-                            })
-                            .ok();
+                            });
                         }));
                     }
                 }
