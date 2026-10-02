@@ -270,6 +270,28 @@ impl Docker {
         command.arg("config");
         command
     }
+
+    fn create_docker_exec_command(
+        &self,
+        container_id: &str,
+        remote_folder: &str,
+        user: &str,
+        env: &HashMap<String, String>,
+        inner_command: Command,
+    ) -> Command {
+        let mut command = Command::new(&self.docker_cli);
+        command.args(&["exec", "-w", remote_folder, "-u", user]);
+
+        for (key, value) in env {
+            command.arg("-e");
+            command.arg(format!("{key}={value}"));
+        }
+
+        command.arg(container_id);
+        command.arg(inner_command.get_program());
+        command.args(inner_command.get_args());
+        command
+    }
 }
 
 #[async_trait]
@@ -354,28 +376,8 @@ impl DockerClient for Docker {
         env: &HashMap<String, String>,
         inner_command: Command,
     ) -> Result<(), DevContainerError> {
-        let mut command = Command::new(&self.docker_cli);
-
-        command.args(&["exec", "-w", remote_folder, "-u", user]);
-
-        for (k, v) in env {
-            command.arg("-e");
-            let env_declaration = format!("{}={}", k, v);
-            command.arg(&env_declaration);
-        }
-
-        command.arg(container_id);
-
-        command.arg("sh");
-
-        let mut inner_program_script: Vec<String> =
-            vec![inner_command.get_program().display().to_string()];
-        let mut args: Vec<String> = inner_command
-            .get_args()
-            .map(|arg| arg.display().to_string())
-            .collect();
-        inner_program_script.append(&mut args);
-        command.args(&["-c", &inner_program_script.join(" ")]);
+        let mut command =
+            self.create_docker_exec_command(container_id, remote_folder, user, env, inner_command);
 
         let output = command.output().await.map_err(|e| {
             log::error!("Error running command {e} in container exec");
@@ -725,6 +727,7 @@ mod test {
             parse_find_process_output,
         },
     };
+    use util::command::Command;
 
     #[test]
     fn use_buildkit_setting_overrides_buildx_detection() {
@@ -843,6 +846,40 @@ mod test {
                 OsStr::new(given_id)
             ]
         )
+    }
+
+    #[test]
+    fn docker_exec_preserves_inner_command_arguments() {
+        let docker = Docker {
+            docker_cli: "docker".to_owned(),
+            has_buildx: false,
+        };
+        let mut inner_command = Command::new("printf");
+        inner_command.args(["%s", "hello world", "$HOME; echo unsafe"]);
+
+        let command = docker.create_docker_exec_command(
+            "container",
+            "/workspaces/project",
+            "developer",
+            &HashMap::new(),
+            inner_command,
+        );
+
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            [
+                OsStr::new("exec"),
+                OsStr::new("-w"),
+                OsStr::new("/workspaces/project"),
+                OsStr::new("-u"),
+                OsStr::new("developer"),
+                OsStr::new("container"),
+                OsStr::new("printf"),
+                OsStr::new("%s"),
+                OsStr::new("hello world"),
+                OsStr::new("$HOME; echo unsafe"),
+            ]
+        );
     }
 
     #[test]
