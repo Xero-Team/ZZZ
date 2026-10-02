@@ -315,7 +315,7 @@ impl PickerDelegate for OutlineViewDelegate {
                     .await
             };
 
-            let _ = this.update(cx, |this, cx| {
+            this.update(cx, |this, cx| {
                 this.delegate.matches = matches;
                 let selected_index = if is_query_empty {
                     let (buffer, cursor_offset) =
@@ -353,7 +353,8 @@ impl PickerDelegate for OutlineViewDelegate {
 
                 this.delegate
                     .set_selected_index(selected_index, !is_query_empty, cx);
-            });
+            })
+            .log_err();
         })
     }
 
