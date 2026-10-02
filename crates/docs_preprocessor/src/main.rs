@@ -9,26 +9,6 @@ use std::io::{self, Read};
 use std::process;
 use std::sync::{LazyLock, OnceLock};
 
-static KEYMAP_MACOS: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/default-macos.json").expect("Failed to load MacOS keymap")
-});
-
-static KEYMAP_LINUX: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/default-linux.json").expect("Failed to load Linux keymap")
-});
-
-static KEYMAP_WINDOWS: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/default-windows.json").expect("Failed to load Windows keymap")
-});
-
-static KEYMAP_JETBRAINS_MACOS: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/macos/jetbrains.json").expect("Failed to load JetBrains macOS keymap")
-});
-
-static KEYMAP_JETBRAINS_LINUX: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/linux/jetbrains.json").expect("Failed to load JetBrains Linux keymap")
-});
-
 static ALL_ACTIONS: LazyLock<ActionManifest> = LazyLock::new(load_all_actions);
 
 #[derive(Clone, Copy)]
@@ -52,10 +32,43 @@ impl KeymapOverlay {
         }
     }
 
-    fn keymap(self, os: Os) -> &'static KeymapFile {
+    fn keymap(self, os: Os, keymaps: &LoadedKeymaps) -> &KeymapFile {
         match (self, os) {
-            (Self::JetBrains, Os::MacOs) => &KEYMAP_JETBRAINS_MACOS,
-            (Self::JetBrains, Os::Linux | Os::Windows) => &KEYMAP_JETBRAINS_LINUX,
+            (Self::JetBrains, Os::MacOs) => &keymaps.jetbrains_macos,
+            (Self::JetBrains, Os::Linux | Os::Windows) => &keymaps.jetbrains_linux,
+        }
+    }
+}
+
+struct LoadedKeymaps {
+    macos: KeymapFile,
+    linux: KeymapFile,
+    windows: KeymapFile,
+    jetbrains_macos: KeymapFile,
+    jetbrains_linux: KeymapFile,
+}
+
+impl LoadedKeymaps {
+    fn load() -> Result<Self> {
+        Ok(Self {
+            macos: load_keymap("keymaps/default-macos.json")
+                .context("failed to load macOS keymap")?,
+            linux: load_keymap("keymaps/default-linux.json")
+                .context("failed to load Linux keymap")?,
+            windows: load_keymap("keymaps/default-windows.json")
+                .context("failed to load Windows keymap")?,
+            jetbrains_macos: load_keymap("keymaps/macos/jetbrains.json")
+                .context("failed to load JetBrains macOS keymap")?,
+            jetbrains_linux: load_keymap("keymaps/linux/jetbrains.json")
+                .context("failed to load JetBrains Linux keymap")?,
+        })
+    }
+
+    fn for_os(&self, os: Os) -> &KeymapFile {
+        match os {
+            Os::MacOs => &self.macos,
+            Os::Linux => &self.linux,
+            Os::Windows => &self.windows,
         }
     }
 }
@@ -191,7 +204,7 @@ fn handle_preprocessing() -> Result<()> {
     let mut errors = HashSet::<PreprocessorError>::new();
     handle_frontmatter(&mut book, &mut errors);
     template_big_table_of_actions(&mut book);
-    template_and_validate_keybindings(&mut book, &mut errors);
+    template_and_validate_keybindings(&mut book, &mut errors)?;
     template_and_validate_actions(&mut book, &mut errors);
     template_and_validate_json_snippets(&mut book, &mut errors)?;
 
@@ -268,8 +281,12 @@ fn escape_html_attribute(attribute: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
+fn template_and_validate_keybindings(
+    book: &mut Book,
+    errors: &mut HashSet<PreprocessorError>,
+) -> Result<()> {
     let regex = Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").expect("valid regex literal");
+    let keymaps = LoadedKeymaps::load()?;
 
     for_each_chapter_mut(book, |chapter| {
         chapter.content = regex
@@ -297,10 +314,10 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
                 };
 
                 let macos_binding =
-                    find_binding_with_overlay(Os::MacOs, action, overlay)
+                    find_binding_with_overlay(&keymaps, Os::MacOs, action, overlay)
                         .unwrap_or_default();
                 let linux_binding =
-                    find_binding_with_overlay(Os::Linux, action, overlay)
+                    find_binding_with_overlay(&keymaps, Os::Linux, action, overlay)
                         .unwrap_or_default();
 
                 if macos_binding.is_empty() && linux_binding.is_empty() {
@@ -314,6 +331,7 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
             })
             .into_owned()
     });
+    Ok(())
 }
 
 fn template_and_validate_actions(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
@@ -375,23 +393,19 @@ fn find_binding_in_keymap(keymap: &KeymapFile, action: &str) -> Option<String> {
     find(&|a| name_for_action(a.to_owned()) == action)
 }
 
-fn find_binding(os: Os, action: &str) -> Option<String> {
-    let keymap = match os {
-        Os::MacOs => &KEYMAP_MACOS,
-        Os::Linux => &KEYMAP_LINUX,
-        Os::Windows => &KEYMAP_WINDOWS,
-    };
-    find_binding_in_keymap(keymap, action)
+fn find_binding(keymaps: &LoadedKeymaps, os: Os, action: &str) -> Option<String> {
+    find_binding_in_keymap(keymaps.for_os(os), action)
 }
 
 fn find_binding_with_overlay(
+    keymaps: &LoadedKeymaps,
     os: Os,
     action: &str,
     overlay: Option<KeymapOverlay>,
 ) -> Option<String> {
     overlay
-        .and_then(|overlay| find_binding_in_keymap(overlay.keymap(os), action))
-        .or_else(|| find_binding(os, action))
+        .and_then(|overlay| find_binding_in_keymap(overlay.keymap(os, keymaps), action))
+        .or_else(|| find_binding(keymaps, os, action))
 }
 
 fn template_and_validate_json_snippets(
