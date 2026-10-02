@@ -393,7 +393,7 @@ impl LifecycleScript {
 
     pub async fn run(
         &self,
-        command_runnder: &Arc<dyn CommandRunner>,
+        command_runner: &Arc<dyn CommandRunner>,
         working_directory: &Path,
     ) -> Result<(), DevContainerError> {
         for (command_name, mut command) in self.script_commands() {
@@ -401,7 +401,7 @@ impl LifecycleScript {
 
             command.current_dir(working_directory);
 
-            let output = command_runnder
+            let output = command_runner
                 .run_command(&mut command)
                 .await
                 .map_err(|e| {
@@ -413,6 +413,7 @@ impl LifecycleScript {
                 log::error!(
                     "Command {command_name} produced a non-successful output. StdErr: {std_err}"
                 );
+                return Err(DevContainerError::DevContainerScriptsFailed);
             }
             let std_out = String::from_utf8_lossy(&output.stdout);
             log::debug!("Command {command_name} output:\n {std_out}");
@@ -650,9 +651,23 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::{
+        collections::HashMap,
+        path::Path,
+        process::{ExitStatus, Output},
+        sync::Arc,
+    };
+
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt as _;
+    #[cfg(windows)]
+    use std::os::windows::process::ExitStatusExt as _;
+
+    use async_trait::async_trait;
+    use util::command::Command;
 
     use crate::{
+        command_json::CommandRunner,
         devcontainer_api::DevContainerError,
         devcontainer_json::{
             ContainerBuild, DevContainer, DevContainerBuildType, FeatureOptions, ForwardPort,
@@ -661,6 +676,24 @@ mod test {
             ZZZCustomizationsWrapper, deserialize_devcontainer_json,
         },
     };
+
+    struct FailingCommandRunner;
+
+    #[async_trait]
+    impl CommandRunner for FailingCommandRunner {
+        async fn run_command(&self, _command: &mut Command) -> Result<Output, std::io::Error> {
+            #[cfg(unix)]
+            let status = ExitStatus::from_raw(1 << 8);
+            #[cfg(windows)]
+            let status = ExitStatus::from_raw(1);
+
+            Ok(Output {
+                status,
+                stdout: Vec::new(),
+                stderr: b"failed".to_vec(),
+            })
+        }
+    }
 
     #[test]
     fn string_lifecycle_commands_use_shell() {
@@ -672,6 +705,16 @@ mod test {
             command.get_args().collect::<Vec<_>>(),
             vec!["-c", "echo hi | tr i o"]
         );
+    }
+
+    #[test]
+    fn lifecycle_script_propagates_nonzero_exit_status() {
+        let script = LifecycleScript::from_str("exit 1");
+        let runner: Arc<dyn CommandRunner> = Arc::new(FailingCommandRunner);
+
+        let result = futures::executor::block_on(script.run(&runner, Path::new(".")));
+
+        assert_eq!(result, Err(DevContainerError::DevContainerScriptsFailed));
     }
 
     #[test]
