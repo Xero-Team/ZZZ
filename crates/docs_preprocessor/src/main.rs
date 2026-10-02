@@ -129,7 +129,11 @@ impl PreprocessorError {
         error: String,
     ) -> Self {
         PreprocessorError::InvalidSettingsJson {
-            file: chapter.path.clone().expect("chapter has path"),
+            file: chapter
+                .path
+                .clone()
+                .or_else(|| chapter.source_path.clone())
+                .unwrap_or_else(|| std::path::PathBuf::from("<unknown chapter>")),
             line: chapter.content[..location].lines().count() + 1,
             snippet,
             error,
@@ -697,9 +701,8 @@ fn handle_postprocessing() -> Result<()> {
     queue.push(root_dir.clone());
     while let Some(dir) = queue.pop() {
         for entry in std::fs::read_dir(&dir).context("failed to read docs dir")? {
-            let Ok(entry) = entry else {
-                continue;
-            };
+            let entry = entry
+                .with_context(|| format!("failed to read entry in docs dir {}", dir.display()))?;
             let file_type = entry.file_type().context("Failed to determine file type")?;
             if file_type.is_dir() {
                 queue.push(entry.path());
@@ -723,7 +726,8 @@ fn handle_postprocessing() -> Result<()> {
     let meta_regex =
         Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).expect("valid regex literal");
     for file in files {
-        let contents = std::fs::read_to_string(&file)?;
+        let contents = std::fs::read_to_string(&file)
+            .with_context(|| format!("failed to read rendered page {}", file.display()))?;
         let mut meta_description = None;
         let mut meta_title = None;
         let mut metadata_error = None;
@@ -777,7 +781,8 @@ fn handle_postprocessing() -> Result<()> {
                 format!("<title>{}</title>", meta_title)
             })
             .to_string();
-        std::fs::write(file, contents)?;
+        std::fs::write(&file, contents)
+            .with_context(|| format!("failed to update rendered page {}", file.display()))?;
     }
 
     fn pretty_path<'a>(
@@ -962,6 +967,25 @@ mod tests {
         assert!(errors.contains(&PreprocessorError::InvalidFrontmatterLine(
             "[Some(\"intro.md\")] Docs > Intro: invalid-line".into()
         )));
+    }
+
+    #[test]
+    fn invalid_json_error_handles_chapters_without_paths() {
+        let mut chapter = Chapter::new("Generated", "{}".into(), "generated.md", Vec::new());
+        chapter.path = None;
+        chapter.source_path = None;
+
+        let error = PreprocessorError::new_for_invalid_settings_json(
+            &chapter,
+            0,
+            "{}".to_owned(),
+            "invalid".to_owned(),
+        );
+
+        let PreprocessorError::InvalidSettingsJson { file, .. } = error else {
+            panic!("expected invalid settings error");
+        };
+        assert_eq!(file, std::path::PathBuf::from("<unknown chapter>"));
     }
 
     #[test]
