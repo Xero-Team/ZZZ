@@ -1286,96 +1286,34 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             privileged: Some(resources.privileged),
             ..Default::default()
         };
-        // let mut extra_service_port_declarations: Vec<(String, DockerComposeService)> = Vec::new();
         let mut service_declarations: HashMap<String, DockerComposeService> = HashMap::new();
         if let Some(forward_ports) = &self.dev_container().forward_ports {
-            let main_service_ports: Vec<String> = forward_ports
-                .iter()
-                .filter_map(|f| match f {
-                    ForwardPort::Number(port) => Some(port.to_string()),
-                    ForwardPort::String(port) => {
-                        let parts: Vec<&str> = port.split(":").collect();
-                        if parts.len() <= 1 {
-                            Some(port.clone())
-                        } else if parts.len() == 2 {
-                            if parts[0] == main_service_name {
-                                Some(parts[1].to_owned())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
+            for forward_port in forward_ports {
+                let (service_name, port) = match forward_port {
+                    ForwardPort::Number(port) => (None, port.to_string()),
+                    ForwardPort::String(port) => match port.split_once(':') {
+                        None => (None, port.clone()),
+                        Some((_, port)) if port.contains(':') => continue,
+                        Some((service_name, port)) if service_name == main_service_name => {
+                            (None, port.to_owned())
                         }
-                    }
-                })
-                .collect();
-            for port in main_service_ports {
-                // If the main service uses a different service's network bridge, append to that service's ports instead
-                if let Some(network_service_name) = network_mode_service {
-                    if let Some(service) = service_declarations.get_mut(network_service_name) {
-                        service.ports.push(DockerComposeServicePort {
-                            target: port.clone(),
-                            published: port.clone(),
-                            ..Default::default()
-                        });
-                    } else {
-                        service_declarations.insert(
-                            network_service_name.to_owned(),
-                            DockerComposeService {
-                                ports: vec![DockerComposeServicePort {
-                                    target: port.clone(),
-                                    published: port.clone(),
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            },
-                        );
-                    }
+                        Some((service_name, port)) => (Some(service_name), port.to_owned()),
+                    },
+                };
+
+                let port = DockerComposeServicePort {
+                    target: port.clone(),
+                    published: port,
+                    ..Default::default()
+                };
+                if let Some(service_name) = service_name.or(network_mode_service) {
+                    service_declarations
+                        .entry(service_name.to_owned())
+                        .or_default()
+                        .ports
+                        .push(port);
                 } else {
-                    main_service.ports.push(DockerComposeServicePort {
-                        target: port.clone(),
-                        published: port.clone(),
-                        ..Default::default()
-                    });
-                }
-            }
-            let other_service_ports: Vec<(&str, &str)> = forward_ports
-                .iter()
-                .filter_map(|f| match f {
-                    ForwardPort::Number(_) => None,
-                    ForwardPort::String(port) => {
-                        let parts: Vec<&str> = port.split(":").collect();
-                        if parts.len() == 2 {
-                            if parts[0] == main_service_name {
-                                None
-                            } else {
-                                Some((parts[0], parts[1]))
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                })
-                .collect();
-            for (service_name, port) in other_service_ports {
-                if let Some(service) = service_declarations.get_mut(service_name) {
-                    service.ports.push(DockerComposeServicePort {
-                        target: port.to_owned(),
-                        published: port.to_owned(),
-                        ..Default::default()
-                    });
-                } else {
-                    service_declarations.insert(
-                        service_name.to_owned(),
-                        DockerComposeService {
-                            ports: vec![DockerComposeServicePort {
-                                target: port.to_owned(),
-                                published: port.to_owned(),
-                                ..Default::default()
-                            }],
-                            ..Default::default()
-                        },
-                    );
+                    main_service.ports.push(port);
                 }
             }
         }
