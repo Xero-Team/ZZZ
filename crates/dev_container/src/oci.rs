@@ -178,7 +178,7 @@ where
             "OCI request to {} returned HTTP {}: {}",
             url,
             status.as_u16(),
-            &output[..output.len().min(500)],
+            response_excerpt(&output, 500),
         ));
     }
 
@@ -188,9 +188,21 @@ where
             "Failed to deserialize response from {}: {} (body: {})",
             url,
             e,
-            &output[..output.len().min(500)],
+            response_excerpt(&output, 500),
         )),
     }
+}
+
+fn response_excerpt(output: &str, max_bytes: usize) -> &str {
+    if output.len() <= max_bytes {
+        return output;
+    }
+
+    let mut end = max_bytes;
+    while !output.is_char_boundary(end) {
+        end -= 1;
+    }
+    &output[..end]
 }
 
 #[cfg(test)]
@@ -204,8 +216,16 @@ mod test {
 
     use crate::oci::{
         TokenResponse, download_oci_tarball, get_deserializable_oci_blob,
-        get_deserialized_response, get_latest_oci_manifest, get_oci_token,
+        get_deserialized_response, get_latest_oci_manifest, get_oci_token, response_excerpt,
     };
+
+    #[test]
+    fn response_excerpt_preserves_utf8_boundaries() {
+        let output = format!("{}é", "a".repeat(499));
+
+        assert_eq!(response_excerpt(&output, 500), "a".repeat(499));
+        assert_eq!(response_excerpt("short", 500), "short");
+    }
 
     async fn build_test_tarball() -> Vec<u8> {
         let devcontainer_json = concat!(
