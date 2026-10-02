@@ -1456,10 +1456,7 @@ impl Session {
             return;
         }
 
-        if self
-            .selected_snapshot_index
-            .is_some_and(|ix| self.snapshots.len() <= ix)
-        {
+        if ix.is_some_and(|ix| self.snapshots.len() <= ix) {
             debug_panic!("Attempted to select a debug session with an out of bounds index");
             return;
         }
