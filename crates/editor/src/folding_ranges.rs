@@ -16,7 +16,7 @@ impl Editor {
         if !self.lsp_data_enabled() || !self.use_document_folding_ranges {
             return;
         }
-        let Some(project) = self.project.as_ref().map(|p| p.downgrade()) else {
+        let Some(project) = self.project.as_ref().map(|project| project.downgrade()) else {
             return;
         };
 
@@ -26,9 +26,9 @@ impl Editor {
             .filter(|buffer| self.is_lsp_relevant(buffer.read(cx).file(), cx))
             .chain(for_buffer.and_then(|id| self.buffer.read(cx).buffer(id)))
             .filter(|buffer| {
-                let id = buffer.read(cx).remote_id();
-                (for_buffer.is_none_or(|target| target == id))
-                    && self.registered_buffers.contains_key(&id)
+                let buffer_id = buffer.read(cx).remote_id();
+                (for_buffer.is_none_or(|target| target == buffer_id))
+                    && self.registered_buffers.contains_key(&buffer_id)
                     && LanguageSettings::for_buffer(buffer.read(cx), cx)
                         .document_folding_ranges
                         .enabled()
@@ -41,8 +41,11 @@ impl Editor {
                 .timer(LSP_REQUEST_DEBOUNCE_TIMEOUT)
                 .await;
 
-            let Some(tasks) = editor
-                .update(cx, |_, cx| {
+            let tasks = {
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                editor.update(cx, |_, cx| {
                     let project = project.upgrade()?;
                     Some(project.read(cx).lsp_store().update(cx, |lsp_store, cx| {
                         buffers_to_query
@@ -55,9 +58,8 @@ impl Editor {
                             .collect::<Vec<_>>()
                     }))
                 })
-                .ok()
-                .flatten()
-            else {
+            };
+            let Some(tasks) = tasks else {
                 return;
             };
 
@@ -66,16 +68,16 @@ impl Editor {
                 return;
             }
 
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     editor.display_map.update(cx, |display_map, cx| {
                         for (buffer_id, ranges) in results {
                             display_map.set_lsp_folding_ranges(buffer_id, ranges, cx);
                         }
                     });
                     cx.notify();
-                })
-                .ok();
+                });
+            }
         });
     }
 
