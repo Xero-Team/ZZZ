@@ -25,6 +25,7 @@ use project::git_store::Repository;
 use project_diff::ProjectDiff;
 use time::OffsetDateTime;
 use ui::prelude::*;
+use util::ResultExt;
 use workspace::{ModalView, OpenMode, Workspace, notifications::DetachAndPromptErr};
 use zzz_actions;
 
@@ -545,7 +546,7 @@ impl RefPickerModal {
             let show_result = repo
                 .update(cx, |repo, _| repo.show(git_ref.clone()))
                 .await
-                .ok();
+                .log_err();
 
             if let Some(show_future) = show_result {
                 if let Ok(details) = show_future {
@@ -553,13 +554,13 @@ impl RefPickerModal {
                         this.commit_details = Some(details);
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
                 } else {
                     this.update(cx, |this, cx| {
                         this.commit_details = None;
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
                 }
             }
         }));
