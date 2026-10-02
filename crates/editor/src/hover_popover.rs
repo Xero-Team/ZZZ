@@ -87,10 +87,11 @@ pub fn hover_at(
             let delay = Duration::from_millis(settings.hover_popover_hiding_delay.0);
             let task = cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(delay).await;
-                this.update(cx, |editor, cx| {
-                    hide_hover(editor, cx);
-                })
-                .ok();
+                if let Some(editor) = this.upgrade() {
+                    editor.update(cx, |editor, cx| {
+                        hide_hover(editor, cx);
+                    });
+                }
             });
             editor.hover_state.hiding_delay_task = Some(task);
         }
@@ -1080,11 +1081,12 @@ impl InfoPopover {
             // because that would dismiss the popover.
             .on_mouse_move({
                 move |_, _, cx: &mut App| {
-                    this.update(cx, |editor, _| {
-                        editor.hover_state.closest_mouse_distance = Some(px(0.0));
-                        editor.hover_state.hiding_delay_task = None;
-                    })
-                    .ok();
+                    if let Some(editor) = this.upgrade() {
+                        editor.update(cx, |editor, _| {
+                            editor.hover_state.closest_mouse_distance = Some(px(0.0));
+                            editor.hover_state.hiding_delay_task = None;
+                        });
+                    }
                     cx.stop_propagation()
                 }
             })
@@ -1182,11 +1184,12 @@ impl DiagnosticPopover {
             .on_mouse_move({
                 let this = this.clone();
                 move |_, _, cx: &mut App| {
-                    this.update(cx, |editor, _| {
-                        editor.hover_state.closest_mouse_distance = Some(px(0.0));
-                        editor.hover_state.hiding_delay_task = None;
-                    })
-                    .ok();
+                    if let Some(editor) = this.upgrade() {
+                        editor.update(cx, |editor, _| {
+                            editor.hover_state.closest_mouse_distance = Some(px(0.0));
+                            editor.hover_state.hiding_delay_task = None;
+                        });
+                    }
                     cx.stop_propagation()
                 }
             })
@@ -1227,11 +1230,13 @@ impl DiagnosticPopover {
                                 .on_url_click(
                                     move |link, window, cx| {
                                         if let Some(renderer) = GlobalDiagnosticRenderer::global(cx)
+                                            && let Some(editor) = this.upgrade()
                                         {
-                                            this.update(cx, |this, cx| {
-                                                renderer.as_ref().open_link(this, link, window, cx);
-                                            })
-                                            .ok();
+                                            editor.update(cx, |editor, cx| {
+                                                renderer.as_ref().open_link(
+                                                    editor, link, window, cx,
+                                                );
+                                            });
                                         }
                                     },
                                 ),
