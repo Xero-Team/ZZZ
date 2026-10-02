@@ -1982,7 +1982,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
 
         let devcontainer_up = self.run_dev_container(build_resources).await?;
 
-        self.run_remote_scripts(&devcontainer_up, true).await?;
+        self.run_remote_scripts(&devcontainer_up, true, true)
+            .await?;
 
         Ok(devcontainer_up)
     }
@@ -1991,6 +1992,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
         &self,
         devcontainer_up: &DevContainerUp,
         new_container: bool,
+        container_started: bool,
     ) -> Result<(), DevContainerError> {
         let ConfigStatus::VariableParsed(config) = &self.config else {
             log::error!("Config not yet parsed, cannot proceed with remote scripts");
@@ -2042,6 +2044,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                         .await?;
                 }
             }
+        }
+        if container_started {
             if let Some(post_start_command) = &config.post_start_command {
                 for (command_name, command) in post_start_command.script_commands() {
                     log::debug!("Running post start command {command_name}");
@@ -2100,7 +2104,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
 
             let docker_inspect = self.docker_client.inspect(&docker_ps.id).await?;
 
-            if !docker_inspect.is_running() {
+            let container_started = !docker_inspect.is_running();
+            if container_started {
                 log::debug!("Container not running. Will attempt to start, and then proceed");
                 self.docker_client.start_container(&docker_ps.id).await?;
             }
@@ -2119,7 +2124,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                 remote_env,
             };
 
-            self.run_remote_scripts(&dev_container_up, false).await?;
+            self.run_remote_scripts(&dev_container_up, false, container_started)
+                .await?;
 
             Ok(Some(dev_container_up))
         } else {
@@ -3026,6 +3032,46 @@ mod test {
             devcontainer_contents,
         )
         .await
+    }
+
+    #[gpui::test]
+    async fn post_start_runs_when_an_existing_container_is_started(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let (test_dependencies, mut devcontainer_manifest) = init_default_devcontainer_manifest(
+            cx,
+            r#"{
+                "image": "image",
+                "postStartCommand": "echo post-start",
+                "postAttachCommand": "echo post-attach"
+            }"#,
+        )
+        .await
+        .unwrap();
+        devcontainer_manifest.parse_nonremote_vars().unwrap();
+
+        let devcontainer_up = devcontainer_manifest
+            .check_for_existing_devcontainer()
+            .await
+            .unwrap()
+            .expect("existing container");
+        assert_eq!(devcontainer_up.container_id, "found_docker_ps");
+
+        let commands = test_dependencies
+            .docker
+            .exec_commands_recorded
+            .lock()
+            .expect("recorded commands");
+        assert_eq!(commands.len(), 2);
+        assert_eq!(commands[0]._inner_command.get_program(), "/bin/sh");
+        assert_eq!(
+            commands[0]._inner_command.get_args().collect::<Vec<_>>(),
+            [OsStr::new("-c"), OsStr::new("echo post-start")]
+        );
+        assert_eq!(commands[1]._inner_command.get_program(), "/bin/sh");
+        assert_eq!(
+            commands[1]._inner_command.get_args().collect::<Vec<_>>(),
+            [OsStr::new("-c"), OsStr::new("echo post-attach")]
+        );
     }
 
     async fn init_devcontainer_manifest(
@@ -6544,7 +6590,7 @@ RUN echo $RUBY_VERSION2
             Ok(())
         }
         async fn start_container(&self, _id: &str) -> Result<(), DevContainerError> {
-            Err(DevContainerError::DockerNotAvailable)
+            Ok(())
         }
         async fn find_process_by_filters(
             &self,
