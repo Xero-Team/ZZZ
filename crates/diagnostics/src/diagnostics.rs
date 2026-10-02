@@ -101,9 +101,7 @@ fn diagnostics_are_unchanged(
 ) -> bool {
     existing.len() == new.len()
         && existing.iter().zip(new).all(|(existing, new)| {
-            existing.diagnostic.message == new.diagnostic.message
-                && existing.diagnostic.severity == new.diagnostic.severity
-                && existing.diagnostic.is_primary == new.diagnostic.is_primary
+            existing.diagnostic == *new.diagnostic
                 && existing.range.to_offset(snapshot) == new.range.to_offset(snapshot)
         })
 }

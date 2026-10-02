@@ -1522,6 +1522,63 @@ async fn test_diagnostics_with_code(cx: &mut TestAppContext) {
              }"
         }
     );
+
+    lsp_store.update(cx, |lsp_store, cx| {
+        lsp_store
+            .update_diagnostics(
+                language_server_id,
+                lsp::PublishDiagnosticsParams {
+                    uri,
+                    diagnostics: vec![
+                        lsp::Diagnostic {
+                            range: lsp::Range::new(
+                                lsp::Position::new(1, 4),
+                                lsp::Position::new(1, 14),
+                            ),
+                            severity: Some(lsp::DiagnosticSeverity::WARNING),
+                            code: Some(lsp::NumberOrString::String("unused-x".to_string())),
+                            source: Some("biome".to_string()),
+                            message: "'x' is assigned a value but never used".to_string(),
+                            ..Default::default()
+                        },
+                        lsp::Diagnostic {
+                            range: lsp::Range::new(
+                                lsp::Position::new(2, 4),
+                                lsp::Position::new(2, 14),
+                            ),
+                            severity: Some(lsp::DiagnosticSeverity::WARNING),
+                            code: Some(lsp::NumberOrString::String("unused-y".to_string())),
+                            source: Some("biome".to_string()),
+                            message: "'y' is assigned a value but never used".to_string(),
+                            ..Default::default()
+                        },
+                    ],
+                    version: None,
+                },
+                None,
+                DiagnosticSourceKind::Pushed,
+                &[],
+                cx,
+            )
+            .unwrap();
+    });
+
+    diagnostics
+        .next_notification(DIAGNOSTICS_UPDATE_DEBOUNCE + Duration::from_millis(10), cx)
+        .await;
+
+    pretty_assertions::assert_eq!(
+        editor_content_with_blocks(&editor, cx),
+        indoc::indoc! {
+            "§ main.js
+             § -----
+             function test() {
+                 const x = 10; § 'x' is assigned a value but never used (biome unused-x)
+                 const y = 20; § 'y' is assigned a value but never used (biome unused-y)
+                 return 1;
+             }"
+        }
+    );
 }
 
 #[gpui::test]
