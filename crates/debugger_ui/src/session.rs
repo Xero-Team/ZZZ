@@ -132,8 +132,6 @@ impl FollowableItem for DebugSession {
         _window: &mut Window,
         _cx: &mut App,
     ) -> bool {
-        // update.get_or_insert_with(|| proto::update_view::Variant::DebugPanel(Default::default()));
-
         true
     }
 

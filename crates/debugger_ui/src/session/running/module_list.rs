@@ -111,9 +111,10 @@ impl ModuleList {
 
             this.update_in(cx, |this, window, cx| {
                 this.workspace.update(cx, |workspace, cx| {
-                    let project_path = buffer.read(cx).project_path(cx).ok_or_else(|| {
-                        anyhow!("Could not select a stack frame for unnamed buffer")
-                    })?;
+                    let project_path = buffer
+                        .read(cx)
+                        .project_path(cx)
+                        .ok_or_else(|| anyhow!("Could not open a module with an unnamed buffer"))?;
                     anyhow::Ok(workspace.open_path_preview(
                         project_path,
                         None,

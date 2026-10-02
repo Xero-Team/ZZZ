@@ -85,7 +85,6 @@ impl Render for LoadedSourceList {
                 .update(cx, |session, cx| session.loaded_sources(cx).len());
             self.list.reset(len);
             self.invalidate = false;
-            cx.notify();
         }
 
         div()
