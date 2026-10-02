@@ -261,7 +261,7 @@ pub(crate) fn get_serialized_layout(
     kvp.read_kvp(&key)
         .log_err()
         .flatten()
-        .and_then(|value| serde_json::from_str::<SerializedLayout>(&value).ok())
+        .and_then(|value| serde_json::from_str::<SerializedLayout>(&value).log_err())
 }
 
 pub(crate) fn deserialize_pane_layout(
