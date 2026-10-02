@@ -359,8 +359,8 @@ impl ProjectDiagnosticsEditor {
             if buffer.read(cx).is_dirty() {
                 continue;
             }
-            self.multibuffer.update(cx, |b, cx| {
-                b.remove_excerpts(PathKey::for_buffer(&buffer, cx), cx);
+            self.multibuffer.update(cx, |multibuffer, cx| {
+                multibuffer.remove_excerpts(PathKey::for_buffer(&buffer, cx), cx);
             });
         }
     }
@@ -557,8 +557,9 @@ impl ProjectDiagnosticsEditor {
                 if group_severity.is_none_or(|s| s > max_severity) {
                     continue;
                 }
-                let languages =
-                    Some(this.read_with(cx, |t, cx| t.project.read(cx).languages().clone())?);
+                let languages = Some(this.read_with(cx, |diagnostics_editor, cx| {
+                    diagnostics_editor.project.read(cx).languages().clone()
+                })?);
                 let more = cx.update(|_, cx| {
                     crate::diagnostic_renderer::DiagnosticRenderer::diagnostic_blocks_for_group(
                         group,
@@ -573,12 +574,20 @@ impl ProjectDiagnosticsEditor {
             }
 
             let cmp_excerpts = |buffer_snapshot: &BufferSnapshot,
-                                a: &ExcerptRange<text::Anchor>,
-                                b: &ExcerptRange<text::Anchor>| {
-                let context_start = || a.context.start.cmp(&b.context.start, buffer_snapshot);
-                let context_end = || a.context.end.cmp(&b.context.end, buffer_snapshot);
-                let primary_start = || a.primary.start.cmp(&b.primary.start, buffer_snapshot);
-                let primary_end = || a.primary.end.cmp(&b.primary.end, buffer_snapshot);
+                                left: &ExcerptRange<text::Anchor>,
+                                right: &ExcerptRange<text::Anchor>| {
+                let context_start = || {
+                    left.context
+                        .start
+                        .cmp(&right.context.start, buffer_snapshot)
+                };
+                let context_end = || left.context.end.cmp(&right.context.end, buffer_snapshot);
+                let primary_start = || {
+                    left.primary
+                        .start
+                        .cmp(&right.primary.start, buffer_snapshot)
+                };
+                let primary_end = || left.primary.end.cmp(&right.primary.end, buffer_snapshot);
                 context_start()
                     .then_with(context_end)
                     .then_with(primary_start)
@@ -596,7 +605,7 @@ impl ProjectDiagnosticsEditor {
                         RetainExcerpts::All | RetainExcerpts::Dirty => multi_buffer
                             .snapshot(cx)
                             .excerpts_for_buffer(buffer_id)
-                            .sorted_by(|a, b| cmp_excerpts(&buffer_snapshot, a, b))
+                            .sorted_by(|left, right| cmp_excerpts(&buffer_snapshot, left, right))
                             .collect(),
                     }
                 })
@@ -604,25 +613,25 @@ impl ProjectDiagnosticsEditor {
 
             let mut result_blocks = vec![None; excerpt_ranges.len()];
             let context_lines = cx.update(|_, cx| multibuffer_context_lines(cx))?;
-            for b in blocks {
+            for block in blocks {
                 let excerpt_range = context_range_for_entry(
-                    b.initial_range.clone(),
+                    block.initial_range.clone(),
                     context_lines,
                     buffer_snapshot.clone(),
                     cx,
                 )
                 .await;
-                let initial_range = buffer_snapshot.anchor_after(b.initial_range.start)
-                    ..buffer_snapshot.anchor_before(b.initial_range.end);
+                let initial_range = buffer_snapshot.anchor_after(block.initial_range.start)
+                    ..buffer_snapshot.anchor_before(block.initial_range.end);
                 let excerpt_range = ExcerptRange {
                     context: excerpt_range,
                     primary: initial_range,
                 };
-                let i = excerpt_ranges
+                let insertion_index = excerpt_ranges
                     .binary_search_by(|probe| cmp_excerpts(&buffer_snapshot, probe, &excerpt_range))
-                    .unwrap_or_else(|i| i);
-                excerpt_ranges.insert(i, excerpt_range);
-                result_blocks.insert(i, Some(b));
+                    .unwrap_or_else(|insertion_index| insertion_index);
+                excerpt_ranges.insert(insertion_index, excerpt_range);
+                result_blocks.insert(insertion_index, Some(block));
             }
 
             this.update_in(cx, |this, window, cx| {
@@ -684,7 +693,9 @@ impl ProjectDiagnosticsEditor {
                             placement: BlockPlacement::Near(anchor.start),
                             height: Some(1),
                             style: BlockStyle::Flex,
-                            render: Arc::new(move |bcx| block.render_block(editor.clone(), bcx)),
+                            render: Arc::new(move |block_context| {
+                                block.render_block(editor.clone(), block_context)
+                            }),
                             priority: 1,
                         })
                     },

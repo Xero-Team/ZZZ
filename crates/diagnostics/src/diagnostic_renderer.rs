@@ -43,12 +43,12 @@ impl DiagnosticRenderer {
                 let diagnostic = &primary.diagnostic;
                 append_source_and_code(&mut markdown, diagnostic);
 
-                for (ix, entry) in diagnostic_group.iter().enumerate() {
+                for (index, entry) in diagnostic_group.iter().enumerate() {
                     if entry.range.start.row.abs_diff(primary.range.start.row) >= 5 {
                         markdown.push_str("  \nhint: [");
                         markdown.push_str(&Markdown::escape(&entry.diagnostic.message));
                         markdown.push_str(&format!(
-                            "](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n",
+                            "](file://#diagnostic-{buffer_id}-{group_id}-{index})\n",
                         ))
                     }
                 }
@@ -150,7 +150,9 @@ impl editor::DiagnosticRenderer for DiagnosticRenderer {
                     ),
                     height: Some(1),
                     style: BlockStyle::Flex,
-                    render: Arc::new(move |bcx| block.render_block(editor.clone(), bcx)),
+                    render: Arc::new(move |block_context| {
+                        block.render_block(editor.clone(), block_context)
+                    }),
                     priority: 1,
                 }
             })
@@ -198,11 +200,15 @@ pub(crate) struct DiagnosticBlock {
 }
 
 impl DiagnosticBlock {
-    pub fn render_block(&self, editor: WeakEntity<Editor>, bcx: &BlockContext) -> AnyElement {
-        let cx = &bcx.app;
+    pub fn render_block(
+        &self,
+        editor: WeakEntity<Editor>,
+        block_context: &BlockContext,
+    ) -> AnyElement {
+        let cx = &block_context.app;
         let status_colors = cx.theme().status();
 
-        let max_width = bcx.em_width * 120.;
+        let max_width = block_context.em_width * 120.;
 
         let (background_color, border_color) = match self.severity {
             DiagnosticSeverity::ERROR => (status_colors.error_background, status_colors.error),
@@ -240,7 +246,7 @@ impl DiagnosticBlock {
                 div().flex_1().min_w_0().child(
                     MarkdownElement::new(
                         self.markdown.clone(),
-                        diagnostics_markdown_style(bcx.window, cx),
+                        diagnostics_markdown_style(block_context.window, cx),
                     )
                     .code_block_renderer(markdown::CodeBlockRenderer::Default {
                         copy_button_visibility: CopyButtonVisibility::Hidden,
@@ -279,12 +285,12 @@ impl DiagnosticBlock {
             editor::hover_popover::open_markdown_url(link, window, cx);
             return;
         };
-        let Some((buffer_id, group_id, ix)) = maybe!({
+        let Some((buffer_id, group_id, diagnostic_index)) = maybe!({
             let mut parts = diagnostic_link.split('-');
             let buffer_id: u64 = parts.next()?.parse().ok()?;
             let group_id: usize = parts.next()?.parse().ok()?;
-            let ix: usize = parts.next()?.parse().ok()?;
-            Some((BufferId::new(buffer_id).ok()?, group_id, ix))
+            let diagnostic_index: usize = parts.next()?.parse().ok()?;
+            Some((BufferId::new(buffer_id).ok()?, group_id, diagnostic_index))
         }) else {
             return;
         };
@@ -294,7 +300,7 @@ impl DiagnosticBlock {
                 .get_diagnostics_for_buffer(buffer_id, cx)
                 .into_iter()
                 .filter(|d| d.diagnostic.group_id == group_id)
-                .nth(ix)
+                .nth(diagnostic_index)
             {
                 let multibuffer = editor.buffer().read(cx);
                 if let Some(anchor_range) = multibuffer
@@ -309,7 +315,7 @@ impl DiagnosticBlock {
             .snapshot(window, cx)
             .buffer_snapshot()
             .diagnostic_group(buffer_id, group_id)
-            .nth(ix)
+            .nth(diagnostic_index)
         {
             Self::jump_to(editor, diagnostic.range, window, cx)
         };

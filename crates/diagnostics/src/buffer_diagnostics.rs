@@ -376,10 +376,12 @@ impl BufferDiagnosticsEditor {
                     continue;
                 }
 
-                let languages = Some(
-                    buffer_diagnostics_editor
-                        .read_with(cx, |b, cx| b.project.read(cx).languages().clone())?,
-                );
+                let languages = Some(buffer_diagnostics_editor.read_with(
+                    cx,
+                    |diagnostics_editor, cx| {
+                        diagnostics_editor.project.read(cx).languages().clone()
+                    },
+                )?);
 
                 let diagnostic_blocks = cx.update(|_window, cx| {
                     DiagnosticRenderer::diagnostic_blocks_for_group(
@@ -462,7 +464,7 @@ impl BufferDiagnosticsEditor {
 
                 let index = excerpt_ranges
                     .binary_search_by(bin_search)
-                    .unwrap_or_else(|i| i);
+                    .unwrap_or_else(|insertion_index| insertion_index);
 
                 excerpt_ranges.insert(
                     index,
