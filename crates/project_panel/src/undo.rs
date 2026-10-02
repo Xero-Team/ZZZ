@@ -141,7 +141,7 @@ use project::{Project, ProjectPath, WorktreeId};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::VecDeque, sync::Arc};
 use ui::{App, TextSize};
-use util::{paths::PathStyle, rel_path::RelPath};
+use util::{ResultExt, paths::PathStyle, rel_path::RelPath};
 use workspace::{
     Workspace,
     notifications::{
@@ -381,12 +381,12 @@ impl Inner {
                 }
                 UndoMessage::Undo => {
                     let res = self.undo(&mut cx).await;
-                    let _ = self.panel.update(&mut cx, |_, cx| cx.notify());
+                    self.panel.update(&mut cx, |_, cx| cx.notify()).log_err();
                     res
                 }
                 UndoMessage::Redo => {
                     let res = self.redo(&mut cx).await;
-                    let _ = self.panel.update(&mut cx, |_, cx| cx.notify());
+                    self.panel.update(&mut cx, |_, cx| cx.notify()).log_err();
                     res
                 }
             };
@@ -737,6 +737,6 @@ impl Inner {
                     })
                 })
             })
-            .ok();
+            .log_err();
     }
 }
