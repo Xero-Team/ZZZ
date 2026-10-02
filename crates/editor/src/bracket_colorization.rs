@@ -56,7 +56,7 @@ impl Editor {
             let bracket_matches_by_accent: HashMap<usize, Vec<Range<Anchor>>> =
                 excerpt_data.into_iter().fold(
                     HashMap::default(),
-                    |mut acc, (buffer_snapshot, buffer_range, excerpt_range)| {
+                    |mut matches_by_accent, (buffer_snapshot, buffer_range, excerpt_range)| {
                         let fetched_chunks = fetched_tree_sitter_chunks
                             .entry(excerpt_range.context.clone())
                             .or_default();
@@ -71,21 +71,21 @@ impl Editor {
                         );
 
                         for (accent_number, new_ranges) in brackets_by_accent {
-                            let ranges = acc
+                            let ranges = matches_by_accent
                                 .entry(accent_number)
                                 .or_insert_with(Vec::<Range<Anchor>>::new);
 
                             for new_range in new_ranges {
-                                let i = ranges
+                                let insertion_index = ranges
                                     .binary_search_by(|probe| {
                                         probe.start.cmp(&new_range.start, &multi_buffer_snapshot)
                                     })
-                                    .unwrap_or_else(|i| i);
-                                ranges.insert(i, new_range);
+                                    .unwrap_or_else(|insertion_index| insertion_index);
+                                ranges.insert(insertion_index, new_range);
                             }
                         }
 
-                        acc
+                        matches_by_accent
                     },
                 );
 
@@ -97,42 +97,44 @@ impl Editor {
 
         self.colorize_brackets_task = cx.spawn(async move |editor, cx| {
             if invalidate {
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.clear_highlights_with(
-                            &mut |key| matches!(key, HighlightKey::ColorizeBracket(_)),
-                            cx,
-                        );
-                    })
-                    .ok();
+                let Some(editor_handle) = editor.upgrade() else {
+                    return;
+                };
+                editor_handle.update(cx, |editor, cx| {
+                    editor.clear_highlights_with(
+                        &mut |key| matches!(key, HighlightKey::ColorizeBracket(_)),
+                        cx,
+                    );
+                });
             }
 
             let (bracket_matches_by_accent, updated_chunks) = bracket_matches_by_accent.await;
 
-            editor
-                .update(cx, |editor, cx| {
-                    editor
-                        .bracket_fetched_tree_sitter_chunks
-                        .extend(updated_chunks);
-                    for (accent_number, bracket_highlights) in bracket_matches_by_accent {
-                        let bracket_color = accents.color_for_index(accent_number as u32);
-                        let adjusted_color =
-                            ensure_minimum_contrast(bracket_color, editor_background, 55.0);
-                        let style = HighlightStyle {
-                            color: Some(adjusted_color),
-                            ..HighlightStyle::default()
-                        };
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            editor.update(cx, |editor, cx| {
+                editor
+                    .bracket_fetched_tree_sitter_chunks
+                    .extend(updated_chunks);
+                for (accent_number, bracket_highlights) in bracket_matches_by_accent {
+                    let bracket_color = accents.color_for_index(accent_number as u32);
+                    let adjusted_color =
+                        ensure_minimum_contrast(bracket_color, editor_background, 55.0);
+                    let style = HighlightStyle {
+                        color: Some(adjusted_color),
+                        ..HighlightStyle::default()
+                    };
 
-                        editor.highlight_text_key(
-                            HighlightKey::ColorizeBracket(accent_number),
-                            bracket_highlights,
-                            style,
-                            true,
-                            cx,
-                        );
-                    }
-                })
-                .ok();
+                    editor.highlight_text_key(
+                        HighlightKey::ColorizeBracket(accent_number),
+                        bracket_highlights,
+                        style,
+                        true,
+                        cx,
+                    );
+                }
+            });
         });
     }
 }
