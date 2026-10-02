@@ -562,9 +562,8 @@ impl ProjectDiagnosticsEditor {
                 if group_severity.is_none_or(|s| s > max_severity) {
                     continue;
                 }
-                let languages = this
-                    .read_with(cx, |t, cx| t.project.read(cx).languages().clone())
-                    .ok();
+                let languages =
+                    Some(this.read_with(cx, |t, cx| t.project.read(cx).languages().clone())?);
                 let more = cx.update(|_, cx| {
                     crate::diagnostic_renderer::DiagnosticRenderer::diagnostic_blocks_for_group(
                         group,

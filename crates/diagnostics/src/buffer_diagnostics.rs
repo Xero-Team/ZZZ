@@ -374,9 +374,10 @@ impl BufferDiagnosticsEditor {
                     continue;
                 }
 
-                let languages = buffer_diagnostics_editor
-                    .read_with(cx, |b, cx| b.project.read(cx).languages().clone())
-                    .ok();
+                let languages = Some(
+                    buffer_diagnostics_editor
+                        .read_with(cx, |b, cx| b.project.read(cx).languages().clone())?,
+                );
 
                 let diagnostic_blocks = cx.update(|_window, cx| {
                     DiagnosticRenderer::diagnostic_blocks_for_group(

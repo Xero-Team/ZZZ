@@ -212,12 +212,12 @@ impl DiagnosticIndicator {
                     cx.background_executor()
                         .timer(Duration::from_millis(50))
                         .await;
-                    diagnostics_indicator
-                        .update(cx, |diagnostics_indicator, cx| {
+                    if let Some(diagnostics_indicator) = diagnostics_indicator.upgrade() {
+                        diagnostics_indicator.update(cx, |diagnostics_indicator, cx| {
                             diagnostics_indicator.current_diagnostic = new_diagnostic;
                             cx.notify();
-                        })
-                        .ok();
+                        });
+                    }
                 });
         }
     }

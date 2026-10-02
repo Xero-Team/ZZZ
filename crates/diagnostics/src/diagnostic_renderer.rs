@@ -249,11 +249,11 @@ impl DiagnosticBlock {
                     })
                     .on_url_click({
                         move |link, window, cx| {
-                            editor
-                                .update(cx, |editor, cx| {
+                            if let Some(editor) = editor.upgrade() {
+                                editor.update(cx, |editor, cx| {
                                     Self::open_link(editor, &diagnostics_editor, link, window, cx)
-                                })
-                                .ok();
+                                });
+                            }
                         }
                     }),
                 ),
