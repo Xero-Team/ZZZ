@@ -142,7 +142,9 @@ impl DocumentationView {
             this.consume_pending_fragment(cx);
         })
         .detach();
-        this.set_path(&target, cx);
+        if !this.set_path(&target, cx) && target.path.as_ref() != DEFAULT_DOC {
+            this.set_path(&DocTarget::page(DEFAULT_DOC), cx);
+        }
         this
     }
 
@@ -151,16 +153,18 @@ impl DocumentationView {
         if target.path == self.current && target.fragment.is_none() {
             return;
         }
-        if !self.current.is_empty() && target.path != self.current {
-            self.back.push(self.current.clone());
+        let previous = self.current.clone();
+        if self.set_path(&target, cx) {
+            if !previous.is_empty() && target.path != previous {
+                self.back.push(previous);
+            }
+            self.forward.clear();
         }
-        self.forward.clear();
-        self.set_path(&target, cx);
     }
 
-    fn set_path(&mut self, target: &DocTarget, cx: &mut Context<Self>) {
+    fn set_path(&mut self, target: &DocTarget, cx: &mut Context<Self>) -> bool {
         let Some(raw) = lookup_docs_text(&target.path) else {
-            return;
+            return false;
         };
         let text = strip_front_matter(&raw);
         self.current = target.path.clone();
@@ -172,6 +176,7 @@ impl DocumentationView {
         // which case the observe callback above will not fire.
         self.consume_pending_fragment(cx);
         cx.notify();
+        true
     }
 
     /// Scrolls to the pending `#fragment` if it resolves in the parsed page.
@@ -190,19 +195,25 @@ impl DocumentationView {
     }
 
     fn go_back(&mut self, cx: &mut Context<Self>) {
-        let Some(previous) = self.back.pop() else {
+        let Some(previous) = self.back.last().cloned() else {
             return;
         };
-        self.forward.push(self.current.clone());
-        self.set_path(&DocTarget::page(previous), cx);
+        let current = self.current.clone();
+        if self.set_path(&DocTarget::page(previous), cx) {
+            self.back.pop();
+            self.forward.push(current);
+        }
     }
 
     fn go_forward(&mut self, cx: &mut Context<Self>) {
-        let Some(next) = self.forward.pop() else {
+        let Some(next) = self.forward.last().cloned() else {
             return;
         };
-        self.back.push(self.current.clone());
-        self.set_path(&DocTarget::page(next), cx);
+        let current = self.current.clone();
+        if self.set_path(&DocTarget::page(next), cx) {
+            self.forward.pop();
+            self.back.push(current);
+        }
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
