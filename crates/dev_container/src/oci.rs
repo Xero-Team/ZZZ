@@ -120,18 +120,20 @@ pub(crate) async fn download_oci_tarball(
     })?;
     let status = response.status();
 
-    let body = BufReader::new(response.body_mut());
-
     if !status.is_success() {
-        let body_text = String::from_utf8_lossy(body.buffer());
+        let mut body_text = String::new();
+        if let Err(error) = response.body_mut().read_to_string(&mut body_text).await {
+            log::error!("Failed to read feature blob error response: {error}");
+        }
         log::error!(
             "Feature blob download returned HTTP {}: {}",
             status.as_u16(),
-            body_text,
+            response_excerpt(&body_text, 500),
         );
         return Err(DevContainerError::ResourceFetchFailed);
     }
 
+    let body = BufReader::new(response.body_mut());
     futures::pin_mut!(body);
     let body: Pin<&mut (dyn AsyncRead + Send)> = body;
     let archive = async_tar::Archive::new(body);
@@ -214,9 +216,12 @@ mod test {
     use http_client::{FakeHttpClient, anyhow};
     use serde::Deserialize;
 
-    use crate::oci::{
-        TokenResponse, download_oci_tarball, get_deserializable_oci_blob,
-        get_deserialized_response, get_latest_oci_manifest, get_oci_token, response_excerpt,
+    use crate::{
+        devcontainer_api::DevContainerError,
+        oci::{
+            TokenResponse, download_oci_tarball, get_deserializable_oci_blob,
+            get_deserialized_response, get_latest_oci_manifest, get_oci_token, response_excerpt,
+        },
     };
 
     #[test]
@@ -486,5 +491,35 @@ mod test {
                 .unwrap(),
             expected_devcontainer_json
         )
+    }
+
+    #[gpui::test]
+    async fn download_oci_tarball_handles_multibyte_error_bodies(cx: &mut TestAppContext) {
+        let fs: Arc<dyn Fs> = FakeFs::new(cx.executor());
+        let error_body = format!("{}é", "a".repeat(499));
+        let client = FakeHttpClient::create(move |_| {
+            let error_body = error_body.clone();
+            async move {
+                Ok(http_client::Response::builder()
+                    .status(500)
+                    .body(error_body.into())
+                    .unwrap())
+            }
+        });
+
+        let result = download_oci_tarball(
+            "",
+            test_oci_registry(),
+            test_oci_repository(),
+            "blobdigest",
+            "header",
+            &PathBuf::from("/tmp/extracted"),
+            &client,
+            &fs,
+            None,
+        )
+        .await;
+
+        assert_eq!(result, Err(DevContainerError::ResourceFetchFailed));
     }
 }
