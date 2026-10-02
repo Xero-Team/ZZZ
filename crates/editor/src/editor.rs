@@ -2072,13 +2072,14 @@ impl Editor {
         });
         self.sticky_headers_task = cx.spawn(async move |this, cx| {
             let sticky_headers = background_task.await;
-            this.update(cx, |this, cx| {
-                if this.sticky_headers.as_ref() != Some(&sticky_headers) {
-                    this.sticky_headers = Some(sticky_headers);
-                    cx.notify();
-                }
-            })
-            .ok();
+            if let Some(this) = this.upgrade() {
+                this.update(cx, |this, cx| {
+                    if this.sticky_headers.as_ref() != Some(&sticky_headers) {
+                        this.sticky_headers = Some(sticky_headers);
+                        cx.notify();
+                    }
+                });
+            }
         });
     }
 
@@ -2116,8 +2117,8 @@ impl Editor {
                     .child("⋯")
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(move |_, _window, cx| {
-                        editor
-                            .update(cx, |editor, cx| {
+                        if let Some(editor) = editor.upgrade() {
+                            editor.update(cx, |editor, cx| {
                                 editor.unfold_ranges(
                                     &[fold_range.start..fold_range.end],
                                     true,
@@ -2125,8 +2126,8 @@ impl Editor {
                                     cx,
                                 );
                                 cx.stop_propagation();
-                            })
-                            .ok();
+                            });
+                        }
                     })
                     .into_any()
             }),
@@ -2719,13 +2720,13 @@ impl Editor {
                 .push(
                     cx.observe_new::<project::debugger::session::Session>(move |_, _, cx| {
                         let session_entity = cx.entity();
-                        weak_editor
-                            .update(cx, |editor, cx| {
+                        if let Some(editor) = weak_editor.upgrade() {
+                            editor.update(cx, |editor, cx| {
                                 editor._subscriptions.push(
                                     cx.subscribe(&session_entity, Self::on_debug_session_event),
                                 );
-                            })
-                            .ok();
+                            });
+                        }
                     }),
                 );
 
