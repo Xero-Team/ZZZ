@@ -788,7 +788,7 @@ impl ThreadView {
                     });
                     this.schedule_save(cx);
                 })
-                .ok();
+                .log_err();
             }));
         }));
 
@@ -878,9 +878,11 @@ impl ThreadView {
                 // directly would panic from a double borrow.
                 cx.defer(move |cx| {
                     let _ = list_state.logical_scroll_top();
-                    let _ = thread_view.update(cx, |this, cx| {
-                        this.schedule_save(cx);
-                    });
+                    thread_view
+                        .update(cx, |this, cx| {
+                            this.schedule_save(cx);
+                        })
+                        .log_err();
                 });
             });
 
@@ -897,7 +899,7 @@ impl ThreadView {
             cx.background_executor()
                 .timer(SERIALIZATION_THROTTLE_TIME)
                 .await;
-            this.update(cx, |_this, _cx| {}).ok();
+            this.update(cx, |_this, _cx| {}).log_err();
         }));
     }
 
@@ -1231,7 +1233,7 @@ impl ThreadView {
                 .update(cx, |workspace, cx| {
                     workspace.follow(CollaboratorId::Agent, window, cx);
                 })
-                .ok();
+                .log_err();
         }
 
         let contents_task = cx.spawn_in(window, async move |_this, cx| {
@@ -1303,7 +1305,7 @@ impl ThreadView {
                         this.stop_turn(generation, cx);
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
                 }
             });
             if is_first_message && thread.read_with(cx, |thread, _cx| thread.title().is_none())? {
@@ -1375,7 +1377,7 @@ impl ThreadView {
                 this.update(cx, |this, cx| {
                     this.handle_thread_error(err, cx);
                 })
-                .ok();
+                .log_err();
             }
         })
         .detach();
@@ -1417,7 +1419,7 @@ impl ThreadView {
             this.update_in(cx, |this, window, cx| {
                 this.send_impl(message_editor, window, cx);
             })
-            .ok();
+            .log_err();
         })
         .detach();
     }
@@ -1633,7 +1635,7 @@ impl ThreadView {
                     .update_in(cx, |workspace, window, cx| {
                         workspace.follow(CollaboratorId::Agent, window, cx);
                     })
-                    .ok();
+                    .log_err();
             }
 
             Ok(Some((content, tracked_buffers)))
@@ -1825,7 +1827,7 @@ impl ThreadView {
                 .update(cx, |workspace, cx| {
                     workspace.follow(CollaboratorId::Agent, window, cx);
                 })
-                .ok();
+                .log_err();
         }
         cx.notify();
     }
@@ -1857,7 +1859,7 @@ impl ThreadView {
                 .update(cx, |workspace, cx| {
                     workspace.follow(CollaboratorId::Agent, window, cx);
                 })
-                .ok();
+                .log_err();
         }
         cx.notify();
         Some(())
@@ -2277,7 +2279,7 @@ impl ThreadView {
                 .update(cx, |workspace, cx| {
                     workspace.follow(CollaboratorId::Agent, window, cx);
                 })
-                .ok();
+                .log_err();
         }
         cx.notify();
         result
@@ -2383,7 +2385,7 @@ impl ThreadView {
                         workspace.follow(CollaboratorId::Agent, window, cx);
                     }
                 })
-                .ok();
+                .log_err();
         }
     }
 
@@ -8822,7 +8824,7 @@ impl ThreadView {
                             .update(cx, |this, cx| {
                                 this.navigate_to_thread(nav_session_id.clone(), window, cx);
                             })
-                            .ok();
+                            .log_err();
                     }));
 
                 if is_running && let Some((_, subagent_tool_call_id, _)) = pending_tool_call {
@@ -9635,7 +9637,7 @@ impl ThreadView {
                         .on_click(move |_, window, cx| {
                             server_view
                                 .update(cx, |view, cx| view.reset(window, cx))
-                                .ok();
+                                .log_err();
                         }),
                 ),
         )
@@ -9754,7 +9756,7 @@ impl ThreadView {
                                 });
                                 cx.notify();
                             })
-                            .ok();
+                            .log_err();
                     });
                 });
             let search_bar = cx.new(|cx| {
@@ -9928,7 +9930,7 @@ impl Render for ThreadView {
                         .update(cx, |view, cx| {
                             view.navigate_to_thread(parent_session_id, window, cx);
                         })
-                        .ok();
+                        .log_err();
                 }
             }))
             .on_action(cx.listener(Self::keep_all))
