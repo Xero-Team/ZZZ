@@ -1144,11 +1144,11 @@ impl HeadlessProject {
             });
 
             while let Some((buffer, _)) = new_matches.next().await {
-                let _ = buffer_store
+                buffer_store
                     .update(cx, |this, cx| {
                         this.create_buffer_for_peer(&buffer, REMOTE_SERVER_PEER_ID, cx)
                     })
-                    .await;
+                    .await?;
                 let buffer_id = buffer.read_with(cx, |this, _| this.remote_id().to_proto());
                 batcher.push(buffer_id).await;
             }
