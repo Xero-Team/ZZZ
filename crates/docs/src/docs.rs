@@ -342,7 +342,9 @@ fn resolve_doc_link(current_path: &str, href: &str) -> Option<DocLink> {
         return Some(DocLink::Keybinding(action.to_string().into()));
     }
     if let Some(path) = href.strip_prefix("zzz://docs/") {
-        return Some(DocLink::Docs(DocTarget::from_href(path)));
+        let mut target = DocTarget::from_href(path);
+        target.path = resolve_relative_path("", target.path.as_ref())?.into();
+        return Some(DocLink::Docs(target));
     }
     if href.starts_with("http://") || href.starts_with("https://") {
         return Some(DocLink::External(href.to_string().into()));
@@ -734,8 +736,19 @@ mod tests {
         ));
         assert!(matches!(
             resolve_doc_link("index.md", "zzz://docs/key-bindings"),
-            Some(DocLink::Docs(target)) if target.path.as_ref() == "key-bindings"
+            Some(DocLink::Docs(target)) if target.path.as_ref() == "key-bindings.md"
         ));
+    }
+
+    #[test]
+    fn resolve_doc_link_normalizes_app_doc_paths_with_fragments() {
+        let link = resolve_doc_link("index.md", "zzz://docs/key-bindings#vim");
+        let Some(DocLink::Docs(target)) = link else {
+            panic!("expected a documentation link");
+        };
+
+        assert_eq!(target.path.as_ref(), "key-bindings.md");
+        assert_eq!(target.fragment.as_deref(), Some("vim"));
     }
 
     #[test]
