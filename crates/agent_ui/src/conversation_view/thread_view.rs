@@ -1241,11 +1241,13 @@ impl ThreadView {
                 return Ok(None);
             }
 
-            let _ = cx.update(|window, cx| {
-                message_editor.update(cx, |message_editor, cx| {
-                    message_editor.clear(window, cx);
-                });
-            });
+            let _ = cx
+                .update(|window, cx| {
+                    message_editor.update(cx, |message_editor, cx| {
+                        message_editor.clear(window, cx);
+                    });
+                })
+                .log_err();
 
             Ok(Some((contents, tracked_buffers)))
         });
@@ -1287,10 +1289,11 @@ impl ThreadView {
                 this.set_editor_is_expanded(false, cx);
             })?;
 
-            let _ = this.update(cx, |this, cx| {
+            this.update(cx, |this, cx| {
                 this.list_state.scroll_to_end();
                 cx.notify();
-            });
+            })
+            .log_err();
 
             let _stop_turn = defer({
                 let this = this.clone();
@@ -1334,10 +1337,11 @@ impl ThreadView {
                 thread.send(contents, cx)
             })?;
 
-            let _ = this.update(cx, |this, cx| {
+            this.update(cx, |this, cx| {
                 this.sync_generating_indicator(cx);
                 cx.notify();
-            });
+            })
+            .log_err();
 
             let res = send.await;
             let _turn_time_ms = turn_start_time.elapsed().as_millis();
@@ -3564,13 +3568,15 @@ impl ThreadView {
                                             "Minimize Subagent",
                                         )))
                                         .on_click(move |_, window, cx| {
-                                            let _ = server_view.update(cx, |server_view, cx| {
-                                                server_view.navigate_to_thread(
-                                                    parent_session_id.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            });
+                                            server_view
+                                                .update(cx, |server_view, cx| {
+                                                    server_view.navigate_to_thread(
+                                                        parent_session_id.clone(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                })
+                                                .log_err();
                                         }),
                                 ),
                         ),
