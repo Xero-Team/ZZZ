@@ -1673,12 +1673,13 @@ async fn get_ghcr_templates(
         None,
     )
     .await?;
+    let digest = first_manifest_layer_digest(&manifest, devcontainer_templates_repository())?;
 
     let mut template_response: DevContainerTemplatesResponse = get_deserializable_oci_blob(
         &token.token,
         ghcr_registry(),
         devcontainer_templates_repository(),
-        &manifest.layers[0].digest,
+        digest,
         &client,
     )
     .await?;
@@ -1711,12 +1712,13 @@ async fn get_ghcr_features(
         None,
     )
     .await?;
+    let digest = first_manifest_layer_digest(&manifest, devcontainer_features_repository())?;
 
     let mut features_response: DevContainerFeaturesResponse = get_deserializable_oci_blob(
         &token.token,
         ghcr_registry(),
         devcontainer_features_repository(),
-        &manifest.layers[0].digest,
+        digest,
         &client,
     )
     .await?;
@@ -1731,14 +1733,36 @@ async fn get_ghcr_features(
     Ok(features_response)
 }
 
+fn first_manifest_layer_digest<'a>(
+    manifest: &'a oci::DockerManifestsResponse,
+    repository: &str,
+) -> Result<&'a str, String> {
+    manifest
+        .layers
+        .first()
+        .map(|layer| layer.digest.as_str())
+        .ok_or_else(|| format!("OCI manifest for {repository} contains no layers"))
+}
+
 #[cfg(test)]
 mod tests {
     use http_client::{FakeHttpClient, anyhow};
 
     use crate::{
         DevContainerTemplatesResponse, devcontainer_templates_repository,
-        get_deserializable_oci_blob, ghcr_registry,
+        first_manifest_layer_digest, get_deserializable_oci_blob, ghcr_registry,
+        oci::DockerManifestsResponse,
     };
+
+    #[test]
+    fn rejects_oci_manifests_without_layers() {
+        let manifest = DockerManifestsResponse { layers: Vec::new() };
+
+        assert_eq!(
+            first_manifest_layer_digest(&manifest, "devcontainers/templates"),
+            Err("OCI manifest for devcontainers/templates contains no layers".to_owned())
+        );
+    }
 
     #[gpui::test]
     async fn test_get_devcontainer_templates() {
