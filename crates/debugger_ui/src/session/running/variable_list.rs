@@ -742,16 +742,25 @@ impl VariableList {
                                 menu = menu.separator();
                                 if let Some(access_types) = data_info.access_types {
                                     for access in access_types {
-                                        menu = menu.action(
-                                            format!(
-                                                "Toggle {} Data Breakpoint",
-                                                match access {
-                                                    dap::DataBreakpointAccessType::Read => "Read",
-                                                    dap::DataBreakpointAccessType::Write => "Write",
-                                                    dap::DataBreakpointAccessType::ReadWrite =>
-                                                        "Read/Write",
-                                                }
+                                        let label = match access {
+                                            dap::DataBreakpointAccessType::Read => tr(
+                                                cx,
+                                                "debugger_ui.variable_list.toggle_read_data_breakpoint",
+                                                "Toggle Read Data Breakpoint",
                                             ),
+                                            dap::DataBreakpointAccessType::Write => tr(
+                                                cx,
+                                                "debugger_ui.variable_list.toggle_write_data_breakpoint",
+                                                "Toggle Write Data Breakpoint",
+                                            ),
+                                            dap::DataBreakpointAccessType::ReadWrite => tr(
+                                                cx,
+                                                "debugger_ui.variable_list.toggle_read_write_data_breakpoint",
+                                                "Toggle Read/Write Data Breakpoint",
+                                            ),
+                                        };
+                                        menu = menu.action(
+                                            label,
                                             crate::ToggleDataBreakpoint {
                                                 access_type: Some(access),
                                             }
@@ -762,7 +771,11 @@ impl VariableList {
                                     menu
                                 } else {
                                     menu.action(
-                                        "Toggle Data Breakpoint",
+                                        tr(
+                                            cx,
+                                            "debugger_ui.variable_list.toggle_data_breakpoint",
+                                            "Toggle Data Breakpoint",
+                                        ),
                                         crate::ToggleDataBreakpoint { access_type: None }
                                             .boxed_clone(),
                                     )
