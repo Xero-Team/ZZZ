@@ -58,11 +58,19 @@ register_feature_flag!(DebuggerHistoryFeatureFlag);
 const DEBUG_PANEL_KEY: &str = "DebugPanel";
 
 fn scenario_definition_row(content: &str, label: &str) -> Option<usize> {
+    let serialized_label = serde_json::to_string(label).ok()?;
     content
         .lines()
         .enumerate()
         .filter_map(|(row, text)| {
-            (text.contains(label) && text.contains("\"label\": ")).then_some(row)
+            let value = text
+                .split_once("\"label\"")?
+                .1
+                .trim_start()
+                .strip_prefix(':')?
+                .trim_start();
+            let remainder = value.strip_prefix(&serialized_label)?.trim_start();
+            (remainder.is_empty() || remainder.starts_with([',', '}'])).then_some(row)
         })
         .last()
 }
@@ -2062,6 +2070,25 @@ mod tests {
 ]"#;
 
         assert_eq!(scenario_definition_row(content, "Debug App"), Some(3));
+    }
+
+    #[test]
+    fn scenario_definition_row_matches_the_complete_label() {
+        let content = r#"[
+  { "label": "Debug App", "program": "target" },
+  { "label": "Debug App Extended", "program": "other" }
+]"#;
+
+        assert_eq!(scenario_definition_row(content, "Debug App"), Some(1));
+    }
+
+    #[test]
+    fn scenario_definition_row_matches_escaped_labels() {
+        let content = r#"[
+  { "label": "Debug \"App\"", "program": "target" }
+]"#;
+
+        assert_eq!(scenario_definition_row(content, "Debug \"App\""), Some(1));
     }
 }
 
