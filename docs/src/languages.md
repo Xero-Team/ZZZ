@@ -22,6 +22,7 @@ Some work out-of-the box and others rely on 3rd party extensions.
 - [C#](./languages/csharp.md)
 - [Clojure](./languages/clojure.md)
 - [CSS](./languages/css.md) \*
+- [Delimited text](./languages/csv-and-tsv.md) \*
 - [Dart](./languages/dart.md)
 - [Deno](./languages/deno.md)
 - [Diff](./languages/diff.md) \*
@@ -101,7 +102,6 @@ Some work out-of-the box and others rely on 3rd party extensions.
 - [Cap'n Proto](https://github.com/cmackenzie1/zed-capnp)
 - [Cedar](https://github.com/chrnorm/zed-cedar)
 - [CFEngine policy language](https://github.com/olehermanse/zed-cfengine)
-- [CSV](https://github.com/huacnlee/zed-csv)
 - [Cucumber/Gherkin](https://github.com/thlcodes/zed-extension-cucumber)
 - [CUE](https://github.com/jkasky/zed-cue)
 - [Curry](https://github.com/fwcd/zed-curry)

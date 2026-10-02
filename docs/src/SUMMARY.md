@@ -83,6 +83,7 @@
 - [C#](./languages/csharp.md)
 - [Clojure](./languages/clojure.md)
 - [CSS](./languages/css.md)
+- [Delimited text](./languages/csv-and-tsv.md)
 - [Dart](./languages/dart.md)
 - [Deno](./languages/deno.md)
 - [Diff](./languages/diff.md)
