@@ -75,6 +75,16 @@ fn scenario_definition_row(content: &str, label: &str) -> Option<usize> {
         .last()
 }
 
+fn previous_historic_snapshot_index(
+    active_snapshot_index: Option<usize>,
+    snapshot_count: usize,
+) -> Option<usize> {
+    active_snapshot_index.map_or_else(
+        || snapshot_count.checked_sub(1),
+        |index| index.checked_sub(1),
+    )
+}
+
 pub struct DebugPanel {
     active_session: Option<Entity<DebugSession>>,
     project: Entity<Project>,
@@ -997,16 +1007,27 @@ impl DebugPanel {
                                     .when(
                                         cx.has_flag::<DebuggerHistoryFeatureFlag>(),
                                         |this| {
+                                            let session = running_state.read(cx).session();
+                                            let session = session.read(cx);
+                                            let can_go_back = previous_historic_snapshot_index(
+                                                session.active_snapshot_index(),
+                                                session.historic_snapshots().len(),
+                                            )
+                                            .is_some();
+                                            let has_history =
+                                                !session.historic_snapshots().is_empty();
                                             this.child(Divider::vertical()).child(
                                                 SplitButton::new(
                                                     self.render_history_button(
                                                         &running_state,
                                                         thread_status,
+                                                        can_go_back,
                                                         window,
                                                     ),
                                                     self.render_history_toggle_button(
                                                         thread_status,
                                                         &running_state,
+                                                        has_history,
                                                     )
                                                     .into_any_element(),
                                                 )
@@ -1430,21 +1451,25 @@ impl DebugPanel {
         &self,
         running_state: &Entity<RunningState>,
         thread_status: ThreadStatus,
+        can_go_back: bool,
         window: &mut Window,
     ) -> IconButton {
         IconButton::new("debug-back-in-history", IconName::HistoryRerun)
             .icon_size(IconSize::Small)
             .on_click(window.listener_for(running_state, |this, _, _window, cx| {
                 this.session().update(cx, |session, cx| {
-                    let ix = session
-                        .active_snapshot_index()
-                        .unwrap_or_else(|| session.historic_snapshots().len());
-
-                    session.select_historic_snapshot(Some(ix.saturating_sub(1)), cx);
+                    if let Some(index) = previous_historic_snapshot_index(
+                        session.active_snapshot_index(),
+                        session.historic_snapshots().len(),
+                    ) {
+                        session.select_historic_snapshot(Some(index), cx);
+                    }
                 })
             }))
             .disabled(
-                thread_status == ThreadStatus::Running || thread_status == ThreadStatus::Stepping,
+                !can_go_back
+                    || thread_status == ThreadStatus::Running
+                    || thread_status == ThreadStatus::Stepping,
             )
     }
 
@@ -1452,6 +1477,7 @@ impl DebugPanel {
         &self,
         thread_status: ThreadStatus,
         running_state: &Entity<RunningState>,
+        has_history: bool,
     ) -> impl IntoElement {
         PopoverMenu::new("debug-back-in-history-menu")
             .trigger(
@@ -1464,7 +1490,8 @@ impl DebugPanel {
                             .child(Icon::new(IconName::ChevronDown).size(IconSize::XSmall)),
                     )
                     .disabled(
-                        thread_status == ThreadStatus::Running
+                        !has_history
+                            || thread_status == ThreadStatus::Running
                             || thread_status == ThreadStatus::Stepping,
                     ),
             )
@@ -2059,7 +2086,7 @@ impl Render for DebugPanel {
 
 #[cfg(test)]
 mod tests {
-    use super::scenario_definition_row;
+    use super::{previous_historic_snapshot_index, scenario_definition_row};
 
     #[test]
     fn scenario_definition_row_prefers_the_last_matching_label() {
@@ -2089,6 +2116,14 @@ mod tests {
 ]"#;
 
         assert_eq!(scenario_definition_row(content, "Debug \"App\""), Some(1));
+    }
+
+    #[test]
+    fn previous_historic_snapshot_respects_history_boundaries() {
+        assert_eq!(previous_historic_snapshot_index(None, 0), None);
+        assert_eq!(previous_historic_snapshot_index(None, 3), Some(2));
+        assert_eq!(previous_historic_snapshot_index(Some(2), 3), Some(1));
+        assert_eq!(previous_historic_snapshot_index(Some(0), 3), None);
     }
 }
 
