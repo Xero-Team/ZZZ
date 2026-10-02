@@ -38,7 +38,7 @@ use ui::{
 };
 use util::redact::redact_command;
 use util::rel_path::RelPath;
-use util::{debug_panic, maybe};
+use util::{ResultExt as _, debug_panic, maybe};
 use workspace::SplitDirection;
 use workspace::item::SaveOptions;
 use workspace::{
@@ -649,7 +649,7 @@ impl DebugPanel {
                 session = parent;
             }
             let binary = session.read(cx).binary()?;
-            let content = serde_json::to_string_pretty(&binary).ok()?;
+            let content = serde_json::to_string_pretty(&binary).log_err()?;
             Some(content)
         });
         if let Some(content) = content {
