@@ -1880,10 +1880,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
             command.arg("--privileged");
         }
 
-        let run_args = match &self.dev_container().run_args {
-            Some(run_args) => run_args,
-            None => &Vec::new(),
-        };
+        let run_args = self.dev_container().run_args.as_deref().unwrap_or_default();
 
         for arg in run_args {
             command.arg(arg);
@@ -1891,10 +1888,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
 
         let run_if_missing = {
             |arg_name: &str, arg: &str, command: &mut Command| {
-                if !run_args
-                    .iter()
-                    .any(|arg| arg.strip_prefix(arg_name).is_some())
-                {
+                if !contains_run_argument(run_args, arg_name) {
                     command.arg(arg);
                 }
             }
@@ -2634,6 +2628,15 @@ fn is_local_feature_ref(feature_ref: &str) -> bool {
     feature_ref.starts_with("./") || feature_ref.starts_with("../")
 }
 
+fn contains_run_argument(run_args: &[String], argument_name: &str) -> bool {
+    run_args.iter().any(|argument| {
+        argument == argument_name
+            || argument
+                .strip_prefix(argument_name)
+                .is_some_and(|suffix| suffix.starts_with('='))
+    })
+}
+
 /// Generates a shell command that looks up a user's passwd entry.
 ///
 /// Mirrors the CLI's `getEntPasswdShellCommand` in `commonUtils.ts`.
@@ -2934,9 +2937,9 @@ mod test {
         devcontainer_json::MountDefinition,
         devcontainer_manifest::{
             ConfigStatus, DevContainerManifest, DockerBuildResources, DockerComposeResources,
-            DockerInspect, dockerfile_inject_alias, extract_feature_id, find_primary_service,
-            get_remote_user_from_config, image_from_dockerfile, is_local_feature_ref,
-            resolve_compose_dockerfile,
+            DockerInspect, contains_run_argument, dockerfile_inject_alias, extract_feature_id,
+            find_primary_service, get_remote_user_from_config, image_from_dockerfile,
+            is_local_feature_ref, resolve_compose_dockerfile,
         },
         docker::{
             DockerClient, DockerComposeConfig, DockerComposeService, DockerComposeServiceBuild,
@@ -6248,6 +6251,19 @@ RUN echo $RUBY_VERSION2
             dockerfile_inject_alias(dockerfile, "dev_container_auto_added_stage_label", None),
             dockerfile
         );
+    }
+
+    #[test]
+    fn run_argument_detection_requires_a_flag_boundary() {
+        let run_args = vec![
+            "--sig-proxying".to_owned(),
+            "--userns=host".to_owned(),
+            "--security-opt".to_owned(),
+        ];
+
+        assert!(!contains_run_argument(&run_args, "--sig-proxy"));
+        assert!(contains_run_argument(&run_args, "--userns"));
+        assert!(contains_run_argument(&run_args, "--security-opt"));
     }
 
     pub(crate) struct RecordedExecCommand {
