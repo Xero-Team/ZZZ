@@ -15905,15 +15905,16 @@ impl Editor {
             .newest::<MultiBufferOffset>(&editor_snapshot.display_snapshot)
             .head();
 
-        cx.spawn_in(window, async move |editor, wcx| -> Result<()> {
-            let Ok(Some(remote_id)) = editor.update(wcx, |ed, cx| {
-                let buffer = ed.buffer.read(cx).as_singleton()?;
+        cx.spawn_in(window, async move |editor, cx| -> Result<()> {
+            let Ok(Some(remote_id)) = editor.update(cx, |editor, cx| {
+                let buffer = editor.buffer.read(cx).as_singleton()?;
                 Some(buffer.read(cx).remote_id())
             }) else {
                 return Ok(());
             };
 
-            let task = editor.update(wcx, |ed, cx| ed.buffer_outline_items(remote_id, cx))?;
+            let task =
+                editor.update(cx, |editor, cx| editor.buffer_outline_items(remote_id, cx))?;
             let outline_items: Vec<OutlineItem<text::Anchor>> = task.await;
 
             let multi_snapshot = editor_snapshot.buffer();
@@ -15925,11 +15926,11 @@ impl Editor {
                 )
             };
 
-            wcx.update_window(wcx.window_handle(), |_, window, acx| {
-                let current_idx = outline_items
+            cx.update_window(cx.window_handle(), |_, window, cx| {
+                let current_index = outline_items
                     .iter()
                     .enumerate()
-                    .filter_map(|(idx, item)| {
+                    .filter_map(|(index, item)| {
                         // Find the closest outline item by distance between outline text and cursor location
                         let source_range = buffer_range(&item.source_range_for_text)?;
                         let distance_to_closest_endpoint = cmp::min(
@@ -15947,30 +15948,30 @@ impl Editor {
                         // we should not already be within the outline's source range. We then pick the closest outline
                         // item.
                         (item_towards_offset && !source_range_contains_cursor)
-                            .then_some((distance_to_closest_endpoint, idx))
+                            .then_some((distance_to_closest_endpoint, index))
                     })
                     .min()
-                    .map(|(_, idx)| idx);
+                    .map(|(_, index)| index);
 
-                let Some(idx) = current_idx else {
+                let Some(index) = current_index else {
                     return;
                 };
 
-                let Some(range) = buffer_range(&outline_items[idx].source_range_for_text) else {
+                let Some(range) = buffer_range(&outline_items[index].source_range_for_text) else {
                     return;
                 };
                 let selection = [range.start..range.start];
 
-                let _ = editor
-                    .update(acx, |editor, ecx| {
+                if let Some(editor) = editor.upgrade() {
+                    editor.update(cx, |editor, cx| {
                         editor.change_selections(
                             SelectionEffects::scroll(Autoscroll::newest()),
                             window,
-                            ecx,
-                            |s| s.select_ranges(selection),
+                            cx,
+                            |selections| selections.select_ranges(selection),
                         );
-                    })
-                    .ok();
+                    });
+                }
             })?;
 
             Ok(())
