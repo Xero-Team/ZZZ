@@ -1524,10 +1524,10 @@ struct DevContainerFeature {
 
 impl DevContainerFeature {
     fn major_version(&self) -> String {
-        let Some(mv) = self.version.get(..1) else {
-            return String::new();
-        };
-        mv.to_owned()
+        self.version
+            .split_once('.')
+            .map_or(self.version.as_str(), |(major, _)| major)
+            .to_owned()
     }
 }
 
@@ -1761,10 +1761,22 @@ mod tests {
     use http_client::{FakeHttpClient, anyhow};
 
     use crate::{
-        DevContainerTemplatesResponse, devcontainer_templates_repository,
+        DevContainerFeature, DevContainerTemplatesResponse, devcontainer_templates_repository,
         first_manifest_layer_digest, get_deserializable_oci_blob, ghcr_registry,
         oci::DockerManifestsResponse,
     };
+
+    #[test]
+    fn feature_major_version_preserves_multiple_digits() {
+        let feature = DevContainerFeature {
+            id: "feature".to_owned(),
+            version: "10.2.3".to_owned(),
+            name: "Feature".to_owned(),
+            source_repository: None,
+        };
+
+        assert_eq!(feature.major_version(), "10");
+    }
 
     #[test]
     fn rejects_oci_manifests_without_layers() {
