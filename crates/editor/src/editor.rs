@@ -19326,10 +19326,11 @@ impl Editor {
 
         cx.spawn_in(window, async move |_, cx| match permalink_task.await {
             Ok(permalink) => {
-                cx.update(|_, cx| {
+                let Ok(()) = cx.update(|_, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(permalink.to_string()));
-                })
-                .ok();
+                }) else {
+                    return;
+                };
             }
             Err(err) => {
                 let message = format!("Failed to copy permalink: {err}");
@@ -19337,19 +19338,16 @@ impl Editor {
                 anyhow::Result::<()>::Err(err).log_err();
 
                 if let Some(workspace) = workspace {
-                    workspace
-                        .update_in(cx, |workspace, _, cx| {
-                            struct CopyPermalinkToLine;
+                    let Ok(()) = workspace.update_in(cx, |workspace, _, cx| {
+                        struct CopyPermalinkToLine;
 
-                            workspace.show_toast(
-                                Toast::new(
-                                    NotificationId::unique::<CopyPermalinkToLine>(),
-                                    message,
-                                ),
-                                cx,
-                            )
-                        })
-                        .ok();
+                        workspace.show_toast(
+                            Toast::new(NotificationId::unique::<CopyPermalinkToLine>(), message),
+                            cx,
+                        )
+                    }) else {
+                        return;
+                    };
                 }
             }
         })
@@ -19411,10 +19409,11 @@ impl Editor {
 
         cx.spawn_in(window, async move |_, cx| match permalink_task.await {
             Ok(permalink) => {
-                cx.update(|_, cx| {
+                let Ok(()) = cx.update(|_, cx| {
                     cx.open_url(permalink.as_ref());
-                })
-                .ok();
+                }) else {
+                    return;
+                };
             }
             Err(err) => {
                 let message = format!("Failed to open permalink: {err}");
