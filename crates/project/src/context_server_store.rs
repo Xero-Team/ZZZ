@@ -1669,7 +1669,7 @@ impl ContextServerStore {
             this.update(cx, |this, cx| {
                 let server_ids: Vec<_> = this.servers.keys().cloned().collect();
                 for id in server_ids {
-                    let _ = this.stop_server(&id, cx);
+                    this.stop_server(&id, cx).log_err();
                 }
             })?;
             return Ok(());

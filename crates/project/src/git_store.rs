@@ -3899,7 +3899,7 @@ impl BufferGitState {
     fn buffer_language_changed(&mut self, buffer: Entity<Buffer>, cx: &mut Context<Self>) {
         self.language = buffer.read(cx).language().cloned();
         self.language_changed = true;
-        let _ = self.recalculate_diffs(buffer.read(cx).text_snapshot(), cx);
+        self.recalculate_diffs(buffer.read(cx).text_snapshot(), cx);
     }
 
     fn reparse_conflict_markers(

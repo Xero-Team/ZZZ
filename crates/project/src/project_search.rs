@@ -321,9 +321,9 @@ impl Search {
 
                                     let forward_buffers = cx.background_spawn(async move {
                                         while let Ok(buffer) = buffer_rx.recv().await {
-                                            let _ = grab_buffer_snapshot_tx
+                                            grab_buffer_snapshot_tx
                                                 .send((buffer.await?, LineHint::default()))
-                                                .await;
+                                                .await?;
                                         }
                                         anyhow::Ok(())
                                     });

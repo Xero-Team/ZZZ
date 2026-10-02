@@ -627,7 +627,7 @@ impl RemoteToolchainStore {
             let did_activate = cx
                 .background_spawn(async move {
                     let path = PathBuf::from(toolchain.path.to_string());
-                    let _ = client
+                    client
                         .request(proto::ActivateToolchain {
                             project_id,
                             worktree_id: project_path.worktree_id.to_proto(),

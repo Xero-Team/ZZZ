@@ -1753,7 +1753,7 @@ impl BufferStore {
             envelope.original_sender_id.unwrap_or(envelope.sender_id),
             envelope.payload.handle,
         );
-        let _ = this.update(&mut cx, |this, _| {
+        this.update(&mut cx, |this, _| {
             this.project_search.searches_in_progress.remove(&id)
         });
         Ok(())

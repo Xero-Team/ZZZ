@@ -1333,9 +1333,10 @@ impl LocalLspStore {
                     let request =
                         LanguageServerPromptRequest::new(level, params.message, vec![], name, tx);
 
-                    let _ = this.update(&mut cx, |_, cx| {
+                    this.update(&mut cx, |_, cx| {
                         cx.emit(LspStoreEvent::LanguageServerPrompt(request));
-                    });
+                    })
+                    .log_err();
                 }
             })
             .detach();
@@ -13554,7 +13555,7 @@ impl LspStore {
                                 .collect::<BTreeSet<_>>();
                             for handle in buffers_with_language_server {
                                 let triggers = triggers.clone();
-                                let _ = handle.update(cx, move |buffer, cx| {
+                                handle.update(cx, move |buffer, cx| {
                                     buffer.set_completion_triggers(server_id, triggers, cx);
                                 });
                             }

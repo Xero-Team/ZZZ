@@ -221,8 +221,6 @@ pub struct Project {
     user_store: Entity<UserStore>,
     fs: Arc<dyn Fs>,
     remote_client: Option<Entity<RemoteClient>>,
-    // todo lw explain the client_state x remote_client matrix, its super confusing
-    client_state: ProjectClientState,
     git_store: Entity<GitStore>,
     collaborators: HashMap<proto::PeerId, Collaborator>,
     #[allow(dead_code)]
@@ -313,11 +311,6 @@ enum BufferOrderedMessage {
     },
     #[allow(dead_code)]
     Resync,
-}
-
-#[derive(Debug)]
-enum ProjectClientState {
-    Local,
 }
 
 /// A link to display in a toast notification, useful to point to documentation.
@@ -1297,7 +1290,6 @@ impl Project {
                 lsp_store,
                 context_server_store,
                 join_project_response_message_id: 0,
-                client_state: ProjectClientState::Local,
                 git_store,
                 client_subscriptions: Vec::new(),
                 _subscriptions: vec![cx.on_release(Self::release)],
@@ -1525,7 +1517,6 @@ impl Project {
                 breakpoint_store,
                 dap_store,
                 join_project_response_message_id: 0,
-                client_state: ProjectClientState::Local,
                 git_store,
                 agent_server_store,
                 client_subscriptions: Vec::new(),
@@ -1641,8 +1632,6 @@ impl Project {
             })
             .detach()
         }
-
-        let _ = &self.client_state;
     }
 
     #[cfg(feature = "test-support")]
@@ -2377,12 +2366,7 @@ impl Project {
         if self.is_disconnected(cx) {
             return;
         }
-        self.disconnected_from_host_internal(cx);
         cx.emit(Event::DisconnectedFromHost);
-    }
-
-    fn disconnected_from_host_internal(&mut self, cx: &mut App) {
-        let _ = cx;
     }
 
     #[inline]
