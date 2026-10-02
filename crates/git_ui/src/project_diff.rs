@@ -196,7 +196,7 @@ impl ProjectDiff {
                             cx,
                         );
                     })
-                    .ok();
+                    .log_err();
             }
         });
 
@@ -268,7 +268,7 @@ impl ProjectDiff {
                     .update_in(cx, |workspace, window, cx| {
                         workspace.add_item_to_active_pane(Box::new(this), None, true, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 anyhow::Ok(())
             })
             .detach_and_notify_err(workspace_weak, window, cx);
@@ -765,7 +765,7 @@ impl ProjectDiff {
                     unstage_all = git_panel.can_unstage_all();
                 }
             })
-            .ok();
+            .log_err();
 
         ButtonStates {
             stage: has_unstaged_hunks,
@@ -797,7 +797,7 @@ impl ProjectDiff {
                             })
                         }
                     })
-                    .ok();
+                    .log_err();
             }
             EditorEvent::Saved => {
                 self._task =
@@ -1049,7 +1049,7 @@ impl ProjectDiff {
                             buffers_to_fold.push(buffer_id);
                         }
                     })
-                    .ok();
+                    .log_err();
                 })?;
             }
         }
@@ -1670,7 +1670,7 @@ impl ProjectDiffToolbar {
                     });
                 }
             })
-            .ok();
+            .log_err();
     }
 
     fn unstage_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1683,7 +1683,7 @@ impl ProjectDiffToolbar {
                     panel.unstage_all(&Default::default(), window, cx);
                 });
             })
-            .ok();
+            .log_err();
     }
 }
 
@@ -2057,7 +2057,7 @@ impl Render for BranchDiffToolbar {
                                         });
                                         cx.notify();
                                     })
-                                    .ok();
+                                    .log_err();
                             },
                         );
                         Some(branch_picker::select_popover(
