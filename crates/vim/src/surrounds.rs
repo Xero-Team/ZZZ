@@ -7,6 +7,7 @@ use crate::{
 use editor::{Anchor, Bias, MultiBufferOffset, ToOffset, movement};
 use gpui::{Context, Window};
 use language::BracketPair;
+use util::ResultExt;
 
 use std::sync::Arc;
 
@@ -499,7 +500,7 @@ impl Vim {
         let mut best_pair = None;
         let mut min_range_size = usize::MAX;
 
-        let _ = self.editor.update(cx, |editor, cx| {
+        let editor_update_result = self.editor.update(cx, |editor, cx| {
             let display_map = editor.display_snapshot(cx);
             let selections = editor.selections.all_adjusted_display(&display_map);
             // Even if there's multiple cursors, we'll simply rely on the first one
@@ -546,6 +547,7 @@ impl Vim {
                 }
             }
         });
+        editor_update_result.log_err();
 
         best_pair.map(|p| p.to_bracket_pair())
     }

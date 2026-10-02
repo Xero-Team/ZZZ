@@ -491,7 +491,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                                 return;
                             }
 
-                            let _ = this.update_in(cx, |worktree, window, cx| {
+                            let worktree_update_result = this.update_in(cx, |worktree, window, cx| {
                                 let Some(path) = RelPath::new(Path::new(&filename), path_style).ok() else {
                                     return;
                                 };
@@ -509,6 +509,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                                         |_, _, _| None,
                                     );
                             });
+                            worktree_update_result.log_err();
                         })
                         .detach();
                     });
@@ -590,7 +591,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                         return;
                     }
 
-                    let _ = editor.update_in(cx, |editor, window, cx| {
+                    let editor_update_result = editor.update_in(cx, |editor, window, cx| {
                         let failed_write_command = tr(
                             cx,
                             "vim.command.failed_write_command",
@@ -605,6 +606,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                                 |_, _, _| None,
                             );
                     });
+                    editor_update_result.log_err();
                 })
                 .detach();
             } else {
@@ -742,7 +744,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                 path: path.into_arc(),
             };
 
-            let _ = workspace.update(cx, |workspace, cx| {
+            workspace.update(cx, |workspace, cx| {
                 workspace
                     .open_path(project_path, None, true, window, cx)
                     .detach_and_log_err(cx);
@@ -826,7 +828,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                     text.push('\n');
                 }
 
-                let _ = editor.update_in(cx, |editor, window, cx| {
+                let editor_update_result = editor.update_in(cx, |editor, window, cx| {
                     editor.transact(window, cx, |editor, window, cx| {
                         editor.edit([(edit_range.clone(), text)], cx);
                         let snapshot = editor.buffer().read(cx).snapshot(cx);
@@ -843,6 +845,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
                         })
                     });
                 });
+                editor_update_result.log_err();
             })
             .detach();
         });

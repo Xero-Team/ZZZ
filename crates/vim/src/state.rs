@@ -792,7 +792,7 @@ impl VimGlobals {
                                     });
                                 }
                             })
-                            .ok();
+                            .log_err();
                     }
                 }
             } else {
@@ -1496,7 +1496,7 @@ impl PickerDelegate for MarksViewDelegate {
         };
         cx.spawn(async move |picker, cx| {
             let mut matches = Vec::new();
-            let _ = workspace.update(cx, |workspace, cx| {
+            workspace.update(cx, |workspace, cx| {
                 let entity_id = cx.entity_id();
                 let Some(editor) = workspace
                     .active_item(cx)
@@ -1632,7 +1632,7 @@ impl PickerDelegate for MarksViewDelegate {
                     }
                 }
             });
-            let _ = picker.update(cx, |picker, cx| {
+            let picker_update_result = picker.update(cx, |picker, cx| {
                 matches.sort_by_key(|a| {
                     (
                         a.name.chars().next().map(|c| c.is_ascii_uppercase()),
@@ -1648,6 +1648,7 @@ impl PickerDelegate for MarksViewDelegate {
                 picker.delegate.point_column_width = (digits + 4) as usize;
                 cx.notify();
             });
+            picker_update_result.log_err();
         })
     }
 

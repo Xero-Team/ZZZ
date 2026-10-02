@@ -6,7 +6,7 @@ use search::{BufferSearchBar, SearchOptions, buffer_search};
 use serde::Deserialize;
 use settings::Settings;
 use std::{iter::Peekable, str::Chars};
-use util::serde::default_true;
+use util::{ResultExt, serde::default_true};
 use workspace::{notifications::NotifyResultExt, searchable::Direction};
 
 use crate::{
@@ -673,7 +673,7 @@ impl Vim {
                         cx,
                     )
                 })
-                .ok();
+                .log_err();
 
                 // Disable the `ONE_MATCH_PER_LINE` search option when finished, as
                 // this is not properly supported outside of vim mode, and

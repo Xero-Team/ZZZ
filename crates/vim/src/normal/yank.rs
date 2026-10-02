@@ -12,6 +12,7 @@ use gpui::Context;
 use gpui::Window;
 use language::Point;
 use settings::Settings;
+use util::ResultExt;
 
 impl Vim {
     pub fn yank_motion(
@@ -242,7 +243,7 @@ impl Vim {
             this.update(cx, |editor, cx| {
                 editor.clear_background_highlights(HighlightKey::HighlightOnYank, cx)
             })
-            .ok();
+            .log_err();
         })
         .detach();
     }
