@@ -9,7 +9,7 @@ use i18n::tr;
 use language::{Buffer, BufferEvent, LanguageName, Toolchain, ToolchainScope};
 use project::{Project, ProjectPath, Toolchains, WorktreeId, toolchain_store::ToolchainStoreEvent};
 use ui::{Button, ButtonCommon, Clickable, LabelSize, SharedString, Tooltip};
-use util::{maybe, rel_path::RelPath};
+use util::{ResultExt, maybe, rel_path::RelPath};
 use workspace::{HideStatusItem, StatusItemView, Workspace, item::ItemHandle};
 
 use crate::ToolchainSelector;
@@ -77,10 +77,11 @@ impl ActiveToolchain {
                     })
                     .ok()?
                     .await?;
-                let _ = this.update(cx, |this, cx| {
+                this.update(cx, |this, cx| {
                     this.term = meta.term;
                     cx.notify();
-                });
+                })
+                .log_err();
                 let (worktree_id, path) = active_file
                     .update(cx, |this, cx| {
                         this.file().and_then(|file| {

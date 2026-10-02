@@ -635,7 +635,7 @@ impl ToolchainSelector {
                         )
                     });
                 })
-                .ok();
+                .log_err();
             anyhow::Ok(())
         })
         .detach();
@@ -666,7 +666,7 @@ impl ToolchainSelector {
                     this.language = language;
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             }
         })
         .detach();
@@ -846,13 +846,14 @@ impl ToolchainSelectorDelegate {
                         .replacen("{}", &pretty_path, 1)
                     })
                     .ok()?;
-                let _ = this.update_in(cx, move |this, window, cx| {
+                this.update_in(cx, move |this, window, cx| {
                     this.delegate.relative_path = relative_path;
                     this.delegate.placeholder_text = placeholder_text.into();
                     this.refresh_placeholder(window, cx);
-                });
+                })
+                .log_err();
 
-                let _ = this.update_in(cx, move |this, window, cx| {
+                this.update_in(cx, move |this, window, cx| {
                     this.delegate.candidates = user_toolchains
                         .into_iter()
                         .flat_map(|(scope, toolchains)| {
@@ -878,7 +879,8 @@ impl ToolchainSelectorDelegate {
                         this.delegate.set_selected_index(position, window, cx);
                     }
                     this.update_matches(this.query(cx), window, cx);
-                });
+                })
+                .log_err();
 
                 Some(())
             }
