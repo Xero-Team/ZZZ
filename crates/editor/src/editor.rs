@@ -16865,13 +16865,14 @@ impl Editor {
             {
                 let has_new_transaction = transaction_id_prev != Some(transaction_id_now);
                 if has_new_transaction {
-                    editor
-                        .update(cx, |editor, _| {
-                            editor
-                                .selection_history
-                                .insert_transaction(transaction_id_now, selections_prev);
-                        })
-                        .ok();
+                    let Some(editor) = editor.upgrade() else {
+                        return Ok(());
+                    };
+                    editor.update(cx, |editor, _| {
+                        editor
+                            .selection_history
+                            .insert_transaction(transaction_id_now, selections_prev);
+                    });
                 }
             }
 
