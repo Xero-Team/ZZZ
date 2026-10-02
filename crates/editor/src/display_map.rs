@@ -622,19 +622,24 @@ impl DisplayMap {
             )
             .snapshot;
 
-        if let Some((companion_dm, _)) = &self.companion {
-            let _ = companion_dm.update(cx, |dm, _cx| {
+        if let Some((companion_display_map, _)) = &self.companion
+            && let Some(companion_display_map) = companion_display_map.upgrade()
+        {
+            companion_display_map.update(cx, |companion_display_map, cx| {
                 if let Some((companion_snapshot, companion_edits)) = companion_wrap_data {
-                    let their_companion_ref = dm.companion.as_ref().map(|(_, c)| c.read(_cx));
-                    dm.block_map.read(
+                    let their_companion_ref = companion_display_map
+                        .companion
+                        .as_ref()
+                        .map(|(_, companion)| companion.read(cx));
+                    companion_display_map.block_map.read(
                         companion_snapshot,
                         companion_edits,
-                        their_companion_ref.map(|c| {
+                        their_companion_ref.map(|companion| {
                             CompanionView::new(
-                                dm.entity_id,
+                                companion_display_map.entity_id,
                                 &self_wrap_snapshot,
                                 &self_wrap_edits,
-                                c,
+                                companion,
                             )
                         }),
                     );
@@ -1107,19 +1112,24 @@ impl DisplayMap {
         );
         let block_row = block_map.row_for_block(block_id)?;
 
-        if let Some((companion_dm, _)) = &self.companion {
-            let _ = companion_dm.update(cx, |dm, cx| {
+        if let Some((companion_display_map, _)) = &self.companion
+            && let Some(companion_display_map) = companion_display_map.upgrade()
+        {
+            companion_display_map.update(cx, |companion_display_map, cx| {
                 if let Some((companion_snapshot, companion_edits)) = companion_wrap_data {
-                    let their_companion_ref = dm.companion.as_ref().map(|(_, c)| c.read(cx));
-                    dm.block_map.read(
+                    let their_companion_ref = companion_display_map
+                        .companion
+                        .as_ref()
+                        .map(|(_, companion)| companion.read(cx));
+                    companion_display_map.block_map.read(
                         companion_snapshot,
                         companion_edits,
-                        their_companion_ref.map(|c| {
+                        their_companion_ref.map(|companion| {
                             CompanionView::new(
-                                dm.entity_id,
+                                companion_display_map.entity_id,
                                 &self_wrap_snapshot,
                                 &self_wrap_edits,
-                                c,
+                                companion,
                             )
                         }),
                     );
@@ -1342,19 +1352,24 @@ impl DisplayMap {
                 .read(self_new_wrap_snapshot, self_new_wrap_edits, companion_view);
         }
 
-        if let Some((companion_dm, _)) = &self.companion {
-            let _ = companion_dm.update(cx, |dm, cx| {
+        if let Some((companion_display_map, _)) = &self.companion
+            && let Some(companion_display_map) = companion_display_map.upgrade()
+        {
+            companion_display_map.update(cx, |companion_display_map, cx| {
                 if let Some((companion_snapshot, companion_edits)) = companion_wrap_data {
-                    let their_companion_ref = dm.companion.as_ref().map(|(_, c)| c.read(cx));
-                    dm.block_map.read(
+                    let their_companion_ref = companion_display_map
+                        .companion
+                        .as_ref()
+                        .map(|(_, companion)| companion.read(cx));
+                    companion_display_map.block_map.read(
                         companion_snapshot,
                         companion_edits,
-                        their_companion_ref.map(|c| {
+                        their_companion_ref.map(|companion| {
                             CompanionView::new(
-                                dm.entity_id,
+                                companion_display_map.entity_id,
                                 &self_wrap_snapshot,
                                 &self_wrap_edits,
-                                c,
+                                companion,
                             )
                         }),
                     );
