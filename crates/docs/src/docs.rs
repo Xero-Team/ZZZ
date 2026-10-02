@@ -562,11 +562,11 @@ impl PickerDelegate for DocsSearchDelegate {
 
     fn set_selected_index(
         &mut self,
-        ix: usize,
+        index: usize,
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = index;
     }
 
     fn update_matches(
@@ -584,7 +584,7 @@ impl PickerDelegate for DocsSearchDelegate {
                 .iter()
                 .enumerate()
                 .filter(|(_, entry)| entry.search_text.contains(&query))
-                .map(|(ix, _)| ix)
+                .map(|(index, _)| index)
                 .collect();
         }
         self.selected_index = 0;
@@ -592,8 +592,8 @@ impl PickerDelegate for DocsSearchDelegate {
     }
 
     fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        if let Some(ix) = self.matches.get(self.selected_index) {
-            let target = DocTarget::page(self.entries[*ix].path.clone());
+        if let Some(entry_index) = self.matches.get(self.selected_index) {
+            let target = DocTarget::page(self.entries[*entry_index].path.clone());
             self.workspace
                 .update(cx, |workspace, cx| {
                     DocumentationView::open_documentation_page(workspace, Some(target), window, cx);
@@ -609,14 +609,14 @@ impl PickerDelegate for DocsSearchDelegate {
 
     fn render_match(
         &self,
-        ix: usize,
+        index: usize,
         selected: bool,
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let entry = self.entries.get(*self.matches.get(ix)?)?;
+        let entry = self.entries.get(*self.matches.get(index)?)?;
         Some(
-            ListItem::new(ix)
+            ListItem::new(index)
                 .inset(true)
                 .spacing(ListItemSpacing::Sparse)
                 .toggle_state(selected)
