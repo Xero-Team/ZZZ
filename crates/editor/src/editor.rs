@@ -20910,7 +20910,7 @@ impl Editor {
         // and activating a new item causes the pane to call a method on us reentrantly,
         // which panics if we're on the stack.
         window.defer(cx, move |window, cx| {
-            workspace
+            if workspace
                 .update(cx, |workspace, cx| {
                     let pane = if split {
                         workspace.adjacent_pane(window, cx)
@@ -20935,16 +20935,18 @@ impl Editor {
                                 // so `workspace.open_project_item` will never find them, always opening a new editor.
                                 // Instead, we try to activate the existing editor in the pane first.
                                 let (editor, pane_item_index, pane_item_id) =
-                                    pane.read(cx).items().enumerate().find_map(|(i, item)| {
-                                        let editor = item.downcast::<Editor>()?;
-                                        let singleton_buffer =
-                                            editor.read(cx).buffer().read(cx).as_singleton()?;
-                                        if singleton_buffer == buffer {
-                                            Some((editor, i, item.item_id()))
-                                        } else {
-                                            None
-                                        }
-                                    })?;
+                                    pane.read(cx).items().enumerate().find_map(
+                                        |(item_index, item)| {
+                                            let editor = item.downcast::<Editor>()?;
+                                            let singleton_buffer =
+                                                editor.read(cx).buffer().read(cx).as_singleton()?;
+                                            if singleton_buffer == buffer {
+                                                Some((editor, item_index, item.item_id()))
+                                            } else {
+                                                None
+                                            }
+                                        },
+                                    )?;
                                 pane.update(cx, |pane, cx| {
                                     pane.activate_item(pane_item_index, true, true, window, cx);
                                     if !PreviewTabsSettings::get_global(cx)
@@ -20983,30 +20985,39 @@ impl Editor {
                                 }
                                 None => Autoscroll::newest(),
                             };
-                            let nav_history = editor.nav_history.take();
                             let multibuffer_snapshot = editor.buffer().read(cx).snapshot(cx);
                             let Some(buffer_snapshot) = multibuffer_snapshot.as_singleton() else {
                                 return;
                             };
+                            let selection_ranges = ranges
+                                .into_iter()
+                                .filter_map(|range| {
+                                    let start =
+                                        buffer_snapshot.clip_offset(range.start.0, Bias::Left);
+                                    let end = buffer_snapshot.clip_offset(range.end.0, Bias::Right);
+                                    let range = buffer_snapshot.anchor_before(start)
+                                        ..buffer_snapshot.anchor_after(end);
+                                    multibuffer_snapshot.buffer_anchor_range_to_anchor_range(range)
+                                })
+                                .collect::<Vec<_>>();
+                            if selection_ranges.is_empty() {
+                                return;
+                            }
+                            let nav_history = editor.nav_history.take();
                             editor.change_selections(
                                 SelectionEffects::scroll(autoscroll),
                                 window,
                                 cx,
-                                |s| {
-                                    s.select_ranges(ranges.into_iter().map(|range| {
-                                        let range = buffer_snapshot.anchor_before(range.start)
-                                            ..buffer_snapshot.anchor_after(range.end);
-                                        multibuffer_snapshot
-                                            .buffer_anchor_range_to_anchor_range(range)
-                                            .expect("buffer_anchor_range_to_anchor_range should be present")
-                                    }));
-                                },
+                                |selections| selections.select_ranges(selection_ranges),
                             );
                             editor.nav_history = nav_history;
                         });
                     }
                 })
-                .ok();
+                .is_err()
+            {
+                return;
+            }
         });
     }
 
@@ -21969,16 +21980,20 @@ impl Editor {
                 cx.background_executor()
                     .timer(Duration::from_millis(50))
                     .await;
-                editor
-                    .update_in(cx, |editor, window, cx| {
-                        editor.do_update_data_on_scroll(window, cx);
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                let Ok(()) = editor.update_in(cx, |editor, window, cx| {
+                    editor.do_update_data_on_scroll(window, cx);
+                }) else {
+                    return;
+                };
             });
-        } else {
-            self.post_scroll_update = Task::ready(());
-            self.do_update_data_on_scroll(window, cx);
+            return;
         }
+
+        self.post_scroll_update = Task::ready(());
+        self.do_update_data_on_scroll(window, cx);
     }
 
     fn do_update_data_on_scroll(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {

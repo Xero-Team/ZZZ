@@ -490,10 +490,10 @@ impl Editor {
                                 SharedString::new,
                             );
                         let start_anchor = snapshot.anchor_before(diagnostic_entry.range.start);
-                        let (Ok(i) | Err(i)) = inline_diagnostics
+                        let (Ok(insertion_index) | Err(insertion_index)) = inline_diagnostics
                             .binary_search_by(|(probe, _)| probe.cmp(&start_anchor, &snapshot));
                         inline_diagnostics.insert(
-                            i,
+                            insertion_index,
                             (
                                 start_anchor,
                                 InlineDiagnostic {
@@ -510,12 +510,13 @@ impl Editor {
                 })
                 .await;
 
-            editor
-                .update(cx, |editor, cx| {
-                    editor.inline_diagnostics = new_inline_diagnostics;
-                    cx.notify();
-                })
-                .ok();
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            editor.update(cx, |editor, cx| {
+                editor.inline_diagnostics = new_inline_diagnostics;
+                cx.notify();
+            });
         });
     }
 
