@@ -4838,8 +4838,6 @@ impl EditorElement {
         scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
         line_layouts: &[LineWithInvisibles],
         cursor: DisplayPoint,
-        _cursor_point: Point,
-        _style: &EditorStyle,
         window: &mut Window,
         cx: &mut App,
     ) -> Option<ContextMenuLayout> {
@@ -4919,8 +4917,7 @@ impl EditorElement {
             viewport_bounds,
             window,
             cx,
-            |height, max_width_for_stable_x, y_flipped, window, cx| {
-                // First layout the menu to get its size - others can be at least this wide.
+            |height, _, y_flipped, window, cx| {
                 let context_menu = if context_menu_visible {
                     let menu_height = if y_flipped {
                         height - height_below_menu
@@ -4935,17 +4932,7 @@ impl EditorElement {
                 } else {
                     None
                 };
-                let min_width = context_menu
-                    .as_ref()
-                    .map_or(px(0.), |(_, _, size)| size.width);
-                let max_width = max_width_for_stable_x.max(
-                    context_menu
-                        .as_ref()
-                        .map_or(px(0.), |(_, _, size)| size.width),
-                );
-
-                let _ = (min_width, max_width);
-                vec![context_menu].into_iter().flatten().collect::<Vec<_>>()
+                context_menu.into_iter().collect::<Vec<_>>()
             },
         )?;
 
@@ -11055,8 +11042,6 @@ impl Element for EditorElement {
 
                     let context_menu_layout =
                         if let Some(newest_selection_head) = newest_selection_head {
-                            let newest_selection_point =
-                                newest_selection_head.to_point(&snapshot.display_snapshot);
                             if (start_row..end_row).contains(&newest_selection_head.row()) {
                                 self.layout_cursor_popovers(
                                     line_height,
@@ -11067,8 +11052,6 @@ impl Element for EditorElement {
                                     scroll_pixel_position,
                                     &line_layouts,
                                     newest_selection_head,
-                                    newest_selection_point,
-                                    style,
                                     window,
                                     cx,
                                 )
