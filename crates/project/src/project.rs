@@ -4971,7 +4971,7 @@ impl Project {
 
             sender_task.await?;
 
-            let _ = client
+            client
                 .request(proto::FindSearchCandidatesChunk {
                     handle,
                     peer_id: Some(peer_id),
