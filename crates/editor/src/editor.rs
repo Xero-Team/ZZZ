@@ -6459,8 +6459,8 @@ impl Editor {
                         .timer(std::time::Duration::from_millis(blame_popover_delay))
                         .await;
                 }
-                editor
-                    .update(cx, |editor, cx| {
+                if let Some(editor) = editor.upgrade() {
+                    editor.update(cx, |editor, cx| {
                         editor.inline_blame_popover_show_task.take();
                         let Some(blame) = editor.blame.as_ref() else {
                             return;
@@ -6490,8 +6490,8 @@ impl Editor {
                             keyboard_grace: ignore_timeout,
                         });
                         cx.notify();
-                    })
-                    .ok();
+                    });
+                }
             });
             self.inline_blame_popover_show_task = Some(show_task);
         }
@@ -6522,12 +6522,12 @@ impl Editor {
                         .timer(std::time::Duration::from_millis(100))
                         .await;
 
-                    editor
-                        .update(cx, |editor, cx| {
+                    if let Some(editor) = editor.upgrade() {
+                        editor.update(cx, |editor, cx| {
                             editor.inline_blame_popover.take();
                             cx.notify();
-                        })
-                        .ok();
+                        });
+                    }
                 }));
             }
 
@@ -6568,12 +6568,13 @@ impl Editor {
         self.document_highlights_task = Some(cx.spawn(async move |this, cx| {
             let (start_word_range, end_word_range) = word_ranges.await;
             if start_word_range != end_word_range {
-                this.update(cx, |this, cx| {
-                    this.document_highlights_task.take();
-                    this.clear_background_highlights(HighlightKey::DocumentHighlightRead, cx);
-                    this.clear_background_highlights(HighlightKey::DocumentHighlightWrite, cx);
-                })
-                .ok();
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        this.document_highlights_task.take();
+                        this.clear_background_highlights(HighlightKey::DocumentHighlightRead, cx);
+                        this.clear_background_highlights(HighlightKey::DocumentHighlightWrite, cx);
+                    });
+                }
                 return;
             }
             cx.background_executor()
@@ -6589,49 +6590,50 @@ impl Editor {
             };
 
             if let Some(highlights) = highlights {
-                this.update(cx, |this, cx| {
-                    if this.pending_rename.is_some() {
-                        return;
-                    }
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if this.pending_rename.is_some() {
+                            return;
+                        }
 
-                    let buffer = this.buffer.read(cx);
-                    if buffer
-                        .text_anchor_for_position(cursor_position, cx)
-                        .is_none_or(|(buffer, _)| buffer != cursor_buffer)
-                    {
-                        return;
-                    }
-
-                    let mut write_ranges = Vec::new();
-                    let mut read_ranges = Vec::new();
-                    let multibuffer_snapshot = buffer.snapshot(cx);
-                    for highlight in highlights {
-                        for range in
-                            multibuffer_snapshot.buffer_range_to_excerpt_ranges(highlight.range)
+                        let buffer = this.buffer.read(cx);
+                        if buffer
+                            .text_anchor_for_position(cursor_position, cx)
+                            .is_none_or(|(buffer, _)| buffer != cursor_buffer)
                         {
-                            if highlight.kind == lsp::DocumentHighlightKind::WRITE {
-                                write_ranges.push(range);
-                            } else {
-                                read_ranges.push(range);
+                            return;
+                        }
+
+                        let mut write_ranges = Vec::new();
+                        let mut read_ranges = Vec::new();
+                        let multibuffer_snapshot = buffer.snapshot(cx);
+                        for highlight in highlights {
+                            for range in
+                                multibuffer_snapshot.buffer_range_to_excerpt_ranges(highlight.range)
+                            {
+                                if highlight.kind == lsp::DocumentHighlightKind::WRITE {
+                                    write_ranges.push(range);
+                                } else {
+                                    read_ranges.push(range);
+                                }
                             }
                         }
-                    }
 
-                    this.highlight_background(
-                        HighlightKey::DocumentHighlightRead,
-                        &read_ranges,
-                        |_, theme| theme.colors().editor_document_highlight_read_background,
-                        cx,
-                    );
-                    this.highlight_background(
-                        HighlightKey::DocumentHighlightWrite,
-                        &write_ranges,
-                        |_, theme| theme.colors().editor_document_highlight_write_background,
-                        cx,
-                    );
-                    cx.notify();
-                })
-                .log_err();
+                        this.highlight_background(
+                            HighlightKey::DocumentHighlightRead,
+                            &read_ranges,
+                            |_, theme| theme.colors().editor_document_highlight_read_background,
+                            cx,
+                        );
+                        this.highlight_background(
+                            HighlightKey::DocumentHighlightWrite,
+                            &write_ranges,
+                            |_, theme| theme.colors().editor_document_highlight_write_background,
+                            cx,
+                        );
+                        cx.notify();
+                    });
+                }
             }
         }));
         None
@@ -6788,12 +6790,13 @@ impl Editor {
             self.refresh_outline_symbols_at_cursor_at_cursor_task =
                 cx.spawn(async move |this, cx| {
                     let symbols = background_task.await;
-                    this.update(cx, |this, cx| {
-                        this.outline_symbols_at_cursor = symbols;
-                        cx.emit(EditorEvent::OutlineSymbolsChanged);
-                        cx.notify();
-                    })
-                    .ok();
+                    if let Some(this) = this.upgrade() {
+                        this.update(cx, |this, cx| {
+                            this.outline_symbols_at_cursor = symbols;
+                            cx.emit(EditorEvent::OutlineSymbolsChanged);
+                            cx.notify();
+                        });
+                    }
                 });
         }
     }
