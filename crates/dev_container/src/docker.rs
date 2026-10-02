@@ -275,7 +275,15 @@ impl Docker {
 #[async_trait]
 impl DockerClient for Docker {
     async fn inspect(&self, id: &String) -> Result<DockerInspect, DevContainerError> {
-        // Try to pull the image, continue on failure; Image may be local only, id a reference to a running container
+        let command = self.create_docker_inspect(id);
+        match evaluate_json_command::<DockerInspect>(command).await {
+            Ok(Some(docker_inspect)) => return Ok(docker_inspect),
+            Ok(None) | Err(_) => {}
+        }
+
+        // The identifier may refer to a missing image, so pull it before retrying.
+        // Pull failures are logged by `pull_image`; inspect remains authoritative
+        // because the identifier may instead refer to a local-only resource.
         self.pull_image(id).await.ok();
 
         let command = self.create_docker_inspect(id);
