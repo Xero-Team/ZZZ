@@ -615,17 +615,18 @@ impl CompletionsMenu {
         let completion_id = self.id;
         cx.spawn(async move |editor, cx| {
             if resolve_task.await.log_err() == Some(true) {
-                editor
-                    .update(cx, |editor, cx| {
-                        // `resolve_completions` modified state affecting display.
-                        cx.notify();
-                        editor.with_completions_menu_matching_id(completion_id, |menu| {
-                            if let Some(menu) = menu {
-                                menu.start_markdown_parse_for_nearby_entries(cx)
-                            }
-                        });
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                editor.update(cx, |editor, cx| {
+                    // `resolve_completions` modified state affecting display.
+                    cx.notify();
+                    editor.with_completions_menu_matching_id(completion_id, |menu| {
+                        if let Some(menu) = menu {
+                            menu.start_markdown_parse_for_nearby_entries(cx)
+                        }
+                    });
+                });
             }
         })
         .detach();
@@ -1152,15 +1153,18 @@ impl CompletionsMenu {
         let id = self.id;
         self.filter_task = cx.spawn_in(window, async move |editor, cx| {
             let matches = matches.await;
-            editor
-                .update_in(cx, |editor, window, cx| {
-                    editor.with_completions_menu_matching_id(id, |this| {
-                        if let Some(this) = this {
-                            this.set_filter_results(matches, provider, window, cx);
-                        }
-                    });
-                })
-                .ok();
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            let Ok(()) = editor.update_in(cx, |editor, window, cx| {
+                editor.with_completions_menu_matching_id(id, |menu| {
+                    if let Some(menu) = menu {
+                        menu.set_filter_results(matches, provider, window, cx);
+                    }
+                });
+            }) else {
+                return;
+            };
         });
     }
 
