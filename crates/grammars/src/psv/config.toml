@@ -1,0 +1,9 @@
+name = "PSV"
+grammar = "psv"
+query_layers = ["csv"]
+path_suffixes = ["psv"]
+autoclose_before = "|"
+brackets = [
+    { start = "\"", end = "\"", close = true, surround = true, newline = false, not_in = ["string"] },
+]
+tab_size = 2

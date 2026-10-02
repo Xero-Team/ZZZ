@@ -1,0 +1,9 @@
+name = "TSV"
+grammar = "tsv"
+query_layers = ["csv"]
+path_suffixes = ["tsv"]
+autoclose_before = "\t"
+brackets = [
+    { start = "\"", end = "\"", close = true, surround = true, newline = false, not_in = ["string"] },
+]
+tab_size = 2

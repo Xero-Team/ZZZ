@@ -23,6 +23,9 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("cpp", tree_sitter_cpp::LANGUAGE.into()),
         ("css", tree_sitter_css::LANGUAGE.into()),
         ("csv", tree_sitter_csv::LANGUAGE.into()),
+        ("tsv", tree_sitter_csv::TSV_LANGUAGE.into()),
+        ("psv", tree_sitter_csv::PSV_LANGUAGE.into()),
+        ("semicolon", tree_sitter_csv::SEMICOLON_LANGUAGE.into()),
         ("dtd", tree_sitter_xml::LANGUAGE_DTD.into()),
         ("diff", tree_sitter_diff::LANGUAGE.into()),
         ("dockerfile", tree_sitter_dockerfile::LANGUAGE.into()),
@@ -194,6 +197,30 @@ mod tests {
         parser.parse(source, None).expect("parse CSV source")
     }
 
+    fn parse_tsv(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_csv::TSV_LANGUAGE.into())
+            .expect("load TSV grammar");
+        parser.parse(source, None).expect("parse TSV source")
+    }
+
+    fn parse_psv(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_csv::PSV_LANGUAGE.into())
+            .expect("load PSV grammar");
+        parser.parse(source, None).expect("parse PSV source")
+    }
+
+    fn parse_semicolon(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_csv::SEMICOLON_LANGUAGE.into())
+            .expect("load semicolon grammar");
+        parser.parse(source, None).expect("parse semicolon source")
+    }
+
     fn parse_dockerfile(source: &str) -> tree_sitter::Tree {
         let mut parser = Parser::new();
         parser
@@ -250,6 +277,14 @@ mod tests {
         );
     }
 
+    fn assert_tsv_parses(source: &str) {
+        let tree = parse_tsv(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid TSV, got parse error for:\n{source}"
+        );
+    }
+
     fn assert_dockerfile_parses(source: &str) {
         let tree = parse_dockerfile(source);
         assert!(
@@ -283,6 +318,11 @@ mod tests {
     fn read_csv_testdata(name: &str) -> String {
         std::fs::read_to_string(Path::new("src/csv/testdata").join(name))
             .unwrap_or_else(|error| panic!("failed to read CSV testdata {name}: {error}"))
+    }
+
+    fn read_tsv_testdata(name: &str) -> String {
+        std::fs::read_to_string(Path::new("src/tsv/testdata").join(name))
+            .unwrap_or_else(|error| panic!("failed to read TSV testdata {name}: {error}"))
     }
 
     fn read_dockerfile_testdata(name: &str) -> String {
@@ -505,6 +545,74 @@ mod tests {
         let brackets = queries.brackets.expect("csv brackets query");
         tree_sitter::Query::new(&tree_sitter_csv::LANGUAGE.into(), &brackets)
             .expect("compile CSV brackets query");
+    }
+
+    #[test]
+    fn tsv_queries_reuse_csv_highlights_and_compile() {
+        let config = load_config("tsv");
+        let queries = load_queries_for_config("tsv", &config);
+
+        let highlights = queries.highlights.expect("shared tabular highlights query");
+        assert!(highlights.contains("@property"));
+        assert!(highlights.contains("(delimiter) @punctuation.delimiter"));
+
+        let query = tree_sitter::Query::new(&tree_sitter_csv::TSV_LANGUAGE.into(), &highlights)
+            .expect("compile shared highlights query for TSV");
+        let header_capture_index = query
+            .capture_names()
+            .iter()
+            .position(|name| *name == "property")
+            .expect("TSV highlights should expose a property capture");
+
+        let source = read_tsv_testdata("typed-values.tsv");
+        let tree = parse_tsv(&source);
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut captures = cursor.matches(&query, tree.root_node(), source.as_bytes());
+        let mut header_captures = Vec::new();
+
+        while let Some(query_match) = captures.next() {
+            for capture in query_match.captures() {
+                if capture.index as usize == header_capture_index {
+                    header_captures.push(&source[capture.node.byte_range()]);
+                }
+            }
+        }
+
+        assert_eq!(header_captures, vec!["value", "number", "flag", "notes"]);
+
+        let brackets = queries.brackets.expect("shared tabular brackets query");
+        tree_sitter::Query::new(&tree_sitter_csv::TSV_LANGUAGE.into(), &brackets)
+            .expect("compile shared brackets query for TSV");
+    }
+
+    #[test]
+    fn psv_and_semicolon_queries_reuse_csv_highlights_and_compile() {
+        let highlights = load_queries_for_config("psv", &load_config("psv"))
+            .highlights
+            .expect("PSV highlights query");
+        assert!(!parse_psv("field|value\nalice|1").root_node().has_error());
+        tree_sitter::Query::new(&tree_sitter_csv::PSV_LANGUAGE.into(), &highlights)
+            .expect("compile shared highlights query for PSV");
+
+        let semicolon_highlights = load_queries_for_config("semicolon", &load_config("semicolon"))
+            .highlights
+            .expect("semicolon highlights query");
+        let semicolon_tree = parse_semicolon("field;value\nalice;3,14");
+        assert!(
+            !semicolon_tree.root_node().has_error(),
+            "{}",
+            semicolon_tree.root_node().to_sexp()
+        );
+        assert!(
+            semicolon_tree.root_node().to_sexp().contains("(float)"),
+            "{}",
+            semicolon_tree.root_node().to_sexp()
+        );
+        tree_sitter::Query::new(
+            &tree_sitter_csv::SEMICOLON_LANGUAGE.into(),
+            &semicolon_highlights,
+        )
+        .expect("compile shared highlights query for semicolon values");
     }
 
     #[test]
@@ -1489,6 +1597,20 @@ mod tests {
         assert!(sexp.contains("(boolean)"));
         assert!(sexp.contains("(na)"));
         assert!(sexp.contains("(float)"));
+    }
+
+    #[test]
+    fn tsv_parser_accepts_typed_values_and_commas_in_fields() {
+        let source = read_tsv_testdata("typed-values.tsv");
+        assert_tsv_parses(&source);
+
+        let sexp = parse_tsv(&source).root_node().to_sexp();
+        assert!(sexp.contains("(null)"));
+        assert!(sexp.contains("(hex)"));
+        assert!(sexp.contains("(boolean)"));
+        assert!(sexp.contains("(na)"));
+        assert!(sexp.contains("(float)"));
+        assert!(source.contains("plain,text"));
     }
 
     #[test]

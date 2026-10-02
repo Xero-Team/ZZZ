@@ -130,6 +130,16 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "psv",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "semicolon",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "dtd",
             adapters: vec![],
             ..Default::default()
@@ -249,6 +259,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
         },
         LanguageInfo {
             name: "toml",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "tsv",
             adapters: vec![],
             ..Default::default()
         },
@@ -619,6 +634,54 @@ mod tests {
                 .await
                 .expect("CSV language should load with built-in queries");
             assert_eq!(loaded_language.name(), "CSV");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_tsv_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        assert_eq!(
+            languages
+                .language_for_file_path(Path::new("table.tsv"))
+                .map(|language| language.name()),
+            Some("TSV".into())
+        );
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("table.tsv"))
+                .await
+                .expect("TSV language should load with shared tabular queries");
+            assert_eq!(loaded_language.name(), "TSV");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_other_delimited_formats_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        for (path, expected_name) in [
+            ("table.psv", "PSV"),
+            ("table.scsv", "Semicolon-separated values"),
+            ("table.ssv", "Semicolon-separated values"),
+        ] {
+            assert_eq!(
+                languages
+                    .language_for_file_path(Path::new(path))
+                    .map(|language| language.name()),
+                Some(expected_name.into())
+            );
         }
     }
 
