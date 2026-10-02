@@ -58,13 +58,14 @@ pub(super) fn refresh_linked_ranges(
         cx.background_executor().timer(UPDATE_DEBOUNCE).await;
 
         let mut applicable_selections = Vec::new();
-        editor
-            .update(cx, |editor, cx| {
+        {
+            let editor = editor.upgrade()?;
+            editor.update(cx, |editor, cx| {
                 let display_snapshot = editor.display_snapshot(cx);
                 let selections = editor.selections.all_anchors(&display_snapshot);
                 let snapshot = display_snapshot.buffer_snapshot();
                 let buffer = editor.buffer.read(cx);
-                for selection in selections.iter() {
+                for selection in selections.as_ref() {
                     if let Some((_, range)) =
                         snapshot.anchor_range_to_buffer_anchor_range(selection.range())
                         && let Some(buffer) = buffer.buffer(range.start.buffer_id)
@@ -72,15 +73,16 @@ pub(super) fn refresh_linked_ranges(
                         applicable_selections.push((buffer, range.start, range.end));
                     }
                 }
-            })
-            .ok()?;
+            });
+        }
 
         if applicable_selections.is_empty() {
             return None;
         }
 
-        let highlights = project
-            .update(cx, |project, cx| {
+        let highlights = {
+            let project = project.upgrade()?;
+            project.update(cx, |project, cx| {
                 let mut linked_edits_tasks = vec![];
                 for (buffer, start, end) in &applicable_selections {
                     let linked_edits_task = project.linked_edits(buffer, *start, cx);
@@ -97,11 +99,11 @@ pub(super) fn refresh_linked_ranges(
 
                         let start_point = start.to_point(&snapshot);
                         let end_point = end.to_point(&snapshot);
-                        let _current_selection_contains_range = edits.iter().find(|range| {
+                        let current_selection_contains_range = edits.iter().find(|range| {
                             range.start.to_point(&snapshot) <= start_point
                                 && range.end.to_point(&snapshot) >= end_point
                         });
-                        _current_selection_contains_range?;
+                        current_selection_contains_range?;
                         // Now link every range as each-others sibling.
                         let mut siblings: HashMap<Range<Anchor>, Vec<_>> = Default::default();
                         let mut insert_sorted_anchor =
@@ -117,45 +119,44 @@ pub(super) fn refresh_linked_ranges(
                             insert_sorted_anchor(&second, &first);
                         }
                         let mut siblings: Vec<(_, _)> = siblings.into_iter().collect();
-                        siblings.sort_by(|lhs, rhs| lhs.0.cmp(&rhs.0, &snapshot));
+                        siblings.sort_by(|left, right| left.0.cmp(&right.0, &snapshot));
                         Some((buffer_id, siblings))
                     };
                     linked_edits_tasks.push(highlights);
                 }
                 linked_edits_tasks
             })
-            .ok()?;
+        };
 
         let highlights = futures::future::join_all(highlights).await;
 
-        editor
-            .update(cx, |this, cx| {
-                this.linked_edit_ranges.0.clear();
-                if this.pending_rename.is_some() {
-                    return;
-                }
-                for (buffer_id, ranges) in highlights.into_iter().flatten() {
-                    this.linked_edit_ranges
-                        .0
-                        .entry(buffer_id)
-                        .or_default()
-                        .extend(ranges);
-                }
-                for (buffer_id, values) in &mut this.linked_edit_ranges.0 {
-                    let Some(snapshot) = this
-                        .buffer
-                        .read(cx)
-                        .buffer(*buffer_id)
-                        .map(|buffer| buffer.read(cx).snapshot())
-                    else {
-                        continue;
-                    };
-                    values.sort_by(|lhs, rhs| lhs.0.cmp(&rhs.0, &snapshot));
-                }
+        let editor = editor.upgrade()?;
+        editor.update(cx, |this, cx| {
+            this.linked_edit_ranges.0.clear();
+            if this.pending_rename.is_some() {
+                return;
+            }
+            for (buffer_id, ranges) in highlights.into_iter().flatten() {
+                this.linked_edit_ranges
+                    .0
+                    .entry(buffer_id)
+                    .or_default()
+                    .extend(ranges);
+            }
+            for (buffer_id, values) in &mut this.linked_edit_ranges.0 {
+                let Some(snapshot) = this
+                    .buffer
+                    .read(cx)
+                    .buffer(*buffer_id)
+                    .map(|buffer| buffer.read(cx).snapshot())
+                else {
+                    continue;
+                };
+                values.sort_by(|left, right| left.0.cmp(&right.0, &snapshot));
+            }
 
-                cx.notify();
-            })
-            .ok()?;
+            cx.notify();
+        });
 
         Some(())
     }));
