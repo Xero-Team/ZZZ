@@ -306,6 +306,11 @@ impl PickerDelegate for AttachModalDelegate {
     ) -> Option<Self::ListItem> {
         let hit = &self.matches.get(ix)?;
         let candidate = self.candidates.get(hit.candidate_id)?;
+        let command = candidate.command.join(" ");
+        let arguments = candidate
+            .command
+            .get(1..)
+            .map_or_else(String::new, |arguments| arguments.join(" "));
 
         Some(
             ListItem::new(format!("process-entry-{ix}"))
@@ -319,28 +324,11 @@ impl PickerDelegate for AttachModalDelegate {
                         .child(
                             div()
                                 .id(format!("process-entry-{ix}-command"))
-                                .tooltip(Tooltip::text(
-                                    candidate
-                                        .command
-                                        .clone()
-                                        .into_iter()
-                                        .collect::<Vec<_>>()
-                                        .join(" "),
-                                ))
+                                .tooltip(Tooltip::text(command))
                                 .child(
-                                    Label::new(format!(
-                                        "{} {}",
-                                        candidate.name,
-                                        candidate
-                                            .command
-                                            .clone()
-                                            .into_iter()
-                                            .skip(1)
-                                            .collect::<Vec<_>>()
-                                            .join(" ")
-                                    ))
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted),
+                                    Label::new(format!("{} {}", candidate.name, arguments))
+                                        .size(LabelSize::Small)
+                                        .color(Color::Muted),
                                 ),
                         ),
                 ),
@@ -377,7 +365,7 @@ fn get_processes_for_project(project: &Entity<Project>, cx: &mut App) -> Task<Ar
                 })
                 .collect();
 
-            processes.sort_by_key(|k| k.name.clone());
+            processes.sort_by(|left, right| left.name.cmp(&right.name));
             Arc::from(processes.into_boxed_slice())
         })
     } else {
@@ -402,7 +390,7 @@ fn get_processes_for_project(project: &Entity<Project>, cx: &mut App) -> Task<Ar
                 }
             })
             .collect();
-        processes.sort_by_key(|k| k.name.clone());
+        processes.sort_by(|left, right| left.name.cmp(&right.name));
         let processes = processes.into_iter().collect();
         Task::ready(processes)
     }
