@@ -222,7 +222,7 @@ impl Workspace {
                     .await;
                 workspace
                     .update(cx, |workspace, cx| workspace.dismiss_toast(&toast.id, cx))
-                    .ok();
+                    .log_err();
             })
             .detach();
         }
