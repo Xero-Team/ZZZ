@@ -28,7 +28,7 @@ use std::{
     ops::Range,
     sync::Arc,
 };
-use text::{Anchor, BufferSnapshot, OffsetRangeExt};
+use text::{Anchor, OffsetRangeExt};
 use ui::{Button, ButtonStyle, Icon, IconName, Label, Tooltip, h_flex, prelude::*};
 use workspace::{
     ItemHandle, ItemNavHistory, Workspace,
@@ -334,9 +334,11 @@ impl BufferDiagnosticsEditor {
 
             let unchanged =
                 buffer_diagnostics_editor.update(cx, |buffer_diagnostics_editor, _cx| {
-                    if buffer_diagnostics_editor
-                        .diagnostics_are_unchanged(&diagnostics, &buffer_snapshot)
-                    {
+                    if crate::diagnostics_are_unchanged(
+                        &buffer_diagnostics_editor.diagnostics,
+                        &diagnostics,
+                        &buffer_snapshot,
+                    ) {
                         return true;
                     }
 
@@ -604,26 +606,6 @@ impl BufferDiagnosticsEditor {
             .iter()
             .map(DiagnosticEntryRef::to_owned)
             .collect();
-    }
-
-    fn diagnostics_are_unchanged(
-        &self,
-        diagnostics: &Vec<DiagnosticEntryRef<'_, Anchor>>,
-        snapshot: &BufferSnapshot,
-    ) -> bool {
-        if self.diagnostics.len() != diagnostics.len() {
-            return false;
-        }
-
-        self.diagnostics
-            .iter()
-            .zip(diagnostics.iter())
-            .all(|(existing, new)| {
-                existing.diagnostic.message == new.diagnostic.message
-                    && existing.diagnostic.severity == new.diagnostic.severity
-                    && existing.diagnostic.is_primary == new.diagnostic.is_primary
-                    && existing.range.to_offset(snapshot) == new.range.to_offset(snapshot)
-            })
     }
 
     fn focus_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {

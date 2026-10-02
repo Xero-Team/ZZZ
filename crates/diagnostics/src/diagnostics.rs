@@ -94,6 +94,20 @@ impl EventEmitter<EditorEvent> for ProjectDiagnosticsEditor {}
 const DIAGNOSTICS_UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 const DIAGNOSTICS_SUMMARY_UPDATE_DEBOUNCE: Duration = Duration::from_millis(30);
 
+fn diagnostics_are_unchanged(
+    existing: &[DiagnosticEntry<text::Anchor>],
+    new: &[DiagnosticEntryRef<'_, text::Anchor>],
+    snapshot: &BufferSnapshot,
+) -> bool {
+    existing.len() == new.len()
+        && existing.iter().zip(new).all(|(existing, new)| {
+            existing.diagnostic.message == new.diagnostic.message
+                && existing.diagnostic.severity == new.diagnostic.severity
+                && existing.diagnostic.is_primary == new.diagnostic.is_primary
+                && existing.range.to_offset(snapshot) == new.range.to_offset(snapshot)
+        })
+}
+
 impl Render for ProjectDiagnosticsEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let warning_count = if self.include_warnings {
@@ -483,23 +497,6 @@ impl ProjectDiagnosticsEditor {
         self.update_stale_excerpts(window, cx);
     }
 
-    fn diagnostics_are_unchanged(
-        &self,
-        existing: &[DiagnosticEntry<text::Anchor>],
-        new: &[DiagnosticEntryRef<'_, text::Anchor>],
-        snapshot: &BufferSnapshot,
-    ) -> bool {
-        if existing.len() != new.len() {
-            return false;
-        }
-        existing.iter().zip(new.iter()).all(|(existing, new)| {
-            existing.diagnostic.message == new.diagnostic.message
-                && existing.diagnostic.severity == new.diagnostic.severity
-                && existing.diagnostic.is_primary == new.diagnostic.is_primary
-                && existing.range.to_offset(snapshot) == new.range.to_offset(snapshot)
-        })
-    }
-
     fn update_excerpts(
         &mut self,
         buffer: Entity<Buffer>,
@@ -527,7 +524,7 @@ impl ProjectDiagnosticsEditor {
 
             let unchanged = this.update(cx, |this, _| {
                 if this.diagnostics.get(&buffer_id).is_some_and(|existing| {
-                    this.diagnostics_are_unchanged(existing, &diagnostics, &buffer_snapshot)
+                    diagnostics_are_unchanged(existing, &diagnostics, &buffer_snapshot)
                 }) {
                     return true;
                 }
