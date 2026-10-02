@@ -2177,10 +2177,11 @@ impl Render for SplittableEditor {
                             return;
                         }
                         window.defer(cx, move |window, cx| {
-                            this.update(cx, |this, cx| {
-                                this.width_changed(width, window, cx);
-                            })
-                            .ok();
+                            if let Some(this) = this.upgrade() {
+                                this.update(cx, |this, cx| {
+                                    this.width_changed(width, window, cx);
+                                });
+                            }
                         });
                     },
                     |_, _, _, _| {},
