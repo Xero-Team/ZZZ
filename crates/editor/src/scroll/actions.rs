@@ -68,11 +68,12 @@ impl Editor {
             cx.background_executor()
                 .timer(SCROLL_CENTER_TOP_BOTTOM_DEBOUNCE_TIMEOUT)
                 .await;
-            editor
-                .update(cx, |editor, _| {
-                    editor.next_scroll_position = NextScrollCursorCenterTopBottom::default();
-                })
-                .ok();
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            editor.update(cx, |editor, _| {
+                editor.next_scroll_position = NextScrollCursorCenterTopBottom::default();
+            });
         });
     }
 
