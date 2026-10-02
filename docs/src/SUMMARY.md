@@ -193,6 +193,7 @@
   - [Keeping ZZZ Lean](./development/bloat.md)
   - [GPUI: Ownership and Data Flow](./development/ownership-and-data-flow.md)
   - [Text Layout and Fonts](./development/text-layout.md)
+  - [GUI Framework Architecture Research](./development/gui-framework-research/report.md)
   - [Telegram Panel](./development/telegram-panel.md)
   - [Telegram Panel Hardening Plan](./development/telegram-panel-hardening.md)
   - [Upstream Sync 2026-07-03](./development/upstream-sync-2026-07-03.md)
