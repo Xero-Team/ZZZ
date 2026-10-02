@@ -5,6 +5,7 @@ use editor::Editor;
 use gpui::{App, AppContext as _, Context, Entity, Task, Window};
 use project::{Location, TaskContexts, TaskSourceKind, Worktree};
 use task::{RevealTarget, TaskContext, TaskId, TaskTemplate, TaskVariables, VariableName};
+use util::ResultExt;
 use workspace::Workspace;
 
 mod modal;
@@ -58,7 +59,7 @@ pub fn init(cx: &mut App) {
                                             cx,
                                         )
                                     })
-                                    .ok()
+                                    .log_err()
                             })
                             .detach()
                         } else {
@@ -169,7 +170,7 @@ pub fn toggle_modal(
                         )
                     })
                 })
-                .ok();
+                .log_err();
         })
     } else {
         Task::ready(())
@@ -259,7 +260,7 @@ where
                         cx,
                     );
                 })
-                .ok();
+                .log_err();
         }
 
         Ok(())

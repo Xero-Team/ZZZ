@@ -348,7 +348,7 @@ impl PickerDelegate for TasksModalDelegate {
                                 let _ = picker.delegate.candidates.insert(new_candidates);
                                 match_candidates
                             })
-                            .ok()
+                            .log_err()
                             .unwrap_or_default()
                     })
                 } else {
@@ -432,7 +432,7 @@ impl PickerDelegate for TasksModalDelegate {
                     cx,
                 );
             })
-            .ok();
+            .log_err();
 
         cx.emit(DismissEvent);
     }
@@ -636,7 +636,7 @@ impl PickerDelegate for TasksModalDelegate {
                     cx,
                 )
             })
-            .ok();
+            .log_err();
         cx.emit(DismissEvent);
     }
 
