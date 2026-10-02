@@ -4,6 +4,7 @@ use language::{LanguageName, LanguageRegistry};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
     usize,
 };
@@ -448,7 +449,7 @@ impl NewProcessModal {
                 this.attach_picker.update(cx, |this, cx| {
                     this.picker.update(cx, |this, cx| {
                         match &mut this.delegate.intent {
-                            ModalIntent::AttachToProcess(definition) => {
+                            ModalIntent::AttachToProcess { definition, .. } => {
                                 definition.adapter = adapter.0.clone();
                                 this.focus(window, cx);
                             },
@@ -1083,9 +1084,28 @@ impl AttachMode {
             request: dap::DebugRequest::Attach(task::AttachRequest { process_id: None }),
             stop_on_entry: Some(false),
         };
+        let new_process_modal = cx.weak_entity();
+        let secondary_confirm = Rc::new(move |process_id, window: &mut Window, cx: &mut App| {
+            new_process_modal
+                .update(cx, |modal, cx| {
+                    modal.attach_mode.update(cx, |attach_mode, _| {
+                        let DebugRequest::Attach(request) = &mut attach_mode.definition.request
+                        else {
+                            debug_panic!("Attach mode contained a launch request");
+                            return;
+                        };
+                        request.process_id = Some(process_id);
+                    });
+                    modal.save_debug_scenario(window, cx);
+                })
+                .ok();
+        });
         let attach_picker = cx.new(|cx| {
             let modal = AttachModal::new(
-                ModalIntent::AttachToProcess(definition.clone()),
+                ModalIntent::AttachToProcess {
+                    definition: definition.clone(),
+                    secondary_confirm: Some(secondary_confirm),
+                },
                 workspace,
                 project,
                 false,
@@ -1103,7 +1123,11 @@ impl AttachMode {
         })
     }
     pub(super) fn debug_request(&self) -> task::AttachRequest {
-        task::AttachRequest { process_id: None }
+        let DebugRequest::Attach(request) = &self.definition.request else {
+            debug_panic!("Attach mode contained a launch request");
+            return task::AttachRequest::default();
+        };
+        request.clone()
     }
 }
 
@@ -1790,6 +1814,32 @@ impl NewProcessModal {
                 ToggleState::Unselected
             }
         })
+    }
+
+    pub(crate) fn set_attach_process(
+        &mut self,
+        process_id: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.mode = NewProcessMode::Attach;
+        let debugger = DebugAdapterName("fake-adapter".into());
+        self.debugger = Some(debugger.clone());
+        Self::update_attach_picker(&self.attach_mode, &debugger, window, cx);
+        self.attach_mode.update(cx, |attach_mode, cx| {
+            attach_mode.attach_picker.update(cx, |attach_modal, cx| {
+                crate::attach_modal::set_candidates(
+                    attach_modal,
+                    Arc::from([crate::attach_modal::Candidate {
+                        pid: process_id,
+                        name: "test-process".into(),
+                        command: Vec::new(),
+                    }]),
+                    window,
+                    cx,
+                );
+            });
+        });
     }
 
     pub(crate) fn debug_picker_candidate_subtitles(&self, cx: &mut App) -> Vec<String> {

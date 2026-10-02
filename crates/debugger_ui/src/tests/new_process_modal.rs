@@ -290,6 +290,73 @@ async fn test_save_debug_scenario_to_file(executor: BackgroundExecutor, cx: &mut
 }
 
 #[gpui::test]
+async fn test_secondary_confirm_saves_attach_scenario(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+
+    let fs = FakeFs::new(executor.clone());
+    fs.insert_tree(
+        path!("/project"),
+        json!({
+            "main.rs": "fn main() {}"
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs.clone(), [path!("/project").as_ref()], cx).await;
+    let workspace = init_test_workspace(&project, cx).await;
+    let cx = &mut VisualTestContext::from_window(*workspace, cx);
+
+    workspace
+        .update(cx, |multi, window, cx| {
+            multi.workspace().update(cx, |workspace, cx| {
+                NewProcessModal::show(workspace, window, NewProcessMode::Attach, None, cx);
+            });
+        })
+        .unwrap();
+
+    cx.run_until_parked();
+
+    let modal = workspace
+        .update(cx, |workspace, _, cx| {
+            workspace.active_modal::<NewProcessModal>(cx)
+        })
+        .unwrap()
+        .expect("Modal should be active");
+
+    modal.update_in(cx, |modal, window, cx| {
+        modal.set_attach_process(42, window, cx);
+    });
+    cx.run_until_parked();
+
+    cx.dispatch_action(menu::SecondaryConfirm);
+    cx.run_until_parked();
+
+    let debug_json_content = fs
+        .load(path!("/project/.ZZZ/debug.json").as_ref())
+        .await
+        .expect("debug.json should exist")
+        .lines()
+        .filter(|line| !line.starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let expected_content = indoc::indoc! {r#"
+        [
+          {
+            "adapter": "fake-adapter",
+            "label": "pid: 42 (fake-adapter)",
+            "request": "attach",
+            "process_id": 42
+          }
+        ]"#};
+
+    pretty_assertions::assert_eq!(expected_content, debug_json_content);
+}
+
+#[gpui::test]
 async fn test_debug_modal_subtitles_with_multiple_worktrees(
     executor: BackgroundExecutor,
     cx: &mut TestAppContext,

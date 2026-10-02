@@ -129,12 +129,15 @@ async fn test_show_attach_modal_and_select_process(
                     .into_iter()
                     .collect(),
                     true,
-                    ModalIntent::AttachToProcess(task::ZZZDebugConfig {
-                        adapter: FakeAdapter::ADAPTER_NAME.into(),
-                        request: dap::DebugRequest::Attach(AttachRequest::default()),
-                        label: "attach example".into(),
-                        stop_on_entry: None,
-                    }),
+                    ModalIntent::AttachToProcess {
+                        definition: task::ZZZDebugConfig {
+                            adapter: FakeAdapter::ADAPTER_NAME.into(),
+                            request: dap::DebugRequest::Attach(AttachRequest::default()),
+                            label: "attach example".into(),
+                            stop_on_entry: None,
+                        },
+                        secondary_confirm: None,
+                    },
                     window,
                     cx,
                 )

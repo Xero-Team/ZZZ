@@ -10,7 +10,7 @@ use rpc::proto;
 use task::ZZZDebugConfig;
 use util::debug_panic;
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
 use ui::{Context, Tooltip, prelude::*};
@@ -28,8 +28,13 @@ pub(super) struct Candidate {
 
 pub(crate) enum ModalIntent {
     ResolveProcessId(Option<oneshot::Sender<Option<u32>>>),
-    AttachToProcess(ZZZDebugConfig),
+    AttachToProcess {
+        definition: ZZZDebugConfig,
+        secondary_confirm: Option<SecondaryConfirmHandler>,
+    },
 }
+
+pub(crate) type SecondaryConfirmHandler = Rc<dyn Fn(u32, &mut Window, &mut App)>;
 
 pub(crate) struct AttachModalDelegate {
     selected_index: usize,
@@ -217,7 +222,7 @@ impl PickerDelegate for AttachModalDelegate {
         })
     }
 
-    fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
+    fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         let candidate = self
             .matches
             .get(self.selected_index())
@@ -234,10 +239,20 @@ impl PickerDelegate for AttachModalDelegate {
                     sender.send(candidate.map(|candidate| candidate.pid)).ok();
                 }
             }
-            ModalIntent::AttachToProcess(definition) => {
+            ModalIntent::AttachToProcess {
+                definition,
+                secondary_confirm,
+            } => {
                 let Some(candidate) = candidate else {
                     return cx.emit(DismissEvent);
                 };
+
+                if secondary {
+                    if let Some(secondary_confirm) = secondary_confirm {
+                        secondary_confirm(candidate.pid, window, cx);
+                    }
+                    return;
+                }
 
                 match &mut definition.request {
                     DebugRequest::Attach(config) => {
@@ -291,7 +306,7 @@ impl PickerDelegate for AttachModalDelegate {
                     sender.send(None).ok();
                 }
             }
-            ModalIntent::AttachToProcess(_) => {}
+            ModalIntent::AttachToProcess { .. } => {}
         }
 
         cx.emit(DismissEvent);
