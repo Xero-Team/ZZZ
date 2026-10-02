@@ -23,7 +23,7 @@ use std::{
 use ui::{Context, LabelLike, ListItem, Window};
 use ui::{HighlightedLabel, ListItemSpacing, prelude::*};
 use util::{
-    maybe,
+    ResultExt, maybe,
     paths::{PathStyle, compare_paths},
 };
 use workspace::Workspace;
@@ -519,7 +519,7 @@ impl PickerDelegate for OpenPathDelegate {
                         };
                     cx.notify();
                 })
-                .ok();
+                .log_err();
                 return;
             }
 
@@ -610,7 +610,7 @@ impl PickerDelegate for OpenPathDelegate {
 
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
     }
 
@@ -728,7 +728,7 @@ impl PickerDelegate for OpenPathDelegate {
                                     }
                                     cx.emit(gpui::DismissEvent);
                                 })
-                                .ok();
+                                .log_err();
                         });
                         return;
                     } else if let Some(tx) = self.tx.take() {
