@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use prost::Message as _;
 use rpc::proto::Envelope;
@@ -9,8 +9,12 @@ pub struct MessageId(pub u32);
 pub type MessageLen = u32;
 pub const MESSAGE_LEN_SIZE: usize = size_of::<MessageLen>();
 
-pub fn message_len_from_buffer(buffer: &[u8]) -> MessageLen {
-    MessageLen::from_le_bytes(buffer.try_into().expect("conversion should succeed"))
+pub fn message_len_from_buffer(buffer: &[u8]) -> Result<MessageLen> {
+    let bytes = buffer
+        .get(..MESSAGE_LEN_SIZE)
+        .context("message length prefix is truncated")?;
+    let bytes = bytes.try_into()?;
+    Ok(MessageLen::from_le_bytes(bytes))
 }
 
 pub async fn read_message_with_len<S: AsyncRead + Unpin>(
@@ -30,7 +34,7 @@ pub async fn read_message<S: AsyncRead + Unpin>(
     buffer.resize(MESSAGE_LEN_SIZE, 0);
     stream.read_exact(buffer).await?;
 
-    let len = message_len_from_buffer(buffer);
+    let len = message_len_from_buffer(buffer)?;
 
     read_message_with_len(stream, buffer, len).await
 }
@@ -68,7 +72,7 @@ pub async fn read_message_raw<S: AsyncRead + Unpin>(
     buffer.resize(MESSAGE_LEN_SIZE, 0);
     stream.read_exact(buffer).await?;
 
-    let message_len = message_len_from_buffer(buffer);
+    let message_len = message_len_from_buffer(buffer)?;
     buffer.resize(message_len as usize, 0);
     stream.read_exact(buffer).await?;
 
