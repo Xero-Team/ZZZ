@@ -2153,7 +2153,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
         let workspace_fallback = self
             .local_workspace_base_name()
             .unwrap_or_else(|_| self.local_workspace_folder());
-        let compose_resources = self.docker_compose_manifest().await.ok();
+        let compose_resources = self.docker_compose_manifest().await.log_err();
         let first_compose_file = compose_resources
             .as_ref()
             .and_then(|r| r.files.first())
