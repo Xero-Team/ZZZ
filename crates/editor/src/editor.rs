@@ -20263,8 +20263,11 @@ impl Editor {
             .and_then(|lines| lines.last().map(|line| line.range.end));
 
         self.inline_value_cache.refresh_task = cx.spawn(async move |editor, cx| {
-            let inline_values = editor
-                .update(cx, |editor, cx| {
+            let inline_values_task = {
+                let Some(editor) = editor.upgrade() else {
+                    return None;
+                };
+                editor.update(cx, |editor, cx| {
                     let Some(current_execution_position) = current_execution_position else {
                         return Some(Task::ready(Ok(Vec::new())));
                     };
@@ -20281,9 +20284,9 @@ impl Editor {
                     let range = buffer.read(cx).anchor_before(0)..buffer_anchor;
 
                     semantics.inline_values(buffer, range, cx)
-                })
-                .ok()
-                .flatten()?
+                })?
+            };
+            let inline_values = inline_values_task
                 .await
                 .context("refreshing debugger inlays")
                 .log_err()?;
@@ -20300,33 +20303,34 @@ impl Editor {
                     .push(inline_value);
             }
 
-            editor
-                .update(cx, |editor, cx| {
-                    let snapshot = editor.buffer.read(cx).snapshot(cx);
-                    let mut new_inlays = Vec::default();
+            let Some(editor) = editor.upgrade() else {
+                return None;
+            };
+            editor.update(cx, |editor, cx| {
+                let snapshot = editor.buffer.read(cx).snapshot(cx);
+                let mut new_inlays = Vec::default();
 
-                    for (_buffer_id, inline_values) in buffer_inline_values {
-                        for hint in inline_values {
-                            let Some(anchor) = snapshot.anchor_in_excerpt(hint.position) else {
-                                continue;
-                            };
-                            let inlay = Inlay::debugger(
-                                post_inc(&mut editor.next_inlay_id),
-                                anchor,
-                                hint.text(),
-                            );
-                            if !inlay.text().chars().contains(&'\n') {
-                                new_inlays.push(inlay);
-                            }
+                for (_buffer_id, inline_values) in buffer_inline_values {
+                    for hint in inline_values {
+                        let Some(anchor) = snapshot.anchor_in_excerpt(hint.position) else {
+                            continue;
+                        };
+                        let inlay = Inlay::debugger(
+                            post_inc(&mut editor.next_inlay_id),
+                            anchor,
+                            hint.text(),
+                        );
+                        if !inlay.text().chars().contains(&'\n') {
+                            new_inlays.push(inlay);
                         }
                     }
+                }
 
-                    let mut inlay_ids = new_inlays.iter().map(|inlay| inlay.id).collect();
-                    std::mem::swap(&mut editor.inline_value_cache.inlays, &mut inlay_ids);
+                let mut inlay_ids = new_inlays.iter().map(|inlay| inlay.id).collect();
+                std::mem::swap(&mut editor.inline_value_cache.inlays, &mut inlay_ids);
 
-                    editor.splice_inlays(&inlay_ids, new_inlays, cx);
-                })
-                .ok()?;
+                editor.splice_inlays(&inlay_ids, new_inlays, cx);
+            });
             Some(())
         });
     }
