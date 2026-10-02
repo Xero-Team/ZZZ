@@ -12,7 +12,7 @@ use editor::{
 };
 use fuzzy::StringMatchCandidate;
 use gpui::{
-    Action as _, AppContext, Context, Entity, FocusHandle, Focusable, HighlightStyle, Hsla, Render,
+    Action as _, AppContext, Context, Entity, FocusHandle, Focusable, HighlightStyle, Render,
     Subscription, Task, TextStyle, WeakEntity, actions,
 };
 use i18n::tr;
@@ -25,9 +25,7 @@ use project::{
     search_history::{SearchHistory, SearchHistoryCursor},
 };
 use settings::Settings;
-use std::fmt::Write;
 use std::{ops::Range, rc::Rc};
-use theme::Theme;
 use theme_settings::ThemeSettings;
 use ui::{ContextMenu, Divider, PopoverMenu, SplitButton, Tooltip, prelude::*};
 use util::ResultExt;
@@ -188,8 +186,10 @@ impl Console {
                             let mut ansi_processor =
                                 ansi::Processor::<ansi::StdSyncHandler>::default();
 
-                            let trimmed_output = event.output.trim_end();
-                            let _ = writeln!(&mut scratch, "{trimmed_output}");
+                            scratch.push_str(&event.output);
+                            if !event.output.ends_with('\n') {
+                                scratch.push('\n');
+                            }
                             ansi_processor.advance(&mut ansi_handler, scratch.as_bytes());
                             let output = std::mem::take(&mut ansi_handler.output);
                             to_insert.extend(output.chars());
@@ -261,11 +261,12 @@ impl Console {
                         let start_offset = range.start;
                         let range = buffer.anchor_after(MultiBufferOffset(range.start))
                             ..buffer.anchor_before(MultiBufferOffset(range.end));
-                        let color_fn = color_fetcher(color);
                         console.highlight_background(
                             HighlightKey::ConsoleAnsiHighlight(start_offset),
                             &[range],
-                            move |_, theme| color_fn(theme),
+                            move |_, theme| {
+                                terminal_view::terminal_element::convert_color(&color, theme)
+                            },
                             cx,
                         );
                     }
@@ -308,7 +309,7 @@ impl Console {
             if let Some(stack_frame_id) = self.stack_frame_list.read(cx).opened_stack_frame_id() {
                 session
                     .add_watcher(expression.into(), stack_frame_id, cx)
-                    .detach();
+                    .detach_and_log_err(cx);
             }
         });
     }
@@ -466,9 +467,11 @@ impl Console {
                 });
                 return;
             };
-            _ = task.await.log_err();
+            let output_was_added = task.await.log_err().is_some();
             _ = this.update(cx, |this, _| {
-                this.last_token = last_processed_token;
+                if output_was_added {
+                    this.last_token = last_processed_token;
+                }
                 this.update_output_task.take();
             });
         }));
@@ -677,7 +680,7 @@ impl ConsoleQueryBarCompletionProvider {
                         replace_range: Self::replace_range_for_completion(
                             &buffer_text,
                             buffer_position,
-                            string_match.string.as_bytes(),
+                            string_match.string.as_ref(),
                             &snapshot,
                         ),
                         new_text: string_match.string.clone(),
@@ -704,21 +707,22 @@ impl ConsoleQueryBarCompletionProvider {
     }
 
     fn replace_range_for_completion(
-        buffer_text: &String,
+        buffer_text: &str,
         buffer_position: Anchor,
-        new_bytes: &[u8],
+        new_text: &str,
         snapshot: &TextBufferSnapshot,
     ) -> Range<Anchor> {
         let buffer_offset = buffer_position.to_offset(snapshot);
         let buffer_bytes = &buffer_text.as_bytes()[0..buffer_offset];
 
-        let mut prefix_len = 0;
-        for i in (0..new_bytes.len()).rev() {
-            if buffer_bytes.ends_with(&new_bytes[0..i]) {
-                prefix_len = i;
-                break;
-            }
-        }
+        let new_bytes = new_text.as_bytes();
+        let prefix_len = new_text
+            .char_indices()
+            .map(|(index, _)| index)
+            .chain(std::iter::once(new_text.len()))
+            .rev()
+            .find(|&index| buffer_bytes.ends_with(&new_bytes[..index]))
+            .unwrap_or(0);
 
         let start = snapshot.clip_offset(buffer_offset - prefix_len, Bias::Left);
 
@@ -788,7 +792,7 @@ impl ConsoleQueryBarCompletionProvider {
                         replace_range: Self::replace_range_for_completion(
                             &buffer_text,
                             buffer_position,
-                            new_text.as_bytes(),
+                            &new_text,
                             &snapshot,
                         ),
                         new_text,
@@ -881,87 +885,6 @@ impl ansi::Handler for ConsoleHandler {
     }
 }
 
-fn color_fetcher(color: ansi::Color) -> fn(&Theme) -> Hsla {
-    let color_fetcher: fn(&Theme) -> Hsla = match color {
-        // Named and theme defined colors
-        ansi::Color::Named(n) => match n {
-            ansi::NamedColor::Black => |theme| theme.colors().terminal_ansi_black,
-            ansi::NamedColor::Red => |theme| theme.colors().terminal_ansi_red,
-            ansi::NamedColor::Green => |theme| theme.colors().terminal_ansi_green,
-            ansi::NamedColor::Yellow => |theme| theme.colors().terminal_ansi_yellow,
-            ansi::NamedColor::Blue => |theme| theme.colors().terminal_ansi_blue,
-            ansi::NamedColor::Magenta => |theme| theme.colors().terminal_ansi_magenta,
-            ansi::NamedColor::Cyan => |theme| theme.colors().terminal_ansi_cyan,
-            ansi::NamedColor::White => |theme| theme.colors().terminal_ansi_white,
-            ansi::NamedColor::BrightBlack => |theme| theme.colors().terminal_ansi_bright_black,
-            ansi::NamedColor::BrightRed => |theme| theme.colors().terminal_ansi_bright_red,
-            ansi::NamedColor::BrightGreen => |theme| theme.colors().terminal_ansi_bright_green,
-            ansi::NamedColor::BrightYellow => |theme| theme.colors().terminal_ansi_bright_yellow,
-            ansi::NamedColor::BrightBlue => |theme| theme.colors().terminal_ansi_bright_blue,
-            ansi::NamedColor::BrightMagenta => |theme| theme.colors().terminal_ansi_bright_magenta,
-            ansi::NamedColor::BrightCyan => |theme| theme.colors().terminal_ansi_bright_cyan,
-            ansi::NamedColor::BrightWhite => |theme| theme.colors().terminal_ansi_bright_white,
-            ansi::NamedColor::Foreground => |theme| theme.colors().terminal_foreground,
-            ansi::NamedColor::Background => |theme| theme.colors().terminal_background,
-            ansi::NamedColor::Cursor => |theme| theme.players().local().cursor,
-            ansi::NamedColor::DimBlack => |theme| theme.colors().terminal_ansi_dim_black,
-            ansi::NamedColor::DimRed => |theme| theme.colors().terminal_ansi_dim_red,
-            ansi::NamedColor::DimGreen => |theme| theme.colors().terminal_ansi_dim_green,
-            ansi::NamedColor::DimYellow => |theme| theme.colors().terminal_ansi_dim_yellow,
-            ansi::NamedColor::DimBlue => |theme| theme.colors().terminal_ansi_dim_blue,
-            ansi::NamedColor::DimMagenta => |theme| theme.colors().terminal_ansi_dim_magenta,
-            ansi::NamedColor::DimCyan => |theme| theme.colors().terminal_ansi_dim_cyan,
-            ansi::NamedColor::DimWhite => |theme| theme.colors().terminal_ansi_dim_white,
-            ansi::NamedColor::BrightForeground => |theme| theme.colors().terminal_bright_foreground,
-            ansi::NamedColor::DimForeground => |theme| theme.colors().terminal_dim_foreground,
-        },
-        // 'True' colors
-        ansi::Color::Spec(_) => |theme| theme.colors().editor_background,
-        // 8 bit, indexed colors
-        ansi::Color::Indexed(i) => {
-            match i {
-                // 0-15 are the same as the named colors above
-                0 => |theme| theme.colors().terminal_ansi_black,
-                1 => |theme| theme.colors().terminal_ansi_red,
-                2 => |theme| theme.colors().terminal_ansi_green,
-                3 => |theme| theme.colors().terminal_ansi_yellow,
-                4 => |theme| theme.colors().terminal_ansi_blue,
-                5 => |theme| theme.colors().terminal_ansi_magenta,
-                6 => |theme| theme.colors().terminal_ansi_cyan,
-                7 => |theme| theme.colors().terminal_ansi_white,
-                8 => |theme| theme.colors().terminal_ansi_bright_black,
-                9 => |theme| theme.colors().terminal_ansi_bright_red,
-                10 => |theme| theme.colors().terminal_ansi_bright_green,
-                11 => |theme| theme.colors().terminal_ansi_bright_yellow,
-                12 => |theme| theme.colors().terminal_ansi_bright_blue,
-                13 => |theme| theme.colors().terminal_ansi_bright_magenta,
-                14 => |theme| theme.colors().terminal_ansi_bright_cyan,
-                15 => |theme| theme.colors().terminal_ansi_bright_white,
-                // 16-231 are a 6x6x6 RGB color cube, mapped to 0-255 using steps defined by XTerm.
-                // See: https://github.com/xterm-x11/xterm-snapshots/blob/master/256colres.pl
-                // 16..=231 => {
-                //     let (r, g, b) = rgb_for_index(index as u8);
-                //     rgba_color(
-                //         if r == 0 { 0 } else { r * 40 + 55 },
-                //         if g == 0 { 0 } else { g * 40 + 55 },
-                //         if b == 0 { 0 } else { b * 40 + 55 },
-                //     )
-                // }
-                // 232-255 are a 24-step grayscale ramp from (8, 8, 8) to (238, 238, 238).
-                // 232..=255 => {
-                //     let i = index as u8 - 232; // Align index to 0..24
-                //     let value = i * 10 + 8;
-                //     rgba_color(value, value, value)
-                // }
-                // For compatibility with the alacritty::Colors interface
-                // See: https://github.com/alacritty/alacritty/blob/master/alacritty_terminal/src/term/color.rs
-                _ => |_| gpui::black(),
-            }
-        }
-    };
-    color_fetcher
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -991,7 +914,7 @@ mod tests {
         let replace_range = ConsoleQueryBarCompletionProvider::replace_range_for_completion(
             &cx.buffer_text(),
             snapshot.anchor_before(buffer_position),
-            replacement.as_bytes(),
+            replacement,
             snapshot,
         );
 
@@ -1016,6 +939,8 @@ mod tests {
         let mut cx = EditorTestContext::new(cx).await;
 
         assert_completion_range("resˇ", "result", "result", &mut cx);
+        assert_completion_range("resultˇ", "result", "result", &mut cx);
+        assert_completion_range("a😀ˇ", "a😀value", "a😀value", &mut cx);
         assert_completion_range("print(resˇ)", "print(result)", "result", &mut cx);
         assert_completion_range("$author->nˇ", "$author->name", "$author->name", &mut cx);
         assert_completion_range(

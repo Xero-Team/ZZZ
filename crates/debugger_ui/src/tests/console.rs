@@ -61,6 +61,20 @@ async fn test_handle_output_event(executor: BackgroundExecutor, cx: &mut TestApp
     client
         .fake_event(dap::messages::Events::Output(dap::OutputEvent {
             category: Some(dap::OutputEventCategory::Stdout),
+            output: "Trailing spaces   \n\n".to_string(),
+            data: None,
+            variables_reference: None,
+            source: None,
+            line: None,
+            column: None,
+            group: None,
+            location_reference: None,
+        }))
+        .await;
+
+    client
+        .fake_event(dap::messages::Events::Output(dap::OutputEvent {
+            category: Some(dap::OutputEventCategory::Stdout),
             output: "First output line before thread stopped!".to_string(),
             data: None,
             variables_reference: None,
@@ -103,7 +117,7 @@ async fn test_handle_output_event(executor: BackgroundExecutor, cx: &mut TestApp
                 .unwrap();
 
             assert_eq!(
-                "First console output line before thread stopped!\nFirst output line before thread stopped!\n",
+                "First console output line before thread stopped!\nTrailing spaces   \n\nFirst output line before thread stopped!\n",
                 active_debug_session_panel.read(cx).running_state().read(cx).console().read(cx).editor().read(cx).text(cx).as_str()
             );
         })
@@ -152,7 +166,7 @@ async fn test_handle_output_event(executor: BackgroundExecutor, cx: &mut TestApp
                 .unwrap();
 
             assert_eq!(
-                "First console output line before thread stopped!\nFirst output line before thread stopped!\n\tSecond output line after thread stopped!\n\tSecond console output line after thread stopped!\n",
+                "First console output line before thread stopped!\nTrailing spaces   \n\nFirst output line before thread stopped!\n\tSecond output line after thread stopped!\n\tSecond console output line after thread stopped!\n",
                 active_session_panel.read(cx).running_state().read(cx).console().read(cx).editor().read(cx).text(cx).as_str()
             );
         })
