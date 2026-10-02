@@ -225,8 +225,11 @@ impl Editor {
         let reveal_task = self.cmd_click_reveal_task(point, modifiers, window, cx);
         cx.spawn_in(window, async move |editor, cx| {
             let definition_revealed = reveal_task.await.log_err().unwrap_or(Navigated::No);
-            let find_references = editor
-                .update_in(cx, |editor, window, cx| {
+            let find_references = {
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                let Ok(find_references) = editor.update_in(cx, |editor, window, cx| {
                     if definition_revealed == Navigated::Yes {
                         return None;
                     }
@@ -236,9 +239,11 @@ impl Editor {
                             editor.find_all_references(&FindAllReferences::default(), window, cx)
                         }
                     }
-                })
-                .ok()
-                .flatten();
+                }) else {
+                    return;
+                };
+                find_references
+            };
             if let Some(find_references) = find_references {
                 find_references.await.log_err();
             }
@@ -428,12 +433,14 @@ pub fn show_link_definition(
             // Resolution is deduplicated by `LspStore`; awaiting here only
             // blocks until either the cached resolved entry is returned or
             // the in-flight `Shared` task completes.
-            let resolved_document_links = this
-                .update(cx, |editor, cx| {
+            let resolved_document_links = {
+                let Some(editor) = this.upgrade() else {
+                    return Ok(());
+                };
+                editor.update(cx, |editor, cx| {
                     editor.document_links_at(buffer.clone(), anchor, cx)
                 })
-                .ok()
-                .flatten();
+            };
             let resolved_document_links = match resolved_document_links {
                 Some(task) => task.await,
                 None => Vec::new(),
@@ -492,7 +499,7 @@ pub fn show_link_definition(
                             provider.definitions(&buffer, anchor, preferred_kind, cx)
                         })?;
                         if let Some(task) = task
-                            && let Some(definition_result) = task.await.ok().flatten()
+                            && let Some(definition_result) = task.await.log_err().flatten()
                         {
                             if symbol_range.is_none() {
                                 let snapshot = this.read_with(cx, |editor, cx| {
