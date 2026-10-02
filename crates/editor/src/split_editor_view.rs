@@ -145,17 +145,10 @@ fn render_resize_handle(
 impl RenderOnce for SplitEditorView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let splittable_editor = self.splittable_editor.read(cx);
-
-        assert!(
-            splittable_editor.lhs_editor().is_some(),
-            "`SplitEditorView` requires `SplittableEditor` to be in split mode"
-        );
-
-        let lhs_editor = splittable_editor
-            .lhs_editor()
-            .expect("lhs_editor should be present")
-            .clone();
         let rhs_editor = splittable_editor.rhs_editor().clone();
+        let Some(lhs_editor) = splittable_editor.lhs_editor().cloned() else {
+            return EditorElement::new(&rhs_editor, self.style).into_any_element();
+        };
 
         let mut lhs = EditorElement::new(&lhs_editor, self.style.clone());
         let mut rhs = EditorElement::new(&rhs_editor, self.style.clone());
@@ -200,18 +193,18 @@ impl RenderOnce for SplitEditorView {
                     .id("split-editor-view")
                     .size_full()
                     .on_drag_move::<DraggedSplitHandle>(move |event, window, cx| {
-                        state_for_drag
-                            .update(cx, |state, cx| {
+                        if let Some(state_for_drag) = state_for_drag.upgrade() {
+                            state_for_drag.update(cx, |state, cx| {
                                 state.on_drag_move(event, window, cx);
-                            })
-                            .ok();
+                            });
+                        }
                     })
                     .on_drop::<DraggedSplitHandle>(move |_, _, cx| {
-                        state_for_drop
-                            .update(cx, |state, _| {
+                        if let Some(state_for_drop) = state_for_drop.upgrade() {
+                            state_for_drop.update(cx, |state, _| {
                                 state.commit_ratio();
-                            })
-                            .ok();
+                            });
+                        }
                     })
                     .child(
                         div()
@@ -236,6 +229,7 @@ impl RenderOnce for SplitEditorView {
                     ),
             )
             .child(buffer_headers)
+            .into_any_element()
     }
 }
 
