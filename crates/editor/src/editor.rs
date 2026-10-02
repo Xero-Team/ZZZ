@@ -291,12 +291,6 @@ pub type RenderDiffHunkControlsFn = Arc<
     ) -> AnyElement,
 >;
 
-enum ReportEditorEvent {
-    Saved,
-    EditorOpened,
-    Closed,
-}
-
 pub enum ActiveDebugLine {}
 pub enum DebugStackFrameLine {}
 
@@ -2772,7 +2766,6 @@ impl Editor {
             if let Some(buffer) = multi_buffer.read(cx).as_singleton() {
                 editor.register_buffer(buffer.read(cx).remote_id(), cx);
             }
-            editor.report_editor_event(ReportEditorEvent::EditorOpened, None, cx);
         }
 
         editor
@@ -21049,42 +21042,6 @@ impl Editor {
                     ..snapshot.clip_offset_utf16(selection.end, Bias::Right)
             })
             .collect()
-    }
-
-    fn report_editor_event(
-        &self,
-        reported_event: ReportEditorEvent,
-        file_extension: Option<String>,
-        cx: &App,
-    ) {
-        if cfg!(any(test, feature = "test-support")) {
-            return;
-        }
-
-        let Some(project) = &self.project else { return };
-
-        // If None, we are in a file without an extension
-        let file = self
-            .buffer
-            .read(cx)
-            .as_singleton()
-            .and_then(|b| b.read(cx).file());
-        let file_extension = file_extension.or(file
-            .as_ref()
-            .and_then(|file| Path::new(file.file_name(cx)).extension())
-            .and_then(|e| e.to_str())
-            .map(|a| a.to_owned()));
-
-        let vim_mode =
-            vim_mode_setting::VimModeSetting::try_get(cx).is_some_and(|vim_mode| vim_mode.0);
-
-        let project = project.read(cx);
-        let _ = (
-            reported_event,
-            file_extension,
-            vim_mode,
-            project.is_via_remote_server(),
-        );
     }
 
     /// Copy the highlighted chunks to the clipboard as JSON. The format is an array of lines,
