@@ -23,6 +23,7 @@ use ui::{
     ButtonStyle, ContextMenu, ContextMenuEntry, DocumentationSide, IconButton, IconName, IconSize,
     PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*,
 };
+use util::ResultExt;
 use vim_mode_setting::{HelixModeSetting, VimModeSetting};
 use workspace::item::ItemBufferKind;
 use workspace::{
@@ -458,7 +459,7 @@ impl Render for QuickActionBar {
                                                         cx,
                                                     );
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }
                                     },
                                 );
@@ -479,7 +480,7 @@ impl Render for QuickActionBar {
                                                         cx,
                                                     );
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }
                                     }
                                 );
@@ -502,7 +503,7 @@ impl Render for QuickActionBar {
                                                         cx,
                                                     );
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }
                                     },
                                 );
@@ -525,7 +526,7 @@ impl Render for QuickActionBar {
                                                         cx,
                                                     );
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }
                                     },
                                 );
@@ -548,7 +549,7 @@ impl Render for QuickActionBar {
                                                         cx,
                                                     );
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }
                                     },
                                 )
@@ -573,7 +574,7 @@ impl Render for QuickActionBar {
                                                         cx,
                                                     );
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }
                                     },
                                 );
@@ -595,7 +596,7 @@ impl Render for QuickActionBar {
                                                             cx,
                                                         );
                                                     })
-                                                    .ok();
+                                                    .log_err();
                                             }
                                         });
                                     if !diagnostics_enabled {
@@ -632,7 +633,7 @@ impl Render for QuickActionBar {
                                                     cx,
                                                 );
                                             })
-                                            .ok();
+                                            .log_err();
                                     }
                                 },
                             );
@@ -653,7 +654,7 @@ impl Render for QuickActionBar {
                                                     cx,
                                                 )
                                             })
-                                            .ok();
+                                            .log_err();
                                     }
                                 },
                             );
@@ -674,7 +675,7 @@ impl Render for QuickActionBar {
                                                     cx,
                                                 );
                                             })
-                                            .ok();
+                                            .log_err();
                                     }
                                 },
                             );
@@ -697,7 +698,7 @@ impl Render for QuickActionBar {
                                                     cx,
                                                 )
                                             })
-                                            .ok();
+                                            .log_err();
                                     }
                                 },
                             );
@@ -718,7 +719,7 @@ impl Render for QuickActionBar {
                                                     cx,
                                                 )
                                             })
-                                            .ok();
+                                            .log_err();
                                     }
                                 },
                             );
