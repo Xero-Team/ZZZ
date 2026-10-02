@@ -1,0 +1,6 @@
+interface:
+  display_name: "Repository Research"
+  short_description: "Evidence-backed repository architecture comparisons"
+  default_prompt: "Use $repository-research to investigate these repositories from source and produce a cited architecture comparison."
+policy:
+  allow_implicit_invocation: true
