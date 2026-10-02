@@ -1,10 +1,15 @@
+use gpui::App;
 use i18n::tr;
 use ui::{
     ActiveTheme as _, AnyElement, ButtonSize, Context, ContextMenu, DropdownMenu, ElementId,
-    IntoElement as _, ParentElement as _, Styled as _, Tooltip, Window, div, h_flex,
+    FluentBuilder as _, IntoElement as _, ParentElement as _, Styled as _, Tooltip, Window, div,
+    h_flex,
 };
 
-use crate::{CsvPreviewView, settings::VerticalAlignment};
+use crate::{
+    CsvPreviewView,
+    settings::{DelimiterSelection, HeaderMode, VerticalAlignment},
+};
 
 ///// Settings related /////
 impl CsvPreviewView {
@@ -20,6 +25,12 @@ impl CsvPreviewView {
         };
         let top_label = tr(cx, "csv_preview.settings.alignment.top", "Top");
         let center_label = tr(cx, "csv_preview.settings.alignment.center", "Center");
+        let delimiter_label =
+            delimiter_selection_label(self.settings.delimiter, self.detected_delimiter, cx);
+        let header_label = match self.settings.header_mode {
+            HeaderMode::FirstRow => tr(cx, "csv_preview.settings.header.first_row", "First row"),
+            HeaderMode::NoHeader => tr(cx, "csv_preview.settings.header.none", "No header"),
+        };
 
         let view = cx.entity();
         let alignment_dropdown_menu = ContextMenu::build(window, cx, move |menu, _window, _cx| {
@@ -40,6 +51,69 @@ impl CsvPreviewView {
                         cx.notify();
                     });
                 }
+            })
+        });
+
+        let view = cx.entity();
+        let delimiter_dropdown_menu = ContextMenu::build(window, cx, move |menu, _window, cx| {
+            let entries = [
+                (
+                    tr(cx, "csv_preview.settings.delimiter.auto", "Auto"),
+                    DelimiterSelection::Auto,
+                ),
+                (
+                    tr(cx, "csv_preview.settings.delimiter.comma", "Comma (,)"),
+                    DelimiterSelection::Character(','),
+                ),
+                (
+                    tr(cx, "csv_preview.settings.delimiter.tab", "Tab"),
+                    DelimiterSelection::Character('\t'),
+                ),
+                (
+                    tr(cx, "csv_preview.settings.delimiter.pipe", "Pipe (|)"),
+                    DelimiterSelection::Character('|'),
+                ),
+                (
+                    tr(
+                        cx,
+                        "csv_preview.settings.delimiter.semicolon",
+                        "Semicolon (;)",
+                    ),
+                    DelimiterSelection::Character(';'),
+                ),
+            ];
+            entries.into_iter().fold(menu, |menu, (label, selection)| {
+                let view = view.clone();
+                menu.entry(label, None, move |_window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.settings.delimiter = selection;
+                        this.parse_delimited_from_active_editor(false, cx);
+                        cx.notify();
+                    });
+                })
+            })
+        });
+
+        let view = cx.entity();
+        let header_dropdown_menu = ContextMenu::build(window, cx, move |menu, _window, cx| {
+            let first_row_label = tr(cx, "csv_preview.settings.header.first_row", "First row");
+            let no_header_label = tr(cx, "csv_preview.settings.header.none", "No header");
+            menu.entry(first_row_label, None, {
+                let view = view.clone();
+                move |_window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.settings.header_mode = HeaderMode::FirstRow;
+                        this.parse_delimited_from_active_editor(false, cx);
+                        cx.notify();
+                    });
+                }
+            })
+            .entry(no_header_label, None, move |_window, cx| {
+                view.update(cx, |this, cx| {
+                    this.settings.header_mode = HeaderMode::NoHeader;
+                    this.parse_delimited_from_active_editor(false, cx);
+                    cx.notify();
+                });
             })
         });
 
@@ -79,6 +153,64 @@ impl CsvPreviewView {
                     ),
             );
 
+        let panel = panel.child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().colors().text_muted)
+                        .child(tr(cx, "csv_preview.settings.delimiter", "Delimiter:")),
+                )
+                .child(
+                    DropdownMenu::new(
+                        ElementId::Name("delimiter-dropdown".into()),
+                        delimiter_label,
+                        delimiter_dropdown_menu,
+                    )
+                    .trigger_size(ButtonSize::Compact)
+                    .trigger_tooltip(Tooltip::text(tr(
+                        cx,
+                        "csv_preview.settings.choose_delimiter",
+                        "Choose how columns are separated",
+                    ))),
+                )
+                .child(self.custom_delimiter_editor.clone())
+                .when(self.custom_delimiter_error, |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().colors().text_muted)
+                            .child(tr(
+                                cx,
+                                "csv_preview.settings.invalid_delimiter",
+                                "Enter exactly one character other than quote or newline",
+                            )),
+                    )
+                }),
+        );
+
+        let panel = panel.child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().colors().text_muted)
+                        .child(tr(cx, "csv_preview.settings.header", "Header:")),
+                )
+                .child(
+                    DropdownMenu::new(
+                        ElementId::Name("header-dropdown".into()),
+                        header_label,
+                        header_dropdown_menu,
+                    )
+                    .trigger_size(ButtonSize::Compact),
+                ),
+        );
+
         #[cfg(feature = "dev-tools")]
         let panel = panel.child(
             h_flex()
@@ -97,6 +229,53 @@ impl CsvPreviewView {
     }
 }
 
+fn delimiter_selection_label(
+    selection: DelimiterSelection,
+    detected_delimiter: Option<char>,
+    cx: &App,
+) -> ui::SharedString {
+    match (selection, detected_delimiter) {
+        (DelimiterSelection::Auto, Some(delimiter)) => format!(
+            "{} ({})",
+            tr(cx, "csv_preview.settings.delimiter.auto", "Auto"),
+            delimiter_display(delimiter, cx)
+        )
+        .into(),
+        (DelimiterSelection::Auto, None) => {
+            tr(cx, "csv_preview.settings.delimiter.auto", "Auto").into()
+        }
+        (DelimiterSelection::Character(','), _) => {
+            tr(cx, "csv_preview.settings.delimiter.comma", "Comma (,)").into()
+        }
+        (DelimiterSelection::Character('\t'), _) => {
+            tr(cx, "csv_preview.settings.delimiter.tab", "Tab").into()
+        }
+        (DelimiterSelection::Character('|'), _) => {
+            tr(cx, "csv_preview.settings.delimiter.pipe", "Pipe (|)").into()
+        }
+        (DelimiterSelection::Character(';'), _) => tr(
+            cx,
+            "csv_preview.settings.delimiter.semicolon",
+            "Semicolon (;)",
+        )
+        .into(),
+        (DelimiterSelection::Character(delimiter), _) => format!(
+            "{} ({})",
+            tr(cx, "csv_preview.settings.delimiter.custom", "Custom"),
+            delimiter_display(delimiter, cx)
+        )
+        .into(),
+    }
+}
+
+fn delimiter_display(delimiter: char, cx: &App) -> String {
+    match delimiter {
+        '\t' => tr(cx, "csv_preview.settings.delimiter.tab", "Tab"),
+        ' ' => tr(cx, "csv_preview.settings.delimiter.space", "Space"),
+        delimiter => delimiter.to_string(),
+    }
+}
+
 #[cfg(feature = "dev-tools")]
 fn create_dev_only_popover_menu(
     cx: &mut Context<'_, CsvPreviewView>,
@@ -110,7 +289,7 @@ fn create_dev_only_popover_menu(
             Tooltip::text(tr(
                 cx,
                 "csv_preview.settings.dev_tools_tooltip",
-                "Dev-only section used for debugging purposes.\nWill be removed on public release of CSV feature",
+                "Dev-only section used for debugging purposes.\nWill be removed on public release of delimited text preview",
             )),
         )
         .menu({

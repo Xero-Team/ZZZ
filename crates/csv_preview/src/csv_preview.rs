@@ -1,6 +1,7 @@
 use editor::{Editor, EditorEvent};
 use gpui::{
-    AppContext, Entity, EventEmitter, FocusHandle, Focusable, ListAlignment, Task, actions,
+    AppContext, Entity, EventEmitter, FocusHandle, Focusable, ListAlignment, Subscription, Task,
+    Window, actions,
 };
 use i18n::tr;
 use std::{
@@ -25,15 +26,26 @@ mod types;
 
 actions!(csv, [OpenPreview, OpenPreviewToTheSide]);
 
+fn valid_custom_delimiter(text: &str) -> Option<char> {
+    let mut characters = text.chars();
+    let delimiter = characters.next()?;
+    (characters.next().is_none() && delimiter != '"' && delimiter != '\r' && delimiter != '\n')
+        .then_some(delimiter)
+}
+
 pub struct CsvPreviewView {
     pub(crate) engine: TableDataEngine,
 
     pub(crate) focus_handle: FocusHandle,
     active_editor_state: EditorState,
+    custom_delimiter_editor: Entity<Editor>,
+    _custom_delimiter_subscription: Subscription,
+    pub(crate) custom_delimiter_error: bool,
     pub(crate) table_interaction_state: Entity<TableInteractionState>,
     pub(crate) column_widths: ColumnWidths,
     pub(crate) parsing_task: Option<Task<anyhow::Result<()>>>,
     pub(crate) settings: CsvPreviewSettings,
+    pub(crate) detected_delimiter: Option<char>,
     /// Performance metrics for debugging and monitoring CSV operations.
     pub(crate) performance_metrics: PerformanceMetrics,
     pub(crate) list_state: gpui::ListState,
@@ -82,9 +94,9 @@ impl CsvPreviewView {
                 if let Some(editor) = workspace
                     .active_item(cx)
                     .and_then(|item| item.act_as::<Editor>(cx))
-                    .filter(|editor| Self::is_csv_file(editor, cx))
+                    .filter(|editor| Self::is_delimited_file(editor, cx))
                 {
-                    let csv_preview = Self::new(&editor, cx);
+                    let csv_preview = Self::new(&editor, window, cx);
                     workspace.active_pane().update(cx, |pane, cx| {
                         let existing = pane
                             .items_of_type::<CsvPreviewView>()
@@ -103,9 +115,9 @@ impl CsvPreviewView {
                     if let Some(editor) = workspace
                         .active_item(cx)
                         .and_then(|item| item.act_as::<Editor>(cx))
-                        .filter(|editor| Self::is_csv_file(editor, cx))
+                        .filter(|editor| Self::is_delimited_file(editor, cx))
                     {
-                        let csv_preview = Self::new(&editor, cx);
+                        let csv_preview = Self::new(&editor, window, cx);
                         let pane = workspace
                             .find_pane_in_direction(SplitDirection::Right, cx)
                             .unwrap_or_else(|| {
@@ -140,8 +152,21 @@ impl CsvPreviewView {
         });
     }
 
-    fn new(editor: &Entity<Editor>, cx: &mut Context<Workspace>) -> Entity<Self> {
+    fn new(
+        editor: &Entity<Editor>,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) -> Entity<Self> {
         let contents = TableLikeContent::default();
+        let custom_delimiter_placeholder = tr(
+            cx,
+            "csv_preview.settings.custom_delimiter_placeholder",
+            "Custom delimiter",
+        );
+        let custom_delimiter_editor = cx.new(|cx| Editor::single_line(window, cx));
+        custom_delimiter_editor.update(cx, |editor, cx| {
+            editor.set_placeholder_text(&custom_delimiter_placeholder, window, cx);
+        });
         let table_interaction_state = cx.new(|cx| {
             TableInteractionState::new(cx).with_custom_scrollbar(ui::Scrollbars::for_settings::<
                 editor::EditorSettingsScrollbarProxy,
@@ -154,10 +179,27 @@ impl CsvPreviewView {
                 |this: &mut CsvPreviewView, _editor, event: &EditorEvent, cx| {
                     match event {
                         EditorEvent::Edited { .. } | EditorEvent::DirtyChanged => {
-                            this.parse_csv_from_active_editor(true, cx);
+                            this.parse_delimited_from_active_editor(true, cx);
                         }
                         _ => {}
                     };
+                },
+            );
+            let custom_delimiter_subscription = cx.subscribe(
+                &custom_delimiter_editor,
+                |this: &mut CsvPreviewView, editor, event: &EditorEvent, cx| {
+                    if matches!(event, EditorEvent::Edited { .. }) {
+                        let text = editor.read(cx).text(cx);
+                        if let Some(delimiter) = valid_custom_delimiter(&text) {
+                            this.settings.delimiter =
+                                crate::settings::DelimiterSelection::Character(delimiter);
+                            this.custom_delimiter_error = false;
+                            this.parse_delimited_from_active_editor(false, cx);
+                        } else {
+                            this.custom_delimiter_error = !text.is_empty();
+                        }
+                        cx.notify();
+                    }
                 },
             );
 
@@ -167,6 +209,9 @@ impl CsvPreviewView {
                     editor: editor.clone(),
                     _subscription: subscription,
                 },
+                custom_delimiter_editor,
+                _custom_delimiter_subscription: custom_delimiter_subscription,
+                custom_delimiter_error: false,
                 table_interaction_state,
                 column_widths: ColumnWidths::new(cx, 1),
                 parsing_task: None,
@@ -174,11 +219,12 @@ impl CsvPreviewView {
                 list_state: gpui::ListState::new(contents.rows.len(), ListAlignment::Top, px(1.))
                     .measure_all(),
                 settings: CsvPreviewSettings::default(),
+                detected_delimiter: None,
                 last_parse_end_time: None,
                 engine: TableDataEngine::default(),
             };
 
-            view.parse_csv_from_active_editor(false, cx);
+            view.parse_delimited_from_active_editor(false, cx);
             view
         })
     }
@@ -204,30 +250,35 @@ impl CsvPreviewView {
             gpui::ListState::new(visible_rows, ListAlignment::Top, px(100.)).measure_all();
     }
 
-    pub fn resolve_active_item_as_csv_editor(
+    pub fn resolve_active_item_as_delimited_editor(
         workspace: &Workspace,
         cx: &mut Context<Workspace>,
     ) -> Option<Entity<Editor>> {
         let editor = workspace
             .active_item(cx)
             .and_then(|item| item.act_as::<Editor>(cx))?;
-        Self::is_csv_file(&editor, cx).then_some(editor)
+        Self::is_delimited_file(&editor, cx).then_some(editor)
     }
 
-    fn is_csv_file(editor: &Entity<Editor>, cx: &App) -> bool {
+    fn is_delimited_file(editor: &Entity<Editor>, cx: &App) -> bool {
         editor
             .read(cx)
             .buffer()
             .read(cx)
             .as_singleton()
-            .and_then(|buffer| {
+            .is_some_and(|buffer| {
                 buffer
                     .read(cx)
                     .file()
                     .and_then(|file| file.path().extension())
-                    .map(|ext| ext.eq_ignore_ascii_case("csv"))
+                    .is_some_and(|extension| {
+                        extension.eq_ignore_ascii_case("csv")
+                            || extension.eq_ignore_ascii_case("tsv")
+                            || extension.eq_ignore_ascii_case("psv")
+                            || extension.eq_ignore_ascii_case("scsv")
+                            || extension.eq_ignore_ascii_case("ssv")
+                    })
             })
-            .unwrap_or(false)
     }
 }
 
@@ -261,7 +312,7 @@ impl Item for CsvPreviewView {
                         .into()
                 })
             })
-            .unwrap_or_else(|| tr(cx, "csv_preview.tab_title", "CSV Preview").into())
+            .unwrap_or_else(|| tr(cx, "csv_preview.tab_title", "Delimited Text Preview").into())
     }
 }
 

@@ -39,8 +39,17 @@ impl CsvPreviewView {
                 .contents
                 .headers
                 .get(AnyColumn(i))
-                .and_then(|h| h.display_value().cloned())
-                .unwrap_or_else(|| format!("Col {}", i + 1).into());
+                .map(|header| {
+                    header.synthetic_column().map_or_else(
+                        || header.display_value().cloned().unwrap_or_default(),
+                        |column| {
+                            i18n::tr(cx, "csv_preview.settings.synthetic_column", "Column {}")
+                                .replacen("{}", &column.to_string(), 1)
+                                .into()
+                        },
+                    )
+                })
+                .unwrap_or_default();
 
             headers.push(self.create_header_element_with_sort_button(
                 header_text,
@@ -154,6 +163,7 @@ impl CsvPreviewView {
                                     let eo = pos.end.offset;
                                     format!("Pos {so}(L{slv})-{eo}(L{elv})")
                                 }
+                                TableCell::Synthetic { .. } => "Synthetic cell".into(),
                                 TableCell::Virtual => "Virtual cell".into(),
                             },
                         ))

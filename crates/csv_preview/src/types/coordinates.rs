@@ -31,7 +31,7 @@ impl Deref for DisplayRow {
     }
 }
 
-/// Original CSV row position.
+/// Original delimited text row position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DataRow(pub usize);
 

@@ -40,7 +40,8 @@ impl QuickActionBar {
                 } else if SvgPreviewView::resolve_active_item_as_svg_buffer(workspace, cx).is_some()
                 {
                     preview_type = Some(PreviewType::Svg);
-                } else if CsvPreviewView::resolve_active_item_as_csv_editor(workspace, cx).is_some()
+                } else if CsvPreviewView::resolve_active_item_as_delimited_editor(workspace, cx)
+                    .is_some()
                 {
                     preview_type = Some(PreviewType::Csv);
                 }
@@ -71,7 +72,11 @@ impl QuickActionBar {
                 ),
                 PreviewType::Csv => (
                     "toggle-csv-preview",
-                    tr(cx, "zzz.quick_action_bar.preview_csv", "Preview CSV"),
+                    tr(
+                        cx,
+                        "zzz.quick_action_bar.preview_csv",
+                        "Preview Delimited Text",
+                    ),
                     Box::new(CsvOpenPreview) as Box<dyn gpui::Action>,
                     Box::new(CsvOpenPreviewToTheSide) as Box<dyn gpui::Action>,
                     &csv_preview::OpenPreview as &dyn gpui::Action,

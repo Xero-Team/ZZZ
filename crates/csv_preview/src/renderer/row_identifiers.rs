@@ -124,7 +124,7 @@ impl CsvPreviewView {
                 .tooltip(Tooltip::text(tr(
                     cx,
                     "csv_preview.row_identifiers.toggle_tooltip",
-                    "Toggle between: CSV row numbers or sequential preview row numbers",
+                    "Toggle between source row numbers and sequential preview row numbers",
                 )))
                 .on_click(move |_event, _window, cx| {
                     view.update(cx, |this, cx| {

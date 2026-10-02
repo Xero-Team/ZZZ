@@ -20,6 +20,11 @@ pub enum TableCell {
         /// Cached display value (for performance)
         cached_value: SharedString,
     },
+    /// Generated cell, such as a synthetic column name when the source has no header row.
+    Synthetic {
+        column: usize,
+        cached_value: SharedString,
+    },
     /// Virtual cell, created to pad malformed row
     Virtual,
 }
@@ -47,8 +52,24 @@ impl TableCell {
     /// Get the display value for this cell
     pub fn display_value(&self) -> Option<&SharedString> {
         match self {
-            TableCell::Real { cached_value, .. } => Some(cached_value),
+            TableCell::Real { cached_value, .. } | TableCell::Synthetic { cached_value, .. } => {
+                Some(cached_value)
+            }
             TableCell::Virtual => None,
+        }
+    }
+
+    pub fn synthetic(column: usize, content: impl Into<SharedString>) -> Self {
+        Self::Synthetic {
+            column,
+            cached_value: content.into(),
+        }
+    }
+
+    pub fn synthetic_column(&self) -> Option<usize> {
+        match self {
+            Self::Synthetic { column, .. } => Some(*column),
+            _ => None,
         }
     }
 }

@@ -7,11 +7,11 @@ mod table_cell;
 pub use table_like_content::*;
 mod table_like_content;
 
-/// Line number information for CSV rows
+/// Line number information for delimited text rows.
 #[derive(Debug, Clone, Copy)]
 pub enum LineNumber {
-    /// Single logical CSV row number
+    /// Single logical source row number.
     Line(usize),
-    /// Logical CSV row number range. Inclusive.
+    /// Logical source row number range. Inclusive.
     LineRange(usize, usize),
 }

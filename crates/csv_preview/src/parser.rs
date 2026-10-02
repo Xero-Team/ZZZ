@@ -1,5 +1,6 @@
 use crate::{
     CsvPreviewView,
+    settings::{DelimiterSelection, HeaderMode},
     types::TableLikeContent,
     types::{LineNumber, TableCell},
 };
@@ -17,16 +18,16 @@ pub(crate) struct EditorState {
 }
 
 impl CsvPreviewView {
-    pub(crate) fn parse_csv_from_active_editor(
+    pub(crate) fn parse_delimited_from_active_editor(
         &mut self,
         wait_for_debounce: bool,
         cx: &mut Context<Self>,
     ) {
         let editor = self.active_editor_state.editor.clone();
-        self.parsing_task = Some(self.parse_csv_in_background(wait_for_debounce, editor, cx));
+        self.parsing_task = Some(self.parse_delimited_in_background(wait_for_debounce, editor, cx));
     }
 
-    fn parse_csv_in_background(
+    fn parse_delimited_in_background(
         &mut self,
         wait_for_debounce: bool,
         editor: Entity<Editor>,
@@ -54,33 +55,69 @@ impl CsvPreviewView {
                 }
             }
 
-            let buffer_snapshot = view.update(cx, |_, cx| {
-                editor
+            let parse_input = view.update(cx, |view, cx| {
+                let buffer_snapshot = editor
                     .read(cx)
                     .buffer()
                     .read(cx)
                     .as_singleton()
-                    .map(|b| b.read(cx).text_snapshot())
+                    .map(|buffer| buffer.read(cx).text_snapshot())?;
+                let extension =
+                    editor
+                        .read(cx)
+                        .buffer()
+                        .read(cx)
+                        .as_singleton()
+                        .and_then(|buffer| {
+                            buffer
+                                .read(cx)
+                                .file()
+                                .and_then(|file| file.path().extension())
+                                .map(str::to_ascii_lowercase)
+                        });
+                let fallback = extension
+                    .as_deref()
+                    .and_then(default_delimiter_for_extension)
+                    .unwrap_or(',');
+                let selection = view.settings.delimiter;
+                Some((
+                    buffer_snapshot,
+                    selection,
+                    fallback,
+                    view.settings.header_mode,
+                ))
             })?;
 
-            let Some(buffer_snapshot) = buffer_snapshot else {
+            let Some((buffer_snapshot, selection, fallback, header_mode)) = parse_input else {
                 return Ok(());
             };
 
             let instant = Instant::now();
-            let parsed_csv = cx
-                .background_spawn(async move { from_buffer(&buffer_snapshot) })
+            let parsed_content = cx
+                .background_spawn(async move {
+                    let text = buffer_snapshot.text();
+                    let delimiter = effective_delimiter(&text, selection, fallback);
+                    let content = from_buffer_with_selection(
+                        &buffer_snapshot,
+                        selection,
+                        fallback,
+                        header_mode,
+                    );
+                    (content, delimiter)
+                })
                 .await;
             let parse_duration = instant.elapsed();
             let parse_end_time: Instant = Instant::now();
-            log::debug!("Parsed CSV in {}ms", parse_duration.as_millis());
+            log::debug!("Parsed delimited text in {}ms", parse_duration.as_millis());
             view.update(cx, move |view, cx| {
                 view.performance_metrics
                     .timings
                     .insert("Parsing", (parse_duration, Instant::now()));
 
-                log::debug!("Parsed {} rows", parsed_csv.rows.len());
-                view.engine.contents = parsed_csv;
+                let (parsed_content, delimiter) = parsed_content;
+                log::debug!("Parsed {} rows", parsed_content.rows.len());
+                view.detected_delimiter = Some(delimiter);
+                view.engine.contents = parsed_content;
                 view.sync_column_widths(cx);
                 view.last_parse_end_time = Some(parse_end_time);
 
@@ -91,18 +128,55 @@ impl CsvPreviewView {
     }
 }
 
-pub fn from_buffer(buffer_snapshot: &BufferSnapshot) -> TableLikeContent {
+#[allow(dead_code)]
+pub fn from_buffer(buffer_snapshot: &BufferSnapshot, delimiter: char) -> TableLikeContent {
+    from_buffer_with_options(buffer_snapshot, delimiter, HeaderMode::FirstRow, false)
+}
+
+pub(crate) fn from_buffer_with_selection(
+    buffer_snapshot: &BufferSnapshot,
+    selection: DelimiterSelection,
+    fallback: char,
+    header_mode: HeaderMode,
+) -> TableLikeContent {
+    let text = buffer_snapshot.text();
+    let delimiter = effective_delimiter(&text, selection, fallback);
+    let skip_directive = has_separator_directive(&text);
+    from_buffer_with_options(buffer_snapshot, delimiter, header_mode, skip_directive)
+}
+
+fn effective_delimiter(text: &str, selection: DelimiterSelection, fallback: char) -> char {
+    if let Some(delimiter) = separator_directive(text) {
+        return delimiter;
+    }
+    match selection {
+        DelimiterSelection::Auto if fallback == ',' => detect_delimiter(text, fallback).0,
+        DelimiterSelection::Auto => fallback,
+        DelimiterSelection::Character(delimiter) => delimiter,
+    }
+}
+
+fn from_buffer_with_options(
+    buffer_snapshot: &BufferSnapshot,
+    delimiter: char,
+    header_mode: HeaderMode,
+    skip_directive: bool,
+) -> TableLikeContent {
     let text = buffer_snapshot.text();
 
     if text.trim().is_empty() {
         return TableLikeContent::default();
     }
 
-    let (parsed_cells_with_positions, line_numbers) = parse_csv_with_positions(&text);
+    let (mut parsed_cells_with_positions, mut line_numbers) =
+        parse_delimited_with_positions(&text, delimiter);
+    if skip_directive && !parsed_cells_with_positions.is_empty() {
+        parsed_cells_with_positions.remove(0);
+        line_numbers.remove(0);
+    }
     if parsed_cells_with_positions.is_empty() {
         return TableLikeContent::default();
     }
-    let raw_headers = parsed_cells_with_positions[0].clone();
 
     // Calculating the longest row, as CSV might have less headers than max row width
     let Some(max_number_of_cols) = parsed_cells_with_positions.iter().map(|r| r.len()).max() else {
@@ -110,15 +184,26 @@ pub fn from_buffer(buffer_snapshot: &BufferSnapshot) -> TableLikeContent {
     };
 
     // Convert to TableCell objects with buffer positions
-    let headers = create_table_row(&buffer_snapshot, max_number_of_cols, raw_headers);
-
-    let rows = parsed_cells_with_positions
-        .into_iter()
-        .skip(1)
-        .map(|row| create_table_row(&buffer_snapshot, max_number_of_cols, row))
-        .collect();
-
-    let row_line_numbers = line_numbers.into_iter().skip(1).collect();
+    let (headers, rows, row_line_numbers) = match header_mode {
+        HeaderMode::FirstRow => {
+            let raw_headers = parsed_cells_with_positions.remove(0);
+            let headers = create_table_row(&buffer_snapshot, max_number_of_cols, raw_headers);
+            let rows = parsed_cells_with_positions
+                .into_iter()
+                .map(|row| create_table_row(&buffer_snapshot, max_number_of_cols, row))
+                .collect();
+            let row_line_numbers = line_numbers.into_iter().skip(1).collect();
+            (headers, rows, row_line_numbers)
+        }
+        HeaderMode::NoHeader => {
+            let headers = create_synthetic_headers(max_number_of_cols);
+            let rows = parsed_cells_with_positions
+                .into_iter()
+                .map(|row| create_table_row(&buffer_snapshot, max_number_of_cols, row))
+                .collect();
+            (headers, rows, line_numbers)
+        }
+    };
 
     TableLikeContent {
         headers,
@@ -128,9 +213,81 @@ pub fn from_buffer(buffer_snapshot: &BufferSnapshot) -> TableLikeContent {
     }
 }
 
-/// Parse CSV and track byte positions for each cell
-fn parse_csv_with_positions(
+fn create_synthetic_headers(max_number_of_cols: usize) -> TableRow<TableCell> {
+    let headers = (1..=max_number_of_cols)
+        .map(|column| TableCell::synthetic(column, format!("Column {column}")))
+        .collect();
+    TableRow::from_vec(headers, max_number_of_cols)
+}
+
+fn default_delimiter_for_extension(extension: &str) -> Option<char> {
+    match extension {
+        "tsv" => Some('\t'),
+        "psv" => Some('|'),
+        "scsv" | "ssv" => Some(';'),
+        "csv" => Some(','),
+        _ => None,
+    }
+}
+
+fn has_separator_directive(text: &str) -> bool {
+    text.lines().next().is_some_and(|line| {
+        let line = line.trim_start();
+        let line = line.strip_prefix('\u{feff}').unwrap_or(line);
+        let bytes = line.as_bytes();
+        bytes.len() >= 5
+            && line[..4].eq_ignore_ascii_case("sep=")
+            && line[4..]
+                .chars()
+                .next()
+                .is_some_and(|delimiter| delimiter != '\r' && delimiter != '\n' && delimiter != '"')
+    })
+}
+
+fn separator_directive(text: &str) -> Option<char> {
+    let first_line = text.lines().next()?.trim_start();
+    let first_line = first_line.strip_prefix('\u{feff}').unwrap_or(first_line);
+    if first_line.len() < 5 || !first_line[..4].eq_ignore_ascii_case("sep=") {
+        return None;
+    }
+    let rest = &first_line[4..];
+    let delimiter = rest.chars().next()?;
+    (delimiter != '\r' && delimiter != '\n' && delimiter != '"').then_some(delimiter)
+}
+
+fn detect_delimiter(text: &str, fallback: char) -> (char, bool) {
+    if let Some(delimiter) = separator_directive(text) {
+        return (delimiter, true);
+    }
+
+    let candidates = [',', '\t', '|', ';'];
+    let mut best = (fallback, 0usize);
+    for candidate in candidates {
+        let (rows, _) = parse_delimited_with_positions(text, candidate);
+        let sample = rows.into_iter().take(32).collect::<Vec<_>>();
+        let multi_column_rows = sample.iter().filter(|row| row.len() > 1).count();
+        if multi_column_rows == 0 {
+            continue;
+        }
+        let width = sample
+            .iter()
+            .filter(|row| row.len() > 1)
+            .map(Vec::len)
+            .max()
+            .unwrap_or_default();
+        let stable_rows = sample.iter().filter(|row| row.len() == width).count();
+        let score = stable_rows * 100 + multi_column_rows * 10 + width;
+        if score > best.1 {
+            best = (candidate, score);
+        }
+    }
+    (best.0, false)
+}
+
+/// Parse delimited text and track byte positions for each cell.
+fn parse_delimited_with_positions(
     text: &str,
+    delimiter: char,
 ) -> (
     Vec<Vec<(SharedString, std::ops::Range<usize>)>>,
     Vec<LineNumber>,
@@ -170,7 +327,7 @@ fn parse_csv_with_positions(
                     }
                 }
             }
-            ',' if !in_quotes => {
+            separator if separator == delimiter && !in_quotes => {
                 // Field separator
                 let field_end_offset = current_offset;
                 if current_field.is_empty() && !in_quotes {
@@ -429,6 +586,116 @@ Jane,"Simple name""#;
     }
 
     #[test]
+    fn test_tsv_parsing_reuses_delimited_preview_parser() {
+        let tsv_data = "Name\tDescription\tStatus\nAlice\t\"contains, commas\"\tactive\nBob\t\"multiple\nlines\"\tinactive";
+        let parsed = TableLikeContent::from_delimited_str(tsv_data.to_string(), '\t');
+
+        assert_eq!(parsed.headers.cols(), 3);
+        assert_eq!(parsed.headers[0].display_value().unwrap().as_ref(), "Name");
+        assert_eq!(
+            parsed.rows[0][1].display_value().unwrap().as_ref(),
+            "contains, commas"
+        );
+        assert_eq!(
+            parsed.rows[1][1].display_value().unwrap().as_ref(),
+            "multiple\nlines"
+        );
+        let logical_rows = parsed
+            .line_numbers
+            .iter()
+            .map(|line_number| match line_number {
+                LineNumber::Line(line) => *line,
+                LineNumber::LineRange(start, end) => {
+                    panic!("expected logical line number, got range {start}-{end}")
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(logical_rows, vec![2, 3]);
+    }
+
+    #[test]
+    fn test_auto_detection_supports_psv_and_semicolon_files() {
+        use text::{Buffer, BufferId, ReplicaId};
+
+        let psv_buffer = Buffer::new(
+            ReplicaId::LOCAL,
+            BufferId::new(4).unwrap(),
+            "name|value\na|1".to_string(),
+        );
+        let psv = from_buffer_with_selection(
+            psv_buffer.snapshot(),
+            DelimiterSelection::Auto,
+            ',',
+            HeaderMode::FirstRow,
+        );
+        assert_eq!(psv.headers.cols(), 2);
+        assert_eq!(psv.rows[0][1].display_value().unwrap().as_ref(), "1");
+
+        let semicolon_buffer = Buffer::new(
+            ReplicaId::LOCAL,
+            BufferId::new(5).unwrap(),
+            "name;value\na;1".to_string(),
+        );
+        let semicolon = from_buffer_with_selection(
+            semicolon_buffer.snapshot(),
+            DelimiterSelection::Auto,
+            ',',
+            HeaderMode::FirstRow,
+        );
+        assert_eq!(semicolon.headers.cols(), 2);
+        assert_eq!(semicolon.rows[0][1].display_value().unwrap().as_ref(), "1");
+
+        let tsv_buffer = Buffer::new(
+            ReplicaId::LOCAL,
+            BufferId::new(6).unwrap(),
+            "field,value\nalice,1".to_string(),
+        );
+        let tsv = from_buffer_with_selection(
+            tsv_buffer.snapshot(),
+            DelimiterSelection::Auto,
+            '\t',
+            HeaderMode::FirstRow,
+        );
+        assert_eq!(tsv.headers.cols(), 1);
+        assert_eq!(tsv.rows[0][0].display_value().unwrap().as_ref(), "alice,1");
+    }
+
+    #[test]
+    fn test_no_header_generates_column_names_and_keeps_first_row() {
+        use text::{Buffer, BufferId, ReplicaId};
+
+        let source = "alice,30\nbob,40".to_string();
+        let buffer = Buffer::new(ReplicaId::LOCAL, BufferId::new(2).unwrap(), source);
+        let parsed = from_buffer_with_options(buffer.snapshot(), ',', HeaderMode::NoHeader, false);
+
+        assert_eq!(
+            parsed.headers[0].display_value().unwrap().as_ref(),
+            "Column 1"
+        );
+        assert_eq!(parsed.rows.len(), 2);
+        assert_eq!(parsed.line_numbers.len(), 2);
+        assert_eq!(parsed.rows[0][0].display_value().unwrap().as_ref(), "alice");
+    }
+
+    #[test]
+    fn test_separator_directive_is_hidden_from_preview() {
+        use text::{Buffer, BufferId, ReplicaId};
+
+        let source = "sep=;\nname;value\na;1".to_string();
+        let buffer = Buffer::new(ReplicaId::LOCAL, BufferId::new(3).unwrap(), source);
+        let parsed = from_buffer_with_selection(
+            buffer.snapshot(),
+            DelimiterSelection::Auto,
+            ',',
+            HeaderMode::FirstRow,
+        );
+
+        assert_eq!(parsed.headers[0].display_value().unwrap().as_ref(), "name");
+        assert_eq!(parsed.rows.len(), 1);
+        assert_eq!(parsed.rows[0][1].display_value().unwrap().as_ref(), "1");
+    }
+
+    #[test]
     fn test_empty_csv() {
         let parsed = TableLikeContent::from_str(String::new());
         assert_eq!(parsed.headers.cols(), 0);
@@ -438,7 +705,7 @@ Jane,"Simple name""#;
     #[test]
     fn test_csv_parsing_quote_offset_handling() {
         let csv_data = r#"first,"se,cond",third"#;
-        let (parsed_cells, _) = parse_csv_with_positions(csv_data);
+        let (parsed_cells, _) = parse_delimited_with_positions(csv_data, ',');
 
         assert_eq!(parsed_cells.len(), 1); // One row
         assert_eq!(parsed_cells[0].len(), 3); // Three cells
@@ -464,7 +731,7 @@ Jane,"Simple name""#;
         let csv_data = r#"id,"name with spaces","description, with commas",status
 1,"John Doe","A person with ""quotes"" and, commas",active
 2,"Jane Smith","Simple description",inactive"#;
-        let (parsed_cells, _) = parse_csv_with_positions(csv_data);
+        let (parsed_cells, _) = parse_delimited_with_positions(csv_data, ',');
 
         assert_eq!(parsed_cells.len(), 3); // header + 2 rows
 
@@ -517,11 +784,16 @@ Jane,"Simple name""#;
 impl TableLikeContent {
     #[cfg(test)]
     pub fn from_str(text: String) -> Self {
+        Self::from_delimited_str(text, ',')
+    }
+
+    #[cfg(test)]
+    pub fn from_delimited_str(text: String, delimiter: char) -> Self {
         use text::{Buffer, BufferId, ReplicaId};
 
         let buffer_id = BufferId::new(1).unwrap();
         let buffer = Buffer::new(ReplicaId::LOCAL, buffer_id, text);
         let snapshot = buffer.snapshot();
-        from_buffer(snapshot)
+        from_buffer(snapshot, delimiter)
     }
 }

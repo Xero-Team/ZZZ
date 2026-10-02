@@ -29,7 +29,7 @@ impl Render for CsvPreviewView {
                         .child(tr(
                             cx,
                             "csv_preview.no_content_to_display",
-                            "No CSV content to display",
+                            "No delimited text content to display",
                         ))
                         .into_any_element()
                 } else {
