@@ -5399,26 +5399,28 @@ impl Editor {
                 menu.visible().then_some(menu)
             };
 
-            editor
-                .update_in(cx, |editor, window, cx| {
-                    if editor.focus_handle.is_focused(window)
-                        && let Some(menu) = menu
-                    {
-                        *editor.context_menu.borrow_mut() =
-                            Some(CodeContextMenu::Completions(menu));
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            let Ok(()) = editor.update_in(cx, |editor, window, cx| {
+                if editor.focus_handle.is_focused(window)
+                    && let Some(menu) = menu
+                {
+                    *editor.context_menu.borrow_mut() = Some(CodeContextMenu::Completions(menu));
 
-                        crate::hover_popover::hide_hover(editor, cx);
+                    crate::hover_popover::hide_hover(editor, cx);
 
-                        cx.notify();
-                        return;
-                    }
+                    cx.notify();
+                    return;
+                }
 
-                    if editor.completion_tasks.len() <= 1 {
-                        // If there are no more completion tasks and the last menu was empty, we should hide it.
-                        editor.hide_context_menu(window, cx);
-                    }
-                })
-                .ok();
+                if editor.completion_tasks.len() <= 1 {
+                    // If there are no more completion tasks and the last menu was empty, we should hide it.
+                    editor.hide_context_menu(window, cx);
+                }
+            }) else {
+                return;
+            };
         });
 
         self.completion_tasks.push((id, task));
