@@ -7,6 +7,7 @@ use picker::{Picker, PickerDelegate, PickerEditorPosition};
 use project::{Project, git_store::Repository};
 use std::sync::Arc;
 use ui::{ListItem, ListItemSpacing, prelude::*};
+use util::ResultExt;
 use workspace::{ModalView, Workspace};
 
 pub fn register(workspace: &mut Workspace) {
@@ -238,7 +239,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
                 this.delegate.set_selected_index(selected_index, window, cx);
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
     }
 
@@ -255,7 +256,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
     fn dismissed(&mut self, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
         self.repository_selector
             .update(cx, |_this, cx| cx.emit(DismissEvent))
-            .ok();
+            .log_err();
     }
 
     fn render_match(

@@ -340,11 +340,12 @@ impl BranchList {
                 .flatten()
                 .flatten();
 
-            let _ = this.update_in(cx, |this, _window, cx| {
+            let branch_list_update_result = this.update_in(cx, |this, _window, cx| {
                 this.picker.update(cx, |picker, _cx| {
                     picker.delegate.default_branch = default_branch;
                 });
             });
+            branch_list_update_result.log_err();
 
             anyhow::Ok(())
         })

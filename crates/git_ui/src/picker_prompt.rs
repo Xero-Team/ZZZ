@@ -44,7 +44,7 @@ pub fn prompt(
                     PickerPrompt::new(delegate, 34., window, cx)
                 })
             })
-            .ok();
+            .log_err();
 
         (rx.await).ok()
     })

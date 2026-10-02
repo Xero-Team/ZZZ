@@ -1528,7 +1528,7 @@ pub async fn open_remote_worktree(
                 prompt.update(cx, |prompt, cx| prompt.finished(cx))
             }
         })
-        .ok();
+        .log_err();
 
     let Some(Some(session)) = session else {
         return Ok(());
