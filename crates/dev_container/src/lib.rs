@@ -80,7 +80,7 @@ fn get_safe_id(input: &str) -> String {
     let replaced: String = input
         .chars()
         .map(|c| {
-            if c.is_alphanumeric() || c == '_' {
+            if c.is_ascii_alphanumeric() || c == '_' {
                 c
             } else {
                 '_'
@@ -1759,8 +1759,14 @@ mod tests {
         DevContainerFeature, DevContainerTemplatesResponse, devcontainer_features_repository,
         devcontainer_templates_repository, first_manifest_layer_digest,
         get_deserializable_oci_blob, get_ghcr_features, ghcr_registry,
-        oci::DockerManifestsResponse,
+        oci::DockerManifestsResponse, safe_id_lower, safe_id_upper,
     };
+
+    #[test]
+    fn safe_ids_replace_non_ascii_characters() {
+        assert_eq!(safe_id_upper("café-option"), "CAF__OPTION");
+        assert_eq!(safe_id_lower("9é-option"), "_option");
+    }
 
     #[test]
     fn feature_major_version_preserves_multiple_digits() {
