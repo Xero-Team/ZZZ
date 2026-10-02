@@ -436,6 +436,18 @@ impl BreakpointList {
             let path = line_breakpoint.breakpoint.path.clone();
             let row = line_breakpoint.breakpoint.row;
             self.edit_line_breakpoint(path, row, BreakpointEditAction::Toggle, cx);
+        } else if let BreakpointEntryKind::DataBreakpoint(data_breakpoint) = &entry.kind
+            && let Some(session) = &self.session
+        {
+            let state = data_breakpoint.0.clone();
+            session.update(cx, |session, cx| {
+                session.create_data_breakpoint(
+                    state.context,
+                    state.dap.data_id.clone(),
+                    state.dap,
+                    cx,
+                );
+            });
         }
         cx.notify();
     }
@@ -697,7 +709,8 @@ impl BreakpointList {
                         })
                     })
                     .disabled(
-                        selection_kind.map(|kind| kind.0) != Some(SelectedBreakpointKind::Source),
+                        selection_kind
+                            .is_none_or(|(kind, _)| kind == SelectedBreakpointKind::Exception),
                     )
                     .on_click({
                         move |_, window, cx| {
@@ -712,6 +725,10 @@ impl BreakpointList {
 
 impl Render for BreakpointList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl ui::IntoElement {
+        let selected_breakpoint_id = self
+            .selected_ix
+            .and_then(|ix| self.breakpoints.get(ix))
+            .map(BreakpointEntry::id);
         let breakpoints = self.breakpoint_store.read(cx).all_source_breakpoints(cx);
         self.breakpoints.clear();
         let multiple_worktrees = self.worktree_store.read(cx).visible_worktrees(cx).count() > 1;
@@ -753,7 +770,7 @@ impl Render for BreakpointList {
                     .map(ToOwned::to_owned)
                     .map(SharedString::from)?;
                 let weak = weak.clone();
-                let line = breakpoint.row + 1;
+                let line = breakpoint.row.saturating_add(1);
                 Some(BreakpointEntry {
                     kind: BreakpointEntryKind::LineBreakpoint(LineBreakpoint {
                         name,
@@ -792,6 +809,14 @@ impl Render for BreakpointList {
                 .chain(data_breakpoints)
                 .chain(exception_breakpoints),
         );
+        self.selected_ix = selected_breakpoint_id.and_then(|selected_breakpoint_id| {
+            self.breakpoints
+                .iter()
+                .position(|breakpoint| breakpoint.id() == selected_breakpoint_id)
+        });
+        if self.selected_ix.is_none() {
+            self.strip_mode = None;
+        }
 
         let text_pixels = ui::TextSize::Default.pixels(cx).to_f64() as f32;
 
