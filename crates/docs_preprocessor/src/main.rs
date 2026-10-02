@@ -69,7 +69,9 @@ fn main() -> Result<()> {
 
     match args.get(0).map(String::as_str) {
         Some("supports") => {
-            let renderer = args.get(1).expect("Required argument");
+            let renderer = args
+                .get(1)
+                .context("the supports command requires a renderer argument")?;
             let supported = renderer != "not-supported";
             if supported {
                 process::exit(0);
@@ -665,18 +667,16 @@ fn handle_postprocessing() -> Result<()> {
     let zzz_html = outputs
         .get("zzz-html")
         .cloned()
-        .expect("zzz-html output defined");
+        .context("mdBook output.zzz-html configuration is missing")?;
     let default_description = zzz_html
         .get("default-description")
-        .expect("Default description not found")
-        .as_str()
-        .expect("Default description not a string")
+        .and_then(serde_json::Value::as_str)
+        .context("output.zzz-html.default-description must be a string")?
         .to_owned();
     let default_title = zzz_html
         .get("default-title")
-        .expect("Default title not found")
-        .as_str()
-        .expect("Default title not a string")
+        .and_then(serde_json::Value::as_str)
+        .context("output.zzz-html.default-title must be a string")?
         .to_owned();
     let amplitude_key = std::env::var("DOCS_AMPLITUDE_API_KEY").unwrap_or_default();
     let consent_io_instance = std::env::var("DOCS_CONSENT_IO_INSTANCE").unwrap_or_default();
@@ -726,8 +726,19 @@ fn handle_postprocessing() -> Result<()> {
         let contents = std::fs::read_to_string(&file)?;
         let mut meta_description = None;
         let mut meta_title = None;
+        let mut metadata_error = None;
         let contents = meta_regex.replace(&contents, |caps: &regex::Captures| {
-            let metadata: HashMap<String, String> = serde_json::from_str(&caps[1]).with_context(|| format!("JSON Metadata: {:?}", &caps[1])).expect("Failed to deserialize metadata");
+            let metadata: HashMap<String, String> = match serde_json::from_str(&caps[1]) {
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    metadata_error = Some(anyhow::Error::new(error).context(format!(
+                        "failed to deserialize metadata in {:?}: {:?}",
+                        pretty_path(&file, &root_dir),
+                        &caps[1]
+                    )));
+                    return String::new();
+                }
+            };
             for (kind, content) in metadata {
                 match kind.as_str() {
                     "description" => {
@@ -743,11 +754,14 @@ fn handle_postprocessing() -> Result<()> {
             }
             String::new()
         });
+        if let Some(error) = metadata_error {
+            return Err(error);
+        }
         let meta_description = meta_description.as_ref().unwrap_or_else(|| {
             zlog::warn!(logger => "No meta description found for {:?}", pretty_path(&file, &root_dir));
             &default_description
         });
-        let page_title = extract_title_from_page(&contents, pretty_path(&file, &root_dir));
+        let page_title = extract_title_from_page(&contents, pretty_path(&file, &root_dir))?;
         let meta_title = meta_title.as_ref().unwrap_or_else(|| {
             zlog::debug!(logger => "No meta title found for {:?}", pretty_path(&file, &root_dir));
             &default_title
@@ -763,10 +777,8 @@ fn handle_postprocessing() -> Result<()> {
                 format!("<title>{}</title>", meta_title)
             })
             .to_string();
-        // let contents = contents.replace("#title#", &meta_title);
         std::fs::write(file, contents)?;
     }
-    return Ok(());
 
     fn pretty_path<'a>(
         path: &'a std::path::PathBuf,
@@ -774,19 +786,24 @@ fn handle_postprocessing() -> Result<()> {
     ) -> &'a std::path::Path {
         path.strip_prefix(&root).unwrap_or(path)
     }
-    fn extract_title_from_page(contents: &str, pretty_path: &std::path::Path) -> String {
-        let title_tag_contents = &title_regex()
+    fn extract_title_from_page(contents: &str, pretty_path: &std::path::Path) -> Result<String> {
+        let captures = title_regex()
             .captures(contents)
-            .with_context(|| format!("Failed to find title in {:?}", pretty_path))
-            .expect("Page has <title> element")[1];
+            .with_context(|| format!("failed to find <title> in {:?}", pretty_path))?;
+        let title_tag_contents = captures
+            .get(1)
+            .context("title regex did not capture the title contents")?
+            .as_str();
 
-        title_tag_contents
+        Ok(title_tag_contents
             .trim()
             .strip_suffix("- ZZZ")
             .unwrap_or(title_tag_contents)
             .trim()
-            .to_owned()
+            .to_owned())
     }
+
+    Ok(())
 }
 
 fn title_regex() -> &'static Regex {
