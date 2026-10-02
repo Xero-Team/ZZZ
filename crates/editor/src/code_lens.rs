@@ -226,8 +226,8 @@ impl Editor {
                 return;
             }
 
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     let snapshot = editor.buffer().read(cx).snapshot(cx);
                     for (buffer_id, result) in results {
                         let actions = match result {
@@ -243,8 +243,8 @@ impl Editor {
                         editor.apply_lens_actions_for_buffer(buffer_id, actions, &snapshot, cx);
                     }
                     editor.resolve_visible_code_lenses(cx);
-                })
-                .ok();
+                });
+            }
         });
     }
 
@@ -464,8 +464,8 @@ impl Editor {
                     .map(|(buffer_id, task)| async move { (buffer_id, task.await) }),
             )
             .await;
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     let snapshot = editor.buffer().read(cx).snapshot(cx);
                     for (buffer_id, newly_resolved) in resolved_per_buffer {
                         if newly_resolved.is_empty() {
@@ -489,8 +489,8 @@ impl Editor {
                         }
                         editor.apply_lens_actions_for_buffer(buffer_id, actions, &snapshot, cx);
                     }
-                })
-                .ok();
+                });
+            }
         });
     }
 

@@ -41,16 +41,16 @@ impl Editor {
             let buffer_snapshot = buffer_snapshot.clone();
             async move |this, cx| {
                 let bracket_ranges = task.await;
-                let current_ranges = this
-                    .read_with(cx, |editor, cx| {
-                        editor
-                            .display_map
-                            .read(cx)
-                            .text_highlights(HighlightKey::MatchingBracket)
-                            .map(|(_, ranges)| ranges.to_vec())
-                    })
-                    .ok()
-                    .flatten();
+                let Some(editor) = this.upgrade() else {
+                    return;
+                };
+                let current_ranges = editor.read_with(cx, |editor, cx| {
+                    editor
+                        .display_map
+                        .read(cx)
+                        .text_highlights(HighlightKey::MatchingBracket)
+                        .map(|(_, ranges)| ranges.to_vec())
+                });
                 let new_ranges = bracket_ranges.map(|(opening_range, closing_range)| {
                     vec![
                         opening_range.to_anchors(&buffer_snapshot),
@@ -59,7 +59,7 @@ impl Editor {
                 });
 
                 if current_ranges != new_ranges {
-                    this.update(cx, |editor, cx| {
+                    editor.update(cx, |editor, cx| {
                         editor.clear_highlights(HighlightKey::MatchingBracket, cx);
                         if let Some(new_ranges) = new_ranges {
                             editor.highlight_text(
@@ -76,8 +76,7 @@ impl Editor {
                                 cx,
                             )
                         }
-                    })
-                    .ok();
+                    });
                 }
             }
         });

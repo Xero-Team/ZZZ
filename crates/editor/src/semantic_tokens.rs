@@ -201,8 +201,11 @@ impl Editor {
             cx.background_executor()
                 .timer(Duration::from_millis(50))
                 .await;
-            let Some(all_semantic_tokens_task) = editor
-                .update(cx, |editor, cx| {
+            let all_semantic_tokens_task = {
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                editor.update(cx, |editor, cx| {
                     buffers_to_query
                         .into_iter()
                         .filter_map(|(buffer_id, buffer)| {
@@ -223,14 +226,11 @@ impl Editor {
                         })
                         .collect::<Vec<_>>()
                 })
-                .ok()
-            else {
-                return;
             };
 
             let all_semantic_tokens = join_all(all_semantic_tokens_task).await;
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     editor.display_map.update(cx, |display_map, _| {
                         for buffer_id in invalidate_semantic_highlights_for_buffers {
                             display_map.invalidate_semantic_highlights(buffer_id);
@@ -324,8 +324,8 @@ impl Editor {
                     }
 
                     cx.notify();
-                })
-                .ok();
+                });
+            }
         });
     }
 }

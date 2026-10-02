@@ -244,8 +244,8 @@ impl Editor {
                 cx.clone(),
             )
             .await;
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     for buffer_id in std::mem::take(&mut editor.runnables.invalidate_buffer_data) {
                         editor.clear_runnables(Some(buffer_id));
                     }
@@ -276,8 +276,8 @@ impl Editor {
                             new_tasks,
                         );
                     }
-                })
-                .ok();
+                });
+            }
         });
     }
 

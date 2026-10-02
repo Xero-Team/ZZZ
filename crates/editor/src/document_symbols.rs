@@ -210,8 +210,8 @@ impl Editor {
                 };
 
                 let results = join_all(tasks).await.into_iter().collect::<HashMap<_, _>>();
-                editor
-                    .update(cx, |editor, cx| {
+                if let Some(editor) = editor.upgrade() {
+                    editor.update(cx, |editor, cx| {
                         let syntax = cx.theme().syntax().clone();
                         let display_snapshot =
                             editor.display_map.update(cx, |map, cx| map.snapshot(cx));
@@ -235,8 +235,8 @@ impl Editor {
                         }
                         editor.lsp_document_symbols.extend(highlighted_results);
                         editor.refresh_outline_symbols_at_cursor(cx);
-                    })
-                    .ok();
+                    });
+                }
             })
             .shared();
     }

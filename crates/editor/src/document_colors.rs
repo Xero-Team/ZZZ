@@ -257,8 +257,8 @@ impl Editor {
                 }
             }
 
-            editor
-                .update(cx, |editor, cx| {
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
                     let mut colors_splice = InlaySplice::default();
                     let Some(colors) = &mut editor.colors else {
                         return;
@@ -366,8 +366,8 @@ impl Editor {
                     if updated {
                         cx.notify();
                     }
-                })
-                .ok();
+                });
+            }
         });
     }
 }

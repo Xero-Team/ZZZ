@@ -220,8 +220,8 @@ impl Editor {
 
                 let signature_help = lsp_task.await;
 
-                editor
-                    .update(cx, |editor, cx| {
+                if let Some(editor) = editor.upgrade() {
+                    editor.update(cx, |editor, cx| {
                         let Some(mut signature_help) =
                             signature_help.unwrap_or_default().into_iter().next()
                         else {
@@ -293,8 +293,8 @@ impl Editor {
                             .signature_help_state
                             .set_popover(signature_help_popover);
                         cx.notify();
-                    })
-                    .ok();
+                    });
+                }
             }));
     }
 }
