@@ -1057,43 +1057,45 @@ fn spawn_editor_hints_refresh(
         }
 
         let query_version = buffer_excerpts.buffer_version.clone();
-        let Some(hint_tasks) = editor
-            .update(cx, |editor, cx| {
-                editor.inlay_hints_for_buffer(invalidate_cache, buffer_excerpts, known_chunks, cx)
-            })
-            .ok()
-        else {
-            return;
-        };
-        let hint_tasks = hint_tasks.unwrap_or_default();
-        if hint_tasks.is_empty() {
+        let hint_tasks = {
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
             editor
-                .update(cx, |editor, _| {
-                    if let Some((_, hint_chunk_fetching)) = editor
-                        .inlay_hints
-                        .as_mut()
-                        .and_then(|inlay_hints| inlay_hints.hint_chunk_fetching.get_mut(&buffer_id))
-                    {
-                        for applicable_chunks in &applicable_chunks {
-                            hint_chunk_fetching.remove(applicable_chunks);
-                        }
-                    }
+                .update(cx, |editor, cx| {
+                    editor.inlay_hints_for_buffer(
+                        invalidate_cache,
+                        buffer_excerpts,
+                        known_chunks,
+                        cx,
+                    )
                 })
-                .ok();
+                .unwrap_or_default()
+        };
+        if hint_tasks.is_empty() {
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            editor.update(cx, |editor, _| {
+                if let Some((_, hint_chunk_fetching)) = editor
+                    .inlay_hints
+                    .as_mut()
+                    .and_then(|inlay_hints| inlay_hints.hint_chunk_fetching.get_mut(&buffer_id))
+                {
+                    for applicable_chunks in &applicable_chunks {
+                        hint_chunk_fetching.remove(applicable_chunks);
+                    }
+                }
+            });
             return;
         }
         let new_hints = join_all(hint_tasks).await;
-        editor
-            .update(cx, |editor, cx| {
-                editor.apply_fetched_hints(
-                    buffer_id,
-                    query_version,
-                    invalidate_cache,
-                    new_hints,
-                    cx,
-                );
-            })
-            .ok();
+        let Some(editor) = editor.upgrade() else {
+            return;
+        };
+        editor.update(cx, |editor, cx| {
+            editor.apply_fetched_hints(buffer_id, query_version, invalidate_cache, new_hints, cx);
+        });
     })
 }
 
