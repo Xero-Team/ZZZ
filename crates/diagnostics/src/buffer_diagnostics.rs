@@ -296,10 +296,12 @@ impl BufferDiagnosticsEditor {
                     .await?;
             };
 
-            let _ = editor.update(cx, |editor, cx| {
-                editor.update_excerpts_task = None;
-                cx.notify();
-            });
+            if let Some(editor) = editor.upgrade() {
+                editor.update(cx, |editor, cx| {
+                    editor.update_excerpts_task = None;
+                    cx.notify();
+                });
+            }
 
             Ok(())
         }));
@@ -989,22 +991,28 @@ impl DiagnosticsToolbarEditor for WeakEntity<BufferDiagnosticsEditor> {
     }
 
     fn stop_updating(&self, cx: &mut App) {
-        let _ = self.update(cx, |buffer_diagnostics_editor, cx| {
-            buffer_diagnostics_editor.update_excerpts_task = None;
-            cx.notify();
-        });
+        if let Some(buffer_diagnostics_editor) = self.upgrade() {
+            buffer_diagnostics_editor.update(cx, |buffer_diagnostics_editor, cx| {
+                buffer_diagnostics_editor.update_excerpts_task = None;
+                cx.notify();
+            });
+        }
     }
 
     fn refresh_diagnostics(&self, window: &mut Window, cx: &mut App) {
-        let _ = self.update(cx, |buffer_diagnostics_editor, cx| {
-            buffer_diagnostics_editor.update_all_excerpts(window, cx);
-        });
+        if let Some(buffer_diagnostics_editor) = self.upgrade() {
+            buffer_diagnostics_editor.update(cx, |buffer_diagnostics_editor, cx| {
+                buffer_diagnostics_editor.update_all_excerpts(window, cx);
+            });
+        }
     }
 
     fn toggle_warnings(&self, window: &mut Window, cx: &mut App) {
-        let _ = self.update(cx, |buffer_diagnostics_editor, cx| {
-            buffer_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
-        });
+        if let Some(buffer_diagnostics_editor) = self.upgrade() {
+            buffer_diagnostics_editor.update(cx, |buffer_diagnostics_editor, cx| {
+                buffer_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
+            });
+        }
     }
 
     fn get_diagnostics_for_buffer(

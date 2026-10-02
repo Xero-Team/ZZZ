@@ -954,22 +954,28 @@ impl DiagnosticsToolbarEditor for WeakEntity<ProjectDiagnosticsEditor> {
     }
 
     fn stop_updating(&self, cx: &mut App) {
-        let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.update_excerpts_task = None;
-            cx.notify();
-        });
+        if let Some(project_diagnostics_editor) = self.upgrade() {
+            project_diagnostics_editor.update(cx, |project_diagnostics_editor, cx| {
+                project_diagnostics_editor.update_excerpts_task = None;
+                cx.notify();
+            });
+        }
     }
 
     fn refresh_diagnostics(&self, window: &mut Window, cx: &mut App) {
-        let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.refresh(window, cx);
-        });
+        if let Some(project_diagnostics_editor) = self.upgrade() {
+            project_diagnostics_editor.update(cx, |project_diagnostics_editor, cx| {
+                project_diagnostics_editor.refresh(window, cx);
+            });
+        }
     }
 
     fn toggle_warnings(&self, window: &mut Window, cx: &mut App) {
-        let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
-        });
+        if let Some(project_diagnostics_editor) = self.upgrade() {
+            project_diagnostics_editor.update(cx, |project_diagnostics_editor, cx| {
+                project_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
+            });
+        }
     }
 
     fn get_diagnostics_for_buffer(
