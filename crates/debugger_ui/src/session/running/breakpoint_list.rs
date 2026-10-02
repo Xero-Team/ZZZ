@@ -1,5 +1,6 @@
 use std::{ops::Range, path::Path, sync::Arc, time::Duration};
 
+use anyhow::Context as _;
 use dap::{Capabilities, ExceptionBreakpointsFilter, adapters::DebugAdapterName};
 use db::kvp::KeyValueStore;
 use editor::Editor;
@@ -23,7 +24,7 @@ use ui::{
     Divider, DividerColor, FluentBuilder as _, Indicator, IntoElement, ListItem, Render,
     ScrollAxes, StatefulInteractiveElement, Tooltip, WithScrollbar, prelude::*,
 };
-use util::paths::PathExt;
+use util::{ResultExt as _, paths::PathExt};
 use workspace::Workspace;
 use zzz_actions::{ToggleEnableBreakpoint, UnsetBreakpoint};
 
@@ -55,7 +56,7 @@ pub(crate) struct BreakpointList {
     max_width_index: Option<usize>,
     input: Entity<Editor>,
     strip_mode: Option<ActiveBreakpointStripMode>,
-    serialize_exception_breakpoints_task: Option<Task<anyhow::Result<()>>>,
+    serialize_exception_breakpoints_task: Option<Task<()>>,
 }
 
 impl Focusable for BreakpointList {
@@ -104,7 +105,7 @@ impl BreakpointList {
                 serialize_exception_breakpoints_task: None,
             };
             if let Some(name) = adapter_name {
-                _ = this.deserialize_exception_breakpoints(name, cx);
+                this.deserialize_exception_breakpoints(name, cx).log_err();
             }
             this
         })
@@ -155,16 +156,15 @@ impl BreakpointList {
                     })
                 })??
                 .await?;
-            if let Some(editor) = item.downcast::<Editor>() {
-                editor
-                    .update_in(cx, |this, window, cx| {
-                        this.go_to_singleton_buffer_point(Point { row, column: 0 }, window, cx);
-                    })
-                    .ok();
-            }
+            let editor = item
+                .downcast::<Editor>()
+                .context("opened breakpoint item is not an editor")?;
+            editor.update_in(cx, |this, window, cx| {
+                this.go_to_singleton_buffer_point(Point { row, column: 0 }, window, cx);
+            })?;
             anyhow::Ok(())
         })
-        .detach();
+        .detach_and_log_err(cx);
     }
 
     pub(crate) fn selection_kind(&self) -> Option<(SelectedBreakpointKind, bool)> {
@@ -503,9 +503,12 @@ impl BreakpointList {
                 cx.background_executor()
                     .timer(EXCEPTION_SERIALIZATION_INTERVAL)
                     .await;
-                this.update(cx, |this, cx| this.serialize_exception_breakpoints(cx))?
-                    .await?;
-                Ok(())
+                let result: anyhow::Result<()> = async {
+                    this.update(cx, |this, cx| this.serialize_exception_breakpoints(cx))?
+                        .await
+                }
+                .await;
+                result.log_err();
             }));
         }
     }
