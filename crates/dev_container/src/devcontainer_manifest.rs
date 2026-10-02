@@ -4314,27 +4314,29 @@ ENV DOCKER_BUILDKIT=1
                 (
                     "app".to_string(),
                     DockerComposeService {
-                        entrypoint: Some(vec![
-                            "/bin/sh".to_string(),
-                            "-c".to_string(),
-                            "echo Container started\ntrap \"exit 0\" 15\n/usr/local/share/docker-init.sh\nexec \"$@\"\nwhile sleep 1 & wait $!; do :; done".to_string(),
-                            "-".to_string(),
-                        ]),
                         cap_add: Some(vec!["SYS_PTRACE".to_string()]),
                         security_opt: Some(vec!["seccomp=unconfined".to_string()]),
                         privileged: Some(true),
                         labels: Some(HashMap::from([
-                            ("devcontainer.metadata".to_string(), "[{\"remoteUser\":\"vscode\"}]".to_string()),
-                            ("devcontainer.local_folder".to_string(), "/path/to/local/project".to_string()),
-                            ("devcontainer.config_file".to_string(), "/path/to/local/project/.devcontainer/devcontainer.json".to_string())
+                            (
+                                "devcontainer.metadata".to_string(),
+                                "[{\"remoteUser\":\"vscode\"}]".to_string(),
+                            ),
+                            (
+                                "devcontainer.local_folder".to_string(),
+                                "/path/to/local/project".to_string(),
+                            ),
+                            (
+                                "devcontainer.config_file".to_string(),
+                                "/path/to/local/project/.devcontainer/devcontainer.json"
+                                    .to_string(),
+                            ),
                         ])),
-                        volumes: vec![
-                            MountDefinition {
-                                source: Some("dind-var-lib-docker-42dad4b4ca7b8ced".to_string()),
-                                target: "/var/lib/docker".to_string(),
-                                mount_type: Some("volume".to_string())
-                            }
-                        ],
+                        volumes: vec![MountDefinition {
+                            source: Some("dind-var-lib-docker-42dad4b4ca7b8ced".to_string()),
+                            target: "/var/lib/docker".to_string(),
+                            mount_type: Some("volume".to_string()),
+                        }],
                         ..Default::default()
                     },
                 ),

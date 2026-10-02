@@ -920,30 +920,26 @@ mod test {
                 update_content_command: Some(LifecycleScript::from_map(HashMap::from([
                     (
                         "first".to_string(),
-                        vec!["echo".to_string(), "update_content_command".to_string()]
+                        LifecycleScript::shell_command("echo update_content_command")
                     ),
                     (
                         "second".to_string(),
                         vec!["echo".to_string(), "update_content_command".to_string()]
                     )
                 ]))),
-                post_create_command: Some(LifecycleScript::from_str("echo post_create_command")),
-                post_start_command: Some(LifecycleScript::from_args(vec![
+                post_create_command: Some(LifecycleScript::from_args(vec![
                     "echo".to_string(),
-                    "post_start_command".to_string()
+                    "post_create_command".to_string(),
                 ])),
+                post_start_command: Some(LifecycleScript::from_str("echo post_start_command")),
                 post_attach_command: Some(LifecycleScript::from_map(HashMap::from([
                     (
                         "something".to_string(),
-                        vec!["echo".to_string(), "post_attach_command".to_string()]
+                        LifecycleScript::shell_command("echo post_attach_command")
                     ),
                     (
                         "something1".to_string(),
-                        vec![
-                            "echo".to_string(),
-                            "something".to_string(),
-                            "else".to_string()
-                        ]
+                        LifecycleScript::shell_command("echo something else")
                     )
                 ]))),
                 wait_for: Some(LifecycleCommand::PostStartCommand),
@@ -1139,30 +1135,26 @@ mod test {
                 update_content_command: Some(LifecycleScript::from_map(HashMap::from([
                     (
                         "first".to_string(),
-                        vec!["echo".to_string(), "update_content_command".to_string()]
+                        LifecycleScript::shell_command("echo update_content_command")
                     ),
                     (
                         "second".to_string(),
                         vec!["echo".to_string(), "update_content_command".to_string()]
                     )
                 ]))),
-                post_create_command: Some(LifecycleScript::from_str("echo post_create_command")),
-                post_start_command: Some(LifecycleScript::from_args(vec![
+                post_create_command: Some(LifecycleScript::from_args(vec![
                     "echo".to_string(),
-                    "post_start_command".to_string()
+                    "post_create_command".to_string(),
                 ])),
+                post_start_command: Some(LifecycleScript::from_str("echo post_start_command")),
                 post_attach_command: Some(LifecycleScript::from_map(HashMap::from([
                     (
                         "something".to_string(),
-                        vec!["echo".to_string(), "post_attach_command".to_string()]
+                        LifecycleScript::shell_command("echo post_attach_command")
                     ),
                     (
                         "something1".to_string(),
-                        vec![
-                            "echo".to_string(),
-                            "something".to_string(),
-                            "else".to_string()
-                        ]
+                        LifecycleScript::shell_command("echo something else")
                     )
                 ]))),
                 wait_for: Some(LifecycleCommand::PostStartCommand),
@@ -1367,30 +1359,26 @@ mod test {
                 update_content_command: Some(LifecycleScript::from_map(HashMap::from([
                     (
                         "first".to_string(),
-                        vec!["echo".to_string(), "update_content_command".to_string()]
+                        LifecycleScript::shell_command("echo update_content_command")
                     ),
                     (
                         "second".to_string(),
                         vec!["echo".to_string(), "update_content_command".to_string()]
                     )
                 ]))),
-                post_create_command: Some(LifecycleScript::from_str("echo post_create_command")),
-                post_start_command: Some(LifecycleScript::from_args(vec![
+                post_create_command: Some(LifecycleScript::from_args(vec![
                     "echo".to_string(),
-                    "post_start_command".to_string()
+                    "post_create_command".to_string(),
                 ])),
+                post_start_command: Some(LifecycleScript::from_str("echo post_start_command")),
                 post_attach_command: Some(LifecycleScript::from_map(HashMap::from([
                     (
                         "something".to_string(),
-                        vec!["echo".to_string(), "post_attach_command".to_string()]
+                        LifecycleScript::shell_command("echo post_attach_command")
                     ),
                     (
                         "something1".to_string(),
-                        vec![
-                            "echo".to_string(),
-                            "something".to_string(),
-                            "else".to_string()
-                        ]
+                        LifecycleScript::shell_command("echo something else")
                     )
                 ]))),
                 wait_for: Some(LifecycleCommand::PostStartCommand),
