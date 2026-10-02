@@ -7,9 +7,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read};
 use std::process;
-use std::sync::{LazyLock, OnceLock};
-
-static ALL_ACTIONS: LazyLock<ActionManifest> = LazyLock::new(load_all_actions);
+use std::sync::OnceLock;
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -121,8 +119,8 @@ enum PreprocessorError {
 }
 
 impl PreprocessorError {
-    fn new_for_not_found_action(action_name: String) -> Self {
-        for action in &ALL_ACTIONS.actions {
+    fn new_for_not_found_action(action_name: String, actions: &ActionManifest) -> Self {
+        for action in &actions.actions {
             for alias in &action.deprecated_aliases {
                 if alias == action_name.as_str() {
                     return PreprocessorError::DeprecatedActionUsed {
@@ -200,13 +198,14 @@ fn handle_preprocessing() -> Result<()> {
     stdin.read_to_string(&mut input)?;
 
     let (_ctx, mut book) = mdbook_preprocessor::parse_input(input.as_bytes())?;
+    let actions = load_all_actions()?;
 
     let mut errors = HashSet::<PreprocessorError>::new();
     handle_frontmatter(&mut book, &mut errors);
-    template_big_table_of_actions(&mut book);
-    template_and_validate_keybindings(&mut book, &mut errors)?;
-    template_and_validate_actions(&mut book, &mut errors);
-    template_and_validate_json_snippets(&mut book, &mut errors)?;
+    template_big_table_of_actions(&mut book, &actions);
+    template_and_validate_keybindings(&mut book, &actions, &mut errors)?;
+    template_and_validate_actions(&mut book, &actions, &mut errors);
+    template_and_validate_json_snippets(&mut book, &actions, &mut errors)?;
 
     if !errors.is_empty() {
         const ANSI_RED: &str = "\x1b[31m";
@@ -253,13 +252,13 @@ fn handle_frontmatter(book: &mut Book, errors: &mut HashSet<PreprocessorError>) 
     });
 }
 
-fn template_big_table_of_actions(book: &mut Book) {
+fn template_big_table_of_actions(book: &mut Book, actions: &ActionManifest) {
     for_each_chapter_mut(book, |chapter| {
         let needle = "{#ACTIONS_TABLE#}";
         if let Some(start) = chapter.content.rfind(needle) {
             chapter.content.replace_range(
                 start..start + needle.len(),
-                &generate_big_table_of_actions(),
+                &generate_big_table_of_actions(actions),
             );
         }
     });
@@ -283,6 +282,7 @@ fn escape_html_attribute(attribute: &str) -> String {
 
 fn template_and_validate_keybindings(
     book: &mut Book,
+    actions: &ActionManifest,
     errors: &mut HashSet<PreprocessorError>,
 ) -> Result<()> {
     let regex = Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").expect("valid regex literal");
@@ -294,9 +294,10 @@ fn template_and_validate_keybindings(
                 let overlay_name = caps.get(1).map(|m| m.as_str());
                 let action = caps[2].trim();
 
-                if is_missing_action(action) {
+                if is_missing_action(actions, action) {
                     errors.insert(PreprocessorError::new_for_not_found_action(
                         action.to_owned(),
+                        actions,
                     ));
                     return String::new();
                 }
@@ -334,16 +335,23 @@ fn template_and_validate_keybindings(
     Ok(())
 }
 
-fn template_and_validate_actions(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
+fn template_and_validate_actions(
+    book: &mut Book,
+    actions: &ActionManifest,
+    errors: &mut HashSet<PreprocessorError>,
+) {
     let regex = Regex::new(r"\{#action (.*?)\}").expect("valid regex literal");
 
     for_each_chapter_mut(book, |chapter| {
         chapter.content = regex
             .replace_all(&chapter.content, |caps: &regex::Captures| {
                 let name = caps[1].trim();
-                let Some(action) = find_action_by_name(name) else {
-                    if actions_available() {
-                        errors.insert(PreprocessorError::new_for_not_found_action(name.to_owned()));
+                let Some(action) = find_action_by_name(actions, name) else {
+                    if actions_available(actions) {
+                        errors.insert(PreprocessorError::new_for_not_found_action(
+                            name.to_owned(),
+                            actions,
+                        ));
                     }
                     return format!("<code class=\"hljs\">{}</code>", name);
                 };
@@ -353,20 +361,20 @@ fn template_and_validate_actions(book: &mut Book, errors: &mut HashSet<Preproces
     });
 }
 
-fn find_action_by_name(name: &str) -> Option<&ActionDef> {
-    ALL_ACTIONS
+fn find_action_by_name<'a>(actions: &'a ActionManifest, name: &str) -> Option<&'a ActionDef> {
+    actions
         .actions
         .binary_search_by(|action| action.name.as_str().cmp(name))
         .ok()
-        .map(|index| &ALL_ACTIONS.actions[index])
+        .map(|index| &actions.actions[index])
 }
 
-fn actions_available() -> bool {
-    !ALL_ACTIONS.actions.is_empty()
+fn actions_available(actions: &ActionManifest) -> bool {
+    !actions.actions.is_empty()
 }
 
-fn is_missing_action(name: &str) -> bool {
-    actions_available() && find_action_by_name(name).is_none()
+fn is_missing_action(actions: &ActionManifest, name: &str) -> bool {
+    actions_available(actions) && find_action_by_name(actions, name).is_none()
 }
 
 // Find the last binding (in keymap order) for the given action.
@@ -410,6 +418,7 @@ fn find_binding_with_overlay(
 
 fn template_and_validate_json_snippets(
     book: &mut Book,
+    actions: &ActionManifest,
     errors: &mut HashSet<PreprocessorError>,
 ) -> Result<()> {
     let params = SettingsJsonSchemaParams {
@@ -427,8 +436,7 @@ fn template_and_validate_json_snippets(
     let settings_validator = jsonschema::validator_for(&settings_schema)
         .context("failed to compile settings JSON schema")?;
 
-    let keymap_schema =
-        keymap_schema_for_actions(&ALL_ACTIONS.actions, &ALL_ACTIONS.schema_definitions);
+    let keymap_schema = keymap_schema_for_actions(&actions.actions, &actions.schema_definitions);
     let keymap_validator = jsonschema::validator_for(&keymap_schema)
         .context("failed to compile keymap JSON schema")?;
 
@@ -663,30 +671,27 @@ struct ActionManifest {
     schema_definitions: serde_json::Map<String, serde_json::Value>,
 }
 
-fn load_all_actions() -> ActionManifest {
+fn load_all_actions() -> Result<ActionManifest> {
     let asset_path = concat!(env!("CARGO_MANIFEST_DIR"), "/actions.json");
     match std::fs::read_to_string(asset_path) {
         Ok(content) => {
-            let mut manifest: ActionManifest =
-                serde_json::from_str(&content).expect("Failed to parse actions.json");
+            let mut manifest: ActionManifest = serde_json::from_str(&content)
+                .with_context(|| format!("failed to parse {asset_path}"))?;
             manifest.actions.sort_by(|a, b| a.name.cmp(&b.name));
-            manifest
+            Ok(manifest)
         }
         Err(err) => {
-            assert!(
-                std::env::var("CI").is_err(),
-                "actions.json not found at {}: {}",
-                asset_path,
-                err
-            );
+            if std::env::var("CI").is_ok() {
+                return Err(err).with_context(|| format!("actions.json not found at {asset_path}"));
+            }
             eprintln!(
                 "Warning: actions.json not found, action validation will be skipped: {}",
                 err
             );
-            ActionManifest {
+            Ok(ActionManifest {
                 actions: Vec::new(),
                 schema_definitions: serde_json::Map::new(),
-            }
+            })
         }
     }
 }
@@ -847,8 +852,8 @@ fn title_regex() -> &'static Regex {
         .get_or_init(|| Regex::new(r"<title>\s*(.*?)\s*</title>").expect("valid regex literal"))
 }
 
-fn generate_big_table_of_actions() -> String {
-    let actions = &ALL_ACTIONS.actions;
+fn generate_big_table_of_actions(actions: &ActionManifest) -> String {
+    let actions = &actions.actions;
     let mut output = String::new();
 
     let mut actions_sorted = actions.iter().collect::<Vec<_>>();
