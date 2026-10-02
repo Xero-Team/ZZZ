@@ -76,11 +76,11 @@ const FRONT_MATTER_COMMENT: &str = "<!-- ZZZ_META {} -->";
 fn main() -> Result<()> {
     zlog::init();
     zlog::init_output_stderr();
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
 
-    match args.get(0).map(String::as_str) {
+    match arguments.first().map(String::as_str) {
         Some("supports") => {
-            let renderer = args
+            let renderer = arguments
                 .get(1)
                 .context("the supports command requires a renderer argument")?;
             let supported = renderer != "not-supported";
@@ -153,16 +153,16 @@ impl PreprocessorError {
 }
 
 impl std::fmt::Display for PreprocessorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PreprocessorError::InvalidFrontmatterLine(line) => {
-                write!(f, "Invalid frontmatter line: {}", line)
+                write!(formatter, "Invalid frontmatter line: {}", line)
             }
             PreprocessorError::ActionNotFound { action_name } => {
-                write!(f, "Action not found: {}", action_name)
+                write!(formatter, "Action not found: {}", action_name)
             }
             PreprocessorError::DeprecatedActionUsed { used, should_be } => write!(
-                f,
+                formatter,
                 "Deprecated action used: {} should be {}",
                 used, should_be
             ),
@@ -173,7 +173,7 @@ impl std::fmt::Display for PreprocessorError {
                 error,
             } => {
                 write!(
-                    f,
+                    formatter,
                     "Invalid settings JSON at {}:{}\nError: {}\n\n{}",
                     file.display(),
                     line,
@@ -183,7 +183,7 @@ impl std::fmt::Display for PreprocessorError {
             }
             PreprocessorError::UnknownKeymapOverlay { overlay_name } => {
                 write!(
-                    f,
+                    formatter,
                     "Unknown keymap overlay: '{}'. Supported overlays: jetbrains",
                     overlay_name
                 )
@@ -382,23 +382,26 @@ fn is_missing_action(actions: &ActionManifest, name: &str) -> bool {
 fn find_binding_in_keymap(keymap: &KeymapFile, action: &str) -> Option<String> {
     let find = |predicate: &dyn Fn(&str) -> bool| {
         keymap.sections().rev().find_map(|section| {
-            section.bindings().rev().find_map(|(keystroke, a)| {
-                if predicate(&a.to_string()) {
-                    Some(keystroke.clone())
-                } else {
-                    None
-                }
-            })
+            section
+                .bindings()
+                .rev()
+                .find_map(|(keystroke, bound_action)| {
+                    if predicate(&bound_action.to_string()) {
+                        Some(keystroke.clone())
+                    } else {
+                        None
+                    }
+                })
         })
     };
 
     // Look for exact match
-    if let Some(binding) = find(&|a| a == action) {
+    if let Some(binding) = find(&|candidate_action| candidate_action == action) {
         return Some(binding);
     }
 
     // Look for parameterized match
-    find(&|a| name_for_action(a.to_owned()) == action)
+    find(&|candidate_action| name_for_action(candidate_action.to_owned()) == action)
 }
 
 fn find_binding(keymaps: &LoadedKeymaps, os: Os, action: &str) -> Option<String> {
@@ -443,7 +446,7 @@ fn template_and_validate_json_snippets(
     fn for_each_labeled_code_block_mut(
         book: &mut Book,
         errors: &mut HashSet<PreprocessorError>,
-        f: &dyn Fn(&str, &str) -> anyhow::Result<()>,
+        validator: &dyn Fn(&str, &str) -> anyhow::Result<()>,
     ) {
         const TAGGED_JSON_BLOCK_START: &'static str = "```json [";
         const JSON_BLOCK_END: &'static str = "```";
@@ -494,7 +497,7 @@ fn template_and_validate_json_snippets(
                 let snippet_json = &chapter.content[snippet_start..snippet_end];
                 offset = snippet_end + 3;
 
-                if let Err(err) = f(tag, snippet_json) {
+                if let Err(err) = validator(tag, snippet_json) {
                     errors.insert(PreprocessorError::new_for_invalid_settings_json(
                         chapter,
                         loc,
@@ -677,7 +680,9 @@ fn load_all_actions() -> Result<ActionManifest> {
         Ok(content) => {
             let mut manifest: ActionManifest = serde_json::from_str(&content)
                 .with_context(|| format!("failed to parse {asset_path}"))?;
-            manifest.actions.sort_by(|a, b| a.name.cmp(&b.name));
+            manifest
+                .actions
+                .sort_by(|left, right| left.name.cmp(&right.name));
             Ok(manifest)
         }
         Err(err) => {
@@ -698,8 +703,8 @@ fn load_all_actions() -> Result<ActionManifest> {
 
 fn handle_postprocessing() -> Result<()> {
     let logger = zlog::scoped!("render");
-    let mut ctx = mdbook_renderer::RenderContext::from_json(io::stdin())?;
-    let outputs = ctx
+    let mut render_context = mdbook_renderer::RenderContext::from_json(io::stdin())?;
+    let outputs = render_context
         .config
         .outputs::<serde_json::Value>()
         .context("failed to read mdBook outputs")?;
@@ -726,11 +731,11 @@ fn handle_postprocessing() -> Result<()> {
         ""
     };
 
-    ctx.config.set("output.html", zzz_html)?;
-    mdbook_html::HtmlHandlebars::new().render(&ctx)?;
+    render_context.config.set("output.html", zzz_html)?;
+    mdbook_html::HtmlHandlebars::new().render(&render_context)?;
     let ignore_list = ["toc.html"];
 
-    let root_dir = ctx.destination.clone();
+    let root_dir = render_context.destination.clone();
     let mut files = Vec::with_capacity(128);
     let mut queue = Vec::with_capacity(64);
     queue.push(root_dir.clone());
@@ -857,7 +862,7 @@ fn generate_big_table_of_actions(actions: &ActionManifest) -> String {
     let mut output = String::new();
 
     let mut actions_sorted = actions.iter().collect::<Vec<_>>();
-    actions_sorted.sort_by_key(|a| a.name.as_str());
+    actions_sorted.sort_by_key(|action| action.name.as_str());
 
     // Start the definition list with custom styling for better spacing
     output.push_str("<dl style=\"line-height: 1.8;\">\n");
@@ -921,10 +926,9 @@ fn keymap_schema_for_actions(
     let mut deprecation_messages = collections::HashMap::<&str, &str>::default();
 
     for action in actions {
-        let schema = action
-            .schema
-            .as_ref()
-            .and_then(|v| serde_json::from_value::<schemars::Schema>(v.clone()).ok());
+        let schema = action.schema.as_ref().and_then(|schema_value| {
+            serde_json::from_value::<schemars::Schema>(schema_value.clone()).ok()
+        });
         action_schemas.push((action.name.as_str(), schema));
         if let Some(doc) = &action.docs {
             documentation.insert(action.name.as_str(), doc.as_str());
@@ -934,10 +938,9 @@ fn keymap_schema_for_actions(
         }
         for alias in &action.deprecated_aliases {
             deprecations.insert(alias.as_str(), action.name.as_str());
-            let alias_schema = action
-                .schema
-                .as_ref()
-                .and_then(|v| serde_json::from_value::<schemars::Schema>(v.clone()).ok());
+            let alias_schema = action.schema.as_ref().and_then(|schema_value| {
+                serde_json::from_value::<schemars::Schema>(schema_value.clone()).ok()
+            });
             action_schemas.push((alias.as_str(), alias_schema));
         }
     }
