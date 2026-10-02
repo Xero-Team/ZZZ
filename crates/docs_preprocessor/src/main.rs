@@ -256,6 +256,18 @@ fn format_binding(binding: String) -> String {
     binding.replace("\\", "\\\\")
 }
 
+fn escape_html_text(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn escape_html_attribute(attribute: &str) -> String {
+    escape_html_text(attribute)
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
     let regex = Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").expect("valid regex literal");
 
@@ -770,9 +782,9 @@ fn handle_postprocessing() -> Result<()> {
             zlog::debug!(logger => "No meta title found for {:?}", pretty_path(&file, &root_dir));
             &default_title
         });
-        let meta_title = format!("{} | {}", page_title, meta_title);
+        let meta_title = format!("{} | {}", page_title, escape_html_text(meta_title));
         zlog::trace!(logger => "Updating {:?}", pretty_path(&file, &root_dir));
-        let contents = contents.replace("#description#", meta_description);
+        let contents = contents.replace("#description#", &escape_html_attribute(meta_description));
         let contents = contents.replace("#amplitude_key#", &amplitude_key);
         let contents = contents.replace("#consent_io_instance#", &consent_io_instance);
         let contents = contents.replace("#noindex#", noindex);
@@ -996,6 +1008,15 @@ mod tests {
         );
         assert_eq!(name_for_action("workspace::Save".into()), "workspace::Save");
         assert_eq!(format_binding("ctrl-\\".into()), "ctrl-\\\\");
+    }
+
+    #[test]
+    fn html_metadata_is_escaped_for_its_output_context() {
+        assert_eq!(
+            escape_html_attribute("A & \"quoted\" <description>"),
+            "A &amp; &quot;quoted&quot; &lt;description&gt;"
+        );
+        assert_eq!(escape_html_text("A & </title>"), "A &amp; &lt;/title&gt;");
     }
 
     #[test]
