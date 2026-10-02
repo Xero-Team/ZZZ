@@ -2,6 +2,7 @@ use gpui::{
     AnyWindowHandle, AppContext as _, Context, FocusHandle, Focusable, Global,
     StatefulInteractiveElement, Task,
 };
+use util::ResultExt as _;
 
 use crate::workspace_settings;
 
@@ -49,9 +50,10 @@ pub trait FocusFollowsMouse<E: Focusable>: StatefulInteractiveElement {
                                 return;
                             };
 
-                            let _ = cx.update_window(window, move |_view, window, cx| {
+                            cx.update_window(window, move |_view, window, cx| {
                                 window.focus(&focus, cx);
-                            });
+                            })
+                            .log_err();
                         });
                     });
 

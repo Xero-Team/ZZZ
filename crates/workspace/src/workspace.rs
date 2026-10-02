@@ -6633,7 +6633,7 @@ impl Workspace {
                 .await
                 .log_err();
 
-            let _ = project
+            project
                 .update(cx, |project, cx| {
                     project
                         .breakpoint_store()
@@ -6642,7 +6642,8 @@ impl Workspace {
                                 .with_serialized_breakpoints(serialized_workspace.breakpoints, cx)
                         })
                 })
-                .await;
+                .await
+                .log_err();
 
             // Clean up all the items that have _not_ been loaded. Our ItemIds aren't stable. That means
             // after loading the items, we might have different items and in order to avoid

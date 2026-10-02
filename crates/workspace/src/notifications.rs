@@ -130,9 +130,10 @@ impl Workspace {
                                 cx.background_executor()
                                     .timer(Duration::from_millis(dismiss_duration_ms))
                                     .await;
-                                let _ = this.update(cx, |workspace, cx| {
+                                this.update(cx, |workspace, cx| {
                                     workspace.dismiss_notification(&id, cx);
-                                });
+                                })
+                                .log_err();
                             }
                         });
                         prompt.update(cx, |prompt, _| {
