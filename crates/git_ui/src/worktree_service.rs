@@ -306,7 +306,7 @@ impl Render for WorktreeFetchFailedToast {
                         .update(cx, move |workspace, cx| {
                             open_output(operation, workspace, &output, window, cx)
                         })
-                        .ok();
+                        .log_err();
                 })),
             )
             .child(
@@ -407,7 +407,7 @@ fn create_worktree_askpass_delegate(
                     });
                 })
             })
-            .ok();
+            .log_err();
     })
 }
 
@@ -548,7 +548,7 @@ pub async fn await_and_rollback_on_failure(
                     repo.remove_worktree(rollback_path.clone(), true)
                 })
             })
-            .ok();
+            .log_err();
 
         rollback_futures.push((rollback_path.clone(), receiver));
     }
@@ -651,7 +651,7 @@ fn maybe_propagate_worktree_trust(
             });
         }
     })
-    .ok();
+    .log_err();
 
     // After trust propagation, refresh the security modal on the new workspace
     // so it dismisses itself if there are no more restricted worktrees.
@@ -660,7 +660,7 @@ fn maybe_propagate_worktree_trust(
             workspace.show_worktree_trust_security_modal(false, window, cx);
         });
     })
-    .ok();
+    .log_err();
 }
 
 /// Handles the `CreateWorktree` action generically, without any agent panel involvement.
@@ -801,7 +801,7 @@ fn handle_create_worktree_inner(
                         show_error_toast(cx.entity(), "worktree create", anyhow!("{err:#}"), cx);
                     }
                 })
-                .ok();
+                .log_err();
         }
 
         result
@@ -866,7 +866,7 @@ pub fn handle_switch_worktree(
                     workspace.set_active_worktree_creation(None, false, cx);
                     show_error_toast(cx.entity(), "worktree switch", anyhow!("{err:#}"), cx);
                 })
-                .ok();
+                .log_err();
         }
 
         result
@@ -1238,7 +1238,7 @@ async fn open_worktree_workspace(
         .update(cx, |ws, cx| {
             ws.set_active_worktree_creation(None, false, cx);
         })
-        .ok();
+        .log_err();
 
     window_handle.update(cx, |multi_workspace, window, cx| {
         multi_workspace.activate(new_workspace.clone(), source_for_transfer, window, cx);
