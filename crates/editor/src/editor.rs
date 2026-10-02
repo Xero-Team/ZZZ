@@ -2225,7 +2225,7 @@ impl Editor {
                                             window,
                                             cx,
                                         )
-                                        .ok();
+                                        .log_err();
                                 }
                             }
                         }
