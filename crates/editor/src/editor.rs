@@ -7326,20 +7326,20 @@ impl Editor {
                         run_to_cursor_label.clone(),
                         Some(RunToCursor.boxed_clone()),
                         move |window, cx| {
-                            weak_editor
-                                .update(cx, |editor, cx| {
-                                    editor.change_selections(
-                                        SelectionEffects::no_scroll(),
-                                        window,
-                                        cx,
-                                        |s| {
-                                            s.select_ranges(
-                                                [Point::new(row, 0)..Point::new(row, 0)],
-                                            )
-                                        },
-                                    );
-                                })
-                                .ok();
+                            let Some(editor) = weak_editor.upgrade() else {
+                                return;
+                            };
+                            editor.update(cx, |editor, cx| {
+                                editor.change_selections(
+                                    SelectionEffects::no_scroll(),
+                                    window,
+                                    cx,
+                                    |selections| {
+                                        selections
+                                            .select_ranges([Point::new(row, 0)..Point::new(row, 0)])
+                                    },
+                                );
+                            });
 
                             window.dispatch_action(Box::new(RunToCursor), cx);
                         },
