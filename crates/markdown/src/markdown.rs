@@ -491,6 +491,8 @@ pub struct Markdown {
     options: MarkdownOptions,
     mermaid_state: MermaidState,
     _mermaid_theme_subscription: Option<Subscription>,
+    _mermaid_settings_subscription: Option<Subscription>,
+    mermaid_ui_font_family: Option<SharedString>,
     mermaid_views: HashMap<usize, MermaidViewState>,
     math_state: MathState,
     copied_code_blocks: HashSet<ElementId>,
@@ -666,8 +668,21 @@ impl Markdown {
         cx: &mut Context<Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
+        let mermaid_ui_font_family = options
+            .render_mermaid_diagrams
+            .then(|| ThemeSettings::get_global(cx).ui_font.family.clone());
         let theme_subscription = options.render_mermaid_diagrams.then(|| {
             cx.observe_global::<theme::GlobalTheme>(|this: &mut Self, cx| {
+                this.invalidate_mermaid_cache(cx);
+            })
+        });
+        let settings_subscription = options.render_mermaid_diagrams.then(|| {
+            cx.observe_global::<settings::SettingsStore>(|this: &mut Self, cx| {
+                let current_font_family = ThemeSettings::get_global(cx).ui_font.family.clone();
+                if this.mermaid_ui_font_family.as_ref() == Some(&current_font_family) {
+                    return;
+                }
+                this.mermaid_ui_font_family = Some(current_font_family);
                 this.invalidate_mermaid_cache(cx);
             })
         });
@@ -688,6 +703,8 @@ impl Markdown {
             options,
             mermaid_state: MermaidState::default(),
             _mermaid_theme_subscription: theme_subscription,
+            _mermaid_settings_subscription: settings_subscription,
+            mermaid_ui_font_family,
             mermaid_views: HashMap::default(),
             math_state: MathState::default(),
             copied_code_blocks: HashSet::default(),

@@ -444,14 +444,19 @@ fn is_supported_diagram_type(source: &str) -> bool {
         "xychart-beta",
         "journey",
     ];
-    let first_token = source
-        .trim_start()
-        .split(|c: char| c.is_whitespace() || c == '\n')
-        .next()
-        .unwrap_or("");
+    // Mermaid permits comments and directives before the diagram declaration,
+    // for example `%%{init: {"theme": "base"}}%%`. They are metadata rather
+    // than diagram types, so keep looking until the first real declaration.
+    let first_token = source.lines().find_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("%%") {
+            return None;
+        }
+        line.split_whitespace().next()
+    });
     SUPPORTED_PREFIXES
         .iter()
-        .any(|prefix| first_token.eq_ignore_ascii_case(prefix))
+        .any(|prefix| first_token.is_some_and(|token| token.eq_ignore_ascii_case(prefix)))
 }
 
 pub(crate) fn extract_mermaid_diagrams(
@@ -483,8 +488,7 @@ pub(crate) fn extract_mermaid_diagrams(
         };
 
         let contents = source[metadata.content_range.clone()]
-            .strip_suffix('\n')
-            .unwrap_or(&source[metadata.content_range.clone()])
+            .trim_end_matches(['\r', '\n'])
             .to_string();
         if !is_supported_diagram_type(&contents) {
             continue;
@@ -1256,6 +1260,45 @@ mod tests {
                 .next()
                 .map(|diagram| diagram.contents.contents.as_ref()),
             Some("graph TD;")
+        );
+    }
+
+    #[test]
+    fn test_extract_mermaid_diagrams_skips_leading_comments_and_directives() {
+        let markdown = concat!(
+            "```mermaid\n",
+            "%% a diagram comment\n",
+            "%%{init: {\"theme\": \"base\"}}%%\n",
+            "flowchart TD\n",
+            "    A --> B\n",
+            "```",
+        );
+        let events =
+            crate::parser::parse_markdown_with_options(markdown, false, false, false).events;
+        let diagrams = extract_mermaid_diagrams(markdown, &events);
+
+        assert_eq!(diagrams.len(), 1);
+        assert!(diagrams.values().next().is_some_and(|diagram| {
+            diagram
+                .contents
+                .contents
+                .starts_with("%% a diagram comment")
+        }));
+    }
+
+    #[test]
+    fn test_extract_mermaid_diagrams_strips_crlf_closing_line_ending() {
+        let markdown = "```mermaid\r\nflowchart TD\r\n    A --> B\r\n```";
+        let events =
+            crate::parser::parse_markdown_with_options(markdown, false, false, false).events;
+        let diagrams = extract_mermaid_diagrams(markdown, &events);
+
+        assert_eq!(
+            diagrams
+                .values()
+                .next()
+                .map(|diagram| diagram.contents.contents.as_ref()),
+            Some("flowchart TD\r\n    A --> B")
         );
     }
 
