@@ -6284,8 +6284,11 @@ impl Editor {
                     .timer(CODE_ACTIONS_DEBOUNCE_TIMEOUT)
                     .await;
 
-                let (start_buffer, start, _, end, _newest_selection) = editor
-                    .update(cx, |editor, cx| {
+                let (start_buffer, start, _, end, _newest_selection) = {
+                    let Some(editor) = editor.upgrade() else {
+                        return None;
+                    };
+                    editor.update(cx, |editor, cx| {
                         let newest_selection = editor.selections.newest_anchor().clone();
                         if newest_selection.head().diff_base_anchor().is_some() {
                             return None;
@@ -6302,12 +6305,14 @@ impl Editor {
 
                         Some((start_buffer, start, end_buffer, end, newest_selection))
                     })
-                    .ok()
-                    .flatten()
-                    .filter(|(start_buffer, _, end_buffer, _, _)| start_buffer == end_buffer)?;
+                }
+                .filter(|(start_buffer, _, end_buffer, _, _)| start_buffer == end_buffer)?;
 
-                let (providers, tasks) = editor
-                    .update_in(cx, |editor, window, cx| {
+                let (providers, tasks) = {
+                    let Some(editor) = editor.upgrade() else {
+                        return None;
+                    };
+                    let Ok(providers_and_tasks) = editor.update_in(cx, |editor, window, cx| {
                         let providers = editor.code_action_providers.clone();
                         let tasks = editor
                             .code_action_providers
@@ -6317,8 +6322,11 @@ impl Editor {
                             })
                             .collect::<Vec<_>>();
                         (providers, tasks)
-                    })
-                    .ok()?;
+                    }) else {
+                        return None;
+                    };
+                    providers_and_tasks
+                };
 
                 let mut actions = Vec::new();
                 for (provider, provider_actions) in
@@ -6334,28 +6342,28 @@ impl Editor {
                     }
                 }
 
-                editor
-                    .update(cx, |editor, cx| {
-                        let new_actions = if actions.is_empty() {
-                            editor.code_actions_for_selection = CodeActionsForSelection::None;
-                            None
-                        } else {
-                            let new_actions = ActionFetchReady {
-                                location: Location {
-                                    buffer: start_buffer,
-                                    range: start..end,
-                                },
-                                actions: Rc::from(actions),
-                            };
-                            editor.code_actions_for_selection =
-                                CodeActionsForSelection::Ready(new_actions.clone());
-                            Some(new_actions)
+                let Some(editor) = editor.upgrade() else {
+                    return None;
+                };
+                editor.update(cx, |editor, cx| {
+                    let new_actions = if actions.is_empty() {
+                        editor.code_actions_for_selection = CodeActionsForSelection::None;
+                        None
+                    } else {
+                        let new_actions = ActionFetchReady {
+                            location: Location {
+                                buffer: start_buffer,
+                                range: start..end,
+                            },
+                            actions: Rc::from(actions),
                         };
-                        cx.notify();
-                        new_actions
-                    })
-                    .ok()
-                    .flatten()
+                        editor.code_actions_for_selection =
+                            CodeActionsForSelection::Ready(new_actions.clone());
+                        Some(new_actions)
+                    };
+                    cx.notify();
+                    new_actions
+                })
             })
             .shared(),
         );
