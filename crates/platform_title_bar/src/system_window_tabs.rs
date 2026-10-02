@@ -11,6 +11,7 @@ use ui::{
     Color, ContextMenu, DynamicSpacing, IconButton, IconButtonShape, IconName, IconSize, Label,
     LabelSize, Tab, h_flex, prelude::*, right_click_menu,
 };
+use util::ResultExt;
 use workspace::{
     CloseWindow, ItemSettings, Workspace, WorkspaceSettings,
     item::{ClosePosition, ShowCloseButton},
@@ -75,21 +76,23 @@ impl SystemWindowTabs {
             }
 
             cx.windows().iter().for_each(|handle| {
-                let _ = handle.update(cx, |_, window, cx| {
-                    window.set_tabbing_identifier(tabbing_identifier.clone());
-                    if use_system_window_tabs {
-                        let tabs = if let Some(tabs) = window.tabbed_windows() {
-                            tabs
-                        } else {
-                            vec![SystemWindowTab::new(
-                                SharedString::from(window.window_title()),
-                                window.window_handle(),
-                            )]
-                        };
+                handle
+                    .update(cx, |_, window, cx| {
+                        window.set_tabbing_identifier(tabbing_identifier.clone());
+                        if use_system_window_tabs {
+                            let tabs = if let Some(tabs) = window.tabbed_windows() {
+                                tabs
+                            } else {
+                                vec![SystemWindowTab::new(
+                                    SharedString::from(window.window_title()),
+                                    window.window_handle(),
+                                )]
+                            };
 
-                        SystemWindowTabController::add_tab(cx, handle.window_id(), tabs);
-                    }
-                });
+                            SystemWindowTabController::add_tab(cx, handle.window_id(), tabs);
+                        }
+                    })
+                    .log_err();
             });
         })
         .detach();
@@ -224,17 +227,21 @@ impl SystemWindowTabs {
                 })
             })
             .on_click(move |_, _, cx| {
-                let _ = item.handle.update(cx, |_, window, _| {
-                    window.activate_window();
-                });
+                item.handle
+                    .update(cx, |_, window, _| {
+                        window.activate_window();
+                    })
+                    .log_err();
             })
             .on_mouse_up(MouseButton::Middle, move |_, window, cx| {
                 if item.handle.window_id() == window.window_handle().window_id() {
                     window.dispatch_action(Box::new(CloseWindow), cx);
                 } else {
-                    let _ = item.handle.update(cx, |_, window, cx| {
-                        window.dispatch_action(Box::new(CloseWindow), cx);
-                    });
+                    item.handle
+                        .update(cx, |_, window, cx| {
+                            window.dispatch_action(Box::new(CloseWindow), cx);
+                        })
+                        .log_err();
                 }
             })
             .child(label)
@@ -262,9 +269,12 @@ impl SystemWindowTabs {
                                         {
                                             window.dispatch_action(Box::new(CloseWindow), cx);
                                         } else {
-                                            let _ = item.handle.update(cx, |_, window, cx| {
-                                                window.dispatch_action(Box::new(CloseWindow), cx);
-                                            });
+                                            item.handle
+                                                .update(cx, |_, window, cx| {
+                                                    window
+                                                        .dispatch_action(Box::new(CloseWindow), cx);
+                                                })
+                                                .log_err();
                                         }
                                     }
                                 })
@@ -387,9 +397,11 @@ impl SystemWindowTabs {
                 if tab.id == window.window_handle().window_id() {
                     action(window, cx);
                 } else {
-                    let _ = tab.handle.update(cx, |_view, window, cx| {
-                        action(window, cx);
-                    });
+                    tab.handle
+                        .update(cx, |_view, window, cx| {
+                            action(window, cx);
+                        })
+                        .log_err();
                 }
             }
         }
@@ -449,9 +461,11 @@ impl Render for SystemWindowTabs {
                         if tab.id == window.window_handle().window_id() {
                             window.move_tab_to_new_window();
                         } else {
-                            let _ = tab.handle.update(cx, |_, window, _cx| {
-                                window.move_tab_to_new_window();
-                            });
+                            tab.handle
+                                .update(cx, |_, window, _cx| {
+                                    window.move_tab_to_new_window();
+                                })
+                                .log_err();
                         }
                     }
                 }),
