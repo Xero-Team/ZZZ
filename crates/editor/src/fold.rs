@@ -344,14 +344,17 @@ impl Editor {
             self.fold_creases(fold_ranges, true, window, cx);
         } else {
             self.toggle_fold_multiple_buffers = cx.spawn_in(window, async move |editor, cx| {
-                editor
-                    .update_in(cx, |editor, _, cx| {
-                        let snapshot = editor.buffer.read(cx).snapshot(cx);
-                        for buffer_id in snapshot.all_buffer_ids() {
-                            editor.fold_buffer(buffer_id, cx);
-                        }
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                let Ok(()) = editor.update_in(cx, |editor, _, cx| {
+                    let snapshot = editor.buffer.read(cx).snapshot(cx);
+                    for buffer_id in snapshot.all_buffer_ids() {
+                        editor.fold_buffer(buffer_id, cx);
+                    }
+                }) else {
+                    return;
+                };
             });
         }
     }
@@ -533,14 +536,15 @@ impl Editor {
             );
         } else {
             self.toggle_fold_multiple_buffers = cx.spawn(async move |editor, cx| {
-                editor
-                    .update(cx, |editor, cx| {
-                        let snapshot = editor.buffer.read(cx).snapshot(cx);
-                        for buffer_id in snapshot.all_buffer_ids() {
-                            editor.unfold_buffer(buffer_id, cx);
-                        }
-                    })
-                    .ok();
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                editor.update(cx, |editor, cx| {
+                    let snapshot = editor.buffer.read(cx).snapshot(cx);
+                    for buffer_id in snapshot.all_buffer_ids() {
+                        editor.unfold_buffer(buffer_id, cx);
+                    }
+                });
             });
         }
     }
@@ -915,11 +919,11 @@ impl Editor {
         let task = cx.background_spawn(async move {
             let new_newlines = snapshot
                 .buffer_chars_at(MultiBufferOffset(0))
-                .filter_map(|(c, i)| {
-                    if c == '\n' {
+                .filter_map(|(character, offset)| {
+                    if character == '\n' {
                         Some(
-                            snapshot.buffer_snapshot().anchor_after(i)
-                                ..snapshot.buffer_snapshot().anchor_before(i + 1usize),
+                            snapshot.buffer_snapshot().anchor_after(offset)
+                                ..snapshot.buffer_snapshot().anchor_before(offset + 1usize),
                         )
                     } else {
                         None
@@ -939,7 +943,7 @@ impl Editor {
 
             (new_newlines, existing_newlines)
         });
-        self.folding_newlines = cx.spawn(async move |this, cx| {
+        self.folding_newlines = cx.spawn(async move |editor, cx| {
             let (new_newlines, existing_newlines) = task.await;
             if new_newlines == existing_newlines {
                 return;
@@ -964,13 +968,15 @@ impl Editor {
                 .into_iter()
                 .map(|range| Crease::simple(range, placeholder.clone()))
                 .collect();
-            this.update(cx, |this, cx| {
-                this.display_map.update(cx, |display_map, cx| {
+            let Some(editor) = editor.upgrade() else {
+                return;
+            };
+            editor.update(cx, |editor, cx| {
+                editor.display_map.update(cx, |display_map, cx| {
                     display_map.remove_folds_with_type(existing_newlines, type_id, cx);
                     display_map.fold(creases, cx);
                 });
-            })
-            .ok();
+            });
         });
     }
 
