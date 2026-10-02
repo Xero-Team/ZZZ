@@ -1597,12 +1597,24 @@ fn dispatch_apply_templates(
                 return;
             }
 
-            let worktree = workspace.read_with(cx, |workspace, cx| {
+            let Some(worktree) = workspace.read_with(cx, |workspace, cx| {
                 workspace.project().read(cx).worktree_for_id(tree_id, cx)
-            });
+            }) else {
+                this.update_in(cx, |this, window, cx| {
+                    this.accept_message(
+                        DevContainerMessage::FailedToWriteTemplate(
+                            DevContainerError::NotInValidProject,
+                        ),
+                        window,
+                        cx,
+                    );
+                })
+                .ok();
+                return;
+            };
 
             let files = match apply_devcontainer_template(
-                worktree.expect("value should be present"),
+                worktree,
                 &template_entry.template,
                 &template_entry.options_selected,
                 &template_entry.features_selected,
