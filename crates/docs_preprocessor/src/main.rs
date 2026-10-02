@@ -193,7 +193,7 @@ fn handle_preprocessing() -> Result<()> {
     template_big_table_of_actions(&mut book);
     template_and_validate_keybindings(&mut book, &mut errors);
     template_and_validate_actions(&mut book, &mut errors);
-    template_and_validate_json_snippets(&mut book, &mut errors);
+    template_and_validate_json_snippets(&mut book, &mut errors)?;
 
     if !errors.is_empty() {
         const ANSI_RED: &str = "\x1b[31m";
@@ -394,7 +394,10 @@ fn find_binding_with_overlay(
         .or_else(|| find_binding(os, action))
 }
 
-fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
+fn template_and_validate_json_snippets(
+    book: &mut Book,
+    errors: &mut HashSet<PreprocessorError>,
+) -> Result<()> {
     let params = SettingsJsonSchemaParams {
         language_names: &[],
         font_names: &[],
@@ -408,12 +411,12 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
     };
     let settings_schema = SettingsStore::json_schema(&params);
     let settings_validator = jsonschema::validator_for(&settings_schema)
-        .expect("failed to compile settings JSON schema");
+        .context("failed to compile settings JSON schema")?;
 
     let keymap_schema =
         keymap_schema_for_actions(&ALL_ACTIONS.actions, &ALL_ACTIONS.schema_definitions);
-    let keymap_validator =
-        jsonschema::validator_for(&keymap_schema).expect("failed to compile keymap JSON schema");
+    let keymap_validator = jsonschema::validator_for(&keymap_schema)
+        .context("failed to compile keymap JSON schema")?;
 
     fn for_each_labeled_code_block_mut(
         book: &mut Book,
@@ -569,6 +572,7 @@ fn template_and_validate_json_snippets(book: &mut Book, errors: &mut HashSet<Pre
         };
         Ok(())
     });
+    Ok(())
 }
 
 /// Removes any configurable options from the stringified action if existing,
