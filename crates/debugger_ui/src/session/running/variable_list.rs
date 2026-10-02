@@ -228,6 +228,7 @@ impl VariableList {
                     this.selection.take();
                     this.edited_path.take();
                     this.selected_stack_frame_id.take();
+                    this.build_entries(cx);
                 }
                 SessionEvent::Variables | SessionEvent::Watchers => {
                     this.build_entries(cx);
@@ -274,6 +275,9 @@ impl VariableList {
 
     fn build_entries(&mut self, cx: &mut Context<Self>) {
         let Some(stack_frame_id) = self.selected_stack_frame_id else {
+            self.entries.clear();
+            self.max_width_index = None;
+            cx.notify();
             return;
         };
 
@@ -312,6 +316,7 @@ impl VariableList {
                 )
             })
             .collect::<Vec<_>>();
+        let scopes_count = stack.len();
 
         let watches = self.session.read(cx).watchers().clone();
         stack.extend(
@@ -327,8 +332,6 @@ impl VariableList {
                 })
                 .collect::<Vec<_>>(),
         );
-
-        let scopes_count = stack.len();
 
         while let Some((container_reference, variables_reference, mut path, dap_kind)) = stack.pop()
         {
@@ -776,12 +779,6 @@ impl VariableList {
                             tr(cx, "debugger_ui.variable_list.copy_value", "Copy Value"),
                             CopyVariableValue.boxed_clone(),
                         )
-                        .when(supports_set_variable, |menu| {
-                            menu.action(
-                                tr(cx, "debugger_ui.variable_list.edit_value", "Edit Value"),
-                                EditVariable.boxed_clone(),
-                            )
-                        })
                         .action(
                             tr(cx, "debugger_ui.variable_list.remove_watch", "Remove Watch"),
                             RemoveWatch.boxed_clone(),
@@ -845,7 +842,7 @@ impl VariableList {
         });
 
         let session = self.session.downgrade();
-        let access_type = data_info.access_type;
+        let requested_access_type = data_info.access_type;
         cx.spawn(async move |_, cx| {
             let Some((data_id, access_types)) = data_breakpoint
                 .await
@@ -859,8 +856,11 @@ impl VariableList {
             let access_type = match access_types {
                 None => None,
                 Some(access_types) => {
-                    if access_type.is_some_and(|access_type| access_types.contains(&access_type)) {
-                        access_type
+                    if let Some(requested_access_type) = requested_access_type {
+                        if !access_types.contains(&requested_access_type) {
+                            return;
+                        }
+                        Some(requested_access_type)
                     } else {
                         None
                     }
@@ -1181,7 +1181,8 @@ impl VariableList {
                     } else {
                         this.text_color(cx.theme().colors().text_muted)
                             .when(
-                                !self.disabled
+                                entry.as_variable().is_some()
+                                    && !self.disabled
                                     && self
                                         .session
                                         .read(cx)
@@ -1251,7 +1252,7 @@ impl VariableList {
 
         for (i, (byte_idx, _)) in s.char_indices().enumerate() {
             if i == start_chars {
-                start_boundary = byte_idx.max(MIN_LENGTH);
+                start_boundary = byte_idx;
             }
 
             if i == skip_chars {
@@ -1715,6 +1716,11 @@ mod tests {
         assert_eq!(
             VariableList::center_truncate_string("😀->happy->face->😎->cool", 15),
             "😀->hap...->cool"
+        );
+
+        assert_eq!(
+            VariableList::center_truncate_string("a😀bcdefgh", 6),
+            "a...gh"
         );
     }
 }
