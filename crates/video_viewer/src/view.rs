@@ -17,7 +17,7 @@ use gpui::{
 use i18n::tr;
 use project::{Project, ProjectPath};
 use rodio::{Decoder, Player};
-use util::rel_path::RelPath;
+use util::{ResultExt, rel_path::RelPath};
 use video::{VideoDecoder, VideoFrame, VideoMetadata};
 
 use crate::{
@@ -278,7 +278,7 @@ impl VideoView {
                             view.present_frame(frame, cx);
                         }
                     })
-                    .ok();
+                    .log_err();
                 }
                 Ok(None) => {}
                 Err(error) => log::warn!("decoding video poster frame: {error:#}"),
@@ -319,7 +319,7 @@ impl VideoView {
                     );
                     cx.notify();
                 })
-                .ok();
+                .log_err();
                 return;
             };
 
@@ -382,7 +382,7 @@ impl VideoView {
                         cx.emit(VideoViewEvent::TitleChanged);
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
                 }
                 Err(error) => {
                     Self::set_error(&this, error.to_string(), cx);
@@ -401,7 +401,7 @@ impl VideoView {
             view.load_state = LoadState::Error(message);
             cx.notify();
         })
-        .ok();
+        .log_err();
     }
 
     pub(crate) fn loaded(&self) -> Option<&LoadedVideo> {
@@ -638,9 +638,10 @@ impl VideoView {
                 if buffered.is_empty() {
                     let looping = this.update(cx, |view, _| view.looping).unwrap_or(false);
                     if looping {
-                        this.update(cx, |view, cx| view.restart_loop(cx)).ok();
+                        this.update(cx, |view, cx| view.restart_loop(cx)).log_err();
                     } else {
-                        this.update(cx, |view, cx| view.finish_playback(cx)).ok();
+                        this.update(cx, |view, cx| view.finish_playback(cx))
+                            .log_err();
                     }
                     break;
                 }
@@ -666,7 +667,7 @@ impl VideoView {
                         continue;
                     };
                     this.update(cx, |view, cx| view.present_frame(frame, cx))
-                        .ok();
+                        .log_err();
                     cx.background_executor().timer(tick).await;
                 } else {
                     let wait = front.pts().saturating_sub(target).clamp(MIN_TICK, tick);
@@ -833,7 +834,7 @@ impl VideoView {
             match decoded {
                 Ok(Some(frame)) => {
                     this.update(cx, |view, cx| view.present_frame(frame, cx))
-                        .ok();
+                        .log_err();
                 }
                 Ok(None) => {}
                 Err(error) => log::warn!("previewing video frame: {error:#}"),
@@ -1044,7 +1045,7 @@ async fn refill_frames(
                         view.fail_playback(message, cx);
                     }
                 })
-                .ok();
+                .log_err();
                 return false;
             }
         }

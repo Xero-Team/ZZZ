@@ -5,6 +5,7 @@ use gpui::{
 };
 use i18n::tr;
 use ui::{IconName, Label, LabelSize, Tooltip, prelude::*};
+use util::ResultExt;
 use workspace::{
     HideStatusItem, ItemHandle, StatusItemView, ToolbarItemEvent, ToolbarItemLocation,
     ToolbarItemView, Workspace,
@@ -417,7 +418,7 @@ fn bounds_capture(
 ) -> impl IntoElement {
     canvas(
         move |bounds, _window, cx| {
-            view.update(cx, |view, _cx| assign(view, bounds)).ok();
+            view.update(cx, |view, _cx| assign(view, bounds)).log_err();
         },
         |_, _, _, _| {},
     )
