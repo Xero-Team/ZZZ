@@ -1,0 +1,12 @@
+dependency	consumer_crates
+gpui	147
+ui	68
+component	13
+ui_input	13
+gpui_platform	11
+gpui_util	10
+gpui_tokio	6
+gpui_shared_string	4
+gpui_macros	2
+ui_macros	1
+ui_prompt	1

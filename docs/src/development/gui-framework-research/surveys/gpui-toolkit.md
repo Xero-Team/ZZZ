@@ -1,0 +1,395 @@
+# Static survey: gpui-toolkit
+
+- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/gpui-toolkit`
+- HEAD: `321f98e5d0041bd8e8f8c892afcfd92307fb803d`
+- Tracked files: 2833
+
+## Top-level subsystems
+
+- `crates`: 2596 files
+- `qa`: 84 files
+- `scripts`: 79 files
+- `assets`: 21 files
+- `docs`: 9 files
+- `builds`: 8 files
+- `.github`: 5 files
+- `fuzz`: 3 files
+- `.cargo`: 1 files
+- `.config`: 1 files
+- `.dockerignore`: 1 files
+- `.gitignore`: 1 files
+- `AGENTS.md`: 1 files
+- `CHANGELOG.md`: 1 files
+- `CODE_OF_CONDUCT.md`: 1 files
+- `CONTRIBUTING.md`: 1 files
+- `Cargo.lock`: 1 files
+- `Cargo.toml`: 1 files
+- `Justfile`: 1 files
+- `LICENSE`: 1 files
+- `README.md`: 1 files
+- `RELEASE.md`: 1 files
+- `SECURITY.md`: 1 files
+- `SUPPORT.md`: 1 files
+- `TUTORIAL.md`: 1 files
+- `WHATSNEW.md`: 1 files
+- `clippy.toml`: 1 files
+- `deny.toml`: 1 files
+- `figma`: 1 files
+- `gpui-skill.md`: 1 files
+
+## Manifests
+
+- `Cargo.toml`
+- `crates/3rdparties/block/Cargo.toml`
+- `crates/3rdparties/collections/Cargo.toml`
+- `crates/3rdparties/derive_refineable/Cargo.toml`
+- `crates/3rdparties/gpui/Cargo.toml`
+- `crates/3rdparties/gpui_linux/Cargo.toml`
+- `crates/3rdparties/gpui_macos/Cargo.toml`
+- `crates/3rdparties/gpui_macros/Cargo.toml`
+- `crates/3rdparties/gpui_shared_string/Cargo.toml`
+- `crates/3rdparties/gpui_util/Cargo.toml`
+- `crates/3rdparties/gpui_web/Cargo.toml`
+- `crates/3rdparties/gpui_wgpu/Cargo.toml`
+- `crates/3rdparties/gpui_windows/Cargo.toml`
+- `crates/3rdparties/http_client/Cargo.toml`
+- `crates/3rdparties/mach2/Cargo.toml`
+- `crates/3rdparties/media/Cargo.toml`
+- `crates/3rdparties/objc/Cargo.toml`
+- `crates/3rdparties/perf/Cargo.toml`
+- `crates/3rdparties/psm/Cargo.toml`
+- `crates/3rdparties/refineable/Cargo.toml`
+- `crates/3rdparties/refineable/derive_refineable/Cargo.toml`
+- `crates/3rdparties/scheduler/Cargo.toml`
+- `crates/3rdparties/sum_tree/Cargo.toml`
+- `crates/3rdparties/util/Cargo.toml`
+- `crates/3rdparties/util_macros/Cargo.toml`
+- `crates/3rdparties/zed-font-kit/Cargo.toml`
+- `crates/gpui-android/Cargo.toml`
+- `crates/gpui-au/Cargo.toml`
+- `crates/gpui-audio-kit/Cargo.toml`
+- `crates/gpui-builder/Cargo.toml`
+- `crates/gpui-component-lab/Cargo.toml`
+- `crates/gpui-d3rs/Cargo.toml`
+- `crates/gpui-d3rs/golden/package.json`
+- `crates/gpui-design-tools/Cargo.toml`
+- `crates/gpui-design/Cargo.toml`
+- `crates/gpui-hello-web/Cargo.toml`
+- `crates/gpui-ios/Cargo.toml`
+- `crates/gpui-keybinding/Cargo.toml`
+- `crates/gpui-miniapp/Cargo.toml`
+- `crates/gpui-pretext/Cargo.toml`
+- `crates/gpui-profiler/Cargo.toml`
+- `crates/gpui-px/Cargo.toml`
+- `crates/gpui-python-runtime/Cargo.toml`
+- `crates/gpui-python-runtime/pyproject.toml`
+- `crates/gpui-release-gates/Cargo.toml`
+- `crates/gpui-scaffolder/Cargo.toml`
+- `crates/gpui-showcase/Cargo.toml`
+- `crates/gpui-showcase/android/Cargo.toml`
+- `crates/gpui-showcase/ios/Cargo.toml`
+- `crates/gpui-showcase/tvos/Cargo.toml`
+- `crates/gpui-themes/Cargo.toml`
+- `crates/gpui-toolkit/Cargo.toml`
+- `crates/gpui-ui-kit-macros/Cargo.toml`
+- `crates/gpui-ui-kit/Cargo.toml`
+- `fuzz/Cargo.toml`
+- `pyproject.toml`
+
+## Candidate entrypoints
+
+- `crates/3rdparties/block/src/lib.rs`
+- `crates/3rdparties/gpui_util/src/lib.rs`
+- `crates/3rdparties/mach2/src/lib.rs`
+- `crates/3rdparties/objc/src/lib.rs`
+- `crates/3rdparties/perf/src/lib.rs`
+- `crates/3rdparties/perf/src/main.rs`
+- `crates/3rdparties/psm/src/lib.rs`
+- `crates/3rdparties/zed-font-kit/src/lib.rs`
+- `crates/gpui-android/src/lib.rs`
+- `crates/gpui-au/src/lib.rs`
+- `crates/gpui-audio-kit/src/lib.rs`
+- `crates/gpui-builder/src/lib.rs`
+- `crates/gpui-component-lab/src/lib.rs`
+- `crates/gpui-d3rs/bin/showcase/main.rs`
+- `crates/gpui-d3rs/bin/spinorama_demo/main.rs`
+- `crates/gpui-d3rs/src/lib.rs`
+- `crates/gpui-design-tools/src/lib.rs`
+- `crates/gpui-design/src/lib.rs`
+- `crates/gpui-hello-web/src/main.rs`
+- `crates/gpui-ios/src/lib.rs`
+- `crates/gpui-keybinding/src/lib.rs`
+- `crates/gpui-miniapp/src/lib.rs`
+- `crates/gpui-pretext/src/lib.rs`
+- `crates/gpui-profiler/src/lib.rs`
+- `crates/gpui-px/src/lib.rs`
+- `crates/gpui-python-runtime/python/gpui_toolkit/app.py`
+- `crates/gpui-python-runtime/src/lib.rs`
+- `crates/gpui-release-gates/src/lib.rs`
+- `crates/gpui-scaffolder/src/lib.rs`
+- `crates/gpui-scaffolder/src/main.rs`
+- `crates/gpui-showcase/android/src/lib.rs`
+- `crates/gpui-showcase/ios/src/lib.rs`
+- `crates/gpui-showcase/src/lib.rs`
+- `crates/gpui-showcase/src/main.rs`
+- `crates/gpui-showcase/tvos/src/lib.rs`
+- `crates/gpui-themes/src/lib.rs`
+- `crates/gpui-toolkit/src/lib.rs`
+- `crates/gpui-ui-kit-macros/src/lib.rs`
+- `crates/gpui-ui-kit/src/lib.rs`
+
+## Tests, benchmarks, and evals
+
+- `crates/3rdparties/block/src/test_utils.rs`
+- `crates/3rdparties/gpui/src/app/test_app.rs`
+- `crates/3rdparties/gpui/src/app/test_context.rs`
+- `crates/3rdparties/gpui/src/platform/test/dispatcher.rs`
+- `crates/3rdparties/gpui/src/platform/test/display.rs`
+- `crates/3rdparties/gpui/src/platform/test/platform.rs`
+- `crates/3rdparties/gpui/src/platform/test/window.rs`
+- `crates/3rdparties/gpui/tests/action_macros.rs`
+- `crates/3rdparties/gpui_macros/tests/derive_context.rs`
+- `crates/3rdparties/gpui_macros/tests/derive_inspector_reflection.rs`
+- `crates/3rdparties/gpui_macros/tests/render_test.rs`
+- `crates/3rdparties/objc/src/test_utils.rs`
+- `crates/3rdparties/psm/tests/stack_direction.rs`
+- `crates/3rdparties/psm/tests/stack_direction_2.rs`
+- `crates/3rdparties/scheduler/src/test_scheduler.rs`
+- `crates/3rdparties/util/src/test/assertions.rs`
+- `crates/3rdparties/util/src/test/git.rs`
+- `crates/3rdparties/util/src/test/marked_text.rs`
+- `crates/3rdparties/zed-font-kit/tests/select_font.rs`
+- `crates/3rdparties/zed-font-kit/tests/tests.rs`
+- `crates/3rdparties/zed-font-kit/tests/tests/check.rs`
+- `crates/3rdparties/zed-font-kit/tests/tests/consts.rs`
+- `crates/3rdparties/zed-font-kit/tests/tests/misc.rs`
+- `crates/gpui-audio-kit/tests/allocation_contracts.rs`
+- `crates/gpui-audio-kit/tests/components.rs`
+- `crates/gpui-audio-kit/tests/components/potentiometer_test.rs`
+- `crates/gpui-audio-kit/tests/components/vertical_slider_test.rs`
+- `crates/gpui-audio-kit/tests/components/volume_knob_test.rs`
+- `crates/gpui-audio-kit/tests/design_tokens.rs`
+- `crates/gpui-audio-kit/tests/integration.rs`
+- `crates/gpui-audio-kit/tests/integration/design_tokens_render.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/disabled_pot_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_drag_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_keyboard_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_log_scale_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_percentage_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_reset_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_scroll_wheel_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_select_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/pot_value_change_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/potentiometer_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/potentiometer_test/test.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/drag_callback_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/reset_callback_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/select_callback_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_change_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_click_step_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_disabled_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_drag_start_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_keyboard_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_log_scale_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_percentage_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_reset_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_scroll_wheel_disabled_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_scroll_wheel_log_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_scroll_wheel_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_select_and_drag_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_select_interaction_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/slider_track_click_view.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/test.rs`
+- `crates/gpui-audio-kit/tests/integration/vertical_slider_test/vertical_slider_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test/mute_toggle_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test/test.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test/volume_change_test_view.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test/volume_knob_keyboard_view.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test/volume_knob_scroll_wheel_view.rs`
+- `crates/gpui-audio-kit/tests/integration/volume_knob_test/volume_knob_test_view.rs`
+- `crates/gpui-builder/tests/allocation_contracts.rs`
+- `crates/gpui-builder/tests/proptests.rs`
+- `crates/gpui-component-lab/src/lib/tests/misc.rs`
+- `crates/gpui-component-lab/tests/allocation_contracts.rs`
+- `crates/gpui-component-lab/tests/component_lab_interaction_allocation_contract.rs`
+- `crates/gpui-d3rs/tests/allocation_contracts.rs`
+- `crates/gpui-d3rs/tests/billboard_tests.rs`
+- `crates/gpui-d3rs/tests/buffer_diff_golden.rs`
+- `crates/gpui-d3rs/tests/force_many_body_golden.rs`
+- `crates/gpui-d3rs/tests/glyph_text_tests.rs`
+- … 282 more
+
+## Architecture and policy documents
+
+- `AGENTS.md`
+- `CONTRIBUTING.md`
+- `README.md`
+- `SECURITY.md`
+- `assets/component-lab-gallery/README.md`
+- `crates/3rdparties/README.md`
+- `crates/3rdparties/block/README.md`
+- `crates/3rdparties/gpui/README.md`
+- `crates/3rdparties/mach2/AGENTS.md`
+- `crates/3rdparties/mach2/README.md`
+- `crates/3rdparties/objc/README.md`
+- `crates/3rdparties/psm/AGENTS.md`
+- `crates/3rdparties/psm/README.md`
+- `crates/3rdparties/zed-font-kit/AGENTS.md`
+- `crates/3rdparties/zed-font-kit/README.md`
+- `crates/assets/README.md`
+- `crates/figma/DESIGN_SYSTEM_RULES.md`
+- `crates/gpui-au/AGENTS.md`
+- `crates/gpui-au/README.md`
+- `crates/gpui-audio-kit/README.md`
+- `crates/gpui-builder/AGENTS.md`
+- `crates/gpui-builder/README.md`
+- `crates/gpui-component-lab/README.md`
+- `crates/gpui-d3rs/AGENTS.md`
+- `crates/gpui-d3rs/README.md`
+- `crates/gpui-design-tools/README.md`
+- `crates/gpui-design/AGENTS.md`
+- `crates/gpui-design/README.md`
+- `crates/gpui-ios/AGENTS.md`
+- `crates/gpui-ios/README.md`
+- `crates/gpui-keybinding/AGENTS.md`
+- `crates/gpui-keybinding/README.md`
+- `crates/gpui-miniapp/README.md`
+- `crates/gpui-pretext/AGENTS.md`
+- `crates/gpui-pretext/README.md`
+- `crates/gpui-profiler/README.md`
+- `crates/gpui-px/AGENTS.md`
+- `crates/gpui-px/README.md`
+- `crates/gpui-python-runtime/README.md`
+- `crates/gpui-python-runtime/python/gpui_toolkit/bin/README.md`
+- `crates/gpui-python-runtime/python/tutorial/README.md`
+- `crates/gpui-showcase/ios/AGENTS.md`
+- `crates/gpui-showcase/ios/README.md`
+- `crates/gpui-showcase/tvos/AGENTS.md`
+- `crates/gpui-showcase/tvos/README.md`
+- `crates/gpui-themes/AGENTS.md`
+- `crates/gpui-themes/README.md`
+- `crates/gpui-ui-kit-macros/AGENTS.md`
+- `crates/gpui-ui-kit-macros/README.md`
+- `crates/gpui-ui-kit/AGENTS.md`
+- `crates/gpui-ui-kit/README.md`
+- `crates/gpui-ui-kit/tests/README.md`
+- `docs/demos/README.md`
+- `docs/superpowers/specs/2026-06-20-performance2-remaining-design.md`
+- `docs/superpowers/specs/2026-08-16-vello-2d-charts-design.md`
+- `gpui-toolkit-python-full-surface-design.md`
+- `qa/games/README.md`
+- `qa/visual/baselines/README.md`
+
+## Declared dependencies
+
+- `Pillow`
+- `accesskit`
+- `anyhow`
+- `approx`
+- `ar_archive_writer`
+- `arrow-array`
+- `arrow-cast`
+- `arrow-ipc`
+- `async-channel`
+- `async-compression`
+- `async-task`
+- `async_zip`
+- `autoeq`
+- `backtrace`
+- `bindgen`
+- `bitflags`
+- `bytemuck`
+- `byteorder`
+- `bytes`
+- `cc`
+- `chrono`
+- `clap`
+- `collections`
+- `colored`
+- `cosmic-text`
+- `criterion`
+- `ctor`
+- `d3`
+- `d3-hexbin`
+- `d3-sankey`
+- `delaunator`
+- `derive_more`
+- `derive_refineable`
+- `dunce`
+- `embed-resource`
+- `env_logger`
+- `etagere`
+- `float-ord`
+- `font-kit`
+- `fontdue`
+- `fontique`
+- `freetype`
+- `futures`
+- `futures-concurrency`
+- `futures-lite`
+- `glam`
+- `globset`
+- `gpui`
+- `gpui-android`
+- `gpui-au`
+- `gpui-audio-kit`
+- `gpui-builder`
+- `gpui-component-lab`
+- `gpui-d3rs`
+- `gpui-design`
+- `gpui-design-tools`
+- `gpui-ios`
+- `gpui-keybinding`
+- `gpui-miniapp`
+- `gpui-pretext`
+- `gpui-profiler`
+- `gpui-px`
+- `gpui-python-runtime`
+- `gpui-release-gates`
+- `gpui-scaffolder`
+- `gpui-showcase`
+- `gpui-themes`
+- `gpui-ui-kit`
+- `gpui-ui-kit-macros`
+- `gpui_macos`
+- `gpui_macros`
+- `gpui_shared_string`
+- `gpui_util`
+- `gpui_wgpu`
+- `hashbrown`
+- `hdrhistogram`
+- `heapless`
+- `heck`
+- `http`
+- `http-body`
+- … 93 more
+
+## Architecture keyword hints
+
+- **agent**: `AGENTS.md`, `README.md`, `crates/3rdparties/gpui/src/app.rs`, `crates/3rdparties/gpui_macros/src/derive_inspector_reflection.rs`, `crates/3rdparties/gpui_macros/tests/derive_inspector_reflection.rs`, `crates/3rdparties/gpui_web/src/events.rs`, `crates/3rdparties/gpui_web/src/http_client.rs`, `crates/3rdparties/gpui_windows/src/window.rs`, `crates/3rdparties/http_client/src/github_download.rs`, `crates/3rdparties/http_client/src/http_client.rs`, `crates/3rdparties/mach2/VENDORING.md`, `crates/3rdparties/psm/README.md`
+- **benchmark**: `.github/workflows/ci.yml`, `CHANGELOG.md`, `Cargo.toml`, `README.md`, `crates/3rdparties/gpui/src/app/bench_context.rs`, `crates/3rdparties/gpui/src/gpui.rs`, `crates/3rdparties/gpui/src/platform/bench_dispatcher.rs`, `crates/3rdparties/gpui/src/window.rs`, `crates/3rdparties/gpui_macos/src/metal_renderer.rs`, `crates/3rdparties/gpui_macros/src/bench.rs`, `crates/3rdparties/gpui_macros/src/gpui_macros.rs`, `crates/3rdparties/perf/src/implementation.rs`
+- **browser**: `.github/workflows/demos.yml`, `AGENTS.md`, `CHANGELOG.md`, `README.md`, `WHATSNEW.md`, `crates/3rdparties/gpui/src/_accessibility.rs`, `crates/3rdparties/gpui/src/app.rs`, `crates/3rdparties/gpui/src/elements/div.rs`, `crates/3rdparties/gpui/src/geometry.rs`, `crates/3rdparties/gpui_linux/src/linux/wayland/client.rs`, `crates/3rdparties/gpui_web/src/dispatcher.rs`, `crates/3rdparties/gpui_web/src/display.rs`
+- **cache**: `.cargo/config.toml`, `.github/workflows/ci.yml`, `.github/workflows/demos.yml`, `.github/workflows/visual-nightly.yml`, `CHANGELOG.md`, `Cargo.toml`, `TUTORIAL.md`, `crates/3rdparties/collections/src/vecmap.rs`, `crates/3rdparties/gpui/VENDORED.md`, `crates/3rdparties/gpui/src/app.rs`, `crates/3rdparties/gpui/src/app/bench_context.rs`, `crates/3rdparties/gpui/src/assets.rs`
+- **checkpoint**: `crates/gpui-python-runtime/python/examples/games_demo.py`, `crates/gpui-python-runtime/python/tests/test_games_demo.py`, `crates/gpui-showcase/src/showcase/sections/games.rs`, `docs/issue-1-games-plan.md`, `scripts/python_games_smoke.py`
+- **embed**: `AGENTS.md`, `README.md`, `crates/3rdparties/README.md`, `crates/3rdparties/gpui/Cargo.toml`, `crates/3rdparties/gpui/PATCHES.md`, `crates/3rdparties/gpui/VENDORED.md`, `crates/3rdparties/gpui/build.rs`, `crates/3rdparties/gpui/src/app.rs`, `crates/3rdparties/gpui/src/asset_cache.rs`, `crates/3rdparties/gpui/src/custom_draw.rs`, `crates/3rdparties/gpui/src/elements/img.rs`, `crates/3rdparties/gpui/src/scene.rs`
+- **evaluation**: `crates/3rdparties/util/VENDORED.md`, `crates/3rdparties/util/src/util.rs`, `crates/gpui-d3rs/bin/showcase/showcase_modules/d3_examples/kernel_density_estimation/kde_curve_element.rs`, `crates/gpui-ios/src/local_auth.rs`, `crates/gpui-px/src/mesh_plot/mesh_plot_chart.rs`, `crates/gpui-python-runtime/python/showcase.py`, `crates/gpui-python-runtime/python/tests/test_ui.py`, `crates/gpui-python-runtime/src/ui_ir.rs`, `crates/gpui-ui-kit/src/thinking_orb/mod.rs`, `gpui-toolkit-simulation-app-requirements.md`
+- **graph**: `.github/workflows/ci.yml`, `AGENTS.md`, `CHANGELOG.md`, `Cargo.toml`, `README.md`, `TUTORIAL.md`, `crates/3rdparties/gpui/Cargo.toml`, `crates/3rdparties/gpui/PATCHES.md`, `crates/3rdparties/gpui/src/asset_cache.rs`, `crates/3rdparties/gpui/src/geometry.rs`, `crates/3rdparties/gpui/src/platform.rs`, `crates/3rdparties/gpui/src/text_system.rs`
+- **index**: `.github/workflows/visual-nightly.yml`, `crates/3rdparties/collections/Cargo.toml`, `crates/3rdparties/collections/src/collections.rs`, `crates/3rdparties/collections/src/vecmap.rs`, `crates/3rdparties/gpui/Cargo.toml`, `crates/3rdparties/gpui/src/_accessibility.rs`, `crates/3rdparties/gpui/src/app.rs`, `crates/3rdparties/gpui/src/app/async_context.rs`, `crates/3rdparties/gpui/src/arena.rs`, `crates/3rdparties/gpui/src/assets.rs`, `crates/3rdparties/gpui/src/bounds_tree.rs`, `crates/3rdparties/gpui/src/elements/div.rs`
+- **mcp**: `crates/3rdparties/util/src/process.rs`, `crates/3rdparties/zed-font-kit/src/canvas.rs`, `crates/figma/CODE_CONNECT_MAPPINGS.md`, `crates/gpui-d3rs/bin/showcase/data/counties-albers-10m.json`
+- **plugin**: `Cargo.toml`, `README.md`, `crates/gpui-au/CHANGELOG.md`, `crates/gpui-au/README.md`, `crates/gpui-au/src/ffi.rs`, `crates/gpui-au/src/params.rs`, `crates/gpui-au/src/window/au_window.rs`, `crates/gpui-audio-kit/Cargo.toml`, `crates/gpui-audio-kit/README.md`, `crates/gpui-audio-kit/TUTORIAL.md`, `crates/gpui-audio-kit/src/audio/potentiometer.rs`, `crates/gpui-audio-kit/src/audio/potentiometer/knob_arc_element.rs`
+- **provider**: `TUTORIAL.md`, `crates/3rdparties/gpui/src/elements/div.rs`, `crates/3rdparties/gpui/src/elements/image_cache.rs`, `crates/3rdparties/gpui_macos/src/text_system.rs`, `crates/3rdparties/gpui_windows/src/platform.rs`, `crates/3rdparties/gpui_windows/src/vsync.rs`, `crates/3rdparties/gpui_windows/src/window.rs`, `crates/3rdparties/http_client/src/http_client.rs`, `crates/gpui-android/CHANGELOG.md`, `crates/gpui-android/android/src/main/java/dev/gpui/mobile/FileLeaseRegistry.java`, `crates/gpui-android/android/src/main/java/dev/gpui/mobile/GpuiActivity.java`, `crates/gpui-android/android/src/main/java/dev/gpui/mobile/GpuiFileProvider.java`
+- **queue**: `crates/3rdparties/gpui/src/app/bench_context.rs`, `crates/3rdparties/gpui/src/executor.rs`, `crates/3rdparties/gpui/src/gpui.rs`, `crates/3rdparties/gpui/src/platform/bench_dispatcher.rs`, `crates/3rdparties/gpui/src/queue.rs`, `crates/3rdparties/gpui_linux/src/linux/dispatcher.rs`, `crates/3rdparties/gpui_linux/src/linux/platform.rs`, `crates/3rdparties/gpui_linux/src/linux/wayland/client.rs`, `crates/3rdparties/gpui_macos/src/dispatcher.rs`, `crates/3rdparties/gpui_macos/src/display_link.rs`, `crates/3rdparties/gpui_macos/src/metal_renderer.rs`, `crates/3rdparties/gpui_macos/src/platform.rs`
+- **rank**: `crates/3rdparties/gpui_wgpu/src/wgpu_context.rs`, `crates/gpui-d3rs/bin/showcase/data/counties-albers-10m.json`, `crates/gpui-keybinding/src/discovery.rs`, `crates/gpui-px/README.md`, `crates/gpui-px/bin/showcase/showcase_app.rs`, `crates/gpui-px/src/lib.rs`, `crates/gpui-python-runtime/bin/showcase/python_ir_showcase.rs`, `crates/gpui-ui-kit/examples/avatar_debug.rs`, `crates/gpui-ui-kit/tests/integration/avatar_test.rs`
+- **retriev**: `crates/3rdparties/gpui/src/app/test_context.rs`, `crates/3rdparties/gpui/src/elements/div.rs`, `crates/3rdparties/gpui/src/elements/text.rs`, `crates/3rdparties/gpui/src/keymap/binding.rs`, `crates/3rdparties/gpui/src/platform.rs`, `crates/3rdparties/gpui/src/text_system/line_layout.rs`, `crates/3rdparties/gpui_linux/src/linux/x11/client.rs`, `crates/3rdparties/gpui_macos/src/metal_renderer.rs`, `crates/3rdparties/gpui_macos/src/text_system.rs`, `crates/3rdparties/gpui_wgpu/src/cosmic_text_system/cosmic_text_system_state.rs`, `crates/3rdparties/gpui_windows/src/events.rs`, `crates/3rdparties/gpui_windows/src/vsync.rs`
+- **sandbox**: `crates/gpui-au/src/helpers.rs`, `crates/gpui-au/src/safety_report.rs`, `crates/gpui-ios/README.md`, `crates/gpui-ios/src/ios/document_picker.rs`, `crates/gpui-px/src/mesh_plot/mesh_plot_chart.rs`, `crates/gpui-scaffolder/src/lib.rs`, `crates/gpui-showcase/ios/project.yml`, `crates/gpui-showcase/tvos/project.yml`, `gpui-toolkit-python-full-surface-design.md`, `gpui-toolkit-simulation-app-requirements.md`, `qa/visual/mesh-plot-reference.md`, `scripts/qa_perf_baseline.py`
+- **search**: `.github/workflows/python-package.yml`, `Cargo.toml`, `crates/3rdparties/gpui/src/app.rs`, `crates/3rdparties/gpui/src/bounds_tree.rs`, `crates/3rdparties/gpui/src/elements/div.rs`, `crates/3rdparties/gpui/src/key_dispatch.rs`, `crates/3rdparties/gpui/src/keymap.rs`, `crates/3rdparties/gpui/src/window.rs`, `crates/3rdparties/gpui_linux/src/linux/platform.rs`, `crates/3rdparties/gpui_macos/src/text_system.rs`, `crates/3rdparties/psm/build.rs`, `crates/3rdparties/sum_tree/src/cursor.rs`
+- **symbol**: `.cargo/config.toml`, `CHANGELOG.md`, `Cargo.toml`, `TUTORIAL.md`, `crates/3rdparties/README.md`, `crates/3rdparties/block/VENDORING.md`, `crates/3rdparties/gpui/src/app/entity_map.rs`, `crates/3rdparties/gpui/src/svg_renderer.rs`, `crates/3rdparties/gpui_linux/src/linux/platform.rs`, `crates/3rdparties/gpui_macos/VENDORED.md`, `crates/3rdparties/gpui_macos/src/open_type.rs`, `crates/3rdparties/gpui_macos/src/text_system.rs`
+- **telemetry**: `crates/gpui-audio-kit/src/audio_automation_patterns.rs`, `crates/gpui-d3rs/src/mesh/gpu/retained.rs`, `crates/gpui-d3rs/src/mesh/gpu/wgpu_backend.rs`, `crates/gpui-d3rs/tests/mesh_lod_evidence.rs`, `crates/gpui-d3rs/tests/mesh_wgpu_embedded_viewport.rs`, `crates/gpui-px/tests/mesh_plot_native.rs`, `crates/gpui-python-runtime/bin/showcase/python_ir_showcase.rs`, `crates/gpui-python-runtime/python/gpui_toolkit/app.py`, `crates/gpui-python-runtime/python/gpui_toolkit/capabilities.py`, `crates/gpui-python-runtime/python/gpui_toolkit/profiler.py`, `crates/gpui-python-runtime/python/tests/test_profiler.py`, `crates/gpui-python-runtime/src/session.rs`
+- **vector**: `AGENTS.md`, `crates/3rdparties/collections/src/vecmap.rs`, `crates/3rdparties/gpui/src/elements/div.rs`, `crates/3rdparties/gpui/src/path_builder.rs`, `crates/3rdparties/gpui/src/scene.rs`, `crates/3rdparties/gpui_macos/src/text_system.rs`, `crates/3rdparties/gpui_wgpu/src/cosmic_text_system/cosmic_text_system_state.rs`, `crates/3rdparties/gpui_windows/src/direct_write.rs`, `crates/3rdparties/util/CHANGELOG.md`, `crates/3rdparties/util/src/util.rs`, `crates/3rdparties/zed-font-kit/README.md`, `crates/3rdparties/zed-font-kit/src/canvas.rs`
+
+## Interpretation limit
+
+This survey identifies candidate files. It does not establish behavior; read and cite the implementation and tests before making claims.

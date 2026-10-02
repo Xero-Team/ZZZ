@@ -1,0 +1,11 @@
+repository	head_sha	branch	shallow	sparse_checkout	sparse_patterns	worktree	porcelain
+zzz	34fb99e58d0dac953afb9a577a3aae6f99fb0c71	main	false	no		dirty	?? .agents/skills/repository-research/ | ?? .tmp/
+zed	23d10a4754bb917e635b584b5686bc492ea25995	main	true	yes	crates/gpui,crates/gpui-*,crates/gpui_*	clean	-
+gpui-ce	175ef66578817bf96b2e26b0cd568dd4f4793529	main	true	no		clean	-
+gpui-kit	3467e647600290343885b500bd7464057e334d18	main	true	no		clean	-
+gpui-mobile	c7cab3a43970bd5f1e05d907695404ed73fcdc95	main	true	no		clean	-
+gpui-rsx	8e0751e9361c08af1ceec702be10b50fbf4e412f	main	true	no		clean	-
+gpui-toolkit	321f98e5d0041bd8e8f8c892afcfd92307fb803d	main	true	no		clean	-
+adabraka-ui	e158684b23d9cb043fed3989ca252212046dabca	main	true	no		clean	-
+avalonia	17350180c33b063f0e98abbfd19aa3cae63f5d56	main	true	no		clean	-
+openswiftui	b17d55b85bb3380a45afeca183426b846e990b98	main	true	no		clean	-

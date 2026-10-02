@@ -1,0 +1,466 @@
+# Static survey: ZZZ
+
+- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ`
+- HEAD: `34fb99e58d0dac953afb9a577a3aae6f99fb0c71`
+- Tracked files: 4920
+
+## Top-level subsystems
+
+- `crates`: 3012 files
+- `vendor`: 913 files
+- `assets`: 472 files
+- `docs`: 221 files
+- `script`: 124 files
+- `tooling`: 49 files
+- `extensions`: 46 files
+- `.agents`: 12 files
+- `nix`: 9 files
+- `.factory`: 8 files
+- `.github`: 6 files
+- `legal`: 4 files
+- `.ZZZ`: 3 files
+- `.cargo`: 2 files
+- `.config`: 1 files
+- `.env.example`: 1 files
+- `.git-blame-ignore-revs`: 1 files
+- `.gitattributes`: 1 files
+- `.gitignore`: 1 files
+- `.mailmap`: 1 files
+- `.prettierrc`: 1 files
+- `.rules`: 1 files
+- `AGENTS.md`: 1 files
+- `CHANGELOG.md`: 1 files
+- `CLAUDE.md`: 1 files
+- `CODE_OF_CONDUCT.md`: 1 files
+- `CONTRIBUTING.md`: 1 files
+- `Cargo.lock`: 1 files
+- `Cargo.toml`: 1 files
+- `Dockerfile-cross.dockerignore`: 1 files
+
+## Manifests
+
+- `Cargo.toml`
+- `crates/acp_thread/Cargo.toml`
+- `crates/acp_tools/Cargo.toml`
+- `crates/action_log/Cargo.toml`
+- `crates/activity_indicator/Cargo.toml`
+- `crates/agent/Cargo.toml`
+- `crates/agent_servers/Cargo.toml`
+- `crates/agent_settings/Cargo.toml`
+- `crates/agent_ui/Cargo.toml`
+- `crates/askpass/Cargo.toml`
+- `crates/assets/Cargo.toml`
+- `crates/audio/Cargo.toml`
+- `crates/audio_viewer/Cargo.toml`
+- `crates/breadcrumbs/Cargo.toml`
+- `crates/buffer_diff/Cargo.toml`
+- `crates/cli/Cargo.toml`
+- `crates/client/Cargo.toml`
+- `crates/clock/Cargo.toml`
+- `crates/cloud_api_types/Cargo.toml`
+- `crates/collections/Cargo.toml`
+- `crates/command_palette/Cargo.toml`
+- `crates/command_palette_hooks/Cargo.toml`
+- `crates/component/Cargo.toml`
+- `crates/component_preview/Cargo.toml`
+- `crates/context_server/Cargo.toml`
+- `crates/credentials_provider/Cargo.toml`
+- `crates/csv_preview/Cargo.toml`
+- `crates/dap/Cargo.toml`
+- `crates/dap_adapters/Cargo.toml`
+- `crates/db/Cargo.toml`
+- `crates/debug_adapter_extension/Cargo.toml`
+- `crates/debugger_tools/Cargo.toml`
+- `crates/debugger_ui/Cargo.toml`
+- `crates/dev_container/Cargo.toml`
+- `crates/diagnostics/Cargo.toml`
+- `crates/docs/Cargo.toml`
+- `crates/docs_preprocessor/Cargo.toml`
+- `crates/editor/Cargo.toml`
+- `crates/editor_benchmarks/Cargo.toml`
+- `crates/encoding_selector/Cargo.toml`
+- `crates/env_var/Cargo.toml`
+- `crates/etw_tracing/Cargo.toml`
+- `crates/eval_utils/Cargo.toml`
+- `crates/explorer_command_injector/Cargo.toml`
+- `crates/extension/Cargo.toml`
+- `crates/extension_api/Cargo.toml`
+- `crates/extension_cli/Cargo.toml`
+- `crates/extension_host/Cargo.toml`
+- `crates/extensions_ui/Cargo.toml`
+- `crates/feature_flags/Cargo.toml`
+- `crates/feature_flags_macros/Cargo.toml`
+- `crates/feedback/Cargo.toml`
+- `crates/file_finder/Cargo.toml`
+- `crates/file_icons/Cargo.toml`
+- `crates/fs/Cargo.toml`
+- `crates/fs_benchmarks/Cargo.toml`
+- `crates/fuzzy/Cargo.toml`
+- `crates/fuzzy_nucleo/Cargo.toml`
+- `crates/git/Cargo.toml`
+- `crates/git_graph/Cargo.toml`
+- `crates/git_hosting_providers/Cargo.toml`
+- `crates/git_ui/Cargo.toml`
+- `crates/go_to_line/Cargo.toml`
+- `crates/gpui/Cargo.toml`
+- `crates/gpui_linux/Cargo.toml`
+- `crates/gpui_macos/Cargo.toml`
+- `crates/gpui_macros/Cargo.toml`
+- `crates/gpui_platform/Cargo.toml`
+- `crates/gpui_shared_string/Cargo.toml`
+- `crates/gpui_tokio/Cargo.toml`
+- `crates/gpui_util/Cargo.toml`
+- `crates/gpui_web/Cargo.toml`
+- `crates/gpui_web/examples/hello_web/Cargo.toml`
+- `crates/gpui_wgpu/Cargo.toml`
+- `crates/gpui_windows/Cargo.toml`
+- `crates/grammars/Cargo.toml`
+- `crates/grammars/vendor/tree-sitter-cmake/Cargo.toml`
+- `crates/grammars/vendor/tree-sitter-cmd/Cargo.toml`
+- `crates/grammars/vendor/tree-sitter-csv/Cargo.toml`
+- `crates/grammars/vendor/tree-sitter-dockerfile/Cargo.toml`
+- … 192 more
+
+## Candidate entrypoints
+
+- `crates/cli/src/main.rs`
+- `crates/dev_container/src/lib.rs`
+- `crates/docs_preprocessor/src/main.rs`
+- `crates/editor_benchmarks/src/main.rs`
+- `crates/extension_cli/src/main.rs`
+- `crates/fs_benchmarks/src/main.rs`
+- `crates/gpui_util/src/lib.rs`
+- `crates/gpui_web/examples/hello_web/main.rs`
+- `crates/grammars/vendor/tree-sitter-cmake/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-cmd/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-csv/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-dockerfile/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-git-config/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-git-rebase/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-gitattributes/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-gitcommit/bindings/node/index.js`
+- `crates/grammars/vendor/tree-sitter-gitcommit/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-gitignore/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-go-mod/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-gowork/bindings/node/index.js`
+- `crates/grammars/vendor/tree-sitter-gowork/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-md/bindings/node/index.js`
+- `crates/grammars/vendor/tree-sitter-md/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-mermaid/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-powershell/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-syslog/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-toml/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-typescript/bindings/node/index.js`
+- `crates/grammars/vendor/tree-sitter-typescript/bindings/rust/lib.rs`
+- `crates/languages/src/lib.rs`
+- `crates/project_benchmarks/src/main.rs`
+- `crates/release_channel/src/lib.rs`
+- `crates/remote_server/src/main.rs`
+- `crates/schema_generator/src/main.rs`
+- `crates/snippet_provider/src/lib.rs`
+- `crates/sqlez/src/lib.rs`
+- `crates/theme_importer/src/main.rs`
+- `crates/worktree_benchmarks/src/main.rs`
+- `crates/ztracing/src/lib.rs`
+- `crates/ztracing_macro/src/lib.rs`
+- `crates/zzz/src/main.rs`
+- `crates/zzz_actions/src/lib.rs`
+- `script/syncflow/syncflow/__main__.py`
+- `script/syncflow/syncflow/cli.py`
+- `script/update_top_ranking_issues/main.py`
+- `tooling/compliance/src/lib.rs`
+- `tooling/perf/src/lib.rs`
+- `tooling/perf/src/main.rs`
+- `tooling/xtask/src/main.rs`
+- `vendor/async-pipe/src/lib.rs`
+- `vendor/dap-types/dap-types/src/lib.rs`
+- `vendor/dap-types/generator/src/main.rs`
+- `vendor/font-kit/src/lib.rs`
+- `vendor/gh-workflow/crates/gh-workflow-macros/src/lib.rs`
+- `vendor/gh-workflow/crates/gh-workflow-tailcall/src/lib.rs`
+- `vendor/gh-workflow/crates/gh-workflow/src/lib.rs`
+- `vendor/lsp-types/src/lib.rs`
+- `vendor/notify/notify-types/src/lib.rs`
+- `vendor/notify/notify/src/lib.rs`
+- `vendor/nvim-rs/src/lib.rs`
+- `vendor/reqwest/src/lib.rs`
+- `vendor/scap/src/lib.rs`
+- `vendor/scap/src/main.rs`
+- `vendor/trash/src/lib.rs`
+- `vendor/wgpu/naga-test/src/lib.rs`
+- `vendor/wgpu/naga/hlsl-snapshots/src/lib.rs`
+- `vendor/wgpu/naga/src/lib.rs`
+- `vendor/wgpu/wgpu-core/platform-deps/apple/src/lib.rs`
+- `vendor/wgpu/wgpu-core/platform-deps/emscripten/src/lib.rs`
+- `vendor/wgpu/wgpu-core/platform-deps/wasm/src/lib.rs`
+- `vendor/wgpu/wgpu-core/platform-deps/windows-linux-android/src/lib.rs`
+- `vendor/wgpu/wgpu-core/src/lib.rs`
+- `vendor/wgpu/wgpu-hal/examples/halmark/main.rs`
+- `vendor/wgpu/wgpu-hal/examples/ray-traced-triangle/main.rs`
+- `vendor/wgpu/wgpu-hal/src/lib.rs`
+- `vendor/wgpu/wgpu-macros/src/lib.rs`
+- `vendor/wgpu/wgpu-naga-bridge/src/lib.rs`
+- `vendor/wgpu/wgpu-types/src/lib.rs`
+- `vendor/wgpu/wgpu/src/lib.rs`
+- `vendor/windows-capture/src/lib.rs`
+- … 6 more
+
+## Tests, benchmarks, and evals
+
+- `crates/agent_ui/src/test_support.rs`
+- `crates/debugger_ui/src/tests/attach_modal.rs`
+- `crates/debugger_ui/src/tests/console.rs`
+- `crates/debugger_ui/src/tests/dap_logger.rs`
+- `crates/debugger_ui/src/tests/debugger_panel.rs`
+- `crates/debugger_ui/src/tests/inline_values.rs`
+- `crates/debugger_ui/src/tests/loaded_source_list.rs`
+- `crates/debugger_ui/src/tests/module_list.rs`
+- `crates/debugger_ui/src/tests/new_process_modal.rs`
+- `crates/debugger_ui/src/tests/persistence.rs`
+- `crates/debugger_ui/src/tests/stack_frame_list.rs`
+- `crates/debugger_ui/src/tests/variable_list.rs`
+- `crates/editor/src/test/editor_lsp_test_context.rs`
+- `crates/editor/src/test/editor_test_context.rs`
+- `crates/fs/tests/integration/fake_git_repo_tests.rs`
+- `crates/fs/tests/integration/fs_tests.rs`
+- `crates/git/test_data/blame_incremental_complex`
+- `crates/git/test_data/blame_incremental_not_committed`
+- `crates/git/test_data/blame_incremental_simple`
+- `crates/git/test_data/golden/blame_incremental_complex.json`
+- `crates/git/test_data/golden/blame_incremental_not_committed.json`
+- `crates/git/test_data/golden/blame_incremental_simple.json`
+- `crates/gpui/src/app/test_app.rs`
+- `crates/gpui/src/app/test_context.rs`
+- `crates/gpui/src/platform/test/dispatcher.rs`
+- `crates/gpui/src/platform/test/display.rs`
+- `crates/gpui/src/platform/test/platform.rs`
+- `crates/gpui/src/platform/test/window.rs`
+- `crates/gpui/tests/action_macros.rs`
+- `crates/gpui_macros/tests/derive_context.rs`
+- `crates/gpui_macros/tests/derive_inspector_reflection.rs`
+- `crates/gpui_macros/tests/render_test.rs`
+- `crates/grammars/vendor/tree-sitter-md/bindings/python/tests/test_binding.py`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/extension_latex.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/extension_strikethrough.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/extension_wikilink.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/failing.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/issues.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/spec.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown-inline/test/corpus/tags.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/extension_minus_metadata.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/extension_pipe_table.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/extension_plus_metadata.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/extension_task_list.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/failing.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/issues.txt`
+- `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/spec.txt`
+- `crates/grammars/vendor/tree-sitter-typescript/bindings/python/tests/test_binding.py`
+- `crates/mermaid_render/tests/check_invalid_attrs.rs`
+- `crates/project/tests/integration/agent_registry_store.rs`
+- `crates/project/tests/integration/bookmark_store.rs`
+- `crates/project/tests/integration/color_extractor.rs`
+- `crates/project/tests/integration/context_server_store.rs`
+- `crates/project/tests/integration/debugger.rs`
+- `crates/project/tests/integration/git_store.rs`
+- `crates/project/tests/integration/image_store.rs`
+- `crates/project/tests/integration/lsp_command.rs`
+- `crates/project/tests/integration/lsp_store.rs`
+- `crates/project/tests/integration/manifest_tree.rs`
+- `crates/project/tests/integration/project_search.rs`
+- `crates/project/tests/integration/project_tests.rs`
+- `crates/project/tests/integration/search.rs`
+- `crates/project/tests/integration/search_history.rs`
+- `crates/project/tests/integration/signature_help.rs`
+- `crates/project/tests/integration/task_inventory.rs`
+- `crates/project/tests/integration/trusted_worktrees.rs`
+- `crates/project/tests/integration/yarn.rs`
+- `crates/project_panel/src/tests/undo.rs`
+- `crates/scheduler/src/test_scheduler.rs`
+- `crates/task/test_data/rust-analyzer.json`
+- `crates/task/test_data/tasks-npm.json`
+- `crates/task/test_data/tasks-without-labels.json`
+- `crates/task/test_data/typescript.json`
+- `crates/util/src/test/assertions.rs`
+- `crates/util/src/test/marked_text.rs`
+- `crates/vim/src/test/neovim_backed_test_context.rs`
+- `crates/vim/src/test/neovim_connection.rs`
+- `crates/vim/src/test/vim_test_context.rs`
+- `crates/vim/test_data/neovim_backed_test_context_works.json`
+- `crates/vim/test_data/test_a.json`
+- … 326 more
+
+## Architecture and policy documents
+
+- `AGENTS.md`
+- `CONTRIBUTING.md`
+- `README.ORIGINAL.md`
+- `README.md`
+- `SECURITY.md`
+- `crates/cli/README.md`
+- `crates/db/README.md`
+- `crates/eval_utils/README.md`
+- `crates/extension_api/README.md`
+- `crates/gpui/README.md`
+- `crates/gpui/examples/README.md`
+- `crates/grammars/vendor/tree-sitter-cmake/README.rst`
+- `crates/grammars/vendor/tree-sitter-git-rebase/README.md`
+- `crates/grammars/vendor/tree-sitter-gitattributes/README.md`
+- `crates/grammars/vendor/tree-sitter-gitcommit/README.md`
+- `crates/grammars/vendor/tree-sitter-go-mod/README.md`
+- `crates/grammars/vendor/tree-sitter-gowork/README.md`
+- `crates/grammars/vendor/tree-sitter-md/CONTRIBUTING.md`
+- `crates/grammars/vendor/tree-sitter-md/README.md`
+- `crates/grammars/vendor/tree-sitter-md/bindings/swift/README.md`
+- `crates/grammars/vendor/tree-sitter-toml/README.md`
+- `crates/grammars/vendor/tree-sitter-typescript/README.md`
+- `crates/icons/README.md`
+- `crates/inspector_ui/README.md`
+- `crates/schema_generator/README.md`
+- `crates/terminal_view/README.md`
+- `crates/theme_importer/README.md`
+- `crates/vim/README.md`
+- `crates/zlog/README.md`
+- `docs/AGENTS.md`
+- `docs/README.md`
+- `docs/src/ai/external-agents.md`
+- `docs/src/ai/parallel-agents.md`
+- `docs/src/ai/privacy-and-security.md`
+- `extensions/README.md`
+- `extensions/test-extension/README.md`
+- `vendor/async-pipe/README.md`
+- `vendor/dap-types/dap-types/readme.md`
+- `vendor/font-kit/README.md`
+- `vendor/gh-workflow/README.md`
+- `vendor/lsp-types/README.md`
+- `vendor/notify/README.md`
+- `vendor/nvim-rs/CONTRIBUTING.md`
+- `vendor/nvim-rs/README.md`
+- `vendor/nvim-rs/src/examples/README.md`
+- `vendor/reqwest/README.md`
+- `vendor/scap/README.md`
+- `vendor/trash/README.md`
+- `vendor/wgpu/README.md`
+- `vendor/wgpu/naga/README.md`
+- `vendor/wgpu/wgpu-core/platform-deps/apple/README.md`
+- `vendor/wgpu/wgpu-core/platform-deps/emscripten/README.md`
+- `vendor/wgpu/wgpu-core/platform-deps/wasm/README.md`
+- `vendor/wgpu/wgpu-core/platform-deps/windows-linux-android/README.md`
+- `vendor/wgpu/wgpu-hal/README.md`
+- `vendor/windows-capture/README.md`
+- `vendor/wprcontrol/README.md`
+- `vendor/xim-rs/README.md`
+- `vendor/xim-rs/xim-ctext/README.md`
+
+## Declared dependencies
+
+- `acp_thread`
+- `acp_tools`
+- `action_log`
+- `activity_indicator`
+- `agent`
+- `agent-client-protocol`
+- `agent_servers`
+- `agent_settings`
+- `agent_ui`
+- `ahash`
+- `aho-corasick`
+- `alacritty_terminal`
+- `annotate-snippets`
+- `any_vec`
+- `anyhow`
+- `arbitrary`
+- `arrayvec`
+- `askpass`
+- `assets`
+- `async-channel`
+- `async-compat`
+- `async-compression`
+- `async-dispatcher`
+- `async-fs`
+- `async-io`
+- `async-lock`
+- `async-pipe`
+- `async-recursion`
+- `async-std`
+- `async-tar`
+- `async-task`
+- `async-trait`
+- `async-tungstenite`
+- `async_zip`
+- `audio`
+- `audio_viewer`
+- `backtrace`
+- `base64`
+- `betlang`
+- `bit-set`
+- `bit-vec`
+- `bitflags`
+- `breadcrumbs`
+- `brush-parser`
+- `buffer_diff`
+- `bytemuck`
+- `byteorder`
+- `bytes`
+- `cargo_metadata`
+- `cargo_toml`
+- `cbindgen`
+- `cc`
+- `cfg-if`
+- `cfg_aliases`
+- `chacha20poly1305`
+- `chardetng`
+- `chrono`
+- `circular-buffer`
+- `clap`
+- `clap_complete`
+- `clap_complete_nushell`
+- `cli`
+- `client`
+- `clock`
+- `cloud_api_types`
+- `codebook-tree-sitter-typst`
+- `codespan-reporting`
+- `collections`
+- `colored`
+- `command_palette`
+- `command_palette_hooks`
+- `compliance`
+- `component`
+- `component_preview`
+- `context_server`
+- `convert_case`
+- `cosmic-text`
+- `cpal`
+- `credentials_provider`
+- `criterion`
+- … 472 more
+
+## Architecture keyword hints
+
+- **agent**: `.ZZZ/settings.json`, `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/absorbing-upstream/SKILL.md`, `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/auditing-upstream/SKILL.md`, `.agents/skills/creating-agents/REFERENCE.md`, `.agents/skills/creating-agents/SKILL.md`, `.agents/skills/creating-skills/REFERENCE.md`, `.agents/skills/creating-skills/SKILL.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `.agents/skills/hunting-code-smells/REFERENCE.md`
+- **benchmark**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `Cargo.toml`, `crates/editor/benches/display_map.rs`, `crates/editor/benches/editor_render.rs`, `crates/editor_benchmarks/Cargo.toml`, `crates/editor_benchmarks/src/main.rs`, `crates/eval_utils/src/eval_utils.rs`, `crates/extension_host/Cargo.toml`, `crates/extension_host/benches/extension_compilation_benchmark.rs`, `crates/fs_benchmarks/Cargo.toml`, `crates/fuzzy_nucleo/Cargo.toml`, `crates/fuzzy_nucleo/benches/match_benchmark.rs`
+- **browser**: `assets/locales/en.json`, `crates/agent_servers/src/custom.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/client/src/client.rs`, `crates/context_server/src/oauth.rs`, `crates/dap_adapters/src/codelldb.rs`, `crates/dap_adapters/src/go.rs`, `crates/dap_adapters/src/javascript.rs`, `crates/dap_adapters/src/python.rs`, `crates/debugger_ui/src/debugger_ui.rs`, `crates/dev_container/src/devcontainer_json.rs`, `crates/docs/src/docs.rs`
+- **cache**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.cargo/config.toml`, `Cargo.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent/src/db.rs`, `crates/agent/src/tool_permissions.rs`, `crates/agent_ui/src/agent_panel.rs`, `crates/agent_ui/src/config_options.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_metadata_store.rs`, `crates/agent_ui/src/threads_archive_view.rs`
+- **checkpoint**: `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_worktree_archive.rs`, `crates/fs/src/fake_git_repo.rs`, `crates/fs/src/fs.rs`, `crates/fs/tests/integration/fake_git_repo_tests.rs`, `crates/git/src/repository.rs`, `crates/project/src/git_store.rs`, `crates/proto/src/proto.rs`, `crates/remote_server/src/remote_editing_tests.rs`
+- **citation**: `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_diff.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/agent_ui/src/conversation_view/thread_search_bar.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/entry_view_state.rs`, `crates/html_to_markdown/src/structure/wikipedia.rs`
+- **embed**: `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.github/workflows/ci.yaml`, `Cargo.toml`, `assets/locales/en.json`, `assets/themes/ayu/ayu.json`, `assets/themes/gruvbox/gruvbox.json`, `assets/themes/one/one.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_ui/src/agent_panel.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_search_bar.rs`
+- **evaluation**: `Cargo.toml`, `crates/agent_settings/src/agent_settings.rs`, `crates/editor/src/runnables.rs`, `crates/eval_utils/src/eval_utils.rs`, `docs/src/development/text-layout.md`, `vendor/dap-types/dap-types/src/types.rs`, `vendor/dap-types/schema.json`, `vendor/gh-workflow/crates/gh-workflow/src/expression.rs`, `vendor/lsp-types/src/inline_value.rs`, `vendor/wgpu/naga/src/back/mod.rs`, `vendor/wgpu/naga/src/back/msl/writer.rs`, `vendor/wgpu/naga/src/back/pipeline_constants.rs`
+- **graph**: `.config/nextest.toml`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/taboo-phrases.md`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/emacs.json`, `assets/keymaps/macos/emacs.json`, `assets/keymaps/vim.json`
+- **index**: `.agents/skills/hunting-code-smells/REFERENCE.md`, `.factory/prompts/crash/investigate.md`, `CLAUDE.md`, `Cargo.toml`, `GEMINI.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `clippy.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/acp_thread/src/mention.rs`
+- **mcp**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.factory/prompts/crash/investigate.md`, `.factory/prompts/crash/link-issues.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/agent/src/tool_permissions.rs`, `crates/agent/src/tool_protocol.rs`, `crates/agent/src/tools/context_server_registry.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_servers/src/agent_servers.rs`
+- **oauth**: `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_configuration/configure_context_server_modal.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/context_server/src/client.rs`, `crates/context_server/src/context_server.rs`, `crates/context_server/src/oauth.rs`, `crates/context_server/src/protocol.rs`, `crates/context_server/src/transport.rs`, `crates/context_server/src/transport/http.rs`
+- **plugin**: `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/agent/src/tool_permissions.rs`, `crates/dev_container/src/devcontainer_manifest.rs`, `crates/extension_host/src/extension_host.rs`, `crates/grammars/src/xml/config.toml`, `crates/grammars/src/xsd/config.toml`, `crates/json_schema_store/src/schemas/tsconfig.json`, `crates/language/src/language.rs`, `crates/language/src/language_settings.rs`, `crates/languages/src/python.rs`
+- **provider**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `Cargo.toml`, `README.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent/src/tool_protocol.rs`, `crates/agent/src/tools.rs`
+- **queue**: `CLAUDE.md`, `GEMINI.md`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_ui.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_metadata_store.rs`
+- **rank**: `.agents/skills/hunting-code-smells/SKILL.md`, `crates/command_palette/src/command_palette.rs`, `crates/editor/src/code_completion_tests.rs`, `crates/editor/src/cursor_animation.rs`, `crates/fuzzy_nucleo/src/fuzzy_nucleo.rs`, `crates/fuzzy_nucleo/src/strings.rs`, `crates/git_ui/src/worktree_names.rs`, `crates/gpui_wgpu/src/wgpu_context.rs`, `crates/recent_projects/src/remote_servers/filter.rs`, `crates/repl/src/outputs.rs`, `crates/terminal/src/terminal_hyperlinks.rs`, `crates/theme_importer/src/vscode/syntax.rs`
+- **retriev**: `.agents/skills/creating-agents/REFERENCE.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/connection.rs`, `crates/agent/src/db.rs`, `crates/agent_ui/src/thread_metadata_store.rs`, `crates/cli/src/main.rs`, `crates/command_palette/src/persistence.rs`, `crates/dev_container/src/lib.rs`, `crates/editor/src/display_map/fold_map.rs`, `crates/editor/src/document_colors.rs`, `crates/editor/src/editor.rs`
+- **sandbox**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/unicode_confusables.rs`, `crates/cli/src/main.rs`, `docs/src/development/linux.md`, `docs/src/development/upstream-sync-2026-07-03.md`, `docs/src/development/upstream-sync-2026-08-07.md`, `docs/src/development/upstream-sync-2026-09-02.md`, `docs/src/development/upstream-sync-2026-09-22-acp-elicitation.md`, `docs/src/development/upstream-sync-2026-10-02.md`
+- **search**: `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/creating-agents/REFERENCE.md`, `.agents/skills/creating-agents/SKILL.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/voice-examples.md`, `.factory/skills/humanizer/SKILL.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`
+- **symbol**: `.cargo/config.toml`, `.factory/skills/humanizer/SKILL.md`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/atom.json`, `assets/keymaps/linux/emacs.json`, `assets/keymaps/linux/jetbrains.json`, `assets/keymaps/linux/sublime_text.json`, `assets/keymaps/macos/atom.json`
+- **telemetry**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `.agents/skills/hunting-code-smells/REFERENCE.md`, `.agents/skills/hunting-code-smells/SKILL.md`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `README.md`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_panel.rs`
+- **tree_sitter**: `crates/debugger_ui/src/debugger_panel.rs`, `crates/debugger_ui/src/tests/inline_values.rs`, `crates/editor/src/bracket_colorization.rs`, `crates/editor/src/code_lens.rs`, `crates/editor/src/display_map.rs`, `crates/editor/src/display_map/block_map.rs`, `crates/editor/src/display_map/custom_highlights.rs`, `crates/editor/src/display_map/fold_map.rs`, `crates/editor/src/display_map/inlay_map.rs`, `crates/editor/src/display_map/tab_map.rs`, `crates/editor/src/display_map/wrap_map.rs`, `crates/editor/src/document_symbols.rs`
+- **vector**: `Cargo.toml`, `crates/agent_ui/src/message_editor.rs`, `crates/clock/src/clock.rs`, `crates/collections/src/vecmap.rs`, `crates/diagnostics/src/buffer_diagnostics.rs`, `crates/editor/src/cursor_animation.rs`, `crates/editor/src/display_map/tab_map.rs`, `crates/editor/src/hover_popover.rs`, `crates/fs/src/fs.rs`, `crates/gpui/src/elements/deferred.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/path_builder.rs`
+
+## Interpretation limit
+
+This survey identifies candidate files. It does not establish behavior; read and cite the implementation and tests before making claims.

@@ -1,0 +1,357 @@
+# Static survey: gpui-kit
+
+- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/gpui-kit`
+- HEAD: `3467e647600290343885b500bd7464057e334d18`
+- Tracked files: 3629
+
+## Top-level subsystems
+
+- `crates`: 2789 files
+- `website`: 499 files
+- `examples`: 230 files
+- `skills`: 29 files
+- `themes`: 21 files
+- `script`: 18 files
+- `docs`: 12 files
+- `.github`: 9 files
+- `.agents`: 2 files
+- `.claude`: 2 files
+- `.cargo`: 1 files
+- `.gitignore`: 1 files
+- `.rustfmt.toml`: 1 files
+- `.theme-schema.json`: 1 files
+- `AGENTS.md`: 1 files
+- `CLAUDE.md`: 1 files
+- `CONTRIBUTING.md`: 1 files
+- `Cargo.lock`: 1 files
+- `Cargo.toml`: 1 files
+- `LICENSE-APACHE`: 1 files
+- `LICENSE-DOCS.md`: 1 files
+- `Makefile`: 1 files
+- `README.md`: 1 files
+- `README.zh-CN.md`: 1 files
+- `_typos.toml`: 1 files
+- `flake.lock`: 1 files
+- `flake.nix`: 1 files
+- `release-notes.md`: 1 files
+
+## Manifests
+
+- `Cargo.toml`
+- `crates/assets/Cargo.toml`
+- `crates/base/Cargo.toml`
+- `crates/base/examples/native/Cargo.toml`
+- `crates/base/examples/wasm/Cargo.toml`
+- `crates/base/examples/wasm/www/package.json`
+- `crates/component-macros/Cargo.toml`
+- `crates/component-shell/Cargo.toml`
+- `crates/component-shell/tests/types/package.json`
+- `crates/component/Cargo.toml`
+- `crates/fps/Cargo.toml`
+- `crates/kit/Cargo.toml`
+- `crates/shell/Cargo.toml`
+- `crates/shell/rquickjs-compat/Cargo.toml`
+- `crates/story-web/Cargo.toml`
+- `crates/story-web/www/package.json`
+- `crates/story/Cargo.toml`
+- `crates/webview/Cargo.toml`
+- `examples/ai_recipes/Cargo.toml`
+- `examples/app_assets/Cargo.toml`
+- `examples/brush/Cargo.toml`
+- `examples/dialog_overlay/Cargo.toml`
+- `examples/dock/Cargo.toml`
+- `examples/editor/Cargo.toml`
+- `examples/focus_trap/Cargo.toml`
+- `examples/fps_monitor/Cargo.toml`
+- `examples/hello_world/Cargo.toml`
+- `examples/html/Cargo.toml`
+- `examples/input/Cargo.toml`
+- `examples/large-text/Cargo.toml`
+- `examples/markdown/Cargo.toml`
+- `examples/markdown_table/Cargo.toml`
+- `examples/sidebar/Cargo.toml`
+- `examples/speech/Cargo.toml`
+- `examples/stream-markdown/Cargo.toml`
+- `examples/system_monitor/Cargo.toml`
+- `examples/table_in_scrollable/Cargo.toml`
+- `examples/text_max_lines/Cargo.toml`
+- `examples/text_selection/Cargo.toml`
+- `examples/tooltip_top_edge/Cargo.toml`
+- `examples/touch_selection/Cargo.toml`
+- `examples/webview/Cargo.toml`
+- `examples/window_title/Cargo.toml`
+- `website/package.json`
+
+## Candidate entrypoints
+
+- `crates/assets/src/lib.rs`
+- `crates/base/examples/wasm/src/lib.rs`
+- `crates/base/src/lib.rs`
+- `crates/component-macros/src/lib.rs`
+- `crates/component-shell/src/lib.rs`
+- `crates/component/src/lib.rs`
+- `crates/fps/src/lib.rs`
+- `crates/kit/src/lib.rs`
+- `crates/shell/rquickjs-compat/src/lib.rs`
+- `crates/shell/src/lib.rs`
+- `crates/story-web/src/lib.rs`
+- `crates/story/src/lib.rs`
+- `crates/story/src/main.rs`
+- `crates/webview/src/lib.rs`
+- `examples/ai_recipes/src/lib.rs`
+- `examples/ai_recipes/src/main.rs`
+- `examples/app_assets/src/main.rs`
+- `examples/brush/src/main.rs`
+- `examples/dialog_overlay/src/main.rs`
+- `examples/dock/src/main.rs`
+- `examples/editor/src/main.rs`
+- `examples/focus_trap/src/main.rs`
+- `examples/fps_monitor/src/main.rs`
+- `examples/hello_world/src/main.rs`
+- `examples/html/src/main.rs`
+- `examples/input/src/main.rs`
+- `examples/large-text/src/main.rs`
+- `examples/markdown/src/main.rs`
+- `examples/markdown_table/src/main.rs`
+- `examples/sidebar/src/main.rs`
+- `examples/speech/src/main.rs`
+- `examples/stream-markdown/src/main.rs`
+- `examples/system_monitor/src/main.rs`
+- `examples/table_in_scrollable/src/main.rs`
+- `examples/text_max_lines/src/main.rs`
+- `examples/text_selection/src/main.rs`
+- `examples/tooltip_top_edge/src/main.rs`
+- `examples/touch_selection/src/main.rs`
+- `examples/webview/src/main.rs`
+- `examples/window_title/src/main.rs`
+
+## Tests, benchmarks, and evals
+
+- `crates/assets/tests/icons.rs`
+- `crates/base/src/dock/test_support.rs`
+- `crates/base/src/test_support.rs`
+- `crates/base/tests/element_ext.rs`
+- `crates/component-shell/tests/basic_public_host.rs`
+- `crates/component-shell/tests/chart_host.rs`
+- `crates/component-shell/tests/chat_host.rs`
+- `crates/component-shell/tests/check.rs`
+- `crates/component-shell/tests/cli.rs`
+- `crates/component-shell/tests/collections_host.rs`
+- `crates/component-shell/tests/command_host.rs`
+- `crates/component-shell/tests/controls_host.rs`
+- `crates/component-shell/tests/data_table_host.rs`
+- `crates/component-shell/tests/delegate_collections_host.rs`
+- `crates/component-shell/tests/delegate_combobox_host.rs`
+- `crates/component-shell/tests/delegate_select_host.rs`
+- `crates/component-shell/tests/empty_host.rs`
+- `crates/component-shell/tests/inline_tokens_host.rs`
+- `crates/component-shell/tests/input_group_host.rs`
+- `crates/component-shell/tests/inventory.rs`
+- `crates/component-shell/tests/layout_host.rs`
+- `crates/component-shell/tests/lazy_overlay_host.rs`
+- `crates/component-shell/tests/lifecycle_host.rs`
+- `crates/component-shell/tests/media_public_host.rs`
+- `crates/component-shell/tests/navigation_host.rs`
+- `crates/component-shell/tests/overlay_host.rs`
+- `crates/component-shell/tests/public_host.rs`
+- `crates/component-shell/tests/questionnaire_host.rs`
+- `crates/component-shell/tests/scroll_host.rs`
+- `crates/component-shell/tests/settings_public_host.rs`
+- `crates/component-shell/tests/story_gallery_host.rs`
+- `crates/component-shell/tests/structured_host.rs`
+- `crates/component-shell/tests/types/README.md`
+- `crates/component-shell/tests/types/fluent.ts`
+- `crates/component-shell/tests/types/package-lock.json`
+- `crates/component-shell/tests/types/package.json`
+- `crates/component-shell/tests/types/rejected.ts`
+- `crates/component-shell/tests/types/run.mjs`
+- `crates/component-shell/tests/window_effects_host.rs`
+- `crates/component/src/dock/test_support.rs`
+- `crates/component/tests/base_compat.rs`
+- `crates/component/tests/controlled_change_callbacks.rs`
+- `crates/component/tests/legacy_button_compat.rs`
+- `crates/component/tests/legacy_controls_compat.rs`
+- `crates/component/tests/legacy_language_config_compat.rs`
+- `crates/component/tests/table_dump_range.rs`
+- `crates/component/tests/theme_compat.rs`
+- `crates/kit/tests/assets.rs`
+- `crates/kit/tests/collections.rs`
+- `crates/kit/tests/common/mod.rs`
+- `crates/kit/tests/components.rs`
+- `crates/kit/tests/controls.rs`
+- `crates/kit/tests/date_picker.rs`
+- `crates/kit/tests/disclosure.rs`
+- `crates/kit/tests/dock.rs`
+- `crates/kit/tests/exports.rs`
+- `crates/kit/tests/input.rs`
+- `crates/kit/tests/input/README.md`
+- `crates/kit/tests/input/completions.rs`
+- `crates/kit/tests/input/composition.rs`
+- `crates/kit/tests/input/constraints.rs`
+- `crates/kit/tests/input/editing.rs`
+- `crates/kit/tests/input/editor.rs`
+- `crates/kit/tests/input/history.rs`
+- `crates/kit/tests/input/lifecycle.rs`
+- `crates/kit/tests/input/textarea.rs`
+- `crates/kit/tests/input_focus.rs`
+- `crates/kit/tests/interactions.rs`
+- `crates/kit/tests/lifecycle.rs`
+- `crates/kit/tests/menu.rs`
+- `crates/kit/tests/overlays.rs`
+- `crates/kit/tests/rendering.rs`
+- `crates/kit/tests/root.rs`
+- `crates/kit/tests/search.rs`
+- `crates/kit/tests/test_macro.rs`
+- `crates/kit/tests/touch_selection.rs`
+- `crates/kit/tests/ui.rs`
+- `crates/kit/tests/window.rs`
+- `crates/shell/rquickjs-compat/tests/identity.rs`
+- `crates/shell/src/tests/benchmark.rs`
+- … 28 more
+
+## Architecture and policy documents
+
+- `AGENTS.md`
+- `CONTRIBUTING.md`
+- `README.md`
+- `README.zh-CN.md`
+- `crates/assets/README.md`
+- `crates/base/README.md`
+- `crates/base/examples/README.md`
+- `crates/base/src/input/README.md`
+- `crates/base/src/input/editor/display_map/README.md`
+- `crates/component-shell/tests/types/README.md`
+- `crates/component/src/highlighter/languages/rust/README.md`
+- `crates/fps/README.md`
+- `crates/kit/README.md`
+- `crates/kit/tests/input/README.md`
+- `crates/shell/README.md`
+- `crates/story-web/README.md`
+- `crates/webview/README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/README.md`
+- `docs/superpowers/specs/2026-08-29-gpui-component-shell-design.md`
+- `docs/superpowers/specs/2026-08-30-gpui-base-text-view-design.md`
+- `docs/superpowers/specs/2026-09-02-history-split-design.md`
+- `examples/README.md`
+- `examples/ai_recipes/README.md`
+- `examples/app_assets/README.md`
+- `examples/js_story/README.md`
+- `examples/speech/README.md`
+- `skills/gpui-kit-design-guides/references/design-guides.md`
+- `website/DESIGN.md`
+- `website/README.md`
+- `website/docs/design-guides.md`
+- `website/zh-CN/docs/design-guides.md`
+
+## Declared dependencies
+
+- `@astrojs/markdown-remark`
+- `@astrojs/vue`
+- `@fontsource-variable/jetbrains-mono`
+- `@pagefind/default-ui`
+- `@tailwindcss/vite`
+- `@types/bun`
+- `aho-corasick`
+- `anyhow`
+- `astro`
+- `astro-pagefind`
+- `async-channel`
+- `autocorrect`
+- `battery`
+- `cap-std`
+- `chrono`
+- `color-lsp`
+- `console_error_panic_hook`
+- `console_log`
+- `cpal`
+- `criterion`
+- `csv`
+- `data-url`
+- `dirs`
+- `enum-iterator`
+- `fake`
+- `fs2`
+- `futures`
+- `gpui`
+- `gpui-base`
+- `gpui-component`
+- `gpui-component-macros`
+- `gpui-component-story`
+- `gpui-fps`
+- `gpui-kit`
+- `gpui-kit-assets`
+- `gpui-shell`
+- `gpui-wry`
+- `gpui_macros`
+- `gpui_platform`
+- `html5ever`
+- `image`
+- `indoc`
+- `instant`
+- `itertools`
+- `log`
+- `lsp-types`
+- `lucide-vue-next`
+- `markdown`
+- `markup5ever_rcdom`
+- `notify`
+- `num-traits`
+- `once_cell`
+- `paste`
+- `proc-macro-crate`
+- `proc-macro2`
+- `quickjs-jit-stdlib`
+- `quote`
+- `rand`
+- `raw-window-handle`
+- `regex`
+- `rehype-mathjax`
+- `remark-frontmatter`
+- `remark-gfm`
+- `remark-math`
+- `remark-parse`
+- `reqwest`
+- `reqwest_client`
+- `ropey`
+- `rquickjs`
+- `rquickjs-jit`
+- `rust-embed`
+- `rust-i18n`
+- `rust_decimal`
+- `schemars`
+- `semver`
+- `serde`
+- `serde_json`
+- `serde_repr`
+- `sha2`
+- `smallvec`
+- … 28 more
+
+## Architecture keyword hints
+
+- **agent**: `.claude/COMPONENT_TEST_RULES.md`, `.claude/commands/release-notes.md`, `.theme-schema.json`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `README.zh-CN.md`, `crates/base/examples/native/src/bin/components.rs`, `crates/component/src/color_picker.rs`, `crates/component/src/theme/default-theme.json`, `crates/component/src/theme/schema.rs`, `crates/component/src/theme/theme_color.rs`
+- **benchmark**: `.github/workflows/ci.yml`, `crates/base/benches/motion.rs`, `crates/fps/src/sampler.rs`, `crates/shell/src/engine/mod.rs`, `crates/shell/src/engine/quickjs/mod.rs`, `crates/shell/src/materialize.rs`, `crates/shell/src/snapshot.rs`, `crates/shell/src/tests/benchmark.rs`, `crates/shell/src/tests/mod.rs`, `crates/shell/src/tests/structure.rs`, `crates/shell/src/tests/template.rs`, `crates/story/src/stories/shell_story.rs`
+- **browser**: `CONTRIBUTING.md`, `crates/base/README.md`, `crates/base/src/event.rs`, `crates/base/src/history.rs`, `crates/base/src/input/base/state.rs`, `crates/base/src/input/editor/lsp/mod.rs`, `crates/base/src/link.rs`, `crates/component-shell/tests/questionnaire_host.rs`, `crates/component/src/input/overlay.rs`, `crates/component/src/styled.rs`, `crates/shell/README.md`, `crates/shell/src/engine/quickjs/host.rs`
+- **cache**: `.github/workflows/ci.yml`, `.github/workflows/release-gpui.yml`, `.github/workflows/release-website.yml`, `AGENTS.md`, `crates/assets/README.md`, `crates/assets/src/lib.rs`, `crates/assets/src/wasm_assets.rs`, `crates/base/benches/text_view_scroll.rs`, `crates/base/src/dock/dock_area.rs`, `crates/base/src/dock/layout/node.rs`, `crates/base/src/dock/layout/tree.rs`, `crates/base/src/dock/mod.rs`
+- **checkpoint**: `crates/shell/src/engine/quickjs/mod.rs`, `crates/shell/src/engine/quickjs/scheduler.rs`, `crates/shell/src/entities.rs`, `crates/shell/src/runtime.rs`, `crates/shell/src/tests/render.rs`, `docs/ACCESSIBILITY-UI-TESTING.md`
+- **citation**: `website/base/text-view.md`, `website/component/text-view.md`
+- **embed**: `.theme-schema.json`, `crates/assets/Cargo.toml`, `crates/assets/README.md`, `crates/assets/build.rs`, `crates/assets/src/lib.rs`, `crates/assets/src/native_assets.rs`, `crates/base/README.md`, `crates/base/examples/motion/mod.rs`, `crates/base/examples/showcase/mod.rs`, `crates/base/examples/wasm/src/lib.rs`, `crates/base/examples/wasm/www/src/main.js`, `crates/base/src/input/editor/lsp/completions.rs`
+- **evaluation**: `crates/base/src/input/editor/display_map/fold_map.rs`, `crates/shell/src/engine/quickjs/sandbox.rs`, `crates/shell/src/engine/quickjs/scheduler.rs`, `crates/shell/src/scope.rs`, `crates/shell/src/tests/render.rs`, `docs/gpui-shell.md`, `examples/ai_recipes/README.md`, `examples/fps_monitor/src/main.rs`, `examples/markdown_table/src/report.md`, `website/docs/comparison.md`, `website/shell/capabilities.md`
+- **graph**: `AGENTS.md`, `crates/base/README.md`, `crates/base/benches/text_view_scroll.rs`, `crates/base/examples/showcase/components/text_selection.rs`, `crates/base/src/input/base/inline_tokens.rs`, `crates/base/src/input/base/mask_pattern.rs`, `crates/base/src/input/base/state.rs`, `crates/base/src/lib.rs`, `crates/base/src/plot/mod.rs`, `crates/base/src/plot/shape.rs`, `crates/base/src/plot/shape/bar.rs`, `crates/base/src/plot/shape/sankey.rs`
+- **index**: `.github/workflows/release-gpui.yml`, `crates/base/README.md`, `crates/base/benches/motion.rs`, `crates/base/examples/showcase/components/accordion.rs`, `crates/base/examples/showcase/components/color_picker.rs`, `crates/base/examples/showcase/components/select.rs`, `crates/base/examples/showcase/components/tabs.rs`, `crates/base/examples/showcase/mod.rs`, `crates/base/examples/showcase/syntect_highlighter.rs`, `crates/base/src/alert_dialog.rs`, `crates/base/src/button.rs`, `crates/base/src/calendar.rs`
+- **oauth**: `crates/shell/README.md`, `crates/shell/src/engine/quickjs/standard/fetch.rs`, `crates/shell/src/storage.rs`, `crates/shell/src/tests/http_request.rs`, `website/shell/examples.md`, `website/zh-CN/shell/examples.md`
+- **plugin**: `README.md`, `_typos.toml`, `crates/base/src/lib.rs`, `crates/base/src/root.rs`, `crates/base/src/text/format/markdown.rs`, `crates/base/src/text/inline_flow.rs`, `crates/base/src/text/inline_virtual_tests.rs`, `crates/base/src/text/markdown_ext.rs`, `crates/base/src/text/node.rs`, `crates/base/src/text/state.rs`, `crates/base/src/text/text_view.rs`, `crates/component/src/root.rs`
+- **provider**: `crates/base/src/input/base/element.rs`, `crates/base/src/input/base/kind.rs`, `crates/base/src/input/base/state.rs`, `crates/base/src/input/editor/highlighting.rs`, `crates/base/src/input/editor/language.rs`, `crates/base/src/input/editor/lsp/code_actions.rs`, `crates/base/src/input/editor/lsp/completions.rs`, `crates/base/src/input/editor/lsp/definitions.rs`, `crates/base/src/input/editor/lsp/document_colors.rs`, `crates/base/src/input/editor/lsp/hover.rs`, `crates/base/src/input/editor/lsp/mod.rs`, `crates/base/src/input/editor/lsp/semantic_tokens.rs`
+- **queue**: `.github/workflows/release-website.yml`, `crates/base/src/dock/tab_group.rs`, `crates/base/src/plot/shape/sankey.rs`, `crates/base/src/root.rs`, `crates/base/src/text/state.rs`, `crates/base/src/text_selection.rs`, `crates/component/src/speech/microphone.rs`, `crates/component/src/speech/system/macos.rs`, `crates/component/src/speech/system/winrt.rs`, `crates/fps/src/gpu/macos.rs`, `crates/fps/src/refresh.rs`, `crates/kit/TESTING.md`
+- **rank**: `crates/base/src/dock/dock_area.rs`, `crates/base/src/plot/shape/sankey.rs`, `crates/base/src/scroll_bounce.rs`, `crates/base/src/toast.rs`, `crates/component/src/switch.rs`, `crates/fps/src/sampler.rs`, `crates/shell/src/materialize/components/list.rs`, `crates/shell/src/tests/benchmark.rs`, `crates/story/src/stories/data_table_story.rs`, `website/docs/comparison.md`, `website/docs/keybinding.md`, `website/src/lib/showcases.ts`
+- **sandbox**: `crates/shell/src/assets.rs`, `crates/shell/src/capability.rs`, `crates/shell/src/engine/mod.rs`, `crates/shell/src/engine/quickjs/host_modules.rs`, `crates/shell/src/engine/quickjs/mod.rs`, `crates/shell/src/engine/quickjs/sandbox.rs`, `crates/shell/src/engine/quickjs/standard/mod.rs`, `crates/shell/src/host.rs`, `crates/shell/src/host_modules.rs`, `crates/shell/src/lib.rs`, `docs/README.md`, `docs/gpui-shell.md`
+- **search**: `crates/assets/examples/full_assets.rs`, `crates/assets/examples/selected_assets.rs`, `crates/assets/src/icon.rs`, `crates/assets/src/lib.rs`, `crates/assets/tests/icons.rs`, `crates/base/examples/showcase/components/combobox.rs`, `crates/base/examples/showcase/components/dock.rs`, `crates/base/examples/showcase/components/toolbar.rs`, `crates/base/examples/showcase/mod.rs`, `crates/base/examples/showcase/syntect_highlighter.rs`, `crates/base/examples/wasm/www/src/main.js`, `crates/base/src/combobox.rs`
+- **symbol**: `.theme-schema.json`, `crates/assets/README.md`, `crates/base/src/input/base/element.rs`, `crates/base/src/input/base/kind.rs`, `crates/base/src/input/editor/diagnostics.rs`, `crates/base/src/input/editor/lsp/definitions.rs`, `crates/base/src/input/editor/lsp/hover.rs`, `crates/base/src/input/editor/lsp/overlay.rs`, `crates/base/src/input/editor/mod.rs`, `crates/base/src/plot/mod.rs`, `crates/base/src/text/format/markdown.rs`, `crates/base/src/text/node.rs`
+- **telemetry**: `crates/base/README.md`, `examples/markdown_table/src/report.md`, `website/docs/event.md`, `website/zh-CN/docs/event.md`
+- **tree_sitter**: `.theme-schema.json`, `crates/component/src/highlighter/highlighter.rs`, `crates/component/src/highlighter/input_adapter.rs`, `crates/component/src/highlighter/languages.rs`, `crates/component/src/highlighter/registry.rs`, `crates/component/src/highlighter/wasm_stub.rs`, `crates/component/src/input/syntax_context.rs`, `crates/component/src/text/mod.rs`, `examples/editor/src/main.rs`
+- **vector**: `crates/base/src/dock/dock_area.rs`, `crates/base/src/dock/layout/edit.rs`, `crates/component/src/button/button_group.rs`, `crates/component/src/chart/radar_chart.rs`, `crates/component/src/command/item.rs`, `crates/component/src/highlighter/highlighter.rs`, `crates/component/src/searchable_list/vec.rs`, `crates/component/src/table/state.rs`, `crates/shell/README.md`, `crates/shell/src/engine/quickjs/entity_api.rs`, `crates/shell/src/engine/quickjs/mod.rs`, `crates/shell/src/spec.rs`
+
+## Interpretation limit
+
+This survey identifies candidate files. It does not establish behavior; read and cite the implementation and tests before making claims.
