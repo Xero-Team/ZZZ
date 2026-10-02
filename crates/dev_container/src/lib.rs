@@ -1709,12 +1709,7 @@ async fn get_ghcr_templates(
 async fn get_ghcr_features(
     client: Arc<dyn HttpClient>,
 ) -> Result<DevContainerFeaturesResponse, String> {
-    let token = get_oci_token(
-        ghcr_registry(),
-        devcontainer_templates_repository(),
-        &client,
-    )
-    .await?;
+    let token = get_oci_token(ghcr_registry(), devcontainer_features_repository(), &client).await?;
 
     let manifest = get_latest_oci_manifest(
         &token.token,
@@ -1761,8 +1756,9 @@ mod tests {
     use http_client::{FakeHttpClient, anyhow};
 
     use crate::{
-        DevContainerFeature, DevContainerTemplatesResponse, devcontainer_templates_repository,
-        first_manifest_layer_digest, get_deserializable_oci_blob, ghcr_registry,
+        DevContainerFeature, DevContainerTemplatesResponse, devcontainer_features_repository,
+        devcontainer_templates_repository, first_manifest_layer_digest,
+        get_deserializable_oci_blob, get_ghcr_features, ghcr_registry,
         oci::DockerManifestsResponse,
     };
 
@@ -1786,6 +1782,37 @@ mod tests {
             first_manifest_layer_digest(&manifest, "devcontainers/templates"),
             Err("OCI manifest for devcontainers/templates contains no layers".to_owned())
         );
+    }
+
+    #[gpui::test]
+    async fn feature_catalog_uses_the_features_token_scope() {
+        let client = FakeHttpClient::create(|request| async move {
+            let path = request.uri().path();
+            let body = match path {
+                "/token" => {
+                    assert_eq!(
+                        request.uri().query(),
+                        Some("service=ghcr.io&scope=repository:devcontainers/features:pull")
+                    );
+                    r#"{"token":"test-token"}"#
+                }
+                "/v2/devcontainers/features/manifests/latest" => {
+                    r#"{"layers":[{"digest":"sha256:test"}]}"#
+                }
+                "/v2/devcontainers/features/blobs/sha256:test" => r#"{"features":[]}"#,
+                _ => return Err(anyhow!("Unexpected path: {path}")),
+            };
+
+            Ok(http_client::Response::builder()
+                .status(200)
+                .body(body.into())
+                .unwrap())
+        });
+
+        let response = get_ghcr_features(client).await.expect("feature catalog");
+
+        assert!(response.features.is_empty());
+        assert_eq!(devcontainer_features_repository(), "devcontainers/features");
     }
 
     #[gpui::test]
