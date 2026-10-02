@@ -18,8 +18,8 @@ use crate::{
     devcontainer_api::{DevContainerError, DevContainerUp},
     devcontainer_json::{
         ContainerBuild, DevContainer, DevContainerBuildType, FeatureOptions, ForwardPort,
-        MountDefinition, deserialize_devcontainer_json, deserialize_devcontainer_json_from_value,
-        deserialize_devcontainer_json_to_value,
+        LifecycleScript, MountDefinition, deserialize_devcontainer_json,
+        deserialize_devcontainer_json_from_value, deserialize_devcontainer_json_to_value,
     },
     docker::{
         Docker, DockerClient, DockerComposeConfig, DockerComposeService, DockerComposeServiceBuild,
@@ -2002,80 +2002,77 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
 
         if new_container {
             if let Some(on_create_command) = &config.on_create_command {
-                for (command_name, command) in on_create_command.script_commands() {
-                    log::debug!("Running on create command {command_name}");
-                    self.docker_client
-                        .run_docker_exec(
-                            &devcontainer_up.container_id,
-                            &remote_folder,
-                            &devcontainer_up.remote_user,
-                            &devcontainer_up.remote_env,
-                            command,
-                        )
-                        .await?;
-                }
+                self.run_remote_script_commands(
+                    devcontainer_up,
+                    &remote_folder,
+                    "on create",
+                    on_create_command,
+                )
+                .await?;
             }
             if let Some(update_content_command) = &config.update_content_command {
-                for (command_name, command) in update_content_command.script_commands() {
-                    log::debug!("Running update content command {command_name}");
-                    self.docker_client
-                        .run_docker_exec(
-                            &devcontainer_up.container_id,
-                            &remote_folder,
-                            &devcontainer_up.remote_user,
-                            &devcontainer_up.remote_env,
-                            command,
-                        )
-                        .await?;
-                }
+                self.run_remote_script_commands(
+                    devcontainer_up,
+                    &remote_folder,
+                    "update content",
+                    update_content_command,
+                )
+                .await?;
             }
 
             if let Some(post_create_command) = &config.post_create_command {
-                for (command_name, command) in post_create_command.script_commands() {
-                    log::debug!("Running post create command {command_name}");
-                    self.docker_client
-                        .run_docker_exec(
-                            &devcontainer_up.container_id,
-                            &remote_folder,
-                            &devcontainer_up.remote_user,
-                            &devcontainer_up.remote_env,
-                            command,
-                        )
-                        .await?;
-                }
+                self.run_remote_script_commands(
+                    devcontainer_up,
+                    &remote_folder,
+                    "post create",
+                    post_create_command,
+                )
+                .await?;
             }
         }
         if container_started {
             if let Some(post_start_command) = &config.post_start_command {
-                for (command_name, command) in post_start_command.script_commands() {
-                    log::debug!("Running post start command {command_name}");
-                    self.docker_client
-                        .run_docker_exec(
-                            &devcontainer_up.container_id,
-                            &remote_folder,
-                            &devcontainer_up.remote_user,
-                            &devcontainer_up.remote_env,
-                            command,
-                        )
-                        .await?;
-                }
+                self.run_remote_script_commands(
+                    devcontainer_up,
+                    &remote_folder,
+                    "post start",
+                    post_start_command,
+                )
+                .await?;
             }
         }
         if let Some(post_attach_command) = &config.post_attach_command {
-            for (command_name, command) in post_attach_command.script_commands() {
-                log::debug!("Running post attach command {command_name}");
-                self.docker_client
-                    .run_docker_exec(
-                        &devcontainer_up.container_id,
-                        &remote_folder,
-                        &devcontainer_up.remote_user,
-                        &devcontainer_up.remote_env,
-                        command,
-                    )
-                    .await?;
-            }
+            self.run_remote_script_commands(
+                devcontainer_up,
+                &remote_folder,
+                "post attach",
+                post_attach_command,
+            )
+            .await?;
         }
 
+        Ok(())
+    }
+
+    async fn run_remote_script_commands(
+        &self,
+        devcontainer_up: &DevContainerUp,
+        remote_folder: &str,
+        lifecycle_phase: &str,
+        script: &LifecycleScript,
+    ) -> Result<(), DevContainerError> {
+        for (command_name, command) in script.script_commands() {
+            log::debug!("Running {lifecycle_phase} command {command_name}");
+            self.docker_client
+                .run_docker_exec(
+                    &devcontainer_up.container_id,
+                    remote_folder,
+                    &devcontainer_up.remote_user,
+                    &devcontainer_up.remote_env,
+                    command,
+                )
+                .await?;
+        }
         Ok(())
     }
 
