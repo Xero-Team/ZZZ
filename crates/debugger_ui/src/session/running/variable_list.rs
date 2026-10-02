@@ -155,29 +155,29 @@ impl ListEntry {
     }
 
     fn item_id(&self) -> ElementId {
-        use std::fmt::Write;
         let mut id = match &self.entry {
             DapEntry::Watcher(watcher) => format!("watcher-{}", watcher.expression),
             DapEntry::Variable(dap) => format!("variable-{}", dap.name),
             DapEntry::Scope(dap) => format!("scope-{}", dap.name),
         };
         for name in self.path.indices.iter() {
-            _ = write!(id, "-{}", name);
+            id.push('-');
+            id.push_str(name);
         }
         SharedString::from(id).into()
     }
 
     fn item_value_id(&self) -> ElementId {
-        use std::fmt::Write;
         let mut id = match &self.entry {
             DapEntry::Watcher(watcher) => format!("watcher-{}", watcher.expression),
             DapEntry::Variable(dap) => format!("variable-{}", dap.name),
             DapEntry::Scope(dap) => format!("scope-{}", dap.name),
         };
         for name in self.path.indices.iter() {
-            _ = write!(id, "-{}", name);
+            id.push('-');
+            id.push_str(name);
         }
-        _ = write!(id, "-value");
+        id.push_str("-value");
         SharedString::from(id).into()
     }
 }
@@ -382,6 +382,20 @@ impl VariableList {
         }
 
         self.entries = entries;
+        if self
+            .selection
+            .as_ref()
+            .is_some_and(|selection| !self.entries.iter().any(|entry| &entry.path == selection))
+        {
+            self.selection = None;
+        }
+        if self
+            .edited_path
+            .as_ref()
+            .is_some_and(|(path, _)| !self.entries.iter().any(|entry| &entry.path == path))
+        {
+            self.edited_path = None;
+        }
 
         let text_pixels = ui::TextSize::Default.pixels(cx).to_f64() as f32;
         let indent_size = INDENT_STEP_SIZE.to_f64() as f32;
@@ -1341,7 +1355,6 @@ impl VariableList {
                     "watcher-{}",
                     watcher.expression
                 )))
-                .selectable(false)
                 .disabled(self.disabled)
                 .selectable(false)
                 .indent_level(state.depth)
@@ -1655,7 +1668,6 @@ impl Render for VariableList {
                 )
                 .with_priority(1)
             }))
-            // .vertical_scrollbar_for(&self.list_handle, window, cx)
             .custom_scrollbars(
                 ui::Scrollbars::new(ScrollAxes::Both)
                     .tracked_scroll_handle(&self.list_handle)
