@@ -799,7 +799,10 @@ tree-sitter-heex = "0.8"
 tree-sitter-html = "0.23"
 tree-sitter-jsdoc = "0.25"
 tree-sitter-json = "0.24"
-tree-sitter-md = { path = "crates/grammars/vendor/tree-sitter-md" } # vendored fork of 9a23c1a with serialize() buffer-overflow fix; https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243
+# Vendored fork of 9a23c1a with serialize() buffer-overflow fix; https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243
+tree-sitter-md = { path = "crates/grammars/vendor/tree-sitter-md" }
+# Vendored from https://github.com/monaqa/tree-sitter-mermaid @ 90ae195b31933ceb9d079abfa8a3ad0a36fee4cc
+tree-sitter-mermaid = { path = "crates/grammars/vendor/tree-sitter-mermaid" }
 tree-sitter-powershell = { path = "crates/grammars/vendor/tree-sitter-powershell" }
 tree-sitter-python = "0.25"
 tree-sitter-regex = "0.25"

@@ -1,10 +1,11 @@
 use collections::HashMap;
 use gpui::{
-    Animation, AnimationExt, AnyElement, App, ClipboardItem, Context, Entity, ImageSource,
-    ParsedSvg, RenderImage, SMOOTH_SVG_SCALE_FACTOR, ScrollDelta, ScrollHandle, ScrollWheelEvent,
-    Size, Stateful, StyledText, Task, Window, img, pulsating_between, size,
+    Animation, AnimationExt, AnyElement, App, ClipboardItem, Context, Entity, HighlightStyle,
+    ImageSource, ParsedSvg, RenderImage, SMOOTH_SVG_SCALE_FACTOR, ScrollDelta, ScrollHandle,
+    ScrollWheelEvent, Size, Stateful, StyledText, Task, Window, img, pulsating_between, size,
 };
 use i18n::tr;
+use language::{Language, Rope};
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::Path;
@@ -573,6 +574,7 @@ pub(crate) fn render_mermaid_diagram(
     parsed: &ParsedMarkdownMermaidDiagram,
     mermaid_state: &MermaidState,
     style: &MarkdownStyle,
+    language: Option<Arc<Language>>,
     markdown: Entity<Markdown>,
     source_offset: usize,
     showing_code: bool,
@@ -606,7 +608,7 @@ pub(crate) fn render_mermaid_diagram(
     match render_result {
         Some(Ok(render_image)) => {
             let body = if showing_code {
-                render_mermaid_code_view(&parsed.contents.contents)
+                render_mermaid_code_view(&parsed.contents.contents, language.as_ref(), style)
             } else {
                 let rasterized_scale = cached.map_or(1.0, |cached| cached.rasterized_scale);
                 let image_element = img(ImageSource::Render(render_image.clone()))
@@ -652,7 +654,11 @@ pub(crate) fn render_mermaid_diagram(
         Some(Err(_)) => {
             // Render failed — show the source code without tabs
             container
-                .child(render_mermaid_code_view(&parsed.contents.contents))
+                .child(render_mermaid_code_view(
+                    &parsed.contents.contents,
+                    language.as_ref(),
+                    style,
+                ))
                 .when(show_interactive, |container| {
                     container.child(render_mermaid_overlay_controls(
                         source_offset,
@@ -727,7 +733,11 @@ pub(crate) fn render_mermaid_diagram(
             } else {
                 // No fallback — show the code so the user has something to look at
                 container
-                    .child(render_mermaid_code_view(&parsed.contents.contents))
+                    .child(render_mermaid_code_view(
+                        &parsed.contents.contents,
+                        language.as_ref(),
+                        style,
+                    ))
                     .child(
                         div().absolute().top_1().right_2().child(
                             Label::new(rendering)
@@ -976,18 +986,44 @@ fn render_mermaid_copy_button(
         })
 }
 
-fn render_mermaid_code_view(contents: &SharedString) -> AnyElement {
-    div()
-        .w_full()
-        .child(StyledText::new(contents.clone()))
-        .into_any_element()
+fn render_mermaid_code_view(
+    contents: &SharedString,
+    language: Option<&Arc<Language>>,
+    style: &MarkdownStyle,
+) -> AnyElement {
+    let mut text_style = style.base_text_style.clone();
+    text_style.refine(&style.code_block.text);
+    let highlights = mermaid_code_highlights(contents, language, style);
+    let text = StyledText::new(contents.clone()).with_default_highlights(&text_style, highlights);
+
+    div().w_full().child(text).into_any_element()
+}
+
+fn mermaid_code_highlights(
+    contents: &str,
+    language: Option<&Arc<Language>>,
+    style: &MarkdownStyle,
+) -> Vec<(Range<usize>, HighlightStyle)> {
+    let rope = Rope::from(contents);
+    language
+        .into_iter()
+        .flat_map(|language| language.highlight_text(&rope, 0..contents.len()))
+        .filter_map(|(range, highlight_id)| {
+            style
+                .syntax
+                .get(highlight_id)
+                .cloned()
+                .map(|highlight| (range, highlight))
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         CachedMermaidDiagram, MermaidDiagramCache, MermaidState, ParsedMarkdownMermaidDiagram,
-        ParsedMarkdownMermaidDiagramContents, extract_mermaid_diagrams, parse_mermaid_info,
+        ParsedMarkdownMermaidDiagramContents, extract_mermaid_diagrams, mermaid_code_highlights,
+        parse_mermaid_info,
     };
     use crate::{
         CodeBlockRenderer, CopyButtonVisibility, MERMAID_ZOOM_DEBOUNCE, Markdown, MarkdownElement,
@@ -997,6 +1033,7 @@ mod tests {
     use gpui::{
         Context, Entity, IntoElement, Render, RenderImage, TestAppContext, Window, point, size,
     };
+    use language::{Language, LanguageConfig};
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
@@ -1144,6 +1181,39 @@ mod tests {
         assert_eq!(
             super::mermaid_font_family("Custom Font, sans-serif"),
             "Custom Font, sans-serif"
+        );
+    }
+
+    #[test]
+    fn test_mermaid_code_view_uses_language_highlights() {
+        let syntax = Arc::new(theme::SyntaxTheme::new(
+            [("keyword", gpui::rgba(0xffffffff))]
+                .into_iter()
+                .map(|(name, color)| (name.to_owned(), color.into())),
+        ));
+        let language = Arc::new(
+            Language::new(
+                LanguageConfig {
+                    name: "Mermaid".into(),
+                    grammar: Some("mermaid".into()),
+                    ..Default::default()
+                },
+                Some(tree_sitter_mermaid::LANGUAGE.into()),
+            )
+            .with_highlights_query(include_str!("../../grammars/src/mermaid/highlights.scm"))
+            .expect("Mermaid highlights query should parse"),
+        );
+        language.set_theme(&syntax);
+
+        let mut style = MarkdownStyle::default();
+        style.syntax = syntax;
+        let source = "flowchart TD\n    Start --> Stop";
+        let highlights = mermaid_code_highlights(source, Some(&language), &style);
+
+        assert!(
+            highlights
+                .iter()
+                .any(|(range, _)| &source[range.clone()] == "flowchart")
         );
     }
 

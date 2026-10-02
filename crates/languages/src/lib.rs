@@ -211,6 +211,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "mermaid",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "python",
             adapters: vec![
                 basedpyright_lsp_adapter,
@@ -477,7 +482,7 @@ fn load_config(name: &str) -> LanguageConfig {
 mod tests {
     use super::*;
     use fs::FakeFs;
-    use gpui::TestAppContext;
+    use gpui::{AppContext as _, TestAppContext};
     use std::path::Path;
 
     #[gpui::test]
@@ -614,6 +619,89 @@ mod tests {
                 .await
                 .expect("CSV language should load with built-in queries");
             assert_eq!(loaded_language.name(), "CSV");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_mermaid_registered_with_highlights(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        for file_name in ["diagram.mmd", "diagram.mermaid"] {
+            assert_eq!(
+                languages
+                    .language_for_file_path(Path::new(file_name))
+                    .map(|language| language.name()),
+                Some("Mermaid".into())
+            );
+        }
+
+        if cfg!(feature = "load-grammars") {
+            let language = languages
+                .load_language_for_file_path(Path::new("diagram.mmd"))
+                .await
+                .expect("Mermaid language should load with built-in queries");
+            let syntax_theme = theme::SyntaxTheme::new(
+                [("keyword", gpui::rgba(0xffffffff))]
+                    .into_iter()
+                    .map(|(name, color)| (name.to_owned(), color.into())),
+            );
+            language.set_theme(&syntax_theme);
+            let source = "flowchart TD\n    Start --> Stop\n";
+            let highlights = language.highlight_text(&Rope::from(source), 0..source.len());
+            assert!(
+                !highlights.is_empty(),
+                "Mermaid source should be highlighted"
+            );
+
+            let markdown_language = languages
+                .load_language_for_file_path(Path::new("README.md"))
+                .await
+                .expect("Markdown language should load with built-in queries");
+            let markdown_source = "```mermaid\nflowchart TD\n    Start --> Stop\n```";
+            let buffer = cx.new(|cx| {
+                let mut buffer = language::Buffer::local(markdown_source, cx);
+                buffer.set_language_registry(languages.clone());
+                buffer.set_language(Some(markdown_language), cx);
+                buffer
+            });
+            cx.run_until_parked();
+
+            buffer.read_with(cx, |buffer, _| {
+                let snapshot = buffer.snapshot();
+                let flowchart_offset = markdown_source
+                    .find("flowchart")
+                    .expect("flowchart source should be present");
+                assert_eq!(
+                    snapshot
+                        .language_at(flowchart_offset)
+                        .map(|language| language.name()),
+                    Some("Mermaid".into())
+                );
+
+                let keyword_id = syntax_theme
+                    .highlight_id("keyword")
+                    .map(language::HighlightId::new)
+                    .expect("keyword highlight should be registered");
+                assert!(
+                    snapshot
+                        .chunks(
+                            0..snapshot.len(),
+                            language::LanguageAwareStyling {
+                                tree_sitter: true,
+                                diagnostics: false,
+                            },
+                        )
+                        .any(|chunk| {
+                            chunk.syntax_highlight_id == Some(keyword_id)
+                                && chunk.text == "flowchart"
+                        })
+                );
+            });
         }
     }
 

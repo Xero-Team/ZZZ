@@ -39,6 +39,7 @@ tree-sitter-gowork = { workspace = true, optional = true }
 tree-sitter-jsdoc = { workspace = true, optional = true }
 tree-sitter-json = { workspace = true, optional = true }
 tree-sitter-md = { workspace = true, optional = true }
+tree-sitter-mermaid = { workspace = true, optional = true }
 tree-sitter-powershell = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-regex = { workspace = true, optional = true }
@@ -73,6 +74,7 @@ load-grammars = [
     "tree-sitter-jsdoc",
     "tree-sitter-json",
     "tree-sitter-md",
+    "tree-sitter-mermaid",
     "tree-sitter-powershell",
     "tree-sitter-python",
     "tree-sitter-regex",
@@ -91,5 +93,6 @@ tree-sitter-cmake.workspace = true
 tree-sitter-cmd.workspace = true
 tree-sitter-csv.workspace = true
 tree-sitter-dockerfile.workspace = true
+tree-sitter-mermaid.workspace = true
 tree-sitter-syslog.workspace = true
 tree-sitter-toml.workspace = true

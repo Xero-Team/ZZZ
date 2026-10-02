@@ -49,6 +49,7 @@ Some work out-of-the box and others rely on 3rd party extensions.
 - [Luau](./languages/luau.md)
 - [Makefile](./languages/makefile.md)
 - [Markdown](./languages/markdown.md) \*
+- [Mermaid](./languages/mermaid.md) \*
 - [Nim](./languages/nim.md)
 - [OCaml](./languages/ocaml.md)
 - [PHP](./languages/php.md)

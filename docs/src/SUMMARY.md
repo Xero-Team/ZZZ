@@ -110,6 +110,7 @@
 - [Luau](./languages/luau.md)
 - [Makefile](./languages/makefile.md)
 - [Markdown](./languages/markdown.md)
+- [Mermaid](./languages/mermaid.md)
 - [Nim](./languages/nim.md)
 - [OCaml](./languages/ocaml.md)
 - [OpenTofu](./languages/opentofu.md)

@@ -37,6 +37,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("jsonc", tree_sitter_json::LANGUAGE.into()),
         ("markdown", tree_sitter_md::LANGUAGE.into()),
         ("markdown-inline", tree_sitter_md::INLINE_LANGUAGE.into()),
+        ("mermaid", tree_sitter_mermaid::LANGUAGE.into()),
         ("powershell", tree_sitter_powershell::LANGUAGE.into()),
         ("python", tree_sitter_python::LANGUAGE.into()),
         ("regex", tree_sitter_regex::LANGUAGE.into()),
@@ -201,6 +202,14 @@ mod tests {
         parser.parse(source, None).expect("parse Dockerfile source")
     }
 
+    fn parse_mermaid(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_mermaid::LANGUAGE.into())
+            .expect("load Mermaid grammar");
+        parser.parse(source, None).expect("parse Mermaid source")
+    }
+
     fn assert_toml_parses(source: &str) {
         let tree = parse_toml(source);
         assert!(
@@ -246,6 +255,14 @@ mod tests {
         assert!(
             !tree.root_node().has_error(),
             "expected valid Dockerfile, got parse error for:\n{source}"
+        );
+    }
+
+    fn assert_mermaid_parses(source: &str) {
+        let tree = parse_mermaid(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid Mermaid, got parse error for:\n{source}"
         );
     }
 
@@ -1542,6 +1559,22 @@ mod tests {
         assert!(highlights.contains("\"NONE\""));
         assert!(highlights.contains("syntax|escape|check"));
         assert!(highlights.contains("@keyword.directive"));
+    }
+
+    #[test]
+    fn mermaid_parser_and_queries_cover_flowcharts() {
+        let source = "flowchart TD\n    Start --> Stop\n";
+        assert_mermaid_parses(source);
+
+        let sexp = parse_mermaid(source).root_node().to_sexp();
+        assert!(sexp.contains("flowchart"));
+        assert!(sexp.contains("flow_link_arrow"));
+
+        let queries = load_queries("mermaid");
+        let highlights = queries.highlights.expect("Mermaid highlights query");
+        assert!(highlights.contains("flowchart"));
+        assert!(highlights.contains("@keyword"));
+        assert!(highlights.contains("flow_link_arrow"));
     }
 
     #[test]

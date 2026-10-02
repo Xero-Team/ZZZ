@@ -24,6 +24,10 @@ def fib(n):
 ```
 ````
 
+Mermaid highlighting is built in. Use `mermaid` as the code fence language;
+Markdown Preview renders the diagram and its Code tab keeps the same syntax
+highlighting.
+
 ## Configuration
 
 ### Format

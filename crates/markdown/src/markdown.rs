@@ -2792,6 +2792,18 @@ impl Element for MarkdownElement {
                                 continue;
                             }
 
+                            let language = match kind {
+                                CodeBlockKind::Fenced => None,
+                                CodeBlockKind::FencedLang(language) => {
+                                    parsed_markdown.languages_by_name.get(language).cloned()
+                                }
+                                CodeBlockKind::FencedSrc(path_range) => parsed_markdown
+                                    .languages_by_path
+                                    .get(&path_range.path)
+                                    .cloned(),
+                                _ => None,
+                            };
+
                             if render_mermaid_diagrams
                                 && let Some(mermaid_diagram) =
                                     parsed_markdown.mermaid_diagrams.get(&range.start)
@@ -2816,6 +2828,7 @@ impl Element for MarkdownElement {
                                         mermaid_diagram,
                                         &mermaid_state,
                                         &self.style,
+                                        language.clone(),
                                         self.markdown.clone(),
                                         range.start,
                                         showing_code,
@@ -2829,18 +2842,6 @@ impl Element for MarkdownElement {
                                 rendered_mermaid_block = true;
                                 continue;
                             }
-
-                            let language = match kind {
-                                CodeBlockKind::Fenced => None,
-                                CodeBlockKind::FencedLang(language) => {
-                                    parsed_markdown.languages_by_name.get(language).cloned()
-                                }
-                                CodeBlockKind::FencedSrc(path_range) => parsed_markdown
-                                    .languages_by_path
-                                    .get(&path_range.path)
-                                    .cloned(),
-                                _ => None,
-                            };
 
                             let is_indented = matches!(kind, CodeBlockKind::Indented);
                             let scroll_handle = if self.style.code_block_overflow_x_scroll {
