@@ -45,6 +45,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("python", tree_sitter_python::LANGUAGE.into()),
         ("regex", tree_sitter_regex::LANGUAGE.into()),
         ("rust", tree_sitter_rust::LANGUAGE.into()),
+        ("scheme", tree_sitter_scheme::LANGUAGE.into()),
         ("syslog", tree_sitter_syslog::LANGUAGE.into()),
         ("toml", tree_sitter_toml::LANGUAGE.into()),
         ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
@@ -237,6 +238,14 @@ mod tests {
         parser.parse(source, None).expect("parse Mermaid source")
     }
 
+    fn parse_scheme(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_scheme::LANGUAGE.into())
+            .expect("load Scheme grammar");
+        parser.parse(source, None).expect("parse Scheme source")
+    }
+
     fn parse_markdown(source: &str) -> tree_sitter::Tree {
         let mut parser = Parser::new();
         parser
@@ -320,6 +329,14 @@ mod tests {
         assert!(
             !tree.root_node().has_error(),
             "expected valid Mermaid, got parse error for:\n{source}"
+        );
+    }
+
+    fn assert_scheme_parses(source: &str) {
+        let tree = parse_scheme(source);
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid Scheme, got parse error for:\n{source}"
         );
     }
 
@@ -1749,6 +1766,41 @@ mod tests {
         assert!(highlights.contains("flowchart"));
         assert!(highlights.contains("@keyword"));
         assert!(highlights.contains("flow_link_arrow"));
+    }
+
+    #[test]
+    fn scheme_parser_and_queries_cover_r6rs_forms() {
+        let source = r#"#!r6rs
+(import (rnrs))
+
+(define (factorial n)
+  (if (<= n 1)
+      1
+      (* n (factorial (- n 1)))))
+
+#| outer #| nested |# comment |#
+(define values '#(1 #t #\space "ok"))
+"#;
+        assert_scheme_parses(source);
+
+        let sexp = parse_scheme(source).root_node().to_sexp();
+        assert!(sexp.contains("(directive"));
+        assert!(sexp.contains("(block_comment"));
+        assert!(sexp.contains("(vector"));
+
+        let queries = load_queries("scheme");
+        assert!(
+            queries
+                .highlights
+                .expect("Scheme highlights query")
+                .contains("define-syntax")
+        );
+        assert!(
+            queries
+                .outline
+                .expect("Scheme outline query")
+                .contains("^define")
+        );
     }
 
     #[test]

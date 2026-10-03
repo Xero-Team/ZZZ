@@ -253,6 +253,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "scheme",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "syslog",
             adapters: vec![],
             ..Default::default()
@@ -546,6 +551,33 @@ mod tests {
                 .map(|language| language.name()),
             Some("TOML".into())
         );
+    }
+
+    #[gpui::test]
+    async fn test_scheme_registered_for_file_matching(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        for file_name in ["library.scm", "program.ss"] {
+            assert_eq!(
+                languages
+                    .language_for_file_path(Path::new(file_name))
+                    .map(|language| language.name()),
+                Some("Scheme".into())
+            );
+        }
+
+        if cfg!(feature = "load-grammars") {
+            let loaded_language = languages
+                .load_language_for_file_path(Path::new("library.scm"))
+                .await
+                .expect("Scheme language should load with built-in queries");
+            assert_eq!(loaded_language.name(), "Scheme");
+        }
     }
 
     #[gpui::test]

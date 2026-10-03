@@ -43,6 +43,7 @@ tree-sitter-powershell = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-regex = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
+tree-sitter-scheme = { workspace = true, optional = true }
 tree-sitter-syslog = { workspace = true, optional = true }
 tree-sitter-toml = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
@@ -78,6 +79,7 @@ load-grammars = [
     "tree-sitter-python",
     "tree-sitter-regex",
     "tree-sitter-rust",
+    "tree-sitter-scheme",
     "tree-sitter-syslog",
     "tree-sitter-toml",
     "tree-sitter-typescript",
@@ -94,6 +96,7 @@ tree-sitter-cmd.workspace = true
 tree-sitter-csv.workspace = true
 tree-sitter-dockerfile.workspace = true
 tree-sitter-mermaid.workspace = true
+tree-sitter-scheme.workspace = true
 tree-sitter-syslog.workspace = true
 tree-sitter-toml.workspace = true
 tree-sitter-typst.workspace = true
