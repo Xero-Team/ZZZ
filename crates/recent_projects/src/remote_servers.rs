@@ -1766,13 +1766,15 @@ impl RemoteServerProjects {
             else {
                 return;
             };
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, cx| {
                 if let Mode::Default(state) = &mut this.mode {
                     state.filtered_servers = Some(results);
                     cx.notify();
                 }
-            })
-            .ok();
+            });
         });
     }
 
