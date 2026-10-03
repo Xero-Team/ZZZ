@@ -133,7 +133,9 @@ impl NodeRuntime {
         }
 
         let system_node_error = if options.allow_path_lookup {
-            state.shell_env_loaded.clone().await.ok();
+            if state.shell_env_loaded.clone().await.is_err() {
+                log::debug!("shell environment unavailable; checking Node.js on the current PATH");
+            }
             match SystemNodeRuntime::detect().await {
                 Ok(instance) => {
                     log::info!("using Node.js found on PATH: {:?}", instance);
@@ -167,11 +169,8 @@ impl NodeRuntime {
                     Box::new(instance) as Box<dyn NodeRuntimeTrait>
                 }
                 Err(err) => {
-                    // failure case is cached, since downloading + installing may be expensive. The
-                    // downside of this is that it may fail due to an intermittent network issue.
-                    //
-                    // TODO: Have `install_if_needed` indicate which failure cases are retryable
-                    // and/or have shared tracking of when internet is available.
+                    // Cache managed installation failures because repeated downloads are expensive;
+                    // restarting ZZZ retries transient failures.
                     Box::new(UnavailableNodeRuntime {
                         error_message: format!(
                             "failure while downloading and/or installing ZZZ managed Node.js, \
@@ -184,9 +183,6 @@ impl NodeRuntime {
             }
         } else if let Some(system_node_error) = system_node_error {
             // failure case not cached, since it's cheap to check again
-            //
-            // TODO: When support is added for setting `options.allow_binary_download`, update this
-            // error message.
             return Box::new(UnavailableNodeRuntime {
                 error_message: format!(
                     "failure while checking system Node.js from PATH: {}",
@@ -196,9 +192,6 @@ impl NodeRuntime {
             });
         } else {
             // failure case is cached because it will always happen with these options
-            //
-            // TODO: When support is added for setting `options.allow_binary_download`, update this
-            // error message.
             Box::new(UnavailableNodeRuntime {
                 error_message: "`node` settings do not allow any way to use Node.js"
                     .to_owned()
@@ -323,7 +316,7 @@ impl NodeRuntime {
 
         let arguments: Vec<_> = packages
             .iter()
-            .map(|p| p.as_str())
+            .map(|package| package.as_str())
             .chain([
                 "--no-package-lock",
                 "--save-exact",
@@ -336,7 +329,6 @@ impl NodeRuntime {
             ])
             .collect();
 
-        // This is also wrong because the directory is wrong.
         self.run_npm_subcommand(Some(directory), "install", &arguments)
             .await?;
         Ok(())
@@ -678,10 +670,24 @@ impl ManagedNodeRuntime {
         };
 
         if !valid {
-            _ = fs::remove_dir_all(&node_containing_dir).await;
-            fs::create_dir(&node_containing_dir)
+            if let Err(error) = fs::remove_dir_all(&node_containing_dir).await
+                && error.kind() != io::ErrorKind::NotFound
+            {
+                return Err(error).with_context(|| {
+                    format!(
+                        "removing stale Node.js installation at {}",
+                        node_containing_dir.display()
+                    )
+                });
+            }
+            fs::create_dir_all(&node_containing_dir)
                 .await
-                .context("error creating node containing dir")?;
+                .with_context(|| {
+                    format!(
+                        "creating Node.js installation directory at {}",
+                        node_containing_dir.display()
+                    )
+                })?;
 
             let archive_type = match consts::OS {
                 "macos" | "linux" => ArchiveType::TarGz,
@@ -718,10 +724,19 @@ impl ManagedNodeRuntime {
             log::info!("Extracted Node.js to {}", node_containing_dir.display())
         }
 
-        // Note: Not in the `if !valid {}` so we can populate these for existing installations
-        _ = fs::create_dir(node_dir.join("cache")).await;
-        _ = fs::write(node_dir.join("blank_user_npmrc"), []).await;
-        _ = fs::write(node_dir.join("blank_global_npmrc"), []).await;
+        // Existing installations may predate the cache and blank npm configuration files.
+        let cache_dir = node_dir.join("cache");
+        fs::create_dir_all(&cache_dir)
+            .await
+            .with_context(|| format!("creating npm cache directory at {}", cache_dir.display()))?;
+        let user_config = node_dir.join("blank_user_npmrc");
+        fs::write(&user_config, [])
+            .await
+            .with_context(|| format!("writing npm user config at {}", user_config.display()))?;
+        let global_config = node_dir.join("blank_global_npmrc");
+        fs::write(&global_config, [])
+            .await
+            .with_context(|| format!("writing npm global config at {}", global_config.display()))?;
 
         anyhow::Ok(ManagedNodeRuntime {
             installation_path: node_dir,
@@ -881,8 +896,10 @@ impl SystemNodeRuntime {
         }
 
         let scratch_dir = paths::data_dir().join("node");
-        fs::create_dir(&scratch_dir).await.ok();
-        fs::create_dir(scratch_dir.join("cache")).await.ok();
+        let cache_dir = scratch_dir.join("cache");
+        fs::create_dir_all(&cache_dir)
+            .await
+            .with_context(|| format!("creating npm cache directory at {}", cache_dir.display()))?;
 
         Ok(Self {
             node,
@@ -982,7 +999,6 @@ impl NodeRuntimeTrait for SystemNodeRuntime {
         name: &str,
     ) -> Result<Option<Version>> {
         read_package_installed_version(local_package_directory.join("node_modules"), name).await
-        // todo: allow returning a globally installed version (requires callers not to hard-code the path)
     }
 }
 
@@ -1062,11 +1078,11 @@ fn proxy_argument(proxy: Option<&Url>) -> Option<String> {
     // Map proxy settings from `http://localhost:10809` to `http://127.0.0.1:10809`
     // NodeRuntime without environment information can not parse `localhost`
     // correctly.
-    // TODO: map to `[::1]` if we are using ipv6
     if matches!(proxy.host(), Some(Host::Domain(domain)) if domain.eq_ignore_ascii_case("localhost"))
     {
-        // When localhost is a valid Host, so is `127.0.0.1`
-        let _ = proxy.set_ip_host(IpAddr::V4(Ipv4Addr::LOCALHOST));
+        proxy
+            .set_ip_host(IpAddr::V4(Ipv4Addr::LOCALHOST))
+            .expect("IPv4 loopback should be a valid URL host");
     }
 
     Some(proxy.as_str().to_owned())
