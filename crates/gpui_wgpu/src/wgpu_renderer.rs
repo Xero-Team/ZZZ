@@ -994,14 +994,6 @@ impl WgpuRenderer {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn viewport_size(&self) -> Size<DevicePixels> {
-        Size {
-            width: DevicePixels(self.surface_config.width as i32),
-            height: DevicePixels(self.surface_config.height as i32),
-        }
-    }
-
     pub fn sprite_atlas(&self) -> &Arc<WgpuAtlas> {
         &self.atlas
     }
