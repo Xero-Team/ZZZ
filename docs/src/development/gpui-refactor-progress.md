@@ -323,6 +323,9 @@ routing owner，并固定 routing order 回归测试。
 - mouse listener capture/bubble、active drag cleanup、pointer capture release 与 action
   capture/bubble 算法已迁入 `InteractionOwner`；`Window` 只保留 event normalization、
   inspector/diagnostics 协调和公开 façade。
+- key/modifier capture/bubble、multi-stroke timeout/replay、focus/tab 与 pending-input cleanup
+  已迁入 `InteractionOwner`；platform input handler 的查询和文本提交通过窄 helper 保留原
+  take/set 生命周期。
 
 验证：
 
@@ -338,8 +341,9 @@ routing owner，并固定 routing order 回归测试。
 order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
 完整 routing snapshots `487347fcff`。
 pointer/action routing owner `d52a99235d`。
-下一步：继续 4B，将 key dispatch、pending replay 和 focus/tab 算法下沉到 interaction
-owner，然后收敛 4D completed-frame payload。
+key routing owner `8a2ce07544`；focus/pending-input owner `0ea05bb762`。
+下一步：收敛 4D completed-frame accessibility/diagnostics payload，并继续检查
+`window.rs` 中仍可归属 owner 的平行状态。
 
 4C text input owner 当前进度：
 
