@@ -38,7 +38,7 @@ impl Parse for StyleableMacroInput {
 }
 
 pub fn style_helpers(input: TokenStream) -> TokenStream {
-    let _ = parse_macro_input!(input as StyleableMacroInput);
+    parse_macro_input!(input as StyleableMacroInput);
     let methods = generate_methods();
     let output = quote! {
         #(#methods)*
@@ -721,7 +721,9 @@ fn generate_custom_value_setter(
     let method_name = format_ident!("{}", prefix);
 
     let mut iter = fields.iter();
-    let last = iter.next_back().expect("iterator should yield an item");
+    let last = iter
+        .next_back()
+        .expect("box style prefix must define at least one field");
     let field_assignments = iter
         .map(|field_tokens| {
             quote! {
@@ -921,8 +923,6 @@ fn box_prefixes() -> Vec<BoxStylePrefix> {
             fields: vec![quote! { min_size.width }],
             doc_string_prefix: "Sets the minimum width of the element. [Docs](https://tailwindcss.com/docs/min-width)",
         },
-        // TODO: These don't use the same size ramp as the others
-        // see https://tailwindcss.com/docs/max-width
         BoxStylePrefix {
             prefix: "min_h",
             auto_allowed: true,
@@ -935,16 +935,12 @@ fn box_prefixes() -> Vec<BoxStylePrefix> {
             fields: vec![quote! {max_size.width}, quote! {max_size.height}],
             doc_string_prefix: "Sets the maximum width and height of the element.",
         },
-        // TODO: These don't use the same size ramp as the others
-        // see https://tailwindcss.com/docs/max-width
         BoxStylePrefix {
             prefix: "max_w",
             auto_allowed: true,
             fields: vec![quote! { max_size.width }],
             doc_string_prefix: "Sets the maximum width of the element. [Docs](https://tailwindcss.com/docs/max-width)",
         },
-        // TODO: These don't use the same size ramp as the others
-        // see https://tailwindcss.com/docs/max-width
         BoxStylePrefix {
             prefix: "max_h",
             auto_allowed: true,

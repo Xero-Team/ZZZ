@@ -1,9 +1,9 @@
-//! Implements `#[derive_inspector_reflection]` macro to provide runtime access to trait methods
-//! that have the shape `fn method(self) -> Self`. This code was generated using ZZZ Agent with Claude Opus 4.
+//! Implements `#[derive_inspector_reflection]` for methods shaped like
+//! `fn method(self) -> Self`.
 
 use heck::ToSnakeCase as _;
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
     Attribute, Expr, FnArg, Ident, Item, ItemTrait, Lit, Meta, Path, ReturnType, TraitItem, Type,
@@ -11,16 +11,11 @@ use syn::{
     visit_mut::{self, VisitMut},
 };
 
-pub fn derive_inspector_reflection(_args: TokenStream, input: TokenStream) -> TokenStream {
-    let mut item = parse_macro_input!(input as Item);
-
-    // First, expand any macros in the trait
-    match &mut item {
-        Item::Trait(trait_item) => {
-            let mut expander = MacroExpander;
-            expander.visit_item_trait_mut(trait_item);
-        }
-        _ => {
+pub fn derive_inspector_reflection(_arguments: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    let mut trait_item = match item {
+        Item::Trait(trait_item) => trait_item,
+        item => {
             return syn::Error::new_spanned(
                 quote!(#item),
                 "#[derive_inspector_reflection] can only be applied to traits",
@@ -28,42 +23,35 @@ pub fn derive_inspector_reflection(_args: TokenStream, input: TokenStream) -> To
             .to_compile_error()
             .into();
         }
-    }
+    };
 
-    // Now process the expanded trait
-    match item {
-        Item::Trait(trait_item) => generate_reflected_trait(trait_item),
-        _ => unreachable!(),
-    }
+    MacroExpander.visit_item_trait_mut(&mut trait_item);
+    generate_reflected_trait(trait_item)
 }
 
 fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
     let trait_name = &trait_item.ident;
     let vis = &trait_item.vis;
 
-    // Determine if we're being called from within the gpui crate
-    let call_site = Span::call_site();
-    let inspector_reflection_path = if is_called_from_gpui_crate(call_site) {
+    // Generated code uses `crate` inside GPUI and `::gpui` in downstream crates.
+    let inspector_reflection_path = if is_called_from_gpui_crate() {
         quote! { crate::inspector_reflection }
     } else {
         quote! { ::gpui::inspector_reflection }
     };
 
-    // Collect method information for methods of form fn name(self) -> Self or fn name(mut self) -> Self
     let mut method_infos = Vec::new();
 
     for item in &trait_item.items {
         if let TraitItem::Fn(method) = item {
             let method_name = &method.sig.ident;
 
-            // Check if method has self or mut self receiver
             let has_valid_self_receiver = method
                 .sig
                 .inputs
                 .iter()
                 .any(|arg| matches!(arg, FnArg::Receiver(r) if matches!(r.kind, syn::ReceiverKind::Value)));
 
-            // Check if method returns Self
             let returns_self = match &method.sig.output {
                 ReturnType::Type(_, ty) => {
                     matches!(**ty, Type::Path(ref path) if path.path.is_ident("Self"))
@@ -71,13 +59,9 @@ fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
                 ReturnType::Default => false,
             };
 
-            // Check if method has exactly one parameter (self or mut self)
             let param_count = method.sig.inputs.len();
 
-            // Include methods of form fn name(self) -> Self or fn name(mut self) -> Self
-            // This includes methods with default implementations
             if has_valid_self_receiver && returns_self && param_count == 1 {
-                // Extract documentation and cfg attributes
                 let doc = extract_doc_comment(&method.attrs);
                 let cfg_attrs = extract_cfg_attributes(&method.attrs);
                 method_infos.push((method_name.clone(), doc, cfg_attrs));
@@ -85,14 +69,12 @@ fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
         }
     }
 
-    // Generate the reflection module name
     let reflection_mod_name = Ident::new(
         &format!("{}_reflection", trait_name.to_string().to_snake_case()),
         trait_name.span(),
     );
 
-    // Generate wrapper functions for each method
-    // These wrappers use type erasure to allow runtime invocation
+    // Type erasure lets reflected methods be selected by name at runtime.
     let wrapper_functions = method_infos.iter().map(|(method_name, _doc, cfg_attrs)| {
         let wrapper_name = Ident::new(
             &format!("__wrapper_{}", method_name),
@@ -110,7 +92,6 @@ fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
         }
     });
 
-    // Generate method info entries
     let method_info_entries = method_infos.iter().map(|(method_name, doc, cfg_attrs)| {
         let method_name_str = method_name.to_string();
         let wrapper_name = Ident::new(&format!("__wrapper_{}", method_name), method_name.span());
@@ -130,7 +111,6 @@ fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
         }
     });
 
-    // Generate the complete output
     let output = quote! {
         #trait_item
 
@@ -149,7 +129,7 @@ fn generate_reflected_trait(trait_item: ItemTrait) -> TokenStream {
 
             /// Find a method by name for a concrete type implementing the trait
             pub fn find_method<T: #trait_name + 'static>(name: &str) -> Option<#inspector_reflection_path::FunctionReflection<T>> {
-                methods::<T>().into_iter().find(|m| m.name == name)
+                methods::<T>().into_iter().find(|method| method.name == name)
             }
         }
     };
@@ -187,9 +167,7 @@ fn extract_cfg_attributes(attrs: &[Attribute]) -> Vec<Attribute> {
         .collect()
 }
 
-fn is_called_from_gpui_crate(_span: Span) -> bool {
-    // Check if we're being called from within the gpui crate by examining the call site
-    // This is a heuristic approach - we check if the current crate name is "gpui"
+fn is_called_from_gpui_crate() -> bool {
     std::env::var("CARGO_PKG_NAME").is_ok_and(|name| name == "gpui")
 }
 
@@ -203,11 +181,9 @@ impl VisitMut for MacroExpander {
         for item in trait_item.items.drain(..) {
             match item {
                 TraitItem::Macro(macro_item) => {
-                    // Try to expand known macros
                     if let Some(expanded) = try_expand_macro(&macro_item) {
                         expanded_items.extend(expanded);
                     } else {
-                        // Keep unknown macros as-is
                         items_to_keep.push(TraitItem::Macro(macro_item));
                     }
                 }
@@ -217,11 +193,10 @@ impl VisitMut for MacroExpander {
             }
         }
 
-        // Rebuild the items list with expanded content first, then original items
+        // Style helpers precede explicit methods in inspector completion results.
         trait_item.items = expanded_items;
         trait_item.items.extend(items_to_keep);
 
-        // Continue visiting
         visit_mut::visit_item_trait_mut(self, trait_item);
     }
 }
@@ -229,55 +204,53 @@ impl VisitMut for MacroExpander {
 fn try_expand_macro(macro_item: &syn::TraitItemMacro) -> Option<Vec<TraitItem>> {
     let path = &macro_item.mac.path;
 
-    // Check if this is one of our known style macros
     let macro_name = path_to_string(path);
 
-    // Handle the known macros by calling their implementations
     match macro_name.as_str() {
         "gpui_macros::style_helpers" | "style_helpers" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::style_helpers(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::visibility_style_methods" | "visibility_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::visibility_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::margin_style_methods" | "margin_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::margin_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::padding_style_methods" | "padding_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::padding_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::position_style_methods" | "position_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::position_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::overflow_style_methods" | "overflow_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::overflow_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::cursor_style_methods" | "cursor_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::cursor_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::border_style_methods" | "border_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::border_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         "gpui_macros::box_shadow_style_methods" | "box_shadow_style_methods" => {
             let tokens = macro_item.mac.tokens.clone();
             let expanded = crate::styles::box_shadow_style_methods(TokenStream::from(tokens));
-            parse_expanded_items(expanded)
+            Some(parse_expanded_items(expanded))
         }
         _ => None,
     }
@@ -286,21 +259,20 @@ fn try_expand_macro(macro_item: &syn::TraitItemMacro) -> Option<Vec<TraitItem>> 
 fn path_to_string(path: &Path) -> String {
     path.segments
         .iter()
-        .map(|seg| seg.ident.to_string())
+        .map(|segment| segment.ident.to_string())
         .collect::<Vec<_>>()
         .join("::")
 }
 
-fn parse_expanded_items(expanded: TokenStream) -> Option<Vec<TraitItem>> {
+fn parse_expanded_items(expanded: TokenStream) -> Vec<TraitItem> {
     let tokens = TokenStream2::from(expanded);
 
-    // Try to parse the expanded tokens as trait items
-    // We need to wrap them in a dummy trait to parse properly
+    // `syn` parses generated methods as trait items only within a trait body.
     let dummy_trait: ItemTrait = parse_quote! {
         trait Dummy {
             #tokens
         }
     };
 
-    Some(dummy_trait.items)
+    dummy_trait.items
 }

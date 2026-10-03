@@ -55,6 +55,15 @@ pub fn derive_render(input: TokenStream) -> TokenStream {
 ///     app: &'a mut gpui::App
 /// }
 /// ```
+///
+/// The attribute must be attached to a named field:
+///
+/// ```compile_fail
+/// # #[macro_use] extern crate gpui_macros;
+/// # #[macro_use] extern crate gpui;
+/// #[derive(AppContext)]
+/// struct TupleContext<'a>(#[app] &'a mut gpui::App);
+/// ```
 #[proc_macro_derive(AppContext, attributes(app))]
 pub fn derive_app_context(input: TokenStream) -> TokenStream {
     derive_app_context::derive_app_context(input)
@@ -287,18 +296,30 @@ pub fn property_test(args: TokenStream, function: TokenStream) -> TokenStream {
 /// provides the method's documentation.
 #[cfg(any(feature = "inspector", debug_assertions))]
 #[proc_macro_attribute]
-pub fn derive_inspector_reflection(_args: TokenStream, input: TokenStream) -> TokenStream {
-    derive_inspector_reflection::derive_inspector_reflection(_args, input)
+pub fn derive_inspector_reflection(_arguments: TokenStream, input: TokenStream) -> TokenStream {
+    derive_inspector_reflection::derive_inspector_reflection(_arguments, input)
 }
 
-pub(crate) fn get_simple_attribute_field(ast: &DeriveInput, name: &'static str) -> Option<Ident> {
+pub(crate) fn get_simple_attribute_field(
+    ast: &DeriveInput,
+    name: &'static str,
+) -> syn::Result<Option<Ident>> {
     match &ast.data {
-        syn::Data::Struct(data_struct) => data_struct
-            .fields
-            .iter()
-            .find(|field| field.attrs.iter().any(|attr| attr.path().is_ident(name)))
-            .map(|field| field.ident.clone().expect("value should be present")),
-        syn::Data::Enum(_) => None,
-        syn::Data::Union(_) => None,
+        syn::Data::Struct(data_struct) => {
+            let Some(field) = data_struct
+                .fields
+                .iter()
+                .find(|field| field.attrs.iter().any(|attr| attr.path().is_ident(name)))
+            else {
+                return Ok(None);
+            };
+            field.ident.clone().map(Some).ok_or_else(|| {
+                syn::Error::new_spanned(
+                    field,
+                    format!("#[{name}] must be applied to a named struct field"),
+                )
+            })
+        }
+        syn::Data::Enum(_) | syn::Data::Union(_) => Ok(None),
     }
 }

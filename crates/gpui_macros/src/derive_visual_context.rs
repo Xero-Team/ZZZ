@@ -7,18 +7,26 @@ use super::get_simple_attribute_field;
 pub fn derive_visual_context(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
-    let Some(window_variable) = get_simple_attribute_field(&ast, "window") else {
-        return quote! {
-            compile_error!("Derive must have a #[window] attribute to detect the &mut Window field");
+    let window_variable = match get_simple_attribute_field(&ast, "window") {
+        Ok(Some(window_variable)) => window_variable,
+        Ok(None) => {
+            return quote! {
+                compile_error!("Derive must have a #[window] attribute to detect the &mut Window field");
+            }
+            .into();
         }
-        .into();
+        Err(error) => return error.to_compile_error().into(),
     };
 
-    let Some(app_variable) = get_simple_attribute_field(&ast, "app") else {
-        return quote! {
-            compile_error!("Derive must have a #[app] attribute to detect the &mut App field");
+    let app_variable = match get_simple_attribute_field(&ast, "app") {
+        Ok(Some(app_variable)) => app_variable,
+        Ok(None) => {
+            return quote! {
+                compile_error!("Derive must have a #[app] attribute to detect the &mut App field");
+            }
+            .into();
         }
-        .into();
+        Err(error) => return error.to_compile_error().into(),
     };
 
     let type_name = &ast.ident;

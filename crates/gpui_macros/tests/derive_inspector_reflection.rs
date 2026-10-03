@@ -1,6 +1,4 @@
-//! This code was generated using ZZZ Agent with Claude Opus 4.
-
-// gate on rust-analyzer so rust-analyzer never needs to expand this macro, it takes up to 10 seconds to expand due to inefficiencies in rust-analyzers proc-macro srv
+// Rust Analyzer's proc-macro server can take up to ten seconds to expand this macro.
 #[cfg_attr(not(rust_analyzer), gpui_macros::derive_inspector_reflection)]
 trait Transform: Clone {
     /// Doubles the value
@@ -13,13 +11,11 @@ trait Transform: Clone {
     ///
     /// This method has a default implementation
     fn increment(self) -> Self {
-        // Default implementation
         self.add_one()
     }
 
     /// Quadruples the value by doubling twice
     fn quadruple(self) -> Self {
-        // Default implementation with mut self
         self.double().double()
     }
 
@@ -68,66 +64,69 @@ impl Transform for Number {
 fn test_derive_inspector_reflection() {
     use transform_reflection::*;
 
-    // Get all methods that match the pattern fn(self) -> Self or fn(mut self) -> Self
     let methods = methods::<Number>();
 
     assert_eq!(methods.len(), 5);
-    let method_names: Vec<_> = methods.iter().map(|m| m.name).collect();
+    let method_names: Vec<_> = methods.iter().map(|method| method.name).collect();
     assert!(method_names.contains(&"double"));
     assert!(method_names.contains(&"triple"));
     assert!(method_names.contains(&"increment"));
     assert!(method_names.contains(&"quadruple"));
     assert!(method_names.contains(&"add_one"));
 
-    // Invoke methods by name
-    let num = Number(5);
+    let number = Number(5);
 
-    let doubled = find_method::<Number>("double").unwrap().invoke(num.clone());
+    let doubled = find_method::<Number>("double")
+        .expect("double should be reflected")
+        .invoke(number.clone());
     assert_eq!(doubled, Number(10));
 
-    let tripled = find_method::<Number>("triple").unwrap().invoke(num.clone());
+    let tripled = find_method::<Number>("triple")
+        .expect("triple should be reflected")
+        .invoke(number.clone());
     assert_eq!(tripled, Number(15));
 
     let incremented = find_method::<Number>("increment")
-        .unwrap()
-        .invoke(num.clone());
+        .expect("increment should be reflected")
+        .invoke(number.clone());
     assert_eq!(incremented, Number(6));
 
-    let quadrupled = find_method::<Number>("quadruple").unwrap().invoke(num);
+    let quadrupled = find_method::<Number>("quadruple")
+        .expect("quadruple should be reflected")
+        .invoke(number);
     assert_eq!(quadrupled, Number(20));
 
-    // Try to invoke a non-existent method
     let result = find_method::<Number>("nonexistent");
     assert!(result.is_none());
 
-    // Chain operations
-    let num = Number(10);
+    let number = Number(10);
     let result = find_method::<Number>("double")
-        .map(|m| m.invoke(num))
-        .and_then(|n| find_method::<Number>("increment").map(|m| m.invoke(n)))
-        .and_then(|n| find_method::<Number>("triple").map(|m| m.invoke(n)));
+        .map(|method| method.invoke(number))
+        .and_then(|number| find_method::<Number>("increment").map(|method| method.invoke(number)))
+        .and_then(|number| find_method::<Number>("triple").map(|method| method.invoke(number)));
 
-    assert_eq!(result, Some(Number(63))); // (10 * 2 + 1) * 3 = 63
+    assert_eq!(result, Some(Number(63)));
 
-    // Test documentationumentation capture
-    let double_method = find_method::<Number>("double").unwrap();
+    let double_method = find_method::<Number>("double").expect("double should be reflected");
     assert_eq!(double_method.documentation, Some("Doubles the value"));
 
-    let triple_method = find_method::<Number>("triple").unwrap();
+    let triple_method = find_method::<Number>("triple").expect("triple should be reflected");
     assert_eq!(triple_method.documentation, Some("Triples the value"));
 
-    let increment_method = find_method::<Number>("increment").unwrap();
+    let increment_method =
+        find_method::<Number>("increment").expect("increment should be reflected");
     assert_eq!(
         increment_method.documentation,
         Some("Increments the value by one\n\nThis method has a default implementation")
     );
 
-    let quadruple_method = find_method::<Number>("quadruple").unwrap();
+    let quadruple_method =
+        find_method::<Number>("quadruple").expect("quadruple should be reflected");
     assert_eq!(
         quadruple_method.documentation,
         Some("Quadruples the value by doubling twice")
     );
 
-    let add_one_method = find_method::<Number>("add_one").unwrap();
+    let add_one_method = find_method::<Number>("add_one").expect("add_one should be reflected");
     assert_eq!(add_one_method.documentation, Some("Adds one to the value"));
 }

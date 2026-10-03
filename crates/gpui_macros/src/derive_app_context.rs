@@ -7,11 +7,15 @@ use crate::get_simple_attribute_field;
 pub fn derive_app_context(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
-    let Some(app_variable) = get_simple_attribute_field(&ast, "app") else {
-        return quote! {
-            compile_error!("Derive must have an #[app] attribute to detect the &mut App field");
+    let app_variable = match get_simple_attribute_field(&ast, "app") {
+        Ok(Some(app_variable)) => app_variable,
+        Ok(None) => {
+            return quote! {
+                compile_error!("Derive must have an #[app] attribute to detect the &mut App field");
+            }
+            .into();
         }
-        .into();
+        Err(error) => return error.to_compile_error().into(),
     };
 
     let type_name = &ast.ident;
