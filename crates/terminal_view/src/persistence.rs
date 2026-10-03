@@ -233,13 +233,15 @@ async fn deserialize_pane_group(
                 async move |cx| {
                     let new_items = new_items.await;
 
-                    let items = pane.update_in(cx, |pane, window, cx| {
-                        populate_pane_items(pane, new_items, active_item, window, cx);
-                        pane.set_pinned_count(pinned_count.min(pane.items_len()));
-                        pane.items_len()
-                    });
+                    let items = pane
+                        .update_in(cx, |pane, window, cx| {
+                            populate_pane_items(pane, new_items, active_item, window, cx);
+                            pane.set_pinned_count(pinned_count.min(pane.items_len()));
+                            pane.items_len()
+                        })
+                        .ok()?;
                     // Avoid blank panes in splits
-                    if items.is_ok_and(|items| items == 0) {
+                    if items == 0 {
                         let working_directory = workspace
                             .update(cx, |workspace, cx| default_working_directory(workspace, cx))
                             .ok()
@@ -251,7 +253,7 @@ async fn deserialize_pane_group(
                             .await
                             .log_err();
                         let Some(terminal) = terminal else {
-                            return;
+                            return None;
                         };
                         pane.update_in(cx, |pane, window, cx| {
                             let terminal_view = Box::new(cx.new(|cx| {
@@ -266,11 +268,13 @@ async fn deserialize_pane_group(
                             }));
                             pane.add_item(terminal_view, true, false, None, window, cx);
                         })
-                        .ok();
+                        .ok()?;
                     }
+
+                    Some(())
                 }
             })
-            .await;
+            .await?;
             Some((Member::Pane(pane.clone()), active.then_some(pane)))
         }
     }
