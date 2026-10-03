@@ -271,8 +271,8 @@ impl MasterProcess {
         let mut line = String::new();
 
         loop {
-            let n = reader.read_line(&mut line).await?;
-            if n == 0 {
+            let bytes_read = reader.read_line(&mut line).await?;
+            if bytes_read == 0 {
                 anyhow::bail!("ssh process exited before connection established");
             }
 
@@ -303,8 +303,16 @@ impl RemoteConnection for SshRemoteConnection {
             log::debug!("no master process to kill (external ControlMaster session)");
             return Ok(());
         };
-        process.as_mut().kill().ok();
-        process.as_mut().status().await?;
+        if let Err(error) = process.as_mut().kill()
+            && error.kind() != std::io::ErrorKind::InvalidInput
+        {
+            return Err(error).context("killing SSH master process");
+        }
+        process
+            .as_mut()
+            .status()
+            .await
+            .context("waiting for SSH master process to exit")?;
         Ok(())
     }
 
@@ -461,9 +469,9 @@ impl RemoteConnection for SshRemoteConnection {
         &self,
         unique_identifier: String,
         reconnect: bool,
-        incoming_tx: UnboundedSender<Envelope>,
-        outgoing_rx: UnboundedReceiver<Envelope>,
-        connection_activity_tx: Sender<()>,
+        incoming_sender: UnboundedSender<Envelope>,
+        outgoing_receiver: UnboundedReceiver<Envelope>,
+        connection_activity_sender: Sender<()>,
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
@@ -475,43 +483,42 @@ impl RemoteConnection for SshRemoteConnection {
         };
 
         let mut ssh_command = if self.ssh_platform.os.is_windows() {
-            // TODO: Set the `VARS` environment variables, we do not have `env` on windows
-            // so this needs a different approach
-            let mut proxy_args = vec![];
-            proxy_args.push("proxy".to_owned());
-            proxy_args.push("--identifier".to_owned());
-            proxy_args.push(unique_identifier);
+            // Windows remote shells cannot use the POSIX `env KEY=value` prefix below.
+            let mut proxy_arguments = vec![];
+            proxy_arguments.push("proxy".to_owned());
+            proxy_arguments.push("--identifier".to_owned());
+            proxy_arguments.push(unique_identifier);
 
             if reconnect {
-                proxy_args.push("--reconnect".to_owned());
+                proxy_arguments.push("--reconnect".to_owned());
             }
             self.socket.ssh_command(
                 self.ssh_shell_kind,
                 &remote_binary_path.display(self.path_style()),
-                &proxy_args,
+                &proxy_arguments,
                 false,
             )
         } else {
-            let mut proxy_args = vec![];
-            for env_var in VARS {
-                if let Ok(value) = std::env::var(env_var) {
-                    proxy_args.push(format!("{env_var}={value}"));
+            let mut proxy_arguments = vec![];
+            for environment_variable in VARS {
+                if let Ok(value) = std::env::var(environment_variable) {
+                    proxy_arguments.push(format!("{environment_variable}={value}"));
                 }
             }
-            proxy_args.push(remote_binary_path.display(self.path_style()).into_owned());
-            proxy_args.push("proxy".to_owned());
-            proxy_args.push("--identifier".to_owned());
-            proxy_args.push(unique_identifier);
+            proxy_arguments.push(remote_binary_path.display(self.path_style()).into_owned());
+            proxy_arguments.push("proxy".to_owned());
+            proxy_arguments.push("--identifier".to_owned());
+            proxy_arguments.push(unique_identifier);
 
             if reconnect {
-                proxy_args.push("--reconnect".to_owned());
+                proxy_arguments.push("--reconnect".to_owned());
             }
             self.socket
-                .ssh_command(self.ssh_shell_kind, "env", &proxy_args, false)
+                .ssh_command(self.ssh_shell_kind, "env", &proxy_arguments, false)
         };
 
         let ssh_proxy_process = match ssh_command
-            // IMPORTANT: we kill this process when we drop the task that uses it.
+            // Dropping the proxy task must terminate its child process.
             .kill_on_drop(true)
             .spawn()
         {
@@ -523,9 +530,9 @@ impl RemoteConnection for SshRemoteConnection {
 
         super::handle_rpc_messages_over_child_process_stdio(
             ssh_proxy_process,
-            incoming_tx,
-            outgoing_rx,
-            connection_activity_tx,
+            incoming_sender,
+            outgoing_receiver,
+            connection_activity_sender,
             cx,
         )
     }
@@ -644,7 +651,9 @@ impl SshRemoteConnection {
         } else {
             let askpass_delegate = askpass::AskPassDelegate::new(cx, {
                 let delegate = delegate.clone();
-                move |prompt, tx, cx| delegate.ask_password(prompt, tx, cx)
+                move |prompt, password_sender, cx| {
+                    delegate.ask_password(prompt, password_sender, cx)
+                }
             });
 
             let mut askpass =
@@ -668,7 +677,9 @@ impl SshRemoteConnection {
                 result = askpass.run(Some(SSH_CONNECTION_PROMPT_TIMEOUT)).fuse() => {
                     match result {
                         AskPassResult::CancelledByUser => {
-                            master_process.as_mut().kill().ok();
+                            if let Err(error) = master_process.as_mut().kill() {
+                                log::warn!("failed to kill canceled SSH connection: {error}");
+                            }
                             anyhow::bail!("SSH connection canceled")
                         }
                         AskPassResult::Timedout => {
@@ -681,8 +692,8 @@ impl SshRemoteConnection {
                 }
             };
 
-            if let Err(e) = result {
-                return Err(e.context("Failed to connect to host"));
+            if let Err(error) = result {
+                return Err(error.context("Failed to connect to host"));
             }
 
             if master_process.as_mut().try_status()?.is_some() {
@@ -710,7 +721,9 @@ impl SshRemoteConnection {
         let (socket, master_process_option) = {
             let askpass_delegate = askpass::AskPassDelegate::new(cx, {
                 let delegate = delegate.clone();
-                move |prompt, tx, cx| delegate.ask_password(prompt, tx, cx)
+                move |prompt, password_sender, cx| {
+                    delegate.ask_password(prompt, password_sender, cx)
+                }
             });
 
             let mut askpass =
@@ -729,7 +742,9 @@ impl SshRemoteConnection {
                 result = askpass.run(Some(SSH_CONNECTION_PROMPT_TIMEOUT)).fuse() => {
                     match result {
                         AskPassResult::CancelledByUser => {
-                            master_process.as_mut().kill().ok();
+                            if let Err(error) = master_process.as_mut().kill() {
+                                log::warn!("failed to kill canceled SSH connection: {error}");
+                            }
                             anyhow::bail!("SSH connection canceled")
                         }
                         AskPassResult::Timedout => {
@@ -742,8 +757,8 @@ impl SshRemoteConnection {
                 }
             };
 
-            if let Err(e) = result {
-                return Err(e.context("Failed to connect to host"));
+            if let Err(error) = result {
+                return Err(error.context("Failed to connect to host"));
             }
 
             if master_process.as_mut().try_status()?.is_some() {
