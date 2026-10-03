@@ -2691,7 +2691,11 @@ mod tests {
         server_cx: &mut TestAppContext,
     ) -> (Entity<Project>, Entity<Workspace>) {
         cx.update(|cx| {
+            let store = SettingsStore::test(cx);
+            cx.set_global(store);
             release_channel::init(semver::Version::new(0, 0, 0), cx);
+            i18n::init(cx);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
         server_cx.update(|cx| {
             release_channel::init(semver::Version::new(0, 0, 0), cx);
