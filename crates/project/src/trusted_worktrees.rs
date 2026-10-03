@@ -51,7 +51,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use util::debug_panic;
+use util::{ResultExt as _, debug_panic};
 
 use crate::{project_settings::ProjectSettings, worktree_store::WorktreeStore};
 
@@ -95,7 +95,7 @@ pub fn track_worktree_trust(
                                 project_id: upstream_project_id.0,
                                 trusted_paths,
                             })
-                            .ok();
+                            .log_err();
                     }
                 }
             });
@@ -403,7 +403,7 @@ impl TrustedWorktreesStore {
                             project_id: upstream_project_id.0,
                             trusted_paths,
                         })
-                        .ok();
+                        .log_err();
                 }
             }
         }
@@ -527,7 +527,7 @@ impl TrustedWorktreesStore {
                         project_id: downstream_project_id.0,
                         worktree_ids: vec![worktree_id.to_proto()],
                     })
-                    .ok();
+                    .log_err();
             }
             if let Some((upstream_client, upstream_project_id)) = &store_data.upstream_client {
                 upstream_client
@@ -535,7 +535,7 @@ impl TrustedWorktreesStore {
                         project_id: upstream_project_id.0,
                         worktree_ids: vec![worktree_id.to_proto()],
                     })
-                    .ok();
+                    .log_err();
             }
         }
         cx.emit(TrustedWorktreesEvent::Restricted(
