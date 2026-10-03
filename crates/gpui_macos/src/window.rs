@@ -1349,6 +1349,52 @@ impl gpui::TextInputBridge for MacWindow {
     }
 }
 
+impl gpui::InputSource for MacWindow {
+    fn mouse_position(&self) -> Point<Pixels> {
+        let position = unsafe {
+            self.0
+                .lock()
+                .native_window
+                .mouseLocationOutsideOfEventStream()
+        };
+        convert_mouse_position(position, self.content_size().height)
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        unsafe {
+            let modifiers: NSEventModifierFlags = msg_send![class!(NSEvent), modifierFlags];
+
+            let control = modifiers.contains(NSEventModifierFlags::NSControlKeyMask);
+            let alt = modifiers.contains(NSEventModifierFlags::NSAlternateKeyMask);
+            let shift = modifiers.contains(NSEventModifierFlags::NSShiftKeyMask);
+            let command = modifiers.contains(NSEventModifierFlags::NSCommandKeyMask);
+            let function = modifiers.contains(NSEventModifierFlags::NSFunctionKeyMask);
+
+            Modifiers {
+                control,
+                alt,
+                shift,
+                platform: command,
+                function,
+            }
+        }
+    }
+
+    fn capslock(&self) -> Capslock {
+        unsafe {
+            let modifiers: NSEventModifierFlags = msg_send![class!(NSEvent), modifierFlags];
+
+            Capslock {
+                on: modifiers.contains(NSEventModifierFlags::NSAlphaShiftKeyMask),
+            }
+        }
+    }
+
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
+        self.0.as_ref().lock().event_callback = Some(callback);
+    }
+}
+
 impl PlatformWindow for MacWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.as_ref().lock().bounds()
@@ -1471,46 +1517,6 @@ impl PlatformWindow for MacWindow {
             let screen_number: u32 = msg_send![screen_number, unsignedIntValue];
 
             Some(Rc::new(MacDisplay(screen_number)))
-        }
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        let position = unsafe {
-            self.0
-                .lock()
-                .native_window
-                .mouseLocationOutsideOfEventStream()
-        };
-        convert_mouse_position(position, self.content_size().height)
-    }
-
-    fn modifiers(&self) -> Modifiers {
-        unsafe {
-            let modifiers: NSEventModifierFlags = msg_send![class!(NSEvent), modifierFlags];
-
-            let control = modifiers.contains(NSEventModifierFlags::NSControlKeyMask);
-            let alt = modifiers.contains(NSEventModifierFlags::NSAlternateKeyMask);
-            let shift = modifiers.contains(NSEventModifierFlags::NSShiftKeyMask);
-            let command = modifiers.contains(NSEventModifierFlags::NSCommandKeyMask);
-            let function = modifiers.contains(NSEventModifierFlags::NSFunctionKeyMask);
-
-            Modifiers {
-                control,
-                alt,
-                shift,
-                platform: command,
-                function,
-            }
-        }
-    }
-
-    fn capslock(&self) -> Capslock {
-        unsafe {
-            let modifiers: NSEventModifierFlags = msg_send![class!(NSEvent), modifierFlags];
-
-            Capslock {
-                on: modifiers.contains(NSEventModifierFlags::NSAlphaShiftKeyMask),
-            }
         }
     }
 
@@ -1823,10 +1829,6 @@ impl PlatformWindow for MacWindow {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.as_ref().lock().request_frame_callback = Some(callback);
-    }
-
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
-        self.0.as_ref().lock().event_callback = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

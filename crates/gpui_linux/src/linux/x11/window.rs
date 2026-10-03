@@ -1368,6 +1368,49 @@ impl gpui::TextInputBridge for X11Window {
     }
 }
 
+impl gpui::InputSource for X11Window {
+    fn mouse_position(&self) -> Point<Pixels> {
+        get_reply(
+            || "X11 QueryPointer failed.",
+            self.0.xcb.query_pointer(self.0.x_window),
+        )
+        .log_err()
+        .map_or(Point::new(Pixels::ZERO, Pixels::ZERO), |reply| {
+            let scale_factor = self.0.state.borrow().scale_factor;
+            Point::new(
+                px(reply.win_x as f32 / scale_factor),
+                px(reply.win_y as f32 / scale_factor),
+            )
+        })
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        self.0
+            .state
+            .borrow()
+            .client
+            .0
+            .upgrade()
+            .map(|ref_cell| ref_cell.borrow().modifiers)
+            .unwrap_or_default()
+    }
+
+    fn capslock(&self) -> gpui::Capslock {
+        self.0
+            .state
+            .borrow()
+            .client
+            .0
+            .upgrade()
+            .map(|ref_cell| ref_cell.borrow().capslock)
+            .unwrap_or_default()
+    }
+
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
+        self.0.callbacks.borrow_mut().input = Some(callback);
+    }
+}
+
 impl PlatformWindow for X11Window {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
@@ -1454,43 +1497,6 @@ impl PlatformWindow for X11Window {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(self.0.state.borrow().display.clone())
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        get_reply(
-            || "X11 QueryPointer failed.",
-            self.0.xcb.query_pointer(self.0.x_window),
-        )
-        .log_err()
-        .map_or(Point::new(Pixels::ZERO, Pixels::ZERO), |reply| {
-            let scale_factor = self.0.state.borrow().scale_factor;
-            Point::new(
-                px(reply.win_x as f32 / scale_factor),
-                px(reply.win_y as f32 / scale_factor),
-            )
-        })
-    }
-
-    fn modifiers(&self) -> Modifiers {
-        self.0
-            .state
-            .borrow()
-            .client
-            .0
-            .upgrade()
-            .map(|ref_cell| ref_cell.borrow().modifiers)
-            .unwrap_or_default()
-    }
-
-    fn capslock(&self) -> gpui::Capslock {
-        self.0
-            .state
-            .borrow()
-            .client
-            .0
-            .upgrade()
-            .map(|ref_cell| ref_cell.borrow().capslock)
-            .unwrap_or_default()
     }
 
     fn prompt(
@@ -1671,10 +1677,6 @@ impl PlatformWindow for X11Window {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.callbacks.borrow_mut().request_frame = Some(callback);
-    }
-
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
-        self.0.callbacks.borrow_mut().input = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

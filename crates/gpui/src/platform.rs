@@ -652,8 +652,19 @@ pub trait TextInputBridge {
     fn update_ime_position(&self, bounds: Bounds<Pixels>);
 }
 
+/// Platform source for pointer and keyboard input state and events.
 #[expect(missing_docs)]
-pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + TextInputBridge {
+pub trait InputSource {
+    fn mouse_position(&self) -> Point<Pixels>;
+    fn modifiers(&self) -> Modifiers;
+    fn capslock(&self) -> Capslock;
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>);
+}
+
+#[expect(missing_docs)]
+pub trait PlatformWindow:
+    HasWindowHandle + HasDisplayHandle + InputSource + TextInputBridge
+{
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
     fn window_bounds(&self) -> WindowBounds;
@@ -662,9 +673,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + TextInputBridge {
     fn scale_factor(&self) -> f32;
     fn appearance(&self) -> WindowAppearance;
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>>;
-    fn mouse_position(&self) -> Point<Pixels>;
-    fn modifiers(&self) -> Modifiers;
-    fn capslock(&self) -> Capslock;
     fn prompt(
         &self,
         level: PromptLevel,
@@ -688,7 +696,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + TextInputBridge {
         None
     }
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>);
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>);
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>);
     fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>);
     fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>);

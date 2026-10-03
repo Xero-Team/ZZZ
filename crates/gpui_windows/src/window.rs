@@ -612,6 +612,33 @@ impl gpui::TextInputBridge for WindowsWindow {
     }
 }
 
+impl gpui::InputSource for WindowsWindow {
+    fn mouse_position(&self) -> Point<Pixels> {
+        let scale_factor = self.scale_factor();
+        let point = unsafe {
+            let mut point: POINT = std::mem::zeroed();
+            GetCursorPos(&mut point)
+                .context("unable to get cursor position")
+                .log_err();
+            ScreenToClient(self.0.hwnd, &mut point).ok().log_err();
+            point
+        };
+        logical_point(point.x as f32, point.y as f32, scale_factor)
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        current_modifiers()
+    }
+
+    fn capslock(&self) -> Capslock {
+        current_capslock()
+    }
+
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
+        self.state.callbacks.input.set(Some(callback));
+    }
+}
+
 impl PlatformWindow for WindowsWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.state.bounds()
@@ -668,27 +695,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(Rc::new(self.state.display.get()))
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        let scale_factor = self.scale_factor();
-        let point = unsafe {
-            let mut point: POINT = std::mem::zeroed();
-            GetCursorPos(&mut point)
-                .context("unable to get cursor position")
-                .log_err();
-            ScreenToClient(self.0.hwnd, &mut point).ok().log_err();
-            point
-        };
-        logical_point(point.x as f32, point.y as f32, scale_factor)
-    }
-
-    fn modifiers(&self) -> Modifiers {
-        current_modifiers()
-    }
-
-    fn capslock(&self) -> Capslock {
-        current_capslock()
     }
 
     fn prompt(
@@ -939,10 +945,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.state.callbacks.request_frame.set(Some(callback));
-    }
-
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
-        self.state.callbacks.input.set(Some(callback));
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

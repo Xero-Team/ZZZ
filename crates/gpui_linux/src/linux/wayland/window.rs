@@ -1165,6 +1165,29 @@ impl gpui::TextInputBridge for WaylandWindow {
     }
 }
 
+impl gpui::InputSource for WaylandWindow {
+    fn mouse_position(&self) -> Point<Pixels> {
+        self.borrow()
+            .client
+            .get_client()
+            .borrow()
+            .mouse_location
+            .unwrap_or_default()
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        self.borrow().client.get_client().borrow().modifiers
+    }
+
+    fn capslock(&self) -> Capslock {
+        self.borrow().client.get_client().borrow().capslock
+    }
+
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
+        self.0.callbacks.borrow_mut().input = Some(callback);
+    }
+}
+
 impl PlatformWindow for WaylandWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
@@ -1252,23 +1275,6 @@ impl PlatformWindow for WaylandWindow {
                 bounds: display.bounds.to_pixels(state.scale),
             }) as Rc<dyn PlatformDisplay>
         })
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        self.borrow()
-            .client
-            .get_client()
-            .borrow()
-            .mouse_location
-            .unwrap_or_default()
-    }
-
-    fn modifiers(&self) -> Modifiers {
-        self.borrow().client.get_client().borrow().modifiers
-    }
-
-    fn capslock(&self) -> Capslock {
-        self.borrow().client.get_client().borrow().capslock
     }
 
     fn prompt(
@@ -1376,10 +1382,6 @@ impl PlatformWindow for WaylandWindow {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.callbacks.borrow_mut().request_frame = Some(callback);
-    }
-
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
-        self.0.callbacks.borrow_mut().input = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

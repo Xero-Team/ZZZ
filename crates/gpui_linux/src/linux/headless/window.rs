@@ -113,6 +113,22 @@ impl gpui::TextInputBridge for HeadlessWindow {
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 }
 
+impl gpui::InputSource for HeadlessWindow {
+    fn mouse_position(&self) -> Point<Pixels> {
+        Point::default()
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        Modifiers::default()
+    }
+
+    fn capslock(&self) -> Capslock {
+        Capslock::default()
+    }
+
+    fn on_input(&self, _callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {}
+}
+
 impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
@@ -144,18 +160,6 @@ impl PlatformWindow for HeadlessWindow {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(self.0.borrow().display.clone())
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        Point::default()
-    }
-
-    fn modifiers(&self) -> Modifiers {
-        Modifiers::default()
-    }
-
-    fn capslock(&self) -> Capslock {
-        Capslock::default()
     }
 
     fn prompt(
@@ -209,8 +213,6 @@ impl PlatformWindow for HeadlessWindow {
     // No compositor drives a frame loop, so frame and status callbacks are
     // dropped: anything that awaits a frame will never resolve headlessly.
     fn on_request_frame(&self, _callback: Box<dyn FnMut(RequestFrameOptions)>) {}
-
-    fn on_input(&self, _callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {}
 
     fn on_active_status_change(&self, _callback: Box<dyn FnMut(bool)>) {}
 

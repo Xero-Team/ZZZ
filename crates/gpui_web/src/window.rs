@@ -600,6 +600,24 @@ impl gpui::TextInputBridge for WebWindow {
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 }
 
+impl gpui::InputSource for WebWindow {
+    fn mouse_position(&self) -> Point<Pixels> {
+        self.inner.state.borrow().mouse_position
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        self.inner.state.borrow().modifiers
+    }
+
+    fn capslock(&self) -> Capslock {
+        self.inner.state.borrow().capslock
+    }
+
+    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
+        self.inner.callbacks.borrow_mut().input = Some(callback);
+    }
+}
+
 impl PlatformWindow for WebWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.inner.state.borrow().bounds
@@ -637,18 +655,6 @@ impl PlatformWindow for WebWindow {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(self.display.clone())
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        self.inner.state.borrow().mouse_position
-    }
-
-    fn modifiers(&self) -> Modifiers {
-        self.inner.state.borrow().modifiers
-    }
-
-    fn capslock(&self) -> Capslock {
-        self.inner.state.borrow().capslock
     }
 
     fn prompt(
@@ -724,10 +730,6 @@ impl PlatformWindow for WebWindow {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.inner.callbacks.borrow_mut().request_frame = Some(callback);
-    }
-
-    fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {
-        self.inner.callbacks.borrow_mut().input = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

@@ -183,6 +183,24 @@ impl crate::TextInputBridge for TestWindow {
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 }
 
+impl crate::InputSource for TestWindow {
+    fn mouse_position(&self) -> Point<Pixels> {
+        Point::default()
+    }
+
+    fn modifiers(&self) -> crate::Modifiers {
+        crate::Modifiers::default()
+    }
+
+    fn capslock(&self) -> crate::Capslock {
+        crate::Capslock::default()
+    }
+
+    fn on_input(&self, callback: Box<dyn FnMut(crate::PlatformInput) -> DispatchEventResult>) {
+        self.0.lock().input_callback = Some(callback)
+    }
+}
+
 impl PlatformWindow for TestWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.lock().bounds
@@ -215,18 +233,6 @@ impl PlatformWindow for TestWindow {
 
     fn display(&self) -> Option<std::rc::Rc<dyn crate::PlatformDisplay>> {
         Some(self.0.lock().display.clone())
-    }
-
-    fn mouse_position(&self) -> Point<Pixels> {
-        Point::default()
-    }
-
-    fn modifiers(&self) -> crate::Modifiers {
-        crate::Modifiers::default()
-    }
-
-    fn capslock(&self) -> crate::Capslock {
-        crate::Capslock::default()
     }
 
     fn prompt(
@@ -317,10 +323,6 @@ impl PlatformWindow for TestWindow {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.lock().request_frame_callback = Some(callback);
-    }
-
-    fn on_input(&self, callback: Box<dyn FnMut(crate::PlatformInput) -> DispatchEventResult>) {
-        self.0.lock().input_callback = Some(callback)
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
