@@ -53,9 +53,9 @@ struct DirectWriteComponents {
 impl Drop for DirectWriteComponents {
     fn drop(&mut self) {
         unsafe {
-            let _ = self
-                .factory
-                .UnregisterFontFileLoader(&self.in_memory_loader);
+            self.factory
+                .UnregisterFontFileLoader(&self.in_memory_loader)
+                .log_err();
         }
     }
 }
