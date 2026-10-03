@@ -47,7 +47,7 @@ pub fn run_clippy(args: ClippyArgs) -> Result<()> {
         "running: {cargo} {}",
         clippy_command
             .get_args()
-            .map(|arg| arg.to_str().unwrap())
+            .map(|arg| arg.to_string_lossy())
             .collect::<Vec<_>>()
             .join(" ")
     );

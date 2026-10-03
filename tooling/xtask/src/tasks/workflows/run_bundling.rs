@@ -144,7 +144,10 @@ pub(crate) fn bundle_mac(
 }
 
 pub fn upload_artifact(path: &str) -> Step<Use> {
-    let name = Path::new(path).file_name().unwrap().to_str().unwrap();
+    let name = Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(path);
     Step::new(format!("@actions/upload-artifact {}", name))
         .uses(
             "actions",
