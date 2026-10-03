@@ -532,7 +532,6 @@ struct PendingInput {
 /// It can hold zero or more outputs, which the user
 /// sees as "the output" for a single execution.
 pub struct ExecutionView {
-    #[allow(unused)]
     workspace: WeakEntity<Workspace>,
     pub outputs: Vec<Output>,
     pub status: ExecutionStatus,
