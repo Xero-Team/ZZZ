@@ -215,10 +215,33 @@ async fn cleanup_staging_path(staging_path: &Path, asset_kind: AssetKind) {
 }
 
 async fn finalize_download(staging_path: &Path, destination_path: &Path) -> Result<()> {
-    _ = async_fs::remove_dir_all(destination_path).await;
+    remove_existing_destination(destination_path).await?;
     async_fs::rename(staging_path, destination_path)
         .await
         .with_context(|| format!("renaming {staging_path:?} to {destination_path:?}"))?;
+    Ok(())
+}
+
+async fn remove_existing_destination(destination_path: &Path) -> Result<()> {
+    let metadata = match async_fs::symlink_metadata(destination_path).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("reading metadata for {destination_path:?}"));
+        }
+    };
+
+    if metadata.is_dir() {
+        async_fs::remove_dir_all(destination_path)
+            .await
+            .with_context(|| format!("removing existing directory {destination_path:?}"))?;
+    } else {
+        async_fs::remove_file(destination_path)
+            .await
+            .with_context(|| format!("removing existing file {destination_path:?}"))?;
+    }
+
     Ok(())
 }
 
@@ -461,6 +484,59 @@ mod tests {
             assert!(!destination_path.exists());
             let leftover_entries = std::fs::read_dir(temp_dir.path()).unwrap().count();
             assert_eq!(leftover_entries, 0, "staging directory should be removed");
+        });
+    }
+
+    #[test]
+    fn finalize_download_replaces_existing_file() {
+        futures::executor::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let staging_path = temp_dir.path().join("staging");
+            let destination_path = temp_dir.path().join("destination");
+            async_fs::write(&staging_path, b"new contents")
+                .await
+                .unwrap();
+            async_fs::write(&destination_path, b"old contents")
+                .await
+                .unwrap();
+
+            finalize_download(&staging_path, &destination_path)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                async_fs::read(&destination_path).await.unwrap(),
+                b"new contents"
+            );
+            assert!(!staging_path.exists());
+        });
+    }
+
+    #[test]
+    fn finalize_download_replaces_existing_directory() {
+        futures::executor::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let staging_path = temp_dir.path().join("staging");
+            let destination_path = temp_dir.path().join("destination");
+            async_fs::create_dir(&staging_path).await.unwrap();
+            async_fs::write(staging_path.join("new"), b"new contents")
+                .await
+                .unwrap();
+            async_fs::create_dir(&destination_path).await.unwrap();
+            async_fs::write(destination_path.join("old"), b"old contents")
+                .await
+                .unwrap();
+
+            finalize_download(&staging_path, &destination_path)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                async_fs::read(destination_path.join("new")).await.unwrap(),
+                b"new contents"
+            );
+            assert!(!destination_path.join("old").exists());
+            assert!(!staging_path.exists());
         });
     }
 }
