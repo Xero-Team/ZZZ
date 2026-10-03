@@ -8,6 +8,7 @@ use gpui::{
     Task,
 };
 use ui::{animation::DefaultAnimations, prelude::*};
+use util::ResultExt as _;
 use zzz_actions::toast;
 
 use crate::Workspace;
@@ -34,7 +35,7 @@ pub fn init(cx: &mut App) {
                         .update(cx, |_, window, cx| {
                             on_click(window, cx);
                         })
-                        .ok();
+                        .log_err();
                 }
             });
         });
