@@ -197,7 +197,27 @@ diagnostics feature。
 
 ### 阶段 2：并发与 accessibility 边界
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
+
+已完成：
+
+- 按 `8886dcb0d4ea0e145e4512d415d3260602eca99` 的 B 级安全部分，在现有 ZZZ
+  `PlatformDispatcher` 和 priority queue 上增加 `ThreadedDispatcher`。
+- worker pool、main-thread handoff、real-time timer queue、idle tracking 和显式
+  dispatcher drop shutdown 已实现；普通 deterministic tests 继续使用 `TestDispatcher`。
+- 3 个 focused tests 通过，其中 teardown test 创建并销毁 100 个 dispatcher 实例。
+
+阶段 2 上游 A/B/C 决策：
+
+| Upstream                                   | Class | Disposition                                                                                                                                                                                       |
+| ------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `8886dcb0d4ea0e145e4512d415d3260602eca99`  | B     | Ported the isolated threaded worker/timer/main-handoff behavior to ZZZ names and queue APIs; omitted upstream BenchDispatcher rename, benchmark feature graph, and unrelated benchmark reporting. |
+| `cc053a4a6fa2fd0e8793201ed9099466af1be0b1` | C     | AccessKit writer/semantic tree is absent from ZZZ; the one-line author-id builder cannot be isolated from the missing accessibility chain.                                                        |
+| `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | C     | ZZZ has no macOS AccessKit adapter or SubclassingAdapter ownership to release.                                                                                                                    |
+
+当前仍待完成：ThreadedDispatcher 100-seed panic/cancellation parity、GPUI semantic
+node/action snapshots、Linux/Windows/macOS adapter 分离审查，以及 native screen-reader
+runbook。EXP-008 尚未达到最终阈值，AccessKit EXP-006 尚未运行。
 
 ### 阶段 3：真实 headless renderer
 

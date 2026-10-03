@@ -237,6 +237,23 @@ impl<T> PriorityQueueReceiver<T> {
         self.pop_inner(false)
     }
 
+    /// Returns the number of queued items without removing them.
+    #[doc(hidden)]
+    pub fn len(&self) -> usize {
+        let queues = self
+            .state
+            .queues
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        queues.high_priority.len() + queues.medium_priority.len() + queues.low_priority.len()
+    }
+
+    /// Returns whether no item is currently queued.
+    #[doc(hidden)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn spin_try_pop(&mut self) -> Result<Option<T>, RecvError> {
         use Priority as P;
 

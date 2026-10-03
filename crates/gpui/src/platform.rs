@@ -9,6 +9,9 @@ pub mod layer_shell;
 #[cfg(any(test, feature = "test-support"))]
 mod test;
 
+#[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
+mod threaded_dispatcher;
+
 #[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
 mod visual_test;
 
@@ -78,6 +81,9 @@ pub(crate) use test::*;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use test::{TestDispatcher, TestScreenCaptureSource, TestScreenCaptureStream};
+
+#[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
+pub use threaded_dispatcher::ThreadedDispatcher;
 
 #[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
 pub use visual_test::VisualTestPlatform;
@@ -777,6 +783,11 @@ pub trait PlatformDispatcher: Send + Sync {
 
     #[cfg(any(test, feature = "test-support"))]
     fn as_test(&self) -> Option<&TestDispatcher> {
+        None
+    }
+
+    #[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
+    fn as_threaded(&self) -> Option<&ThreadedDispatcher> {
         None
     }
 }
