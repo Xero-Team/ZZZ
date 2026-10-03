@@ -3293,14 +3293,14 @@ impl Project {
                             buffer_id: buffer_id.to_proto(),
                             operations: vec![operation.clone()],
                         })
-                        .ok();
+                        .log_err();
                 }
 
                 self.enqueue_buffer_ordered_message(BufferOrderedMessage::Operation {
                     buffer_id,
                     operation,
                 })
-                .ok();
+                .log_err();
             }
 
             _ => {}
