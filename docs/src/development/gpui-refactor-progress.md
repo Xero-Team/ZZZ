@@ -355,6 +355,29 @@ text input owner。
 下一步：运行 Editor IME、UTF-16、多 cursor 和 candidate geometry checks，再进入 4D
 immutable `BuiltFrame`。
 
+4D built frame 当前进度：
+
+- 增加只读 `BuiltFrame` projection，包含 `Scene`、interaction snapshot、text-input
+  snapshot、accessibility update placeholder 和 diagnostics snapshot。
+- platform `draw` 与 test-support `render_to_image` 现在只接收 completed frame 的不可变
+  scene view；frame owner 继续负责构建、交换和 cache replay。
+- 这是 4D 的第一步，snapshot 的 accessibility/diagnostics 数据接线和 renderer contract
+  仍待阶段 5；当前不宣称 immutable ownership 已完全收敛。
+
+验证：
+
+| 命令或检查                                                       | 结果   | 证据                                              |
+| ---------------------------------------------------------------- | ------ | ------------------------------------------------- |
+| `cargo check --locked -p gpui`                                   | `PASS` | built frame projection 编译通过                   |
+| `cargo test --locked -p gpui --lib`                              | `PASS` | 219 tests passed                                  |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 221 tests passed                                  |
+| `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                               | `PASS` | built frame migration 无 whitespace error         |
+
+提交：`e321e6fa0b`。
+下一步：补齐 BuiltFrame 的 accessibility/diagnostics payload 和 read-only renderer contract，
+再按 EXP-004/005 决定是否抽出 `gpui_render` crate。
+
 ### 阶段 5：render contract 与 WGPU 模块化
 
 状态：`NOT STARTED`
