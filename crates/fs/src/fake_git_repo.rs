@@ -1501,7 +1501,9 @@ impl GitRepository for FakeGitRepository {
             }
 
             for chunk in graph_commits.chunks(GRAPH_CHUNK_SIZE) {
-                request_tx.send(chunk.to_vec()).await.ok();
+                if request_tx.send(chunk.to_vec()).await.is_err() {
+                    break;
+                }
             }
             Ok(())
         }
