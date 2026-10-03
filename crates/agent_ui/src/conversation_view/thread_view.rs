@@ -4683,8 +4683,8 @@ impl Render for TokenUsageTooltip {
                                                         .size(IconSize::XSmall),
                                                 )
                                                 .on_click(move |_, window, cx| {
-                                                    let _ =
-                                                        workspace.update(cx, |workspace, cx| {
+                                                    workspace
+                                                        .update(cx, |workspace, cx| {
                                                             let project =
                                                                 workspace.project().read(cx);
                                                             let paths = project_entry_ids
@@ -4701,7 +4701,8 @@ impl Render for TokenUsageTooltip {
                                                                     )
                                                                     .detach_and_log_err(cx);
                                                             }
-                                                        });
+                                                        })
+                                                        .log_err();
                                                 }),
                                             )
                                         }),
