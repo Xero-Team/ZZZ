@@ -422,6 +422,38 @@ pub struct WindowControls {
     pub window_menu: bool,
 }
 
+/// Capabilities exposed by a platform window implementation.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct PlatformCapabilities {
+    /// Whether the platform has a text-input/IME bridge.
+    pub text_input: bool,
+    /// Whether a native accessibility bridge is connected.
+    pub accessibility: bool,
+    /// Whether a real headless renderer is available.
+    pub headless_renderer: bool,
+    /// Whether frame callbacks can be requested from the platform event loop.
+    pub frame_callbacks: bool,
+    /// Window control operations supported by the backend.
+    pub window_controls: WindowControls,
+}
+
+impl Default for PlatformCapabilities {
+    fn default() -> Self {
+        Self {
+            text_input: false,
+            accessibility: false,
+            headless_renderer: false,
+            frame_callbacks: false,
+            window_controls: WindowControls {
+                fullscreen: false,
+                maximize: false,
+                minimize: false,
+                window_menu: false,
+            },
+        }
+    }
+}
+
 impl Default for WindowControls {
     fn default() -> Self {
         // Assume that we can do anything, unless told otherwise
@@ -716,6 +748,9 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     }
     fn window_controls(&self) -> WindowControls {
         WindowControls::default()
+    }
+    fn capabilities(&self) -> PlatformCapabilities {
+        PlatformCapabilities::default()
     }
     fn set_client_inset(&self, _inset: Pixels) {}
     fn gpu_specs(&self) -> Option<GpuSpecs>;
@@ -2682,6 +2717,24 @@ mod atlas_tests {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn default_platform_capabilities_are_explicitly_unsupported() {
+        let capabilities = PlatformCapabilities::default();
+        assert!(!capabilities.text_input);
+        assert!(!capabilities.accessibility);
+        assert!(!capabilities.headless_renderer);
+        assert!(!capabilities.frame_callbacks);
+        assert_eq!(
+            capabilities.window_controls,
+            WindowControls {
+                fullscreen: false,
+                maximize: false,
+                minimize: false,
+                window_menu: false,
+            }
+        );
+    }
 
     #[test]
     fn test_window_button_layout_parse_standard() {

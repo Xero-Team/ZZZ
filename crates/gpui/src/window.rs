@@ -9,8 +9,8 @@ use crate::{
     GlyphId, GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner,
     IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId,
     Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent,
-    MouseUpEvent, PaintIndex, Path, PendingInput, Pixels, PlatformAtlas, PlatformDisplay,
-    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
+    MouseUpEvent, PaintIndex, Path, PendingInput, Pixels, PlatformAtlas, PlatformCapabilities,
+    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
     PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
     RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
     SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size,
@@ -1619,6 +1619,11 @@ impl Window {
     /// after it has been closed
     pub fn window_bounds(&self) -> WindowBounds {
         self.platform_window.window_bounds()
+    }
+
+    /// Returns the capabilities declared by this window's platform backend.
+    pub fn platform_capabilities(&self) -> PlatformCapabilities {
+        self.platform_window.capabilities()
     }
 
     /// Return the `WindowBounds` excluding insets (Wayland and X11)
