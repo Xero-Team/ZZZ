@@ -235,6 +235,9 @@ impl AgentRegistryStore {
                 }
             };
 
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, cx| {
                 this.pending_refresh = None;
                 this.is_fetching = false;
@@ -248,8 +251,7 @@ impl AgentRegistryStore {
                     }
                 }
                 cx.notify();
-            })
-            .ok();
+            });
         }));
     }
 
