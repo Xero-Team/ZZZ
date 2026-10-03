@@ -14,7 +14,6 @@ use std::sync::atomic::{self, AtomicBool};
 ///
 /// `scap_default_target_source` should be used instead on Wayland, since `scap_screen_sources`
 /// won't return any results.
-#[allow(dead_code)]
 pub fn scap_screen_sources(
     foreground_executor: &ForegroundExecutor,
 ) -> oneshot::Receiver<Result<Vec<Rc<dyn ScreenCaptureSource>>>> {
