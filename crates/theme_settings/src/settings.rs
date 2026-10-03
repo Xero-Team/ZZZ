@@ -458,10 +458,9 @@ impl ThemeSettings {
 
     /// Returns the markdown preview font size.
     ///
-    /// Note: the fallback deliberately uses `self.ui_font_size` instead of `ui_font_size(cx)`,
-    /// so that temporary UI zoom does not also resize the markdown preview.
-    pub fn markdown_preview_font_size(&self, cx: &App) -> Pixels {
-        let _ = cx;
+    /// The fallback reads the configured UI font size directly so temporary UI zoom does not
+    /// resize the markdown preview.
+    pub fn markdown_preview_font_size(&self) -> Pixels {
         self.markdown_preview_font_size
             .map_or_else(|| clamp_font_size(self.ui_font_size), clamp_font_size)
     }

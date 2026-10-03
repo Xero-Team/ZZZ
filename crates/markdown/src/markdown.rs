@@ -222,7 +222,7 @@ impl MarkdownStyle {
             ),
             MarkdownFont::Preview => (
                 theme_settings.buffer_font_size(cx),
-                theme_settings.markdown_preview_font_size(cx),
+                theme_settings.markdown_preview_font_size(),
             ),
         };
 
@@ -6427,14 +6427,14 @@ mod tests {
         cx.run_until_parked();
 
         cx.update(|cx| {
-            let before = ThemeSettings::get_global(cx).markdown_preview_font_size(cx);
+            let before = ThemeSettings::get_global(cx).markdown_preview_font_size();
             assert_eq!(before, px(16.0));
 
             theme_settings::adjust_ui_font_size(cx, |size| size + px(3.0));
 
             assert_eq!(ThemeSettings::get_global(cx).ui_font_size(cx), px(19.0));
             assert_eq!(
-                ThemeSettings::get_global(cx).markdown_preview_font_size(cx),
+                ThemeSettings::get_global(cx).markdown_preview_font_size(),
                 before
             );
         });
@@ -6489,7 +6489,7 @@ mod tests {
         cx.run_until_parked();
         cx.update(|cx| {
             assert_eq!(
-                ThemeSettings::get_global(cx).markdown_preview_font_size(cx),
+                ThemeSettings::get_global(cx).markdown_preview_font_size(),
                 px(20.0)
             );
         });
@@ -6504,7 +6504,7 @@ mod tests {
         cx.run_until_parked();
         cx.update(|cx| {
             assert_eq!(
-                ThemeSettings::get_global(cx).markdown_preview_font_size(cx),
+                ThemeSettings::get_global(cx).markdown_preview_font_size(),
                 px(24.0)
             );
         });
