@@ -73,13 +73,16 @@ impl SidebarRecentProjects {
                     .await
                     .log_err()
                     .unwrap_or_default();
+                let Some(this) = this.upgrade() else {
+                    return;
+                };
                 this.update_in(cx, move |this, window, cx| {
                     this.picker.update(cx, move |picker, cx| {
                         picker.delegate.set_workspaces(workspaces);
                         picker.update_matches(picker.query(cx), window, cx)
                     })
                 })
-                .ok();
+                .log_err();
             })
             .detach();
 
