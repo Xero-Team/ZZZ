@@ -84,37 +84,6 @@ impl RepositorySelector {
     }
 }
 
-//pub(crate) fn filtered_repository_entries(
-//    git_store: &GitStore,
-//    cx: &App,
-//) -> Vec<Entity<Repository>> {
-//    let repositories = git_store
-//        .repositories()
-//        .values()
-//        .sorted_by_key(|repo| {
-//            let repo = repo.read(cx);
-//            (
-//                repo.dot_git_abs_path.clone(),
-//                repo.worktree_abs_path.clone(),
-//            )
-//        })
-//        .collect::<Vec<&Entity<Repository>>>();
-//
-//    repositories
-//        .chunk_by(|a, b| a.read(cx).dot_git_abs_path == b.read(cx).dot_git_abs_path)
-//        .flat_map(|chunk| {
-//            let has_non_single_file_worktree = chunk
-//                .iter()
-//                .any(|repo| !repo.read(cx).is_from_single_file_worktree);
-//            chunk.iter().filter(move |repo| {
-//                // Remove any entry that comes from a single file worktree and represents a repository that is also represented by a non-single-file worktree.
-//                !repo.read(cx).is_from_single_file_worktree || !has_non_single_file_worktree
-//            })
-//        })
-//        .map(|&repo| repo.clone())
-//        .collect()
-//}
-
 impl EventEmitter<DismissEvent> for RepositorySelector {}
 
 impl Focusable for RepositorySelector {
