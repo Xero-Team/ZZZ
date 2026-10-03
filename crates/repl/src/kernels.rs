@@ -499,7 +499,7 @@ pub fn python_env_kernel_specifications(
         python_language,
         cx,
     );
-    #[allow(unused)]
+    #[cfg(target_os = "windows")]
     let worktree_root_path: Option<std::sync::Arc<std::path::Path>> = project
         .read(cx)
         .worktree_for_id(worktree_id, cx)
