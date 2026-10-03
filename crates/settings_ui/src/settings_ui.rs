@@ -2768,29 +2768,6 @@ impl SettingsWindow {
         }
     }
 
-    // TODO:
-    //  Reconsider this after preview launch
-    // fn file_location_str(&self) -> String {
-    //     match &self.current_file {
-    //         SettingsUiFile::User => "settings.json".to_string(),
-    //         SettingsUiFile::Project((worktree_id, path)) => self
-    //             .worktree_root_dirs
-    //             .get(&worktree_id)
-    //             .map(|directory_name| {
-    //                 let path_style = PathStyle::local();
-    //                 let file_path = path.join(paths::local_settings_file_relative_path());
-    //                 format!(
-    //                     "{}{}{}",
-    //                     directory_name,
-    //                     path_style.separator(),
-    //                     file_path.display(path_style)
-    //                 )
-    //             })
-    //             .expect("Current file should always be present in root dir map"),
-    //         SettingsUiFile::Server(file) => file.to_string(),
-    //     }
-    // }
-
     fn render_search(
         &self,
         _window: &mut Window,
