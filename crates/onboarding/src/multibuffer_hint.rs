@@ -119,12 +119,14 @@ impl ToolbarItemView for MultibufferHint {
             cx,
             Box::new(move |event, _, cx| {
                 if event == ItemEvent::UpdateBreadcrumbs {
+                    let Some(this) = this.upgrade() else {
+                        return;
+                    };
                     this.update(cx, |this, cx| {
                         cx.notify();
                         let location = this.determine_toolbar_location(cx);
                         cx.emit(ToolbarItemEvent::ChangeLocation(location))
-                    })
-                    .ok();
+                    });
                 }
             }),
         ));
