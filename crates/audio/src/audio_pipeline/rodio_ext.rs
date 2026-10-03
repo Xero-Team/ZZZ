@@ -636,7 +636,7 @@ mod tests {
         fn callback_gets_all_samples() {
             let input = test_source();
 
-            let _ = input
+            input
                 .process_buffer::<{ SAMPLES.len() }, _>(|buffer| assert_eq!(*buffer, SAMPLES))
                 .count();
         }
@@ -674,7 +674,7 @@ mod tests {
         fn callback_gets_all_samples() {
             let input = test_source();
 
-            let _ = input
+            input
                 .inspect_buffer::<{ SAMPLES.len() }, _>(|buffer| assert_eq!(*buffer, SAMPLES))
                 .count();
         }
