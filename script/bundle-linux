@@ -330,7 +330,9 @@ unset ZZZ_BUILDING_REMOTE_SERVER
 
 export ZZZ_EMBED_REMOTE_SERVER_DIR="$(cd "${target_dir}" && pwd)"
 export RUSTFLAGS="${host_rustflags}"
-cargo build "${host_cargo_args[@]}" --target "${target_triple}" --package zzz --package cli
+# Force libz-sys to build its vendored zlib for the bundled host app. Its build
+# script tracks this variable, so Cargo rebuilds it when the link mode changes.
+LIBZ_SYS_STATIC=1 cargo build "${host_cargo_args[@]}" --target "${target_triple}" --package zzz --package cli
 host_artifact_dir="${target_dir}/${target_triple}/${host_build_profile}"
 
 host_binary="${host_artifact_dir}/zzz"
