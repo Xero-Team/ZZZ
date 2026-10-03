@@ -1,8 +1,10 @@
 use std::io::Write;
 use std::path::Path;
 
+#[cfg(any(debug_assertions, feature = "build-remote-server-binary"))]
+use crate::RemoteConnectionStatus;
 use crate::{
-    RemoteArch, RemoteConnectionStatus, RemoteOs, RemotePlatform,
+    RemoteArch, RemoteOs, RemotePlatform,
     json_log::LogRecord,
     protocol::{MESSAGE_LEN_SIZE, message_len_from_buffer, read_message_with_len, write_message},
 };
