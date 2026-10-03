@@ -415,7 +415,8 @@ impl PromptStore {
 
         cx.spawn(async move |this, cx| {
             task.await?;
-            this.update(cx, |_, cx| cx.emit(PromptsUpdatedEvent)).ok();
+            this.update(cx, |_, cx| cx.emit(PromptsUpdatedEvent))
+                .log_err();
             anyhow::Ok(())
         })
     }
@@ -528,7 +529,8 @@ impl PromptStore {
 
         cx.spawn(async move |this, cx| {
             task.await?;
-            this.update(cx, |_, cx| cx.emit(PromptsUpdatedEvent)).ok();
+            this.update(cx, |_, cx| cx.emit(PromptsUpdatedEvent))
+                .log_err();
             anyhow::Ok(())
         })
     }
@@ -571,7 +573,8 @@ impl PromptStore {
 
         cx.spawn(async move |this, cx| {
             task.await?;
-            this.update(cx, |_, cx| cx.emit(PromptsUpdatedEvent)).ok();
+            this.update(cx, |_, cx| cx.emit(PromptsUpdatedEvent))
+                .log_err();
             anyhow::Ok(())
         })
     }
