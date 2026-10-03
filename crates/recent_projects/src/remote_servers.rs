@@ -685,7 +685,7 @@ impl ProjectPicker {
 
         let db = WorkspaceDb::global(cx);
         cx.spawn_in(window, {
-            let entity = entity.clone();
+            let entity = entity.downgrade();
             async move |_this, cx| {
                 let workspaces = db
                     .recent_project_workspaces(app_fs.as_ref())
@@ -708,6 +708,9 @@ impl ProjectPicker {
                     })
                     .collect::<Vec<_>>();
 
+                let Some(entity) = entity.upgrade() else {
+                    return;
+                };
                 entity
                     .update_in(cx, |this, window, cx| {
                         this.recent_projects = recent_projects;
@@ -726,7 +729,7 @@ impl ProjectPicker {
                         }
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
             }
         })
         .detach();
