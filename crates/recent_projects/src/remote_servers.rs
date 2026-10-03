@@ -2889,7 +2889,7 @@ impl RemoteServerProjects {
                 );
 
                 cx.spawn(async move |cx| {
-                    if confirmation.await.ok() == Some(0) {
+                    if confirmation.await? == 0 {
                         remote_servers.update(cx, |this, cx| {
                             this.delete_wsl_distro(index, cx);
                         });
@@ -3075,7 +3075,7 @@ impl RemoteServerProjects {
                     );
 
                     cx.spawn(async move |cx| {
-                        if confirmation.await.ok() == Some(0) {
+                        if confirmation.await? == 0 {
                             remote_servers.update(cx, |this, cx| {
                                 this.delete_ssh_server(index, cx);
                             });
