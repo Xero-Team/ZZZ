@@ -113,6 +113,9 @@ impl ThreadStore {
             let Some(all_threads) = database.list_threads().await.log_err() else {
                 return;
             };
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, cx| {
                 this.threads.clear();
                 for thread in all_threads {
@@ -122,8 +125,7 @@ impl ThreadStore {
                     this.threads.push(thread);
                 }
                 cx.notify();
-            })
-            .ok();
+            });
         })
         .shared()
     }
