@@ -666,7 +666,7 @@ impl ProjectPanel {
                     project::Event::ActiveEntryChanged(Some(entry_id)) => {
                         if ProjectPanelSettings::get_global(cx).auto_reveal_entries {
                             this.reveal_entry(project.clone(), *entry_id, true, window, cx)
-                                .ok();
+                                .log_err();
                         }
                     }
                     project::Event::ActiveEntryChanged(None) => {
@@ -1982,7 +1982,7 @@ impl ProjectPanel {
             .update(cx, |workspace, cx| {
                 MarkdownPreviewView::open_for_project_path(project_path, workspace, window, cx);
             })
-            .ok();
+            .log_err();
     }
 
     fn open_permanent(&mut self, _: &OpenPermanent, window: &mut Window, cx: &mut Context<Self>) {
@@ -2250,7 +2250,7 @@ impl ProjectPanel {
                             project_panel.marked_entries.clear();
                             project_panel.update_visible_entries(None, false, false, window, cx);
                         })
-                        .ok();
+                        .log_err();
                     Err(e)?;
                 }
                 Ok(CreatedEntry::Included(new_entry)) => {
@@ -2700,9 +2700,9 @@ impl ProjectPanel {
                                 .update(cx, |workspace, cx| {
                                     workspace.toggle_status_toast(toast, cx);
                                 })
-                                .ok();
+                                .log_err();
                         })
-                        .ok();
+                        .log_err();
                 }
 
                 panel
@@ -2721,7 +2721,7 @@ impl ProjectPanel {
                             }
                         })
                     })
-                    .ok();
+                    .log_err();
 
                 anyhow::Ok(())
             })
@@ -3096,7 +3096,7 @@ impl ProjectPanel {
             .update(cx, |workspace, cx| {
                 workspace.toggle_status_toast(toast, cx);
             })
-            .ok();
+            .log_err();
     }
 
     fn find_next_selection_after_deletion(
@@ -3805,7 +3805,7 @@ impl ProjectPanel {
                     .update(cx, |this, _| {
                         this.undo_manager.record(changes).log_err();
                     })
-                    .ok();
+                    .log_err();
 
                 // update selection
                 if let Some(entry) = last_succeed {
@@ -3839,7 +3839,7 @@ impl ProjectPanel {
                                 }
                             }
                         })
-                        .ok();
+                        .log_err();
                 }
 
                 anyhow::Ok(())
@@ -3976,7 +3976,7 @@ impl ProjectPanel {
                                 cx,
                             );
                         })
-                        .ok();
+                        .log_err();
 
                     for (index, (worktree_id, entry_path, relative_path)) in
                         files_to_download.into_iter().enumerate()
@@ -4002,7 +4002,7 @@ impl ProjectPanel {
                                     cx,
                                 );
                             })
-                            .ok();
+                            .log_err();
 
                         let destination_path = dest_dir.join(&relative_path);
 
@@ -4044,7 +4044,7 @@ impl ProjectPanel {
                                 cx,
                             );
                         })
-                        .ok();
+                        .log_err();
                 }
             }
         })
@@ -4176,7 +4176,7 @@ impl ProjectPanel {
                     )
                     .detach_and_log_err(cx);
                 })
-                .ok();
+                .log_err();
         }
     }
 
@@ -4241,7 +4241,7 @@ impl ProjectPanel {
                                 cx,
                             );
                         })
-                        .ok();
+                        .log_err();
                     return;
                 }
             };
@@ -4259,7 +4259,7 @@ impl ProjectPanel {
                         workspace, &dir_path, window, cx,
                     );
                 })
-                .ok();
+                .log_err();
         }
     }
 
@@ -4894,7 +4894,7 @@ impl ProjectPanel {
                 }
                 cx.notify();
             })
-            .ok();
+            .log_err();
         });
 
         self.update_visible_entries_task = UpdateVisibleEntriesTask {
@@ -5277,7 +5277,7 @@ impl ProjectPanel {
                         .update(cx, |this, _| {
                             this.undo_manager.record(changes).log_err();
                         })
-                        .ok();
+                        .log_err();
                 })
                 .detach();
             } else {
@@ -5310,7 +5310,7 @@ impl ProjectPanel {
                         .update(cx, |this, _| {
                             this.undo_manager.record(operations).log_err();
                         })
-                        .ok();
+                        .log_err();
 
                     // For folded selections, we need to refresh the leaf paths (with suffixes)
                     // because they may not be indexed yet after the parent directory was moved.
@@ -5356,7 +5356,7 @@ impl ProjectPanel {
                                 });
                                 cx.notify();
                             })
-                            .ok();
+                            .log_err();
                     }
                 })
                 .detach();
@@ -6286,7 +6286,7 @@ impl ProjectPanel {
                                             cx.notify();
                                         }
                                     })
-                                    .ok();
+                                    .log_err();
                                 }));
                         },
                     ))
