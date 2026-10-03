@@ -359,7 +359,7 @@ impl DebugPanel {
                     .update(cx, |workspace, cx| {
                         NewProcessModal::show(workspace, window, NewProcessMode::Debug, None, cx);
                     })
-                    .ok();
+                    .log_err();
             });
             return;
         };
@@ -620,7 +620,7 @@ impl DebugPanel {
                                     })
                                 }
                             })
-                            .ok();
+                            .log_err();
                         }
                     });
                 }
@@ -1758,7 +1758,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_pane_in_direction(SplitDirection::Left, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1767,7 +1767,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_pane_in_direction(SplitDirection::Right, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1776,7 +1776,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_pane_in_direction(SplitDirection::Up, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1785,7 +1785,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_pane_in_direction(SplitDirection::Down, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1794,7 +1794,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::Console, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1803,7 +1803,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::Variables, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1812,7 +1812,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::BreakpointList, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1821,7 +1821,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::Frames, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1830,7 +1830,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::Modules, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1839,7 +1839,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::LoadedSources, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1848,7 +1848,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.activate_item(DebuggerPaneItem::Terminal, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1857,7 +1857,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.toggle_thread_picker(window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action({
@@ -1865,7 +1865,7 @@ impl Render for DebugPanel {
                     this.update(cx, |this, cx| {
                         this.toggle_session_picker(window, cx);
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_action(cx.listener(Self::toggle_zoom))
