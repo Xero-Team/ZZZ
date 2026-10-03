@@ -57,7 +57,9 @@ impl WhichKeyModal {
                 },
             ),
             _focus_out_subscription: window.on_focus_out(&focus_handle, cx, move |_, _, cx| {
-                handle.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
+                if let Some(handle) = handle.upgrade() {
+                    handle.update(cx, |_, cx| cx.emit(DismissEvent));
+                }
             }),
         };
         this.update_pending_keys(window, cx);
