@@ -158,7 +158,9 @@ impl CachedMath {
             if render_image_clone.set(value).is_err() {
                 log::debug!("math render result was already initialized");
             }
-            this.update(cx, |_, cx| cx.notify()).ok();
+            if let Some(this) = this.upgrade() {
+                this.update(cx, |_, cx| cx.notify());
+            }
         });
 
         Self {
