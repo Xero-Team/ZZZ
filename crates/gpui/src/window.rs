@@ -5819,7 +5819,7 @@ impl Window {
             modifiers: self.modifiers,
             pressed_button: None,
         });
-        let _ = self.dispatch_event(event, cx);
+        self.dispatch_event(event, cx);
     }
 }
 
