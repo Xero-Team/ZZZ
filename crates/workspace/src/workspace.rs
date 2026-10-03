@@ -690,7 +690,7 @@ fn prompt_and_open_paths(
                     );
                 });
             })
-            .ok();
+            .log_err();
     } else {
         let task = Workspace::new_local(
             Vec::new(),
@@ -1747,7 +1747,7 @@ impl Workspace {
                         this.save_window_bounds(window, cx).detach();
                         this.bounds_save_task_queued.take();
                     })
-                    .ok();
+                    .log_err();
                 }));
                 cx.notify();
             }),
@@ -3825,7 +3825,7 @@ impl Workspace {
                             cx.emit(project::Event::ActiveEntryChanged(Some(entry_id)));
                         });
                     })
-                    .ok();
+                    .log_err();
                 }
             }
 
@@ -6676,7 +6676,7 @@ impl Workspace {
                     // Ensure that we mark the window as edited if we did load dirty items
                     workspace.update_window_edited(window, cx);
                 })
-                .ok();
+                .log_err();
 
             Ok(opened_items)
         })
