@@ -64,19 +64,7 @@ impl VisualTestPlatform {
     }
 }
 
-impl Platform for VisualTestPlatform {
-    fn background_executor(&self) -> BackgroundExecutor {
-        self.background_executor.clone()
-    }
-
-    fn foreground_executor(&self) -> ForegroundExecutor {
-        self.foreground_executor.clone()
-    }
-
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
-        self.platform.text_system()
-    }
-
+impl crate::AppLifecycle for VisualTestPlatform {
     fn run(&self, _on_finish_launching: Box<dyn 'static + FnOnce()>) {
         panic!("VisualTestPlatform::run should not be called in tests")
     }
@@ -92,6 +80,24 @@ impl Platform for VisualTestPlatform {
     fn hide_other_apps(&self) {}
 
     fn unhide_other_apps(&self) {}
+
+    fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn on_reopen(&self, _callback: Box<dyn FnMut()>) {}
+}
+
+impl Platform for VisualTestPlatform {
+    fn background_executor(&self) -> BackgroundExecutor {
+        self.background_executor.clone()
+    }
+
+    fn foreground_executor(&self) -> ForegroundExecutor {
+        self.foreground_executor.clone()
+    }
+
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
+        self.platform.text_system()
+    }
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>> {
         self.platform.displays()
@@ -171,10 +177,6 @@ impl Platform for VisualTestPlatform {
     fn open_with_system(&self, path: &Path) {
         self.platform.open_with_system(path)
     }
-
-    fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
-
-    fn on_reopen(&self, _callback: Box<dyn FnMut()>) {}
 
     fn set_menus(&self, _menus: Vec<Menu>, _keymap: &Keymap) {}
 

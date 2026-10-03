@@ -485,19 +485,7 @@ impl MacPlatform {
     }
 }
 
-impl Platform for MacPlatform {
-    fn background_executor(&self) -> BackgroundExecutor {
-        self.0.lock().background_executor.clone()
-    }
-
-    fn foreground_executor(&self) -> gpui::ForegroundExecutor {
-        self.0.lock().foreground_executor.clone()
-    }
-
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
-        self.0.lock().text_system.clone()
-    }
-
+impl gpui::AppLifecycle for MacPlatform {
     fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
         let mut state = self.0.lock();
         if state.headless {
@@ -621,6 +609,28 @@ impl Platform for MacPlatform {
             let app = NSApplication::sharedApplication(nil);
             let _: () = msg_send![app, unhideAllApplications: nil];
         }
+    }
+
+    fn on_quit(&self, callback: Box<dyn FnMut()>) {
+        self.0.lock().quit = Some(callback);
+    }
+
+    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
+        self.0.lock().reopen = Some(callback);
+    }
+}
+
+impl Platform for MacPlatform {
+    fn background_executor(&self) -> BackgroundExecutor {
+        self.0.lock().background_executor.clone()
+    }
+
+    fn foreground_executor(&self) -> gpui::ForegroundExecutor {
+        self.0.lock().foreground_executor.clone()
+    }
+
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
+        self.0.lock().text_system.clone()
     }
 
     fn primary_display(&self) -> Option<Rc<dyn PlatformDisplay>> {
@@ -942,14 +952,6 @@ impl Platform for MacPlatform {
                 }
             })
             .detach();
-    }
-
-    fn on_quit(&self, callback: Box<dyn FnMut()>) {
-        self.0.lock().quit = Some(callback);
-    }
-
-    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
-        self.0.lock().reopen = Some(callback);
     }
 
     fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {

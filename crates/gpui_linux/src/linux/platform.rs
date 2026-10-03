@@ -162,40 +162,7 @@ pub(crate) struct LinuxPlatform<P> {
     pub(crate) inner: P,
 }
 
-impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
-    fn background_executor(&self) -> BackgroundExecutor {
-        self.inner
-            .with_common(|common| common.background_executor.clone())
-    }
-
-    fn foreground_executor(&self) -> ForegroundExecutor {
-        self.inner
-            .with_common(|common| common.foreground_executor.clone())
-    }
-
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
-        self.inner.with_common(|common| common.text_system.clone())
-    }
-
-    fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
-        self.inner.keyboard_layout()
-    }
-
-    fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper> {
-        Rc::new(gpui::DummyKeyboardMapper)
-    }
-
-    fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {
-        self.inner
-            .with_common(|common| common.callbacks.keyboard_layout_change = Some(callback));
-    }
-
-    fn on_thermal_state_change(&self, _callback: Box<dyn FnMut()>) {}
-
-    fn thermal_state(&self) -> ThermalState {
-        ThermalState::Nominal
-    }
-
+impl<P: LinuxClient + 'static> gpui::AppLifecycle for LinuxPlatform<P> {
     fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
         on_finish_launching();
 
@@ -211,10 +178,6 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
 
     fn quit(&self) {
         self.inner.with_common(|common| common.signal.stop());
-    }
-
-    fn compositor_name(&self) -> &'static str {
-        self.inner.compositor_name()
     }
 
     fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
@@ -283,6 +246,57 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
 
     fn unhide_other_apps(&self) {
         log::info!("unhide_other_apps is not implemented on Linux, ignoring the call")
+    }
+
+    fn on_quit(&self, callback: Box<dyn FnMut()>) {
+        self.inner.with_common(|common| {
+            common.callbacks.quit = Some(callback);
+        });
+    }
+
+    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
+        self.inner.with_common(|common| {
+            common.callbacks.reopen = Some(callback);
+        });
+    }
+}
+
+impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
+    fn background_executor(&self) -> BackgroundExecutor {
+        self.inner
+            .with_common(|common| common.background_executor.clone())
+    }
+
+    fn foreground_executor(&self) -> ForegroundExecutor {
+        self.inner
+            .with_common(|common| common.foreground_executor.clone())
+    }
+
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
+        self.inner.with_common(|common| common.text_system.clone())
+    }
+
+    fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
+        self.inner.keyboard_layout()
+    }
+
+    fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper> {
+        Rc::new(gpui::DummyKeyboardMapper)
+    }
+
+    fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {
+        self.inner
+            .with_common(|common| common.callbacks.keyboard_layout_change = Some(callback));
+    }
+
+    fn on_thermal_state_change(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn thermal_state(&self) -> ThermalState {
+        ThermalState::Nominal
+    }
+
+    fn compositor_name(&self) -> &'static str {
+        self.inner.compositor_name()
     }
 
     fn primary_display(&self) -> Option<Rc<dyn PlatformDisplay>> {
@@ -477,18 +491,6 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
                 Some(())
             })
             .detach();
-    }
-
-    fn on_quit(&self, callback: Box<dyn FnMut()>) {
-        self.inner.with_common(|common| {
-            common.callbacks.quit = Some(callback);
-        });
-    }
-
-    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
-        self.inner.with_common(|common| {
-            common.callbacks.reopen = Some(callback);
-        });
     }
 
     fn on_app_menu_action(&self, callback: Box<dyn FnMut(&dyn Action)>) {

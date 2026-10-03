@@ -120,12 +120,9 @@ pub fn guess_compositor() -> &'static str {
     }
 }
 
+/// Application lifecycle owned by the platform event loop.
 #[expect(missing_docs)]
-pub trait Platform: 'static {
-    fn background_executor(&self) -> BackgroundExecutor;
-    fn foreground_executor(&self) -> ForegroundExecutor;
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem>;
-
+pub trait AppLifecycle {
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>);
     fn quit(&self);
     fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>);
@@ -133,6 +130,15 @@ pub trait Platform: 'static {
     fn hide(&self);
     fn hide_other_apps(&self);
     fn unhide_other_apps(&self);
+    fn on_quit(&self, callback: Box<dyn FnMut()>);
+    fn on_reopen(&self, callback: Box<dyn FnMut()>);
+}
+
+#[expect(missing_docs)]
+pub trait Platform: AppLifecycle + 'static {
+    fn background_executor(&self) -> BackgroundExecutor;
+    fn foreground_executor(&self) -> ForegroundExecutor;
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem>;
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>>;
     fn primary_display(&self) -> Option<Rc<dyn PlatformDisplay>>;
@@ -190,9 +196,6 @@ pub trait Platform: 'static {
     fn can_select_mixed_files_and_dirs(&self) -> bool;
     fn reveal_path(&self, path: &Path);
     fn open_with_system(&self, path: &Path);
-
-    fn on_quit(&self, callback: Box<dyn FnMut()>);
-    fn on_reopen(&self, callback: Box<dyn FnMut()>);
 
     fn set_menus(&self, menus: Vec<Menu>, keymap: &Keymap);
     fn get_menus(&self) -> Option<Vec<OwnedMenu>> {

@@ -400,45 +400,7 @@ fn encode_restart_arguments(arguments: &[OsString]) -> OsString {
     OsString::from_wide(&encoded)
 }
 
-impl Platform for WindowsPlatform {
-    fn background_executor(&self) -> BackgroundExecutor {
-        self.background_executor.clone()
-    }
-
-    fn foreground_executor(&self) -> ForegroundExecutor {
-        self.foreground_executor.clone()
-    }
-
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
-        self.text_system.clone()
-    }
-
-    fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
-        Box::new(
-            WindowsKeyboardLayout::new()
-                .log_err()
-                .unwrap_or(WindowsKeyboardLayout::unknown()),
-        )
-    }
-
-    fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper> {
-        Rc::new(WindowsKeyboardMapper::new())
-    }
-
-    fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {
-        self.inner
-            .state
-            .callbacks
-            .keyboard_layout_change
-            .set(Some(callback));
-    }
-
-    fn on_thermal_state_change(&self, _callback: Box<dyn FnMut()>) {}
-
-    fn thermal_state(&self) -> ThermalState {
-        ThermalState::Nominal
-    }
-
+impl gpui::AppLifecycle for WindowsPlatform {
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>) {
         on_finish_launching();
         if !self.headless {
@@ -541,15 +503,65 @@ impl Platform for WindowsPlatform {
 
     fn hide(&self) {}
 
-    // todo(windows)
     fn hide_other_apps(&self) {
         unimplemented!()
     }
 
-    // todo(windows)
     fn unhide_other_apps(&self) {
         unimplemented!()
     }
+
+    fn on_quit(&self, callback: Box<dyn FnMut()>) {
+        self.inner.state.callbacks.quit.set(Some(callback));
+    }
+
+    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
+        self.inner.state.callbacks.reopen.set(Some(callback));
+    }
+}
+
+impl Platform for WindowsPlatform {
+    fn background_executor(&self) -> BackgroundExecutor {
+        self.background_executor.clone()
+    }
+
+    fn foreground_executor(&self) -> ForegroundExecutor {
+        self.foreground_executor.clone()
+    }
+
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
+        self.text_system.clone()
+    }
+
+    fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
+        Box::new(
+            WindowsKeyboardLayout::new()
+                .log_err()
+                .unwrap_or(WindowsKeyboardLayout::unknown()),
+        )
+    }
+
+    fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper> {
+        Rc::new(WindowsKeyboardMapper::new())
+    }
+
+    fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {
+        self.inner
+            .state
+            .callbacks
+            .keyboard_layout_change
+            .set(Some(callback));
+    }
+
+    fn on_thermal_state_change(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn thermal_state(&self) -> ThermalState {
+        ThermalState::Nominal
+    }
+
+    // todo(windows)
+
+    // todo(windows)
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>> {
         WindowsDisplay::displays()
@@ -671,14 +683,6 @@ impl Platform for WindowsPlatform {
                     .log_err();
             })
             .detach();
-    }
-
-    fn on_quit(&self, callback: Box<dyn FnMut()>) {
-        self.inner.state.callbacks.quit.set(Some(callback));
-    }
-
-    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
-        self.inner.state.callbacks.reopen.set(Some(callback));
     }
 
     fn set_menus(&self, menus: Vec<Menu>, _keymap: &Keymap) {

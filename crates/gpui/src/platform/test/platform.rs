@@ -261,35 +261,7 @@ impl TestPlatform {
     }
 }
 
-impl Platform for TestPlatform {
-    fn background_executor(&self) -> BackgroundExecutor {
-        self.background_executor.clone()
-    }
-
-    fn foreground_executor(&self) -> ForegroundExecutor {
-        self.foreground_executor.clone()
-    }
-
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
-        self.text_system.clone()
-    }
-
-    fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
-        Box::new(TestKeyboardLayout)
-    }
-
-    fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper> {
-        Rc::new(DummyKeyboardMapper)
-    }
-
-    fn on_keyboard_layout_change(&self, _: Box<dyn FnMut()>) {}
-
-    fn on_thermal_state_change(&self, _: Box<dyn FnMut()>) {}
-
-    fn thermal_state(&self) -> ThermalState {
-        ThermalState::Nominal
-    }
-
+impl crate::AppLifecycle for TestPlatform {
     fn run(&self, _on_finish_launching: Box<dyn FnOnce()>) {
         unimplemented!()
     }
@@ -317,6 +289,42 @@ impl Platform for TestPlatform {
 
     fn unhide_other_apps(&self) {
         unimplemented!()
+    }
+
+    fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn on_reopen(&self, _callback: Box<dyn FnMut()>) {
+        unimplemented!()
+    }
+}
+
+impl Platform for TestPlatform {
+    fn background_executor(&self) -> BackgroundExecutor {
+        self.background_executor.clone()
+    }
+
+    fn foreground_executor(&self) -> ForegroundExecutor {
+        self.foreground_executor.clone()
+    }
+
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
+        self.text_system.clone()
+    }
+
+    fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
+        Box::new(TestKeyboardLayout)
+    }
+
+    fn keyboard_mapper(&self) -> Rc<dyn PlatformKeyboardMapper> {
+        Rc::new(DummyKeyboardMapper)
+    }
+
+    fn on_keyboard_layout_change(&self, _: Box<dyn FnMut()>) {}
+
+    fn on_thermal_state_change(&self, _: Box<dyn FnMut()>) {}
+
+    fn thermal_state(&self) -> ThermalState {
+        ThermalState::Nominal
     }
 
     fn displays(&self) -> Vec<std::rc::Rc<dyn crate::PlatformDisplay>> {
@@ -407,12 +415,6 @@ impl Platform for TestPlatform {
     }
 
     fn reveal_path(&self, _path: &std::path::Path) {
-        unimplemented!()
-    }
-
-    fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
-
-    fn on_reopen(&self, _callback: Box<dyn FnMut()>) {
         unimplemented!()
     }
 

@@ -106,19 +106,7 @@ impl WebPlatform {
     }
 }
 
-impl Platform for WebPlatform {
-    fn background_executor(&self) -> BackgroundExecutor {
-        self.background_executor.clone()
-    }
-
-    fn foreground_executor(&self) -> ForegroundExecutor {
-        self.foreground_executor.clone()
-    }
-
-    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
-        self.text_system.clone()
-    }
-
+impl gpui::AppLifecycle for WebPlatform {
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>) {
         let wgpu_context = self.wgpu_context.clone();
         let browser_window = self.browser_window.clone();
@@ -153,6 +141,28 @@ impl Platform for WebPlatform {
     fn hide_other_apps(&self) {}
 
     fn unhide_other_apps(&self) {}
+
+    fn on_quit(&self, callback: Box<dyn FnMut()>) {
+        self.callbacks.borrow_mut().quit = Some(callback);
+    }
+
+    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
+        self.callbacks.borrow_mut().reopen = Some(callback);
+    }
+}
+
+impl Platform for WebPlatform {
+    fn background_executor(&self) -> BackgroundExecutor {
+        self.background_executor.clone()
+    }
+
+    fn foreground_executor(&self) -> ForegroundExecutor {
+        self.foreground_executor.clone()
+    }
+
+    fn text_system(&self) -> Arc<dyn PlatformTextSystem> {
+        self.text_system.clone()
+    }
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>> {
         vec![self.active_display.clone()]
@@ -242,14 +252,6 @@ impl Platform for WebPlatform {
     fn reveal_path(&self, _path: &Path) {}
 
     fn open_with_system(&self, _path: &Path) {}
-
-    fn on_quit(&self, callback: Box<dyn FnMut()>) {
-        self.callbacks.borrow_mut().quit = Some(callback);
-    }
-
-    fn on_reopen(&self, callback: Box<dyn FnMut()>) {
-        self.callbacks.borrow_mut().reopen = Some(callback);
-    }
 
     fn set_menus(&self, _menus: Vec<Menu>, _keymap: &Keymap) {}
 
