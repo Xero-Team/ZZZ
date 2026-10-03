@@ -453,6 +453,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 - 新增 `WindowHost` supertrait，将 frame waker、request-frame callback 与
   completed-frame lifecycle 从 `PlatformWindow` 抽离；Wayland/Web completion 语义和
   TestWindow demand/waker 行为保持原实现。
+- `WindowHost` 随后接管通用 window geometry、resize/scale/display、activation/title、
+  fullscreen/minimize/zoom 和 status/lifecycle callbacks；`PlatformWindow` 现在主要保留
+  平台专属扩展、capabilities 与 test downcast façade。
 - 新增 `SystemServices` supertrait，将 native prompt 与 system bell 从
   `PlatformWindow` 抽离；Linux/Web/headless 的 rendered-prompt fallback、macOS/Windows
   native prompt 和各平台 bell 行为均保留。
@@ -502,8 +505,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
 `9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`；renderer
-factory `85fffe8fe5`；platform render target `c3f2d1bb90`。
-下一步：继续拆 `WindowHost`/platform system capability，并覆盖
+factory `85fffe8fe5`；platform render target `c3f2d1bb90`；completed window host
+`2b2d467ce5`。
+下一步：收敛 platform-specific façade 与 capability error，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
 ### 阶段 7：UI 集成边界
