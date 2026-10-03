@@ -4,7 +4,7 @@ use async_tar::Archive;
 use async_trait::async_trait;
 use collections::HashMap;
 pub use dap_types::{StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest};
-use fs::Fs;
+use fs::{Fs, RemoveOptions, RenameOptions};
 use futures::io::BufReader;
 use gpui::{AsyncApp, SharedString};
 pub use http_client::{HttpClient, github::latest_github_release};
@@ -282,6 +282,9 @@ pub async fn download_adapter_from_github(
 ) -> Result<PathBuf> {
     let adapter_path = paths::debug_adapters_dir().join(&adapter_name.as_ref());
     let version_path = adapter_path.join(format!("{}_{}", adapter_name, github_version.tag_name));
+    let mut staging_path = version_path.as_os_str().to_owned();
+    staging_path.push(".partial");
+    let staging_path = PathBuf::from(staging_path);
     let fs = delegate.fs();
 
     if version_path.exists() {
@@ -309,6 +312,9 @@ pub async fn download_adapter_from_github(
             .await
             .context("Failed creating adapter path")?;
     }
+    remove_adapter_staging_directory(fs.as_ref(), &staging_path)
+        .await
+        .context("removing stale debug adapter staging directory")?;
 
     log::debug!(
         "Downloading adapter {} from {}",
@@ -329,30 +335,67 @@ pub async fn download_adapter_from_github(
     );
 
     delegate.output_to_console("Download complete".to_owned());
-    match file_type {
-        DownloadedFileType::GzipTar => {
-            let decompressed_bytes = GzipDecoder::new(BufReader::new(response.body_mut()));
-            let archive = Archive::new(decompressed_bytes);
-            archive.unpack(&version_path).await?;
+    let extraction_result: Result<()> = async {
+        match file_type {
+            DownloadedFileType::GzipTar => {
+                let decompressed_bytes = GzipDecoder::new(BufReader::new(response.body_mut()));
+                let archive = Archive::new(decompressed_bytes);
+                archive
+                    .unpack(&staging_path)
+                    .await
+                    .context("extracting debug adapter tarball")?;
+            }
+            DownloadedFileType::Zip | DownloadedFileType::Vsix => {
+                let zip_path = version_path.with_extension("zip");
+                let mut file = File::create(&zip_path)
+                    .await
+                    .context("creating downloaded debug adapter archive")?;
+                futures::io::copy(response.body_mut(), &mut file)
+                    .await
+                    .context("saving downloaded debug adapter archive")?;
+                let file = File::open(&zip_path)
+                    .await
+                    .context("opening downloaded debug adapter archive")?;
+                extract_zip(&staging_path, file)
+                    .await
+                    .context("extracting downloaded debug adapter archive")?;
+            }
         }
-        DownloadedFileType::Zip | DownloadedFileType::Vsix => {
-            let zip_path = version_path.with_extension("zip");
-            let mut file = File::create(&zip_path).await?;
-            futures::io::copy(response.body_mut(), &mut file).await?;
-            let file = File::open(&zip_path).await?;
-            extract_zip(&version_path, file)
-                .await
-                // we cannot check the status as some adapter include files with names that trigger `Illegal byte sequence`
-                .inspect_err(|e| log::warn!("ZIP extraction error: {}. Ignoring...", e))
-                .ok();
+        Ok(())
+    }
+    .await;
 
-            util::fs::remove_matching(&adapter_path, |entry| {
-                entry
-                    .file_name()
-                    .is_some_and(|file| file.to_string_lossy().ends_with(".zip"))
-            })
-            .await;
+    if let Err(error) = extraction_result {
+        if let Err(cleanup_error) =
+            remove_adapter_staging_directory(fs.as_ref(), &staging_path).await
+        {
+            log::warn!(
+                "failed to remove debug adapter staging directory {staging_path:?}: {cleanup_error:#}"
+            );
         }
+        return Err(error);
+    }
+
+    if let Err(error) = fs
+        .rename(
+            &staging_path,
+            &version_path,
+            RenameOptions {
+                overwrite: false,
+                ignore_if_exists: false,
+                create_parents: false,
+            },
+        )
+        .await
+    {
+        if let Err(cleanup_error) =
+            remove_adapter_staging_directory(fs.as_ref(), &staging_path).await
+        {
+            log::warn!(
+                "failed to remove debug adapter staging directory {staging_path:?}: {cleanup_error:#}"
+            );
+        }
+        return Err(error).context("installing extracted debug adapter");
     }
 
     // remove older versions
@@ -362,6 +405,17 @@ pub async fn download_adapter_from_github(
     .await;
 
     Ok(version_path)
+}
+
+async fn remove_adapter_staging_directory(fs: &dyn Fs, staging_path: &Path) -> Result<()> {
+    fs.remove_dir(
+        staging_path,
+        RemoveOptions {
+            recursive: true,
+            ignore_if_not_exists: true,
+        },
+    )
+    .await
 }
 
 #[async_trait(?Send)]
