@@ -866,18 +866,14 @@ impl ThreadView {
         this.sync_generating_indicator(cx);
         this.sync_editor_mode_for_empty_state(cx);
         this.sync_existing_elicitation_states(window, cx);
-        let list_state_for_scroll = this.list_state.clone();
         let thread_view = cx.entity().downgrade();
 
         this.list_state
             .set_scroll_handler(move |_event, _window, cx| {
-                let list_state = list_state_for_scroll.clone();
                 let thread_view = thread_view.clone();
                 // N.B. We must defer because the scroll handler is called while the
-                // ListState's RefCell is mutably borrowed. Reading logical_scroll_top()
-                // directly would panic from a double borrow.
+                // ListState's RefCell is mutably borrowed.
                 cx.defer(move |cx| {
-                    let _ = list_state.logical_scroll_top();
                     thread_view
                         .update(cx, |this, cx| {
                             this.schedule_save(cx);
