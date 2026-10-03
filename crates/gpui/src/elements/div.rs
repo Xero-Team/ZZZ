@@ -2030,6 +2030,7 @@ impl Interactivity {
                 #[cfg(any(feature = "test-support", test))]
                 if let Some(debug_selector) = &self.debug_selector {
                     window
+                        .interaction
                         .next_frame
                         .record_debug_bounds(debug_selector.clone(), bounds);
                 }
@@ -2045,7 +2046,7 @@ impl Interactivity {
                     tab_group = self.tab_index;
                 }
                 if let Some(focus_handle) = &self.tracked_focus_handle {
-                    window.next_frame.tab_stops.insert(focus_handle);
+                    window.interaction.next_frame.tab_stops.insert(focus_handle);
                 }
 
                 window.with_element_opacity(style.opacity, |window| {

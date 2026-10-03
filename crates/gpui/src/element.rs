@@ -441,7 +441,7 @@ impl<E: Element> Drawable<E> {
                 }
 
                 let bounds = window.layout_bounds(layout_id);
-                let node_id = window.next_frame.dispatch_tree.push_node();
+                let node_id = window.interaction.next_frame.dispatch_tree.push_node();
                 let prepaint = self.element.prepaint(
                     global_id.as_ref(),
                     inspector_id.as_ref(),
@@ -450,7 +450,7 @@ impl<E: Element> Drawable<E> {
                     window,
                     cx,
                 );
-                window.next_frame.dispatch_tree.pop_node();
+                window.interaction.next_frame.dispatch_tree.pop_node();
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();
@@ -495,7 +495,11 @@ impl<E: Element> Drawable<E> {
                     );
                 }
 
-                window.next_frame.dispatch_tree.set_active_node(node_id);
+                window
+                    .interaction
+                    .next_frame
+                    .dispatch_tree
+                    .set_active_node(node_id);
                 self.element.paint(
                     global_id.as_ref(),
                     inspector_id.as_ref(),
@@ -633,11 +637,11 @@ impl AnyElement {
     /// Prepares the element to be painted by storing its bounds, giving it a chance to draw hitboxes and
     /// request autoscroll before the final paint pass is confirmed.
     pub fn prepaint(&mut self, window: &mut Window, cx: &mut App) -> Option<FocusHandle> {
-        let focus_assigned = window.next_frame.focus.is_some();
+        let focus_assigned = window.interaction.next_frame.focus.is_some();
 
         self.0.prepaint(window, cx);
 
-        if !focus_assigned && let Some(focus_id) = window.next_frame.focus {
+        if !focus_assigned && let Some(focus_id) = window.interaction.next_frame.focus {
             return FocusHandle::for_id(focus_id, &cx.focus_handles);
         }
 

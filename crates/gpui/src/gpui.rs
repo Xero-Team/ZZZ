@@ -34,6 +34,8 @@ pub(crate) use platform_scheduler::PlatformScheduler;
 mod geometry;
 mod global;
 mod input;
+mod interaction;
+pub(crate) use interaction::*;
 mod inspector;
 mod interactive;
 mod key_dispatch;

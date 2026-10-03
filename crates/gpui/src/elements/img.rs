@@ -868,6 +868,7 @@ mod tests {
         });
         let full_tile_bounds = window.update(|window, _| {
             window
+                .interaction
                 .rendered_frame
                 .scene
                 .polychrome_sprites
@@ -886,6 +887,7 @@ mod tests {
 
         let (rendered_bounds, rendered_tile_bounds, scale_factor) = window.update(|window, _| {
             let sprite = window
+                .interaction
                 .rendered_frame
                 .scene
                 .polychrome_sprites
@@ -931,6 +933,7 @@ mod tests {
 
         let (rendered_bounds, scale_factor) = window.update(|window, _| {
             let sprite = window
+                .interaction
                 .rendered_frame
                 .scene
                 .polychrome_sprites
@@ -963,6 +966,7 @@ mod tests {
         let (corner_radius, expected_corner_radius) = window.update(|window, _| {
             (
                 window
+                    .interaction
                     .rendered_frame
                     .scene
                     .polychrome_sprites

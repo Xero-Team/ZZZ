@@ -336,7 +336,12 @@ mod tests {
 
         let menu_bounds = window
             .update(cx, |_, window, _| {
-                window.rendered_frame.debug_bounds.get("MENU").copied()
+                window
+                    .interaction
+                    .rendered_frame
+                    .debug_bounds
+                    .get("MENU")
+                    .copied()
             })
             .unwrap()
             .expect("MENU debug bounds not found");
@@ -368,7 +373,12 @@ mod tests {
 
         let menu_bounds = window
             .update(cx, |_, window, _| {
-                window.rendered_frame.debug_bounds.get("MENU").copied()
+                window
+                    .interaction
+                    .rendered_frame
+                    .debug_bounds
+                    .get("MENU")
+                    .copied()
             })
             .unwrap()
             .expect("MENU debug bounds not found");
@@ -387,7 +397,12 @@ mod tests {
 
         let menu_bounds = window
             .update(cx, |_, window, _| {
-                window.rendered_frame.debug_bounds.get("MENU").copied()
+                window
+                    .interaction
+                    .rendered_frame
+                    .debug_bounds
+                    .get("MENU")
+                    .copied()
             })
             .unwrap()
             .expect("MENU debug bounds not found");
