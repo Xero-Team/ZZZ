@@ -22,6 +22,7 @@ include = [
   "tree-sitter-markdown-inline/queries/*",
   "common/grammar.js",
   "common/html_entities.json",
+  "tree-sitter.json",
 ]
 
 [lib]

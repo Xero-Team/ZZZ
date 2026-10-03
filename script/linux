@@ -11,6 +11,19 @@ fi
 function finalize {
   # after packages install (curl, etc), get the rust toolchain
   which rustup > /dev/null 2>&1 || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  source "$HOME/.cargo/env"
+  rustup component add rustfmt
+
+  tree_sitter_cli_version="$(sed -n 's/^tree-sitter-cli-version = "\([^"]*\)"/\1/p' crates/grammars/vendor/manifest.toml)"
+  if [[ -z "$tree_sitter_cli_version" ]]; then
+    echo "Unable to read the Tree-sitter CLI version from crates/grammars/vendor/manifest.toml" >&2
+    exit 1
+  fi
+  installed_tree_sitter_version="$(tree-sitter --version 2>/dev/null || true)"
+  if [[ "$installed_tree_sitter_version" != "tree-sitter $tree_sitter_cli_version" ]]; then
+    cargo install --locked --version "$tree_sitter_cli_version" tree-sitter-cli
+  fi
+
   cat <<EOF
 Finished installing Linux dependencies with script/linux
 EOF

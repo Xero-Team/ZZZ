@@ -1,0 +1,386 @@
+tree-sitter-cli-version = "0.26.11"
+abi = 15
+
+[[packages]]
+directory = "tree-sitter-cmake"
+compile-name = "tree-sitter-cmake"
+display-name = "CMake"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_cmake"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "CMake"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/injections.scm"
+
+[[packages]]
+directory = "tree-sitter-cmd"
+compile-name = "tree-sitter-cmd"
+display-name = "CMD"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_cmd"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "CMD"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-csv"
+compile-name = "tree-sitter-csv"
+display-name = "delimited text"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_csv"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "CSV"
+
+[[packages.grammars]]
+input = "tsv/src/grammar.json"
+output = "tsv/src"
+symbol = "tree_sitter_tsv"
+language-constant = "TSV_LANGUAGE"
+node-types-constant = "TSV_NODE_TYPES"
+display-name = "TSV"
+
+[[packages.grammars]]
+input = "psv/src/grammar.json"
+output = "psv/src"
+symbol = "tree_sitter_psv"
+language-constant = "PSV_LANGUAGE"
+node-types-constant = "PSV_NODE_TYPES"
+display-name = "PSV"
+
+[[packages.grammars]]
+input = "semicolon/src/grammar.json"
+output = "semicolon/src"
+symbol = "tree_sitter_semicolon"
+language-constant = "SEMICOLON_LANGUAGE"
+node-types-constant = "SEMICOLON_NODE_TYPES"
+display-name = "semicolon-delimited text"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-dockerfile"
+compile-name = "tree-sitter-dockerfile"
+display-name = "Dockerfile"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_dockerfile"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Dockerfile"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-git-config"
+compile-name = "tree-sitter-git-config"
+display-name = "Git config"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_git_config"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Git config"
+
+[[packages]]
+directory = "tree-sitter-git-rebase"
+compile-name = "tree-sitter-git-rebase"
+display-name = "Git rebase"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_git_rebase"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Git rebase"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-gitattributes"
+compile-name = "tree-sitter-gitattributes"
+display-name = "Git attributes"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_gitattributes"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Git attributes"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-gitcommit"
+compile-name = "tree-sitter-gitcommit"
+display-name = "Git commit"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_git_commit"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Git commit"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-gitignore"
+compile-name = "tree-sitter-gitignore"
+display-name = "Gitignore"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_gitignore"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Gitignore"
+
+[[packages]]
+directory = "tree-sitter-go-mod"
+compile-name = "tree-sitter-go-mod"
+display-name = "Go module"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_gomod"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Go module"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-gowork"
+compile-name = "tree-sitter-gowork"
+display-name = "Go workspace"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_gowork"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Go workspace"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-md"
+compile-name = "tree-sitter-markdown"
+display-name = "Markdown"
+
+[[packages.grammars]]
+input = "tree-sitter-markdown/src/grammar.json"
+output = "tree-sitter-markdown/src"
+symbol = "tree_sitter_markdown"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES_BLOCK"
+display-name = "Markdown block"
+
+[[packages.grammars]]
+input = "tree-sitter-markdown-inline/src/grammar.json"
+output = "tree-sitter-markdown-inline/src"
+symbol = "tree_sitter_markdown_inline"
+language-constant = "INLINE_LANGUAGE"
+node-types-constant = "NODE_TYPES_INLINE"
+display-name = "Markdown inline"
+
+[[packages.queries]]
+constant = "HIGHLIGHT_QUERY_BLOCK"
+path = "tree-sitter-markdown/queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTION_QUERY_BLOCK"
+path = "tree-sitter-markdown/queries/injections.scm"
+
+[[packages.queries]]
+constant = "HIGHLIGHT_QUERY_INLINE"
+path = "tree-sitter-markdown-inline/queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTION_QUERY_INLINE"
+path = "tree-sitter-markdown-inline/queries/injections.scm"
+
+[[packages]]
+directory = "tree-sitter-mermaid"
+compile-name = "tree-sitter-mermaid"
+display-name = "Mermaid"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_mermaid"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Mermaid"
+
+[[packages]]
+directory = "tree-sitter-powershell"
+compile-name = "tree-sitter-powershell"
+display-name = "PowerShell"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_powershell"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "PowerShell"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "LOCALS_QUERY"
+path = "queries/locals.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-syslog"
+compile-name = "tree-sitter-syslog"
+display-name = "Syslog"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_syslog"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Syslog"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-toml"
+compile-name = "tree-sitter-toml"
+display-name = "TOML"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_toml"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "TOML"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-typescript"
+compile-name = "tree-sitter-typescript"
+display-name = "TypeScript"
+extra-rerun-paths = ["common/scanner.h"]
+
+[[packages.grammars]]
+input = "typescript/src/grammar.json"
+output = "typescript/src"
+symbol = "tree_sitter_typescript"
+language-constant = "LANGUAGE_TYPESCRIPT"
+node-types-constant = "TYPESCRIPT_NODE_TYPES"
+display-name = "TypeScript"
+
+[[packages.grammars]]
+input = "tsx/src/grammar.json"
+output = "tsx/src"
+symbol = "tree_sitter_tsx"
+language-constant = "LANGUAGE_TSX"
+node-types-constant = "TSX_NODE_TYPES"
+display-name = "TSX"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "LOCALS_QUERY"
+path = "queries/locals.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-typst"
+compile-name = "tree-sitter-typst"
+display-name = "Typst"
+extra-rerun-paths = ["src/external_tokens.h", "src/unicode_tables.h"]
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_typst"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Typst"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/typst/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/typst/injections.scm"
+
+[[packages.queries]]
+constant = "LOCALS_QUERY"
+path = "queries/typst/locals.scm"
+
+[[packages.queries]]
+constant = "FOLDS_QUERY"
+path = "queries/typst/folds.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/typst/tags.scm"

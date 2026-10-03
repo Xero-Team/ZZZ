@@ -1,6 +1,5 @@
 #include "tree_sitter/parser.h"
 #include <assert.h>
-#include <ctype.h>
 #include <string.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -745,7 +744,7 @@ static bool parse_ordered_list_marker(Scanner *s, TSLexer *lexer,
         size_t digits = 1;
         bool dont_interrupt = lexer->lookahead != '1';
         advance(s, lexer);
-        while (isdigit(lexer->lookahead)) {
+        while (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
             dont_interrupt = true;
             digits++;
             advance(s, lexer);

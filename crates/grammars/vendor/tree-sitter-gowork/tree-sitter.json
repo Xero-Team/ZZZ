@@ -1,0 +1,24 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "gowork",
+      "camelcase": "GoWork",
+      "scope": "source.gowork",
+      "path": ".",
+      "file-types": ["go.work"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.1",
+    "license": "MIT",
+    "description": "Go workspace grammar for tree-sitter",
+    "links": {
+      "repository": "https://github.com/zed-industries/tree-sitter-go-work"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

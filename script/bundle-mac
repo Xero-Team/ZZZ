@@ -50,6 +50,7 @@ done
 
 shift $((OPTIND-1))
 
+cargo xtask grammars generate
 
 # Get release channel
 pushd crates/zzz

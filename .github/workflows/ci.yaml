@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: ./script/linux
 
+      - name: Check generated Tree-sitter files
+        run: cargo xtask grammars check
+
       - name: Check licenses
         run: ./script/check-licenses
 

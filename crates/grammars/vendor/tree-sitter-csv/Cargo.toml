@@ -18,6 +18,7 @@ include = [
   "psv/src/*",
   "semicolon/grammar.js",
   "semicolon/src/*",
+  "tree-sitter.json",
 ]
 
 [lib]

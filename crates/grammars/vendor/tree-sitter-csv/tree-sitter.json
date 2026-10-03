@@ -1,0 +1,46 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "csv",
+      "camelcase": "CSV",
+      "scope": "source.csv",
+      "path": ".",
+      "file-types": ["csv"],
+      "highlights": ["queries/highlights.scm"]
+    },
+    {
+      "name": "tsv",
+      "camelcase": "TSV",
+      "scope": "source.tsv",
+      "path": "tsv",
+      "file-types": ["tsv"],
+      "highlights": ["queries/highlights.scm"]
+    },
+    {
+      "name": "psv",
+      "camelcase": "PSV",
+      "scope": "source.psv",
+      "path": "psv",
+      "file-types": ["psv"],
+      "highlights": ["queries/highlights.scm"]
+    },
+    {
+      "name": "semicolon",
+      "camelcase": "Semicolon",
+      "scope": "source.semicolon",
+      "path": "semicolon",
+      "file-types": ["ssv"],
+      "highlights": ["queries/highlights.scm"]
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "CSV and delimited text grammars for tree-sitter"
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

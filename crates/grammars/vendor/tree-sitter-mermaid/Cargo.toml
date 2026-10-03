@@ -12,9 +12,9 @@ build = "bindings/rust/build.rs"
 include = [
   "LICENSE",
   "bindings/rust/*",
-  "src/node-types.json",
-  "src/parser.c",
-  "src/tree_sitter/parser.h",
+  "grammar.js",
+  "src/*",
+  "tree-sitter.json",
 ]
 
 [lib]

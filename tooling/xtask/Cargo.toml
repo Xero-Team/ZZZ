@@ -24,7 +24,9 @@ regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml = "0.9.34"
+smol.workspace = true
 strum.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 toml.workspace = true
 toml_edit.workspace = true

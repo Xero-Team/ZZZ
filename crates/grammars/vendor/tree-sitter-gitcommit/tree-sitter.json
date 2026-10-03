@@ -1,0 +1,25 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "git_commit",
+      "camelcase": "GitCommit",
+      "scope": "source.gitcommit",
+      "path": ".",
+      "file-types": ["COMMIT_EDITMSG", "MERGE_MSG"],
+      "highlights": ["queries/highlights.scm"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.1",
+    "license": "MIT",
+    "description": "Git commit grammar for tree-sitter",
+    "links": {
+      "repository": "https://github.com/zed-industries/tree-sitter-git-commit"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

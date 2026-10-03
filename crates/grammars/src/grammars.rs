@@ -237,6 +237,20 @@ mod tests {
         parser.parse(source, None).expect("parse Mermaid source")
     }
 
+    fn parse_markdown(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_md::LANGUAGE.into())
+            .expect("load Markdown grammar");
+        parser.parse(source, None).expect("parse Markdown source")
+    }
+
+    fn nested_markdown_blocks(depth: usize) -> String {
+        (1..=depth)
+            .map(|depth| format!("{}a\n", "> ".repeat(depth)))
+            .collect()
+    }
+
     fn parse_typst(source: &str) -> tree_sitter::Tree {
         let mut parser = Parser::new();
         parser
@@ -307,6 +321,36 @@ mod tests {
             !tree.root_node().has_error(),
             "expected valid Mermaid, got parse error for:\n{source}"
         );
+    }
+
+    #[test]
+    fn deeply_nested_markdown_blocks_do_not_overflow_scanner_serialization() {
+        let source = nested_markdown_blocks(300);
+        let tree = parse_markdown(&source);
+        let mut cursor = tree.walk();
+        let mut node_count = 0usize;
+
+        'walk: loop {
+            node_count += 1;
+            if cursor.goto_first_child() {
+                continue;
+            }
+            while !cursor.goto_next_sibling() {
+                if !cursor.goto_parent() {
+                    break 'walk;
+                }
+            }
+        }
+
+        assert!(node_count > 0);
+    }
+
+    #[test]
+    fn moderately_nested_markdown_blocks_parse_cleanly() {
+        let source = nested_markdown_blocks(100);
+        let tree = parse_markdown(&source);
+        assert_eq!(tree.root_node().kind(), "document");
+        assert!(!tree.root_node().has_error());
     }
 
     fn cmd_sexp(source: &str) -> String {

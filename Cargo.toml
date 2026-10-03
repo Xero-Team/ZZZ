@@ -781,6 +781,7 @@ tree-sitter-diff = "0.1.0"
 tree-sitter-dockerfile = { path = "crates/grammars/vendor/tree-sitter-dockerfile" }
 tree-sitter-elixir = "0.3"
 tree-sitter-embedded-template = "0.25.0"
+# Vendored from https://github.com/the-mikedavis/tree-sitter-git-config @ 7ee6dd00d1cc235ecc4426921d15938a0539a596
 tree-sitter-git-config = { path = "crates/grammars/vendor/tree-sitter-git-config" }
 # Vendored from https://github.com/tree-sitter-grammars/tree-sitter-gitattributes @ 1b7af09d45b579f9f288453b95ad555f1f431645
 tree-sitter-gitattributes = { path = "crates/grammars/vendor/tree-sitter-gitattributes" }
@@ -788,6 +789,7 @@ tree-sitter-gitattributes = { path = "crates/grammars/vendor/tree-sitter-gitattr
 tree-sitter-gitcommit = { path = "crates/grammars/vendor/tree-sitter-gitcommit" }
 # Vendored from https://github.com/the-mikedavis/tree-sitter-git-rebase @ 39bf3b7566c86ccffd70aaa5105c7c8b76788975
 tree-sitter-git-rebase = { path = "crates/grammars/vendor/tree-sitter-git-rebase" }
+# Vendored from https://github.com/shunsambongi/tree-sitter-gitignore @ b8928bd61e396bca1dde7666ed306702b0244ea4
 tree-sitter-gitignore = { path = "crates/grammars/vendor/tree-sitter-gitignore", package = "tree-sitter-ignore" }
 tree-sitter-go = "0.25"
 # Vendored from https://github.com/camdencheek/tree-sitter-go-mod @ 2e886870578eeba1927a2dc4bd2e2b3f598c5f9a

@@ -1,4 +1,5 @@
 {
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
       "name": "gitattributes",
@@ -27,5 +28,9 @@
     "links": {
       "repository": "https://github.com/tree-sitter-grammars/tree-sitter-gitattributes"
     }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
   }
 }

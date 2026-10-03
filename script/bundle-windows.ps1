@@ -273,6 +273,12 @@ if ($Help) {
     exit 0
 }
 
+Invoke-NativeCommand -FilePath "cargo" -ArgumentList @(
+    'xtask',
+    'grammars',
+    'generate'
+) -Description "Generate Tree-sitter parsers and Rust bindings"
+
 Push-Location -Path crates/zzz
 $channel = Get-Content "RELEASE_CHANNEL"
 $env:ZZZ_RELEASE_CHANNEL = $channel

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "gitignore",
+      "camelcase": "GitIgnore",
+      "scope": "source.gitignore",
+      "path": ".",
+      "file-types": [".gitignore", ".ignore"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.1",
+    "license": "MIT",
+    "description": "Gitignore grammar for tree-sitter",
+    "links": {
+      "repository": "https://github.com/shunsambongi/tree-sitter-gitignore"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

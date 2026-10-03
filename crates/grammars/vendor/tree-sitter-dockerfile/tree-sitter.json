@@ -1,4 +1,5 @@
 {
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
       "name": "dockerfile",
@@ -19,7 +20,7 @@
   ],
   "metadata": {
     "version": "0.2.0",
-    "license": "ISC",
+    "license": "MIT",
     "description": "A tree-sitter module for the Dockerfile grammar",
     "authors": [
       {

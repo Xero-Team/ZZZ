@@ -10,6 +10,7 @@ include = [
   "grammar.js",
   "queries/*",
   "src/*",
+  "tree-sitter.json",
 ]
 
 [lib]
