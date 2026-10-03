@@ -445,6 +445,8 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 - 删除 `ui_input::ERASED_EDITOR_FACTORY` process-global `OnceLock`。
 - 增加 per-App `ErasedEditorFactory` global registration；Editor 在 app 初始化时显式注册，
   InputField、Picker 和 RemoteConnection 通过当前 App 的 adapter 读取。
+- `ui_prompt` renderer 不再读取 `WorkspaceSettings` 或订阅 product settings；system prompt
+  policy 由 `zzz` app composition 决定，generic renderer 只负责 prompt view。
 - 保留 `ErasedEditor` façade 和 Editor UTF-16/IME 行为，未引入跨 crate product API。
 
 验证：
@@ -456,9 +458,8 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | `./script/clippy -p ui_input`                                               | `PASS` | all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                                          | `PASS` | ui_input boundary change 无 whitespace error      |
 
-提交：`f4f22a68fc`。
-下一步：审查 ui_prompt 的 product-specific workspace coupling，补齐显式 prompt renderer
-adapter 和 UI integration tests，再运行 EXP-009/010。
+提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`。
+下一步：补齐显式 prompt renderer adapter 和 UI integration tests，再运行 EXP-009/010。
 
 ### 阶段 8：invalidation 实验
 
