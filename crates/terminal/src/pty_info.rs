@@ -230,8 +230,10 @@ impl PtyProcessInfo {
         });
         let this = Arc::downgrade(self);
         *self.task.lock() = Some(cx.spawn(async move |term, cx| {
-            if has_changed.await {
-                term.update(cx, |_, cx| cx.emit(Event::TitleChanged)).ok();
+            if has_changed.await
+                && let Some(term) = term.upgrade()
+            {
+                term.update(cx, |_, cx| cx.emit(Event::TitleChanged));
             }
             if let Some(this) = this.upgrade() {
                 this.task.lock().take();
