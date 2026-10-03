@@ -351,7 +351,7 @@ text input owner。
 | `./script/clippy -p gpui --features frame-diagnostics`                 | `PASS` | all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                                     | `PASS` | text input owner 迁移无 whitespace error          |
 
-提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`。
+提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`；cache-slot swap fix `ff126abc7a`.
 下一步：运行 Editor IME、UTF-16、多 cursor 和 candidate geometry checks，再进入 4D
 immutable `BuiltFrame`。
 
@@ -451,14 +451,15 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 
 验证：
 
-| 命令或检查                                                                  | 结果   | 证据                                              |
-| --------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
-| `cargo check --locked -p ui_input -p editor -p picker -p remote_connection` | `PASS` | app-scoped factory consumers 编译通过             |
-| `cargo check --locked -p ui_prompt -p zzz`                                  | `PASS` | prompt policy moved to app composition            |
-| `cargo test --locked -p ui_input --lib`                                     | `PASS` | 0 tests, compile/test harness passed              |
-| `./script/clippy -p ui_input`                                               | `PASS` | all-target release clippy 与 philosophy gate 通过 |
-| `./script/clippy -p ui_prompt`                                              | `PASS` | all-target release clippy 与 philosophy gate 通过 |
-| `git diff --check`                                                          | `PASS` | ui_input boundary change 无 whitespace error      |
+| 命令或检查                                                                  | 结果                      | 证据                                                                                                                                                              |
+| --------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo check --locked -p ui_input -p editor -p picker -p remote_connection` | `PASS`                    | app-scoped factory consumers 编译通过                                                                                                                             |
+| `cargo check --locked -p ui_prompt -p zzz`                                  | `PASS`                    | prompt policy moved to app composition                                                                                                                            |
+| `cargo test --locked -p ui_input --lib`                                     | `PASS`                    | 0 tests, compile/test harness passed                                                                                                                              |
+| `./script/clippy -p ui_input`                                               | `PASS`                    | all-target release clippy 与 philosophy gate 通过                                                                                                                 |
+| `./script/clippy -p ui_prompt`                                              | `PASS`                    | all-target release clippy 与 philosophy gate 通过                                                                                                                 |
+| `git diff --check`                                                          | `PASS`                    | ui_input boundary change 无 whitespace error                                                                                                                      |
+| `cargo test --locked -p agent_ui --lib`                                     | `FAIL (baseline overlap)` | 293 passed；6 agent action/focus failures remain; representative baseline reproduction is recorded in `.tmp/gpui-refactor/phase-9/baseline-agent-ui-form-tab.log` |
 
 提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`。
 下一步：补齐显式 prompt renderer adapter 和 UI integration tests，再运行 EXP-009/010。
