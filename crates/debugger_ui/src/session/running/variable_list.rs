@@ -20,7 +20,7 @@ use project::debugger::{
 };
 use std::{collections::HashMap, ops::Range, sync::Arc};
 use ui::{ContextMenu, ListItem, ScrollAxes, ScrollableHandle, Tooltip, WithScrollbar, prelude::*};
-use util::{debug_panic, maybe};
+use util::{ResultExt as _, debug_panic, maybe};
 
 static INDENT_STEP_SIZE: Pixels = px(10.0);
 
@@ -1418,7 +1418,7 @@ impl VariableList {
                                 variable_list.selection = Some(path.clone());
                                 variable_list.remove_watcher(&RemoveWatch, window, cx);
                             })
-                            .ok();
+                            .log_err();
                         }
                     })
                     .tooltip(move |_window, cx| {
