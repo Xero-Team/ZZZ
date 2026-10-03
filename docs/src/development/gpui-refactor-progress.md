@@ -401,24 +401,29 @@ immutable `BuiltFrame`。
   swapchain 行为。
 - `gpui_wgpu/src/wgpu_renderer/resources.rs` 现在承载 GPU resource lifetime，
   `pipelines.rs` 承载 pipeline/layout definitions，`surface.rs` 承载 surface config/context
-  alias，`frame.rs` 承载 upload/readback POD；headless path 保持独立。
+  alias，`frame.rs` 承载 upload/readback POD，`drawing.rs` 承载 primitive/path draw calls；
+  headless path 保持独立。
 
 验证：
 
-| 命令或检查                                                                                                                          | 结果   | 证据                                                   |
-| ----------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------ |
-| `cargo check --locked -p gpui`                                                                                                      | `PASS` | render contract 与 compatibility adapter 编译通过      |
-| `CARGO_TARGET_DIR=.tmp/gpui-refactor/phase-5/target-gpui cargo check --locked -p gpui`                                              | `PASS` | clean 18.63 s，RSS 860,532 KiB；baseline 19.52 s       |
-| `CARGO_TARGET_DIR=.tmp/gpui-refactor/phase-5/target-gpui cargo check --locked -p gpui_platform -p gpui_wgpu -p gpui_linux`          | `PASS` | clean 17.13 s，RSS 858,320 KiB                         |
-| `cargo test --locked -p gpui --lib window::tests::test_frame_waker_fires_on_frame_demand`                                           | `PASS` | completed frame submit path 通过                       |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics window::tests::test_frame_diagnostics_follow_build_through_present` | `PASS` | diagnostics present path 通过                          |
-| `cargo test --locked -p gpui_wgpu --lib`                                                                                            | `PASS` | 15 WGPU unit tests passed                              |
-| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                                                 | `PASS` | hardware/fallback primitive corpus passed              |
-| `./script/clippy -p gpui_wgpu --features test-support`                                                                              | `PASS` | WGPU all-target release clippy 与 philosophy gate 通过 |
-| `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过      |
-| `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error          |
+| 命令或检查                                                                                                                          | 结果                    | 证据                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                                                                      | `PASS`                  | render contract 与 compatibility adapter 编译通过                                                                      |
+| `CARGO_TARGET_DIR=.tmp/gpui-refactor/phase-5/target-gpui cargo check --locked -p gpui`                                              | `PASS`                  | clean 18.63 s，RSS 860,532 KiB；baseline 19.52 s                                                                       |
+| `CARGO_TARGET_DIR=.tmp/gpui-refactor/phase-5/target-gpui cargo check --locked -p gpui_platform -p gpui_wgpu -p gpui_linux`          | `PASS`                  | clean 17.13 s，RSS 858,320 KiB                                                                                         |
+| `cargo test --locked -p gpui --lib window::tests::test_frame_waker_fires_on_frame_demand`                                           | `PASS`                  | completed frame submit path 通过                                                                                       |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics window::tests::test_frame_diagnostics_follow_build_through_present` | `PASS`                  | diagnostics present path 通过                                                                                          |
+| `cargo test --locked -p gpui_wgpu --lib`                                                                                            | `PASS`                  | 15 WGPU unit tests passed                                                                                              |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                                                 | `PASS`                  | hardware/fallback primitive corpus passed                                                                              |
+| drawing split 后 fallback adapter corpus                                                                                            | `PASS`                  | llvmpipe corpus passed                                                                                                 |
+| drawing split 后 hardware adapter corpus                                                                                            | `NOT RUN (environment)` | managed environment 无 `/dev/dri`，WGPU 仅枚举 llvmpipe；`.tmp/gpui-refactor/phase-5/headless-after-drawing-split.txt` |
+| `./script/clippy -p gpui_wgpu --features test-support`                                                                              | `PASS`                  | WGPU all-target release clippy 与 philosophy gate 通过                                                                 |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS`                  | all-target release clippy 与 philosophy gate 通过                                                                      |
+| `git diff --check`                                                                                                                  | `PASS`                  | render contract migration 无 whitespace error                                                                          |
 
-提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`；surface split `bffcfd6e62`；frame helper split `ea29cf0afc`.
+提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split
+`90e8f62f3e`；surface split `bffcfd6e62`；frame helper split `ea29cf0afc`；drawing split
+`cee87f046e`。
 EXP-004/005 当前状态：`PARTIAL`。clean check 在当前样本中未超过 baseline*1.10，
 但 consumer edit/rebuild graph、binary-size 和 golden scene equivalence 尚未完成；因此
 不创建独立 `gpui_render` crate。
