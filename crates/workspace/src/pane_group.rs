@@ -205,7 +205,7 @@ impl PaneGroup {
         match &mut self.root {
             Member::Pane(_) => {}
             Member::Axis(axis) => {
-                let _ = axis.reset_pane_sizes();
+                axis.reset_pane_sizes();
             }
         };
         self.mark_positions(cx);
