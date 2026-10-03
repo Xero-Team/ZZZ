@@ -999,7 +999,7 @@ impl LineBreakpoint {
                             cx,
                         );
                     })
-                    .ok();
+                    .log_err();
                 }
             })
             .on_mouse_down(MouseButton::Left, move |_, _, _| {});
@@ -1016,7 +1016,7 @@ impl LineBreakpoint {
                 weak.update(cx, |breakpoint_list, cx| {
                     breakpoint_list.select_ix(Some(ix), window, cx);
                 })
-                .ok();
+                .log_err();
             }
         })
         .on_secondary_mouse_down(|_, _, cx| {
@@ -1040,7 +1040,7 @@ impl LineBreakpoint {
                             breakpoint_list.select_ix(Some(ix), window, cx);
                             breakpoint_list.go_to_line_breakpoint(path.clone(), row, window, cx);
                         })
-                        .ok();
+                        .log_err();
                     }
                 })
                 .child(
@@ -1161,7 +1161,7 @@ impl DataBreakpoint {
                         list.update(cx, |this, cx| {
                             this.toggle_data_breakpoint(&id, cx);
                         })
-                        .ok();
+                        .log_err();
                     }
                 }),
         )
@@ -1227,7 +1227,7 @@ impl ExceptionBreakpoint {
             let list = list.clone();
             move |_, window, cx| {
                 list.update(cx, |list, cx| list.select_ix(Some(ix), window, cx))
-                    .ok();
+                    .log_err();
             }
         })
         .on_secondary_mouse_down(|_, _, cx| {
@@ -1268,7 +1268,7 @@ impl ExceptionBreakpoint {
                         list.update(cx, |this, cx| {
                             this.toggle_exception_breakpoint(&id, cx);
                         })
-                        .ok();
+                        .log_err();
                     }
                 }),
         )
@@ -1484,7 +1484,7 @@ impl BreakpointOptionsStrip {
                     cx.propagate();
                 }
             })
-            .ok();
+            .log_err();
         }
     }
 
