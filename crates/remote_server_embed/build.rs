@@ -335,9 +335,16 @@ fn rustup_target_add(triple: &str) {
     if !which("rustup") {
         return;
     }
-    let _ = Command::new("rustup")
+    let result = Command::new("rustup")
         .args(["target", "add", triple])
         .status();
+    match result {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            println!("cargo:warning=rustup target add {triple} exited with status {status}")
+        }
+        Err(error) => println!("cargo:warning=failed to run rustup target add {triple}: {error}"),
+    }
 }
 
 fn musl_cc(triple: &str) -> Option<PathBuf> {
