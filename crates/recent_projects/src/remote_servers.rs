@@ -1694,9 +1694,9 @@ impl RemoteServerProjects {
             #[cfg(target_os = "windows")]
             Mode::AddWslDistro(state) => {
                 let delegate = &state.picker.read(cx).delegate;
-                let distro = delegate
-                    .selected_distro()
-                    .expect("selected_distro should be present");
+                let Some(distro) = delegate.selected_distro() else {
+                    return;
+                };
                 self.connect_wsl_distro(state.picker.clone(), distro, window, cx);
             }
         }
