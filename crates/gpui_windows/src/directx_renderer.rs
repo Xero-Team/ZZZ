@@ -1313,7 +1313,9 @@ impl Drop for DirectXRenderer {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         if let Some(devices) = &self.devices {
-            report_live_objects(&devices.device).ok();
+            report_live_objects(&devices.device)
+                .context("Failed to report live objects while dropping renderer")
+                .log_err();
         }
     }
 }
