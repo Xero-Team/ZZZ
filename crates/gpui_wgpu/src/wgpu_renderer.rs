@@ -94,55 +94,11 @@ pub struct WgpuSurfaceConfig {
     pub preferred_present_mode: Option<wgpu::PresentMode>,
 }
 
-struct WgpuPipelines {
-    quads: wgpu::RenderPipeline,
-    shadows: wgpu::RenderPipeline,
-    path_rasterization: wgpu::RenderPipeline,
-    paths: wgpu::RenderPipeline,
-    underlines: wgpu::RenderPipeline,
-    mono_sprites: wgpu::RenderPipeline,
-    subpixel_sprites: Option<wgpu::RenderPipeline>,
-    poly_sprites: wgpu::RenderPipeline,
-    #[allow(dead_code)]
-    surfaces: wgpu::RenderPipeline,
-}
-
-struct WgpuBindGroupLayouts {
-    globals: wgpu::BindGroupLayout,
-    instances: wgpu::BindGroupLayout,
-    instances_with_texture: wgpu::BindGroupLayout,
-    surfaces: wgpu::BindGroupLayout,
-}
-
 /// Shared GPU context reference, used to coordinate device recovery across multiple windows.
 pub type GpuContext = Rc<RefCell<Option<WgpuContext>>>;
 
-/// GPU resources that must be dropped together during device recovery.
-struct WgpuResources {
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
-    surface: Option<wgpu::Surface<'static>>,
-    pipelines: WgpuPipelines,
-    bind_group_layouts: WgpuBindGroupLayouts,
-    atlas_sampler: wgpu::Sampler,
-    globals_buffer: wgpu::Buffer,
-    globals_bind_group: wgpu::BindGroup,
-    path_globals_bind_group: wgpu::BindGroup,
-    instance_buffer: wgpu::Buffer,
-    path_intermediate_texture: Option<wgpu::Texture>,
-    path_intermediate_view: Option<wgpu::TextureView>,
-    path_msaa_texture: Option<wgpu::Texture>,
-    path_msaa_view: Option<wgpu::TextureView>,
-}
-
-impl WgpuResources {
-    fn invalidate_intermediate_textures(&mut self) {
-        self.path_intermediate_texture = None;
-        self.path_intermediate_view = None;
-        self.path_msaa_texture = None;
-        self.path_msaa_view = None;
-    }
-}
+mod resources;
+use resources::{WgpuBindGroupLayouts, WgpuPipelines, WgpuResources};
 
 pub struct WgpuRenderer {
     /// Shared GPU context for device recovery coordination (unused on WASM).
