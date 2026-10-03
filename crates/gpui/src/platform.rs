@@ -1205,13 +1205,6 @@ impl<T> ops::Index<usize> for AtlasTextureList<T> {
 }
 
 impl<T> AtlasTextureList<T> {
-    #[allow(unused)]
-    pub fn drain(&mut self) -> std::vec::Drain<'_, Option<T>> {
-        self.free_list.clear();
-        self.textures.drain(..)
-    }
-
-    #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut T> {
         self.textures.iter_mut().flatten()
     }
