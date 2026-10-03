@@ -104,25 +104,6 @@ pub trait WithScrollbar: Sized {
     where
         T: ScrollableHandle;
 
-    // TODO: account for these cases properly
-    // #[track_caller]
-    // fn horizontal_scrollbar(self, window: &mut Window, cx: &mut App) -> Self::Output {
-    //     self.custom_scrollbars(
-    //         Scrollbars::new(ScrollAxes::Horizontal).ensure_id(core::panic::Location::caller()),
-    //         window,
-    //         cx,
-    //     )
-    // }
-
-    // #[track_caller]
-    // fn vertical_scrollbar(self, window: &mut Window, cx: &mut App) -> Self::Output {
-    //     self.custom_scrollbars(
-    //         Scrollbars::new(ScrollAxes::Vertical).ensure_id(core::panic::Location::caller()),
-    //         window,
-    //         cx,
-    //     )
-    // }
-
     #[track_caller]
     fn vertical_scrollbar_for<ScrollHandle: ScrollableHandle + Clone>(
         self,
@@ -238,35 +219,6 @@ impl<T: ScrollableHandle> UniformListDecoration for ScrollbarStateWrapper<T> {
         .into_any()
     }
 }
-
-// impl WithScrollbar for UniformList {
-//     type Output = Self;
-
-//     #[track_caller]
-//     fn custom_scrollbars<S, T>(
-//         self,
-//         config: Scrollbars<S, T>,
-//         window: &mut Window,
-//         cx: &mut App,
-//     ) -> Self::Output
-//     where
-//         S: ScrollbarVisibilitySetting,
-//         T: ScrollableHandle,
-//     {
-//         let scrollbar = get_scrollbar_state(config, std::panic::Location::caller(), window, cx);
-//         self.when_some(
-//             scrollbar.read_with(cx, |wrapper, cx| {
-//                 wrapper
-//                     .0
-//                     .read(cx)
-//                     .handle_to_track::<UniformListScrollHandle>()
-//                     .cloned()
-//             }),
-//             |this, handle| this.track_scroll(handle),
-//         )
-//         .with_decoration(scrollbar)
-//     }
-// }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum ShowBehavior {
