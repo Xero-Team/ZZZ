@@ -34,7 +34,7 @@ impl WakerId {
     fn post_inc(&mut self) -> Self {
         let id = *self;
         self.0 = id.0.wrapping_add(1);
-        *self
+        id
     }
 }
 
@@ -257,7 +257,7 @@ mod tests {
     async fn test_watch_random(cx: &mut TestAppContext) {
         let next_id = Arc::new(AtomicUsize::new(1));
         let closed = Arc::new(AtomicBool::new(false));
-        let (mut tx, rx) = channel(0);
+        let (mut sender, receiver) = channel(0);
         let mut tasks = Vec::new();
 
         tasks.push(cx.background_spawn({
@@ -269,7 +269,9 @@ mod tests {
                     executor.simulate_random_delay().await;
                     let id = next_id.fetch_add(1, SeqCst);
                     zlog::info!("sending {}", id);
-                    tx.send(id).ok();
+                    sender
+                        .send(id)
+                        .expect("receivers should remain open during the send loop");
                 }
                 closed.store(true, SeqCst);
             }
@@ -279,25 +281,25 @@ mod tests {
             let executor = cx.executor().clone();
             let next_id = next_id.clone();
             let closed = closed.clone();
-            let mut rx = rx.clone();
-            let mut prev_observed_value = *rx.borrow();
+            let mut receiver = receiver.clone();
+            let mut previous_observed_value = *receiver.borrow();
             tasks.push(cx.background_spawn(async move {
                 for _ in 0..16 {
                     executor.simulate_random_delay().await;
 
                     zlog::info!("{}: receiving", receiver_id);
                     let mut timeout = executor.simulate_random_delay().fuse();
-                    let mut recv = pin!(rx.recv().fuse());
+                    let mut receive = pin!(receiver.recv().fuse());
                     select_biased! {
                         _ = timeout => {
                             zlog::info!("{}: dropping recv future", receiver_id);
                         }
-                        result = recv => {
+                        result = receive => {
                             if let Ok(value) = result {
                                 zlog::info!("{}: received {}", receiver_id, value);
                                 assert_eq!(value, next_id.load(SeqCst) - 1);
-                                assert_ne!(value, prev_observed_value);
-                                prev_observed_value = value;
+                                assert_ne!(value, previous_observed_value);
+                                previous_observed_value = value;
                             } else {
                                 zlog::info!("{}: closed", receiver_id);
                                 assert!(closed.load(SeqCst));
