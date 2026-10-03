@@ -306,7 +306,6 @@ impl ButtonStyle {
             },
         }
     }
-
 }
 
 /// The height of a button.
