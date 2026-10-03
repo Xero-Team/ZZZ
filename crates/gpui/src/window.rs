@@ -2320,7 +2320,12 @@ impl Window {
             &mut self.interaction.rendered_frame,
             &mut self.interaction.next_frame,
         );
+        mem::swap(
+            &mut self.text_input.rendered_handlers,
+            &mut self.text_input.next_handlers,
+        );
         self.interaction.next_frame.clear();
+        self.text_input.next_handlers.clear();
         let current_focus_path = self.interaction.rendered_frame.focus_path();
         let current_window_active = self.interaction.rendered_frame.window_active;
         let mut focus_before_listeners = self.interaction.focus;
