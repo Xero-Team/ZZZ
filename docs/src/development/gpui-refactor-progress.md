@@ -428,18 +428,37 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 - 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
+- Linux X11、Wayland、headless、TestWindow、macOS、Windows 和 Web backend 均显式声明
+  capability matrix；未接 native AccessKit adapter 的平台统一声明 accessibility false。
+
+当前矩阵：
+
+| Backend               | Text input | Accessibility | Offscreen/headless window render | Frame callbacks | Window controls       |
+| --------------------- | ---------- | ------------- | -------------------------------- | --------------- | --------------------- |
+| TestWindow            | yes        | no            | runtime renderer dependent       | yes             | fullscreen only       |
+| Linux X11             | yes        | no            | no                               | yes             | full desktop set      |
+| Linux Wayland         | yes        | no            | no                               | yes             | compositor dependent  |
+| Linux headless window | no         | no            | no; scene is discarded           | no              | fullscreen state only |
+| macOS                 | yes        | no            | test-support only                | yes             | full desktop set      |
+| Windows               | yes        | no            | test-support only                | yes             | full desktop set      |
+| Web                   | no         | no            | no                               | yes             | fullscreen only       |
 
 验证：
 
-| 命令或检查                                                                                   | 结果   | 证据                                              |
-| -------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
-| `cargo check --locked -p gpui`                                                               | `PASS` | capability façade 编译通过                        |
-| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS` | capability default test passed                    |
-| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS` | all-target release clippy 与 philosophy gate 通过 |
-| `git diff --check`                                                                           | `PASS` | platform capability change 无 whitespace error    |
+| 命令或检查                                                                                   | 结果                        | 证据                                                    |
+| -------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                               | `PASS`                      | capability façade 编译通过                              |
+| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                          |
+| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                     |
+| `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                 |
+| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux            |
+| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过       |
+| `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error          |
 
-提交：`982cb1642a`。
-下一步：由 Linux/Windows/macOS/Web adapters 分别声明 capability matrix，并覆盖
+提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`。
+下一步：建立 `AppLifecycle`、`WindowHost`、`InputSource`、`TextInputBridge`、
+`AccessibilityBridge`、`SystemServices` 和 renderer factory 内部 traits，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
 ### 阶段 7：UI 集成边界
