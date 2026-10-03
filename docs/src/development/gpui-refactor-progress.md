@@ -378,22 +378,28 @@ immutable `BuiltFrame`。
   scene view；frame owner 继续负责构建、交换和 cache replay。
 - 这是 4D 的第一步，snapshot 的 accessibility/diagnostics 数据接线和 renderer contract
   仍待阶段 5；当前不宣称 immutable ownership 已完全收敛。
-- `BuiltFrame.accessibility` 已替换为真实 `AccessibilityUpdate` contract，并在 present
-  时提交给 platform bridge；当前尚无 native adapter，因此 frame payload 仍为空。
+- `AccessibilityUpdate` 与 diagnostics snapshot 现在由 completed `Frame` 持有，随 frame
+  swap 进入 `BuiltFrame`；frame clear 会清空旧 payload，避免复用上一帧数据。
+- `Window.pending_frame_timing` 平行状态已删除；`present` 从 `BuiltFrame.diagnostics` 读取
+  当前 build timing，accessibility bridge 从同一 completed frame 读取 semantic update。
+- accessibility semantic core 的非空 update 已通过 frame build/swap 测试；native adapter
+  仍未接入，本提交没有复制 Zed writer 或平台 adapter 代码。
 
 验证：
 
-| 命令或检查                                                       | 结果   | 证据                                              |
-| ---------------------------------------------------------------- | ------ | ------------------------------------------------- |
-| `cargo check --locked -p gpui`                                   | `PASS` | built frame projection 编译通过                   |
-| `cargo test --locked -p gpui --lib`                              | `PASS` | 219 tests passed                                  |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 221 tests passed                                  |
-| `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过 |
-| `git diff --check`                                               | `PASS` | built frame migration 无 whitespace error         |
+| 命令或检查                                                                 | 结果   | 证据                                                |
+| -------------------------------------------------------------------------- | ------ | --------------------------------------------------- |
+| `cargo check --locked -p gpui`                                             | `PASS` | built frame projection 编译通过                     |
+| `cargo test --locked -p gpui --lib`                                        | `PASS` | 223 tests passed                                    |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics`           | `PASS` | 225 tests passed                                    |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility` | `PASS` | 5 tests passed，含 completed-frame semantic payload |
+| `./script/clippy -p gpui --features frame-diagnostics`                     | `PASS` | all-target release clippy 与 philosophy gate 通过   |
+| `git diff --check`                                                         | `PASS` | built frame migration 无 whitespace error           |
 
-提交：BuiltFrame projection `e321e6fa0b`；render contract adapter `32d3b403a8`。
-下一步：补齐 BuiltFrame 的 accessibility/diagnostics payload 和 read-only renderer contract，
-再按 EXP-004/005 决定是否抽出 `gpui_render` crate。
+提交：BuiltFrame projection `e321e6fa0b`；render contract adapter `32d3b403a8`；
+completed-frame payload `8897cb326c`。
+下一步：审查并收敛剩余 completed-frame/read-only renderer contract，再按 EXP-004/005
+决定是否抽出 `gpui_render` crate。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
