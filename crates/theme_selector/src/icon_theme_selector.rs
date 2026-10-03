@@ -382,6 +382,7 @@ mod tests {
     fn init_test(cx: &mut TestAppContext) -> Arc<workspace::AppState> {
         cx.update(|cx| {
             let app_state = workspace::AppState::test(cx);
+            i18n::init(cx);
             settings::init(cx);
             theme::init(theme::LoadThemes::JustBase, cx);
             editor::init(cx);
@@ -500,7 +501,7 @@ mod tests {
         assert_eq!(previewed_theme_name(&picker, cx), "Test Icons A");
 
         picker.update_in(cx, |picker, window, cx| {
-            picker.update_matches("zzz".to_string(), window, cx);
+            picker.update_matches("qqqqqqqq".to_string(), window, cx);
         });
         cx.run_until_parked();
 
