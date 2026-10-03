@@ -355,7 +355,7 @@ impl AnyProtoClient {
         let mut response_senders = self.0.request_ids.lock();
         if let Some(tx) = response_senders.remove(&request_id) {
             let responses = std::mem::take(&mut envelope.payload.responses);
-            tx.send(Ok(Some(proto::TypedEnvelope {
+            let response = proto::TypedEnvelope {
                 sender_id: envelope.sender_id,
                 original_sender_id: envelope.original_sender_id,
                 message_id: envelope.message_id,
@@ -422,8 +422,10 @@ impl AnyProtoClient {
                         })
                     })
                     .collect(),
-            })))
-            .ok();
+            };
+            if tx.send(Ok(Some(response))).is_err() {
+                tracing::debug!("LSP query receiver was dropped before the response arrived");
+            }
         }
     }
 
