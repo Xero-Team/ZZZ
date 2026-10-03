@@ -160,7 +160,8 @@ impl BatchedTextRun {
                 None,
                 window,
                 cx,
-            );
+            )
+            .log_err();
     }
 }
 
@@ -754,7 +755,7 @@ impl TerminalElement {
                                 cx.notify();
                             }
                         })
-                        .ok();
+                        .log_err();
                 }
             });
         }
@@ -1540,7 +1541,7 @@ impl InputHandler for TerminalInputHandler {
             .update(cx, |_this, _cx| {
                 window.invalidate_character_coordinates();
             })
-            .ok();
+            .log_err();
     }
 
     fn replace_and_mark_text_in_range(
