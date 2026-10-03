@@ -486,7 +486,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                         multi_workspace.register_sidebar(sidebar, cx);
                     });
                 })
-                .ok();
+                .log_err();
         });
     })
     .detach();
