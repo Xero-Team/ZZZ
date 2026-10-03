@@ -6003,9 +6003,9 @@ impl Workspace {
                             workspace.dirty_items.remove(&item_id);
                             workspace.update_window_edited(window, cx)
                         })
-                        .ok();
+                        .log_err();
                 })
-                .ok();
+                .log_err();
         });
 
         let s = item.on_release(cx, on_release_callback);
@@ -7426,7 +7426,7 @@ impl Workspace {
         if let Some(window) = next_window {
             window
                 .update(cx, |_, window, _| window.activate_window())
-                .ok();
+                .log_err();
         }
     }
 
@@ -7450,7 +7450,7 @@ impl Workspace {
         if let Some(window) = prev_window {
             window
                 .update(cx, |_, window, _| window.activate_window())
-                .ok();
+                .log_err();
         }
     }
 
