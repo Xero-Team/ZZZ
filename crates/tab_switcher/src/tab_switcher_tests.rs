@@ -356,6 +356,7 @@ async fn test_quick_switch_before_popover_visible(cx: &mut gpui::TestAppContext)
 fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
     cx.update(|cx| {
         let state = AppState::test(cx);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         super::init(cx);
         editor::init(cx);
@@ -697,9 +698,8 @@ async fn test_toggle_all_stays_open_after_closing_last_tab_in_active_pane(
 
     // Tab switcher must remain open with a.txt as the only match
     let tab_switcher = get_active_tab_switcher(&workspace, cx);
-    tab_switcher.update(cx, |picker, cx| {
+    tab_switcher.update(cx, |picker, _cx| {
         assert_eq!(picker.delegate.matches.len(), 1);
         assert_match_at_position(picker, 0, tab_a.boxed_clone());
-        let _ = cx;
     });
 }
