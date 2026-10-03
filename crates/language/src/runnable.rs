@@ -324,7 +324,7 @@ fn runnable_range_from_captures(
                 .and_then(|tag_name| match tag_name {
                     RunnableCapture::Named(name) => Some((capture.node.byte_range(), name)),
                     RunnableCapture::Run => {
-                        let _ = run_range.insert(capture.node.byte_range());
+                        run_range = Some(capture.node.byte_range());
                         None
                     }
                     RunnableCapture::RunItem => None,
