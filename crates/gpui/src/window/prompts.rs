@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use futures::channel::oneshot;
+use gpui_util::ResultExt as _;
 
 use crate::{
     AnyView, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
@@ -50,7 +51,7 @@ impl PromptHandle {
                             window.focus(previous_focus, cx);
                         }
                     })
-                    .ok();
+                    .log_err();
             }
         })
         .detach();
