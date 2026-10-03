@@ -269,7 +269,7 @@ pub async fn open_remote_project(
                         .clone();
 
                     ui.update(cx, |ui, _cx| {
-                        ui.set_cancellation_tx(cancel_tx);
+                        ui.set_cancellation_sender(cancel_tx);
                     });
 
                     Some(Arc::new(RemoteClientDelegate::new(
