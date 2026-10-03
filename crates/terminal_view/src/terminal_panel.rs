@@ -334,7 +334,7 @@ impl TerminalPanel {
                             pane.focus_active_item(window, cx);
                         });
                     })
-                    .ok();
+                    .log_err();
             }
         }
         Ok(terminal_panel)
@@ -405,7 +405,7 @@ impl TerminalPanel {
                                     panel.center.split(&pane, &new_pane, direction, cx);
                                     window.focus(&new_pane.focus_handle(cx), cx);
                                 })
-                                .ok();
+                                .log_err();
                         })
                         .detach();
                     }
@@ -1150,7 +1150,7 @@ impl TerminalPanel {
                 .update(cx, |workspace, cx| {
                     workspace.activate_pane_in_direction(direction, window, cx)
                 })
-                .ok();
+                .log_err();
         }
     }
 
