@@ -433,8 +433,11 @@ impl ServerTreeRebase {
                     return Some(node);
                 };
                 if let Some(existing_id) = existing_node.id.get() {
-                    self.rebased_server_ids.insert(*existing_id);
-                    live_node.id.set(*existing_id).ok();
+                    let installed_existing_id = live_node.id.set(*existing_id).is_ok()
+                        || live_node.id.get() == Some(existing_id);
+                    if installed_existing_id {
+                        self.rebased_server_ids.insert(*existing_id);
+                    }
                 }
 
                 Some(node)
