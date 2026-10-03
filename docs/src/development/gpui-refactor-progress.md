@@ -330,6 +330,31 @@ order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
 下一步：继续 4B，覆盖 pointer capture 与 action routing 的固定顺序，再进入 4C
 text input owner。
 
+4C text input owner 当前进度：
+
+- 新建内部 `text_input.rs` 与 `TextInputOwner`，将 frame cache 中的
+  `PlatformInputHandler` rendered/next handler 列表从 `Frame` 移出，保持 cache range
+  索引和 handler drop/cancellation 语义。
+- 增加窄 `TextInputClient` candidate-geometry seam；UTF-16 selection、marked text 和
+  mutation 继续由现有 `InputHandler` compatibility adapter 提供，未引入平台层
+  `AsyncWindowContext` 到应用代码。
+- `invalidate_character_coordinates` 通过 owner 读取 IME candidate bounds；公开
+  `Window::handle_input` 和 Editor UTF-16/multi-cursor 行为保持不变。
+
+验证：
+
+| 命令或检查                                                             | 结果   | 证据                                              |
+| ---------------------------------------------------------------------- | ------ | ------------------------------------------------- |
+| `cargo check --locked -p gpui`                                         | `PASS` | text input owner 默认配置编译通过                 |
+| `cargo test --locked -p gpui --lib input`                              | `PASS` | pending input handler tests 2 passed              |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics input` | `PASS` | same 2 tests passed with diagnostics              |
+| `./script/clippy -p gpui --features frame-diagnostics`                 | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                                     | `PASS` | text input owner 迁移无 whitespace error          |
+
+提交：`71c66cc2ae`。
+下一步：补齐 text input owner 的 selected/marked/mutation client boundary，运行 Editor
+IME、UTF-16、多 cursor 和 candidate geometry checks，再进入 4D immutable `BuiltFrame`。
+
 ### 阶段 5：render contract 与 WGPU 模块化
 
 状态：`NOT STARTED`
