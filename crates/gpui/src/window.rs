@@ -4,22 +4,22 @@ use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
     Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DeferredDraw,
-    DevicePixels, DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, DrawPhase,
-    Edges, Entity, EntityId, EventEmitter, FileDropEvent, FontId, Frame, Global, GlobalElementId,
-    GlyphId, GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner,
-    IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId,
-    Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent,
-    MouseUpEvent, PaintIndex, Path, PendingInput, Pixels, PlatformAtlas, PlatformCapabilities,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
-    PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
-    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
-    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size,
-    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
-    SystemWindowTabController, TaffyLayoutEngine, Task, TextInputOwner, TextRenderingMode,
-    TextStyle, TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
-    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
-    WindowInvalidator, WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems,
-    size, transparent_black,
+    DevicePixels, DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId,
+    EventEmitter, FileDropEvent, FontId, Frame, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
+    InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
+    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
+    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
+    PendingInput, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
+    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority,
+    PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams,
+    RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X,
+    SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style,
+    SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController,
+    TaffyLayoutEngine, Task, TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement,
+    ThermalState, TransformationMatrix, Underline, UnderlineStyle, WindowAppearance,
+    WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations, WindowInvalidator,
+    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
+    transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -4586,52 +4586,7 @@ impl Window {
             return;
         }
 
-        let mut mouse_listeners = mem::take(&mut self.interaction.rendered_frame.mouse_listeners);
-
-        // Capture phase, events bubble from back to front. Handlers for this phase are used for
-        // special purposes, such as detecting events outside of a given Bounds.
-        for listener in &mut mouse_listeners {
-            let listener = listener
-                .as_mut()
-                .expect("value should have the expected type");
-            listener(event, DispatchPhase::Capture, self, cx);
-            if !cx.propagate_event {
-                break;
-            }
-        }
-
-        // Bubble phase, where most normal handlers do their work.
-        if cx.propagate_event {
-            for listener in mouse_listeners.iter_mut().rev() {
-                let listener = listener
-                    .as_mut()
-                    .expect("value should have the expected type");
-                listener(event, DispatchPhase::Bubble, self, cx);
-                if !cx.propagate_event {
-                    break;
-                }
-            }
-        }
-
-        self.interaction.rendered_frame.mouse_listeners = mouse_listeners;
-
-        if cx.has_active_drag() {
-            if event.is::<MouseMoveEvent>() {
-                // If this was a mouse move event, redraw the window so that the
-                // active drag can follow the mouse cursor.
-                self.refresh();
-            } else if event.is::<MouseUpEvent>() {
-                // If this was a mouse up event, cancel the active drag and redraw
-                // the window.
-                cx.active_drag = None;
-                self.refresh();
-            }
-        }
-
-        // Auto-release pointer capture on mouse up
-        if event.is::<MouseUpEvent>() && self.interaction.captured_hitbox.is_some() {
-            self.interaction.captured_hitbox = None;
-        }
+        InteractionOwner::dispatch_mouse_listeners(self, event, cx);
     }
 
     // If modifiers are not excessive (e.g. AltGr), and the input handler is accepting text input,
@@ -5019,14 +4974,7 @@ impl Window {
     }
 
     fn focus_node_id_in_rendered_frame(&self, focus_id: Option<FocusId>) -> DispatchNodeId {
-        focus_id
-            .and_then(|focus_id| {
-                self.interaction
-                    .rendered_frame
-                    .dispatch_tree
-                    .focusable_node_id(focus_id)
-            })
-            .unwrap_or_else(|| self.interaction.rendered_frame.dispatch_tree.root_node_id())
+        self.interaction.focus_node_id_in_rendered_frame(focus_id)
     }
 
     fn dispatch_action_on_node(
@@ -5035,117 +4983,7 @@ impl Window {
         action: &dyn Action,
         cx: &mut App,
     ) {
-        self.dispatch_action_on_node_inner(node_id, action, cx);
-
-        if !cx.propagate_event
-            && cx.cursor_hide_mode == CursorHideMode::OnTypingAndAction
-            && self.last_input_was_keyboard()
-        {
-            cx.platform.hide_cursor_until_mouse_moves();
-        }
-    }
-
-    fn dispatch_action_on_node_inner(
-        &mut self,
-        node_id: DispatchNodeId,
-        action: &dyn Action,
-        cx: &mut App,
-    ) {
-        let dispatch_path = self
-            .interaction
-            .rendered_frame
-            .dispatch_tree
-            .dispatch_path(node_id);
-
-        // Capture phase for global actions.
-        cx.propagate_event = true;
-        if let Some(mut global_listeners) = cx
-            .global_action_listeners
-            .remove(&action.as_any().type_id())
-        {
-            for listener in &global_listeners {
-                listener(action.as_any(), DispatchPhase::Capture, cx);
-                if !cx.propagate_event {
-                    break;
-                }
-            }
-
-            global_listeners.extend(
-                cx.global_action_listeners
-                    .remove(&action.as_any().type_id())
-                    .unwrap_or_default(),
-            );
-
-            cx.global_action_listeners
-                .insert(action.as_any().type_id(), global_listeners);
-        }
-
-        if !cx.propagate_event {
-            return;
-        }
-
-        // Capture phase for window actions.
-        for node_id in &dispatch_path {
-            let node = self.interaction.rendered_frame.dispatch_tree.node(*node_id);
-            for DispatchActionListener {
-                action_type,
-                listener,
-            } in node.action_listeners.clone()
-            {
-                let any_action = action.as_any();
-                if action_type == any_action.type_id() {
-                    listener(any_action, DispatchPhase::Capture, self, cx);
-
-                    if !cx.propagate_event {
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Bubble phase for window actions.
-        for node_id in dispatch_path.iter().rev() {
-            let node = self.interaction.rendered_frame.dispatch_tree.node(*node_id);
-            for DispatchActionListener {
-                action_type,
-                listener,
-            } in node.action_listeners.clone()
-            {
-                let any_action = action.as_any();
-                if action_type == any_action.type_id() {
-                    cx.propagate_event = false; // Actions stop propagation by default during the bubble phase
-                    listener(any_action, DispatchPhase::Bubble, self, cx);
-
-                    if !cx.propagate_event {
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Bubble phase for global actions.
-        if let Some(mut global_listeners) = cx
-            .global_action_listeners
-            .remove(&action.as_any().type_id())
-        {
-            for listener in global_listeners.iter().rev() {
-                cx.propagate_event = false; // Actions stop propagation by default during the bubble phase
-
-                listener(action.as_any(), DispatchPhase::Bubble, cx);
-                if !cx.propagate_event {
-                    break;
-                }
-            }
-
-            global_listeners.extend(
-                cx.global_action_listeners
-                    .remove(&action.as_any().type_id())
-                    .unwrap_or_default(),
-            );
-
-            cx.global_action_listeners
-                .insert(action.as_any().type_id(), global_listeners);
-        }
+        InteractionOwner::dispatch_action_on_node(self, node_id, action, cx);
     }
 
     /// Register the given handler to be invoked whenever the global of the given type
