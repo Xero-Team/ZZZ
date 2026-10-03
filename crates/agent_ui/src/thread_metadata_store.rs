@@ -649,7 +649,7 @@ impl ThreadMetadataStore {
 
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             })
             .shared();
         self.reload_task = Some(reload_task.clone());
@@ -1102,7 +1102,7 @@ impl ThreadMetadataStore {
                         .update(cx, |store, _cx| {
                             store.conversation_subscriptions.remove(&entity_id);
                         })
-                        .ok();
+                        .log_err();
                 }
             })
             .detach();
@@ -1113,7 +1113,7 @@ impl ThreadMetadataStore {
                     this.conversation_subscriptions
                         .insert(entity_id, subscription);
                 })
-                .ok();
+                .log_err();
         })
         .detach();
 
