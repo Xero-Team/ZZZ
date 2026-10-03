@@ -2408,7 +2408,11 @@ impl Window {
         #[cfg(feature = "frame-diagnostics")]
         let present_start = Instant::now();
         let built_frame = self.interaction.built_frame(&self.text_input);
-        self.platform_window.draw(built_frame.scene);
+        let submission = crate::render_api::submit_compat(
+            self.platform_window.as_mut(),
+            crate::render_api::RenderScene::new(built_frame.scene),
+        );
+        debug_assert!(submission.submitted);
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = self.pending_frame_timing.take() {
             let present_end = Instant::now();
