@@ -2992,8 +2992,8 @@ impl RemoteServerProjects {
                     cx: &mut App,
                 ) {
                     cx.write_to_clipboard(ClipboardItem::new_string(connection_string.to_string()));
-                    workspace
-                        .update(cx, |this, cx| {
+                    if let Some(workspace) = workspace.upgrade() {
+                        workspace.update(cx, |this, cx| {
                             struct SshServerAddressCopiedToClipboard;
                             let notification = i18n::tr(
                                 cx,
@@ -3012,8 +3012,8 @@ impl RemoteServerProjects {
                                 .autohide(),
                                 cx,
                             );
-                        })
-                        .ok();
+                        });
+                    }
                 }
                 div()
                     .id("ssh-options-copy-server-address")
