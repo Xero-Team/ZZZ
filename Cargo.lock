@@ -6164,7 +6164,9 @@ dependencies = [
  "gpui_linux",
  "gpui_macos",
  "gpui_web",
+ "gpui_wgpu",
  "gpui_windows",
+ "log",
 ]
 
 [[package]]
@@ -6228,6 +6230,7 @@ dependencies = [
  "etagere",
  "gpui",
  "gpui_util",
+ "image",
  "itertools 0.15.0",
  "js-sys",
  "log",

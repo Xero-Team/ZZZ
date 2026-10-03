@@ -13,6 +13,11 @@ use std::num::NonZeroU64;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+#[cfg(all(feature = "test-support", not(target_family = "wasm")))]
+mod headless;
+#[cfg(all(feature = "test-support", not(target_family = "wasm")))]
+pub use headless::WgpuHeadlessRenderer;
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GlobalParams {
@@ -42,6 +47,14 @@ impl From<Bounds<ScaledPixels>> for PodBounds {
 struct SurfaceParams {
     bounds: PodBounds,
     content_mask: PodBounds,
+}
+
+struct ReadbackCopy<'a> {
+    texture: &'a wgpu::Texture,
+    buffer: &'a wgpu::Buffer,
+    bytes_per_row: u32,
+    width: u32,
+    height: u32,
 }
 
 #[repr(C)]
@@ -108,7 +121,7 @@ pub type GpuContext = Rc<RefCell<Option<WgpuContext>>>;
 struct WgpuResources {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-    surface: wgpu::Surface<'static>,
+    surface: Option<wgpu::Surface<'static>>,
     pipelines: WgpuPipelines,
     bind_group_layouts: WgpuBindGroupLayouts,
     atlas_sampler: wgpu::Sampler,
@@ -173,6 +186,22 @@ impl WgpuRenderer {
             .expect("GPU resources not available")
     }
 
+    #[cfg(all(feature = "test-support", not(target_family = "wasm")))]
+    fn new_headless(context: &WgpuContext, size: Size<DevicePixels>) -> anyhow::Result<Self> {
+        Self::new_internal(
+            None,
+            context,
+            None,
+            WgpuSurfaceConfig {
+                size,
+                transparent: false,
+                preferred_present_mode: None,
+            },
+            None,
+            Arc::new(WgpuAtlas::from_context(context)),
+        )
+    }
+
     /// Creates a new WgpuRenderer from raw window handles.
     ///
     /// The `gpu_context` is a shared reference that coordinates GPU context across
@@ -233,7 +262,7 @@ impl WgpuRenderer {
         Self::new_internal(
             Some(Rc::clone(&gpu_context)),
             context,
-            surface,
+            Some(surface),
             config,
             compositor_gpu,
             atlas,
@@ -253,40 +282,66 @@ impl WgpuRenderer {
 
         let atlas = Arc::new(WgpuAtlas::from_context(context));
 
-        Self::new_internal(None, context, surface, config, None, atlas)
+        Self::new_internal(None, context, Some(surface), config, None, atlas)
     }
 
     fn new_internal(
         gpu_context: Option<GpuContext>,
         context: &WgpuContext,
-        surface: wgpu::Surface<'static>,
+        surface: Option<wgpu::Surface<'static>>,
         config: WgpuSurfaceConfig,
         compositor_gpu: Option<CompositorGpuHint>,
         atlas: Arc<WgpuAtlas>,
     ) -> anyhow::Result<Self> {
-        let surface_caps = surface.get_capabilities(&context.adapter);
+        let surface_caps = surface
+            .as_ref()
+            .map(|surface| surface.get_capabilities(&context.adapter));
         let preferred_formats = [
             wgpu::TextureFormat::Bgra8Unorm,
             wgpu::TextureFormat::Rgba8Unorm,
         ];
-        let surface_format = preferred_formats
-            .iter()
-            .find(|f| surface_caps.formats.contains(f))
-            .copied()
-            .or_else(|| surface_caps.formats.iter().find(|f| !f.is_srgb()).copied())
-            .or_else(|| surface_caps.formats.first().copied())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Surface reports no supported texture formats for adapter {:?}",
-                    context.adapter.get_info().name
-                )
-            })?;
+        let surface_format = if let Some(surface_caps) = &surface_caps {
+            preferred_formats
+                .iter()
+                .find(|format| surface_caps.formats.contains(format))
+                .copied()
+                .or_else(|| {
+                    surface_caps
+                        .formats
+                        .iter()
+                        .find(|format| !format.is_srgb())
+                        .copied()
+                })
+                .or_else(|| surface_caps.formats.first().copied())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Surface reports no supported texture formats for adapter {:?}",
+                        context.adapter.get_info().name
+                    )
+                })?
+        } else {
+            preferred_formats
+                .into_iter()
+                .find(|format| {
+                    context
+                        .adapter
+                        .get_texture_format_features(*format)
+                        .allowed_usages
+                        .contains(
+                            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                        )
+                })
+                .ok_or_else(|| anyhow::anyhow!("No headless render-target format is supported"))?
+        };
 
         let pick_alpha_mode =
             |preferences: &[wgpu::CompositeAlphaMode]| -> anyhow::Result<wgpu::CompositeAlphaMode> {
+                let Some(surface_caps) = &surface_caps else {
+                    return Ok(wgpu::CompositeAlphaMode::Opaque);
+                };
                 preferences
                     .iter()
-                    .find(|p| surface_caps.alpha_modes.contains(p))
+                    .find(|mode| surface_caps.alpha_modes.contains(mode))
                     .copied()
                     .or_else(|| surface_caps.alpha_modes.first().copied())
                     .ok_or_else(|| {
@@ -336,7 +391,11 @@ impl WgpuRenderer {
             height: clamped_height.max(1),
             present_mode: config
                 .preferred_present_mode
-                .filter(|mode| surface_caps.present_modes.contains(mode))
+                .filter(|mode| {
+                    surface_caps
+                        .as_ref()
+                        .is_some_and(|caps| caps.present_modes.contains(mode))
+                })
                 .unwrap_or(wgpu::PresentMode::Fifo),
             desired_maximum_frame_latency: 2,
             alpha_mode,
@@ -344,7 +403,9 @@ impl WgpuRenderer {
         };
         // Configure the surface immediately. The adapter selection process already validated
         // that this adapter can successfully configure this surface.
-        surface.configure(&context.device, &surface_config);
+        if let Some(surface) = &surface {
+            surface.configure(&context.device, &surface_config);
+        }
 
         let queue = Arc::clone(&context.queue);
         let dual_source_blending = context.supports_dual_source_blending();
@@ -991,9 +1052,9 @@ impl WgpuRenderer {
                 texture.destroy();
             }
 
-            resources
-                .surface
-                .configure(&resources.device, &surface_config);
+            if let Some(surface) = &resources.surface {
+                surface.configure(&resources.device, &surface_config);
+            }
 
             // Invalidate intermediate textures - they will be lazily recreated
             // in draw() after we confirm the surface is healthy. This avoids
@@ -1048,9 +1109,9 @@ impl WgpuRenderer {
             let Some(resources) = self.resources.as_mut() else {
                 return;
             };
-            resources
-                .surface
-                .configure(&resources.device, &surface_config);
+            if let Some(surface) = &resources.surface {
+                surface.configure(&resources.device, &surface_config);
+            }
             resources.pipelines = Self::create_pipelines(
                 &resources.device,
                 &resources.bind_group_layouts,
@@ -1128,26 +1189,27 @@ impl WgpuRenderer {
             self.failed_frame_count = 0;
         }
 
-        self.atlas.before_frame();
-
-        let frame = match self.resources().surface.get_current_texture() {
+        let Some(surface) = self.resources().surface.as_ref() else {
+            return false;
+        };
+        let frame = match surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
                 // Textures must be destroyed before the surface can be reconfigured.
                 drop(frame);
                 let surface_config = self.surface_config.clone();
                 let resources = self.resources_mut();
-                resources
-                    .surface
-                    .configure(&resources.device, &surface_config);
+                if let Some(surface) = &resources.surface {
+                    surface.configure(&resources.device, &surface_config);
+                }
                 return false;
             }
             wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
                 let surface_config = self.surface_config.clone();
                 let resources = self.resources_mut();
-                resources
-                    .surface
-                    .configure(&resources.device, &surface_config);
+                if let Some(surface) = &resources.surface {
+                    surface.configure(&resources.device, &surface_config);
+                }
                 return false;
             }
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
@@ -1160,12 +1222,22 @@ impl WgpuRenderer {
             }
         };
 
-        // Now that we know the surface is healthy, ensure intermediate textures exist
-        self.ensure_intermediate_textures();
-
         let frame_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let _submission = self.render_to_view(scene, &frame_view, None);
+        frame.present();
+        true
+    }
+
+    fn render_to_view(
+        &mut self,
+        scene: &Scene,
+        frame_view: &wgpu::TextureView,
+        readback: Option<ReadbackCopy<'_>>,
+    ) -> Option<wgpu::SubmissionIndex> {
+        self.atlas.before_frame();
+        self.ensure_intermediate_textures();
 
         let gamma_params = GammaParams {
             gamma_ratios: self.rendering_params.gamma_ratios,
@@ -1332,18 +1404,35 @@ impl WgpuRenderer {
                         "instance buffer size grew too large: {}",
                         self.instance_buffer_capacity
                     );
-                    frame.present();
-                    return true;
+                    return None;
                 }
                 self.grow_instance_buffer();
                 continue;
             }
 
-            self.resources()
-                .queue
-                .submit(std::iter::once(encoder.finish()));
-            frame.present();
-            return true;
+            if let Some(readback) = readback {
+                encoder.copy_texture_to_buffer(
+                    readback.texture.as_image_copy(),
+                    wgpu::TexelCopyBufferInfo {
+                        buffer: readback.buffer,
+                        layout: wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(readback.bytes_per_row),
+                            rows_per_image: Some(readback.height),
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width: readback.width,
+                        height: readback.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+            }
+            return Some(
+                self.resources()
+                    .queue
+                    .submit(std::iter::once(encoder.finish())),
+            );
         }
     }
 
@@ -1759,7 +1848,7 @@ impl WgpuRenderer {
                 .as_mut()
                 .expect("GPU resources not available");
             surface.configure(&res.device, &self.surface_config);
-            res.surface = surface;
+            res.surface = Some(surface);
 
             // Invalidate intermediate textures — they'll be recreated lazily.
             res.invalidate_intermediate_textures();
@@ -1857,7 +1946,7 @@ impl WgpuRenderer {
         *self = Self::new_internal(
             Some(gpu_context.clone()),
             context,
-            surface,
+            Some(surface),
             config,
             self.compositor_gpu,
             self.atlas.clone(),
