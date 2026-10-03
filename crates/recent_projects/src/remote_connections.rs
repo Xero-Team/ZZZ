@@ -17,7 +17,7 @@ use remote::{
 };
 pub use settings::SshConnection;
 use settings::{DevContainerConnection, ExtendingVec, RegisterSetting, Settings, WslConnection};
-use util::paths::PathWithPosition;
+use util::{ResultExt, paths::PathWithPosition};
 use workspace::{
     AppState, MultiWorkspace, OpenOptions, SerializedWorkspaceLocation, Workspace,
     find_existing_workspace,
@@ -365,7 +365,7 @@ pub async fn open_remote_project(
                 if created_new_window {
                     window
                         .update(cx, |_, window, _| window.remove_window())
-                        .ok();
+                        .log_err();
                 }
                 return Ok(window);
             }
@@ -449,7 +449,7 @@ pub async fn open_remote_project(
                 if created_new_window {
                     window
                         .update(cx, |_, window, _| window.remove_window())
-                        .ok();
+                        .log_err();
                 }
                 initial_workspace.update(cx, |workspace, cx| {
                     trusted_worktrees::track_worktree_trust(
@@ -485,7 +485,7 @@ pub async fn open_remote_project(
                 }
             });
         })
-        .ok();
+        .log_err();
     Ok(window)
 }
 
@@ -516,7 +516,7 @@ pub fn navigate_to_positions(
                         editor.go_to_singleton_buffer_point(point, window, cx);
                     });
                 })
-                .ok();
+                .log_err();
         }
     }
 }
