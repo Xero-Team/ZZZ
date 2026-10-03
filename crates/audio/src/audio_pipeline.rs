@@ -413,9 +413,6 @@ pub fn open_input_stream(
     let builder = rodio::microphone::MicrophoneBuilder::new();
     let builder = if let Some(id) = device_id {
         // TODO(jk): upstream patch
-        // if let Some(input_device) = default_host().device_by_id(id) {
-        //     builder.device(input_device);
-        // }
         let mut found = None;
         for input in rodio::microphone::available_inputs()? {
             if input.clone().into_inner().id()? == id {
