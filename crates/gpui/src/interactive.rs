@@ -710,9 +710,9 @@ impl PlatformInput {
 mod test {
 
     use crate::{
-        self as gpui, AppContext as _, Context, FocusHandle, InteractiveElement, IntoElement,
-        KeyBinding, Keystroke, Modifiers, ParentElement, Render, TestAppContext,
-        VisualContext as _, Window, div,
+        self as gpui, AppContext as _, Context, FocusHandle, HitboxId, InteractiveElement,
+        IntoElement, KeyBinding, Keystroke, Modifiers, MouseButton, ParentElement, Render,
+        Styled as _, TestAppContext, VisualContext as _, Window, div, point, px,
     };
     use std::{cell::RefCell, rc::Rc};
 
@@ -733,16 +733,60 @@ mod test {
             let bubble_parent = self.events.clone();
             let capture_child = self.events.clone();
             let bubble_child = self.events.clone();
+            let action_capture_parent = self.events.clone();
+            let action_bubble_parent = self.events.clone();
+            let action_capture_child = self.events.clone();
+            let action_bubble_child = self.events.clone();
+            let mouse_capture_parent = self.events.clone();
+            let mouse_bubble_parent = self.events.clone();
+            let mouse_capture_child = self.events.clone();
+            let mouse_bubble_child = self.events.clone();
             div()
+                .size_full()
                 .capture_key_down(move |_, _, _| capture_parent.borrow_mut().push("parent-capture"))
                 .on_key_down(move |_, _, _| bubble_parent.borrow_mut().push("parent-bubble"))
+                .capture_action::<TestAction>(move |_, _, _| {
+                    action_capture_parent
+                        .borrow_mut()
+                        .push("parent-action-capture")
+                })
+                .on_action::<TestAction>(move |_, _, cx| {
+                    action_bubble_parent
+                        .borrow_mut()
+                        .push("parent-action-bubble");
+                    cx.propagate();
+                })
+                .capture_any_mouse_down(move |_, _, _| {
+                    mouse_capture_parent
+                        .borrow_mut()
+                        .push("parent-mouse-capture")
+                })
+                .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                    mouse_bubble_parent.borrow_mut().push("parent-mouse-bubble")
+                })
                 .child(
                     div()
+                        .size_full()
                         .track_focus(&self.focus_handle)
                         .capture_key_down(move |_, _, _| {
                             capture_child.borrow_mut().push("child-capture")
                         })
-                        .on_key_down(move |_, _, _| bubble_child.borrow_mut().push("child-bubble")),
+                        .on_key_down(move |_, _, _| bubble_child.borrow_mut().push("child-bubble"))
+                        .capture_action::<TestAction>(move |_, _, _| {
+                            action_capture_child
+                                .borrow_mut()
+                                .push("child-action-capture")
+                        })
+                        .on_action::<TestAction>(move |_, _, cx| {
+                            action_bubble_child.borrow_mut().push("child-action-bubble");
+                            cx.propagate();
+                        })
+                        .capture_any_mouse_down(move |_, _, _| {
+                            mouse_capture_child.borrow_mut().push("child-mouse-capture")
+                        })
+                        .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                            mouse_bubble_child.borrow_mut().push("child-mouse-bubble")
+                        }),
                 )
         }
     }
@@ -855,5 +899,60 @@ mod test {
                 "parent-bubble"
             ]
         );
+    }
+
+    #[gpui::test]
+    fn test_action_routing_order_snapshot(cx: &mut TestAppContext) {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let (view, cx) = cx.add_window_view(|_, cx| RoutingView {
+            focus_handle: cx.focus_handle(),
+            events: events.clone(),
+        });
+
+        view.update_in(cx, |view, window, cx| window.focus(&view.focus_handle, cx));
+        cx.dispatch_action(TestAction);
+
+        assert_eq!(
+            &*events.borrow(),
+            &[
+                "parent-action-capture",
+                "child-action-capture",
+                "child-action-bubble",
+                "parent-action-bubble"
+            ]
+        );
+    }
+
+    #[gpui::test]
+    fn test_mouse_routing_and_pointer_capture_snapshot(cx: &mut TestAppContext) {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let (_view, cx) = cx.add_window_view(|_, cx| RoutingView {
+            focus_handle: cx.focus_handle(),
+            events: events.clone(),
+        });
+        cx.simulate_mouse_move(point(px(10.), px(10.)), None, Modifiers::default());
+        cx.simulate_mouse_down(
+            point(px(10.), px(10.)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        assert_eq!(
+            &*events.borrow(),
+            &[
+                "parent-mouse-capture",
+                "child-mouse-capture",
+                "child-mouse-bubble",
+                "parent-mouse-bubble"
+            ]
+        );
+
+        cx.update(|window, _| window.capture_pointer(HitboxId::placeholder()));
+        cx.update(|window, _| assert_eq!(window.captured_hitbox(), Some(HitboxId::placeholder())));
+        cx.simulate_mouse_up(
+            point(px(100.), px(100.)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.update(|window, _| assert_eq!(window.captured_hitbox(), None));
     }
 }
