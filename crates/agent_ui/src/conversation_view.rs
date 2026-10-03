@@ -2769,10 +2769,9 @@ impl ConversationView {
         }
     }
 
-    fn current_model_name(&self, cx: &App) -> SharedString {
+    fn current_model_name(&self, _cx: &App) -> SharedString {
         // For ACP agents, use the agent name (e.g., "Claude Agent", "Gemini CLI")
         // to provide clarity about what refused the request.
-        let _ = cx;
         self.agent.agent_id().0
     }
 
