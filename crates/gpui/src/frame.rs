@@ -4,7 +4,7 @@ use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest
 use crate::{
     AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId, DispatchTree,
     ElementId, EntityId, FocusId, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
-    LineLayoutIndex, Pixels, Point, Scene, TabStopMap, TextStyleRefinement, Window,
+    LineLayoutIndex, Pixels, Point, Scene, TabStopMap, TextInputOwner, TextStyleRefinement, Window,
     WindowControlArea,
 };
 use crate::{App, Effect};
@@ -428,6 +428,85 @@ pub(crate) struct PaintIndex {
     pub(crate) accessed_element_states_index: usize,
     pub(crate) tab_handle_index: usize,
     pub(crate) line_layout_index: LineLayoutIndex,
+}
+
+/// Immutable view of the completed frame consumed by platform/rendering code.
+#[allow(
+    dead_code,
+    reason = "completed-frame projections are consumed incrementally by owners"
+)]
+pub(crate) struct BuiltFrame<'a> {
+    pub(crate) scene: &'a Scene,
+    pub(crate) interaction: InteractionSnapshot<'a>,
+    pub(crate) text_input: TextInputSnapshot,
+    pub(crate) accessibility: AccessibilityUpdate,
+    pub(crate) diagnostics: FrameDiagnosticsSnapshot,
+}
+
+#[derive(Clone, Copy)]
+#[allow(
+    dead_code,
+    reason = "completed-frame projections are consumed incrementally by owners"
+)]
+pub(crate) struct InteractionSnapshot<'a> {
+    pub(crate) frame: &'a Frame,
+    pub(crate) mouse_hit_test: &'a HitTest,
+    pub(crate) captured_hitbox: Option<HitboxId>,
+    pub(crate) focus: Option<FocusId>,
+}
+
+#[derive(Clone, Copy, Default)]
+#[allow(
+    dead_code,
+    reason = "completed-frame projections are consumed incrementally by owners"
+)]
+pub(crate) struct TextInputSnapshot {
+    pub(crate) rendered_handler_count: usize,
+    pub(crate) next_handler_count: usize,
+}
+
+#[derive(Clone, Copy, Default)]
+#[allow(
+    dead_code,
+    reason = "completed-frame projections are consumed incrementally by owners"
+)]
+pub(crate) struct AccessibilityUpdate {
+    pub(crate) changed: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+#[allow(
+    dead_code,
+    reason = "completed-frame projections are consumed incrementally by owners"
+)]
+pub(crate) struct FrameDiagnosticsSnapshot {
+    pub(crate) build_id: Option<u64>,
+}
+
+impl<'a> BuiltFrame<'a> {
+    pub(crate) fn new(
+        frame: &'a Frame,
+        mouse_hit_test: &'a HitTest,
+        captured_hitbox: Option<HitboxId>,
+        focus: Option<FocusId>,
+        text_input: &'a TextInputOwner,
+    ) -> Self {
+        Self {
+            scene: &frame.scene,
+            interaction: InteractionSnapshot {
+                frame,
+                mouse_hit_test,
+                captured_hitbox,
+                focus,
+            },
+            text_input: TextInputSnapshot {
+                rendered_handler_count: text_input.rendered_handlers.len(),
+                next_handler_count: text_input.next_handlers.len(),
+            },
+            accessibility: AccessibilityUpdate::default(),
+            diagnostics: FrameDiagnosticsSnapshot::default(),
+        }
+    }
 }
 
 impl Frame {

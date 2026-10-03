@@ -1870,8 +1870,8 @@ impl Window {
     /// to capture what would be rendered without displaying it or requiring the window to be visible.
     #[cfg(any(test, feature = "test-support"))]
     pub fn render_to_image(&self) -> anyhow::Result<image::RgbaImage> {
-        self.platform_window
-            .render_to_image(&self.interaction.rendered_frame.scene)
+        let built_frame = self.interaction.built_frame(&self.text_input);
+        self.platform_window.render_to_image(built_frame.scene)
     }
 
     /// Set the content size of the window.
@@ -2407,8 +2407,8 @@ impl Window {
     fn present(&mut self) {
         #[cfg(feature = "frame-diagnostics")]
         let present_start = Instant::now();
-        self.platform_window
-            .draw(&self.interaction.rendered_frame.scene);
+        let built_frame = self.interaction.built_frame(&self.text_input);
+        self.platform_window.draw(built_frame.scene);
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = self.pending_frame_timing.take() {
             let present_end = Instant::now();

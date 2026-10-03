@@ -1,7 +1,7 @@
 use crate::window::{AnyObserver, AnyWindowFocusListener, HitTest};
 use crate::{
-    Bounds, Capslock, ContentMask, CursorStyle, FocusId, Frame, Hitbox, HitboxBehavior, HitboxId,
-    Keystroke, Modifiers, Pixels, Point, SubscriberSet, Task, Window,
+    Bounds, BuiltFrame, Capslock, ContentMask, CursorStyle, FocusId, Frame, Hitbox, HitboxBehavior,
+    HitboxId, Keystroke, Modifiers, Pixels, Point, SubscriberSet, Task, TextInputOwner, Window,
 };
 use smallvec::SmallVec;
 
@@ -94,6 +94,16 @@ impl InteractionOwner {
 
     pub(crate) fn cursor_style(&self, window: &Window) -> Option<CursorStyle> {
         self.rendered_frame.cursor_style(window)
+    }
+
+    pub(crate) fn built_frame<'a>(&'a self, text_input: &'a TextInputOwner) -> BuiltFrame<'a> {
+        BuiltFrame::new(
+            &self.rendered_frame,
+            &self.mouse_hit_test,
+            self.captured_hitbox,
+            self.focus,
+            text_input,
+        )
     }
 }
 
