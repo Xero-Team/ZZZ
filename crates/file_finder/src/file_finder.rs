@@ -185,7 +185,7 @@ impl FileFinder {
                         FileFinder::new(delegate, window, cx)
                     });
                 })
-                .ok();
+                .log_err();
         })
     }
 
@@ -1847,7 +1847,7 @@ impl PickerDelegate for FileFinderDelegate {
             let path = query.path_position.path.clone();
 
             cx.spawn_in(window, async move |this, cx| {
-                let _ = maybe!(async move {
+                maybe!(async move {
                     let is_absolute_path = path.is_absolute();
                     let did_resolve_abs_path = is_absolute_path
                         && this
@@ -1867,7 +1867,8 @@ impl PickerDelegate for FileFinderDelegate {
                     }
                     anyhow::Ok(())
                 })
-                .await;
+                .await
+                .log_err();
             })
         }
     }
@@ -1987,6 +1988,7 @@ impl PickerDelegate for FileFinderDelegate {
     fn render_editor(
         &self,
         editor: &Arc<dyn ErasedEditor>,
+        multi_select_active: bool,
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
@@ -1995,7 +1997,6 @@ impl PickerDelegate for FileFinderDelegate {
             let worktree_store = self.project.read(cx).worktree_store();
             !worktree_store.read(cx).initial_scan_completed()
         };
-        let multi_select_active = cx.entity().read(cx).multi_select_active();
         let focus_handle = self.focus_handle.clone();
 
         Some(
@@ -2156,7 +2157,6 @@ impl FileFinderDelegate {
                         })
                         .trigger_with_tooltip(
                             IconButton::new("filter-trigger", IconName::Sliders)
-                                .icon_size(IconSize::Small)
                                 .icon_size(IconSize::Small)
                                 .toggle_state(self.include_ignored.unwrap_or(false))
                                 .when(self.include_ignored.is_some(), |this| {

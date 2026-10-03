@@ -294,6 +294,7 @@ pub trait PickerDelegate: Sized + 'static {
     fn render_editor(
         &self,
         _editor: &Arc<dyn ErasedEditor>,
+        _multi_select_active: bool,
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
@@ -1804,19 +1805,16 @@ impl<D: PickerDelegate> Render for Picker<D> {
 }
 
 impl<D: PickerDelegate> Picker<D> {
-    /// Returns whether multi-select mode is active for delegates that render a
-    /// custom search bar and need to mirror the picker-owned toggle state.
-    pub fn multi_select_active(&self) -> bool {
-        self.select_instead_of_open
-    }
-
     fn render_editor(
         &self,
         editor: &Arc<dyn ErasedEditor>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        if let Some(custom) = self.delegate.render_editor(editor, window, cx) {
+        if let Some(custom) =
+            self.delegate
+                .render_editor(editor, self.select_instead_of_open, window, cx)
+        {
             return custom;
         }
 

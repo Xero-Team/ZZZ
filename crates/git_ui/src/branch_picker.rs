@@ -1260,6 +1260,7 @@ impl PickerDelegate for BranchListDelegate {
     fn render_editor(
         &self,
         editor: &Arc<dyn ErasedEditor>,
+        _multi_select_active: bool,
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {

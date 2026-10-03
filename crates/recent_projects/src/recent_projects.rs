@@ -967,6 +967,7 @@ impl PickerDelegate for RecentProjectsDelegate {
     fn render_editor(
         &self,
         editor: &Arc<dyn ErasedEditor>,
+        _multi_select_active: bool,
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
