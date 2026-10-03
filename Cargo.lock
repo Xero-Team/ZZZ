@@ -7407,6 +7407,7 @@ dependencies = [
  "chrono",
  "gpui",
  "hdrhistogram",
+ "log",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-use gpui::{App, Global, InputLatencySnapshot, Window, actions};
+use gpui::{App, Global, InputLatencySnapshot, Window, WindowId, actions};
 use hdrhistogram::Histogram;
 
 actions!(
@@ -15,11 +15,13 @@ actions!(
 /// report.
 pub fn format_input_latency_report(window: &Window, cx: &mut App) -> String {
     let snapshot = window.input_latency_snapshot();
+    let window_id = window.window_handle().window_id();
     let state = cx.default_global::<ReporterState>();
-    let report = format_report(&snapshot, state);
+    let report = format_report(&snapshot, window_id, state);
 
     state.previous_snapshot = Some(snapshot);
     state.previous_timestamp = Some(chrono::Local::now());
+    state.previous_window_id = Some(window_id);
 
     report
 }
@@ -28,11 +30,16 @@ pub fn format_input_latency_report(window: &Window, cx: &mut App) -> String {
 struct ReporterState {
     previous_snapshot: Option<InputLatencySnapshot>,
     previous_timestamp: Option<chrono::DateTime<chrono::Local>>,
+    previous_window_id: Option<WindowId>,
 }
 
 impl Global for ReporterState {}
 
-fn format_report(snapshot: &InputLatencySnapshot, previous: &ReporterState) -> String {
+fn format_report(
+    snapshot: &InputLatencySnapshot,
+    window_id: WindowId,
+    previous: &ReporterState,
+) -> String {
     let histogram = &snapshot.latency_histogram;
     let total = histogram.len();
 
@@ -110,38 +117,45 @@ fn format_report(snapshot: &InputLatencySnapshot, previous: &ReporterState) -> S
     }
 
     // Delta section: compare against the previous report's snapshot.
-    if let (Some(prev_snapshot), Some(prev_timestamp)) =
-        (&previous.previous_snapshot, &previous.previous_timestamp)
+    if previous.previous_window_id == Some(window_id)
+        && let (Some(prev_snapshot), Some(prev_timestamp)) =
+            (&previous.previous_snapshot, &previous.previous_timestamp)
     {
         let prev_latency = &prev_snapshot.latency_histogram;
-        let prev_total = prev_latency.len();
-        let delta_total = total - prev_total;
+        let mut delta_histogram = histogram.clone();
+        match delta_histogram.subtract(prev_latency) {
+            Ok(()) => {
+                let delta_total = delta_histogram.len();
 
-        report.push('\n');
-        report.push_str("Delta Since Last Report\n");
-        report.push_str("-----------------------\n");
-        let prev_ts = prev_timestamp.format("%Y-%m-%d %H:%M:%S %Z");
-        let elapsed_secs = (now - *prev_timestamp).num_seconds().max(0);
-        report.push_str(&format!(
-            "Previous report: {prev_ts} ({elapsed_secs}s ago)\n"
-        ));
-        report.push_str(&format!("New samples: {delta_total}\n"));
+                report.push('\n');
+                report.push_str("Delta Since Last Report\n");
+                report.push_str("-----------------------\n");
+                let prev_ts = prev_timestamp.format("%Y-%m-%d %H:%M:%S %Z");
+                let elapsed_secs = (now - *prev_timestamp).num_seconds().max(0);
+                report.push_str(&format!(
+                    "Previous report: {prev_ts} ({elapsed_secs}s ago)\n"
+                ));
+                report.push_str(&format!("New samples: {delta_total}\n"));
 
-        if delta_total > 0 {
-            let mut delta_histogram = histogram.clone();
-            delta_histogram.subtract(prev_latency).ok();
+                if delta_total == 0 {
+                    return report;
+                }
 
-            write_latency_percentiles(
-                &mut report,
-                "Percentiles (new samples only)",
-                &delta_histogram,
-                percentiles,
-            );
-            write_latency_distribution(
-                &mut report,
-                "Distribution (new samples only)",
-                &delta_histogram,
-            );
+                write_latency_percentiles(
+                    &mut report,
+                    "Percentiles (new samples only)",
+                    &delta_histogram,
+                    percentiles,
+                );
+                write_latency_distribution(
+                    &mut report,
+                    "Distribution (new samples only)",
+                    &delta_histogram,
+                );
+            }
+            Err(error) => {
+                log::warn!("input latency histogram history is not cumulative: {error:?}");
+            }
         }
     }
 
@@ -212,5 +226,69 @@ fn write_latency_distribution(report: &mut String, heading: &str, histogram: &Hi
             "  {range:>8}  {note:<11}: {count:>6} ({:>5.1}%) {bar}\n",
             fraction * 100.0,
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reports_delta_for_cumulative_snapshot_from_same_window() {
+        let previous_snapshot = snapshot(&[1_000_000]);
+        let current_snapshot = snapshot(&[1_000_000, 2_000_000]);
+        let window_id = WindowId::from(1);
+        let previous = ReporterState {
+            previous_snapshot: Some(previous_snapshot),
+            previous_timestamp: Some(chrono::Local::now()),
+            previous_window_id: Some(window_id),
+        };
+
+        let report = format_report(&current_snapshot, window_id, &previous);
+
+        assert!(report.contains("New samples: 1"));
+        assert!(report.contains("Percentiles (new samples only)"));
+    }
+
+    #[test]
+    fn omits_delta_for_snapshot_from_another_window() {
+        let previous = ReporterState {
+            previous_snapshot: Some(snapshot(&[1_000_000])),
+            previous_timestamp: Some(chrono::Local::now()),
+            previous_window_id: Some(WindowId::from(1)),
+        };
+
+        let report = format_report(&snapshot(&[2_000_000]), WindowId::from(2), &previous);
+
+        assert!(!report.contains("Delta Since Last Report"));
+    }
+
+    #[test]
+    fn omits_delta_when_current_snapshot_is_not_cumulative() {
+        let window_id = WindowId::from(1);
+        let previous = ReporterState {
+            previous_snapshot: Some(snapshot(&[1_000_000, 3_000_000])),
+            previous_timestamp: Some(chrono::Local::now()),
+            previous_window_id: Some(window_id),
+        };
+
+        let report = format_report(&snapshot(&[1_000_000, 2_000_000]), window_id, &previous);
+
+        assert!(!report.contains("Delta Since Last Report"));
+    }
+
+    fn snapshot(latencies: &[u64]) -> InputLatencySnapshot {
+        let mut latency_histogram = Histogram::new(3).expect("histogram should be created");
+        for latency in latencies {
+            latency_histogram
+                .record(*latency)
+                .expect("latency should fit in histogram");
+        }
+
+        InputLatencySnapshot {
+            latency_histogram,
+            events_per_frame_histogram: Histogram::new(3).expect("histogram should be created"),
+            mid_draw_events_dropped: 0,
+        }
     }
 }
