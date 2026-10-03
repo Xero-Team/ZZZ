@@ -224,7 +224,9 @@ fn main() {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 
         if args.foreground {
-            let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+            if let Err(error) = AttachConsole(ATTACH_PARENT_PROCESS) {
+                eprintln!("Failed to attach to parent console: {error}");
+            }
         }
     }
 
