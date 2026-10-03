@@ -111,12 +111,12 @@ impl MockConnectionRegistry {
     /// Called by `ConnectionPool::connect` to retrieve a pre-registered mock connection.
     pub fn take(
         &mut self,
-        opts: &MockConnectionOptions,
+        options: &MockConnectionOptions,
     ) -> Option<impl Future<Output = Arc<MockRemoteConnection>> + use<>> {
-        let (guard, con) = self.pending.remove(&opts.id)?;
+        let (guard, connection) = self.pending.remove(&options.id)?;
         Some(async move {
-            _ = guard.await;
-            con
+            let _guard_result = guard.await;
+            connection
         })
     }
 }
@@ -256,36 +256,40 @@ impl RemoteConnection for MockRemoteConnection {
         &self,
         _unique_identifier: String,
         _reconnect: bool,
-        mut client_incoming_tx: mpsc::UnboundedSender<Envelope>,
-        mut client_outgoing_rx: mpsc::UnboundedReceiver<Envelope>,
-        mut connection_activity_tx: Sender<()>,
+        mut client_incoming_sender: mpsc::UnboundedSender<Envelope>,
+        mut client_outgoing_receiver: mpsc::UnboundedReceiver<Envelope>,
+        mut connection_activity_sender: Sender<()>,
         _delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
-        let (mut server_incoming_tx, server_incoming_rx) = mpsc::unbounded::<Envelope>();
-        let (server_outgoing_tx, mut server_outgoing_rx) = mpsc::unbounded::<Envelope>();
+        let (mut server_incoming_sender, server_incoming_receiver) = mpsc::unbounded::<Envelope>();
+        let (server_outgoing_sender, mut server_outgoing_receiver) = mpsc::unbounded::<Envelope>();
 
         self.server_channel.reconnect(
-            server_incoming_rx,
-            server_outgoing_tx,
+            server_incoming_receiver,
+            server_outgoing_sender,
             &self.server_cx.get(cx),
         );
 
         cx.background_spawn(async move {
             loop {
                 select_biased! {
-                    server_to_client = server_outgoing_rx.next().fuse() => {
+                    server_to_client = server_outgoing_receiver.next().fuse() => {
                         let Some(server_to_client) = server_to_client else {
                             return Ok(1)
                         };
-                        connection_activity_tx.try_send(()).ok();
-                        client_incoming_tx.send(server_to_client).await.ok();
+                        super::notify_connection_activity(&mut connection_activity_sender);
+                        if client_incoming_sender.send(server_to_client).await.is_err() {
+                            return Ok(1);
+                        }
                     }
-                    client_to_server = client_outgoing_rx.next().fuse() => {
+                    client_to_server = client_outgoing_receiver.next().fuse() => {
                         let Some(client_to_server) = client_to_server else {
                             return Ok(1)
                         };
-                        server_incoming_tx.send(client_to_server).await.ok();
+                        if server_incoming_sender.send(client_to_server).await.is_err() {
+                            return Ok(1);
+                        }
                     }
                 }
             }

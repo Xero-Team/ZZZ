@@ -826,18 +826,18 @@ fn redact_arguments(docker_cli: &str, subcommand: &str, args: &[impl AsRef<str>]
     let mut redacted = format!("{docker_cli:?} {subcommand:?}");
     let mut next_argument_is_environment = false;
 
-    for arg in args {
-        let arg = arg.as_ref();
+    for argument in args {
+        let argument = argument.as_ref();
         let argument = if next_argument_is_environment {
             next_argument_is_environment = false;
-            redact_environment(arg)
-        } else if arg == "-e" {
+            redact_environment(argument)
+        } else if argument == "-e" {
             next_argument_is_environment = true;
-            arg.to_owned()
+            argument.to_owned()
         } else {
-            redact_command(arg)
+            redact_command(argument)
         };
-        write!(redacted, " {argument:?}").ok();
+        write!(redacted, " {argument:?}").expect("writing to a String should not fail");
     }
 
     redacted

@@ -203,23 +203,23 @@ fn parse_shell(output: &str, fallback_shell: &str) -> String {
 
 fn handle_rpc_messages_over_child_process_stdio(
     mut remote_proxy_process: Child,
-    incoming_tx: UnboundedSender<Envelope>,
-    mut outgoing_rx: UnboundedReceiver<Envelope>,
-    mut connection_activity_tx: Sender<()>,
+    incoming_sender: UnboundedSender<Envelope>,
+    mut outgoing_receiver: UnboundedReceiver<Envelope>,
+    mut connection_activity_sender: Sender<()>,
     cx: &AsyncApp,
 ) -> Task<Result<i32>> {
     let mut child_stderr = remote_proxy_process
         .stderr
         .take()
-        .expect("entry should be present");
+        .expect("remote proxy stderr should be piped");
     let mut child_stdout = remote_proxy_process
         .stdout
         .take()
-        .expect("entry should be present");
+        .expect("remote proxy stdout should be piped");
     let mut child_stdin = remote_proxy_process
         .stdin
         .take()
-        .expect("entry should be present");
+        .expect("remote proxy stdin should be piped");
 
     let mut stdin_buffer = Vec::new();
     let mut stdout_buffer = Vec::new();
@@ -227,33 +227,37 @@ fn handle_rpc_messages_over_child_process_stdio(
     let mut stderr_offset = 0;
 
     let stdin_task = cx.background_spawn(async move {
-        while let Some(outgoing) = outgoing_rx.next().await {
+        while let Some(outgoing) = outgoing_receiver.next().await {
             write_message(&mut child_stdin, &mut stdin_buffer, outgoing).await?;
         }
         anyhow::Ok(())
     });
 
     let stdout_task = cx.background_spawn({
-        let mut connection_activity_tx = connection_activity_tx.clone();
+        let mut connection_activity_sender = connection_activity_sender.clone();
         async move {
             loop {
                 stdout_buffer.resize(MESSAGE_LEN_SIZE, 0);
-                let len = child_stdout.read(&mut stdout_buffer).await?;
+                let bytes_read = child_stdout.read(&mut stdout_buffer).await?;
 
-                if len == 0 {
+                if bytes_read == 0 {
                     return anyhow::Ok(());
                 }
 
-                if len < MESSAGE_LEN_SIZE {
-                    child_stdout.read_exact(&mut stdout_buffer[len..]).await?;
+                if bytes_read < MESSAGE_LEN_SIZE {
+                    child_stdout
+                        .read_exact(&mut stdout_buffer[bytes_read..])
+                        .await?;
                 }
 
                 let message_len = message_len_from_buffer(&stdout_buffer)?;
                 let envelope =
                     read_message_with_len(&mut child_stdout, &mut stdout_buffer, message_len)
                         .await?;
-                connection_activity_tx.try_send(()).ok();
-                incoming_tx.unbounded_send(envelope).ok();
+                notify_connection_activity(&mut connection_activity_sender);
+                if incoming_sender.unbounded_send(envelope).is_err() {
+                    return anyhow::Ok(());
+                }
             }
         }
     });
@@ -262,22 +266,22 @@ fn handle_rpc_messages_over_child_process_stdio(
         loop {
             stderr_buffer.resize(stderr_offset + 1024, 0);
 
-            let len = child_stderr
+            let bytes_read = child_stderr
                 .read(&mut stderr_buffer[stderr_offset..])
                 .await?;
-            if len == 0 {
+            if bytes_read == 0 {
                 return anyhow::Ok(());
             }
 
-            stderr_offset += len;
-            let mut start_ix = 0;
-            while let Some(ix) = stderr_buffer[start_ix..stderr_offset]
+            stderr_offset += bytes_read;
+            let mut start_index = 0;
+            while let Some(relative_newline_index) = stderr_buffer[start_index..stderr_offset]
                 .iter()
-                .position(|b| b == &b'\n')
+                .position(|byte| byte == &b'\n')
             {
-                let line_ix = start_ix + ix;
-                let content = &stderr_buffer[start_ix..line_ix];
-                start_ix = line_ix + 1;
+                let line_index = start_index + relative_newline_index;
+                let content = &stderr_buffer[start_index..line_index];
+                start_index = line_index + 1;
                 if let Ok(record) = serde_json::from_slice::<LogRecord>(content) {
                     record.log(log::logger())
                 } else {
@@ -286,13 +290,13 @@ fn handle_rpc_messages_over_child_process_stdio(
                             "(remote) {}\n",
                             String::from_utf8_lossy(content)
                         ))
-                        .ok();
+                        .context("writing remote process stderr")?;
                 }
             }
-            stderr_buffer.drain(0..start_ix);
-            stderr_offset -= start_ix;
+            stderr_buffer.drain(0..start_index);
+            stderr_offset -= start_index;
 
-            connection_activity_tx.try_send(()).ok();
+            notify_connection_activity(&mut connection_activity_sender);
         }
     });
 
@@ -321,6 +325,14 @@ fn handle_rpc_messages_over_child_process_stdio(
             Err(error) => Err(error),
         }
     })
+}
+
+fn notify_connection_activity(sender: &mut Sender<()>) {
+    if let Err(error) = sender.try_send(())
+        && error.is_disconnected()
+    {
+        log::debug!("remote connection activity receiver already closed");
+    }
 }
 
 #[cfg(any(debug_assertions, feature = "build-remote-server-binary"))]
