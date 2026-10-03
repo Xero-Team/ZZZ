@@ -314,22 +314,26 @@ impl HighlightsTreeView {
                 .timer(Duration::from_millis(30))
                 .await;
 
-            let Some(input) = this
-                .update(cx, |this, cx| this.highlight_refresh_input(cx))
-                .ok()
-                .flatten()
-            else {
+            let Some(view) = this.upgrade() else {
                 return;
             };
+            let Some(input) = view.update(cx, |this, cx| this.highlight_refresh_input(cx)) else {
+                return;
+            };
+            drop(view);
 
             let new_highlights = cx
                 .background_spawn(async move { build_highlight_entries(input) })
                 .await;
 
-            this.update_in(cx, |this, _window, cx| {
+            let Some(view) = this.upgrade() else {
+                return;
+            };
+            let Ok(()) = view.update_in(cx, |this, _window, cx| {
                 this.apply_highlight_refresh(new_highlights, cx);
-            })
-            .ok();
+            }) else {
+                return;
+            };
         });
     }
 
@@ -1031,7 +1035,9 @@ impl HighlightsTreeToolbarItemView {
                         {
                             let tree_view = tree_view_for_text.clone();
                             move |_, cx| {
-                                if let Some(view) = tree_view.as_ref() {
+                                if let Some(view) =
+                                    tree_view.as_ref().and_then(|view| view.upgrade())
+                                {
                                     view.update(cx, |view, cx| {
                                         view.show_text_highlights = !view.show_text_highlights;
                                         let snapshot = view.editor.as_ref().map(|s| {
@@ -1041,8 +1047,7 @@ impl HighlightsTreeToolbarItemView {
                                             view.rebuild_display_items(&snapshot, cx);
                                         }
                                         cx.notify();
-                                    })
-                                    .ok();
+                                    });
                                 }
                             }
                         },
@@ -1055,7 +1060,9 @@ impl HighlightsTreeToolbarItemView {
                         {
                             let tree_view = tree_view_for_syntax.clone();
                             move |_, cx| {
-                                if let Some(view) = tree_view.as_ref() {
+                                if let Some(view) =
+                                    tree_view.as_ref().and_then(|view| view.upgrade())
+                                {
                                     view.update(cx, |view, cx| {
                                         view.show_syntax_tokens = !view.show_syntax_tokens;
                                         let snapshot = view.editor.as_ref().map(|s| {
@@ -1065,8 +1072,7 @@ impl HighlightsTreeToolbarItemView {
                                             view.rebuild_display_items(&snapshot, cx);
                                         }
                                         cx.notify();
-                                    })
-                                    .ok();
+                                    });
                                 }
                             }
                         },
@@ -1078,7 +1084,10 @@ impl HighlightsTreeToolbarItemView {
                         Some(ToggleSemanticTokens.boxed_clone()),
                         {
                             move |_, cx| {
-                                if let Some(view) = tree_view_for_semantic.as_ref() {
+                                if let Some(view) = tree_view_for_semantic
+                                    .as_ref()
+                                    .and_then(|view| view.upgrade())
+                                {
                                     view.update(cx, |view, cx| {
                                         view.show_semantic_tokens = !view.show_semantic_tokens;
                                         let snapshot = view.editor.as_ref().map(|s| {
@@ -1088,8 +1097,7 @@ impl HighlightsTreeToolbarItemView {
                                             view.rebuild_display_items(&snapshot, cx);
                                         }
                                         cx.notify();
-                                    })
-                                    .ok();
+                                    });
                                 }
                             }
                         },
