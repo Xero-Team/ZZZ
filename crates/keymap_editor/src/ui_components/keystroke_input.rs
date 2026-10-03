@@ -173,10 +173,12 @@ impl KeystrokeInput {
             cx.background_executor()
                 .timer(CLOSE_KEYSTROKE_CAPTURE_END_TIMEOUT)
                 .await;
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, _cx| {
                 this.end_close_keystrokes_capture();
-            })
-            .ok();
+            });
         }));
     }
 
