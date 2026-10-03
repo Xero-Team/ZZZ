@@ -456,6 +456,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
   实现均只做所有权移动。
 - 新增 `AccessibilityBridge` supertrait；所有 backend 显式实现，未支持平台对非空
   semantic update 返回 error，避免 silent no-op。
+- 新增 `RendererFactory` contract；`gpui_platform::current_headless_renderer` 继续作为
+  compatibility façade，并委托 current-platform factory 创建 Metal 或 WGPU offscreen
+  renderer。
 
 当前矩阵：
 
@@ -481,6 +484,8 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 | `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                    |
 | `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | input/action routing tests, 3 passed                    |
 | `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                  |
+| `cargo test --locked -p gpui_platform --features test-support`                               | `PASS`                      | renderer factory returns real Linux renderer            |
+| `./script/clippy -p gpui_platform --features test-support`                                   | `PASS`                      | renderer factory contract passes release clippy         |
 | `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux            |
 | `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过       |
 | `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过 |
@@ -488,8 +493,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
-`9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`。
-下一步：建立 renderer factory 内部 trait，并覆盖
+`9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`；renderer
+factory `85fffe8fe5`。
+下一步：继续拆 `WindowHost`/platform system capability，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
 ### 阶段 7：UI 集成边界
