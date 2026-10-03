@@ -466,7 +466,11 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 
 ### 阶段 8：invalidation 实验
 
-状态：`NOT STARTED`
+状态：`NOT RUN`
+
+EXP-001/002 的 production-like Editor workload 和正式 phase budget 尚未完成，因此
+没有引入 scoped invalidation API，也没有用未达标数据声称 20% phase-work 下降。
+该阶段保持待运行，后续若 gate 不达标将记录拒绝并永久保留完整 `cx.notify()` 语义。
 
 ### 阶段 9：收敛与最终验证
 
