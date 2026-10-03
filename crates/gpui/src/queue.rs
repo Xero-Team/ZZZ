@@ -113,26 +113,6 @@ impl<T> PriorityQueueState<T> {
         }
     }
 
-    fn spin_try_recv(&self) -> Result<Option<MutexGuard<'_, PriorityQueues<T>>>, RecvError> {
-        let queues = loop {
-            match self.queues.try_lock() {
-                Ok(guard) => break guard,
-                Err(TryLockError::Poisoned(error)) => break error.into_inner(),
-                Err(TryLockError::WouldBlock) => std::hint::spin_loop(),
-            }
-        };
-
-        let sender_count = self.sender_count.load(std::sync::atomic::Ordering::Relaxed);
-        if queues.is_empty() && sender_count == 0 {
-            return Err(crate::queue::RecvError);
-        }
-
-        if queues.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(queues))
-        }
-    }
 }
 
 #[doc(hidden)]
@@ -235,44 +215,6 @@ impl<T> PriorityQueueReceiver<T> {
     /// If the sender was dropped
     pub fn try_pop(&mut self) -> Result<Option<T>, RecvError> {
         self.pop_inner(false)
-    }
-
-    pub fn spin_try_pop(&mut self) -> Result<Option<T>, RecvError> {
-        use Priority as P;
-
-        let Some(mut queues) = self.state.spin_try_recv()? else {
-            return Ok(None);
-        };
-
-        let high = P::High.weight() * !queues.high_priority.is_empty() as u32;
-        let medium = P::Medium.weight() * !queues.medium_priority.is_empty() as u32;
-        let low = P::Low.weight() * !queues.low_priority.is_empty() as u32;
-        let mut mass = high + medium + low;
-
-        if !queues.high_priority.is_empty() {
-            let flip = self.rand.random_ratio(P::High.weight(), mass);
-            if flip {
-                return Ok(queues.high_priority.pop_front());
-            }
-            mass -= P::High.weight();
-        }
-
-        if !queues.medium_priority.is_empty() {
-            let flip = self.rand.random_ratio(P::Medium.weight(), mass);
-            if flip {
-                return Ok(queues.medium_priority.pop_front());
-            }
-            mass -= P::Medium.weight();
-        }
-
-        if !queues.low_priority.is_empty() {
-            let flip = self.rand.random_ratio(P::Low.weight(), mass);
-            if flip {
-                return Ok(queues.low_priority.pop_front());
-            }
-        }
-
-        Ok(None)
     }
 
     /// Pops an element from the priority queue blocking if necessary.
