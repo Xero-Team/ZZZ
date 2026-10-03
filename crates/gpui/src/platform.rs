@@ -1938,7 +1938,6 @@ impl PromptButton {
     }
 
     /// Returns true if this button is a cancel button.
-    #[allow(dead_code)]
     pub fn is_cancel(&self) -> bool {
         matches!(self, PromptButton::Cancel(_))
     }
