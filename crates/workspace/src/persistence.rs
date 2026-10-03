@@ -1772,7 +1772,10 @@ impl WorkspaceDb {
 
         if let RemoteConnectionOptions::Docker(options) = options {
             use_podman = Some(options.use_podman);
-            remote_env = serde_json::to_string(&options.remote_env).ok();
+            remote_env = Some(
+                serde_json::to_string(&options.remote_env)
+                    .context("serializing Docker remote environment")?,
+            );
         }
 
         Self::get_or_create_remote_connection_query(
