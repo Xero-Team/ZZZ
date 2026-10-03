@@ -421,7 +421,7 @@ impl DirectWriteState {
                 };
                 let font = font_face.CreateFontFace()?;
                 let mut count = 0;
-                font.GetUnicodeRanges(None, &mut count).ok();
+                font.GetUnicodeRanges(None, &mut count).log_err();
                 if count == 0 {
                     continue;
                 }
