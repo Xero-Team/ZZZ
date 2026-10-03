@@ -1551,7 +1551,9 @@ fn set_window_composition_attribute(hwnd: HWND, color: Option<Color>, state: u32
                 pv_data: &accent as *const _ as *mut _,
                 cb_data: std::mem::size_of::<AccentPolicy>(),
             };
-            let _ = set_window_composition_attribute(hwnd, &mut data as *mut _ as _);
+            set_window_composition_attribute(hwnd, &mut data as *mut _ as _)
+                .ok()
+                .log_err();
         }
     }
 }
