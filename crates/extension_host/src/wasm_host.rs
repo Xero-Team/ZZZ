@@ -64,8 +64,6 @@ pub struct WasmExtension {
     tx: UnboundedSender<ExtensionCall>,
     pub manifest: Arc<ExtensionManifest>,
     pub work_dir: Arc<Path>,
-    #[allow(unused)]
-    pub zzz_api_version: Version,
     _task: Arc<Task<Result<(), gpui_tokio::JoinError>>>,
 }
 
@@ -712,7 +710,6 @@ impl WasmHost {
                 manifest.clone(),
                 this.work_dir.join(manifest.id.as_ref()).into(),
                 tx,
-                zzz_api_version,
             ))
         };
 
@@ -721,7 +718,7 @@ impl WasmHost {
 
             // Run wasi-dependent operations on tokio.
             // wasmtime_wasi internally uses tokio for I/O operations.
-            let (extension_task, manifest, work_dir, tx, zzz_api_version) =
+            let (extension_task, manifest, work_dir, tx) =
                 gpui_tokio::Tokio::spawn(cx, load_extension(zzz_api_version, component)).await??;
 
             // Run the extension message loop on tokio since extension
@@ -732,7 +729,6 @@ impl WasmHost {
                 manifest,
                 work_dir,
                 tx,
-                zzz_api_version,
                 _task: task,
             })
         })
