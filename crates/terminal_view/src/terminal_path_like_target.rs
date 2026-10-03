@@ -72,7 +72,7 @@ fn possible_hover_target(
                     terminal_view.hover = None;
                 }
             })
-            .ok();
+            .log_err();
     })
 }
 
