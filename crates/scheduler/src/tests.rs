@@ -35,6 +35,16 @@ fn test_background_executor_spawn() {
 }
 
 #[test]
+fn test_realtime_executor_spawn() {
+    TestScheduler::once(async |scheduler| {
+        scheduler.allow_parking();
+        let task = scheduler.background().spawn_realtime(async move { 42 });
+        let result = task.await;
+        assert_eq!(result, 42);
+    });
+}
+
+#[test]
 fn test_foreground_ordering() {
     let mut traces = HashSet::new();
 

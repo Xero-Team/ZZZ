@@ -172,7 +172,10 @@ impl BackgroundExecutor {
             .spawn(
                 move |_| future,
                 move |runnable| {
-                    let _ = tx.send(runnable);
+                    assert!(
+                        tx.send(runnable).is_ok(),
+                        "realtime executor thread stopped"
+                    );
                 },
             );
         runnable.schedule();
