@@ -63,24 +63,38 @@ pub fn current_platform(_headless: bool) -> Rc<dyn Platform> {
 /// Returns a new [`HeadlessRenderer`] for the current platform, if available.
 #[cfg(feature = "test-support")]
 pub fn current_headless_renderer() -> Option<Box<dyn gpui::PlatformHeadlessRenderer>> {
-    #[cfg(target_os = "macos")]
-    {
-        Some(Box::new(
-            gpui_macos::metal_renderer::MetalHeadlessRenderer::new(),
-        ))
-    }
+    use gpui::RendererFactory as _;
 
-    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "windows"))]
-    {
-        gpui_wgpu::WgpuHeadlessRenderer::new()
-            .map(|renderer| Box::new(renderer) as Box<dyn gpui::PlatformHeadlessRenderer>)
-            .map_err(|error| log::error!("failed to initialize WGPU headless renderer: {error}"))
-            .ok()
-    }
+    CurrentRendererFactory.create_headless_renderer()
+}
 
-    #[cfg(target_family = "wasm")]
-    {
-        None
+#[cfg(feature = "test-support")]
+struct CurrentRendererFactory;
+
+#[cfg(feature = "test-support")]
+impl gpui::RendererFactory for CurrentRendererFactory {
+    fn create_headless_renderer(&self) -> Option<Box<dyn gpui::PlatformHeadlessRenderer>> {
+        #[cfg(target_os = "macos")]
+        {
+            return Some(Box::new(
+                gpui_macos::metal_renderer::MetalHeadlessRenderer::new(),
+            ));
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "windows"))]
+        {
+            return gpui_wgpu::WgpuHeadlessRenderer::new()
+                .map(|renderer| Box::new(renderer) as Box<dyn gpui::PlatformHeadlessRenderer>)
+                .map_err(|error| {
+                    log::error!("failed to initialize WGPU headless renderer: {error}")
+                })
+                .ok();
+        }
+
+        #[cfg(target_family = "wasm")]
+        {
+            None
+        }
     }
 }
 

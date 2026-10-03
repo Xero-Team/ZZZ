@@ -864,6 +864,13 @@ pub trait PlatformHeadlessRenderer {
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
 }
 
+/// Creates renderer instances without coupling application code to a backend crate.
+#[cfg(any(test, feature = "test-support"))]
+pub trait RendererFactory {
+    /// Creates a real offscreen renderer when the current platform supports one.
+    fn create_headless_renderer(&self) -> Option<Box<dyn PlatformHeadlessRenderer>>;
+}
+
 /// Type alias for runnables with metadata.
 /// Previously an enum with a single variant, now simplified to a direct type alias.
 #[doc(hidden)]
