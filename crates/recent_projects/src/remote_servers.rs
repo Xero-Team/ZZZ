@@ -1641,26 +1641,24 @@ impl RemoteServerProjects {
                             |path| RemotePathBuf::new(path, path_style),
                         );
 
-                    workspace
-                        .update_in(cx, |workspace, window, cx| {
-                            let weak = cx.entity().downgrade();
-                            workspace.toggle_modal(window, cx, |window, cx| {
-                                RemoteServerProjects::project_picker(
-                                    create_new_window,
-                                    index,
-                                    connection_options,
-                                    project,
-                                    home_dir,
-                                    window,
-                                    cx,
-                                    weak,
-                                )
-                            });
-                        })
-                        .ok();
+                    workspace.update_in(cx, |workspace, window, cx| {
+                        let weak = cx.entity().downgrade();
+                        workspace.toggle_modal(window, cx, |window, cx| {
+                            RemoteServerProjects::project_picker(
+                                create_new_window,
+                                index,
+                                connection_options,
+                                project,
+                                home_dir,
+                                window,
+                                cx,
+                                weak,
+                            )
+                        });
+                    })?;
                     Ok(())
                 })
-                .detach();
+                .detach_and_log_err(cx);
             })
         })
     }
