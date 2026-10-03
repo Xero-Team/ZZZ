@@ -1021,13 +1021,12 @@ impl Client {
         Ok(())
     }
 
-    fn authenticate(self: &Arc<Self>, cx: &AsyncApp) -> Task<Result<Credentials>> {
+    fn authenticate(self: &Arc<Self>, _cx: &AsyncApp) -> Task<Result<Credentials>> {
         #[cfg(any(test, feature = "test-support"))]
         if let Some(callback) = self.authenticate.read().as_ref() {
-            return callback(cx);
+            return callback(_cx);
         }
 
-        let _ = cx;
         Task::ready(Err(anyhow!(
             "no stored credentials for the configured remote server"
         )))
