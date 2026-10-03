@@ -1997,7 +1997,7 @@ impl Sidebar {
         .on_open(Rc::new({
             let this = this.clone();
             move |_window, cx| {
-                this.update(cx, |_sidebar, cx| cx.notify()).ok();
+                this.update(cx, |_sidebar, cx| cx.notify()).log_err();
             }
         }))
         .menu(move |window, cx| {
@@ -2070,7 +2070,7 @@ impl Sidebar {
                                         sidebar.selection = None;
                                         sidebar.create_new_thread(&workspace, window, cx);
                                     })
-                                    .ok();
+                                    .log_err();
                                 }
                             },
                         );
@@ -2223,7 +2223,7 @@ impl Sidebar {
                     .insert(key, DefaultBranchCache::Resolved(parsed));
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
         .detach();
     }
@@ -2272,7 +2272,7 @@ impl Sidebar {
                         sidebar.project_header_menu_ix = Some(ix);
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
                 }
             }))
             .menu(move |window, cx| {
@@ -2342,7 +2342,7 @@ impl Sidebar {
                                                     )
                                                     .detach_and_log_err(cx);
                                             })
-                                            .ok();
+                                            .log_err();
                                     }
                                 },
                             )
@@ -2414,7 +2414,7 @@ impl Sidebar {
                                             sidebar.selection = None;
                                             sidebar.active_entry = None;
                                         })
-                                        .ok();
+                                        .log_err();
                                     }
                                 },
                             )
@@ -2511,12 +2511,12 @@ impl Sidebar {
                                                                     )
                                                                     .detach_and_log_err(cx);
                                                             })
-                                                            .ok();
+                                                            .log_err();
                                                         close_weak_menu
                                                             .update(cx, |_, cx| {
                                                                 cx.emit(DismissEvent)
                                                             })
-                                                            .ok();
+                                                            .log_err();
                                                     }),
                                                 )
                                             })
@@ -2532,10 +2532,10 @@ impl Sidebar {
                                                     cx,
                                                 );
                                             })
-                                            .ok();
+                                            .log_err();
                                         activate_weak_menu
                                             .update(cx, |_, cx| cx.emit(DismissEvent))
-                                            .ok();
+                                            .log_err();
                                     },
                                 );
                             }
@@ -2565,10 +2565,10 @@ impl Sidebar {
                                                 .update(cx, |mw, cx| {
                                                     mw.move_project_group_up(&move_up_key, cx);
                                                 })
-                                                .ok();
+                                                .log_err();
                                             move_up_weak_menu
                                                 .update(cx, |_, cx| cx.emit(DismissEvent))
-                                                .ok();
+                                                .log_err();
                                         },
                                     ),
                                 )
@@ -2585,10 +2585,10 @@ impl Sidebar {
                                                 .update(cx, |mw, cx| {
                                                     mw.move_project_group_down(&move_down_key, cx);
                                                 })
-                                                .ok();
+                                                .log_err();
                                             move_down_weak_menu
                                                 .update(cx, |_, cx| cx.emit(DismissEvent))
-                                                .ok();
+                                                .log_err();
                                         },
                                     ),
                                 )
@@ -2606,8 +2606,10 @@ impl Sidebar {
                                             .remove_project_group(&project_group_key, window, cx)
                                             .detach_and_log_err(cx);
                                     })
-                                    .ok();
-                                weak_menu.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
+                                    .log_err();
+                                weak_menu
+                                    .update(cx, |_, cx| cx.emit(DismissEvent))
+                                    .log_err();
                             },
                         )
                     });
@@ -2620,7 +2622,7 @@ impl Sidebar {
                             sidebar.project_header_menu_ix = None;
                             cx.notify();
                         })
-                        .ok();
+                        .log_err();
                     })
                     .detach();
 
@@ -3239,7 +3241,7 @@ impl Sidebar {
                         this.pending_thread_activation = None;
                     }
                 })
-                .ok();
+                .log_err();
             }
 
             let workspace = result?;
@@ -3415,7 +3417,7 @@ impl Sidebar {
                                         .update(cx, |view, cx| {
                                             view.clear_restoring(&thread_id, cx);
                                         })
-                                        .ok();
+                                        .log_err();
                                 }
 
                                 if let Some(multi_workspace) = this.multi_workspace.upgrade() {
@@ -3434,7 +3436,7 @@ impl Sidebar {
                                     });
                                 }
                             })
-                            .ok();
+                            .log_err();
                             return anyhow::Ok(());
                         }
                     }
