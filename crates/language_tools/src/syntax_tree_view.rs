@@ -57,12 +57,10 @@ pub fn init(cx: &mut App) {
             let workspace_handle = workspace.weak_handle();
             let syntax_tree_view = cx.new(|cx| {
                 cx.on_release(move |view: &mut SyntaxTreeView, cx| {
-                    if view
-                        .workspace_handle
-                        .read_with(cx, |workspace, cx| {
+                    if let Some(workspace) = view.workspace_handle.upgrade()
+                        && workspace.read_with(cx, |workspace, cx| {
                             workspace.item_of_type::<SyntaxTreeView>(cx).is_none()
                         })
-                        .unwrap_or_default()
                     {
                         CommandPaletteFilter::update_global(cx, |this, _| {
                             this.hide_action_types(&syntax_tree_actions);
@@ -658,10 +656,12 @@ impl SyntaxTreeToolbarItemView {
                                 ),
                                 None,
                                 move |window, cx| {
+                                    let Some(view) = view.upgrade() else {
+                                        return;
+                                    };
                                     view.update(cx, |view, cx| {
                                         view.select_layer(layer_ix, window, cx);
-                                    })
-                                    .ok();
+                                    });
                                 },
                             );
                         }
