@@ -351,9 +351,9 @@ text input owner。
 | `./script/clippy -p gpui --features frame-diagnostics`                 | `PASS` | all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                                     | `PASS` | text input owner 迁移无 whitespace error          |
 
-提交：`71c66cc2ae`。
-下一步：补齐 text input owner 的 selected/marked/mutation client boundary，运行 Editor
-IME、UTF-16、多 cursor 和 candidate geometry checks，再进入 4D immutable `BuiltFrame`。
+提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`。
+下一步：运行 Editor IME、UTF-16、多 cursor 和 candidate geometry checks，再进入 4D
+immutable `BuiltFrame`。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
