@@ -529,7 +529,7 @@ impl<'a, T: 'static> Context<'a, T> {
         mut callback: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window.pending_input_observers.insert(
+        let (subscription, activate) = window.interaction.pending_input_observers.insert(
             (),
             Box::new(move |window, cx| {
                 view.update(cx, |view, cx| callback(view, window, cx))
@@ -624,7 +624,7 @@ impl<'a, T: 'static> Context<'a, T> {
         mut listener: impl FnMut(&mut T, &mut Window, &mut Context<T>) + 'static,
     ) -> Subscription {
         let view = self.weak_entity();
-        let (subscription, activate) = window.focus_lost_listeners.insert(
+        let (subscription, activate) = window.interaction.focus_lost_listeners.insert(
             (),
             Box::new(move |window, cx| {
                 view.update(cx, |view, cx| listener(view, window, cx))

@@ -1639,7 +1639,7 @@ impl App {
                     for window_handle in self.windows() {
                         window_handle
                             .update(self, |_, window, cx| {
-                                if window.focus == Some(handle_id) {
+                                if window.interaction.focus == Some(handle_id) {
                                     window.blur(cx);
                                 }
                             })

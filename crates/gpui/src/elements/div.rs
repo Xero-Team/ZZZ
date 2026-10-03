@@ -2474,8 +2474,8 @@ impl Interactivity {
                                 let is_activation_key = (stroke.key.eq("enter")
                                     || stroke.key.eq("space"))
                                     && !stroke.modifiers.modified();
-                                *pending_keyboard_down.borrow_mut() =
-                                    is_activation_key.then_some(window.focus_generation);
+                                *pending_keyboard_down.borrow_mut() = is_activation_key
+                                    .then_some(window.interaction.focus_generation);
                             }
                         }
                     });
@@ -2500,7 +2500,7 @@ impl Interactivity {
                                 {
                                     let pending =
                                         std::mem::take(&mut *pending_keyboard_down.borrow_mut());
-                                    if pending != Some(window.focus_generation) {
+                                    if pending != Some(window.interaction.focus_generation) {
                                         return;
                                     }
 

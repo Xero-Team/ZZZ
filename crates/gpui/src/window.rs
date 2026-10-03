@@ -6,19 +6,20 @@ use crate::{
     Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DeferredDraw,
     DevicePixels, DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, DrawPhase,
     Edges, Entity, EntityId, EventEmitter, FileDropEvent, FontId, Frame, Global, GlobalElementId,
-    GlyphId, GpuSpecs, Hsla, InputHandler, InputPreference, InteractionOwner, IsZero, KeyBinding,
-    KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers,
-    ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent,
-    PaintIndex, Path, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler,
-    PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton,
-    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
-    Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
-    SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine,
-    Task, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState, TransformationMatrix,
-    Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
-    WindowControls, WindowDecorations, WindowInvalidator, WindowOptions, WindowParams,
-    WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
+    GlyphId, GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner,
+    IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId,
+    Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent,
+    MouseUpEvent, PaintIndex, Path, PendingInput, Pixels, PlatformAtlas, PlatformDisplay,
+    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite,
+    PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size,
+    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
+    SystemWindowTabController, TaffyLayoutEngine, Task, TextRenderingMode, TextStyle,
+    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowInvalidator, WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems,
+    size, transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 use collections::{FxHashMap, FxHashSet};
@@ -110,7 +111,7 @@ impl DispatchPhase {
     }
 }
 
-type AnyObserver = Box<dyn FnMut(&mut Window, &mut App) -> bool + 'static>;
+pub(crate) type AnyObserver = Box<dyn FnMut(&mut Window, &mut App) -> bool + 'static>;
 
 pub(crate) type AnyWindowFocusListener =
     Box<dyn FnMut(&WindowFocusEvent, &mut Window, &mut App) -> bool + 'static>;
@@ -226,7 +227,7 @@ pub(crate) struct FocusRef {
 impl FocusId {
     /// Obtains whether the element associated with this handle is currently focused.
     pub fn is_focused(&self, window: &Window) -> bool {
-        window.focus == Some(*self)
+        window.interaction.focus == Some(*self)
     }
 
     /// Obtains whether the element associated with this handle contains the focused
@@ -682,12 +683,6 @@ pub(crate) struct TooltipRequest {
     tooltip: AnyTooltip,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-enum InputModality {
-    Mouse,
-    Keyboard,
-}
-
 /// Holds the state for a specific window.
 pub struct Window {
     pub(crate) handle: AnyWindowHandle,
@@ -722,12 +717,7 @@ pub struct Window {
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
     next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
     pub(crate) dirty_views: FxHashSet<EntityId>,
-    focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
-    pub(crate) focus_lost_listeners: SubscriberSet<(), AnyObserver>,
-    default_prevented: bool,
     mouse_position: Point<Pixels>,
-    modifiers: Modifiers,
-    capslock: Capslock,
     scale_factor: f32,
     pub(crate) bounds_observers: SubscriberSet<(), AnyObserver>,
     appearance: WindowAppearance,
@@ -743,25 +733,12 @@ pub struct Window {
     input_latency_tracker: InputLatencyTracker,
     #[cfg(feature = "frame-diagnostics")]
     pending_frame_timing: Option<FrameTiming>,
-    last_input_modality: InputModality,
     pub(crate) refreshing: bool,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
-    pub(crate) focus: Option<FocusId>,
-    pub(crate) focus_generation: u64,
-    focus_enabled: bool,
-    pending_input: Option<PendingInput>,
-    pending_modifier: ModifierState,
-    pub(crate) pending_input_observers: SubscriberSet<(), AnyObserver>,
     prompt: Option<RenderablePromptHandle>,
     pub(crate) client_inset: Option<Pixels>,
     #[cfg(any(feature = "inspector", debug_assertions))]
     inspector: Option<Entity<Inspector>>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct ModifierState {
-    modifiers: Modifiers,
-    saw_other_input: bool,
 }
 
 /// Tracks input event timestamps to determine if input is arriving at a high rate.
@@ -889,14 +866,6 @@ impl InputLatencyTracker {
             mid_draw_events_dropped: self.mid_draw_events_dropped,
         }
     }
-}
-
-#[derive(Default, Debug)]
-struct PendingInput {
-    keystrokes: SmallVec<[Keystroke; 1]>,
-    focus: Option<FocusId>,
-    timer: Option<Task<()>>,
-    needs_timeout: bool,
 }
 
 pub(crate) struct ElementStateBox {
@@ -1226,8 +1195,8 @@ impl Window {
                 handle
                     .update(&mut cx, |_, window, cx| {
                         window.active.set(active);
-                        window.modifiers = window.platform_window.modifiers();
-                        window.capslock = window.platform_window.capslock();
+                        window.interaction.modifiers = window.platform_window.modifiers();
+                        window.interaction.capslock = window.platform_window.capslock();
                         window
                             .activation_observers
                             .clone()
@@ -1366,17 +1335,14 @@ impl Window {
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 HitboxId(0),
+                modifiers,
+                capslock,
             ),
             next_frame_callbacks,
             next_tooltip_id: TooltipId::default(),
             tooltip_bounds: None,
             dirty_views: FxHashSet::default(),
-            focus_listeners: SubscriberSet::new(),
-            focus_lost_listeners: SubscriberSet::new(),
-            default_prevented: true,
             mouse_position,
-            modifiers,
-            capslock,
             scale_factor,
             bounds_observers: SubscriberSet::new(),
             appearance,
@@ -1390,15 +1356,8 @@ impl Window {
             input_latency_tracker: InputLatencyTracker::new()?,
             #[cfg(feature = "frame-diagnostics")]
             pending_frame_timing: None,
-            last_input_modality: InputModality::Mouse,
             refreshing: false,
             activation_observers: SubscriberSet::new(),
-            focus: None,
-            focus_generation: 0,
-            focus_enabled: true,
-            pending_input: None,
-            pending_modifier: ModifierState::default(),
-            pending_input_observers: SubscriberSet::new(),
             prompt: None,
             client_inset: None,
             image_cache_stack: Vec::new(),
@@ -1411,7 +1370,7 @@ impl Window {
         &self,
         value: AnyWindowFocusListener,
     ) -> (Subscription, impl FnOnce() + use<>) {
-        self.focus_listeners.insert((), value)
+        self.interaction.focus_listeners.insert((), value)
     }
 }
 
@@ -1540,18 +1499,19 @@ impl Window {
 
     /// Obtain the currently focused [`FocusHandle`]. If no elements are focused, returns `None`.
     pub fn focused(&self, cx: &App) -> Option<FocusHandle> {
-        self.focus
+        self.interaction
+            .focus
             .and_then(|id| FocusHandle::for_id(id, &cx.focus_handles))
     }
 
     /// Move focus to the element associated with the given [`FocusHandle`].
     pub fn focus(&mut self, handle: &FocusHandle, cx: &mut App) {
-        if !self.focus_enabled || self.focus == Some(handle.id) {
+        if !self.interaction.focus_enabled || self.interaction.focus == Some(handle.id) {
             return;
         }
 
-        self.focus = Some(handle.id);
-        self.focus_generation += 1;
+        self.interaction.focus = Some(handle.id);
+        self.interaction.focus_generation += 1;
         self.clear_pending_keystrokes(cx);
 
         self.refresh();
@@ -1560,12 +1520,12 @@ impl Window {
     /// Remove focus from all elements within this context's window.
     pub fn blur(&mut self, cx: &mut App) {
         self.clear_pending_keystrokes(cx);
-        if !self.focus_enabled {
+        if !self.interaction.focus_enabled {
             return;
         }
 
-        if self.focus.take().is_some() {
-            self.focus_generation += 1;
+        if self.interaction.focus.take().is_some() {
+            self.interaction.focus_generation += 1;
             self.refresh();
         }
     }
@@ -1573,12 +1533,12 @@ impl Window {
     /// Blur the window and don't allow anything in it to be focused again.
     pub fn disable_focus(&mut self, cx: &mut App) {
         self.blur(cx);
-        self.focus_enabled = false;
+        self.interaction.focus_enabled = false;
     }
 
     /// Move focus to next tab stop.
     pub fn focus_next(&mut self, cx: &mut App) {
-        if !self.focus_enabled {
+        if !self.interaction.focus_enabled {
             return;
         }
 
@@ -1586,7 +1546,7 @@ impl Window {
             .interaction
             .rendered_frame
             .tab_stops
-            .next(self.focus.as_ref())
+            .next(self.interaction.focus.as_ref())
         {
             self.focus(&handle, cx)
         }
@@ -1594,7 +1554,7 @@ impl Window {
 
     /// Move focus to previous tab stop.
     pub fn focus_prev(&mut self, cx: &mut App) {
-        if !self.focus_enabled {
+        if !self.interaction.focus_enabled {
             return;
         }
 
@@ -1602,7 +1562,7 @@ impl Window {
             .interaction
             .rendered_frame
             .tab_stops
-            .prev(self.focus.as_ref())
+            .prev(self.interaction.focus.as_ref())
         {
             self.focus(&handle, cx)
         }
@@ -2217,12 +2177,12 @@ impl Window {
     /// Call to prevent the default action of an event. Currently only used to prevent
     /// parent elements from becoming focused on mouse down.
     pub fn prevent_default(&mut self) {
-        self.default_prevented = true;
+        self.interaction.default_prevented = true;
     }
 
     /// Obtain whether default has been prevented for the event currently being dispatched.
     pub fn default_prevented(&self) -> bool {
-        self.default_prevented
+        self.interaction.default_prevented
     }
 
     /// Determine whether the given action is available along the dispatch path to the currently focused element.
@@ -2271,18 +2231,18 @@ impl Window {
 
     /// The current state of the keyboard's modifiers
     pub fn modifiers(&self) -> Modifiers {
-        self.modifiers
+        self.interaction.modifiers
     }
 
     /// Returns true if the last input event was keyboard-based (key press, tab navigation, etc.)
     /// This is used for focus-visible styling to show focus indicators only for keyboard navigation.
     pub fn last_input_was_keyboard(&self) -> bool {
-        self.last_input_modality == InputModality::Keyboard
+        self.interaction.last_input_modality == InputModality::Keyboard
     }
 
     /// The current state of the keyboard's capslock
     pub fn capslock(&self) -> Capslock {
-        self.capslock
+        self.interaction.capslock
     }
 
     fn complete_frame(&self) {
@@ -2369,18 +2329,19 @@ impl Window {
         self.interaction.next_frame.clear();
         let current_focus_path = self.interaction.rendered_frame.focus_path();
         let current_window_active = self.interaction.rendered_frame.window_active;
-        let mut focus_before_listeners = self.focus;
+        let mut focus_before_listeners = self.interaction.focus;
 
         if previous_focus_path != current_focus_path
             || previous_window_active != current_window_active
         {
             if !previous_focus_path.is_empty() && current_focus_path.is_empty() {
-                self.focus_lost_listeners
+                self.interaction
+                    .focus_lost_listeners
                     .clone()
                     .retain(&(), |listener| listener(self, cx));
                 // Focus-lost fallbacks may move focus to a node outside the current tree.
                 // Track only focus changes made by listeners to avoid a redraw loop.
-                focus_before_listeners = self.focus;
+                focus_before_listeners = self.interaction.focus;
             }
 
             let event = WindowFocusEvent {
@@ -2395,7 +2356,8 @@ impl Window {
                     Default::default()
                 },
             };
-            self.focus_listeners
+            self.interaction
+                .focus_listeners
                 .clone()
                 .retain(&(), |listener| listener(&event, self, cx));
         }
@@ -2407,7 +2369,7 @@ impl Window {
         self.invalidator.set_phase(DrawPhase::None);
         // Focus movement during listener dispatch is suppressed while drawing. Redraw so the
         // new focus state and its corresponding events are delivered on the next frame.
-        if self.focus != focus_before_listeners {
+        if self.interaction.focus != focus_before_listeners {
             self.refresh();
         }
         self.needs_present.set(true);
@@ -2887,11 +2849,11 @@ impl Window {
         let reused_subtree = self.interaction.next_frame.dispatch_tree.reuse_subtree(
             range.start.dispatch_tree_index..range.end.dispatch_tree_index,
             &mut self.interaction.rendered_frame.dispatch_tree,
-            self.focus,
+            self.interaction.focus,
         );
 
         if reused_subtree.contains_focus() {
-            self.interaction.next_frame.focus = self.focus;
+            self.interaction.next_frame.focus = self.interaction.focus;
         }
 
         self.interaction.next_frame.deferred_draws.extend(
@@ -4505,59 +4467,59 @@ impl Window {
         // Track input modality for focus-visible styling and hover suppression.
         // Hover is suppressed during keyboard modality so that keyboard navigation
         // doesn't show hover highlights on the item under the mouse cursor.
-        let old_modality = self.last_input_modality;
-        self.last_input_modality = match &event {
+        let old_modality = self.interaction.last_input_modality;
+        self.interaction.last_input_modality = match &event {
             PlatformInput::KeyDown(_) => InputModality::Keyboard,
             PlatformInput::MouseMove(_) | PlatformInput::MouseDown(_) => InputModality::Mouse,
-            _ => self.last_input_modality,
+            _ => self.interaction.last_input_modality,
         };
-        if self.last_input_modality != old_modality {
+        if self.interaction.last_input_modality != old_modality {
             self.refresh();
         }
 
         // Handlers may set this to false by calling `stop_propagation`.
         cx.propagate_event = true;
         // Handlers may set this to true by calling `prevent_default`.
-        self.default_prevented = false;
+        self.interaction.default_prevented = false;
 
         let event = match event {
             // Track the mouse position with our own state, since accessing the platform
             // API for the mouse position can only occur on the main thread.
             PlatformInput::MouseMove(mouse_move) => {
                 self.mouse_position = mouse_move.position;
-                self.modifiers = mouse_move.modifiers;
+                self.interaction.modifiers = mouse_move.modifiers;
                 PlatformInput::MouseMove(mouse_move)
             }
             PlatformInput::MouseDown(mouse_down) => {
                 self.mouse_position = mouse_down.position;
-                self.modifiers = mouse_down.modifiers;
+                self.interaction.modifiers = mouse_down.modifiers;
                 PlatformInput::MouseDown(mouse_down)
             }
             PlatformInput::MouseUp(mouse_up) => {
                 self.mouse_position = mouse_up.position;
-                self.modifiers = mouse_up.modifiers;
+                self.interaction.modifiers = mouse_up.modifiers;
                 PlatformInput::MouseUp(mouse_up)
             }
             PlatformInput::MousePressure(mouse_pressure) => {
                 PlatformInput::MousePressure(mouse_pressure)
             }
             PlatformInput::MouseExited(mouse_exited) => {
-                self.modifiers = mouse_exited.modifiers;
+                self.interaction.modifiers = mouse_exited.modifiers;
                 PlatformInput::MouseExited(mouse_exited)
             }
             PlatformInput::ModifiersChanged(modifiers_changed) => {
-                self.modifiers = modifiers_changed.modifiers;
-                self.capslock = modifiers_changed.capslock;
+                self.interaction.modifiers = modifiers_changed.modifiers;
+                self.interaction.capslock = modifiers_changed.capslock;
                 PlatformInput::ModifiersChanged(modifiers_changed)
             }
             PlatformInput::ScrollWheel(scroll_wheel) => {
                 self.mouse_position = scroll_wheel.position;
-                self.modifiers = scroll_wheel.modifiers;
+                self.interaction.modifiers = scroll_wheel.modifiers;
                 PlatformInput::ScrollWheel(scroll_wheel)
             }
             PlatformInput::Pinch(pinch) => {
                 self.mouse_position = pinch.position;
-                self.modifiers = pinch.modifiers;
+                self.interaction.modifiers = pinch.modifiers;
                 PlatformInput::Pinch(pinch)
             }
             // Translate dragging and dropping of external files from the operating system
@@ -4625,7 +4587,7 @@ impl Window {
         drop(frame_input_scope);
         DispatchEventResult {
             propagate: cx.propagate_event,
-            default_prevented: self.default_prevented,
+            default_prevented: self.interaction.default_prevented,
         }
     }
 
@@ -4720,7 +4682,7 @@ impl Window {
             self.draw(cx).clear();
         }
 
-        let node_id = self.focus_node_id_in_rendered_frame(self.focus);
+        let node_id = self.focus_node_id_in_rendered_frame(self.interaction.focus);
         let dispatch_path = self
             .interaction
             .rendered_frame
@@ -4731,10 +4693,15 @@ impl Window {
 
         if let Some(event) = event.downcast_ref::<ModifiersChangedEvent>() {
             if event.modifiers.number_of_modifiers() == 0
-                && self.pending_modifier.modifiers.number_of_modifiers() == 1
-                && !self.pending_modifier.saw_other_input
+                && self
+                    .interaction
+                    .pending_modifier
+                    .modifiers
+                    .number_of_modifiers()
+                    == 1
+                && !self.interaction.pending_modifier.saw_other_input
             {
-                let key = match self.pending_modifier.modifiers {
+                let key = match self.interaction.pending_modifier.modifiers {
                     modifiers if modifiers.shift => Some("shift"),
                     modifiers if modifiers.control => Some("control"),
                     modifiers if modifiers.alt => Some("alt"),
@@ -4751,16 +4718,21 @@ impl Window {
                 }
             }
 
-            if self.pending_modifier.modifiers.number_of_modifiers() == 0
+            if self
+                .interaction
+                .pending_modifier
+                .modifiers
+                .number_of_modifiers()
+                == 0
                 && event.modifiers.number_of_modifiers() == 1
             {
-                self.pending_modifier.saw_other_input = false
+                self.interaction.pending_modifier.saw_other_input = false
             } else if event.modifiers.number_of_modifiers() > 1 {
-                self.pending_modifier.saw_other_input = true
+                self.interaction.pending_modifier.saw_other_input = true
             }
-            self.pending_modifier.modifiers = event.modifiers
+            self.interaction.pending_modifier.modifiers = event.modifiers
         } else if let Some(key_down_event) = event.downcast_ref::<KeyDownEvent>() {
-            self.pending_modifier.saw_other_input = true;
+            self.interaction.pending_modifier.saw_other_input = true;
             keystroke = Some(key_down_event.keystroke.clone());
             if key_down_event.keystroke.key_char.is_some()
                 && matches!(
@@ -4805,8 +4777,8 @@ impl Window {
             return;
         }
 
-        let mut currently_pending = self.pending_input.take().unwrap_or_default();
-        if currently_pending.focus.is_some() && currently_pending.focus != self.focus {
+        let mut currently_pending = self.interaction.pending_input.take().unwrap_or_default();
+        if currently_pending.focus.is_some() && currently_pending.focus != self.interaction.focus {
             currently_pending = PendingInput::default();
         }
 
@@ -4824,7 +4796,7 @@ impl Window {
         if !match_result.pending.is_empty() {
             currently_pending.timer.take();
             currently_pending.keystrokes = match_result.pending;
-            currently_pending.focus = self.focus;
+            currently_pending.focus = self.interaction.focus;
 
             let text_input_requires_timeout = event
                 .downcast_ref::<KeyDownEvent>()
@@ -4844,14 +4816,16 @@ impl Window {
                     cx.background_executor.timer(Duration::from_secs(1)).await;
                     cx.update(move |window, cx| {
                         let Some(currently_pending) = window
+                            .interaction
                             .pending_input
                             .take()
-                            .filter(|pending| pending.focus == window.focus)
+                            .filter(|pending| pending.focus == window.interaction.focus)
                         else {
                             return;
                         };
 
-                        let node_id = window.focus_node_id_in_rendered_frame(window.focus);
+                        let node_id =
+                            window.focus_node_id_in_rendered_frame(window.interaction.focus);
                         let dispatch_path = window
                             .interaction
                             .rendered_frame
@@ -4872,7 +4846,7 @@ impl Window {
             } else {
                 currently_pending.timer = None;
             }
-            self.pending_input = Some(currently_pending);
+            self.interaction.pending_input = Some(currently_pending);
             self.pending_input_changed(cx);
             cx.propagate_event = false;
             return;
@@ -4933,7 +4907,8 @@ impl Window {
     }
 
     pub(crate) fn pending_input_changed(&mut self, cx: &mut App) {
-        self.pending_input_observers
+        self.interaction
+            .pending_input_observers
             .clone()
             .retain(&(), |callback| callback(self, cx));
     }
@@ -4992,9 +4967,10 @@ impl Window {
     /// Pending input that can still complete a binding. Input left over from a previous focus can
     /// never complete one.
     fn active_pending_input(&self) -> Option<&PendingInput> {
-        self.pending_input
+        self.interaction
+            .pending_input
             .as_ref()
-            .filter(|pending_input| pending_input.focus == self.focus)
+            .filter(|pending_input| pending_input.focus == self.interaction.focus)
     }
 
     /// Determine whether a potential multi-stroke key binding is in progress on this window.
@@ -5003,7 +4979,7 @@ impl Window {
     }
 
     pub(crate) fn clear_pending_keystrokes(&mut self, cx: &mut App) {
-        if self.pending_input.take().is_some() {
+        if self.interaction.pending_input.take().is_some() {
             let window_handle = self.handle;
             cx.defer(move |cx| {
                 window_handle
@@ -5022,7 +4998,7 @@ impl Window {
     }
 
     fn replay_pending_input(&mut self, replays: SmallVec<[Replay; 1]>, cx: &mut App) {
-        let node_id = self.focus_node_id_in_rendered_frame(self.focus);
+        let node_id = self.focus_node_id_in_rendered_frame(self.interaction.focus);
         let dispatch_path = self
             .interaction
             .rendered_frame
@@ -5321,7 +5297,7 @@ impl Window {
 
     /// Returns the current context stack.
     pub fn context_stack(&self) -> Vec<KeyContext> {
-        let node_id = self.focus_node_id_in_rendered_frame(self.focus);
+        let node_id = self.focus_node_id_in_rendered_frame(self.interaction.focus);
         let dispatch_tree = &self.interaction.rendered_frame.dispatch_tree;
         dispatch_tree
             .dispatch_path(node_id)
@@ -5332,7 +5308,7 @@ impl Window {
 
     /// Returns all available actions for the focused element.
     pub fn available_actions(&self, cx: &App) -> Vec<Box<dyn Action>> {
-        let node_id = self.focus_node_id_in_rendered_frame(self.focus);
+        let node_id = self.focus_node_id_in_rendered_frame(self.interaction.focus);
         let mut actions = self
             .interaction
             .rendered_frame
@@ -5791,7 +5767,7 @@ impl Window {
     /// This does not generate any events.
     #[cfg(any(test, feature = "test-support"))]
     pub fn set_modifiers(&mut self, modifiers: Modifiers) {
-        self.modifiers = modifiers;
+        self.interaction.modifiers = modifiers;
     }
 
     /// For testing: simulate a mouse move event to the given position.
@@ -5801,7 +5777,7 @@ impl Window {
     pub fn simulate_mouse_move(&mut self, position: Point<Pixels>, cx: &mut App) {
         let event = PlatformInput::MouseMove(MouseMoveEvent {
             position,
-            modifiers: self.modifiers,
+            modifiers: self.interaction.modifiers,
             pressed_button: None,
         });
         let _ = self.dispatch_event(event, cx);
