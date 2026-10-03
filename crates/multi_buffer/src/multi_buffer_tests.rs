@@ -4714,47 +4714,10 @@ fn format_diff(
                 .unwrap_or_default();
 
             format!("{boundary_row}{marker}{line}{expand}")
-            // let mbr = info
-            //     .multibuffer_row
-            //     .map(|row| format!("{:0>3}", row.0))
-            //     .unwrap_or_else(|| "???".to_string());
-            // let byte_range = format!("{byte_range_start:0>3}..{byte_range_end:0>3}");
-            // format!("{boundary_row}Row: {mbr}, Bytes: {byte_range} | {marker}{line}{expand}")
         })
         .collect::<Vec<_>>()
         .join("\n")
 }
-
-// fn format_transforms(snapshot: &MultiBufferSnapshot) -> String {
-//     snapshot
-//         .diff_transforms
-//         .iter()
-//         .map(|transform| {
-//             let (kind, summary) = match transform {
-//                 DiffTransform::DeletedHunk { summary, .. } => ("   Deleted", (*summary).into()),
-//                 DiffTransform::FilteredInsertedHunk { summary, .. } => ("  Filtered", *summary),
-//                 DiffTransform::InsertedHunk { summary, .. } => ("  Inserted", *summary),
-//                 DiffTransform::Unmodified { summary, .. } => ("Unmodified", *summary),
-//             };
-//             format!("{kind}(len: {}, lines: {:?})", summary.len, summary.lines)
-//         })
-//         .join("\n")
-// }
-
-// fn format_excerpts(snapshot: &MultiBufferSnapshot) -> String {
-//     snapshot
-//         .excerpts
-//         .iter()
-//         .map(|excerpt| {
-//             format!(
-//                 "Excerpt(buffer_range = {:?}, lines = {:?}, has_trailing_newline = {:?})",
-//                 excerpt.range.context.to_point(&excerpt.buffer),
-//                 excerpt.text_summary.lines,
-//                 excerpt.has_trailing_newline
-//             )
-//         })
-//         .join("\n")
-// }
 
 #[gpui::test]
 async fn test_singleton_with_inverted_diff(cx: &mut TestAppContext) {
