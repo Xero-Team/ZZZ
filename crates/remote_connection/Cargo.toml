@@ -29,4 +29,5 @@ settings.workspace = true
 theme_settings.workspace = true
 ui.workspace = true
 ui_input.workspace = true
+util.workspace = true
 workspace.workspace = true

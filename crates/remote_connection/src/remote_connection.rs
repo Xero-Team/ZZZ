@@ -17,7 +17,20 @@ use ui::{
     prelude::*,
 };
 use ui_input::{ERASED_EDITOR_FACTORY, ErasedEditor};
+use util::ResultExt as _;
 use workspace::{DismissDecision, ModalView, Workspace};
+
+fn send_cancellation(sender: oneshot::Sender<()>) {
+    if sender.send(()).is_err() {
+        log::debug!("remote connection cancellation receiver already closed");
+    }
+}
+
+fn send_password(sender: oneshot::Sender<EncryptedPassword>, password: EncryptedPassword) {
+    if sender.send(password).is_err() {
+        log::debug!("remote connection password receiver already closed");
+    }
+}
 
 pub struct RemoteConnectionPrompt {
     connection_string: SharedString,
@@ -34,9 +47,9 @@ pub struct RemoteConnectionPrompt {
 
 impl Drop for RemoteConnectionPrompt {
     fn drop(&mut self) {
-        if let Some(cancel) = self.cancellation.take() {
+        if let Some(cancellation_sender) = self.cancellation.take() {
             log::debug!("cancelling remote connection");
-            cancel.send(()).ok();
+            send_cancellation(cancellation_sender);
         }
     }
 }
@@ -75,14 +88,14 @@ impl RemoteConnectionPrompt {
         }
     }
 
-    pub fn set_cancellation_tx(&mut self, tx: oneshot::Sender<()>) {
-        self.cancellation = Some(tx);
+    pub fn set_cancellation_sender(&mut self, cancellation_sender: oneshot::Sender<()>) {
+        self.cancellation = Some(cancellation_sender);
     }
 
     pub fn set_prompt(
         &mut self,
         prompt: String,
-        tx: oneshot::Sender<EncryptedPassword>,
+        password_sender: oneshot::Sender<EncryptedPassword>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -92,24 +105,24 @@ impl RemoteConnectionPrompt {
         self.editor.set_masked(self.is_masked, window, cx);
 
         let markdown = cx.new(|cx| Markdown::new_text(prompt.into(), cx));
-        self.prompt = Some((markdown, tx));
+        self.prompt = Some((markdown, password_sender));
         self.status_message.take();
         window.focus(&self.editor.focus_handle(cx), cx);
         cx.notify();
     }
 
     pub fn set_status(&mut self, status: Option<String>, cx: &mut Context<Self>) {
-        self.status_message = status.map(|s| s.into());
+        self.status_message = status.map(Into::into);
         cx.notify();
     }
 
     pub fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some((_, tx)) = self.prompt.take() {
-            self.status_message = Some("Connecting".into());
+        if let Some((_, password_sender)) = self.prompt.take() {
+            self.status_message = Some(tr(cx, "remote_connection.connecting", "Connecting").into());
 
-            let pw = self.editor.text(cx);
-            if let Ok(secure) = EncryptedPassword::try_from(pw.as_ref()) {
-                tx.send(secure).ok();
+            let password_text = self.editor.text(cx);
+            if let Ok(password) = EncryptedPassword::try_from(password_text.as_ref()) {
+                send_password(password_sender, password);
             }
             self.editor.clear(window, cx);
         }
@@ -140,9 +153,15 @@ impl Render for RemoteConnectionPrompt {
         let is_password_prompt = self.is_password_prompt;
         let is_masked = self.is_masked;
         let (masked_password_icon, masked_password_tooltip) = if is_masked {
-            (IconName::Eye, "Toggle to Unmask Password")
+            (
+                IconName::Eye,
+                tr(cx, "remote_connection.unmask_password", "Unmask Password"),
+            )
         } else {
-            (IconName::EyeOff, "Toggle to Mask Password")
+            (
+                IconName::EyeOff,
+                tr(cx, "remote_connection.mask_password", "Mask Password"),
+            )
         };
 
         v_flex()
@@ -232,7 +251,10 @@ impl RemoteConnectionModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        #[allow(unreachable_patterns)]
+        #[allow(
+            unreachable_patterns,
+            reason = "remote connection variants differ across target platforms"
+        )]
         let (connection_string, nickname, is_wsl, is_devcontainer) = match connection_options {
             RemoteConnectionOptions::Ssh(options) => (
                 options.connection_string(),
@@ -273,12 +295,12 @@ impl RemoteConnectionModal {
     }
 
     fn dismiss(&mut self, _: &menu::Cancel, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(tx) = self
+        if let Some(cancellation_sender) = self
             .prompt
             .update(cx, |prompt, _cx| prompt.cancellation.take())
         {
             log::debug!("cancelling remote connection");
-            tx.send(()).ok();
+            send_cancellation(cancellation_sender);
         }
         self.finished(cx);
     }
@@ -451,20 +473,21 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
     fn ask_password(
         &self,
         prompt: String,
-        tx: oneshot::Sender<EncryptedPassword>,
+        password_sender: oneshot::Sender<EncryptedPassword>,
         cx: &mut AsyncApp,
     ) {
         let mut known_password = self.known_password.clone();
         if let Some(password) = known_password.take() {
-            tx.send(password).ok();
+            send_password(password_sender, password);
         } else {
             self.window
                 .update(cx, |_, window, cx| {
                     self.ui.update(cx, |modal, cx| {
-                        modal.set_prompt(prompt, tx, window, cx);
+                        modal.set_prompt(prompt, password_sender, window, cx);
                     })
                 })
-                .ok();
+                .and_then(|result| result)
+                .log_err();
         }
     }
 
@@ -478,9 +501,9 @@ impl RemoteClientDelegate {
         cx.update(|cx| {
             self.ui
                 .update(cx, |modal, cx| {
-                    modal.set_status(status.map(|s| s.to_owned()), cx);
+                    modal.set_status(status.map(str::to_owned), cx);
                 })
-                .ok()
+                .log_err();
         });
     }
 }
@@ -537,7 +560,7 @@ pub fn dismiss_connection_modal(workspace: &Entity<Workspace>, cx: &mut gpui::As
                 modal.update(cx, |modal, cx| modal.finished(cx));
             }
         })
-        .ok();
+        .log_err();
 }
 
 /// Creates a [`RemoteClient`] by reusing an existing connection from the
@@ -602,8 +625,10 @@ pub fn connect(
             .and_then(|pw| pw.try_into().ok()),
         _ => None,
     };
-    let (tx, mut rx) = oneshot::channel();
-    ui.update(cx, |ui, _cx| ui.set_cancellation_tx(tx));
+    let (cancellation_sender, mut cancellation_receiver) = oneshot::channel();
+    ui.update(cx, |ui, _cx| {
+        ui.set_cancellation_sender(cancellation_sender)
+    });
 
     let delegate = Arc::new(RemoteClientDelegate {
         window,
@@ -614,11 +639,19 @@ pub fn connect(
     cx.spawn(async move |cx| {
         let connection = remote::connect(connection_options, delegate.clone(), cx);
         let connection = select! {
-            _ = rx => return Ok(None),
+            _ = cancellation_receiver => return Ok(None),
             result = connection.fuse() => result,
         }?;
 
-        cx.update(|cx| remote::RemoteClient::new(unique_identifier, connection, rx, delegate, cx))
-            .await
+        cx.update(|cx| {
+            remote::RemoteClient::new(
+                unique_identifier,
+                connection,
+                cancellation_receiver,
+                delegate,
+                cx,
+            )
+        })
+        .await
     })
 }
