@@ -2409,6 +2409,9 @@ impl RemoteServerProjects {
                         )
                         .await
                         .log_err();
+                        let Some(entity) = entity.upgrade() else {
+                            return;
+                        };
                         entity
                             .update_in(cx, |remote_server_projects, window, cx| {
                                 remote_server_projects.allow_dismissal = true;
@@ -2419,7 +2422,7 @@ impl RemoteServerProjects {
                                     ));
                                 remote_server_projects.focus_handle(cx).focus(window, cx);
                             })
-                            .ok();
+                            .log_err();
                         return;
                     }
                 };
