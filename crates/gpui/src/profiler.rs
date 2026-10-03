@@ -10,9 +10,14 @@ use std::{
     thread::ThreadId,
 };
 
+#[cfg(feature = "frame-diagnostics")]
+use std::{sync::atomic::AtomicU64, time::Duration};
+
 use serde::{Deserialize, Serialize};
 
 use crate::SharedString;
+#[cfg(feature = "frame-diagnostics")]
+use crate::{EntityId, WindowId};
 
 #[doc(hidden)]
 #[derive(Debug, Copy, Clone)]
@@ -384,4 +389,252 @@ pub fn set_enabled(enabled: bool) -> bool {
         }
     }
     true
+}
+
+/// Identifies one window frame build from its first invalidation through presentation.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FrameBuildId(u64);
+
+#[cfg(feature = "frame-diagnostics")]
+impl FrameBuildId {
+    /// Returns the numeric identifier.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+#[cfg(feature = "frame-diagnostics")]
+static NEXT_FRAME_BUILD_ID: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(feature = "frame-diagnostics")]
+pub(crate) fn next_frame_build_id() -> FrameBuildId {
+    FrameBuildId(NEXT_FRAME_BUILD_ID.fetch_add(1, Ordering::Relaxed))
+}
+
+/// Describes why a window became dirty.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameDirtyReason {
+    /// The initial frame required when a window opens.
+    Initial,
+    /// An entity observed by the window emitted a notification.
+    EntityNotify,
+    /// The window requested a complete refresh.
+    WindowRefresh,
+}
+
+/// Classifies the input event that caused an invalidation.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameInputProvenance {
+    /// A key or modifier event.
+    Keyboard,
+    /// A mouse, scroll, gesture, or file-drag event.
+    Pointer,
+}
+
+/// A measured portion of frame construction.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FramePhase {
+    /// Element layout requests.
+    RequestLayout,
+    /// Hit testing, dispatch-tree construction, and other prepaint work.
+    Prepaint,
+    /// Scene and interaction painting.
+    Paint,
+    /// Reuse of cached prepaint state.
+    PrepaintCacheReplay,
+    /// Reuse of cached paint state and scene primitives.
+    PaintCacheReplay,
+}
+
+/// One invalidation associated with a frame build.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub struct FrameInvalidation {
+    /// The frame build receiving the invalidation.
+    pub build_id: FrameBuildId,
+    /// The affected window.
+    pub window_id: WindowId,
+    /// When the invalidation was observed.
+    pub at: Instant,
+    /// The notifying entity, when the invalidation came from `Context::notify`.
+    pub entity_id: Option<EntityId>,
+    /// Why the window became dirty.
+    pub reason: FrameDirtyReason,
+    /// The input class active when the invalidation occurred.
+    pub input: Option<FrameInputProvenance>,
+    /// Whether another invalidation had already created this frame build.
+    pub coalesced: bool,
+    /// Whether the invalidation occurred while drawing the current frame.
+    pub during_draw: bool,
+}
+
+/// Aggregate timing for one frame phase.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub struct FramePhaseTiming {
+    /// The measured frame build.
+    pub build_id: FrameBuildId,
+    /// The measured window.
+    pub window_id: WindowId,
+    /// The measured render phase.
+    pub phase: FramePhase,
+    /// Time spent in the phase.
+    pub duration: Duration,
+    /// Number of top-level operations represented by this sample.
+    pub operations: u64,
+    /// Number of cache replays represented by this sample.
+    pub cache_hits: u64,
+}
+
+/// Timing for one completed window draw.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub struct FrameTiming {
+    /// The completed frame build.
+    pub build_id: FrameBuildId,
+    /// The window that was drawn.
+    pub window_id: WindowId,
+    /// When the window first became dirty for this frame.
+    pub dirty_at: Instant,
+    /// Number of invalidations coalesced into the frame.
+    pub invalidations: u64,
+    /// When `Window::draw` began.
+    pub draw_start: Instant,
+    /// When `Window::draw` completed.
+    pub draw_end: Instant,
+    /// First input timestamp associated with the frame, when present.
+    pub input_started_at: Option<Instant>,
+    /// Input class associated with `input_started_at`.
+    pub input: Option<FrameInputProvenance>,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+impl FrameTiming {
+    /// Returns the time spent in `Window::draw`.
+    pub fn draw_duration(&self) -> Duration {
+        self.draw_end.duration_since(self.draw_start)
+    }
+}
+
+/// Timing for submission of a newly built frame.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub struct FramePresentationTiming {
+    /// The submitted frame build.
+    pub build_id: FrameBuildId,
+    /// The window whose frame was submitted.
+    pub window_id: WindowId,
+    /// When platform submission began.
+    pub present_start: Instant,
+    /// When platform submission completed.
+    pub present_end: Instant,
+    /// Time from the first associated input to completed submission.
+    pub input_to_present: Option<Duration>,
+    /// Input class associated with `input_to_present`.
+    pub input: Option<FrameInputProvenance>,
+}
+
+/// A frame lifecycle event retained by the diagnostics journal.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub enum FrameEvent {
+    /// A window or entity invalidated a frame.
+    Invalidated(FrameInvalidation),
+    /// A window began building a frame.
+    DrawStarted {
+        /// The frame build that began.
+        build_id: FrameBuildId,
+        /// The window being drawn.
+        window_id: WindowId,
+        /// When drawing began.
+        at: Instant,
+    },
+    /// A render phase completed.
+    Phase(FramePhaseTiming),
+    /// A window completed drawing a frame.
+    DrawFinished(FrameTiming),
+    /// A newly drawn frame completed platform submission.
+    Presented(FramePresentationTiming),
+}
+
+#[cfg(feature = "frame-diagnostics")]
+const MAX_FRAME_EVENTS: usize = (16 * 1024 * 1024) / core::mem::size_of::<FrameEvent>();
+
+#[cfg(feature = "frame-diagnostics")]
+struct FrameEvents {
+    events: VecDeque<FrameEvent>,
+    total_pushed: u64,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+static FRAME_EVENTS: spin::Mutex<FrameEvents> = spin::Mutex::new(FrameEvents {
+    events: VecDeque::new(),
+    total_pushed: 0,
+});
+
+#[cfg(feature = "frame-diagnostics")]
+pub(crate) fn record_frame_event(event: FrameEvent) {
+    let mut frame_events = FRAME_EVENTS.lock();
+    if frame_events.events.len() >= MAX_FRAME_EVENTS {
+        frame_events.events.pop_front();
+    }
+    frame_events.events.push_back(event);
+    frame_events.total_pushed += 1;
+}
+
+/// Frame events collected since the previous snapshot.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Debug)]
+pub struct FrameDiagnosticsSnapshot {
+    /// Events recorded since the previous snapshot.
+    pub events: Vec<FrameEvent>,
+    /// Events evicted before this collector could observe them.
+    pub dropped_events: u64,
+}
+
+/// Collects frame events without removing them from other collectors.
+#[cfg(feature = "frame-diagnostics")]
+pub struct FrameTimingCollector {
+    cursor: u64,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+impl Default for FrameTimingCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "frame-diagnostics")]
+impl FrameTimingCollector {
+    /// Starts observing events recorded after this call.
+    pub fn new() -> Self {
+        Self {
+            cursor: FRAME_EVENTS.lock().total_pushed,
+        }
+    }
+
+    /// Returns events recorded since the previous snapshot.
+    pub fn snapshot(&mut self) -> FrameDiagnosticsSnapshot {
+        let frame_events = FRAME_EVENTS.lock();
+        let buffer_len = frame_events.events.len() as u64;
+        let buffer_start = frame_events.total_pushed.saturating_sub(buffer_len);
+        let dropped_events = buffer_start.saturating_sub(self.cursor);
+        let skip = self.cursor.saturating_sub(buffer_start) as usize;
+        let events = frame_events
+            .events
+            .iter()
+            .skip(skip.min(frame_events.events.len()))
+            .copied()
+            .collect();
+        self.cursor = frame_events.total_pushed;
+        FrameDiagnosticsSnapshot {
+            events,
+            dropped_events,
+        }
+    }
 }

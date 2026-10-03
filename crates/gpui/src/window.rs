@@ -65,6 +65,13 @@ use crate::util::{
 };
 pub use prompts::*;
 
+#[cfg(feature = "frame-diagnostics")]
+use crate::profiler::{
+    FrameBuildId, FrameDirtyReason, FrameEvent, FrameInputProvenance, FrameInvalidation,
+    FramePhase, FramePhaseTiming, FramePresentationTiming, FrameTiming, next_frame_build_id,
+    record_frame_event,
+};
+
 /// Default window size used when no explicit size is provided.
 pub const DEFAULT_WINDOW_SIZE: Size<Pixels> = size(px(1536.), px(1095.));
 
@@ -107,11 +114,48 @@ impl DispatchPhase {
 }
 
 struct WindowInvalidatorInner {
+    #[cfg(feature = "frame-diagnostics")]
+    pub window_id: crate::WindowId,
     pub dirty: bool,
     pub draw_phase: DrawPhase,
     pub dirty_views: FxHashSet<EntityId>,
     pub update_count: usize,
     pub platform_waker: Option<Rc<dyn Fn()>>,
+    #[cfg(feature = "frame-diagnostics")]
+    pub pending_frame: Option<PendingFrameDiagnostics>,
+    #[cfg(feature = "frame-diagnostics")]
+    pub active_frame: Option<PendingFrameDiagnostics>,
+    #[cfg(feature = "frame-diagnostics")]
+    pub current_input: Option<FrameInput>,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy)]
+struct FrameInput {
+    started_at: Instant,
+    provenance: FrameInputProvenance,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy)]
+struct PendingFrameDiagnostics {
+    build_id: FrameBuildId,
+    dirty_at: Instant,
+    invalidations: u64,
+    input_started_at: Option<Instant>,
+    input: Option<FrameInputProvenance>,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+struct FrameInputScope {
+    invalidator: WindowInvalidator,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+impl Drop for FrameInputScope {
+    fn drop(&mut self) {
+        self.invalidator.inner.borrow_mut().current_input = None;
+    }
 }
 
 #[derive(Clone)]
@@ -120,6 +164,7 @@ pub(crate) struct WindowInvalidator {
 }
 
 impl WindowInvalidator {
+    #[cfg(not(feature = "frame-diagnostics"))]
     pub fn new() -> Self {
         WindowInvalidator {
             inner: Rc::new(RefCell::new(WindowInvalidatorInner {
@@ -132,10 +177,54 @@ impl WindowInvalidator {
         }
     }
 
+    #[cfg(feature = "frame-diagnostics")]
+    pub fn new(window_id: crate::WindowId) -> Self {
+        let initial_frame = PendingFrameDiagnostics {
+            build_id: next_frame_build_id(),
+            dirty_at: Instant::now(),
+            invalidations: 1,
+            input_started_at: None,
+            input: None,
+        };
+        WindowInvalidator {
+            inner: Rc::new(RefCell::new(WindowInvalidatorInner {
+                window_id,
+                dirty: true,
+                draw_phase: DrawPhase::None,
+                dirty_views: FxHashSet::default(),
+                update_count: 0,
+                platform_waker: None,
+                pending_frame: Some(initial_frame),
+                active_frame: None,
+                current_input: None,
+            })),
+        }
+        .record_initial_invalidation(window_id)
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn record_initial_invalidation(self, window_id: crate::WindowId) -> Self {
+        if let Some(frame) = self.inner.borrow().pending_frame {
+            record_frame_event(FrameEvent::Invalidated(FrameInvalidation {
+                build_id: frame.build_id,
+                window_id,
+                at: frame.dirty_at,
+                entity_id: None,
+                reason: FrameDirtyReason::Initial,
+                input: None,
+                coalesced: false,
+                during_draw: false,
+            }));
+        }
+        self
+    }
+
     pub fn invalidate_view(&self, entity: EntityId, cx: &mut App) -> bool {
         let mut inner = self.inner.borrow_mut();
         inner.update_count += 1;
         inner.dirty_views.insert(entity);
+        #[cfg(feature = "frame-diagnostics")]
+        Self::record_invalidation(&mut inner, Some(entity), FrameDirtyReason::EntityNotify);
         if inner.draw_phase == DrawPhase::None {
             let became_dirty = !inner.dirty;
             inner.dirty = true;
@@ -161,6 +250,8 @@ impl WindowInvalidator {
         inner.dirty = dirty;
         if dirty {
             inner.update_count += 1;
+            #[cfg(feature = "frame-diagnostics")]
+            Self::record_invalidation(&mut inner, None, FrameDirtyReason::WindowRefresh);
         }
         let waker = became_dirty.then(|| inner.platform_waker.clone()).flatten();
         drop(inner);
@@ -176,6 +267,106 @@ impl WindowInvalidator {
         drop(inner);
         if let Some(waker) = waker {
             waker();
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn record_invalidation(
+        inner: &mut WindowInvalidatorInner,
+        entity_id: Option<EntityId>,
+        reason: FrameDirtyReason,
+    ) {
+        let at = Instant::now();
+        let during_draw = inner.draw_phase != DrawPhase::None;
+        let current_input = inner.current_input;
+        let window_id = inner.window_id;
+        let Some((frame, coalesced)) = (if during_draw {
+            inner.active_frame.as_mut().map(|frame| (frame, true))
+        } else {
+            if inner.pending_frame.is_none() {
+                inner.pending_frame = Some(PendingFrameDiagnostics {
+                    build_id: next_frame_build_id(),
+                    dirty_at: at,
+                    invalidations: 0,
+                    input_started_at: None,
+                    input: None,
+                });
+            }
+            inner.pending_frame.as_mut().map(|frame| {
+                let coalesced = frame.invalidations > 0;
+                (frame, coalesced)
+            })
+        }) else {
+            return;
+        };
+
+        frame.invalidations += 1;
+        if let Some(input) = current_input
+            && frame.input_started_at.is_none()
+        {
+            frame.input_started_at = Some(input.started_at);
+            frame.input = Some(input.provenance);
+        }
+        let build_id = frame.build_id;
+        record_frame_event(FrameEvent::Invalidated(FrameInvalidation {
+            build_id,
+            window_id,
+            at,
+            entity_id,
+            reason,
+            input: current_input.map(|input| input.provenance),
+            coalesced,
+            during_draw,
+        }));
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn begin_frame(&self, draw_start: Instant) -> FrameBuildId {
+        let (window_id, frame) = {
+            let mut inner = self.inner.borrow_mut();
+            let frame = inner
+                .pending_frame
+                .take()
+                .unwrap_or_else(|| PendingFrameDiagnostics {
+                    build_id: next_frame_build_id(),
+                    dirty_at: draw_start,
+                    invalidations: 0,
+                    input_started_at: None,
+                    input: None,
+                });
+            inner.active_frame = Some(frame);
+            (inner.window_id, frame)
+        };
+        record_frame_event(FrameEvent::DrawStarted {
+            build_id: frame.build_id,
+            window_id,
+            at: draw_start,
+        });
+        frame.build_id
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn finish_frame(&self) -> Option<PendingFrameDiagnostics> {
+        self.inner.borrow_mut().active_frame.take()
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn active_frame(&self) -> Option<PendingFrameDiagnostics> {
+        self.inner.borrow().active_frame
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn input_scope(
+        &self,
+        started_at: Instant,
+        provenance: FrameInputProvenance,
+    ) -> FrameInputScope {
+        self.inner.borrow_mut().current_input = Some(FrameInput {
+            started_at,
+            provenance,
+        });
+        FrameInputScope {
+            invalidator: self.clone(),
         }
     }
 
@@ -1051,6 +1242,8 @@ pub struct Window {
     pub(crate) input_rate_tracker: Rc<RefCell<InputRateTracker>>,
     #[cfg(feature = "input-latency-histogram")]
     input_latency_tracker: InputLatencyTracker,
+    #[cfg(feature = "frame-diagnostics")]
+    pending_frame_timing: Option<FrameTiming>,
     last_input_modality: InputModality,
     pub(crate) refreshing: bool,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
@@ -1369,7 +1562,10 @@ impl Window {
         let scale_factor = platform_window.scale_factor();
         let appearance = platform_window.appearance();
         let text_system = Arc::new(WindowTextSystem::new(cx.text_system().clone()));
+        #[cfg(not(feature = "frame-diagnostics"))]
         let invalidator = WindowInvalidator::new();
+        #[cfg(feature = "frame-diagnostics")]
+        let invalidator = WindowInvalidator::new(handle.window_id());
         let active = Rc::new(Cell::new(platform_window.is_active()));
         let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
         let needs_present = Rc::new(Cell::new(false));
@@ -1701,6 +1897,8 @@ impl Window {
             input_rate_tracker,
             #[cfg(feature = "input-latency-histogram")]
             input_latency_tracker: InputLatencyTracker::new()?,
+            #[cfg(feature = "frame-diagnostics")]
+            pending_frame_timing: None,
             last_input_modality: InputModality::Mouse,
             refreshing: false,
             activation_observers: SubscriberSet::new(),
@@ -2592,6 +2790,10 @@ impl Window {
     /// the contents of the new [`Scene`], use [`Self::present`].
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+        #[cfg(feature = "frame-diagnostics")]
+        let draw_start = Instant::now();
+        #[cfg(feature = "frame-diagnostics")]
+        self.invalidator.begin_frame(draw_start);
         // Set up the per-App arena for element allocation during this draw.
         // This ensures that multiple test Apps have isolated arenas.
         let _arena_scope = ElementArenaScope::enter(&cx.element_arena);
@@ -2697,6 +2899,22 @@ impl Window {
         }
         self.needs_present.set(true);
 
+        #[cfg(feature = "frame-diagnostics")]
+        if let Some(frame) = self.invalidator.finish_frame() {
+            let timing = FrameTiming {
+                build_id: frame.build_id,
+                window_id: self.handle.window_id(),
+                dirty_at: frame.dirty_at,
+                invalidations: frame.invalidations,
+                draw_start,
+                draw_end: Instant::now(),
+                input_started_at: frame.input_started_at,
+                input: frame.input,
+            };
+            record_frame_event(FrameEvent::DrawFinished(timing));
+            self.pending_frame_timing = Some(timing);
+        }
+
         ArenaClearNeeded::new(&cx.element_arena)
     }
 
@@ -2724,7 +2942,23 @@ impl Window {
 
     #[profiling::function]
     fn present(&mut self) {
+        #[cfg(feature = "frame-diagnostics")]
+        let present_start = Instant::now();
         self.platform_window.draw(&self.rendered_frame.scene);
+        #[cfg(feature = "frame-diagnostics")]
+        if let Some(frame) = self.pending_frame_timing.take() {
+            let present_end = Instant::now();
+            record_frame_event(FrameEvent::Presented(FramePresentationTiming {
+                build_id: frame.build_id,
+                window_id: self.handle.window_id(),
+                present_start,
+                present_end,
+                input_to_present: frame
+                    .input_started_at
+                    .map(|started_at| present_end.duration_since(started_at)),
+                input: frame.input,
+            }));
+        }
         #[cfg(feature = "input-latency-histogram")]
         self.input_latency_tracker.record_frame_presented();
         self.needs_present.set(false);
@@ -2739,6 +2973,12 @@ impl Window {
 
     fn draw_roots(&mut self, cx: &mut App) {
         self.invalidator.set_phase(DrawPhase::Prepaint);
+        #[cfg(feature = "frame-diagnostics")]
+        let prepaint_started_at = Instant::now();
+        #[cfg(feature = "frame-diagnostics")]
+        let mut request_layout_duration = Duration::ZERO;
+        #[cfg(feature = "frame-diagnostics")]
+        let mut request_layout_operations = 0;
         self.tooltip_bounds.take();
 
         let _inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
@@ -2769,7 +3009,14 @@ impl Window {
             .expect("value should have the expected type")
             .clone()
             .into_any();
+        #[cfg(feature = "frame-diagnostics")]
+        let request_layout_started_at = Instant::now();
         let root_layout_id = root_element.request_layout(self, cx);
+        #[cfg(feature = "frame-diagnostics")]
+        {
+            request_layout_duration += request_layout_started_at.elapsed();
+            request_layout_operations += 1;
+        }
         self.layout_engine
             .as_mut()
             .expect("value should have the expected type")
@@ -2786,7 +3033,14 @@ impl Window {
         let mut tooltip_element = None;
         if let Some(prompt) = self.prompt.take() {
             let mut element = prompt.view.any_view().into_any();
+            #[cfg(feature = "frame-diagnostics")]
+            let request_layout_started_at = Instant::now();
             let prompt_layout_id = element.request_layout(self, cx);
+            #[cfg(feature = "frame-diagnostics")]
+            {
+                request_layout_duration += request_layout_started_at.elapsed();
+                request_layout_operations += 1;
+            }
             self.layout_engine
                 .as_mut()
                 .expect("value should have the expected type")
@@ -2806,8 +3060,28 @@ impl Window {
 
         self.mouse_hit_test = self.next_frame.hit_test(self.mouse_position);
 
+        #[cfg(feature = "frame-diagnostics")]
+        {
+            self.record_frame_phase(
+                FramePhase::RequestLayout,
+                request_layout_duration,
+                request_layout_operations,
+                0,
+            );
+            self.record_frame_phase(
+                FramePhase::Prepaint,
+                prepaint_started_at
+                    .elapsed()
+                    .saturating_sub(request_layout_duration),
+                1,
+                0,
+            );
+        }
+
         // Now actually paint the elements.
         self.invalidator.set_phase(DrawPhase::Paint);
+        #[cfg(feature = "frame-diagnostics")]
+        let paint_started_at = Instant::now();
         root_element.paint(self, cx);
 
         #[cfg(any(feature = "inspector", debug_assertions))]
@@ -2825,6 +3099,29 @@ impl Window {
 
         #[cfg(any(feature = "inspector", debug_assertions))]
         self.paint_inspector_hitbox(cx);
+        #[cfg(feature = "frame-diagnostics")]
+        self.record_frame_phase(FramePhase::Paint, paint_started_at.elapsed(), 1, 0);
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn record_frame_phase(
+        &self,
+        phase: FramePhase,
+        duration: Duration,
+        operations: u64,
+        cache_hits: u64,
+    ) {
+        let Some(frame) = self.invalidator.active_frame() else {
+            return;
+        };
+        record_frame_event(FrameEvent::Phase(FramePhaseTiming {
+            build_id: frame.build_id,
+            window_id: self.handle.window_id(),
+            phase,
+            duration,
+            operations,
+            cache_hits,
+        }));
     }
 
     fn prepaint_tooltip(&mut self, cx: &mut App) -> Option<AnyElement> {
@@ -3024,6 +3321,8 @@ impl Window {
     }
 
     pub(crate) fn reuse_prepaint(&mut self, range: Range<PrepaintStateIndex>) {
+        #[cfg(feature = "frame-diagnostics")]
+        let replay_started_at = Instant::now();
         self.next_frame.hitboxes.extend(
             self.rendered_frame.hitboxes[range.start.hitboxes_index..range.end.hitboxes_index]
                 .iter()
@@ -3072,6 +3371,13 @@ impl Window {
                     paint_range: deferred_draw.paint_range.clone(),
                 }),
         );
+        #[cfg(feature = "frame-diagnostics")]
+        self.record_frame_phase(
+            FramePhase::PrepaintCacheReplay,
+            replay_started_at.elapsed(),
+            1,
+            1,
+        );
     }
 
     pub(crate) fn paint_index(&self) -> PaintIndex {
@@ -3089,6 +3395,8 @@ impl Window {
     }
 
     pub(crate) fn reuse_paint(&mut self, range: Range<PaintIndex>) {
+        #[cfg(feature = "frame-diagnostics")]
+        let replay_started_at = Instant::now();
         // Cached elements still exist in the frame even when their paint methods don't run.
         #[cfg(any(test, feature = "test-support"))]
         for (selector, bounds) in &self.rendered_frame.debug_bounds_records
@@ -3131,6 +3439,13 @@ impl Window {
         self.next_frame.scene.replay(
             range.start.scene_index..range.end.scene_index,
             &self.rendered_frame.scene,
+        );
+        #[cfg(feature = "frame-diagnostics")]
+        self.record_frame_phase(
+            FramePhase::PaintCacheReplay,
+            replay_started_at.elapsed(),
+            1,
+            1,
         );
     }
 
@@ -4550,6 +4865,23 @@ impl Window {
     pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
         #[cfg(feature = "input-latency-histogram")]
         let dispatch_time = Instant::now();
+        #[cfg(feature = "frame-diagnostics")]
+        let frame_input_scope = self.invalidator.input_scope(
+            Instant::now(),
+            match &event {
+                PlatformInput::KeyDown(_)
+                | PlatformInput::KeyUp(_)
+                | PlatformInput::ModifiersChanged(_) => FrameInputProvenance::Keyboard,
+                PlatformInput::MouseMove(_)
+                | PlatformInput::MouseDown(_)
+                | PlatformInput::MouseUp(_)
+                | PlatformInput::MousePressure(_)
+                | PlatformInput::MouseExited(_)
+                | PlatformInput::ScrollWheel(_)
+                | PlatformInput::Pinch(_)
+                | PlatformInput::FileDrop(_) => FrameInputProvenance::Pointer,
+            },
+        );
         let update_count_before = self.invalidator.update_count();
         // Track input modality for focus-visible styling and hover suppression.
         // Hover is suppressed during keyboard modality so that keyboard navigation
@@ -4670,6 +5002,8 @@ impl Window {
             }
         }
 
+        #[cfg(feature = "frame-diagnostics")]
+        drop(frame_input_scope);
         DispatchEventResult {
             propagate: cx.propagate_event,
             default_prevented: self.default_prevented,
@@ -6325,6 +6659,11 @@ mod tests {
         IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
         TestAppContext, Window, WindowAppearance, canvas, div, px, size,
     };
+    #[cfg(feature = "frame-diagnostics")]
+    use crate::{
+        FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector, KeyDownEvent,
+        Keystroke, PlatformInput,
+    };
     use std::{cell::Cell, rc::Rc};
 
     struct RootView {
@@ -6446,6 +6785,99 @@ mod tests {
             test_window.frame_wake_count() > baseline || callback_ran.get(),
             "a frame request with pending next-frame callbacks must either run them or re-arm the frame source"
         );
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn test_frame_diagnostics_follow_build_through_present(cx: &mut TestAppContext) {
+        let mut collector = FrameTimingCollector::new();
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+        let window_id = handle.window_id();
+        let test_window = cx.test_window(handle);
+
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        let initial = collector.snapshot();
+        assert_eq!(initial.dropped_events, 0);
+        let initial_build_id = initial
+            .events
+            .iter()
+            .find_map(|event| match event {
+                FrameEvent::Presented(timing) if timing.window_id == window_id => {
+                    Some(timing.build_id)
+                }
+                _ => None,
+            })
+            .expect("initial frame should be presented");
+        assert!(initial.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if invalidation.window_id == window_id
+                    && invalidation.build_id == initial_build_id
+        )));
+        assert!(initial.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::DrawStarted { build_id, window_id: event_window_id, .. }
+                if *event_window_id == window_id && *build_id == initial_build_id
+        )));
+        assert!(initial.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::DrawFinished(timing)
+                if timing.window_id == window_id && timing.build_id == initial_build_id
+        )));
+        for phase in [
+            FramePhase::RequestLayout,
+            FramePhase::Prepaint,
+            FramePhase::Paint,
+        ] {
+            assert!(initial.events.iter().any(|event| matches!(
+                event,
+                FrameEvent::Phase(timing)
+                    if timing.window_id == window_id
+                        && timing.build_id == initial_build_id
+                        && timing.phase == phase
+            )));
+        }
+
+        cx.update_window(handle, |_, window, _| {
+            window.refresh();
+            window.refresh();
+        })
+        .expect("window should remain open");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        let coalesced = collector.snapshot();
+        assert!(coalesced.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if invalidation.window_id == window_id && invalidation.coalesced
+        )));
+
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_event(
+                PlatformInput::KeyDown(KeyDownEvent {
+                    keystroke: Keystroke::parse("a").expect("valid keystroke"),
+                    is_held: false,
+                    prefer_character_input: false,
+                }),
+                cx,
+            );
+        })
+        .expect("window should remain open");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        let input = collector.snapshot();
+        assert!(input.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if invalidation.window_id == window_id
+                    && invalidation.input == Some(FrameInputProvenance::Keyboard)
+        )));
+        assert!(input.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Presented(timing)
+                if timing.window_id == window_id
+                    && timing.input == Some(FrameInputProvenance::Keyboard)
+                    && timing.input_to_present.is_some()
+        )));
     }
 
     #[gpui::test]

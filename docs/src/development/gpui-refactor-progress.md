@@ -120,7 +120,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 
 原始日志：`.tmp/gpui-refactor/phase-0/`。
 
-提交：待本阶段账本提交后回填 SHA。
+提交：`6c44518908f6fb461f7cec7598fac87a623e6db8`。
 
 下一步：建立 feature-gated frame journal、统一 `FrameBuildId`、collector/snapshot
 API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
@@ -128,6 +128,64 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 ### 阶段 1：frame diagnostics 与预算
 
 状态：`IN PROGRESS`
+
+本阶段已完成的结构改动：
+
+- 在 `gpui` 增加关闭状态零运行时存储的 `frame-diagnostics` feature；默认 feature
+  不增加 frame event ring、计时字段或原子计数。
+- 增加 `FrameBuildId`、dirty reason、input provenance、render phase、draw 和
+  present 事件类型，以及有界 ring-backed `FrameTimingCollector` snapshot API。
+- 将 initial/entity/window invalidation、keyboard/pointer dispatch、request-layout、
+  prepaint、paint、cache replay、draw completion 和 present 关联到同一 build ID。
+- 保留 `request_layout → prepaint → paint`、cached replay、input dispatch 和
+  Entity/Context 所有权语义；新增端到端 TestPlatform 检查验证 coalescing 和 input
+  provenance。
+
+当前仍待完成：
+
+- EXP-001 的 input-to-present p50/p95/p99、skip/coalesce runner；
+- EXP-002 的 cached/dirty phase cost runner；
+- EXP-011 的 steady-state allocation/peak RSS probes；
+- disabled/enabled instrumentation overhead 的正式 workload 采样。
+
+阶段 1 验证：
+
+| 命令或检查                                                  | 结果              | 原始数据/说明                                                                                                |
+| ----------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| `cargo check --locked -p gpui`                              | `PASS`            | 0.40 s，RSS 189,612 KiB；`.tmp/gpui-refactor/phase-1/check-default.log`                                      |
+| `cargo check --locked -p gpui --features frame-diagnostics` | `PASS`            | 0.40 s，RSS 189,704 KiB；`.tmp/gpui-refactor/phase-1/check-frame-diagnostics.log`                            |
+| `cargo test --locked -p gpui`                               | `PASS`            | 214 unit + 1 integration，0 failed                                                                           |
+| `cargo test --locked -p gpui --features frame-diagnostics`  | `PASS`            | 215 unit + 1 integration，0 failed；含 frame lifecycle test                                                  |
+| `./script/clippy -p gpui --features frame-diagnostics`      | `PASS`            | all-features release clippy，含 philosophy check                                                             |
+| `git diff --check`                                          | `PASS`            | `.tmp/gpui-refactor/phase-1/diff-check.log`                                                                  |
+| `cargo fmt --all -- --check`                                | `FAIL (baseline)` | 仅剩 `crates/grammars/vendor/tree-sitter-typst/benches/bench_main.rs` 的既有排序漂移；本阶段文件已单独格式化 |
+| EXP-001/002/011                                             | `NOT RUN`         | runner 与 allocation probe 尚待本阶段后半段                                                                  |
+
+上游 A/B/C 审查（均基于 `decbf641b18f1982b3475c037e7c5c554471574f` 之后的
+live `FETCH_HEAD=a84689073d296dfd39987bc7dd478e43ef76d83a`；未 cherry-pick）：
+
+| Upstream                                   | Class | Disposition                                                                                                                                                       |
+| ------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `a9e7b7767207ccf40bcba04a4c5cad96d6916f13` | A     | Already equivalent: ZZZ already has feature-gated `InputLatencyTracker` and public snapshot on `Window`.                                                          |
+| `9e236090b9a31338caf233d440f724922b58d7e1` | C     | Its shipped behavior is coupled to Zed telemetry and `input_latency_ui`; the local diagnostics contract is implemented independently without importing telemetry. |
+| `a21007b7a948e46be719150f5e9968bfcd1078`   | C     | Broad profiler/window rewrite with unisolatable Zed feature and consumer changes; no clean current ZZZ caller for the full patch.                                 |
+| `07a0bd1220bddb940028d610e40319a459dd49fb` | C     | Product keybindings and debug overlay are outside the frame journal contract.                                                                                     |
+| `1861e58f984c76afc06032e753557994ffc8fe44` | C     | Hang journal, watchdog, and telemetry migration are outside this stage and would import a rejected product surface.                                               |
+| `55007f518bc1d49e6b3291c5eaa1aabf649b36fd` | C     | Dirty-to-present reporting is tied to Zed's telemetry report; the local collector remains provider-free.                                                          |
+| `cd4fc8de4ca8548cca2567352b87bcaaec13328f` | C     | Platform frame-request timestamp APIs touch platform seams reserved for later stages and require the unabsorbed hang journal.                                     |
+| `36b6d0951fdee409f0957294a69360ba2e8e980e` | C     | Follow-up to the rejected/unabsorbed hang journal path; no isolated ZZZ invariant to retain at this point.                                                        |
+
+The local implementation is a small B-style architectural port of the safe
+frame-observation invariant, but it does not copy upstream code; the table records
+the source decisions required by the absorbing-upstream workflow. No upstream local
+commit was created for this stage.
+
+提交：待 EXP-001/002/011 runner 完成后，先提交当前 diagnostics core 作为一个可回退
+逻辑变更，再提交 runner/probe separately。
+
+下一步：增加 deterministic frame diagnostics benchmark/test runner，记录 phase counts,
+input-to-present samples and allocation probe outputs without enabling diagnostics in
+the default product build。
 
 ### 阶段 2：并发与 accessibility 边界
 
