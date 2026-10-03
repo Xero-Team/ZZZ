@@ -438,7 +438,6 @@ mod tests {
     fn test_random_iterations() {
         let max_bounds = 100;
         for seed in 1..=1000 {
-            // let seed = 44;
             let mut tree = BoundsTree::default();
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed as u64);
             let mut expected_quads: Vec<(Bounds<f32>, u32)> = Vec::new();
