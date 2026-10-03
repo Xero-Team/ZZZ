@@ -42,8 +42,6 @@ pub struct TestApp {
     platform: Rc<TestPlatform>,
     background_executor: BackgroundExecutor,
     foreground_executor: ForegroundExecutor,
-    #[allow(dead_code)]
-    dispatcher: TestDispatcher,
     text_system: Arc<TextSystem>,
 }
 
@@ -101,7 +99,6 @@ impl TestApp {
             platform,
             background_executor,
             foreground_executor,
-            dispatcher,
             text_system,
         }
     }
