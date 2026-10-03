@@ -69,7 +69,7 @@ pub use prompts::*;
 use crate::profiler::{
     FrameBuildId, FrameDirtyReason, FrameEvent, FrameInputProvenance, FrameInvalidation,
     FramePhase, FramePhaseTiming, FramePresentationTiming, FrameTiming, next_frame_build_id,
-    record_frame_event,
+    record_frame_events,
 };
 
 /// Default window size used when no explicit size is provided.
@@ -127,6 +127,8 @@ struct WindowInvalidatorInner {
     pub active_frame: Option<PendingFrameDiagnostics>,
     #[cfg(feature = "frame-diagnostics")]
     pub current_input: Option<FrameInput>,
+    #[cfg(feature = "frame-diagnostics")]
+    pub events: SmallVec<[FrameEvent; 16]>,
 }
 
 #[cfg(feature = "frame-diagnostics")]
@@ -173,6 +175,8 @@ impl WindowInvalidator {
                 dirty_views: FxHashSet::default(),
                 update_count: 0,
                 platform_waker: None,
+                #[cfg(feature = "frame-diagnostics")]
+                events: SmallVec::new(),
             })),
         }
     }
@@ -197,6 +201,7 @@ impl WindowInvalidator {
                 pending_frame: Some(initial_frame),
                 active_frame: None,
                 current_input: None,
+                events: SmallVec::new(),
             })),
         }
         .record_initial_invalidation(window_id)
@@ -204,17 +209,21 @@ impl WindowInvalidator {
 
     #[cfg(feature = "frame-diagnostics")]
     fn record_initial_invalidation(self, window_id: crate::WindowId) -> Self {
-        if let Some(frame) = self.inner.borrow().pending_frame {
-            record_frame_event(FrameEvent::Invalidated(FrameInvalidation {
-                build_id: frame.build_id,
-                window_id,
-                at: frame.dirty_at,
-                entity_id: None,
-                reason: FrameDirtyReason::Initial,
-                input: None,
-                coalesced: false,
-                during_draw: false,
-            }));
+        let pending_frame = self.inner.borrow().pending_frame;
+        if let Some(frame) = pending_frame {
+            self.inner
+                .borrow_mut()
+                .events
+                .push(FrameEvent::Invalidated(FrameInvalidation {
+                    build_id: frame.build_id,
+                    window_id,
+                    at: frame.dirty_at,
+                    entity_id: None,
+                    reason: FrameDirtyReason::Initial,
+                    input: None,
+                    coalesced: false,
+                    during_draw: false,
+                }));
         }
         self
     }
@@ -308,16 +317,18 @@ impl WindowInvalidator {
             frame.input = Some(input.provenance);
         }
         let build_id = frame.build_id;
-        record_frame_event(FrameEvent::Invalidated(FrameInvalidation {
-            build_id,
-            window_id,
-            at,
-            entity_id,
-            reason,
-            input: current_input.map(|input| input.provenance),
-            coalesced,
-            during_draw,
-        }));
+        inner
+            .events
+            .push(FrameEvent::Invalidated(FrameInvalidation {
+                build_id,
+                window_id,
+                at,
+                entity_id,
+                reason,
+                input: current_input.map(|input| input.provenance),
+                coalesced,
+                during_draw,
+            }));
     }
 
     #[cfg(feature = "frame-diagnostics")]
@@ -337,11 +348,14 @@ impl WindowInvalidator {
             inner.active_frame = Some(frame);
             (inner.window_id, frame)
         };
-        record_frame_event(FrameEvent::DrawStarted {
-            build_id: frame.build_id,
-            window_id,
-            at: draw_start,
-        });
+        self.inner
+            .borrow_mut()
+            .events
+            .push(FrameEvent::DrawStarted {
+                build_id: frame.build_id,
+                window_id,
+                at: draw_start,
+            });
         frame.build_id
     }
 
@@ -368,6 +382,17 @@ impl WindowInvalidator {
         FrameInputScope {
             invalidator: self.clone(),
         }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn record_event(&self, event: FrameEvent) {
+        self.inner.borrow_mut().events.push(event);
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn flush_events(&self) {
+        let events = mem::take(&mut self.inner.borrow_mut().events);
+        record_frame_events(&events);
     }
 
     pub fn wake_platform(&self) {
@@ -2911,7 +2936,8 @@ impl Window {
                 input_started_at: frame.input_started_at,
                 input: frame.input,
             };
-            record_frame_event(FrameEvent::DrawFinished(timing));
+            self.invalidator
+                .record_event(FrameEvent::DrawFinished(timing));
             self.pending_frame_timing = Some(timing);
         }
 
@@ -2948,21 +2974,31 @@ impl Window {
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = self.pending_frame_timing.take() {
             let present_end = Instant::now();
-            record_frame_event(FrameEvent::Presented(FramePresentationTiming {
-                build_id: frame.build_id,
-                window_id: self.handle.window_id(),
-                present_start,
-                present_end,
-                input_to_present: frame
-                    .input_started_at
-                    .map(|started_at| present_end.duration_since(started_at)),
-                input: frame.input,
-            }));
+            self.invalidator
+                .record_event(FrameEvent::Presented(FramePresentationTiming {
+                    build_id: frame.build_id,
+                    window_id: self.handle.window_id(),
+                    present_start,
+                    present_end,
+                    input_to_present: frame
+                        .input_started_at
+                        .map(|started_at| present_end.duration_since(started_at)),
+                    input: frame.input,
+                }));
         }
         #[cfg(feature = "input-latency-histogram")]
         self.input_latency_tracker.record_frame_presented();
         self.needs_present.set(false);
+        #[cfg(feature = "frame-diagnostics")]
+        self.invalidator.flush_events();
         profiling::finish_frame!();
+    }
+
+    /// Builds and presents one frame for benchmark and integration-test infrastructure.
+    #[cfg(feature = "test-support")]
+    pub fn draw_and_present_for_test(&mut self, cx: &mut App) {
+        self.draw(cx).clear();
+        self.present();
     }
 
     /// Returns a snapshot of the current input-latency histograms.
@@ -3114,14 +3150,15 @@ impl Window {
         let Some(frame) = self.invalidator.active_frame() else {
             return;
         };
-        record_frame_event(FrameEvent::Phase(FramePhaseTiming {
-            build_id: frame.build_id,
-            window_id: self.handle.window_id(),
-            phase,
-            duration,
-            operations,
-            cache_hits,
-        }));
+        self.invalidator
+            .record_event(FrameEvent::Phase(FramePhaseTiming {
+                build_id: frame.build_id,
+                window_id: self.handle.window_id(),
+                phase,
+                duration,
+                operations,
+                cache_hits,
+            }));
     }
 
     fn prepaint_tooltip(&mut self, cx: &mut App) -> Option<AnyElement> {
@@ -6654,16 +6691,15 @@ pub fn outline(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        AnyView, AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle,
-        InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render,
-        RequestFrameOptions, StyleRefinement, Styled as _, TestAppContext, Window,
-        WindowAppearance, canvas, div, px, size,
-    };
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
-        FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector, KeyDownEvent,
-        Keystroke, PlatformInput,
+        AnyView, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
+        KeyDownEvent, Keystroke, PlatformInput, StyleRefinement,
+    };
+    use crate::{
+        AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
+        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
+        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;

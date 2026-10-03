@@ -565,6 +565,9 @@ pub enum FrameEvent {
 const MAX_FRAME_EVENTS: usize = (16 * 1024 * 1024) / core::mem::size_of::<FrameEvent>();
 
 #[cfg(feature = "frame-diagnostics")]
+const INITIAL_FRAME_EVENTS_CAPACITY: usize = 4096;
+
+#[cfg(feature = "frame-diagnostics")]
 struct FrameEvents {
     events: VecDeque<FrameEvent>,
     total_pushed: u64,
@@ -577,13 +580,23 @@ static FRAME_EVENTS: spin::Mutex<FrameEvents> = spin::Mutex::new(FrameEvents {
 });
 
 #[cfg(feature = "frame-diagnostics")]
-pub(crate) fn record_frame_event(event: FrameEvent) {
-    let mut frame_events = FRAME_EVENTS.lock();
-    if frame_events.events.len() >= MAX_FRAME_EVENTS {
-        frame_events.events.pop_front();
+pub(crate) fn record_frame_events(events: &[FrameEvent]) {
+    if events.is_empty() {
+        return;
     }
-    frame_events.events.push_back(event);
-    frame_events.total_pushed += 1;
+    let mut frame_events = FRAME_EVENTS.lock();
+    if frame_events.events.capacity() < INITIAL_FRAME_EVENTS_CAPACITY {
+        let additional_capacity =
+            INITIAL_FRAME_EVENTS_CAPACITY.saturating_sub(frame_events.events.capacity());
+        frame_events.events.reserve(additional_capacity);
+    }
+    for event in events {
+        if frame_events.events.len() >= MAX_FRAME_EVENTS {
+            frame_events.events.pop_front();
+        }
+        frame_events.events.push_back(*event);
+        frame_events.total_pushed += 1;
+    }
 }
 
 /// Frame events collected since the previous snapshot.
