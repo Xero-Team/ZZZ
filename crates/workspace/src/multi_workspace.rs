@@ -2109,13 +2109,13 @@ impl Render for MultiWorkspace {
                                     }
                                     this.serialize(cx);
                                 })
-                                .ok();
+                                .log_err();
                                 cx.stop_propagation();
                             } else {
                                 weak.update(cx, |this, cx| {
                                     this.serialize(cx);
                                 })
-                                .ok();
+                                .log_err();
                             }
                         })
                         .occlude(),
