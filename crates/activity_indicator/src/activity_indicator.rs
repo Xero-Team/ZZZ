@@ -855,9 +855,15 @@ impl Render for ActivityIndicator {
                                                         .into_any_element()
                                                 },
                                                 move |_, cx| {
+                                                    let Some(activity_indicator) =
+                                                        activity_indicator.upgrade()
+                                                    else {
+                                                        return;
+                                                    };
                                                     let token = token.clone();
-                                                    activity_indicator
-                                                        .update(cx, |activity_indicator, cx| {
+                                                    activity_indicator.update(
+                                                        cx,
+                                                        |activity_indicator, cx| {
                                                             activity_indicator.project.update(
                                                                 cx,
                                                                 |project, cx| {
@@ -872,8 +878,8 @@ impl Render for ActivityIndicator {
                                                                 .context_menu_handle
                                                                 .hide(cx);
                                                             cx.notify();
-                                                        })
-                                                        .ok();
+                                                        },
+                                                    );
                                                 },
                                             );
                                         } else {
