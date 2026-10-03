@@ -735,12 +735,27 @@ pub trait AccessibilityBridge {
     }
 }
 
+/// Render target owned by a platform window backend.
+#[expect(missing_docs)]
+pub trait PlatformRenderTarget {
+    fn draw(&self, scene: &Scene);
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
+    fn is_subpixel_rendering_supported(&self) -> bool;
+    fn gpu_specs(&self) -> Option<GpuSpecs>;
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
+        anyhow::bail!("render_to_image not implemented for this platform")
+    }
+}
+
 #[expect(missing_docs)]
 pub trait PlatformWindow:
     AccessibilityBridge
     + HasWindowHandle
     + HasDisplayHandle
     + InputSource
+    + PlatformRenderTarget
     + SystemServices
     + TextInputBridge
     + WindowHost
@@ -774,9 +789,6 @@ pub trait PlatformWindow:
     fn on_close(&self, callback: Box<dyn FnOnce()>);
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
     fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}
-    fn draw(&self, scene: &Scene);
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
-    fn is_subpixel_rendering_supported(&self) -> bool;
 
     // macOS specific methods
     fn get_title(&self) -> String {
@@ -834,19 +846,9 @@ pub trait PlatformWindow:
         PlatformCapabilities::default()
     }
     fn set_client_inset(&self, _inset: Pixels) {}
-    fn gpu_specs(&self) -> Option<GpuSpecs>;
-
     #[cfg(any(test, feature = "test-support"))]
     fn as_test(&mut self) -> Option<&mut TestWindow> {
         None
-    }
-
-    /// Renders the given scene to a texture and returns the pixel data as an RGBA image.
-    /// This does not present the frame to screen - useful for visual testing where we want
-    /// to capture what would be rendered without displaying it or requiring the window to be visible.
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
-        anyhow::bail!("render_to_image not implemented for this platform")
     }
 }
 

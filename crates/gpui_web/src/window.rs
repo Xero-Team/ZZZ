@@ -651,6 +651,42 @@ impl gpui::SystemServices for WebWindow {
     }
 }
 
+impl gpui::PlatformRenderTarget for WebWindow {
+    fn draw(&self, scene: &Scene) {
+        if let Some((width, height)) = self.inner.pending_physical_size.take() {
+            if self.inner.canvas.width() != width || self.inner.canvas.height() != height {
+                self.inner.canvas.set_width(width);
+                self.inner.canvas.set_height(height);
+            }
+
+            let mut state = self.inner.state.borrow_mut();
+            state.renderer.update_drawable_size(Size {
+                width: DevicePixels(width as i32),
+                height: DevicePixels(height as i32),
+            });
+            drop(state);
+        }
+
+        self.inner.state.borrow_mut().renderer.draw(scene);
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        self.inner.state.borrow().renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        self.inner
+            .state
+            .borrow()
+            .renderer
+            .supports_dual_source_blending()
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        Some(self.inner.state.borrow().renderer.gpu_specs())
+    }
+}
+
 impl PlatformWindow for WebWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.inner.state.borrow().bounds
@@ -772,40 +808,6 @@ impl PlatformWindow for WebWindow {
 
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
         self.inner.callbacks.borrow_mut().appearance_changed = Some(callback);
-    }
-
-    fn draw(&self, scene: &Scene) {
-        if let Some((width, height)) = self.inner.pending_physical_size.take() {
-            if self.inner.canvas.width() != width || self.inner.canvas.height() != height {
-                self.inner.canvas.set_width(width);
-                self.inner.canvas.set_height(height);
-            }
-
-            let mut state = self.inner.state.borrow_mut();
-            state.renderer.update_drawable_size(Size {
-                width: DevicePixels(width as i32),
-                height: DevicePixels(height as i32),
-            });
-            drop(state);
-        }
-
-        self.inner.state.borrow_mut().renderer.draw(scene);
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        self.inner.state.borrow().renderer.sprite_atlas().clone()
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        self.inner
-            .state
-            .borrow()
-            .renderer
-            .supports_dual_source_blending()
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        Some(self.inner.state.borrow().renderer.gpu_specs())
     }
 
     fn request_decorations(&self, _decorations: WindowDecorations) {}

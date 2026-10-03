@@ -1232,6 +1232,59 @@ impl gpui::SystemServices for WaylandWindow {
     }
 }
 
+impl gpui::PlatformRenderTarget for WaylandWindow {
+    fn draw(&self, scene: &Scene) {
+        let mut state = self.borrow_mut();
+
+        if state.renderer.device_lost() {
+            let raw_window = RawWindow {
+                window: state.surface.id().as_ptr().cast::<std::ffi::c_void>(),
+                display: state
+                    .surface
+                    .backend()
+                    .upgrade()
+                    .expect("entity should be alive")
+                    .display_ptr()
+                    .cast::<std::ffi::c_void>(),
+            };
+            match state.renderer.recover(&raw_window) {
+                Ok(()) => {}
+                Err(err) => {
+                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
+                }
+            }
+
+            state.force_render_after_recovery = true;
+            return;
+        }
+
+        state.renderer_presented = state.renderer.draw(scene);
+
+        if state.renderer.needs_redraw() {
+            state.force_render_after_recovery = true;
+        }
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        let state = self.borrow();
+        state.renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        let client = self.borrow().client.get_client();
+        let state = client.borrow();
+        state
+            .gpu_context
+            .borrow()
+            .as_ref()
+            .is_some_and(|ctx| ctx.supports_dual_source_blending())
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        self.borrow().renderer.gpu_specs().into()
+    }
+}
+
 impl PlatformWindow for WaylandWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
@@ -1372,16 +1425,6 @@ impl PlatformWindow for WaylandWindow {
         self.borrow().background_appearance
     }
 
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        let client = self.borrow().client.get_client();
-        let state = client.borrow();
-        state
-            .gpu_context
-            .borrow()
-            .as_ref()
-            .is_some_and(|ctx| ctx.supports_dual_source_blending())
-    }
-
     fn minimize(&self) {
         if let Some(toplevel) = self.borrow().surface_state.toplevel() {
             toplevel.set_minimized();
@@ -1447,43 +1490,6 @@ impl PlatformWindow for WaylandWindow {
 
     fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.callbacks.borrow_mut().button_layout_changed = Some(callback);
-    }
-
-    fn draw(&self, scene: &Scene) {
-        let mut state = self.borrow_mut();
-
-        if state.renderer.device_lost() {
-            let raw_window = RawWindow {
-                window: state.surface.id().as_ptr().cast::<std::ffi::c_void>(),
-                display: state
-                    .surface
-                    .backend()
-                    .upgrade()
-                    .expect("entity should be alive")
-                    .display_ptr()
-                    .cast::<std::ffi::c_void>(),
-            };
-            match state.renderer.recover(&raw_window) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
-                }
-            }
-
-            state.force_render_after_recovery = true;
-            return;
-        }
-
-        state.renderer_presented = state.renderer.draw(scene);
-
-        if state.renderer.needs_redraw() {
-            state.force_render_after_recovery = true;
-        }
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        let state = self.borrow();
-        state.renderer.sprite_atlas().clone()
     }
 
     fn show_window_menu(&self, position: Point<Pixels>) {
@@ -1591,10 +1597,6 @@ impl PlatformWindow for WaylandWindow {
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         wayland_capabilities(self.window_controls())
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        self.borrow().renderer.gpu_specs().into()
     }
 }
 

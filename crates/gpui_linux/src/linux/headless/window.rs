@@ -148,6 +148,22 @@ impl gpui::SystemServices for HeadlessWindow {
     }
 }
 
+impl gpui::PlatformRenderTarget for HeadlessWindow {
+    fn draw(&self, _scene: &Scene) {}
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        Arc::new(HeadlessAtlas::default())
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        false
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        None
+    }
+}
+
 impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
@@ -238,22 +254,8 @@ impl PlatformWindow for HeadlessWindow {
 
     fn on_appearance_changed(&self, _callback: Box<dyn FnMut()>) {}
 
-    fn draw(&self, _scene: &Scene) {}
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        Arc::new(HeadlessAtlas::default())
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        false
-    }
-
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         headless_capabilities()
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        None
     }
 }
 

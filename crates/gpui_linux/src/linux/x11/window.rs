@@ -1436,6 +1436,65 @@ impl gpui::SystemServices for X11Window {
     }
 }
 
+impl gpui::PlatformRenderTarget for X11Window {
+    fn draw(&self, scene: &Scene) {
+        let mut inner = self.0.state.borrow_mut();
+
+        if inner.renderer.device_lost() {
+            let raw_window = RawWindow {
+                connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
+                    &*self.0.xcb,
+                )
+                .cast(),
+                screen_id: inner.x_screen_index,
+                window_id: self.0.x_window,
+                visual_id: inner.visual_id,
+            };
+            match inner.renderer.recover(&raw_window) {
+                Ok(()) => {}
+                Err(err) => {
+                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
+                }
+            }
+
+            inner.force_render_after_recovery = true;
+            return;
+        }
+
+        inner.renderer.draw(scene);
+
+        if inner.renderer.needs_redraw() {
+            inner.force_render_after_recovery = true;
+        }
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        let inner = self.0.state.borrow();
+        inner.renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        self.0
+            .state
+            .borrow()
+            .client
+            .0
+            .upgrade()
+            .is_some_and(|ref_cell| {
+                let state = ref_cell.borrow();
+                state
+                    .gpu_context
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|ctx| ctx.supports_dual_source_blending())
+            })
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        self.0.state.borrow().renderer.gpu_specs().into()
+    }
+}
+
 impl PlatformWindow for X11Window {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
@@ -1626,23 +1685,6 @@ impl PlatformWindow for X11Window {
         self.0.state.borrow().background_appearance
     }
 
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        self.0
-            .state
-            .borrow()
-            .client
-            .0
-            .upgrade()
-            .is_some_and(|ref_cell| {
-                let state = ref_cell.borrow();
-                state
-                    .gpu_context
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|ctx| ctx.supports_dual_source_blending())
-            })
-    }
-
     fn minimize(&self) {
         let state = self.0.state.borrow();
         const WINDOW_ICONIC_STATE: u32 = 3;
@@ -1723,42 +1765,6 @@ impl PlatformWindow for X11Window {
 
     fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.callbacks.borrow_mut().button_layout_changed = Some(callback);
-    }
-
-    fn draw(&self, scene: &Scene) {
-        let mut inner = self.0.state.borrow_mut();
-
-        if inner.renderer.device_lost() {
-            let raw_window = RawWindow {
-                connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
-                    &*self.0.xcb,
-                )
-                .cast(),
-                screen_id: inner.x_screen_index,
-                window_id: self.0.x_window,
-                visual_id: inner.visual_id,
-            };
-            match inner.renderer.recover(&raw_window) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
-                }
-            }
-
-            inner.force_render_after_recovery = true;
-            return;
-        }
-
-        inner.renderer.draw(scene);
-
-        if inner.renderer.needs_redraw() {
-            inner.force_render_after_recovery = true;
-        }
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        let inner = self.0.state.borrow();
-        inner.renderer.sprite_atlas().clone()
     }
 
     fn show_window_menu(&self, position: Point<Pixels>) {
@@ -1941,10 +1947,6 @@ impl PlatformWindow for X11Window {
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         x11_capabilities()
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        self.0.state.borrow().renderer.gpu_specs().into()
     }
 }
 

@@ -235,6 +235,35 @@ impl crate::SystemServices for TestWindow {
     }
 }
 
+impl crate::PlatformRenderTarget for TestWindow {
+    fn draw(&self, _scene: &Scene) {}
+
+    fn sprite_atlas(&self) -> sync::Arc<dyn crate::PlatformAtlas> {
+        self.0.lock().sprite_atlas.clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        false
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        None
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<RgbaImage> {
+        let mut state = self.0.lock();
+        let size = state.bounds.size;
+        if let Some(renderer) = &mut state.renderer {
+            let scale_factor = 2.0;
+            let device_size: Size<DevicePixels> = size.to_device_pixels(scale_factor);
+            renderer.render_scene_to_image(scene, device_size)
+        } else {
+            anyhow::bail!("render_to_image not available: no HeadlessRenderer configured")
+        }
+    }
+}
+
 impl PlatformWindow for TestWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.lock().bounds
@@ -288,10 +317,6 @@ impl PlatformWindow for TestWindow {
 
     fn background_appearance(&self) -> WindowBackgroundAppearance {
         WindowBackgroundAppearance::Opaque
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        false
     }
 
     fn set_title(&mut self, title: &str) {
@@ -361,8 +386,6 @@ impl PlatformWindow for TestWindow {
         self.0.lock().appearance_change_callback = Some(callback);
     }
 
-    fn draw(&self, _scene: &Scene) {}
-
     fn capabilities(&self) -> crate::PlatformCapabilities {
         crate::PlatformCapabilities {
             text_input: true,
@@ -375,23 +398,6 @@ impl PlatformWindow for TestWindow {
                 minimize: false,
                 window_menu: false,
             },
-        }
-    }
-
-    fn sprite_atlas(&self) -> sync::Arc<dyn crate::PlatformAtlas> {
-        self.0.lock().sprite_atlas.clone()
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<RgbaImage> {
-        let mut state = self.0.lock();
-        let size = state.bounds.size;
-        if let Some(renderer) = &mut state.renderer {
-            let scale_factor = 2.0;
-            let device_size: Size<DevicePixels> = size.to_device_pixels(scale_factor);
-            renderer.render_scene_to_image(scene, device_size)
-        } else {
-            anyhow::bail!("render_to_image not available: no HeadlessRenderer configured")
         }
     }
 
@@ -410,9 +416,5 @@ impl PlatformWindow for TestWindow {
 
     fn start_window_move(&self) {
         unimplemented!()
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        None
     }
 }

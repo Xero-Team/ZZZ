@@ -1494,6 +1494,31 @@ impl gpui::SystemServices for MacWindow {
     }
 }
 
+impl gpui::PlatformRenderTarget for MacWindow {
+    fn draw(&self, scene: &gpui::Scene) {
+        let mut this = self.0.lock();
+        this.renderer.draw(scene);
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        self.0.lock().renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        false
+    }
+
+    fn gpu_specs(&self) -> Option<gpui::GpuSpecs> {
+        None
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn render_to_image(&self, scene: &gpui::Scene) -> Result<RgbaImage> {
+        let mut this = self.0.lock();
+        this.renderer.render_to_image(scene)
+    }
+}
+
 impl PlatformWindow for MacWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.as_ref().lock().bounds()
@@ -1728,10 +1753,6 @@ impl PlatformWindow for MacWindow {
         self.0.as_ref().lock().background_appearance
     }
 
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        false
-    }
-
     fn set_edited(&mut self, edited: bool) {
         unsafe {
             let window = self.0.lock().native_window;
@@ -1926,19 +1947,6 @@ impl PlatformWindow for MacWindow {
         self.0.as_ref().lock().toggle_tab_bar_callback = Some(callback);
     }
 
-    fn draw(&self, scene: &gpui::Scene) {
-        let mut this = self.0.lock();
-        this.renderer.draw(scene);
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        self.0.lock().renderer.sprite_atlas().clone()
-    }
-
-    fn gpu_specs(&self) -> Option<gpui::GpuSpecs> {
-        None
-    }
-
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         macos_capabilities()
     }
@@ -2014,12 +2022,6 @@ impl PlatformWindow for MacWindow {
             let event: id = msg_send![app, currentEvent];
             let _: () = msg_send![window, performWindowDragWithEvent: event];
         }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, scene: &gpui::Scene) -> Result<RgbaImage> {
-        let mut this = self.0.lock();
-        this.renderer.render_to_image(scene)
     }
 }
 

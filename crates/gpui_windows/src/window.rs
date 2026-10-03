@@ -748,6 +748,36 @@ impl gpui::SystemServices for WindowsWindow {
     }
 }
 
+impl gpui::PlatformRenderTarget for WindowsWindow {
+    fn draw(&self, scene: &Scene) {
+        self.state
+            .renderer
+            .borrow_mut()
+            .draw(scene, self.state.background_appearance.get())
+            .log_err();
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        self.state.renderer.borrow().sprite_atlas()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        true
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        self.state.renderer.borrow().gpu_specs().log_err()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
+        self.state
+            .renderer
+            .borrow_mut()
+            .render_to_image(scene, self.state.background_appearance.get())
+    }
+}
+
 impl PlatformWindow for WindowsWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.state.bounds()
@@ -893,10 +923,6 @@ impl PlatformWindow for WindowsWindow {
         self.state.background_appearance.get()
     }
 
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        true
-    }
-
     fn set_title(&mut self, title: &str) {
         unsafe { SetWindowTextW(self.0.hwnd, &HSTRING::from(title)) }
             .inspect_err(|e| log::error!("Set title failed: {e}"))
@@ -1006,32 +1032,8 @@ impl PlatformWindow for WindowsWindow {
             .set(Some(callback));
     }
 
-    fn draw(&self, scene: &Scene) {
-        self.state
-            .renderer
-            .borrow_mut()
-            .draw(scene, self.state.background_appearance.get())
-            .log_err();
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
-        self.state
-            .renderer
-            .borrow_mut()
-            .render_to_image(scene, self.state.background_appearance.get())
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        self.state.renderer.borrow().sprite_atlas()
-    }
-
     fn get_raw_handle(&self) -> HWND {
         self.0.hwnd
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        self.state.renderer.borrow().gpu_specs().log_err()
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
