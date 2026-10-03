@@ -399,6 +399,8 @@ immutable `BuiltFrame`。
 | 命令或检查                                                                                                                          | 结果   | 证据                                                   |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------ |
 | `cargo check --locked -p gpui`                                                                                                      | `PASS` | render contract 与 compatibility adapter 编译通过      |
+| `CARGO_TARGET_DIR=.tmp/gpui-refactor/phase-5/target-gpui cargo check --locked -p gpui`                                              | `PASS` | clean 18.63 s，RSS 860,532 KiB；baseline 19.52 s       |
+| `CARGO_TARGET_DIR=.tmp/gpui-refactor/phase-5/target-gpui cargo check --locked -p gpui_platform -p gpui_wgpu -p gpui_linux`          | `PASS` | clean 17.13 s，RSS 858,320 KiB                         |
 | `cargo test --locked -p gpui --lib window::tests::test_frame_waker_fires_on_frame_demand`                                           | `PASS` | completed frame submit path 通过                       |
 | `cargo test --locked -p gpui --lib --features frame-diagnostics window::tests::test_frame_diagnostics_follow_build_through_present` | `PASS` | diagnostics present path 通过                          |
 | `cargo test --locked -p gpui_wgpu --lib`                                                                                            | `PASS` | 15 WGPU unit tests passed                              |
@@ -408,8 +410,12 @@ immutable `BuiltFrame`。
 | `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error          |
 
 提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`；surface split `bffcfd6e62`.
-下一步：把 `gpui_wgpu` 的 frame/surface/drawing/headless 按 contract
-拆分，运行 EXP-004/005；只有达标才评估独立 `gpui_render` crate。
+EXP-004/005 当前状态：`PARTIAL`。clean check 在当前样本中未超过 baseline*1.10，
+但 consumer edit/rebuild graph、binary-size 和 golden scene equivalence 尚未完成；因此
+不创建独立 `gpui_render` crate。
+
+下一步：把 `gpui_wgpu` 的 frame/drawing/headless 按 contract 拆分，补齐 EXP-004/005
+consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_render` crate。
 
 ### 阶段 6：platform capability 与 lifecycle
 
