@@ -1400,17 +1400,19 @@ mod view_commit_tests {
             .read_with(cx, |workspace, cx| {
                 workspace.active_modal::<RefPickerModal>(cx).is_some()
             })
-            .unwrap_or(false);
+            .expect("workspace window should remain open");
 
-        let _ = workspace.update(cx, |workspace, window, cx| {
-            show_ref_picker(workspace, &git::ViewCommit, window, cx);
-        });
+        workspace
+            .update(cx, |workspace, window, cx| {
+                show_ref_picker(workspace, &git::ViewCommit, window, cx);
+            })
+            .expect("workspace window should remain open");
 
         let final_modal_state = workspace
             .read_with(cx, |workspace, cx| {
                 workspace.active_modal::<RefPickerModal>(cx).is_some()
             })
-            .unwrap_or(false);
+            .expect("workspace window should remain open");
 
         assert!(!initial_modal_state);
         assert!(final_modal_state);
