@@ -1,16 +1,26 @@
 use anyhow::Context as _;
 
-use rustls::ClientConfig;
+use rustls::{ClientConfig, crypto::CryptoProvider};
 use rustls_platform_verifier::ConfigVerifierExt;
 
 pub fn tls_config() -> anyhow::Result<ClientConfig> {
-    // rustls uses the `aws_lc_rs` provider by default.
-    // This only errors if the default provider has already been installed.
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .ok();
+    ensure_default_crypto_provider();
 
     ClientConfig::with_platform_verifier().context("building platform TLS verifier")
+}
+
+fn ensure_default_crypto_provider() {
+    if CryptoProvider::get_default().is_some() {
+        return;
+    }
+
+    if rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .is_err()
+    {
+        // Another thread can install the process-wide provider between the check and installation.
+        debug_assert!(CryptoProvider::get_default().is_some());
+    }
 }
 
 #[cfg(test)]
