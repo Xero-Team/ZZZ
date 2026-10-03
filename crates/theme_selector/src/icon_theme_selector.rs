@@ -11,7 +11,6 @@ use std::sync::Arc;
 use theme::{Appearance, SystemAppearance, ThemeMeta, ThemeRegistry};
 use theme_settings::{IconThemeName, IconThemeSelection, ThemeSettings};
 use ui::{ListItem, ListItemSpacing, prelude::*, v_flex};
-use util::ResultExt;
 use workspace::{ModalView, ui::HighlightedLabel};
 use zzz_actions::{ExtensionCategoryFilter, Extensions};
 
@@ -195,19 +194,19 @@ impl PickerDelegate for IconThemeSelectorDelegate {
             theme_settings::set_icon_theme(settings, theme_name, appearance);
         });
 
-        self.selector
-            .update(cx, |_, cx| {
+        if let Some(selector) = self.selector.upgrade() {
+            selector.update(cx, |_, cx| {
                 cx.emit(DismissEvent);
-            })
-            .ok();
+            });
+        }
     }
 
     fn dismissed(&mut self, _: &mut Window, cx: &mut Context<Picker<IconThemeSelectorDelegate>>) {
         self.revert_theme(cx);
 
-        self.selector
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .log_err();
+        if let Some(selector) = self.selector.upgrade() {
+            selector.update(cx, |_, cx| cx.emit(DismissEvent));
+        }
     }
 
     fn selected_index(&self) -> usize {
@@ -263,6 +262,9 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                 .await
             };
 
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, cx| {
                 this.delegate.matches = matches;
                 if query.is_empty() && this.delegate.selected_theme.is_none() {
@@ -286,8 +288,7 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                 if let Some(theme) = this.delegate.show_selected_theme(cx) {
                     this.delegate.selected_theme = Some(theme);
                 }
-            })
-            .log_err();
+            });
         })
     }
 
