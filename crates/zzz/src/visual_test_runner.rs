@@ -1,6 +1,3 @@
-// Allow blocking process commands in this binary - it's a synchronous test runner
-#![allow(clippy::disallowed_methods)]
-
 //! Visual Test Runner
 //!
 //! This binary runs visual regression tests for ZZZ's UI. It captures screenshots
@@ -97,7 +94,7 @@ use {
     acp_thread::{AgentConnection, StubAgentConnection},
     agent_client_protocol::schema::v1 as acp,
     agent_servers::{AgentServer, AgentServerDelegate},
-    anyhow::{Context as _, Result},
+    anyhow::{Context as _, Result, bail},
     assets::Assets,
     editor::display_map::DisplayRow,
     feature_flags::FeatureFlagAppExt as _,
@@ -1456,6 +1453,21 @@ fn run_settings_ui_subpage_visual_tests(
 /// 2. Diff view with feature flag disabled (no button)
 /// 3. Regular editor with feature flag enabled (no button - only shows in diff views)
 #[cfg(target_os = "macos")]
+fn run_git_command(project_path: &Path, arguments: &[&str]) -> Result<()> {
+    let mut command = util::command::new_command("git");
+    let output = gpui::block_on(command.args(arguments).current_dir(project_path).output())?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    bail!(
+        "git {} failed: {}",
+        arguments.join(" "),
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+}
+
+#[cfg(target_os = "macos")]
 fn run_diff_review_visual_tests(
     app_state: Arc<AppState>,
     cx: &mut VisualTestAppContext,
@@ -1469,34 +1481,19 @@ fn run_diff_review_visual_tests(
     std::fs::create_dir_all(&project_path)?;
 
     // Initialize a real git repository
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&project_path)
-        .output()?;
+    run_git_command(&project_path, &["init"])?;
 
     // Configure git user for commits
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@test.com"])
-        .current_dir(&project_path)
-        .output()?;
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test User"])
-        .current_dir(&project_path)
-        .output()?;
+    run_git_command(&project_path, &["config", "user.email", "test@test.com"])?;
+    run_git_command(&project_path, &["config", "user.name", "Test User"])?;
 
     // Create a test file with original content
     let original_content = "// Original content\n";
     std::fs::write(project_path.join("thread-view.tsx"), original_content)?;
 
     // Commit the original file
-    std::process::Command::new("git")
-        .args(["add", "thread-view.tsx"])
-        .current_dir(&project_path)
-        .output()?;
-    std::process::Command::new("git")
-        .args(["commit", "-m", "Initial commit"])
-        .current_dir(&project_path)
-        .output()?;
+    run_git_command(&project_path, &["add", "thread-view.tsx"])?;
+    run_git_command(&project_path, &["commit", "-m", "Initial commit"])?;
 
     // Modify the file to create a diff
     let modified_content = r#"import { ScrollArea } from 'components';
