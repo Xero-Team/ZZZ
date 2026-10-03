@@ -700,7 +700,7 @@ impl Render for AgentRegistryPage {
                                         .color(Color::Muted),
                                 )
                                 .on_click(move |_, _, cx| {
-                                    cx.open_url(&zzz_urls::acp_registry_blog(cx))
+                                    cx.open_url(&zzz_urls::acp_registry_blog())
                                 }),
                             ),
                     )

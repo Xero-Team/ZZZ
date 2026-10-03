@@ -3,10 +3,7 @@
 //! Links are intentionally offline-safe; callers can provide their own remote
 //! destinations when explicitly configured.
 
-use gpui::App;
-
 /// Returns the URL to the ACP registry blog post.
-pub fn acp_registry_blog(cx: &App) -> String {
-    let _ = cx;
+pub fn acp_registry_blog() -> String {
     "about:blank".to_owned()
 }
