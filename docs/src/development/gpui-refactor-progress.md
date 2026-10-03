@@ -454,8 +454,10 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | 命令或检查                                                                  | 结果   | 证据                                              |
 | --------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
 | `cargo check --locked -p ui_input -p editor -p picker -p remote_connection` | `PASS` | app-scoped factory consumers 编译通过             |
+| `cargo check --locked -p ui_prompt -p zzz`                                  | `PASS` | prompt policy moved to app composition            |
 | `cargo test --locked -p ui_input --lib`                                     | `PASS` | 0 tests, compile/test harness passed              |
 | `./script/clippy -p ui_input`                                               | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `./script/clippy -p ui_prompt`                                              | `PASS` | all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                                          | `PASS` | ui_input boundary change 无 whitespace error      |
 
 提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`。
