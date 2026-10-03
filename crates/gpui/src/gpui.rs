@@ -15,9 +15,9 @@ pub static GPUI_MANIFEST_DIR: &'static str = env!("CARGO_MANIFEST_DIR");
 mod action;
 mod app;
 
-mod arena;
 #[cfg(feature = "accessibility")]
 pub mod accessibility;
+mod arena;
 mod asset_cache;
 mod assets;
 mod bounds_tree;
@@ -27,6 +27,8 @@ pub mod colors;
 mod element;
 mod elements;
 mod executor;
+mod frame;
+pub(crate) use frame::*;
 mod platform_scheduler;
 pub(crate) use platform_scheduler::PlatformScheduler;
 mod geometry;
@@ -87,9 +89,9 @@ mod seal {
     pub trait Sealed {}
 }
 
-pub use action::*;
 #[cfg(feature = "accessibility")]
 pub use accessibility::*;
+pub use action::*;
 pub use anyhow::Result;
 pub use app::*;
 pub(crate) use arena::*;

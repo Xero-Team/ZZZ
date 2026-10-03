@@ -280,7 +280,18 @@ runtime，以及将 Linux pixel artifacts 纳入后续 renderer/Window migration
 
 ### 阶段 4：拆分 `Window`
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
+
+4A frame owner 当前进度：
+
+- 新增内部 `frame.rs`，迁入 `WindowInvalidator`、dirty views/update count、draw phase、
+  platform waker、`FrameBuildId` lifecycle 和 frame diagnostics event batching。
+- `Window` 继续持有并委托 `WindowInvalidator`；公开 invalidate/draw/present API 未变化。
+- 第一提交仅移动状态和私有算法，不改变行为；`Frame`/cache ranges 和不可变
+  `BuiltFrame` 尚未迁移。
+
+验证：默认/`frame-diagnostics` `cargo check -p gpui` 均通过；frame lifecycle focused
+test 通过。完整 GPUI suite 与 clippy 在提交前运行。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
