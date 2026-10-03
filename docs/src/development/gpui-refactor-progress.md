@@ -314,21 +314,24 @@ routing owner，并固定 routing order 回归测试。
 - 本提交只收拢所有权和字段路径，没有改变 capture、hit-test、dispatch tree 或 cache replay
   算法；focus state、cursor requests 和 key/action routing method 已开始下沉，仍待完整
   action/pointer routing coverage。
+- key、action 与 mouse capture/bubble 顺序均有固定 snapshot；pointer capture 在 mouse-up
+  后自动释放也有独立回归测试。
 
 验证：
 
-| 命令或检查                                                       | 结果   | 证据                                                                  |
-| ---------------------------------------------------------------- | ------ | --------------------------------------------------------------------- |
-| `cargo check --locked -p gpui`                                   | `PASS` | interaction owner 默认配置编译通过                                    |
-| `cargo test --locked -p gpui --lib`                              | `PASS` | 219 tests passed，含 routing snapshot                                 |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 221 tests passed，含 diagnostics lifecycle/runner 与 routing snapshot |
-| `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过                     |
-| `git diff --check`                                               | `PASS` | interaction owner 迁移无 whitespace error                             |
+| 命令或检查                                                       | 结果   | 证据                                                                   |
+| ---------------------------------------------------------------- | ------ | ---------------------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                   | `PASS` | interaction owner 默认配置编译通过                                     |
+| `cargo test --locked -p gpui --lib`                              | `PASS` | 223 tests passed，含 key/action/mouse routing snapshots                |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 225 tests passed，含 diagnostics lifecycle/runner 与 routing snapshots |
+| `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过                      |
+| `git diff --check`                                               | `PASS` | interaction owner 迁移无 whitespace error                              |
 
 提交：frame/input owner `a53e41c9ef`；focus/input state owner `785c0f8c2c`；routing
 order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
-下一步：继续 4B，覆盖 pointer capture 与 action routing 的固定顺序，再进入 4C
-text input owner。
+完整 routing snapshots `487347fcff`。
+下一步：继续 4B，将 key/action/mouse dispatch methods 本身下沉到 interaction owner，
+然后收敛 4C/4D ownership。
 
 4C text input owner 当前进度：
 
