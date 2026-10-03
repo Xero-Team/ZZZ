@@ -2334,10 +2334,11 @@ impl RemoteServerProjects {
     }
 
     fn init_dev_container_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let configs = self
-            .workspace
-            .read_with(cx, |workspace, cx| find_devcontainer_configs(workspace, cx))
-            .unwrap_or_default();
+        let Some(workspace) = self.workspace.upgrade() else {
+            return;
+        };
+        let configs =
+            workspace.read_with(cx, |workspace, cx| find_devcontainer_configs(workspace, cx));
 
         if configs.len() > 1 {
             let delegate = DevContainerPickerDelegate::new(configs, cx.weak_entity());
@@ -2348,16 +2349,11 @@ impl RemoteServerProjects {
                 CreateRemoteDevContainer::new(DevContainerCreationProgress::SelectingConfig, cx);
             self.mode = Mode::CreateRemoteDevContainer(state);
             cx.notify();
-        } else if let Some((app_state, context)) = self
-            .workspace
-            .read_with(cx, |workspace, cx| {
-                let app_state = workspace.app_state().clone();
-                let context = DevContainerContext::from_workspace(workspace, cx)?;
-                Some((app_state, context))
-            })
-            .ok()
-            .flatten()
-        {
+        } else if let Some((app_state, context)) = workspace.read_with(cx, |workspace, cx| {
+            let app_state = workspace.app_state().clone();
+            let context = DevContainerContext::from_workspace(workspace, cx)?;
+            Some((app_state, context))
+        }) {
             let config = configs.into_iter().next();
             self.open_dev_container(config, app_state, context, window, cx);
             self.view_in_progress_dev_container(window, cx);
