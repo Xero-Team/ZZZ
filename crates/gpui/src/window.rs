@@ -3,7 +3,7 @@ use crate::Inspector;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
-    Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DeferredDraw,
+    Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw,
     DevicePixels, DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId,
     EventEmitter, FileDropEvent, FontId, Frame, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
     InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
@@ -12,7 +12,7 @@ use crate::{
     PendingInput, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
     PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority,
     PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams,
-    RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X,
+    RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X,
     SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style,
     SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController,
     TaffyLayoutEngine, Task, TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement,
@@ -4393,12 +4393,8 @@ impl Window {
             return true;
         }
 
-        if let Some(input) = keystroke.key_char
-            && let Some(mut input_handler) = self.platform_window.take_input_handler()
-        {
-            input_handler.dispatch_input(&input, self, cx);
-            self.platform_window.set_input_handler(input_handler);
-            return true;
+        if let Some(input) = keystroke.key_char {
+            return self.dispatch_text_input(&input, cx);
         }
 
         false
@@ -4591,252 +4587,40 @@ impl Window {
 
     // If modifiers are not excessive (e.g. AltGr), and the input handler is accepting text input,
     // we prefer the text input over bindings.
-    fn input_preference(&mut self, event: &dyn Any, cx: &mut App) -> InputPreference {
+    pub(crate) fn input_preference(&mut self, event: &dyn Any, cx: &mut App) -> InputPreference {
         let prefer_character_input = event
             .downcast_ref::<KeyDownEvent>()
             .is_some_and(|key_down_event| key_down_event.prefer_character_input);
         if !prefer_character_input {
             return InputPreference::KeyBindings;
         }
-        let Some(mut input_handler) = self.platform_window.take_input_handler() else {
-            return InputPreference::KeyBindings;
-        };
-        let accepts_text_input = input_handler.accepts_text_input(self, cx);
-        self.platform_window.set_input_handler(input_handler);
-        if accepts_text_input {
+        if self.accepts_text_input(cx) {
             InputPreference::CharacterInput
         } else {
             InputPreference::KeyBindings
         }
     }
 
-    fn dispatch_key_event(&mut self, event: &dyn Any, cx: &mut App) {
-        if self.invalidator.is_dirty() {
-            self.draw(cx).clear();
-        }
-
-        let node_id = self.focus_node_id_in_rendered_frame(self.interaction.focus);
-        let dispatch_path = self
-            .interaction
-            .rendered_frame
-            .dispatch_tree
-            .dispatch_path(node_id);
-
-        let mut keystroke: Option<Keystroke> = None;
-
-        if let Some(event) = event.downcast_ref::<ModifiersChangedEvent>() {
-            if event.modifiers.number_of_modifiers() == 0
-                && self
-                    .interaction
-                    .pending_modifier
-                    .modifiers
-                    .number_of_modifiers()
-                    == 1
-                && !self.interaction.pending_modifier.saw_other_input
-            {
-                let key = match self.interaction.pending_modifier.modifiers {
-                    modifiers if modifiers.shift => Some("shift"),
-                    modifiers if modifiers.control => Some("control"),
-                    modifiers if modifiers.alt => Some("alt"),
-                    modifiers if modifiers.platform => Some("platform"),
-                    modifiers if modifiers.function => Some("function"),
-                    _ => None,
-                };
-                if let Some(key) = key {
-                    keystroke = Some(Keystroke {
-                        key: key.to_owned(),
-                        key_char: None,
-                        modifiers: Modifiers::default(),
-                    });
-                }
-            }
-
-            if self
-                .interaction
-                .pending_modifier
-                .modifiers
-                .number_of_modifiers()
-                == 0
-                && event.modifiers.number_of_modifiers() == 1
-            {
-                self.interaction.pending_modifier.saw_other_input = false
-            } else if event.modifiers.number_of_modifiers() > 1 {
-                self.interaction.pending_modifier.saw_other_input = true
-            }
-            self.interaction.pending_modifier.modifiers = event.modifiers
-        } else if let Some(key_down_event) = event.downcast_ref::<KeyDownEvent>() {
-            self.interaction.pending_modifier.saw_other_input = true;
-            keystroke = Some(key_down_event.keystroke.clone());
-            if key_down_event.keystroke.key_char.is_some()
-                && matches!(
-                    cx.cursor_hide_mode,
-                    CursorHideMode::OnTyping | CursorHideMode::OnTypingAndAction
-                )
-            {
-                cx.platform.hide_cursor_until_mouse_moves();
-            }
-        }
-
-        let Some(keystroke) = keystroke else {
-            self.finish_dispatch_key_event(
-                event,
-                None,
-                InputPreference::KeyBindings,
-                dispatch_path,
-                self.context_stack(),
-                cx,
-            );
-            return;
+    pub(crate) fn accepts_text_input(&mut self, cx: &mut App) -> bool {
+        let Some(mut input_handler) = self.platform_window.take_input_handler() else {
+            return false;
         };
-
-        let input_preference = self.input_preference(event, cx);
-
-        cx.propagate_event = true;
-        self.dispatch_keystroke_interceptors(
-            &keystroke,
-            input_preference,
-            self.context_stack(),
-            cx,
-        );
-        if !cx.propagate_event {
-            self.finish_dispatch_key_event(
-                event,
-                Some(&keystroke),
-                input_preference,
-                dispatch_path,
-                self.context_stack(),
-                cx,
-            );
-            return;
-        }
-
-        let mut currently_pending = self.interaction.pending_input.take().unwrap_or_default();
-        if currently_pending.focus.is_some() && currently_pending.focus != self.interaction.focus {
-            currently_pending = PendingInput::default();
-        }
-
-        let match_result = self.interaction.rendered_frame.dispatch_tree.dispatch_key(
-            currently_pending.keystrokes,
-            keystroke.clone(),
-            &dispatch_path,
-        );
-
-        if !match_result.to_replay.is_empty() {
-            self.replay_pending_input(match_result.to_replay, cx);
-            cx.propagate_event = true;
-        }
-
-        if !match_result.pending.is_empty() {
-            currently_pending.timer.take();
-            currently_pending.keystrokes = match_result.pending;
-            currently_pending.focus = self.interaction.focus;
-
-            let text_input_requires_timeout = event
-                .downcast_ref::<KeyDownEvent>()
-                .filter(|key_down| key_down.keystroke.key_char.is_some())
-                .and_then(|_| self.platform_window.take_input_handler())
-                .is_some_and(|mut input_handler| {
-                    let accepts = input_handler.accepts_text_input(self, cx);
-                    self.platform_window.set_input_handler(input_handler);
-                    accepts
-                });
-
-            currently_pending.needs_timeout |=
-                match_result.pending_has_binding || text_input_requires_timeout;
-
-            if currently_pending.needs_timeout {
-                currently_pending.timer = Some(self.spawn(cx, async move |cx| {
-                    cx.background_executor.timer(Duration::from_secs(1)).await;
-                    cx.update(move |window, cx| {
-                        let Some(currently_pending) = window
-                            .interaction
-                            .pending_input
-                            .take()
-                            .filter(|pending| pending.focus == window.interaction.focus)
-                        else {
-                            return;
-                        };
-
-                        let node_id =
-                            window.focus_node_id_in_rendered_frame(window.interaction.focus);
-                        let dispatch_path = window
-                            .interaction
-                            .rendered_frame
-                            .dispatch_tree
-                            .dispatch_path(node_id);
-
-                        let to_replay = window
-                            .interaction
-                            .rendered_frame
-                            .dispatch_tree
-                            .flush_dispatch(currently_pending.keystrokes, &dispatch_path);
-
-                        window.pending_input_changed(cx);
-                        window.replay_pending_input(to_replay, cx)
-                    })
-                    .log_err();
-                }));
-            } else {
-                currently_pending.timer = None;
-            }
-            self.interaction.pending_input = Some(currently_pending);
-            self.pending_input_changed(cx);
-            cx.propagate_event = false;
-            return;
-        }
-
-        // Interceptors or replayed actions may have changed whether the input handler accepts text.
-        let input_preference = self.input_preference(event, cx);
-        if input_preference == InputPreference::KeyBindings {
-            for binding in match_result.bindings {
-                self.dispatch_action_on_node(node_id, binding.action.as_ref(), cx);
-                if !cx.propagate_event {
-                    self.dispatch_keystroke_observers(
-                        &keystroke,
-                        input_preference,
-                        Some(binding.action.as_ref()),
-                        match_result.context_stack,
-                        cx,
-                    );
-                    self.pending_input_changed(cx);
-                    return;
-                }
-            }
-        }
-
-        self.finish_dispatch_key_event(
-            event,
-            Some(&keystroke),
-            input_preference,
-            dispatch_path,
-            match_result.context_stack,
-            cx,
-        );
-        self.pending_input_changed(cx);
+        let accepts_text_input = input_handler.accepts_text_input(self, cx);
+        self.platform_window.set_input_handler(input_handler);
+        accepts_text_input
     }
 
-    fn finish_dispatch_key_event(
-        &mut self,
-        event: &dyn Any,
-        recognized_keystroke: Option<&Keystroke>,
-        input_preference: InputPreference,
-        dispatch_path: SmallVec<[DispatchNodeId; 32]>,
-        context_stack: Vec<KeyContext>,
-        cx: &mut App,
-    ) {
-        self.dispatch_key_down_up_event(event, &dispatch_path, cx);
-        if !cx.propagate_event {
-            return;
-        }
+    pub(crate) fn dispatch_text_input(&mut self, input: &str, cx: &mut App) -> bool {
+        let Some(mut input_handler) = self.platform_window.take_input_handler() else {
+            return false;
+        };
+        input_handler.dispatch_input(input, self, cx);
+        self.platform_window.set_input_handler(input_handler);
+        true
+    }
 
-        self.dispatch_modifiers_changed_event(event, &dispatch_path, cx);
-        if !cx.propagate_event {
-            return;
-        }
-
-        if let Some(keystroke) = recognized_keystroke {
-            self.dispatch_keystroke_observers(keystroke, input_preference, None, context_stack, cx);
-        }
+    fn dispatch_key_event(&mut self, event: &dyn Any, cx: &mut App) {
+        InteractionOwner::dispatch_key_event(self, event, cx);
     }
 
     pub(crate) fn pending_input_changed(&mut self, cx: &mut App) {
@@ -4844,57 +4628,6 @@ impl Window {
             .pending_input_observers
             .clone()
             .retain(&(), |callback| callback(self, cx));
-    }
-
-    fn dispatch_key_down_up_event(
-        &mut self,
-        event: &dyn Any,
-        dispatch_path: &SmallVec<[DispatchNodeId; 32]>,
-        cx: &mut App,
-    ) {
-        // Capture phase
-        for node_id in dispatch_path {
-            let node = self.interaction.rendered_frame.dispatch_tree.node(*node_id);
-
-            for key_listener in node.key_listeners.clone() {
-                key_listener(event, DispatchPhase::Capture, self, cx);
-                if !cx.propagate_event {
-                    return;
-                }
-            }
-        }
-
-        // Bubble phase
-        for node_id in dispatch_path.iter().rev() {
-            // Handle low level key events
-            let node = self.interaction.rendered_frame.dispatch_tree.node(*node_id);
-            for key_listener in node.key_listeners.clone() {
-                key_listener(event, DispatchPhase::Bubble, self, cx);
-                if !cx.propagate_event {
-                    return;
-                }
-            }
-        }
-    }
-
-    fn dispatch_modifiers_changed_event(
-        &mut self,
-        event: &dyn Any,
-        dispatch_path: &SmallVec<[DispatchNodeId; 32]>,
-        cx: &mut App,
-    ) {
-        let Some(event) = event.downcast_ref::<ModifiersChangedEvent>() else {
-            return;
-        };
-        for node_id in dispatch_path.iter().rev() {
-            let node = self.interaction.rendered_frame.dispatch_tree.node(*node_id);
-            for listener in node.modifiers_changed_listeners.clone() {
-                listener(event, self, cx);
-                if !cx.propagate_event {
-                    return;
-                }
-            }
-        }
     }
 
     /// Pending input that can still complete a binding. Input left over from a previous focus can
@@ -4928,49 +4661,6 @@ impl Window {
     pub fn pending_input_keystrokes(&self) -> Option<&[Keystroke]> {
         self.active_pending_input()
             .map(|pending_input| pending_input.keystrokes.as_slice())
-    }
-
-    fn replay_pending_input(&mut self, replays: SmallVec<[Replay; 1]>, cx: &mut App) {
-        let node_id = self.focus_node_id_in_rendered_frame(self.interaction.focus);
-        let dispatch_path = self
-            .interaction
-            .rendered_frame
-            .dispatch_tree
-            .dispatch_path(node_id);
-
-        'replay: for replay in replays {
-            let event = KeyDownEvent {
-                keystroke: replay.keystroke.clone(),
-                is_held: false,
-                prefer_character_input: true,
-            };
-
-            cx.propagate_event = true;
-            for binding in replay.bindings {
-                self.dispatch_action_on_node(node_id, binding.action.as_ref(), cx);
-                if !cx.propagate_event {
-                    self.dispatch_keystroke_observers(
-                        &replay.keystroke,
-                        InputPreference::KeyBindings,
-                        Some(binding.action.as_ref()),
-                        Vec::default(),
-                        cx,
-                    );
-                    continue 'replay;
-                }
-            }
-
-            self.dispatch_key_down_up_event(&event, &dispatch_path, cx);
-            if !cx.propagate_event {
-                continue 'replay;
-            }
-            if let Some(input) = replay.keystroke.key_char.clone()
-                && let Some(mut input_handler) = self.platform_window.take_input_handler()
-            {
-                input_handler.dispatch_input(&input, self, cx);
-                self.platform_window.set_input_handler(input_handler)
-            }
-        }
     }
 
     fn focus_node_id_in_rendered_frame(&self, focus_id: Option<FocusId>) -> DispatchNodeId {

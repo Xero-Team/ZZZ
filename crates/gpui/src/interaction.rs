@@ -2,11 +2,13 @@ use crate::window::{AnyObserver, AnyWindowFocusListener, DispatchPhase, HitTest}
 use crate::{
     Action, App, Bounds, BuiltFrame, Capslock, ContentMask, CursorHideMode, CursorStyle,
     DispatchActionListener, DispatchNodeId, FocusId, Frame, Hitbox, HitboxBehavior, HitboxId,
-    Keystroke, Modifiers, MouseMoveEvent, MouseUpEvent, Pixels, Point, SubscriberSet, Task,
-    TextInputOwner, Window,
+    InputPreference, KeyContext, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, Replay, SubscriberSet, Task, TextInputOwner,
+    Window,
 };
+use gpui_util::ResultExt;
 use smallvec::SmallVec;
-use std::{any::Any, mem};
+use std::{any::Any, mem, time::Duration};
 
 /// Runtime interaction state owned by a window.
 ///
@@ -272,6 +274,350 @@ impl InteractionOwner {
 
             cx.global_action_listeners
                 .insert(action.as_any().type_id(), global_listeners);
+        }
+    }
+
+    pub(crate) fn dispatch_key_event(window: &mut Window, event: &dyn Any, cx: &mut App) {
+        if window.invalidator.is_dirty() {
+            window.draw(cx).clear();
+        }
+
+        let node_id = window
+            .interaction
+            .focus_node_id_in_rendered_frame(window.interaction.focus);
+        let dispatch_path = window
+            .interaction
+            .rendered_frame
+            .dispatch_tree
+            .dispatch_path(node_id);
+
+        let mut keystroke: Option<Keystroke> = None;
+
+        if let Some(event) = event.downcast_ref::<ModifiersChangedEvent>() {
+            if event.modifiers.number_of_modifiers() == 0
+                && window
+                    .interaction
+                    .pending_modifier
+                    .modifiers
+                    .number_of_modifiers()
+                    == 1
+                && !window.interaction.pending_modifier.saw_other_input
+            {
+                let key = match window.interaction.pending_modifier.modifiers {
+                    modifiers if modifiers.shift => Some("shift"),
+                    modifiers if modifiers.control => Some("control"),
+                    modifiers if modifiers.alt => Some("alt"),
+                    modifiers if modifiers.platform => Some("platform"),
+                    modifiers if modifiers.function => Some("function"),
+                    _ => None,
+                };
+                if let Some(key) = key {
+                    keystroke = Some(Keystroke {
+                        key: key.to_owned(),
+                        key_char: None,
+                        modifiers: Modifiers::default(),
+                    });
+                }
+            }
+
+            if window
+                .interaction
+                .pending_modifier
+                .modifiers
+                .number_of_modifiers()
+                == 0
+                && event.modifiers.number_of_modifiers() == 1
+            {
+                window.interaction.pending_modifier.saw_other_input = false
+            } else if event.modifiers.number_of_modifiers() > 1 {
+                window.interaction.pending_modifier.saw_other_input = true
+            }
+            window.interaction.pending_modifier.modifiers = event.modifiers
+        } else if let Some(key_down_event) = event.downcast_ref::<KeyDownEvent>() {
+            window.interaction.pending_modifier.saw_other_input = true;
+            keystroke = Some(key_down_event.keystroke.clone());
+            if key_down_event.keystroke.key_char.is_some()
+                && matches!(
+                    cx.cursor_hide_mode,
+                    CursorHideMode::OnTyping | CursorHideMode::OnTypingAndAction
+                )
+            {
+                cx.platform.hide_cursor_until_mouse_moves();
+            }
+        }
+
+        let Some(keystroke) = keystroke else {
+            Self::finish_dispatch_key_event(
+                window,
+                event,
+                None,
+                InputPreference::KeyBindings,
+                dispatch_path,
+                window.context_stack(),
+                cx,
+            );
+            return;
+        };
+
+        let input_preference = window.input_preference(event, cx);
+
+        cx.propagate_event = true;
+        window.dispatch_keystroke_interceptors(
+            &keystroke,
+            input_preference,
+            window.context_stack(),
+            cx,
+        );
+        if !cx.propagate_event {
+            Self::finish_dispatch_key_event(
+                window,
+                event,
+                Some(&keystroke),
+                input_preference,
+                dispatch_path,
+                window.context_stack(),
+                cx,
+            );
+            return;
+        }
+
+        let mut currently_pending = window.interaction.pending_input.take().unwrap_or_default();
+        if currently_pending.focus.is_some() && currently_pending.focus != window.interaction.focus
+        {
+            currently_pending = PendingInput::default();
+        }
+
+        let match_result = window
+            .interaction
+            .rendered_frame
+            .dispatch_tree
+            .dispatch_key(
+                currently_pending.keystrokes,
+                keystroke.clone(),
+                &dispatch_path,
+            );
+
+        if !match_result.to_replay.is_empty() {
+            Self::replay_pending_input(window, match_result.to_replay, cx);
+            cx.propagate_event = true;
+        }
+
+        if !match_result.pending.is_empty() {
+            currently_pending.timer.take();
+            currently_pending.keystrokes = match_result.pending;
+            currently_pending.focus = window.interaction.focus;
+
+            let text_input_requires_timeout =
+                event
+                    .downcast_ref::<KeyDownEvent>()
+                    .is_some_and(|key_down| {
+                        key_down.keystroke.key_char.is_some() && window.accepts_text_input(cx)
+                    });
+
+            currently_pending.needs_timeout |=
+                match_result.pending_has_binding || text_input_requires_timeout;
+
+            if currently_pending.needs_timeout {
+                currently_pending.timer = Some(window.spawn(cx, async move |cx| {
+                    cx.background_executor.timer(Duration::from_secs(1)).await;
+                    cx.update(move |window, cx| {
+                        let Some(currently_pending) = window
+                            .interaction
+                            .pending_input
+                            .take()
+                            .filter(|pending| pending.focus == window.interaction.focus)
+                        else {
+                            return;
+                        };
+
+                        let node_id = window
+                            .interaction
+                            .focus_node_id_in_rendered_frame(window.interaction.focus);
+                        let dispatch_path = window
+                            .interaction
+                            .rendered_frame
+                            .dispatch_tree
+                            .dispatch_path(node_id);
+
+                        let to_replay = window
+                            .interaction
+                            .rendered_frame
+                            .dispatch_tree
+                            .flush_dispatch(currently_pending.keystrokes, &dispatch_path);
+
+                        window.pending_input_changed(cx);
+                        Self::replay_pending_input(window, to_replay, cx)
+                    })
+                    .log_err();
+                }));
+            } else {
+                currently_pending.timer = None;
+            }
+            window.interaction.pending_input = Some(currently_pending);
+            window.pending_input_changed(cx);
+            cx.propagate_event = false;
+            return;
+        }
+
+        let input_preference = window.input_preference(event, cx);
+        if input_preference == InputPreference::KeyBindings {
+            for binding in match_result.bindings {
+                Self::dispatch_action_on_node(window, node_id, binding.action.as_ref(), cx);
+                if !cx.propagate_event {
+                    window.dispatch_keystroke_observers(
+                        &keystroke,
+                        input_preference,
+                        Some(binding.action.as_ref()),
+                        match_result.context_stack,
+                        cx,
+                    );
+                    window.pending_input_changed(cx);
+                    return;
+                }
+            }
+        }
+
+        Self::finish_dispatch_key_event(
+            window,
+            event,
+            Some(&keystroke),
+            input_preference,
+            dispatch_path,
+            match_result.context_stack,
+            cx,
+        );
+        window.pending_input_changed(cx);
+    }
+
+    fn finish_dispatch_key_event(
+        window: &mut Window,
+        event: &dyn Any,
+        recognized_keystroke: Option<&Keystroke>,
+        input_preference: InputPreference,
+        dispatch_path: SmallVec<[DispatchNodeId; 32]>,
+        context_stack: Vec<KeyContext>,
+        cx: &mut App,
+    ) {
+        Self::dispatch_key_down_up_event(window, event, &dispatch_path, cx);
+        if !cx.propagate_event {
+            return;
+        }
+
+        Self::dispatch_modifiers_changed_event(window, event, &dispatch_path, cx);
+        if !cx.propagate_event {
+            return;
+        }
+
+        if let Some(keystroke) = recognized_keystroke {
+            window.dispatch_keystroke_observers(
+                keystroke,
+                input_preference,
+                None,
+                context_stack,
+                cx,
+            );
+        }
+    }
+
+    fn dispatch_key_down_up_event(
+        window: &mut Window,
+        event: &dyn Any,
+        dispatch_path: &SmallVec<[DispatchNodeId; 32]>,
+        cx: &mut App,
+    ) {
+        for node_id in dispatch_path {
+            let node = window
+                .interaction
+                .rendered_frame
+                .dispatch_tree
+                .node(*node_id);
+
+            for key_listener in node.key_listeners.clone() {
+                key_listener(event, DispatchPhase::Capture, window, cx);
+                if !cx.propagate_event {
+                    return;
+                }
+            }
+        }
+
+        for node_id in dispatch_path.iter().rev() {
+            let node = window
+                .interaction
+                .rendered_frame
+                .dispatch_tree
+                .node(*node_id);
+            for key_listener in node.key_listeners.clone() {
+                key_listener(event, DispatchPhase::Bubble, window, cx);
+                if !cx.propagate_event {
+                    return;
+                }
+            }
+        }
+    }
+
+    fn dispatch_modifiers_changed_event(
+        window: &mut Window,
+        event: &dyn Any,
+        dispatch_path: &SmallVec<[DispatchNodeId; 32]>,
+        cx: &mut App,
+    ) {
+        let Some(event) = event.downcast_ref::<ModifiersChangedEvent>() else {
+            return;
+        };
+        for node_id in dispatch_path.iter().rev() {
+            let node = window
+                .interaction
+                .rendered_frame
+                .dispatch_tree
+                .node(*node_id);
+            for listener in node.modifiers_changed_listeners.clone() {
+                listener(event, window, cx);
+                if !cx.propagate_event {
+                    return;
+                }
+            }
+        }
+    }
+
+    fn replay_pending_input(window: &mut Window, replays: SmallVec<[Replay; 1]>, cx: &mut App) {
+        let node_id = window
+            .interaction
+            .focus_node_id_in_rendered_frame(window.interaction.focus);
+        let dispatch_path = window
+            .interaction
+            .rendered_frame
+            .dispatch_tree
+            .dispatch_path(node_id);
+
+        'replay: for replay in replays {
+            let event = KeyDownEvent {
+                keystroke: replay.keystroke.clone(),
+                is_held: false,
+                prefer_character_input: true,
+            };
+
+            cx.propagate_event = true;
+            for binding in replay.bindings {
+                Self::dispatch_action_on_node(window, node_id, binding.action.as_ref(), cx);
+                if !cx.propagate_event {
+                    window.dispatch_keystroke_observers(
+                        &replay.keystroke,
+                        InputPreference::KeyBindings,
+                        Some(binding.action.as_ref()),
+                        Vec::default(),
+                        cx,
+                    );
+                    continue 'replay;
+                }
+            }
+
+            Self::dispatch_key_down_up_event(window, &event, &dispatch_path, cx);
+            if !cx.propagate_event {
+                continue 'replay;
+            }
+            if let Some(input) = replay.keystroke.key_char.as_deref() {
+                window.dispatch_text_input(input, cx);
+            }
         }
     }
 
