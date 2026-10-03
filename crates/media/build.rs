@@ -1,14 +1,16 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 
-#[cfg(target_os = "macos")]
 use std::{env, path::PathBuf, process::Command};
 
-#[cfg(not(target_os = "macos"))]
-fn main() {}
-
-#[cfg(target_os = "macos")]
 fn main() {
+    // Build scripts are compiled for the host. Read Cargo's target metadata so
+    // macOS bindings are generated when the target is macOS on a Linux host.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+
     println!("cargo:rerun-if-changed=src/bindings.h");
+    println!("cargo:rerun-if-changed=../../script/ensure-macos-sdk");
     println!("cargo:rerun-if-env-changed=SDKROOT");
     clear_zig_bindgen_args();
 
@@ -42,13 +44,12 @@ fn main() {
         .generate()
         .expect("unable to generate bindings");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("couldn't write dispatch bindings");
 }
 
-#[cfg(target_os = "macos")]
 fn clear_zig_bindgen_args() {
     unsafe {
         env::remove_var("BINDGEN_EXTRA_CLANG_ARGS");
@@ -66,7 +67,6 @@ fn clear_zig_bindgen_args() {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn macos_sdk_path() -> String {
     if let Ok(path) = env::var("SDKROOT") {
         let path = path.trim().to_string();
@@ -75,17 +75,22 @@ fn macos_sdk_path() -> String {
         }
     }
 
-    let output = Command::new("xcrun")
-        .args(["--sdk", "macosx", "--show-sdk-path"])
+    // `xcrun` is only available on a macOS build host. Reuse the repository
+    // helper for Linux cross-builds so direct `cargo zigbuild` invocations get
+    // the same SDK setup as the release and runtime remote-server builders.
+    let ensure_sdk =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"))
+            .join("../../script/ensure-macos-sdk");
+    let output = Command::new(ensure_sdk)
         .output()
-        .expect("xcrun not found; set SDKROOT for macOS cross-compilation");
+        .expect("failed to run script/ensure-macos-sdk");
     assert!(
         output.status.success(),
-        "xcrun --show-sdk-path failed: {}",
+        "script/ensure-macos-sdk failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout)
-        .expect("xcrun sdk path was not utf-8")
+        .expect("macOS SDK path was not utf-8")
         .trim_end()
         .to_string()
 }

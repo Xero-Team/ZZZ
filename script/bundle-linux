@@ -9,6 +9,9 @@ help_info() {
 Usage: ${0##*/} [options]
 Build a release .tar.gz for Linux.
 
+When Zig and cargo-zigbuild are available, the bundle also embeds macOS
+x86_64 and aarch64 remote_server archives for SSH remote development.
+
 Options:
   -h, --help     Display this help and exit.
   --flatpak      Set ZZZ_BUNDLE_TYPE=flatpak so that this can be included in system info
@@ -265,6 +268,62 @@ if [[ "$remote_server_triple" != "aarch64-unknown-linux-musl" ]] \
             > "${target_dir}/zzz-remote-server-linux-aarch64.gz"
     else
         echo "Info: skipped aarch64 remote_server embed; zigbuild failed."
+    fi
+fi
+
+build_macos_remote_server() {
+    local macos_triple="$1"
+    local macos_arch="$2"
+    if "$rustup_installed"; then
+        if ! rustup target add "$macos_triple"; then
+            echo "Info: skipped ${macos_triple} remote_server embed; rustup target installation failed."
+            return 0
+        fi
+    fi
+    rm -rf "${target_dir}/${macos_triple}/release/build"/aws-lc-sys-*
+    rm -rf "${target_dir}/${macos_triple}/release/.fingerprint"/aws-lc-sys-*
+    rm -f "${target_dir}/${macos_triple}/release/deps"/libaws_lc*
+    echo "Compiling remote_server for ${macos_triple}"
+    if cargo zigbuild --release --package remote_server \
+        --target-dir "${target_dir}" --target "$macos_triple"; then
+        gzip -f --stdout --best "${target_dir}/${macos_triple}/release/remote_server" \
+            > "${target_dir}/zzz-remote-server-macos-${macos_arch}.gz"
+    else
+        echo "Info: skipped ${macos_triple} remote_server embed; zigbuild failed."
+    fi
+}
+
+if command -v zig >/dev/null 2>&1 && command -v cargo-zigbuild >/dev/null 2>&1; then
+    export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+    export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
+    mkdir -p "${ZIG_LOCAL_CACHE_DIR}"
+
+    saved_cxxflags="${CXXFLAGS:-}"
+    saved_sdkroot="${SDKROOT:-}"
+    saved_rustflags="${RUSTFLAGS:-}"
+    unset CXXFLAGS
+    if macos_sdkroot="$(script/ensure-macos-sdk)"; then
+        export SDKROOT="${macos_sdkroot}"
+        export RUSTFLAGS="${base_rustflags} -A linker_messages"
+        build_macos_remote_server x86_64-apple-darwin x86_64
+        build_macos_remote_server aarch64-apple-darwin aarch64
+    else
+        echo "Info: skipped macOS remote_server embeds; macOS SDK preparation failed."
+    fi
+    if [[ -n "${saved_cxxflags}" ]]; then
+        export CXXFLAGS="${saved_cxxflags}"
+    else
+        unset CXXFLAGS
+    fi
+    if [[ -n "${saved_sdkroot}" ]]; then
+        export SDKROOT="${saved_sdkroot}"
+    else
+        unset SDKROOT
+    fi
+    if [[ -n "${saved_rustflags}" ]]; then
+        export RUSTFLAGS="${saved_rustflags}"
+    else
+        unset RUSTFLAGS
     fi
 fi
 unset ZZZ_BUILDING_REMOTE_SERVER
