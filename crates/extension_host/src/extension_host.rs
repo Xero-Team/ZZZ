@@ -321,8 +321,9 @@ impl ExtensionStore {
                 future.await;
             }
             this.update(cx, |this, cx| this.auto_install_extensions(cx))
-                .ok();
-            this.update(cx, |this, cx| this.check_for_updates(cx)).ok();
+                .log_err();
+            this.update(cx, |this, cx| this.check_for_updates(cx))
+                .log_err();
         })
         .detach();
 
@@ -610,7 +611,7 @@ impl ExtensionStore {
                 this.update(cx, |this, cx| {
                     this.install_latest_extension(extension_id.clone(), cx);
                 })
-                .ok();
+                .log_err();
             }
         })
         .detach();
@@ -805,7 +806,7 @@ impl ExtensionStore {
                         });
                     }
                 })
-                .ok();
+                .log_err();
             }
 
             anyhow::Ok(())
@@ -1454,7 +1455,7 @@ impl ExtensionStore {
                         this.update(cx, |_, cx| {
                             cx.emit(Event::ExtensionFailedToLoad(extension.manifest.id.clone()))
                         })
-                        .ok();
+                        .log_err();
                     }
                 }
             }
@@ -1514,7 +1515,7 @@ impl ExtensionStore {
                     });
                 }
             })
-            .ok();
+            .log_err();
         })
     }
 
