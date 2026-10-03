@@ -392,7 +392,7 @@ immutable `BuiltFrame`。
   swapchain 行为。
 - `gpui_wgpu/src/wgpu_renderer/resources.rs` 现在承载 GPU resource lifetime，
   `pipelines.rs` 承载 pipeline/layout definitions，`surface.rs` 承载 surface config/context
-  alias；headless path 保持独立。
+  alias，`frame.rs` 承载 upload/readback POD；headless path 保持独立。
 
 验证：
 
@@ -409,7 +409,7 @@ immutable `BuiltFrame`。
 | `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过      |
 | `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error          |
 
-提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`；surface split `bffcfd6e62`.
+提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`；surface split `bffcfd6e62`；frame helper split `ea29cf0afc`.
 EXP-004/005 当前状态：`PARTIAL`。clean check 在当前样本中未超过 baseline*1.10，
 但 consumer edit/rebuild graph、binary-size 和 golden scene equivalence 尚未完成；因此
 不创建独立 `gpui_render` crate。
