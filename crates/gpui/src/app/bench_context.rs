@@ -2,12 +2,35 @@ use std::{future::Future, rc::Rc, sync::Arc};
 
 use anyhow::{Result, anyhow};
 
+#[cfg(feature = "test-support")]
+use crate::ThreadedDispatcher;
 use crate::{
     AnyView, AnyWindowHandle, App, AppCell, AppContext, BackgroundExecutor, Bounds, Context, Empty,
     Entity, EntityId, Focusable, ForegroundExecutor, Global, Render, Reservation, Task,
     TestDispatcher, TestPlatform, VisualContext, Window, WindowBounds, WindowHandle, WindowOptions,
     app::{GpuiBorrow, GpuiMode},
 };
+
+#[derive(Clone)]
+enum BenchDispatcher {
+    Deterministic(TestDispatcher),
+    #[cfg(feature = "test-support")]
+    Threaded(Arc<ThreadedDispatcher>),
+}
+
+impl BenchDispatcher {
+    fn run_until_idle(&self) {
+        match self {
+            Self::Deterministic(dispatcher) => dispatcher.run_until_parked(),
+            #[cfg(feature = "test-support")]
+            Self::Threaded(dispatcher) => dispatcher.run_until_idle(),
+        }
+    }
+
+    fn is_deterministic(&self) -> bool {
+        matches!(self, Self::Deterministic(_))
+    }
+}
 
 /// A GPUI app context for Criterion benchmarks.
 ///
@@ -20,7 +43,7 @@ pub struct BenchAppContext {
     app: Rc<AppCell>,
     background_executor: BackgroundExecutor,
     foreground_executor: ForegroundExecutor,
-    dispatcher: TestDispatcher,
+    dispatcher: BenchDispatcher,
     benchmark_name: Option<&'static str>,
 }
 
@@ -32,13 +55,32 @@ impl BenchAppContext {
 
     /// Creates a new benchmark app context with the provided scheduler seed.
     pub fn with_seed(benchmark_name: Option<&'static str>, seed: u64) -> Self {
-        Self::build(TestDispatcher::new(seed), benchmark_name)
+        let dispatcher = TestDispatcher::new(seed);
+        Self::build(
+            Arc::new(dispatcher.clone()),
+            BenchDispatcher::Deterministic(dispatcher),
+            benchmark_name,
+        )
     }
 
-    fn build(dispatcher: TestDispatcher, benchmark_name: Option<&'static str>) -> Self {
-        let dispatcher = Arc::new(dispatcher);
-        let background_executor = BackgroundExecutor::new(dispatcher.clone());
-        let foreground_executor = ForegroundExecutor::new(dispatcher.clone());
+    /// Creates a benchmark context backed by real worker threads and timers.
+    #[cfg(feature = "test-support")]
+    pub fn threaded(benchmark_name: Option<&'static str>) -> Self {
+        let dispatcher = Arc::new(ThreadedDispatcher::new());
+        Self::build(
+            dispatcher.clone(),
+            BenchDispatcher::Threaded(dispatcher),
+            benchmark_name,
+        )
+    }
+
+    fn build(
+        platform_dispatcher: Arc<dyn crate::PlatformDispatcher>,
+        dispatcher: BenchDispatcher,
+        benchmark_name: Option<&'static str>,
+    ) -> Self {
+        let background_executor = BackgroundExecutor::new(platform_dispatcher.clone());
+        let foreground_executor = ForegroundExecutor::new(platform_dispatcher);
         let platform = TestPlatform::new(background_executor.clone(), foreground_executor.clone());
         let asset_source = Arc::new(());
         let http_client = http_client::FakeHttpClient::with_404_response();
@@ -49,7 +91,7 @@ impl BenchAppContext {
             app,
             background_executor,
             foreground_executor,
-            dispatcher: (*dispatcher).clone(),
+            dispatcher,
             benchmark_name,
         }
     }
@@ -71,7 +113,7 @@ impl BenchAppContext {
 
     /// Runs pending scheduled work until the benchmark app is idle.
     pub fn run_until_idle(&self) {
-        self.dispatcher.run_until_parked();
+        self.dispatcher.run_until_idle();
     }
 
     /// Updates the app and flushes synchronous GPUI effects afterward.
@@ -114,8 +156,11 @@ impl BenchAppContext {
     /// Runs GPUI benchmark teardown.
     pub fn teardown(mut self) {
         self.run_until_idle();
-        self.update(|cx| {
-            cx.background_executor().forbid_parking();
+        let deterministic = self.dispatcher.is_deterministic();
+        self.update(move |cx| {
+            if deterministic {
+                cx.background_executor().forbid_parking();
+            }
             cx.quit();
         });
         self.run_until_idle();
@@ -383,5 +428,111 @@ impl VisualContext for BenchWindowContext {
         self.window.update(&mut self.cx, |_, window, cx| {
             entity.read(cx).focus_handle(cx).focus(window, cx)
         })
+    }
+}
+
+#[cfg(all(test, feature = "test-support"))]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    use futures::channel::oneshot;
+    use std::time::Instant;
+
+    use super::*;
+
+    #[test]
+    fn threaded_context_completes_background_to_main_handoff() {
+        let cx = BenchAppContext::threaded(Some("threaded_context_handoff"));
+        let background = cx.background_executor().clone();
+        let foreground = cx.foreground_executor().clone();
+        let completed = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = oneshot::channel();
+
+        foreground
+            .spawn({
+                let completed = completed.clone();
+                async move {
+                    receiver.await.expect("background sender should complete");
+                    completed.store(true, Ordering::SeqCst);
+                }
+            })
+            .detach();
+        background
+            .spawn(async move { sender.send(()).expect("foreground receiver should live") })
+            .detach();
+
+        cx.run_until_idle();
+        assert!(completed.load(Ordering::SeqCst));
+        cx.teardown();
+    }
+
+    #[test]
+    fn threaded_context_runs_exp_008_seed_matrix() {
+        const SEEDS: usize = 100;
+        let mut cx = BenchAppContext::threaded(Some("exp_008_seed_matrix"));
+        let background = cx.background_executor().clone();
+        let foreground = cx.foreground_executor().clone();
+        let mut elapsed_samples = Vec::with_capacity(SEEDS);
+
+        for seed in 0..SEEDS {
+            let mut window = cx.add_empty_window();
+            let started_at = Instant::now();
+            let task_count = seed % 4 + 1;
+            let completed_tasks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            for _ in 0..task_count {
+                let timer = background.timer(std::time::Duration::ZERO);
+                background
+                    .spawn({
+                        let completed_tasks = completed_tasks.clone();
+                        async move {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            timer.await;
+                            completed_tasks.fetch_add(1, Ordering::SeqCst);
+                        }
+                    })
+                    .detach();
+            }
+
+            let handoff_completed = Arc::new(AtomicBool::new(false));
+            let (sender, receiver) = oneshot::channel();
+            foreground
+                .spawn({
+                    let handoff_completed = handoff_completed.clone();
+                    async move {
+                        receiver.await.expect("background sender should complete");
+                        handoff_completed.store(true, Ordering::SeqCst);
+                    }
+                })
+                .detach();
+            background
+                .spawn(async move { sender.send(()).expect("foreground receiver should live") })
+                .detach();
+
+            let canceled_task = background.spawn(std::future::pending::<()>());
+            drop(canceled_task);
+
+            cx.run_until_idle();
+            assert_eq!(completed_tasks.load(Ordering::SeqCst), task_count);
+            assert!(handoff_completed.load(Ordering::SeqCst));
+            window.update(|window, _| window.remove_window());
+            window.run_until_idle();
+            elapsed_samples.push(started_at.elapsed().as_secs_f64());
+        }
+
+        let measured = &elapsed_samples[10..];
+        let mean = measured.iter().sum::<f64>() / measured.len() as f64;
+        let variance = measured
+            .iter()
+            .map(|sample| (sample - mean).powi(2))
+            .sum::<f64>()
+            / measured.len() as f64;
+        let coefficient_of_variation = variance.sqrt() / mean;
+        println!(
+            "GPUI_EXP_008 seeds={SEEDS} mean_seconds={mean:.9} cv={coefficient_of_variation:.6}"
+        );
+        cx.teardown();
     }
 }

@@ -1,5 +1,6 @@
 use std::{
     collections::BinaryHeap,
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::Arc,
     thread,
     time::{Duration, Instant},
@@ -121,7 +122,9 @@ impl ThreadedDispatcher {
                 .spawn(move || {
                     while let Ok(runnable) = receiver.pop() {
                         let _decrement = idle.decrement_on_drop();
-                        runnable.run();
+                        if catch_unwind(AssertUnwindSafe(|| runnable.run())).is_err() {
+                            log::error!("threaded dispatcher background task panicked");
+                        }
                     }
                 })
                 .expect("threaded dispatcher worker should spawn");
@@ -163,7 +166,9 @@ impl ThreadedDispatcher {
                         drop(state);
                         {
                             let _decrement = idle.decrement_on_drop();
-                            entry.runnable.run();
+                            if catch_unwind(AssertUnwindSafe(|| entry.runnable.run())).is_err() {
+                                log::error!("threaded dispatcher timer task panicked");
+                            }
                         }
                         state = timers.state.lock();
                     }
@@ -433,5 +438,34 @@ mod tests {
             dispatcher.run_until_idle();
             assert_eq!(completed.load(Ordering::SeqCst), 4);
         }
+    }
+
+    #[test]
+    fn panic_and_cancellation_leave_dispatcher_idle() {
+        let dispatcher = Arc::new(ThreadedDispatcher::new());
+        let background = BackgroundExecutor::new(dispatcher.clone());
+
+        background
+            .spawn(async move {
+                panic!("intentional threaded dispatcher test panic");
+            })
+            .detach();
+        dispatcher.run_until_idle();
+        assert!(dispatcher.is_idle(), "{}", dispatcher.debug_state());
+
+        let started = Arc::new(AtomicBool::new(false));
+        let task = background.spawn({
+            let started = started.clone();
+            async move {
+                started.store(true, Ordering::SeqCst);
+                std::future::pending::<()>().await;
+            }
+        });
+        while !started.load(Ordering::SeqCst) {
+            thread::yield_now();
+        }
+        drop(task);
+        dispatcher.run_until_idle();
+        assert!(dispatcher.is_idle(), "{}", dispatcher.debug_state());
     }
 }

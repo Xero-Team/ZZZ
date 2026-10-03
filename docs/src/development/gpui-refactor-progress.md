@@ -208,6 +208,10 @@ diagnostics feature。
 - worker pool、main-thread handoff、real-time timer queue、idle tracking 和显式
   dispatcher drop shutdown 已实现；普通 deterministic tests 继续使用 `TestDispatcher`。
 - 3 个 focused tests 通过，其中 teardown test 创建并销毁 100 个 dispatcher 实例。
+- worker/timer runnable panic 使用 unwind guard 隔离，panic 后 idle tracking 保持一致；
+  Task drop cancellation 不遗留 in-flight work。
+- `BenchAppContext::threaded` 可显式选择 production-like dispatcher；默认构造仍使用
+  deterministic virtual-clock `TestDispatcher`。
 - 增加可选 `accessibility` feature 的 AccessKit core seam：稳定 node ID、完整
   `TreeUpdate` snapshot、focus 映射和一次性 action router；不连接平台 writer。
 
@@ -219,22 +223,25 @@ diagnostics feature。
 | `cc053a4a6fa2fd0e8793201ed9099466af1be0b1` | C     | AccessKit writer/semantic tree is absent from ZZZ; the one-line author-id builder cannot be isolated from the missing accessibility chain.                                                        |
 | `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | C     | ZZZ has no macOS AccessKit adapter or SubclassingAdapter ownership to release.                                                                                                                    |
 
-当前仍待完成：ThreadedDispatcher 100-seed panic/cancellation parity、GPUI semantic
-node/action 与 Window/Element 集成、Linux/Windows/macOS adapter 分离审查，以及 native
-screen-reader runbook。当前 core snapshot/action tests 为 `PASS`；EXP-008 尚未达到最终
-阈值，AccessKit EXP-006 尚未运行。
+当前仍待完成：GPUI semantic node/action 与 Window/Element 集成、Linux/Windows/macOS
+adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher EXP-008 已
+达标；AccessKit EXP-006 尚未运行。
 
 阶段 2 验证：
 
-| 命令或检查                                                                | 结果      | 原始数据/说明                                                                               |
-| ------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------- |
-| `cargo check --locked -p gpui --features test-support`                    | `PASS`    | ThreadedDispatcher port                                                                     |
-| `cargo test --locked -p gpui --features test-support threaded_dispatcher` | `PASS`    | handoff、real-time timer/cancel、100 次 dispatcher teardown                                 |
-| `./script/clippy -p gpui --features test-support`                         | `PASS`    | all-target release clippy + philosophy                                                      |
-| `cargo check --locked -p gpui --features accessibility`                   | `PASS`    | AccessKit 0.24.1 core seam                                                                  |
-| `cargo test --locked -p gpui --features accessibility accessibility`      | `PASS`    | 3 semantic snapshot/action tests                                                            |
-| EXP-006 native adapter/screen-reader QA                                   | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                       |
-| EXP-008 100-seed parity/hang/leak gate                                    | `PARTIAL` | 100 dispatcher lifecycle iterations pass；panic cleanup and full randomized workload remain |
+| 命令或检查                                                                | 结果      | 原始数据/说明                                                                                                                                                                                  |
+| ------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo check --locked -p gpui --features test-support`                    | `PASS`    | ThreadedDispatcher port                                                                                                                                                                        |
+| `cargo test --locked -p gpui --features test-support threaded_dispatcher` | `PASS`    | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
+| `./script/clippy -p gpui --features test-support`                         | `PASS`    | all-target release clippy + philosophy                                                                                                                                                         |
+| `cargo check --locked -p gpui --features accessibility`                   | `PASS`    | AccessKit 0.24.1 core seam                                                                                                                                                                     |
+| `cargo test --locked -p gpui --features accessibility accessibility`      | `PASS`    | 3 semantic snapshot/action tests                                                                                                                                                               |
+| EXP-006 native adapter/screen-reader QA                                   | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                                                                                                                          |
+| EXP-008 100-seed parity/hang/leak gate                                    | `PASS`    | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
+
+提交：ThreadedDispatcher core `49b351afb1edab173ca46dd073c663b44aabbf14`；
+AccessKit semantic core `a7745abdefe9d3e2cebb33482aac35d5e6a0289f`；EXP-008
+BenchAppContext/panic follow-up commit 待本账本更新后回填。
 
 ### 阶段 3：真实 headless renderer
 
