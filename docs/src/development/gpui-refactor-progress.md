@@ -438,7 +438,27 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 
 ### 阶段 7：UI 集成边界
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
+
+已完成的第一步：
+
+- 删除 `ui_input::ERASED_EDITOR_FACTORY` process-global `OnceLock`。
+- 增加 per-App `ErasedEditorFactory` global registration；Editor 在 app 初始化时显式注册，
+  InputField、Picker 和 RemoteConnection 通过当前 App 的 adapter 读取。
+- 保留 `ErasedEditor` façade 和 Editor UTF-16/IME 行为，未引入跨 crate product API。
+
+验证：
+
+| 命令或检查                                                                  | 结果   | 证据                                              |
+| --------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
+| `cargo check --locked -p ui_input -p editor -p picker -p remote_connection` | `PASS` | app-scoped factory consumers 编译通过             |
+| `cargo test --locked -p ui_input --lib`                                     | `PASS` | 0 tests, compile/test harness passed              |
+| `./script/clippy -p ui_input`                                               | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                                          | `PASS` | ui_input boundary change 无 whitespace error      |
+
+提交：`f4f22a68fc`。
+下一步：审查 ui_prompt 的 product-specific workspace coupling，补齐显式 prompt renderer
+adapter 和 UI integration tests，再运行 EXP-009/010。
 
 ### 阶段 8：invalidation 实验
 
