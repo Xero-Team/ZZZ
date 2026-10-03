@@ -3489,15 +3489,14 @@ pub async fn copy_recursive<'a>(
                 }
                 anyhow::bail!("{target_item:?} already exists");
             }
-            let _ = fs
-                .remove_dir(
-                    &target_item,
-                    RemoveOptions {
-                        recursive: true,
-                        ignore_if_not_exists: true,
-                    },
-                )
-                .await;
+            fs.remove_dir(
+                &target_item,
+                RemoveOptions {
+                    recursive: true,
+                    ignore_if_not_exists: true,
+                },
+            )
+            .await?;
             fs.create_dir(&target_item).await?;
         } else {
             fs.copy_file(&item, &target_item, options).await?;
