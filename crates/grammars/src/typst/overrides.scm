@@ -1,5 +1,10 @@
 (string) @string
 
-(math) @math
+(raw) @string
 
-(comment) @comment.inclusive
+(equation) @math
+
+[
+  (line_comment)
+  (block_comment)
+] @comment.inclusive

@@ -17,7 +17,6 @@ anyhow.workspace = true
 toml.workspace = true
 util.workspace = true
 
-codebook-tree-sitter-typst = { workspace = true, optional = true }
 tree-sitter = { workspace = true, optional = true }
 tree-sitter-bash = { workspace = true, optional = true }
 tree-sitter-c = { workspace = true, optional = true }
@@ -47,12 +46,12 @@ tree-sitter-rust = { workspace = true, optional = true }
 tree-sitter-syslog = { workspace = true, optional = true }
 tree-sitter-toml = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
+tree-sitter-typst = { workspace = true, optional = true }
 tree-sitter-xml = { workspace = true, optional = true }
 tree-sitter-yaml = { workspace = true, optional = true }
 
 [features]
 load-grammars = [
-    "codebook-tree-sitter-typst",
     "tree-sitter",
     "tree-sitter-bash",
     "tree-sitter-c",
@@ -82,6 +81,7 @@ load-grammars = [
     "tree-sitter-syslog",
     "tree-sitter-toml",
     "tree-sitter-typescript",
+    "tree-sitter-typst",
     "tree-sitter-xml",
     "tree-sitter-yaml",
 ]
@@ -96,3 +96,4 @@ tree-sitter-dockerfile.workspace = true
 tree-sitter-mermaid.workspace = true
 tree-sitter-syslog.workspace = true
 tree-sitter-toml.workspace = true
+tree-sitter-typst.workspace = true

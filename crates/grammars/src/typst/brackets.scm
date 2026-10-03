@@ -7,18 +7,19 @@
 ("{" @open
   "}" @close)
 
-("\"" @open
+(string
+  "\"" @open
   "\"" @close
   (#set! rainbow.exclude))
 
-("`" @open
-  "`" @close
+(raw
+  .
+  (raw_delimiter) @open
+  (raw_delimiter) @close
+  .
   (#set! rainbow.exclude))
 
-("```" @open
-  "```" @close
-  (#set! rainbow.exclude))
-
-("$" @open
+(equation
+  "$" @open
   "$" @close
   (#set! rainbow.exclude))

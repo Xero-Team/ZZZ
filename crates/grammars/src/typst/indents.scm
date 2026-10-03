@@ -14,5 +14,7 @@
   "$"
   "$" @end) @indent
 
-((comment) @indent
+((block_comment) @indent
   (#match? @indent "^/\\*"))
+
+(list_body) @indent

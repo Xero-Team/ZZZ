@@ -1,6 +1,8 @@
 name = "Typst"
 grammar = "typst"
 path_suffixes = ["typ", "typst"]
+modeline_aliases = ["typ"]
+first_line_pattern = '^#!.*\btypst\b'
 line_comments = ["// "]
 documentation_comment = { start = "/*", prefix = "* ", end = "*/", tab_size = 1 }
 tab_size = 2

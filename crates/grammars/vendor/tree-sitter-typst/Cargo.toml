@@ -1,0 +1,46 @@
+[package]
+name = "tree-sitter-typst"
+description = "An upgraded parser for typst"
+version = "0.1.0"
+authors = ["SeniorMars <mrseniormars@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+keywords = ["incremental", "parsing", "tree-sitter", "tree-sitter-typst"]
+categories = ["parser-implementations", "parsing", "text-editors"]
+repository = "https://github.com/seniormars/tree-sitter-typst"
+edition = "2021"
+autoexamples = false
+
+build = "bindings/rust/build.rs"
+include = [
+  "benches/*",
+  "bindings/rust/*",
+  "/grammar/*.js",
+  "/grammar.js",
+  "queries/typst/*",
+  "/scripts/generate-external-tokens.js",
+  "/src/*.c",
+  "/src/*.h",
+  "/src/*.json",
+  "/src/tree_sitter/*.h",
+  "/src/vendor/tree_sitter/*.h",
+  "test/fixtures/real_world/Typsium/alchemist/src/drawer.typ",
+  "test/fixtures/real_world/typst/typst/docs/content/guides/accessibility.typ",
+  "test/fixtures/real_world/typst/typst/tests/suite/math/cancel.typ",
+  "test/fixtures/real_world/typst/typst/tests/suite/math/equation.typ",
+  "test/fixtures/synthetic/*",
+  "/tree-sitter.json",
+  "/LICENSE",
+]
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1"
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+tree-sitter = "0.27.0"
