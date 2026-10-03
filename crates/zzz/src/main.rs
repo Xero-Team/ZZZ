@@ -605,7 +605,13 @@ fn main() {
 
         audio::init(cx);
         workspace::init(app_state.clone(), cx);
-        ui_prompt::init(cx);
+        if WorkspaceSettings::get_global(cx).use_system_prompts
+            && cfg!(not(any(target_os = "linux", target_os = "freebsd")))
+        {
+            cx.reset_prompt_builder();
+        } else {
+            ui_prompt::init(cx);
+        }
 
         go_to_line::init(cx);
         file_finder::init(cx);
