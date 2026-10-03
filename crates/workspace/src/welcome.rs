@@ -289,11 +289,13 @@ impl WelcomePage {
                     .log_err()
                     .unwrap_or_default();
 
+                let Some(this) = this.upgrade() else {
+                    return;
+                };
                 this.update(cx, |this, cx| {
                     this.recent_workspaces = Some(workspaces);
                     cx.notify();
-                })
-                .ok();
+                });
             })
             .detach();
         }
