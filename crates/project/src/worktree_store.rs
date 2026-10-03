@@ -340,7 +340,7 @@ impl WorktreeStore {
             this.update(cx, |this, cx| {
                 this.update_initial_scan_state(cx);
             })
-            .ok();
+            .log_err();
             anyhow::Ok(())
         })
         .detach();
@@ -734,7 +734,7 @@ impl WorktreeStore {
                     this.update_initial_scan_state(cx);
                 }
             })
-            .ok();
+            .log_err();
 
             match result {
                 Ok(worktree) => {
@@ -759,7 +759,7 @@ impl WorktreeStore {
                             this.observe_worktree_scan_completion(&worktree, cx);
                         }
                     })
-                    .ok();
+                    .log_err();
                     Ok(worktree)
                 }
                 Err(err) => Err((*err).cloned()),
