@@ -5588,6 +5588,10 @@ impl Repository {
                 cx,
             )
             .await;
+
+            // The producer can keep this unbounded channel ready while loading a large history.
+            // Yield between batches so the foreground executor can process input and repaint.
+            yield_now().await;
         }
 
         task.await?;

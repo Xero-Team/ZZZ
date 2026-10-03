@@ -34,6 +34,15 @@ pub struct ThreadTaskTimings {
 impl ThreadTaskTimings {
     /// Convert global thread timings into their structured format.
     pub fn convert(timings: &[GlobalThreadTimings]) -> Vec<Self> {
+        Self::convert_recent(timings, usize::MAX)
+    }
+
+    /// Convert at most the most recent `maximum_timings_per_thread` global thread timings into
+    /// their structured format.
+    pub fn convert_recent(
+        timings: &[GlobalThreadTimings],
+        maximum_timings_per_thread: usize,
+    ) -> Vec<Self> {
         timings
             .iter()
             .filter_map(|t| t.timings.upgrade().map(|timings| (t.thread_id, timings)))
@@ -41,17 +50,21 @@ impl ThreadTaskTimings {
                 let timings = timings.lock();
                 let thread_name = timings.thread_name.clone();
                 let total_pushed = timings.total_pushed;
-                let timings = &timings.timings;
-
-                let mut vec = Vec::with_capacity(timings.len());
-                let (s1, s2) = timings.as_slices();
-                vec.extend_from_slice(s1);
-                vec.extend_from_slice(s2);
+                let timings_to_skip = timings
+                    .timings
+                    .len()
+                    .saturating_sub(maximum_timings_per_thread);
+                let recent_timings = timings
+                    .timings
+                    .iter()
+                    .skip(timings_to_skip)
+                    .copied()
+                    .collect();
 
                 ThreadTaskTimings {
                     thread_name,
                     thread_id,
-                    timings: vec,
+                    timings: recent_timings,
                     total_pushed,
                 }
             })

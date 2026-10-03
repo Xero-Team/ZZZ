@@ -759,6 +759,17 @@ pub type TimerResolutionGuard = gpui_util::Deferred<Box<dyn FnOnce() + Send>>;
 #[doc(hidden)]
 pub trait PlatformDispatcher: Send + Sync {
     fn get_all_timings(&self) -> Vec<ThreadTaskTimings>;
+    fn get_recent_timings(&self, maximum_timings_per_thread: usize) -> Vec<ThreadTaskTimings> {
+        let mut all_timings = self.get_all_timings();
+        for thread_timings in &mut all_timings {
+            let timings_to_remove = thread_timings
+                .timings
+                .len()
+                .saturating_sub(maximum_timings_per_thread);
+            thread_timings.timings.drain(..timings_to_remove);
+        }
+        all_timings
+    }
     fn get_current_thread_timings(&self) -> ThreadTaskTimings;
     fn is_main_thread(&self) -> bool;
     fn dispatch(&self, runnable: RunnableVariant, priority: Priority);

@@ -41,6 +41,11 @@ impl PlatformDispatcher for MacDispatcher {
         ThreadTaskTimings::convert(&global_timings)
     }
 
+    fn get_recent_timings(&self, maximum_timings_per_thread: usize) -> Vec<ThreadTaskTimings> {
+        let global_timings = GLOBAL_THREAD_TIMINGS.lock();
+        ThreadTaskTimings::convert_recent(&global_timings, maximum_timings_per_thread)
+    }
+
     fn get_current_thread_timings(&self) -> ThreadTaskTimings {
         gpui::profiler::get_current_thread_task_timings()
     }
