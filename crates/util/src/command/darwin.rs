@@ -240,8 +240,12 @@ pub struct Child {
 
 impl Drop for Child {
     fn drop(&mut self) {
-        if self.kill_on_drop && self.status.is_none() {
-            let _ = self.kill();
+        if self.kill_on_drop
+            && self.status.is_none()
+            && let Err(error) = self.kill()
+            && error.raw_os_error() != Some(libc::ESRCH)
+        {
+            log::warn!("failed to kill child process {} on drop: {error}", self.pid);
         }
     }
 }
