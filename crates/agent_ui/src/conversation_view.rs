@@ -1276,7 +1276,7 @@ impl ConversationView {
             }
             cx.notify();
         })
-        .ok();
+        .log_err();
     }
 
     fn handle_load_error(&mut self, err: LoadError, window: &mut Window, cx: &mut Context<Self>) {
@@ -1780,7 +1780,7 @@ impl ConversationView {
                         }
                         this.auth_task.take()
                     })
-                    .ok();
+                    .log_err();
                 }
             }));
             return;
@@ -1816,7 +1816,7 @@ impl ConversationView {
                     }
                     this.auth_task.take()
                 })
-                .ok();
+                .log_err();
             }
         }));
     }
@@ -2843,7 +2843,7 @@ impl ConversationView {
                     }
                     drop(this.auth_task.take());
                 })
-                .ok();
+                .log_err();
             }
         }));
     }
