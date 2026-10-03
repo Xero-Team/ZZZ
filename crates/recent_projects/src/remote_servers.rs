@@ -547,6 +547,9 @@ impl ProjectPicker {
                 let workspace = workspace;
                 async move |this, cx| {
                     let Ok(Some(paths)) = rx.await else {
+                        let Some(workspace) = workspace.upgrade() else {
+                            return None;
+                        };
                         workspace
                             .update_in(cx, |workspace, window, cx| {
                                 let fs = workspace.project().read(cx).fs().clone();
@@ -565,9 +568,9 @@ impl ProjectPicker {
                         return None;
                     };
 
-                    let app_state = workspace
-                        .read_with(cx, |workspace, _| workspace.app_state().clone())
-                        .ok()?;
+                    let workspace = workspace.upgrade()?;
+                    let app_state =
+                        workspace.read_with(cx, |workspace, _| workspace.app_state().clone());
 
                     let secondary_confirm =
                         picker.read_with(cx, |picker, _| picker.delegate.confirmed_secondary());
@@ -662,15 +665,17 @@ impl ProjectPicker {
                                             editor.go_to_singleton_buffer_point(point, window, cx);
                                         });
                                     })
-                                    .ok();
+                                    .log_err();
                             }
                         }
                     }
 
+                    let Some(this) = this.upgrade() else {
+                        return Some(());
+                    };
                     this.update(cx, |_, cx| {
                         cx.emit(DismissEvent);
-                    })
-                    .ok();
+                    });
                     Some(())
                 }
             })
