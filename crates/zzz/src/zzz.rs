@@ -5961,9 +5961,10 @@ mod tests {
         });
 
         for window in [window_a, window_b, window_c] {
-            let _ = cx.update_window(*window, |_, window, _| {
+            cx.update_window(*window, |_, window, _| {
                 window.activate_window();
-            });
+            })
+            .unwrap();
 
             cx.update(|cx| {
                 let open_options = OpenOptions {
@@ -5979,15 +5980,17 @@ mod tests {
             cx.update_window(*window, |_, window, _| assert!(window.is_window_active()))
                 .unwrap();
 
-            let _ = window.read_with(cx, |multi_workspace, cx| {
-                let pane = multi_workspace.workspace().read(cx).active_pane().read(cx);
-                let project_path = pane.active_item().unwrap().project_path(cx).unwrap();
+            window
+                .read_with(cx, |multi_workspace, cx| {
+                    let pane = multi_workspace.workspace().read(cx).active_pane().read(cx);
+                    let project_path = pane.active_item().unwrap().project_path(cx).unwrap();
 
-                assert_eq!(
-                    project_path.path.as_ref().as_std_path().to_str().unwrap(),
-                    path!("document.txt")
-                )
-            });
+                    assert_eq!(
+                        project_path.path.as_ref().as_std_path().to_str().unwrap(),
+                        path!("document.txt")
+                    )
+                })
+                .unwrap();
         }
     }
 
