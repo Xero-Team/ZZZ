@@ -230,7 +230,6 @@ impl ComponentPreview {
                 continue;
             }
 
-            // let full_component_name = component.name();
             let scopeless_name = component.scopeless_name();
             let scope_name = component.scope().to_string();
             let description = component.description().unwrap_or_default();
