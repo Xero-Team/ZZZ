@@ -491,8 +491,7 @@ impl LocalToolchainStore {
                     .insert(path.path, toolchain.clone());
                 cx.emit(ToolchainStoreEvent::ToolchainActivated);
             })
-            .ok();
-            Some(())
+            .ok()
         })
     }
     pub(crate) fn list_toolchains(
