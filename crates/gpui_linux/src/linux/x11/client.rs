@@ -765,7 +765,7 @@ impl X11Client {
             }
         }
         ximc.create_ic(xim_handler.im_id, ic_attributes.build())
-            .ok();
+            .log_err();
         let mut state = self.0.borrow_mut();
         state.restore_xim(ximc, xim_handler);
     }
@@ -775,7 +775,8 @@ impl X11Client {
         state.composing = false;
         if let Some(mut ximc) = state.ximc.take() {
             if let Some(xim_handler) = state.xim_handler.as_ref() {
-                ximc.reset_ic(xim_handler.im_id, xim_handler.ic_id).ok();
+                ximc.reset_ic(xim_handler.im_id, xim_handler.ic_id)
+                    .log_err();
             } else {
                 log::error!("bug: xim handler not set in reset_ime");
             }
@@ -1508,7 +1509,7 @@ impl X11Client {
                 })
                 .build();
             ximc.set_ic_values(xim_handler.im_id, xim_handler.ic_id, ic_attributes)
-                .ok();
+                .log_err();
         }
         let mut state = self.0.borrow_mut();
         state.restore_xim(ximc, xim_handler);
