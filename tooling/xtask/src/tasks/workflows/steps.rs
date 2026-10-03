@@ -536,7 +536,6 @@ pub fn git_checkout(ref_name: &dyn std::fmt::Display) -> Step<Run> {
 ///
 /// See https://github.com/actions/create-github-app-token?tab=readme-ov-file#permission-permission-name
 /// and beyond for a full list of available permissions.
-#[allow(unused)]
 pub(crate) enum TokenPermissions {
     Contents,
     Issues,
