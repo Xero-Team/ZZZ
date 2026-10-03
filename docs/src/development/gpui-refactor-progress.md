@@ -324,8 +324,8 @@ routing owner，并固定 routing order 回归测试。
 | `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                               | `PASS` | interaction owner 迁移无 whitespace error         |
 
-提交：`a53e41c9ef`。
-下一步：继续 4B，将 focus/tab state、cursor requests 与 key/action capture/bubble routing
+提交：frame/input owner `a53e41c9ef`；focus/input state owner `785c0f8c2c`。
+下一步：继续 4B，将 cursor requests 与 key/action capture/bubble routing 的方法边界
 收拢到 interaction owner，并增加固定 routing-order snapshot tests。
 
 ### 阶段 5：render contract 与 WGPU 模块化
