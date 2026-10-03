@@ -2561,7 +2561,11 @@ impl RecentProjectsDelegate {
                 let workspaces = db
                     .recent_project_workspaces(fs.as_ref())
                     .await
+                    .log_err()
                     .unwrap_or_default();
+                let Some(this) = this.upgrade() else {
+                    return;
+                };
                 this.update_in(cx, move |picker, window, cx| {
                     Self::update_picker_after_recent_project_deletion(
                         picker, ix, workspaces, window, cx,
@@ -2576,7 +2580,7 @@ impl RecentProjectsDelegate {
                         });
                     }
                 })
-                .ok();
+                .log_err();
             })
             .detach();
         }
