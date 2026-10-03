@@ -155,22 +155,23 @@ impl ToolbarItemView for MigrationBanner {
             return ToolbarItemLocation::Hidden;
         };
 
-        if &target == paths::keymap_file() {
-            self.migration_type = Some(MigrationType::Keymap);
-            let fs = <dyn Fs>::global(cx);
-            let should_migrate = cx.background_spawn(should_migrate_keymap(fs));
-            self.should_migrate_task = Some(cx.spawn_in(window, async move |this, cx| {
-                if matches!(should_migrate.await, Ok(true)) {
-                    this.update(cx, |this, cx| {
-                        this.show(cx);
-                    })
-                    .log_err();
-                }
-            }));
+        let migration_type = if &target == paths::keymap_file() {
+            Some(MigrationType::Keymap)
         } else if &target == paths::settings_file() {
-            self.migration_type = Some(MigrationType::Settings);
+            Some(MigrationType::Settings)
+        } else {
+            None
+        };
+
+        if let Some(migration_type) = migration_type {
+            self.migration_type = Some(migration_type);
             let fs = <dyn Fs>::global(cx);
-            let should_migrate = cx.background_spawn(should_migrate_settings(fs));
+            let should_migrate = cx.background_spawn(async move {
+                match migration_type {
+                    MigrationType::Keymap => should_migrate_keymap(fs).await,
+                    MigrationType::Settings => should_migrate_settings(fs).await,
+                }
+            });
             self.should_migrate_task = Some(cx.spawn_in(window, async move |this, cx| {
                 if matches!(should_migrate.await, Ok(true)) {
                     this.update(cx, |this, cx| {
