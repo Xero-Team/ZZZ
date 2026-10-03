@@ -52,7 +52,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
             "typescript",
             tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
         ),
-        ("typst", codebook_tree_sitter_typst::LANGUAGE.into()),
+        ("typst", tree_sitter_typst::LANGUAGE.into()),
         ("xml", tree_sitter_xml::LANGUAGE_XML.into()),
         ("yaml", tree_sitter_yaml::LANGUAGE.into()),
         ("gitcommit", tree_sitter_gitcommit::LANGUAGE.into()),
@@ -235,6 +235,14 @@ mod tests {
             .set_language(&tree_sitter_mermaid::LANGUAGE.into())
             .expect("load Mermaid grammar");
         parser.parse(source, None).expect("parse Mermaid source")
+    }
+
+    fn parse_typst(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_typst::LANGUAGE.into())
+            .expect("load Typst grammar");
+        parser.parse(source, None).expect("parse Typst source")
     }
 
     fn assert_toml_parses(source: &str) {
@@ -1697,6 +1705,63 @@ mod tests {
         assert!(highlights.contains("flowchart"));
         assert!(highlights.contains("@keyword"));
         assert!(highlights.contains("flow_link_arrow"));
+    }
+
+    #[test]
+    fn typst_parser_accepts_modern_language_features() {
+        let source = include_str!("typst/testdata/modern.typ");
+        let tree = parse_typst(source);
+
+        assert!(
+            !tree.root_node().has_error(),
+            "expected valid Typst, got parse error:\n{}",
+            tree.root_node().to_sexp()
+        );
+
+        let sexp = tree.root_node().to_sexp();
+        for node_kind in [
+            "heading",
+            "show_rule",
+            "destructuring_pattern",
+            "let_binding",
+            "contextual_expression",
+            "module_import",
+            "module_include",
+            "for_loop",
+            "equation",
+            "math_attachment",
+            "raw",
+        ] {
+            assert!(
+                sexp.contains(&format!("({node_kind}")),
+                "missing {node_kind} in Typst syntax tree:\n{sexp}"
+            );
+        }
+    }
+
+    #[test]
+    fn typst_queries_compile_against_vendored_grammar() {
+        let language: tree_sitter::Language = tree_sitter_typst::LANGUAGE.into();
+        let queries = load_queries("typst");
+
+        for (name, source) in [
+            ("highlights", queries.highlights.as_deref()),
+            ("brackets", queries.brackets.as_deref()),
+            ("indents", queries.indents.as_deref()),
+            ("injections", queries.injections.as_deref()),
+            ("outline", queries.outline.as_deref()),
+            ("overrides", queries.overrides.as_deref()),
+            ("textobjects", queries.text_objects.as_deref()),
+        ] {
+            let source = source.unwrap_or_else(|| panic!("missing Typst {name} query"));
+            tree_sitter::Query::new(&language, source)
+                .unwrap_or_else(|error| panic!("failed to compile Typst {name} query: {error}"));
+        }
+
+        let mut config = load_config("typst");
+        language_core::Grammar::new(language)
+            .with_queries(load_queries("typst"), &mut config)
+            .expect("load all Typst queries into the language grammar");
     }
 
     #[test]

@@ -512,7 +512,6 @@ clap_complete = { version = "4.6" }
 clap_complete_nushell = { version = "4.6" }
 cocoa = "=0.27.0"
 cocoa-foundation = "=0.2.1"
-codebook-tree-sitter-typst = "0.12.1"
 const_format = "0.2"
 convert_case = "0.12.0"
 core-foundation = "=0.10.1"
@@ -811,6 +810,8 @@ tree-sitter-rust = "0.24.2"
 tree-sitter-syslog = { path = "crates/grammars/vendor/tree-sitter-syslog" }
 tree-sitter-toml = { package = "tree-sitter-toml-ng", path = "crates/grammars/vendor/tree-sitter-toml" }
 tree-sitter-typescript = { path = "crates/grammars/vendor/tree-sitter-typescript" } # vendored; https://github.com/tree-sitter/tree-sitter-typescript/pull/347
+# Vendored from https://github.com/SeniorMars/tree-sitter-typst @ 1acd48c90d260bc9f8a99f903d3e2a8031bc7aae
+tree-sitter-typst = { path = "crates/grammars/vendor/tree-sitter-typst" }
 tree-sitter-xml = "0.7.0"
 tree-sitter-yaml = "0.7"
 tracing = "0.1.44"

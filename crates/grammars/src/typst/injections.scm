@@ -1,6 +1,9 @@
-(raw_blck
-  lang: (ident) @language
-  (blob) @content)
+(raw
+  language: (raw_language) @injection.language
+  content: (raw_content) @injection.content)
 
-((comment) @content
+([
+  (line_comment)
+  (block_comment)
+] @injection.content
   (#set! injection.language "comment"))
