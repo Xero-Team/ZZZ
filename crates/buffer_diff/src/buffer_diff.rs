@@ -4111,7 +4111,7 @@ mod tests {
             )
         })
         .await
-        .ok();
+        .expect("setting CRLF base text should succeed");
         cx.run_until_parked();
 
         let snapshot = diff.update(cx, |diff, cx| diff.snapshot(cx));
