@@ -3172,7 +3172,7 @@ mod tests {
             workspace.set_prompt_for_open_path(Box::new(|_, _, _, _| {
                 let (tx, rx) = futures::channel::oneshot::channel();
                 tx.send(Some(vec![PathBuf::from(path!("/new-project"))]))
-                    .ok();
+                    .expect("open-path prompt receiver should remain open");
                 rx
             }));
         });
@@ -3248,7 +3248,7 @@ mod tests {
             workspace.set_prompt_for_open_path(Box::new(|_, _, _, _| {
                 let (tx, rx) = futures::channel::oneshot::channel();
                 tx.send(Some(vec![PathBuf::from(path!("/new-project"))]))
-                    .ok();
+                    .expect("open-path prompt receiver should remain open");
                 rx
             }));
         });
