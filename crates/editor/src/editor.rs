@@ -17402,8 +17402,12 @@ impl Editor {
         cx: &mut Context<Editor>,
     ) {
         self.buffer.update(cx, |buffer, cx| {
-            let expand = !buffer.has_expanded_diff_hunks_in_ranges(&ranges, cx);
-            buffer.expand_or_collapse_diff_hunks(ranges, expand, cx);
+            let should_expand = !buffer.has_expanded_diff_hunks_in_ranges(&ranges, cx);
+            if should_expand {
+                buffer.expand_diff_hunks(ranges, cx);
+            } else {
+                buffer.collapse_diff_hunks(ranges, cx);
+            }
         })
     }
 

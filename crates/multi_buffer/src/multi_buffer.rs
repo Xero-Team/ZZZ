@@ -2310,7 +2310,7 @@ impl MultiBuffer {
         let old_len = self.snapshot.borrow().len();
 
         let ranges = std::iter::once((Point::zero()..Point::MAX, None));
-        let _ = self.expand_or_collapse_diff_hunks_inner(ranges, true, cx);
+        drop(self.expand_or_collapse_diff_hunks_inner(ranges, true, cx));
 
         let new_len = self.snapshot.borrow().len();
 
@@ -2376,7 +2376,7 @@ impl MultiBuffer {
         false
     }
 
-    pub fn expand_or_collapse_diff_hunks_inner(
+    fn expand_or_collapse_diff_hunks_inner(
         &mut self,
         ranges: impl IntoIterator<Item = (Range<Point>, Option<Anchor>)>,
         expand: bool,
@@ -2432,7 +2432,7 @@ impl MultiBuffer {
         )
     }
 
-    pub fn expand_or_collapse_diff_hunks(
+    fn expand_or_collapse_diff_hunks(
         &mut self,
         ranges: Vec<Range<Anchor>>,
         expand: bool,
