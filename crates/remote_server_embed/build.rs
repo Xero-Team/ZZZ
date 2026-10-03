@@ -190,7 +190,14 @@ fn build_target(workspace: &Path, target: &RemoteTarget, host: &str) -> Result<P
     if target.musl && !rustflags.contains("target-feature=+crt-static") {
         rustflags.push_str(" -C target-feature=+crt-static");
     }
-    let cross = target.triple != host && !target.triple.starts_with(&host_arch(host));
+    let same_host_architecture = target.triple.starts_with(&host_arch(host));
+    let same_host_os = match target.os {
+        "linux" => host.contains("linux"),
+        "macos" => host.contains("darwin"),
+        "windows" => host.contains("windows"),
+        _ => false,
+    };
+    let cross = target.triple != host && !(same_host_architecture && same_host_os);
     let subcommand = if cross && which("cargo-zigbuild") && which("zig") {
         "zigbuild"
     } else {

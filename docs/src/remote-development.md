@@ -222,11 +222,10 @@ If it is not there or the version mismatches, a non-debug ZZZ build uploads an
 embedded `remote_server` archive over SSH for the remote OS and architecture.
 `script/bundle-mac` embeds the host macOS archive plus Linux x86_64 and
 aarch64 musl archives (`zig` and `cargo-zigbuild` are required).
-`script/bundle-linux` embeds the host Linux archive and, when Zig is
-available, Linux aarch64. Other archives are embedded when that target can
-be compiled on the build machine. Cross-compiling macOS `remote_server` from
-Linux downloads a macOS SDK into a temporary directory when `zig` and
-`cargo-zigbuild` are available.
+`script/bundle-linux` embeds the host Linux archive and, when Zig and
+`cargo-zigbuild` are available, Linux aarch64 plus macOS x86_64 and aarch64
+archives. Cross-compiling macOS `remote_server` from Linux downloads a macOS
+SDK into a temporary directory.
 
 If no matching archive is embedded, ZZZ errors unless the binary is already on
 the remote, or a debug `cargo run` compiles `remote_server` from source
