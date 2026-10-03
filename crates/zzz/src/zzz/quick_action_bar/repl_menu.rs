@@ -325,7 +325,8 @@ impl QuickActionBar {
             {
                 Box::new(move |kernelspec, window, cx| {
                     if kernelspec.has_ipykernel() {
-                        repl::assign_kernelspec(kernelspec, editor.downgrade(), window, cx).ok();
+                        repl::assign_kernelspec(kernelspec, editor.downgrade(), window, cx)
+                            .log_err();
                     } else {
                         repl::install_ipykernel_and_assign(
                             kernelspec,
@@ -333,7 +334,7 @@ impl QuickActionBar {
                             window,
                             cx,
                         )
-                        .ok();
+                        .log_err();
                     }
                 })
             },
