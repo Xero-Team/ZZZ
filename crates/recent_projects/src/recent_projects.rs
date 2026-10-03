@@ -2450,7 +2450,12 @@ impl RecentProjectsDelegate {
             )
         });
         cx.spawn_in(window, async move |picker, cx| {
-            let _result = open_paths_task.await;
+            for result in open_paths_task.await.into_iter().flatten() {
+                result.log_err();
+            }
+            let Some(picker) = picker.upgrade() else {
+                return;
+            };
             picker
                 .update_in(cx, |picker, window, cx| {
                     let Some(workspace) = picker.delegate.workspace.upgrade() else {
@@ -2460,7 +2465,7 @@ impl RecentProjectsDelegate {
                     let query = picker.query(cx);
                     picker.update_matches(query, window, cx);
                 })
-                .ok();
+                .log_err();
         })
         .detach();
     }
