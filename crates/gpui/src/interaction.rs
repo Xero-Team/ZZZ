@@ -1,10 +1,10 @@
 use crate::window::{AnyObserver, AnyWindowFocusListener, DispatchPhase, HitTest};
 use crate::{
     Action, App, Bounds, BuiltFrame, Capslock, ContentMask, CursorHideMode, CursorStyle,
-    DispatchActionListener, DispatchNodeId, FocusId, Frame, Hitbox, HitboxBehavior, HitboxId,
-    InputPreference, KeyContext, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, Replay, SubscriberSet, Task, TextInputOwner,
-    Window,
+    DispatchActionListener, DispatchNodeId, FocusHandle, FocusId, Frame, Hitbox, HitboxBehavior,
+    HitboxId, InputPreference, KeyContext, KeyDownEvent, Keystroke, Modifiers,
+    ModifiersChangedEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Replay, SubscriberSet,
+    Task, TextInputOwner, Window,
 };
 use gpui_util::ResultExt;
 use smallvec::SmallVec;
@@ -99,6 +99,88 @@ impl InteractionOwner {
 
     pub(crate) fn cursor_style(&self, window: &Window) -> Option<CursorStyle> {
         self.rendered_frame.cursor_style(window)
+    }
+
+    pub(crate) fn focused(&self, cx: &App) -> Option<FocusHandle> {
+        self.focus
+            .and_then(|id| FocusHandle::for_id(id, &cx.focus_handles))
+    }
+
+    pub(crate) fn focus(window: &mut Window, handle: &FocusHandle, cx: &mut App) {
+        if !window.interaction.focus_enabled || window.interaction.focus == Some(handle.id) {
+            return;
+        }
+
+        window.interaction.focus = Some(handle.id);
+        window.interaction.focus_generation += 1;
+        Self::clear_pending_keystrokes(window, cx);
+        window.refresh();
+    }
+
+    pub(crate) fn blur(window: &mut Window, cx: &mut App) {
+        Self::clear_pending_keystrokes(window, cx);
+        if !window.interaction.focus_enabled {
+            return;
+        }
+
+        if window.interaction.focus.take().is_some() {
+            window.interaction.focus_generation += 1;
+            window.refresh();
+        }
+    }
+
+    pub(crate) fn disable_focus(window: &mut Window, cx: &mut App) {
+        Self::blur(window, cx);
+        window.interaction.focus_enabled = false;
+    }
+
+    pub(crate) fn focus_next(window: &mut Window, cx: &mut App) {
+        if !window.interaction.focus_enabled {
+            return;
+        }
+
+        if let Some(handle) = window
+            .interaction
+            .rendered_frame
+            .tab_stops
+            .next(window.interaction.focus.as_ref())
+        {
+            Self::focus(window, &handle, cx)
+        }
+    }
+
+    pub(crate) fn focus_prev(window: &mut Window, cx: &mut App) {
+        if !window.interaction.focus_enabled {
+            return;
+        }
+
+        if let Some(handle) = window
+            .interaction
+            .rendered_frame
+            .tab_stops
+            .prev(window.interaction.focus.as_ref())
+        {
+            Self::focus(window, &handle, cx)
+        }
+    }
+
+    pub(crate) fn active_pending_input(&self) -> Option<&PendingInput> {
+        self.pending_input
+            .as_ref()
+            .filter(|pending_input| pending_input.focus == self.focus)
+    }
+
+    pub(crate) fn clear_pending_keystrokes(window: &mut Window, cx: &mut App) {
+        if window.interaction.pending_input.take().is_some() {
+            let window_handle = window.handle;
+            cx.defer(move |cx| {
+                window_handle
+                    .update(cx, |_, window, cx| {
+                        window.pending_input_changed(cx);
+                    })
+                    .ok();
+            });
+        }
     }
 
     pub(crate) fn dispatch_mouse_listeners(window: &mut Window, event: &dyn Any, cx: &mut App) {

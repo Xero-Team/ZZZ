@@ -3,23 +3,22 @@ use crate::Inspector;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
-    Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw,
-    DevicePixels, DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId,
-    EventEmitter, FileDropEvent, FontId, Frame, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
-    InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
-    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
+    Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
+    DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
+    FileDropEvent, FontId, Frame, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla, InputHandler,
+    InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext, KeyDownEvent,
+    KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
     MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
-    PendingInput, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
+    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
     PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority,
     PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams,
-    RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X,
-    SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style,
-    SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController,
-    TaffyLayoutEngine, Task, TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement,
-    ThermalState, TransformationMatrix, Underline, UnderlineStyle, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations, WindowInvalidator,
-    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
-    transparent_black,
+    RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
+    ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
+    SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine,
+    Task, TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
+    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
+    WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
+    WindowParams, WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -1503,73 +1502,32 @@ impl Window {
 
     /// Obtain the currently focused [`FocusHandle`]. If no elements are focused, returns `None`.
     pub fn focused(&self, cx: &App) -> Option<FocusHandle> {
-        self.interaction
-            .focus
-            .and_then(|id| FocusHandle::for_id(id, &cx.focus_handles))
+        self.interaction.focused(cx)
     }
 
     /// Move focus to the element associated with the given [`FocusHandle`].
     pub fn focus(&mut self, handle: &FocusHandle, cx: &mut App) {
-        if !self.interaction.focus_enabled || self.interaction.focus == Some(handle.id) {
-            return;
-        }
-
-        self.interaction.focus = Some(handle.id);
-        self.interaction.focus_generation += 1;
-        self.clear_pending_keystrokes(cx);
-
-        self.refresh();
+        InteractionOwner::focus(self, handle, cx);
     }
 
     /// Remove focus from all elements within this context's window.
     pub fn blur(&mut self, cx: &mut App) {
-        self.clear_pending_keystrokes(cx);
-        if !self.interaction.focus_enabled {
-            return;
-        }
-
-        if self.interaction.focus.take().is_some() {
-            self.interaction.focus_generation += 1;
-            self.refresh();
-        }
+        InteractionOwner::blur(self, cx);
     }
 
     /// Blur the window and don't allow anything in it to be focused again.
     pub fn disable_focus(&mut self, cx: &mut App) {
-        self.blur(cx);
-        self.interaction.focus_enabled = false;
+        InteractionOwner::disable_focus(self, cx);
     }
 
     /// Move focus to next tab stop.
     pub fn focus_next(&mut self, cx: &mut App) {
-        if !self.interaction.focus_enabled {
-            return;
-        }
-
-        if let Some(handle) = self
-            .interaction
-            .rendered_frame
-            .tab_stops
-            .next(self.interaction.focus.as_ref())
-        {
-            self.focus(&handle, cx)
-        }
+        InteractionOwner::focus_next(self, cx);
     }
 
     /// Move focus to previous tab stop.
     pub fn focus_prev(&mut self, cx: &mut App) {
-        if !self.interaction.focus_enabled {
-            return;
-        }
-
-        if let Some(handle) = self
-            .interaction
-            .rendered_frame
-            .tab_stops
-            .prev(self.interaction.focus.as_ref())
-        {
-            self.focus(&handle, cx)
-        }
+        InteractionOwner::focus_prev(self, cx);
     }
 
     /// Accessor for the text system.
@@ -4630,36 +4588,19 @@ impl Window {
             .retain(&(), |callback| callback(self, cx));
     }
 
-    /// Pending input that can still complete a binding. Input left over from a previous focus can
-    /// never complete one.
-    fn active_pending_input(&self) -> Option<&PendingInput> {
-        self.interaction
-            .pending_input
-            .as_ref()
-            .filter(|pending_input| pending_input.focus == self.interaction.focus)
-    }
-
     /// Determine whether a potential multi-stroke key binding is in progress on this window.
     pub fn has_pending_keystrokes(&self) -> bool {
-        self.active_pending_input().is_some()
+        self.interaction.active_pending_input().is_some()
     }
 
     pub(crate) fn clear_pending_keystrokes(&mut self, cx: &mut App) {
-        if self.interaction.pending_input.take().is_some() {
-            let window_handle = self.handle;
-            cx.defer(move |cx| {
-                window_handle
-                    .update(cx, |_, window, cx| {
-                        window.pending_input_changed(cx);
-                    })
-                    .ok();
-            });
-        }
+        InteractionOwner::clear_pending_keystrokes(self, cx);
     }
 
     /// Returns the currently pending input keystrokes that might result in a multi-stroke key binding.
     pub fn pending_input_keystrokes(&self) -> Option<&[Keystroke]> {
-        self.active_pending_input()
+        self.interaction
+            .active_pending_input()
             .map(|pending_input| pending_input.keystrokes.as_slice())
     }
 
