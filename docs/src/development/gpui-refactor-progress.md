@@ -439,6 +439,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 - 新增 `WindowHost` supertrait，将 frame waker、request-frame callback 与
   completed-frame lifecycle 从 `PlatformWindow` 抽离；Wayland/Web completion 语义和
   TestWindow demand/waker 行为保持原实现。
+- 新增 `SystemServices` supertrait，将 native prompt 与 system bell 从
+  `PlatformWindow` 抽离；Linux/Web/headless 的 rendered-prompt fallback、macOS/Windows
+  native prompt 和各平台 bell 行为均保留。
 
 当前矩阵：
 
@@ -469,9 +472,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 | `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error          |
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
-`efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`。
-下一步：建立 `AppLifecycle`、`WindowHost`、`AccessibilityBridge`、
-`SystemServices` 和 renderer factory 内部 traits，并覆盖
+`efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
+`9c8de23b7c`。
+下一步：建立 `AppLifecycle`、`AccessibilityBridge` 和 renderer factory 内部 traits，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
 ### 阶段 7：UI 集成边界
