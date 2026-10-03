@@ -3,19 +3,19 @@ use crate::Inspector;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
-    Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DevicePixels,
-    DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity,
-    EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs,
-    Hsla, InputHandler, InputPreference, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent,
-    Keystroke, KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent,
-    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
-    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
-    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
-    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
-    SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextRenderingMode, TextStyle,
-    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DeferredDraw,
+    DevicePixels, DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, DrawPhase,
+    Edges, Entity, EntityId, EventEmitter, FileDropEvent, FontId, Frame, Global, GlobalElementId,
+    GlyphId, GpuSpecs, Hsla, InputHandler, InputPreference, IsZero, KeyBinding, KeyContext,
+    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
+    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
+    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
+    Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render,
+    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge,
+    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow,
+    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
+    SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine, Task, TextRenderingMode,
+    TextStyle, TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
     WindowInvalidator, WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems,
     size, transparent_black,
@@ -30,8 +30,6 @@ use gpui_util::post_inc;
 use gpui_util::{ResultExt, measure};
 #[cfg(feature = "input-latency-histogram")]
 use hdrhistogram::Histogram;
-use itertools::FoldWhile::{Continue, Done};
-use itertools::Itertools;
 use parking_lot::RwLock;
 use raw_window_handle::{HandleError, HasDisplayHandle, HasWindowHandle};
 use refineable::Refineable;
@@ -680,191 +678,6 @@ pub(crate) struct TooltipBounds {
 pub(crate) struct TooltipRequest {
     id: TooltipId,
     tooltip: AnyTooltip,
-}
-
-pub(crate) struct DeferredDraw {
-    current_view: EntityId,
-    priority: usize,
-    parent_node: DispatchNodeId,
-    element_id_stack: SmallVec<[ElementId; 32]>,
-    text_style_stack: Vec<TextStyleRefinement>,
-    content_mask: Option<ContentMask<Pixels>>,
-    rem_size: Pixels,
-    element: Option<AnyElement>,
-    absolute_offset: Point<Pixels>,
-    prepaint_range: Range<PrepaintStateIndex>,
-    paint_range: Range<PaintIndex>,
-}
-
-pub(crate) struct Frame {
-    pub(crate) focus: Option<FocusId>,
-    pub(crate) window_active: bool,
-    pub(crate) element_states: FxHashMap<(GlobalElementId, TypeId), ElementStateBox>,
-    accessed_element_states: Vec<(GlobalElementId, TypeId)>,
-    pub(crate) mouse_listeners: Vec<Option<AnyMouseListener>>,
-    pub(crate) dispatch_tree: DispatchTree,
-    pub(crate) scene: Scene,
-    pub(crate) hitboxes: Vec<Hitbox>,
-    pub(crate) window_control_hitboxes: Vec<(WindowControlArea, Hitbox)>,
-    pub(crate) deferred_draws: Vec<DeferredDraw>,
-    pub(crate) input_handlers: Vec<Option<PlatformInputHandler>>,
-    pub(crate) tooltip_requests: Vec<Option<TooltipRequest>>,
-    pub(crate) cursor_styles: Vec<CursorStyleRequest>,
-    #[cfg(any(test, feature = "test-support"))]
-    pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
-    #[cfg(any(test, feature = "test-support"))]
-    debug_bounds_records: Vec<(String, Bounds<Pixels>)>,
-    #[cfg(any(feature = "inspector", debug_assertions))]
-    pub(crate) next_inspector_instance_ids: FxHashMap<Rc<crate::InspectorElementPath>, usize>,
-    #[cfg(any(feature = "inspector", debug_assertions))]
-    pub(crate) inspector_hitboxes: FxHashMap<HitboxId, crate::InspectorElementId>,
-    pub(crate) tab_stops: TabStopMap,
-}
-
-#[derive(Clone, Default)]
-pub(crate) struct PrepaintStateIndex {
-    hitboxes_index: usize,
-    tooltips_index: usize,
-    deferred_draws_index: usize,
-    dispatch_tree_index: usize,
-    accessed_element_states_index: usize,
-    line_layout_index: LineLayoutIndex,
-}
-
-#[derive(Clone, Default)]
-pub(crate) struct PaintIndex {
-    scene_index: usize,
-    #[cfg(any(test, feature = "test-support"))]
-    debug_bounds_index: usize,
-    mouse_listeners_index: usize,
-    input_handlers_index: usize,
-    cursor_styles_index: usize,
-    accessed_element_states_index: usize,
-    tab_handle_index: usize,
-    line_layout_index: LineLayoutIndex,
-}
-
-impl Frame {
-    #[cfg(any(test, feature = "test-support"))]
-    pub(crate) fn record_debug_bounds(&mut self, selector: String, bounds: Bounds<Pixels>) {
-        self.debug_bounds.insert(selector.clone(), bounds);
-        self.debug_bounds_records.push((selector, bounds));
-    }
-
-    pub(crate) fn new(dispatch_tree: DispatchTree) -> Self {
-        Frame {
-            focus: None,
-            window_active: false,
-            element_states: FxHashMap::default(),
-            accessed_element_states: Vec::new(),
-            mouse_listeners: Vec::new(),
-            dispatch_tree,
-            scene: Scene::default(),
-            hitboxes: Vec::new(),
-            window_control_hitboxes: Vec::new(),
-            deferred_draws: Vec::new(),
-            input_handlers: Vec::new(),
-            tooltip_requests: Vec::new(),
-            cursor_styles: Vec::new(),
-
-            #[cfg(any(test, feature = "test-support"))]
-            debug_bounds: FxHashMap::default(),
-            #[cfg(any(test, feature = "test-support"))]
-            debug_bounds_records: Vec::new(),
-
-            #[cfg(any(feature = "inspector", debug_assertions))]
-            next_inspector_instance_ids: FxHashMap::default(),
-
-            #[cfg(any(feature = "inspector", debug_assertions))]
-            inspector_hitboxes: FxHashMap::default(),
-            tab_stops: TabStopMap::default(),
-        }
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.element_states.clear();
-        self.accessed_element_states.clear();
-        self.mouse_listeners.clear();
-        self.dispatch_tree.clear();
-        self.scene.clear();
-        self.input_handlers.clear();
-        self.tooltip_requests.clear();
-        self.cursor_styles.clear();
-        self.hitboxes.clear();
-        self.window_control_hitboxes.clear();
-        self.deferred_draws.clear();
-        self.tab_stops.clear();
-        self.focus = None;
-
-        #[cfg(any(test, feature = "test-support"))]
-        {
-            self.debug_bounds.clear();
-            self.debug_bounds_records.clear();
-        }
-
-        #[cfg(any(feature = "inspector", debug_assertions))]
-        {
-            self.next_inspector_instance_ids.clear();
-            self.inspector_hitboxes.clear();
-        }
-    }
-
-    pub(crate) fn cursor_style(&self, window: &Window) -> Option<CursorStyle> {
-        self.cursor_styles
-            .iter()
-            .rev()
-            .fold_while(None, |style, request| match request.hitbox_id {
-                None => Done(Some(request.style)),
-                Some(hitbox_id) => Continue(style.or_else(|| {
-                    hitbox_id
-                        .is_hovered_ignoring_last_input(window)
-                        .then_some(request.style)
-                })),
-            })
-            .into_inner()
-    }
-
-    pub(crate) fn hit_test(&self, position: Point<Pixels>) -> HitTest {
-        let mut set_hover_hitbox_count = false;
-        let mut hit_test = HitTest::default();
-        for hitbox in self.hitboxes.iter().rev() {
-            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
-            if bounds.contains(&position) {
-                hit_test.ids.push(hitbox.id);
-                if !set_hover_hitbox_count
-                    && hitbox.behavior == HitboxBehavior::BlockMouseExceptScroll
-                {
-                    hit_test.hover_hitbox_count = hit_test.ids.len();
-                    set_hover_hitbox_count = true;
-                }
-                if hitbox.behavior == HitboxBehavior::BlockMouse {
-                    break;
-                }
-            }
-        }
-        if !set_hover_hitbox_count {
-            hit_test.hover_hitbox_count = hit_test.ids.len();
-        }
-        hit_test
-    }
-
-    pub(crate) fn focus_path(&self) -> SmallVec<[FocusId; 8]> {
-        self.focus
-            .map(|focus_id| self.dispatch_tree.focus_path(focus_id))
-            .unwrap_or_default()
-    }
-
-    pub(crate) fn finish(&mut self, prev_frame: &mut Self) {
-        for element_state_key in &self.accessed_element_states {
-            if let Some((element_state_key, element_state)) =
-                prev_frame.element_states.remove_entry(element_state_key)
-            {
-                self.element_states.insert(element_state_key, element_state);
-            }
-        }
-
-        self.scene.finish();
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
