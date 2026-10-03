@@ -106,7 +106,7 @@ enum LanguageMatchPrecedence {
 
 enum AvailableGrammar {
     Native(tree_sitter::Language),
-    Loaded(#[allow(unused)] PathBuf, tree_sitter::Language),
+    Loaded(tree_sitter::Language),
     Loading(
         #[allow(unused)] PathBuf,
         Vec<oneshot::Sender<Result<tree_sitter::Language, Arc<anyhow::Error>>>>,
@@ -964,7 +964,7 @@ impl LanguageRegistry {
                 AvailableGrammar::LoadFailed(error) => {
                     tx.send(Err(error.clone())).ok();
                 }
-                AvailableGrammar::Native(grammar) | AvailableGrammar::Loaded(_, grammar) => {
+                AvailableGrammar::Native(grammar) | AvailableGrammar::Loaded(grammar) => {
                     tx.send(Ok(grammar.clone())).ok();
                 }
                 AvailableGrammar::Loading(_, txs) => {
@@ -997,7 +997,7 @@ impl LanguageRegistry {
                             .map_err(Arc::new);
 
                             let value = match &grammar_result {
-                                Ok(grammar) => AvailableGrammar::Loaded(wasm_path, grammar.clone()),
+                                Ok(grammar) => AvailableGrammar::Loaded(grammar.clone()),
                                 Err(error) => AvailableGrammar::LoadFailed(error.clone()),
                             };
 
