@@ -301,11 +301,11 @@ impl CommitModal {
                                     {
                                         let git_panel = git_panel_entity.downgrade();
                                         move |_, cx| {
-                                            git_panel
-                                                .update(cx, |git_panel, cx| {
+                                            if let Some(git_panel) = git_panel.upgrade() {
+                                                git_panel.update(cx, |git_panel, cx| {
                                                     git_panel.toggle_amend_pending(cx);
-                                                })
-                                                .ok();
+                                                });
+                                            }
                                         }
                                     },
                                 )
