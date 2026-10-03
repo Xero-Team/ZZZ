@@ -16,6 +16,8 @@ mod action;
 mod app;
 
 mod arena;
+#[cfg(feature = "accessibility")]
+pub mod accessibility;
 mod asset_cache;
 mod assets;
 mod bounds_tree;
@@ -86,6 +88,8 @@ mod seal {
 }
 
 pub use action::*;
+#[cfg(feature = "accessibility")]
+pub use accessibility::*;
 pub use anyhow::Result;
 pub use app::*;
 pub(crate) use arena::*;
