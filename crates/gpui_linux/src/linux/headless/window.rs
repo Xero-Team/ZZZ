@@ -133,6 +133,19 @@ impl gpui::WindowHost for HeadlessWindow {
     fn on_request_frame(&self, _callback: Box<dyn FnMut(RequestFrameOptions)>) {}
 }
 
+impl gpui::SystemServices for HeadlessWindow {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        // Fall back to GPUI's rendered prompts.
+        None
+    }
+}
+
 impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
@@ -164,17 +177,6 @@ impl PlatformWindow for HeadlessWindow {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(self.0.borrow().display.clone())
-    }
-
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        // Fall back to GPUI's rendered prompts.
-        None
     }
 
     fn activate(&self) {}

@@ -645,64 +645,7 @@ impl gpui::WindowHost for WindowsWindow {
     }
 }
 
-impl PlatformWindow for WindowsWindow {
-    fn bounds(&self) -> Bounds<Pixels> {
-        self.state.bounds()
-    }
-
-    fn is_maximized(&self) -> bool {
-        self.state.is_maximized()
-    }
-
-    fn window_bounds(&self) -> WindowBounds {
-        self.state.window_bounds()
-    }
-
-    /// get the logical size of the app's drawable area.
-    ///
-    /// Currently, GPUI uses the logical size of the app to handle mouse interactions (such as
-    /// whether the mouse collides with other elements of GPUI).
-    fn content_size(&self) -> Size<Pixels> {
-        self.state.content_size()
-    }
-
-    fn resize(&mut self, size: Size<Pixels>) {
-        let hwnd = self.0.hwnd;
-        let bounds = gpui::bounds(self.bounds().origin, size).to_device_pixels(self.scale_factor());
-        let rect = calculate_window_rect(bounds, &self.state.border_offset);
-
-        self.0
-            .executor
-            .spawn(async move {
-                unsafe {
-                    SetWindowPos(
-                        hwnd,
-                        None,
-                        bounds.origin.x.0,
-                        bounds.origin.y.0,
-                        rect.right - rect.left,
-                        rect.bottom - rect.top,
-                        SWP_NOMOVE,
-                    )
-                    .context("unable to set window content size")
-                    .log_err();
-                }
-            })
-            .detach();
-    }
-
-    fn scale_factor(&self) -> f32 {
-        self.state.scale_factor.get()
-    }
-
-    fn appearance(&self) -> WindowAppearance {
-        self.state.appearance.get()
-    }
-
-    fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
-        Some(Rc::new(self.state.display.get()))
-    }
-
+impl gpui::SystemServices for WindowsWindow {
     fn prompt(
         &self,
         level: PromptLevel,
@@ -795,6 +738,70 @@ impl PlatformWindow for WindowsWindow {
             .detach();
 
         Some(done_rx)
+    }
+
+    fn play_system_bell(&self) {
+        // MB_OK: The sound specified as the Windows Default Beep sound.
+        let _ = unsafe { MessageBeep(MB_OK) };
+    }
+}
+
+impl PlatformWindow for WindowsWindow {
+    fn bounds(&self) -> Bounds<Pixels> {
+        self.state.bounds()
+    }
+
+    fn is_maximized(&self) -> bool {
+        self.state.is_maximized()
+    }
+
+    fn window_bounds(&self) -> WindowBounds {
+        self.state.window_bounds()
+    }
+
+    /// get the logical size of the app's drawable area.
+    ///
+    /// Currently, GPUI uses the logical size of the app to handle mouse interactions (such as
+    /// whether the mouse collides with other elements of GPUI).
+    fn content_size(&self) -> Size<Pixels> {
+        self.state.content_size()
+    }
+
+    fn resize(&mut self, size: Size<Pixels>) {
+        let hwnd = self.0.hwnd;
+        let bounds = gpui::bounds(self.bounds().origin, size).to_device_pixels(self.scale_factor());
+        let rect = calculate_window_rect(bounds, &self.state.border_offset);
+
+        self.0
+            .executor
+            .spawn(async move {
+                unsafe {
+                    SetWindowPos(
+                        hwnd,
+                        None,
+                        bounds.origin.x.0,
+                        bounds.origin.y.0,
+                        rect.right - rect.left,
+                        rect.bottom - rect.top,
+                        SWP_NOMOVE,
+                    )
+                    .context("unable to set window content size")
+                    .log_err();
+                }
+            })
+            .detach();
+    }
+
+    fn scale_factor(&self) -> f32 {
+        self.state.scale_factor.get()
+    }
+
+    fn appearance(&self) -> WindowAppearance {
+        self.state.appearance.get()
+    }
+
+    fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
+        Some(Rc::new(self.state.display.get()))
     }
 
     fn activate(&self) {
@@ -1027,11 +1034,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         windows_capabilities()
-    }
-
-    fn play_system_bell(&self) {
-        // MB_OK: The sound specified as the Windows Default Beep sound.
-        let _ = unsafe { MessageBeep(MB_OK) };
     }
 }
 

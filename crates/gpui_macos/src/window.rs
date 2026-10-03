@@ -1401,6 +1401,97 @@ impl gpui::WindowHost for MacWindow {
     }
 }
 
+impl gpui::SystemServices for MacWindow {
+    fn prompt(
+        &self,
+        level: PromptLevel,
+        msg: &str,
+        detail: Option<&str>,
+        answers: &[PromptButton],
+    ) -> Option<oneshot::Receiver<usize>> {
+        // NSAlert's first button keeps Return and Cancel keeps Escape, but the keyboard
+        // focus (and therefore Space) defaults to Cancel, leaving the middle button of
+        // prompts like "Save / Don't Save / Cancel" unreachable from the keyboard. Move
+        // the initial focus onto the last non-cancel, non-default button instead.
+        let initial_focus_ix = answers
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, label)| !label.is_cancel())
+            .map(|(ix, _)| ix)
+            .filter(|&ix| ix > 0);
+
+        unsafe {
+            let alert: id = msg_send![class!(NSAlert), alloc];
+            let alert: id = msg_send![alert, init];
+            let alert_style = match level {
+                PromptLevel::Info => 1,
+                PromptLevel::Warning => 0,
+                PromptLevel::Critical => 2,
+            };
+            let _: () = msg_send![alert, setAlertStyle: alert_style];
+            let _: () = msg_send![alert, setMessageText: ns_string(msg)];
+            if let Some(detail) = detail {
+                let _: () = msg_send![alert, setInformativeText: ns_string(detail)];
+            }
+
+            let mut initial_focus_button: Option<id> = None;
+            for (ix, answer) in answers.iter().enumerate() {
+                let button: id = msg_send![alert, addButtonWithTitle: ns_string(answer.label())];
+                let _: () = msg_send![button, setTag: ix as NSInteger];
+
+                if answer.is_cancel() {
+                    if let Some(key) = std::char::from_u32(crate::events::ESCAPE_KEY as u32) {
+                        let _: () =
+                            msg_send![button, setKeyEquivalent: ns_string(&key.to_string())];
+                    }
+                } else if Some(ix) == initial_focus_ix {
+                    initial_focus_button = Some(button);
+                }
+            }
+
+            if let Some(button) = initial_focus_button {
+                let alert_window: id = msg_send![alert, window];
+                let _: () = msg_send![alert_window, setInitialFirstResponder: button];
+            }
+
+            let (done_tx, done_rx) = oneshot::channel();
+            let done_tx = Cell::new(Some(done_tx));
+            let block = ConcreteBlock::new(move |answer: NSInteger| {
+                let _: () = msg_send![alert, release];
+                if let Some(done_tx) = done_tx.take() {
+                    let _ =
+                        done_tx.send(answer.try_into().expect("channel receiver should be alive"));
+                }
+            });
+            let block = block.copy();
+            let lock = self.0.lock();
+            let native_window = lock.native_window;
+            let closed = lock.closed.clone();
+            let executor = lock.foreground_executor.clone();
+            executor
+                .spawn(async move {
+                    if closed.load(Ordering::Acquire) {
+                        let _: () = msg_send![alert, release];
+                    } else {
+                        let _: () = msg_send![
+                            alert,
+                            beginSheetModalForWindow: native_window
+                            completionHandler: block
+                        ];
+                    }
+                })
+                .detach();
+
+            Some(done_rx)
+        }
+    }
+
+    fn play_system_bell(&self) {
+        NSBeep()
+    }
+}
+
 impl PlatformWindow for MacWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.as_ref().lock().bounds()
@@ -1523,91 +1614,6 @@ impl PlatformWindow for MacWindow {
             let screen_number: u32 = msg_send![screen_number, unsignedIntValue];
 
             Some(Rc::new(MacDisplay(screen_number)))
-        }
-    }
-
-    fn prompt(
-        &self,
-        level: PromptLevel,
-        msg: &str,
-        detail: Option<&str>,
-        answers: &[PromptButton],
-    ) -> Option<oneshot::Receiver<usize>> {
-        // NSAlert's first button keeps Return and Cancel keeps Escape, but the keyboard
-        // focus (and therefore Space) defaults to Cancel, leaving the middle button of
-        // prompts like "Save / Don't Save / Cancel" unreachable from the keyboard. Move
-        // the initial focus onto the last non-cancel, non-default button instead.
-        let initial_focus_ix = answers
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, label)| !label.is_cancel())
-            .map(|(ix, _)| ix)
-            .filter(|&ix| ix > 0);
-
-        unsafe {
-            let alert: id = msg_send![class!(NSAlert), alloc];
-            let alert: id = msg_send![alert, init];
-            let alert_style = match level {
-                PromptLevel::Info => 1,
-                PromptLevel::Warning => 0,
-                PromptLevel::Critical => 2,
-            };
-            let _: () = msg_send![alert, setAlertStyle: alert_style];
-            let _: () = msg_send![alert, setMessageText: ns_string(msg)];
-            if let Some(detail) = detail {
-                let _: () = msg_send![alert, setInformativeText: ns_string(detail)];
-            }
-
-            let mut initial_focus_button: Option<id> = None;
-            for (ix, answer) in answers.iter().enumerate() {
-                let button: id = msg_send![alert, addButtonWithTitle: ns_string(answer.label())];
-                let _: () = msg_send![button, setTag: ix as NSInteger];
-
-                if answer.is_cancel() {
-                    if let Some(key) = std::char::from_u32(crate::events::ESCAPE_KEY as u32) {
-                        let _: () =
-                            msg_send![button, setKeyEquivalent: ns_string(&key.to_string())];
-                    }
-                } else if Some(ix) == initial_focus_ix {
-                    initial_focus_button = Some(button);
-                }
-            }
-
-            if let Some(button) = initial_focus_button {
-                let alert_window: id = msg_send![alert, window];
-                let _: () = msg_send![alert_window, setInitialFirstResponder: button];
-            }
-
-            let (done_tx, done_rx) = oneshot::channel();
-            let done_tx = Cell::new(Some(done_tx));
-            let block = ConcreteBlock::new(move |answer: NSInteger| {
-                let _: () = msg_send![alert, release];
-                if let Some(done_tx) = done_tx.take() {
-                    let _ =
-                        done_tx.send(answer.try_into().expect("channel receiver should be alive"));
-                }
-            });
-            let block = block.copy();
-            let lock = self.0.lock();
-            let native_window = lock.native_window;
-            let closed = lock.closed.clone();
-            let executor = lock.foreground_executor.clone();
-            executor
-                .spawn(async move {
-                    if closed.load(Ordering::Acquire) {
-                        let _: () = msg_send![alert, release];
-                    } else {
-                        let _: () = msg_send![
-                            alert,
-                            beginSheetModalForWindow: native_window
-                            completionHandler: block
-                        ];
-                    }
-                })
-                .detach();
-
-            Some(done_rx)
         }
     }
 
@@ -2006,10 +2012,6 @@ impl PlatformWindow for MacWindow {
             let event: id = msg_send![app, currentEvent];
             let _: () = msg_send![window, performWindowDragWithEvent: event];
         }
-    }
-
-    fn play_system_bell(&self) {
-        NSBeep()
     }
 
     #[cfg(any(test, feature = "test-support"))]

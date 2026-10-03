@@ -1206,6 +1206,30 @@ impl gpui::WindowHost for WaylandWindow {
     }
 }
 
+impl gpui::SystemServices for WaylandWindow {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<Receiver<usize>> {
+        None
+    }
+
+    fn play_system_bell(&self) {
+        let state = self.borrow();
+        let surface = if state.surface_state.toplevel().is_some() {
+            Some(&state.surface)
+        } else {
+            None
+        };
+        if let Some(bell) = state.globals.system_bell.as_ref() {
+            bell.ring(surface);
+        }
+    }
+}
+
 impl PlatformWindow for WaylandWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
@@ -1293,16 +1317,6 @@ impl PlatformWindow for WaylandWindow {
                 bounds: display.bounds.to_pixels(state.scale),
             }) as Rc<dyn PlatformDisplay>
         })
-    }
-
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<Receiver<usize>> {
-        None
     }
 
     fn activate(&self) {
@@ -1579,18 +1593,6 @@ impl PlatformWindow for WaylandWindow {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.borrow().renderer.gpu_specs().into()
-    }
-
-    fn play_system_bell(&self) {
-        let state = self.borrow();
-        let surface = if state.surface_state.toplevel().is_some() {
-            Some(&state.surface)
-        } else {
-            None
-        };
-        if let Some(bell) = state.globals.system_bell.as_ref() {
-            bell.ring(surface);
-        }
     }
 }
 

@@ -1417,6 +1417,23 @@ impl gpui::WindowHost for X11Window {
     }
 }
 
+impl gpui::SystemServices for X11Window {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        None
+    }
+
+    fn play_system_bell(&self) {
+        // Volume 0% means don't increase or decrease from system volume
+        let _ = self.0.xcb.bell(0);
+    }
+}
+
 impl PlatformWindow for X11Window {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
@@ -1503,16 +1520,6 @@ impl PlatformWindow for X11Window {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(self.0.state.borrow().display.clone())
-    }
-
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        None
     }
 
     fn activate(&self) {
@@ -1936,11 +1943,6 @@ impl PlatformWindow for X11Window {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.0.state.borrow().renderer.gpu_specs().into()
-    }
-
-    fn play_system_bell(&self) {
-        // Volume 0% means don't increase or decrease from system volume
-        let _ = self.0.xcb.bell(0);
     }
 }
 

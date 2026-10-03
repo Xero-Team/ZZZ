@@ -214,6 +214,25 @@ impl crate::WindowHost for TestWindow {
     }
 }
 
+impl crate::SystemServices for TestWindow {
+    fn prompt(
+        &self,
+        _level: crate::PromptLevel,
+        msg: &str,
+        detail: Option<&str>,
+        answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        Some(
+            self.0
+                .lock()
+                .platform
+                .upgrade()
+                .expect("platform dropped")
+                .prompt(msg, detail, answers),
+        )
+    }
+}
+
 impl PlatformWindow for TestWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.lock().bounds
@@ -246,23 +265,6 @@ impl PlatformWindow for TestWindow {
 
     fn display(&self) -> Option<std::rc::Rc<dyn crate::PlatformDisplay>> {
         Some(self.0.lock().display.clone())
-    }
-
-    fn prompt(
-        &self,
-        _level: crate::PromptLevel,
-        msg: &str,
-        detail: Option<&str>,
-        answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        Some(
-            self.0
-                .lock()
-                .platform
-                .upgrade()
-                .expect("platform dropped")
-                .prompt(msg, detail, answers),
-        )
     }
 
     fn activate(&self) {

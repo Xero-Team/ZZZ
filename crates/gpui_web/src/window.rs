@@ -637,6 +637,18 @@ impl gpui::WindowHost for WebWindow {
     }
 }
 
+impl gpui::SystemServices for WebWindow {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        None
+    }
+}
+
 impl PlatformWindow for WebWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.inner.state.borrow().bounds
@@ -674,16 +686,6 @@ impl PlatformWindow for WebWindow {
 
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         Some(self.display.clone())
-    }
-
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        None
     }
 
     fn activate(&self) {

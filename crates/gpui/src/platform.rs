@@ -671,9 +671,22 @@ pub trait WindowHost {
     fn completed_frame(&self) {}
 }
 
+/// Window-scoped operating-system services.
+#[expect(missing_docs)]
+pub trait SystemServices {
+    fn prompt(
+        &self,
+        level: PromptLevel,
+        msg: &str,
+        detail: Option<&str>,
+        answers: &[PromptButton],
+    ) -> Option<oneshot::Receiver<usize>>;
+    fn play_system_bell(&self) {}
+}
+
 #[expect(missing_docs)]
 pub trait PlatformWindow:
-    HasWindowHandle + HasDisplayHandle + InputSource + TextInputBridge + WindowHost
+    HasWindowHandle + HasDisplayHandle + InputSource + SystemServices + TextInputBridge + WindowHost
 {
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
@@ -683,13 +696,6 @@ pub trait PlatformWindow:
     fn scale_factor(&self) -> f32;
     fn appearance(&self) -> WindowAppearance;
     fn display(&self) -> Option<Rc<dyn PlatformDisplay>>;
-    fn prompt(
-        &self,
-        level: PromptLevel,
-        msg: &str,
-        detail: Option<&str>,
-        answers: &[PromptButton],
-    ) -> Option<oneshot::Receiver<usize>>;
     fn activate(&self);
     /// Requests that the operating system draw attention to this window.
     fn request_attention(&self) {}
@@ -772,8 +778,6 @@ pub trait PlatformWindow:
     }
     fn set_client_inset(&self, _inset: Pixels) {}
     fn gpu_specs(&self) -> Option<GpuSpecs>;
-
-    fn play_system_bell(&self) {}
 
     #[cfg(any(test, feature = "test-support"))]
     fn as_test(&mut self) -> Option<&mut TestWindow> {
