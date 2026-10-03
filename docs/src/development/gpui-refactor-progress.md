@@ -320,6 +320,9 @@ routing owner，并固定 routing order 回归测试。
   action/pointer routing coverage。
 - key、action 与 mouse capture/bubble 顺序均有固定 snapshot；pointer capture 在 mouse-up
   后自动释放也有独立回归测试。
+- mouse listener capture/bubble、active drag cleanup、pointer capture release 与 action
+  capture/bubble 算法已迁入 `InteractionOwner`；`Window` 只保留 event normalization、
+  inspector/diagnostics 协调和公开 façade。
 
 验证：
 
@@ -334,8 +337,9 @@ routing owner，并固定 routing order 回归测试。
 提交：frame/input owner `a53e41c9ef`；focus/input state owner `785c0f8c2c`；routing
 order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
 完整 routing snapshots `487347fcff`。
-下一步：继续 4B，将 key/action/mouse dispatch methods 本身下沉到 interaction owner，
-然后收敛 4C/4D ownership。
+pointer/action routing owner `d52a99235d`。
+下一步：继续 4B，将 key dispatch、pending replay 和 focus/tab 算法下沉到 interaction
+owner，然后收敛 4D completed-frame payload。
 
 4C text input owner 当前进度：
 
