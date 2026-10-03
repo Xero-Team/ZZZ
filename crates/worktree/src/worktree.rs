@@ -6433,7 +6433,6 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
         let scan_id_increased = |tree: &mut Worktree, git_dir_scan_id: &mut usize| {
             let tree = tree.as_local().expect("should be a local instance");
-            // let repository = tree.repositories.first().unwrap();
             let local_repo_entry = tree
                 .git_repositories
                 .values()
