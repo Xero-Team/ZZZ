@@ -1026,9 +1026,13 @@ impl HighlightsTreeToolbarItemView {
                 let tree_view_for_syntax = tree_view.clone();
                 let tree_view_for_semantic = tree_view.clone();
 
-                let menu = ContextMenu::build(window, cx, move |menu, _, _| {
+                let menu = ContextMenu::build(window, cx, move |menu, _, cx| {
                     menu.toggleable_entry(
-                        "Text Highlights",
+                        tr(
+                            cx,
+                            "language_tools.highlights.text_highlights",
+                            "Text Highlights",
+                        ),
                         show_text,
                         IconPosition::Start,
                         Some(ToggleTextHighlights.boxed_clone()),
@@ -1053,7 +1057,11 @@ impl HighlightsTreeToolbarItemView {
                         },
                     )
                     .toggleable_entry(
-                        "Syntax Tokens",
+                        tr(
+                            cx,
+                            "language_tools.highlights.syntax_tokens",
+                            "Syntax Tokens",
+                        ),
                         show_syntax,
                         IconPosition::Start,
                         Some(ToggleSyntaxTokens.boxed_clone()),
@@ -1078,7 +1086,11 @@ impl HighlightsTreeToolbarItemView {
                         },
                     )
                     .toggleable_entry(
-                        "Semantic Tokens",
+                        tr(
+                            cx,
+                            "language_tools.highlights.semantic_tokens",
+                            "Semantic Tokens",
+                        ),
                         show_semantic,
                         IconPosition::Start,
                         Some(ToggleSemanticTokens.boxed_clone()),
