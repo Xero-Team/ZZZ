@@ -2458,7 +2458,6 @@ impl DisplaySnapshot {
             .collect()
     }
 
-    #[allow(unused)]
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn inlay_highlights(
         &self,
