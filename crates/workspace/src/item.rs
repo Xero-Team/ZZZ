@@ -802,7 +802,7 @@ impl<T: Item> ItemHandle for Entity<T> {
                     if let Some(item) = item.to_serializable_item_handle(cx)
                         && item.should_serialize(event, cx)
                     {
-                        workspace.enqueue_item_serialization(item).ok();
+                        workspace.enqueue_item_serialization(item).log_err();
                     }
 
                     T::to_item_events(event, &mut |event| match event {
