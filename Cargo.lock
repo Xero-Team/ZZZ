@@ -17161,7 +17161,6 @@ dependencies = [
  "settings",
  "theme_settings",
  "ui",
- "workspace",
 ]
 
 [[package]]
