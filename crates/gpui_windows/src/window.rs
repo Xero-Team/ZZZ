@@ -1021,7 +1021,7 @@ impl PlatformWindow for WindowsWindow {
 
     fn play_system_bell(&self) {
         // MB_OK: The sound specified as the Windows Default Beep sound.
-        let _ = unsafe { MessageBeep(MB_OK) };
+        unsafe { MessageBeep(MB_OK).ok().log_err() };
     }
 }
 
