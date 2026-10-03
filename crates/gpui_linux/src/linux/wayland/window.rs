@@ -1147,6 +1147,8 @@ impl rwh::HasDisplayHandle for WaylandWindow {
     }
 }
 
+impl gpui::AccessibilityBridge for WaylandWindow {}
+
 impl gpui::TextInputBridge for WaylandWindow {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.borrow_mut().input_handler = Some(input_handler);

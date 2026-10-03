@@ -1351,6 +1351,8 @@ impl X11WindowStatePtr {
     }
 }
 
+impl gpui::AccessibilityBridge for X11Window {}
+
 impl gpui::TextInputBridge for X11Window {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.0.state.borrow_mut().input_handler = Some(input_handler);

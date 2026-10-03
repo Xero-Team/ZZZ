@@ -171,6 +171,8 @@ impl TestWindow {
     }
 }
 
+impl crate::AccessibilityBridge for TestWindow {}
+
 impl crate::TextInputBridge for TestWindow {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.0.lock().input_handler = Some(input_handler);

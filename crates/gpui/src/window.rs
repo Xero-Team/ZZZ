@@ -2420,6 +2420,9 @@ impl Window {
         #[cfg(feature = "frame-diagnostics")]
         let present_start = Instant::now();
         let built_frame = self.interaction.built_frame(&self.text_input);
+        self.platform_window
+            .update_accessibility(built_frame.accessibility.clone())
+            .log_err();
         let submission = crate::render_api::submit_compat(
             self.platform_window.as_mut(),
             crate::render_api::RenderScene::new(built_frame.scene),

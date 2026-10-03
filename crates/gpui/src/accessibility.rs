@@ -152,6 +152,7 @@ impl SemanticActionRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{AccessibilityBridge, AccessibilityUpdate};
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -197,5 +198,23 @@ mod tests {
         assert_eq!(count.get(), 1);
         assert!(!router.dispatch(node_id, Action::Focus, None));
         assert_eq!(router.actions_for(node_id), HashSet::from([Action::Click]));
+    }
+
+    #[test]
+    fn unsupported_bridge_accepts_empty_and_rejects_semantic_updates() {
+        struct UnsupportedBridge;
+        impl AccessibilityBridge for UnsupportedBridge {}
+
+        let mut bridge = UnsupportedBridge;
+        assert!(
+            bridge
+                .update_accessibility(AccessibilityUpdate::default())
+                .is_ok()
+        );
+
+        let snapshot = SemanticTreeBuilder::new().snapshot();
+        let update = AccessibilityUpdate::from_semantic_snapshot(snapshot.clone());
+        assert_eq!(update.semantic_snapshot(), Some(&snapshot));
+        assert!(bridge.update_accessibility(update).is_err());
     }
 }

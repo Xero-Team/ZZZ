@@ -588,6 +588,8 @@ impl raw_window_handle::HasDisplayHandle for WebWindow {
     }
 }
 
+impl gpui::AccessibilityBridge for WebWindow {}
+
 impl gpui::TextInputBridge for WebWindow {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.inner.state.borrow_mut().input_handler = Some(input_handler);

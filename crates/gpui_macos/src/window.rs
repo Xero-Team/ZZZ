@@ -1323,6 +1323,8 @@ fn if_window_not_closed(closed: Arc<AtomicBool>, f: impl FnOnce()) {
     }
 }
 
+impl gpui::AccessibilityBridge for MacWindow {}
+
 impl gpui::TextInputBridge for MacWindow {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.0.as_ref().lock().input_handler = Some(input_handler);

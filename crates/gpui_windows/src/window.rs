@@ -591,6 +591,8 @@ impl Drop for WindowsWindow {
     }
 }
 
+impl gpui::AccessibilityBridge for WindowsWindow {}
+
 impl gpui::TextInputBridge for WindowsWindow {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.state.input_handler.set(Some(input_handler));

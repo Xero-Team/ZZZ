@@ -457,6 +457,42 @@ impl Default for PlatformCapabilities {
     }
 }
 
+/// Backend-neutral accessibility payload submitted with a completed frame.
+#[derive(Clone, Debug, Default)]
+pub struct AccessibilityUpdate {
+    #[cfg(feature = "accessibility")]
+    semantic_snapshot: Option<crate::accessibility::SemanticSnapshot>,
+}
+
+impl AccessibilityUpdate {
+    /// Wraps a complete semantic snapshot for submission to a native adapter.
+    #[cfg(feature = "accessibility")]
+    pub fn from_semantic_snapshot(snapshot: crate::accessibility::SemanticSnapshot) -> Self {
+        Self {
+            semantic_snapshot: Some(snapshot),
+        }
+    }
+
+    /// Returns whether this frame contains no semantic update.
+    pub fn is_empty(&self) -> bool {
+        #[cfg(feature = "accessibility")]
+        {
+            self.semantic_snapshot.is_none()
+        }
+
+        #[cfg(not(feature = "accessibility"))]
+        {
+            true
+        }
+    }
+
+    /// Returns the semantic snapshot when accessibility support is compiled in.
+    #[cfg(feature = "accessibility")]
+    pub fn semantic_snapshot(&self) -> Option<&crate::accessibility::SemanticSnapshot> {
+        self.semantic_snapshot.as_ref()
+    }
+}
+
 impl Default for WindowControls {
     fn default() -> Self {
         // Assume that we can do anything, unless told otherwise
@@ -687,9 +723,27 @@ pub trait SystemServices {
     fn play_system_bell(&self) {}
 }
 
+/// Native accessibility adapter for completed semantic frame updates.
+#[expect(missing_docs)]
+pub trait AccessibilityBridge {
+    fn update_accessibility(&mut self, update: AccessibilityUpdate) -> Result<()> {
+        if update.is_empty() {
+            Ok(())
+        } else {
+            anyhow::bail!("accessibility adapter is unsupported by this platform window")
+        }
+    }
+}
+
 #[expect(missing_docs)]
 pub trait PlatformWindow:
-    HasWindowHandle + HasDisplayHandle + InputSource + SystemServices + TextInputBridge + WindowHost
+    AccessibilityBridge
+    + HasWindowHandle
+    + HasDisplayHandle
+    + InputSource
+    + SystemServices
+    + TextInputBridge
+    + WindowHost
 {
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;

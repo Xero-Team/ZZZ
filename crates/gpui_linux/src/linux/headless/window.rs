@@ -101,6 +101,8 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
     }
 }
 
+impl gpui::AccessibilityBridge for HeadlessWindow {}
+
 impl gpui::TextInputBridge for HeadlessWindow {
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
         self.0.borrow_mut().input_handler = Some(input_handler);

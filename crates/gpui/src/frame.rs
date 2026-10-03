@@ -2,8 +2,8 @@
 use crate::Bounds;
 use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest};
 use crate::{
-    AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId, DispatchTree,
-    ElementId, EntityId, FocusId, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
+    AccessibilityUpdate, AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId,
+    DispatchTree, ElementId, EntityId, FocusId, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
     LineLayoutIndex, Pixels, Point, Scene, TabStopMap, TextInputOwner, TextStyleRefinement, Window,
     WindowControlArea,
 };
@@ -463,15 +463,6 @@ pub(crate) struct InteractionSnapshot<'a> {
 pub(crate) struct TextInputSnapshot {
     pub(crate) rendered_handler_count: usize,
     pub(crate) next_handler_count: usize,
-}
-
-#[derive(Clone, Copy, Default)]
-#[allow(
-    dead_code,
-    reason = "completed-frame projections are consumed incrementally by owners"
-)]
-pub(crate) struct AccessibilityUpdate {
-    pub(crate) changed: bool,
 }
 
 #[derive(Clone, Copy, Default)]
