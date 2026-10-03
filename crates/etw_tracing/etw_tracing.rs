@@ -42,9 +42,21 @@ struct EtwSessionHandle {
     state: EtwSessionState,
 }
 
+fn remove_socket_file(path: &Path) {
+    std::fs::remove_file(path)
+        .or_else(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
+        .log_err();
+}
+
 impl Drop for EtwSessionHandle {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.socket_path);
+        remove_socket_file(&self.socket_path);
     }
 }
 
@@ -475,7 +487,7 @@ fn record_etw_trace_inner(heap_pid: Option<u32>, stream: &mut net::UnixStream) -
 
     // Cancel any leftover sessions with the same name that might exist
     unsafe {
-        _ = control_manager.Cancel(None);
+        control_manager.Cancel(None).log_err();
     }
 
     unsafe {
@@ -489,7 +501,7 @@ fn record_etw_trace_inner(heap_pid: Option<u32>, stream: &mut net::UnixStream) -
     let cancel_guard = defer({
         let control_manager = control_manager.clone();
         move || unsafe {
-            let _ = control_manager.Cancel(None);
+            control_manager.Cancel(None).log_err();
         }
     });
 
@@ -538,7 +550,7 @@ struct EtwSession {
 fn launch_etw_recording(heap_pid: Option<u32>) -> Result<EtwSession> {
     let sock_path = std::env::temp_dir().join(format!("zzz-etw-{}.sock", std::process::id()));
 
-    _ = std::fs::remove_file(&sock_path);
+    remove_socket_file(&sock_path);
     let listener = net::UnixListener::bind(&sock_path).context("Bind Unix socket for ETW IPC")?;
 
     let exe_path = std::env::current_exe().context("Failed to get current exe path")?;
