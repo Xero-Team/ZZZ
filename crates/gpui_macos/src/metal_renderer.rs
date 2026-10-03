@@ -1495,7 +1495,6 @@ impl MetalRenderer {
                 mem::size_of_val(&texture_size) as u64,
                 (&raw const texture_size).cast(),
             );
-            // let y_texture = y_texture.get_texture().unwrap().
             command_encoder.set_fragment_texture(SurfaceInputIndex::YTexture as u64, unsafe {
                 let texture = CVMetalTextureGetTexture(y_texture.as_concrete_TypeRef());
                 Some(metal::TextureRef::from_ptr(texture.cast()))
