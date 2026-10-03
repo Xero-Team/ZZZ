@@ -2324,7 +2324,7 @@ impl RemoteServerProjects {
                         })?
                         .await
                 })
-                .detach();
+                .detach_and_log_err(cx);
             } else {
                 return;
             }
