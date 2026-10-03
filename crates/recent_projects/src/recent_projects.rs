@@ -128,6 +128,7 @@ pub async fn get_recent_projects(
     let workspaces = db
         .recent_project_workspaces(fs.as_ref())
         .await
+        .log_err()
         .unwrap_or_default();
 
     let filtered: Vec<_> = workspaces
