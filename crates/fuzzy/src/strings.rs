@@ -84,9 +84,9 @@ impl StringMatch {
 
     /// Gets the byte length of the utf-8 character at a byte offset. If the index is out of range
     /// or not on a utf-8 boundary then None is returned.
-    fn char_len_at_index(&self, ix: usize) -> Option<usize> {
+    fn char_len_at_index(&self, index: usize) -> Option<usize> {
         self.string
-            .get(ix..)
+            .get(index..)
             .and_then(|slice| slice.chars().next().map(|char| char.len_utf8()))
     }
 }
@@ -149,18 +149,18 @@ where
     let query = &query;
     let query_char_bag = CharBag::from(&**lowercase_query);
 
-    let num_cpus = executor.num_cpus().min(candidates.len());
-    let segment_size = candidates.len().div_ceil(num_cpus);
-    let mut segment_results = (0..num_cpus)
+    let worker_count = executor.num_cpus().min(candidates.len());
+    let segment_size = candidates.len().div_ceil(worker_count);
+    let mut segment_results = (0..worker_count)
         .map(|_| Vec::with_capacity(max_results.min(candidates.len())))
         .collect::<Vec<_>>();
 
     executor
         .scoped(|scope| {
-            for (segment_idx, results) in segment_results.iter_mut().enumerate() {
+            for (segment_index, results) in segment_results.iter_mut().enumerate() {
                 let cancel_flag = &cancel_flag;
                 scope.spawn(async move {
-                    let segment_start = cmp::min(segment_idx * segment_size, candidates.len());
+                    let segment_start = cmp::min(segment_index * segment_size, candidates.len());
                     let segment_end = cmp::min(segment_start + segment_size, candidates.len());
                     let mut matcher = Matcher::new(
                         query,
@@ -175,13 +175,13 @@ where
                         &[],
                         candidates[segment_start..segment_end]
                             .iter()
-                            .map(|c| c.borrow()),
+                            .map(|candidate| candidate.borrow()),
                         results,
                         cancel_flag,
                         |candidate: &&StringMatchCandidate, score, positions| StringMatch {
                             candidate_id: candidate.id,
                             score,
-                            positions: positions.clone(),
+                            positions: positions.to_vec(),
                             string: candidate.string.clone(),
                         },
                     );
@@ -195,6 +195,6 @@ where
     }
 
     let mut results = segment_results.concat();
-    util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
+    util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|left, right| right.cmp(left));
     results
 }

@@ -9,8 +9,6 @@ const BASE_DISTANCE_PENALTY: f64 = 0.6;
 const ADDITIONAL_DISTANCE_PENALTY: f64 = 0.05;
 const MIN_DISTANCE_PENALTY: f64 = 0.2;
 
-// TODO:
-// Use `Path` instead of `&str` for paths.
 pub struct Matcher<'a> {
     query: &'a [char],
     lowercase_query: &'a [char],
@@ -64,7 +62,7 @@ impl<'a> Matcher<'a> {
     ) where
         C: MatchCandidate,
         T: Borrow<C>,
-        F: Fn(&C, f64, &Vec<usize>) -> R,
+        F: Fn(&C, f64, &[usize]) -> R,
     {
         let mut candidate_chars = Vec::new();
         let mut lowercase_candidate_chars = Vec::new();
@@ -80,9 +78,9 @@ impl<'a> Matcher<'a> {
 
             candidate_chars.clear();
             lowercase_candidate_chars.clear();
-            for c in candidate.borrow().candidate_chars() {
-                candidate_chars.push(c);
-                lowercase_candidate_chars.push(simple_lowercase(c));
+            for character in candidate.borrow().candidate_chars() {
+                candidate_chars.push(character);
+                lowercase_candidate_chars.push(simple_lowercase(character));
             }
 
             if !self.find_last_positions(lowercase_prefix, &lowercase_candidate_chars) {
@@ -120,11 +118,15 @@ impl<'a> Matcher<'a> {
     ) -> bool {
         let mut lowercase_prefix = lowercase_prefix.iter();
         let mut lowercase_candidate = lowercase_candidate.iter();
-        for (i, char) in self.lowercase_query.iter().enumerate().rev() {
-            if let Some(j) = lowercase_candidate.rposition(|c| c == char) {
-                self.last_positions[i] = j + lowercase_prefix.len();
-            } else if let Some(j) = lowercase_prefix.rposition(|c| c == char) {
-                self.last_positions[i] = j;
+        for (query_index, query_character) in self.lowercase_query.iter().enumerate().rev() {
+            if let Some(candidate_index) =
+                lowercase_candidate.rposition(|character| character == query_character)
+            {
+                self.last_positions[query_index] = candidate_index + lowercase_prefix.len();
+            } else if let Some(prefix_index) =
+                lowercase_prefix.rposition(|character| character == query_character)
+            {
+                self.last_positions[query_index] = prefix_index;
             } else {
                 return false;
             }
@@ -153,30 +155,31 @@ impl<'a> Matcher<'a> {
             return 0.0;
         }
         let path_len = prefix.len() + path.len();
-        let mut cur_start = 0;
-        let mut byte_ix = 0;
-        let mut char_ix = 0;
-        for i in 0..self.query.len() {
-            let match_char_ix = self.best_position_matrix[i * path_len + cur_start];
-            while char_ix < match_char_ix {
-                let ch = prefix
-                    .get(char_ix)
-                    .or_else(|| path.get(char_ix - prefix.len()))
+        let mut current_start = 0;
+        let mut byte_index = 0;
+        let mut character_index = 0;
+        for query_index in 0..self.query.len() {
+            let matched_character_index =
+                self.best_position_matrix[query_index * path_len + current_start];
+            while character_index < matched_character_index {
+                let character = prefix
+                    .get(character_index)
+                    .or_else(|| path.get(character_index - prefix.len()))
                     .expect("entry should be present");
-                byte_ix += ch.len_utf8();
-                char_ix += 1;
+                byte_index += character.len_utf8();
+                character_index += 1;
             }
 
-            self.match_positions[i] = byte_ix;
+            self.match_positions[query_index] = byte_index;
 
-            let matched_ch = prefix
-                .get(match_char_ix)
-                .or_else(|| path.get(match_char_ix - prefix.len()))
+            let matched_character = prefix
+                .get(matched_character_index)
+                .or_else(|| path.get(matched_character_index - prefix.len()))
                 .expect("entry should be present");
-            byte_ix += matched_ch.len_utf8();
+            byte_index += matched_character.len_utf8();
 
-            cur_start = match_char_ix + 1;
-            char_ix = match_char_ix + 1;
+            current_start = matched_character_index + 1;
+            character_index = matched_character_index + 1;
         }
 
         score
@@ -188,77 +191,82 @@ impl<'a> Matcher<'a> {
         path_lowercased: &[char],
         prefix: &[char],
         lowercase_prefix: &[char],
-        query_idx: usize,
-        path_idx: usize,
-        cur_score: f64,
+        query_index: usize,
+        path_index: usize,
+        current_score: f64,
     ) -> f64 {
-        if query_idx == self.query.len() {
+        if query_index == self.query.len() {
             return 1.0;
         }
 
-        let limit = self.last_positions[query_idx];
+        let limit = self.last_positions[query_index];
         let max_valid_index = (prefix.len() + path_lowercased.len()).saturating_sub(1);
         let safe_limit = limit.min(max_valid_index);
 
-        if path_idx > safe_limit {
+        if path_index > safe_limit {
             return 0.0;
         }
 
         let path_len = prefix.len() + path.len();
-        if let Some(memoized) = self.score_matrix[query_idx * path_len + path_idx] {
+        if let Some(memoized) = self.score_matrix[query_index * path_len + path_index] {
             return memoized;
         }
 
         let mut score = 0.0;
         let mut best_position = 0;
 
-        let query_char = self.lowercase_query[query_idx];
+        let query_character = self.lowercase_query[query_index];
 
         let mut last_slash = 0;
 
-        for j in path_idx..=safe_limit {
-            let path_char = if j < prefix.len() {
-                lowercase_prefix[j]
+        for candidate_index in path_index..=safe_limit {
+            let path_character = if candidate_index < prefix.len() {
+                lowercase_prefix[candidate_index]
             } else {
-                let path_index = j - prefix.len();
-                match path_lowercased.get(path_index) {
-                    Some(&char) => char,
+                let relative_path_index = candidate_index - prefix.len();
+                match path_lowercased.get(relative_path_index) {
+                    Some(&character) => character,
                     None => continue,
                 }
             };
-            let is_path_sep = path_char == '/';
+            let is_path_separator = path_character == '/';
 
-            if query_idx == 0 && is_path_sep {
-                last_slash = j;
+            if query_index == 0 && is_path_separator {
+                last_slash = candidate_index;
             }
-            let need_to_score = query_char == path_char || (is_path_sep && query_char == '_');
+            let need_to_score =
+                query_character == path_character || (is_path_separator && query_character == '_');
             if need_to_score {
-                let curr = match prefix.get(j) {
-                    Some(&curr) => curr,
-                    None => path[j - prefix.len()],
+                let current_character = match prefix.get(candidate_index) {
+                    Some(&current_character) => current_character,
+                    None => path[candidate_index - prefix.len()],
                 };
 
                 let mut char_score = 1.0;
-                if j > path_idx {
-                    let last = match prefix.get(j - 1) {
-                        Some(&last) => last,
-                        None => path[j - 1 - prefix.len()],
+                if candidate_index > path_index {
+                    let previous_character = match prefix.get(candidate_index - 1) {
+                        Some(&previous_character) => previous_character,
+                        None => path[candidate_index - 1 - prefix.len()],
                     };
 
-                    if last == '/' {
+                    if previous_character == '/' {
                         char_score = 0.9;
-                    } else if (last == '-' || last == '_' || last == ' ' || last.is_numeric())
-                        || (last.is_lowercase() && curr.is_uppercase())
+                    } else if (previous_character == '-'
+                        || previous_character == '_'
+                        || previous_character == ' '
+                        || previous_character.is_numeric())
+                        || (previous_character.is_lowercase() && current_character.is_uppercase())
                     {
                         char_score = 0.8;
-                    } else if last == '.' {
+                    } else if previous_character == '.' {
                         char_score = 0.7;
-                    } else if query_idx == 0 {
+                    } else if query_index == 0 {
                         char_score = BASE_DISTANCE_PENALTY;
                     } else {
                         char_score = MIN_DISTANCE_PENALTY.max(
                             BASE_DISTANCE_PENALTY
-                                - (j - path_idx - 1) as f64 * ADDITIONAL_DISTANCE_PENALTY,
+                                - (candidate_index - path_index - 1) as f64
+                                    * ADDITIONAL_DISTANCE_PENALTY,
                         );
                     }
                 }
@@ -266,20 +274,22 @@ impl<'a> Matcher<'a> {
                 // Apply a severe penalty if the case doesn't match.
                 // This will make the exact matches have higher score than the case-insensitive and the
                 // path insensitive matches.
-                if (self.smart_case || curr == '/') && self.query[query_idx] != curr {
+                if (self.smart_case || current_character == '/')
+                    && self.query[query_index] != current_character
+                {
                     char_score *= 0.001;
                 }
 
                 let mut multiplier = char_score;
 
                 // Scale the score based on how deep within the path we found the match.
-                if self.penalize_length && query_idx == 0 {
+                if self.penalize_length && query_index == 0 {
                     multiplier /= ((prefix.len() + path.len()) - last_slash) as f64;
                 }
 
                 let mut next_score = 1.0;
                 if self.min_score > 0.0 {
-                    next_score = cur_score * multiplier;
+                    next_score = current_score * multiplier;
                     // Scores only decrease. If we can't pass the previous best, bail
                     if next_score < self.min_score {
                         // Ensure that score is non-zero so we use it in the memo table.
@@ -295,14 +305,14 @@ impl<'a> Matcher<'a> {
                     path_lowercased,
                     prefix,
                     lowercase_prefix,
-                    query_idx + 1,
-                    j + 1,
+                    query_index + 1,
+                    candidate_index + 1,
                     next_score,
                 ) * multiplier;
 
                 if new_score > score {
                     score = new_score;
-                    best_position = j;
+                    best_position = candidate_index;
                     // Optimization: can't score better than 1.
                     if new_score == 1.0 {
                         break;
@@ -312,10 +322,10 @@ impl<'a> Matcher<'a> {
         }
 
         if best_position != 0 {
-            self.best_position_matrix[query_idx * path_len + path_idx] = best_position;
+            self.best_position_matrix[query_index * path_len + path_index] = best_position;
         }
 
-        self.score_matrix[query_idx * path_len + path_idx] = Some(score);
+        self.score_matrix[query_index * path_len + path_index] = Some(score);
         score
     }
 }
@@ -603,14 +613,14 @@ mod tests {
             |candidate, score, positions| PathMatch {
                 score,
                 worktree_id: 0,
-                positions: positions.clone(),
+                positions: positions.to_vec(),
                 path: candidate.path.into(),
                 path_prefix: RelPath::empty_arc(),
                 distance_to_relative_ancestor: usize::MAX,
                 is_dir: false,
             },
         );
-        results.sort_by(|a, b| b.cmp(a));
+        results.sort_by(|left, right| right.cmp(left));
 
         results
             .into_iter()
@@ -619,7 +629,7 @@ mod tests {
                     paths
                         .iter()
                         .copied()
-                        .find(|p| result.path.as_ref() == rel_path(p))
+                        .find(|path| result.path.as_ref() == rel_path(path))
                         .unwrap(),
                     result.positions,
                 )
@@ -634,7 +644,6 @@ mod tests {
         let query = "İ/İ";
 
         // This panicked with "index out of bounds: the len is 21 but the index is 22"
-        let result = match_single_path_query(query, false, &paths);
-        let _ = result;
+        match_single_path_query(query, false, &paths);
     }
 }

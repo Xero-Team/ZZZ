@@ -109,12 +109,12 @@ pub fn match_fixed_path_set(
                 .chars()
                 .collect::<Vec<_>>();
             path_prefix_chars.extend(path_style.primary_separator().chars());
-            let lowercase_pfx = path_prefix_chars
+            let lowercase_prefix = path_prefix_chars
                 .iter()
-                .map(|c| simple_lowercase(*c))
+                .map(|character| simple_lowercase(*character))
                 .collect::<Vec<_>>();
 
-            (worktree_root_name, path_prefix_chars, lowercase_pfx)
+            (worktree_root_name, path_prefix_chars, lowercase_prefix)
         }
         None => (RelPath::empty_arc(), Default::default(), Default::default()),
     };
@@ -128,27 +128,27 @@ pub fn match_fixed_path_set(
         |candidate, score, positions| PathMatch {
             score,
             worktree_id,
-            positions: positions.clone(),
+            positions: positions.to_vec(),
             is_dir: candidate.is_dir,
             path: candidate.path.into(),
             path_prefix: path_prefix.clone(),
             distance_to_relative_ancestor: usize::MAX,
         },
     );
-    util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
+    util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|left, right| right.cmp(left));
     results
 }
 
 pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
     candidate_sets: &'a [Set],
     query: &str,
-    relative_to: &Option<Arc<RelPath>>,
+    relative_to: Option<&RelPath>,
     smart_case: bool,
     max_results: usize,
     cancel_flag: &AtomicBool,
     executor: BackgroundExecutor,
 ) -> Vec<PathMatch> {
-    let path_count: usize = candidate_sets.iter().map(|s| s.len()).sum();
+    let path_count: usize = candidate_sets.iter().map(PathMatchCandidateSet::len).sum();
     if path_count == 0 {
         return Vec::new();
     }
@@ -175,17 +175,17 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
     let lowercase_query = &lowercase_query;
     let query_char_bag = CharBag::from_iter(lowercase_query.iter().copied());
 
-    let num_cpus = executor.num_cpus().min(path_count);
-    let segment_size = path_count.div_ceil(num_cpus);
-    let mut segment_results = (0..num_cpus)
+    let worker_count = executor.num_cpus().min(path_count);
+    let segment_size = path_count.div_ceil(worker_count);
+    let mut segment_results = (0..worker_count)
         .map(|_| Vec::with_capacity(max_results))
         .collect::<Vec<_>>();
 
     executor
         .scoped(|scope| {
-            for (segment_idx, results) in segment_results.iter_mut().enumerate() {
+            for (segment_index, results) in segment_results.iter_mut().enumerate() {
                 scope.spawn(async move {
-                    let segment_start = segment_idx * segment_size;
+                    let segment_start = segment_index * segment_size;
                     let segment_end = segment_start + segment_size;
                     let mut matcher =
                         Matcher::new(query, lowercase_query, query_char_bag, smart_case, true);
@@ -214,7 +214,7 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
                             }
                             let lowercase_prefix = prefix
                                 .iter()
-                                .map(|c| simple_lowercase(*c))
+                                .map(|character| simple_lowercase(*character))
                                 .collect::<Vec<_>>();
                             matcher.match_candidates(
                                 &prefix,
@@ -225,17 +225,14 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
                                 |candidate, score, positions| PathMatch {
                                     score,
                                     worktree_id,
-                                    positions: positions.clone(),
+                                    positions: positions.to_vec(),
                                     path: Arc::from(candidate.path),
                                     is_dir: candidate.is_dir,
                                     path_prefix: candidate_set.prefix(),
-                                    distance_to_relative_ancestor: relative_to.as_ref().map_or(
+                                    distance_to_relative_ancestor: relative_to.map_or(
                                         usize::MAX,
                                         |relative_to| {
-                                            distance_between_paths(
-                                                candidate.path,
-                                                relative_to.as_ref(),
-                                            )
+                                            distance_between_paths(candidate.path, relative_to)
                                         },
                                     ),
                                 },
@@ -256,7 +253,7 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
     }
 
     let mut results = segment_results.concat();
-    util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
+    util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|left, right| right.cmp(left));
     results
 }
 

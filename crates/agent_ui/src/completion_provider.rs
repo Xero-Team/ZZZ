@@ -1997,7 +1997,7 @@ pub(crate) fn search_files(
             fuzzy::match_path_sets(
                 candidate_sets.as_slice(),
                 query.as_str(),
-                &relative_to,
+                relative_to.as_deref(),
                 false,
                 100,
                 &cancellation_flag,
