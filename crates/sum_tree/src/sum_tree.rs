@@ -377,7 +377,6 @@ impl<T: Item> SumTree<T> {
         }
     }
 
-    #[allow(unused)]
     pub fn items<'a>(&'a self, cx: <T::Summary as Summary>::Context<'a>) -> Vec<T> {
         let mut items = Vec::new();
         let mut cursor = self.cursor::<()>(cx);
