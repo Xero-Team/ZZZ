@@ -19,7 +19,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 执行基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 4A：frame owner 拆分                  |
+| 当前阶段                   | 阶段 4B：interaction owner 拆分            |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -304,6 +304,29 @@ runtime，以及将 Linux pixel artifacts 纳入后续 renderer/Window migration
 提交：invalidation owner `1946811f30`；completed frame state owner `ccd2a038df`。
 下一步：继续 4B，先抽出 hitbox、dispatch tree、focus/tab、pointer capture 和 key/action
 routing owner，并固定 routing order 回归测试。
+
+4B interaction owner 当前进度：
+
+- 新建内部 `interaction.rs`，由 `InteractionOwner` 持有 rendered/next frame、hitbox ID
+  分配、命中测试结果和 pointer capture；`Window` 仅协调绘制和输入生命周期。
+- GPUI element、deferred draw、image、anchored UI 和 test context 的内部访问已切换到
+  interaction owner；公开 `Window`、`Hitbox`、focus 和 pointer capture API 保持兼容。
+- 本提交只收拢所有权和字段路径，没有改变 capture、hit-test、dispatch tree 或 cache replay
+  算法；focus state、cursor requests 和 key/action routing method 仍待进一步下沉。
+
+验证：
+
+| 命令或检查                                                       | 结果   | 证据                                              |
+| ---------------------------------------------------------------- | ------ | ------------------------------------------------- |
+| `cargo check --locked -p gpui`                                   | `PASS` | interaction owner 默认配置编译通过                |
+| `cargo test --locked -p gpui --lib`                              | `PASS` | 218 tests passed                                  |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 220 tests passed，含 diagnostics lifecycle/runner |
+| `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                               | `PASS` | interaction owner 迁移无 whitespace error         |
+
+提交：`a53e41c9ef`。
+下一步：继续 4B，将 focus/tab state、cursor requests 与 key/action capture/bubble routing
+收拢到 interaction owner，并增加固定 routing-order snapshot tests。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
