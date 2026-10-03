@@ -385,14 +385,12 @@ fn dismiss_suggestion(extension_id: &str, cx: &mut App) {
         .workspace_store
         .read(cx)
         .workspaces()
-        .cloned()
+        .filter_map(|workspace| workspace.upgrade())
         .collect::<Vec<_>>();
     for workspace in workspaces {
-        workspace
-            .update(cx, |workspace, cx| {
-                workspace.dismiss_notification(&notification_id, cx);
-            })
-            .ok();
+        workspace.update(cx, |workspace, cx| {
+            workspace.dismiss_notification(&notification_id, cx);
+        });
     }
 }
 
