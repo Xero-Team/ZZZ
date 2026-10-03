@@ -204,6 +204,9 @@ impl PdfView {
         let receiver = worker.render_page(index, dpi, priority);
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = receiver.await;
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |view, cx| {
                 let center = view.current_page;
                 if let Some(state) = view.loaded_mut() {
@@ -224,8 +227,7 @@ impl PdfView {
                 // without going through `ensure_pages_rendered`, so this is the
                 // authoritative point that keeps the cache within budget.
                 view.evict_over_budget(center);
-            })
-            .ok();
+            });
         });
 
         if let Some(state) = self.loaded_mut() {
