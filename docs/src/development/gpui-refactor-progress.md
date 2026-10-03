@@ -522,6 +522,9 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 - `ui_prompt` renderer 不再读取 `WorkspaceSettings` 或订阅 product settings；system prompt
   policy 由 `zzz` app composition 决定，generic renderer 只负责 prompt view。
 - 保留 `ErasedEditor` façade 和 Editor UTF-16/IME 行为，未引入跨 crate product API。
+- `create_editor`/`InputField::try_new` 提供显式 factory-missing error；兼容
+  `InputField::new` 不再 panic，而是记录 error 并使用可 focus、可程序化读写的 inert
+  fallback editor，避免 app 初始化顺序导致崩溃。
 
 验证：
 
@@ -529,7 +532,7 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | --------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cargo check --locked -p ui_input -p editor -p picker -p remote_connection` | `PASS`                    | app-scoped factory consumers 编译通过                                                                                                                             |
 | `cargo check --locked -p ui_prompt -p zzz`                                  | `PASS`                    | prompt policy moved to app composition                                                                                                                            |
-| `cargo test --locked -p ui_input --lib`                                     | `PASS`                    | 0 tests, compile/test harness passed                                                                                                                              |
+| `cargo test --locked -p ui_input --lib`                                     | `PASS`                    | 1 startup-order/fallback test passed                                                                                                                              |
 | `./script/clippy -p ui_input`                                               | `PASS`                    | all-target release clippy 与 philosophy gate 通过                                                                                                                 |
 | `./script/clippy -p ui_prompt`                                              | `PASS`                    | all-target release clippy 与 philosophy gate 通过                                                                                                                 |
 | `cargo test --locked -p editor ime`                                         | `PASS`                    | 6 IME/composition tests passed                                                                                                                                    |
@@ -538,8 +541,14 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | `git diff --check`                                                          | `PASS`                    | ui_input boundary change 无 whitespace error                                                                                                                      |
 | `cargo test --locked -p agent_ui --lib`                                     | `FAIL (baseline overlap)` | 293 passed；6 agent action/focus failures remain; representative baseline reproduction is recorded in `.tmp/gpui-refactor/phase-9/baseline-agent-ui-form-tab.log` |
 
-提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`。
-下一步：补齐显式 prompt renderer adapter 和 UI integration tests，再运行 EXP-009/010。
+提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`；
+non-panicking factory boundary `d296469604`。
+
+EXP-010 当前状态：`PARTIAL`。process-global factory 已删除、缺 factory 不再 panic、prompt
+product policy 已迁出 generic crate；仍待 editor-only incremental rebuild 测量和完整 UI
+startup smoke。
+
+下一步：补齐 UI integration startup smoke，并完成 EXP-009/010 的增量编译和行为记录。
 
 ### 阶段 8：invalidation 实验
 
