@@ -92,7 +92,13 @@ async fn main() -> Result<()> {
     test_snippets(&manifest, &extension_path, fs.clone()).await?;
 
     let archive_dir = output_dir.join("archive");
-    fs::remove_dir_all(&archive_dir).ok();
+    match fs::remove_dir_all(&archive_dir) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).context("failed to remove previous extension archive directory");
+        }
+    }
     copy_extension_resources(&manifest, &extension_path, &archive_dir, fs.clone())
         .await
         .context("failed to copy extension resources")?;
