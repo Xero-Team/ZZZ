@@ -309,8 +309,6 @@ enum BufferOrderedMessage {
         message: proto::update_language_server::Variant,
         name: Option<LanguageServerName>,
     },
-    #[allow(dead_code)]
-    Resync,
 }
 
 /// A link to display in a toast notification, useful to point to documentation.
@@ -2863,17 +2861,6 @@ impl Project {
                             .push(operation);
                     }
 
-                    BufferOrderedMessage::Resync => {
-                        operations_by_buffer_id.clear();
-                        if project
-                            .update(cx, |this, cx| this.synchronize_remote_buffers(cx))?
-                            .await
-                            .is_ok()
-                        {
-                            needs_resync_with_host = false;
-                        }
-                    }
-
                     BufferOrderedMessage::LanguageServerUpdate {
                         language_server_id,
                         message,
@@ -5189,12 +5176,6 @@ impl Project {
                 completion_tx.send(Ok(content)).ok();
             }
         }
-    }
-
-    fn synchronize_remote_buffers(&mut self, _cx: &mut Context<Self>) -> Task<Result<()>> {
-        Task::ready(Err(anyhow!(
-            "can't synchronize remote buffers on a local project"
-        )))
     }
 
     pub fn worktree_metadata_protos(&self, cx: &App) -> Vec<proto::WorktreeMetadata> {
