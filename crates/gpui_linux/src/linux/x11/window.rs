@@ -1351,6 +1351,23 @@ impl X11WindowStatePtr {
     }
 }
 
+impl gpui::TextInputBridge for X11Window {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.0.state.borrow_mut().input_handler = Some(input_handler);
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.0.state.borrow_mut().input_handler.take()
+    }
+
+    fn update_ime_position(&self, bounds: Bounds<Pixels>) {
+        let state = self.0.state.borrow();
+        let client = state.client.clone();
+        drop(state);
+        client.update_ime_position(bounds);
+    }
+}
+
 impl PlatformWindow for X11Window {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
@@ -1474,14 +1491,6 @@ impl PlatformWindow for X11Window {
             .upgrade()
             .map(|ref_cell| ref_cell.borrow().capslock)
             .unwrap_or_default()
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.0.state.borrow_mut().input_handler = Some(input_handler);
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.0.state.borrow_mut().input_handler.take()
     }
 
     fn prompt(
@@ -1915,13 +1924,6 @@ impl PlatformWindow for X11Window {
         if let Some(appearance_changed) = callbacks.appearance_changed.as_mut() {
             appearance_changed();
         }
-    }
-
-    fn update_ime_position(&self, bounds: Bounds<Pixels>) {
-        let state = self.0.state.borrow();
-        let client = state.client.clone();
-        drop(state);
-        client.update_ime_position(bounds);
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {

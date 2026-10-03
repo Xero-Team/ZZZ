@@ -1147,6 +1147,24 @@ impl rwh::HasDisplayHandle for WaylandWindow {
     }
 }
 
+impl gpui::TextInputBridge for WaylandWindow {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.borrow_mut().input_handler = Some(input_handler);
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.borrow_mut().input_handler.take()
+    }
+
+    fn update_ime_position(&self, bounds: Bounds<Pixels>) {
+        let state = self.borrow();
+        if !state.active {
+            return;
+        }
+        state.client.update_ime_position(bounds);
+    }
+}
+
 impl PlatformWindow for WaylandWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
@@ -1251,14 +1269,6 @@ impl PlatformWindow for WaylandWindow {
 
     fn capslock(&self) -> Capslock {
         self.borrow().client.get_client().borrow().capslock
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.borrow_mut().input_handler = Some(input_handler);
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.borrow_mut().input_handler.take()
     }
 
     fn prompt(
@@ -1557,14 +1567,6 @@ impl PlatformWindow for WaylandWindow {
             state.client_inset = Some(inset);
             update_window(state);
         }
-    }
-
-    fn update_ime_position(&self, bounds: Bounds<Pixels>) {
-        let state = self.borrow();
-        if !state.active {
-            return;
-        }
-        state.client.update_ime_position(bounds);
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {

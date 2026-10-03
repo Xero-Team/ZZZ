@@ -171,6 +171,18 @@ impl TestWindow {
     }
 }
 
+impl crate::TextInputBridge for TestWindow {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.0.lock().input_handler = Some(input_handler);
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.0.lock().input_handler.take()
+    }
+
+    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
+}
+
 impl PlatformWindow for TestWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.lock().bounds
@@ -215,14 +227,6 @@ impl PlatformWindow for TestWindow {
 
     fn capslock(&self) -> crate::Capslock {
         crate::Capslock::default()
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.0.lock().input_handler = Some(input_handler);
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.0.lock().input_handler.take()
     }
 
     fn prompt(
@@ -399,8 +403,6 @@ impl PlatformWindow for TestWindow {
     fn start_window_move(&self) {
         unimplemented!()
     }
-
-    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         None

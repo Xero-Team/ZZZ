@@ -1323,6 +1323,32 @@ fn if_window_not_closed(closed: Arc<AtomicBool>, f: impl FnOnce()) {
     }
 }
 
+impl gpui::TextInputBridge for MacWindow {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.0.as_ref().lock().input_handler = Some(input_handler);
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.0.as_ref().lock().input_handler.take()
+    }
+
+    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {
+        let executor = self.0.lock().foreground_executor.clone();
+        executor
+            .spawn(async move {
+                unsafe {
+                    let input_context: id =
+                        msg_send![class!(NSTextInputContext), currentInputContext];
+                    if input_context.is_null() {
+                        return;
+                    }
+                    let _: () = msg_send![input_context, invalidateCharacterCoordinates];
+                }
+            })
+            .detach()
+    }
+}
+
 impl PlatformWindow for MacWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.as_ref().lock().bounds()
@@ -1486,14 +1512,6 @@ impl PlatformWindow for MacWindow {
                 on: modifiers.contains(NSEventModifierFlags::NSAlphaShiftKeyMask),
             }
         }
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.0.as_ref().lock().input_handler = Some(input_handler);
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.0.as_ref().lock().input_handler.take()
     }
 
     fn prompt(
@@ -1907,22 +1925,6 @@ impl PlatformWindow for MacWindow {
 
     fn gpu_specs(&self) -> Option<gpui::GpuSpecs> {
         None
-    }
-
-    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {
-        let executor = self.0.lock().foreground_executor.clone();
-        executor
-            .spawn(async move {
-                unsafe {
-                    let input_context: id =
-                        msg_send![class!(NSTextInputContext), currentInputContext];
-                    if input_context.is_null() {
-                        return;
-                    }
-                    let _: () = msg_send![input_context, invalidateCharacterCoordinates];
-                }
-            })
-            .detach()
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {

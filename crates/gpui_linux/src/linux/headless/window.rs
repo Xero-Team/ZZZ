@@ -101,6 +101,18 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
     }
 }
 
+impl gpui::TextInputBridge for HeadlessWindow {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.0.borrow_mut().input_handler = Some(input_handler);
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.0.borrow_mut().input_handler.take()
+    }
+
+    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
+}
+
 impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
@@ -144,14 +156,6 @@ impl PlatformWindow for HeadlessWindow {
 
     fn capslock(&self) -> Capslock {
         Capslock::default()
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.0.borrow_mut().input_handler = Some(input_handler);
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.0.borrow_mut().input_handler.take()
     }
 
     fn prompt(
@@ -234,8 +238,6 @@ impl PlatformWindow for HeadlessWindow {
     fn is_subpixel_rendering_supported(&self) -> bool {
         false
     }
-
-    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         headless_capabilities()

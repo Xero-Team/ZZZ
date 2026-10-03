@@ -591,6 +591,27 @@ impl Drop for WindowsWindow {
     }
 }
 
+impl gpui::TextInputBridge for WindowsWindow {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.state.input_handler.set(Some(input_handler));
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.state.input_handler.take()
+    }
+
+    fn update_ime_position(&self, bounds: Bounds<Pixels>) {
+        let scale_factor = self.state.scale_factor.get();
+        let caret_position = POINT {
+            x: (bounds.origin.x.as_f32() * scale_factor) as i32,
+            y: (bounds.origin.y.as_f32() * scale_factor) as i32
+                + ((bounds.size.height.as_f32() * scale_factor) as i32 / 2),
+        };
+
+        self.0.update_ime_position(self.0.hwnd, caret_position);
+    }
+}
+
 impl PlatformWindow for WindowsWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.state.bounds()
@@ -668,14 +689,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn capslock(&self) -> Capslock {
         current_capslock()
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.state.input_handler.set(Some(input_handler));
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.state.input_handler.take()
     }
 
     fn prompt(
@@ -1006,17 +1019,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.state.renderer.borrow().gpu_specs().log_err()
-    }
-
-    fn update_ime_position(&self, bounds: Bounds<Pixels>) {
-        let scale_factor = self.state.scale_factor.get();
-        let caret_position = POINT {
-            x: (bounds.origin.x.as_f32() * scale_factor) as i32,
-            y: (bounds.origin.y.as_f32() * scale_factor) as i32
-                + ((bounds.size.height.as_f32() * scale_factor) as i32 / 2),
-        };
-
-        self.0.update_ime_position(self.0.hwnd, caret_position);
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {

@@ -588,6 +588,18 @@ impl raw_window_handle::HasDisplayHandle for WebWindow {
     }
 }
 
+impl gpui::TextInputBridge for WebWindow {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+        self.inner.state.borrow_mut().input_handler = Some(input_handler);
+    }
+
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+        self.inner.state.borrow_mut().input_handler.take()
+    }
+
+    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
+}
+
 impl PlatformWindow for WebWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.inner.state.borrow().bounds
@@ -637,14 +649,6 @@ impl PlatformWindow for WebWindow {
 
     fn capslock(&self) -> Capslock {
         self.inner.state.borrow().capslock
-    }
-
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
-        self.inner.state.borrow_mut().input_handler = Some(input_handler);
-    }
-
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
-        self.inner.state.borrow_mut().input_handler.take()
     }
 
     fn prompt(
@@ -795,8 +799,6 @@ impl PlatformWindow for WebWindow {
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         Some(self.inner.state.borrow().renderer.gpu_specs())
     }
-
-    fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 
     fn request_decorations(&self, _decorations: WindowDecorations) {}
 

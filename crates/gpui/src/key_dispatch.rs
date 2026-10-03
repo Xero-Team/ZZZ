@@ -647,8 +647,8 @@ mod tests {
 
     use crate::{
         ActionRegistry, App, Bounds, Context, DispatchPhase, DispatchTree, FocusHandle,
-        InputHandler, IntoElement, KeyBinding, KeyContext, Keymap, Pixels, PlatformWindow, Point,
-        Render, Subscription, TestAppContext, UTF16Selection, Unbind, VisualContext,
+        InputHandler, IntoElement, KeyBinding, KeyContext, Keymap, Pixels, Point, Render,
+        Subscription, TestAppContext, TextInputBridge as _, UTF16Selection, Unbind, VisualContext,
         VisualTestContext, Window,
     };
 

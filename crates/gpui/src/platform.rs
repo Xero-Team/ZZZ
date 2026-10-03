@@ -644,8 +644,16 @@ pub struct RequestFrameOptions {
     pub force_render: bool,
 }
 
+/// Platform bridge for native text input and IME candidate positioning.
 #[expect(missing_docs)]
-pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
+pub trait TextInputBridge {
+    fn set_input_handler(&mut self, input_handler: PlatformInputHandler);
+    fn take_input_handler(&mut self) -> Option<PlatformInputHandler>;
+    fn update_ime_position(&self, bounds: Bounds<Pixels>);
+}
+
+#[expect(missing_docs)]
+pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle + TextInputBridge {
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
     fn window_bounds(&self) -> WindowBounds;
@@ -657,8 +665,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn mouse_position(&self) -> Point<Pixels>;
     fn modifiers(&self) -> Modifiers;
     fn capslock(&self) -> Capslock;
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler);
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler>;
     fn prompt(
         &self,
         level: PromptLevel,
@@ -754,8 +760,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     }
     fn set_client_inset(&self, _inset: Pixels) {}
     fn gpu_specs(&self) -> Option<GpuSpecs>;
-
-    fn update_ime_position(&self, _bounds: Bounds<Pixels>);
 
     fn play_system_bell(&self) {}
 
