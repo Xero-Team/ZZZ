@@ -390,19 +390,24 @@ immutable `BuiltFrame`。
   `Window::present` 现在提交 `BuiltFrame.scene` 的只读视图。
 - 没有引入 `App`、`Entity` 或公开 `Window` 到 render contract；没有改变 WGPU/Metal
   swapchain 行为。
+- `gpui_wgpu/src/wgpu_renderer/resources.rs` 现在承载 GPU resource lifetime，
+  `pipelines.rs` 承载 pipeline/layout definitions；headless path 保持独立。
 
 验证：
 
-| 命令或检查                                                                                                                          | 结果   | 证据                                              |
-| ----------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
-| `cargo check --locked -p gpui`                                                                                                      | `PASS` | render contract 与 compatibility adapter 编译通过 |
-| `cargo test --locked -p gpui --lib window::tests::test_frame_waker_fires_on_frame_demand`                                           | `PASS` | completed frame submit path 通过                  |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics window::tests::test_frame_diagnostics_follow_build_through_present` | `PASS` | diagnostics present path 通过                     |
-| `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过 |
-| `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error     |
+| 命令或检查                                                                                                                          | 结果   | 证据                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------ |
+| `cargo check --locked -p gpui`                                                                                                      | `PASS` | render contract 与 compatibility adapter 编译通过      |
+| `cargo test --locked -p gpui --lib window::tests::test_frame_waker_fires_on_frame_demand`                                           | `PASS` | completed frame submit path 通过                       |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics window::tests::test_frame_diagnostics_follow_build_through_present` | `PASS` | diagnostics present path 通过                          |
+| `cargo test --locked -p gpui_wgpu --lib`                                                                                            | `PASS` | 15 WGPU unit tests passed                              |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                                                 | `PASS` | hardware/fallback primitive corpus passed              |
+| `./script/clippy -p gpui_wgpu --features test-support`                                                                              | `PASS` | WGPU all-target release clippy 与 philosophy gate 通过 |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过      |
+| `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error          |
 
-提交：`32d3b403a8`。
-下一步：把 `gpui_wgpu` 的 resources/pipelines/frame/surface/drawing/headless 按 contract
+提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`。
+下一步：把 `gpui_wgpu` 的 frame/surface/drawing/headless 按 contract
 拆分，运行 EXP-004/005；只有达标才评估独立 `gpui_render` crate。
 
 ### 阶段 6：platform capability 与 lifecycle
