@@ -433,6 +433,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 - 新增 `TextInputBridge` supertrait，将 input handler ownership 与 IME candidate position
   从宽 `PlatformWindow` trait 抽离；所有 backend 已迁移，`PlatformWindow` 继续作为
   composite façade，因此现有调用语义和公开 surface 不变。
+- 新增 `InputSource` supertrait，将 mouse position、modifiers、Caps Lock 和 input callback
+  registration 从 `PlatformWindow` 抽离；各 backend 仅移动原实现，dispatch order 与
+  callback ownership 不变。
 
 当前矩阵：
 
@@ -456,14 +459,15 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 | `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                 |
 | `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 221 tests passed after TextInputBridge split            |
 | `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                    |
+| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | input/action routing tests, 3 passed                    |
 | `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux            |
 | `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过       |
 | `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error          |
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
-`efd05dd0cb`。
-下一步：建立 `AppLifecycle`、`WindowHost`、`InputSource`、`AccessibilityBridge`、
+`efd05dd0cb`；input source `7c1e5e0de2`。
+下一步：建立 `AppLifecycle`、`WindowHost`、`AccessibilityBridge`、
 `SystemServices` 和 renderer factory 内部 traits，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
