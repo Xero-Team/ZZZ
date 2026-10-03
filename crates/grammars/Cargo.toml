@@ -96,6 +96,7 @@ tree-sitter-cmd.workspace = true
 tree-sitter-csv.workspace = true
 tree-sitter-dockerfile.workspace = true
 tree-sitter-mermaid.workspace = true
+tree-sitter-md.workspace = true
 tree-sitter-scheme.workspace = true
 tree-sitter-syslog.workspace = true
 tree-sitter-toml.workspace = true
