@@ -112,7 +112,6 @@ impl<T> PriorityQueueState<T> {
             Ok(Some(queues))
         }
     }
-
 }
 
 #[doc(hidden)]
