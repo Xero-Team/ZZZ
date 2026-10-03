@@ -13,7 +13,7 @@ path = "src/pdf_viewer.rs"
 doctest = false
 
 [features]
-test-support = ["gpui/test-support"]
+test-support = ["db/test-support", "gpui/test-support"]
 
 [dependencies]
 anyhow.workspace = true
