@@ -1887,15 +1887,6 @@ impl NotebookItem {
 impl EventEmitter<()> for NotebookItem {}
 
 impl EventEmitter<()> for NotebookEditor {}
-
-// pub struct NotebookControls {
-//     pane_focused: bool,
-//     active_item: Option<Box<dyn ItemHandle>>,
-//     // subscription: Option<Subscription>,
-// }
-
-// impl NotebookControls {
-//     pub fn new() -> Self {
 impl Item for NotebookEditor {
     type Event = ();
 
