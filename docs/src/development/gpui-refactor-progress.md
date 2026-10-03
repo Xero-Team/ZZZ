@@ -374,13 +374,36 @@ immutable `BuiltFrame`。
 | `./script/clippy -p gpui --features frame-diagnostics`           | `PASS` | all-target release clippy 与 philosophy gate 通过 |
 | `git diff --check`                                               | `PASS` | built frame migration 无 whitespace error         |
 
-提交：`e321e6fa0b`。
+提交：BuiltFrame projection `e321e6fa0b`；render contract adapter `32d3b403a8`。
 下一步：补齐 BuiltFrame 的 accessibility/diagnostics payload 和 read-only renderer contract，
 再按 EXP-004/005 决定是否抽出 `gpui_render` crate。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
+
+已完成的第一步：
+
+- 在 `gpui/src/render_api.rs` 建立内部 `RenderScene`、`RenderTarget`、`Renderer` 和
+  `FrameSubmission` contract。
+- 提供 `submit_compat` adapter，保留现有 `PlatformWindow::draw(&Scene)` backend path；
+  `Window::present` 现在提交 `BuiltFrame.scene` 的只读视图。
+- 没有引入 `App`、`Entity` 或公开 `Window` 到 render contract；没有改变 WGPU/Metal
+  swapchain 行为。
+
+验证：
+
+| 命令或检查                                                                                                                          | 结果   | 证据                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                                                                      | `PASS` | render contract 与 compatibility adapter 编译通过 |
+| `cargo test --locked -p gpui --lib window::tests::test_frame_waker_fires_on_frame_demand`                                           | `PASS` | completed frame submit path 通过                  |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics window::tests::test_frame_diagnostics_follow_build_through_present` | `PASS` | diagnostics present path 通过                     |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error     |
+
+提交：`32d3b403a8`。
+下一步：把 `gpui_wgpu` 的 resources/pipelines/frame/surface/drawing/headless 按 contract
+拆分，运行 EXP-004/005；只有达标才评估独立 `gpui_render` crate。
 
 ### 阶段 6：platform capability 与 lifecycle
 
