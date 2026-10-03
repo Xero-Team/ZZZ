@@ -19,7 +19,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 执行基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 4B：interaction owner 拆分            |
+| 当前阶段                   | 阶段 7：UI 集成边界清理                    |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
