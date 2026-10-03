@@ -72,23 +72,24 @@ impl Terminal {
                 .spawn(async move |this, cx| {
                     let exit_status = command_task.await;
 
-                    this.update(cx, |this, cx| {
-                        let (content, original_content_len) = this.truncated_output(cx);
-                        let content_line_count = this.terminal.read(cx).total_lines();
+                    if let Some(this) = this.upgrade() {
+                        this.update(cx, |this, cx| {
+                            let (content, original_content_len) = this.truncated_output(cx);
+                            let content_line_count = this.terminal.read(cx).total_lines();
 
-                        this.output = Some(TerminalOutput {
-                            ended_at: Instant::now(),
-                            exit_status,
-                            content,
-                            original_content_len,
-                            content_line_count,
+                            this.output = Some(TerminalOutput {
+                                ended_at: Instant::now(),
+                                exit_status,
+                                content,
+                                original_content_len,
+                                content_line_count,
+                            });
+                            this.terminal.update(cx, |terminal, _cx| {
+                                terminal.release_pty_resources();
+                            });
+                            cx.notify();
                         });
-                        this.terminal.update(cx, |terminal, _cx| {
-                            terminal.release_pty_resources();
-                        });
-                        cx.notify();
-                    })
-                    .ok();
+                    }
 
                     let exit_status = exit_status.map(portable_pty::ExitStatus::from);
 
