@@ -131,15 +131,29 @@ impl WebWindow {
             .dyn_into()
             .map_err(|e| anyhow::anyhow!("Created element is not an input: {e:?}"))?;
         let input_style = input_element.style();
-        input_style.set_property("position", "fixed").ok();
-        input_style.set_property("top", "0").ok();
-        input_style.set_property("left", "0").ok();
-        input_style.set_property("width", "1px").ok();
-        input_style.set_property("height", "1px").ok();
-        input_style.set_property("opacity", "0").ok();
+        input_style
+            .set_property("position", "fixed")
+            .map_err(|e| anyhow::anyhow!("Failed to set input position style: {e:?}"))?;
+        input_style
+            .set_property("top", "0")
+            .map_err(|e| anyhow::anyhow!("Failed to set input top style: {e:?}"))?;
+        input_style
+            .set_property("left", "0")
+            .map_err(|e| anyhow::anyhow!("Failed to set input left style: {e:?}"))?;
+        input_style
+            .set_property("width", "1px")
+            .map_err(|e| anyhow::anyhow!("Failed to set input width style: {e:?}"))?;
+        input_style
+            .set_property("height", "1px")
+            .map_err(|e| anyhow::anyhow!("Failed to set input height style: {e:?}"))?;
+        input_style
+            .set_property("opacity", "0")
+            .map_err(|e| anyhow::anyhow!("Failed to set input opacity style: {e:?}"))?;
         body.append_child(&input_element)
             .map_err(|e| anyhow::anyhow!("Failed to append input to body: {e:?}"))?;
-        input_element.focus().ok();
+        input_element
+            .focus()
+            .map_err(|e| anyhow::anyhow!("Failed to focus input element: {e:?}"))?;
 
         let device_size = Size {
             width: DevicePixels(0),
