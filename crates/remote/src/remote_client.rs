@@ -818,17 +818,19 @@ impl RemoteClient {
 
                         if missed_heartbeats != 0 {
                             missed_heartbeats = 0;
-                            let _ =this.update(cx, |this, cx| {
+                            if this.update(cx, |this, cx| {
                                 this.handle_heartbeat_result(missed_heartbeats, cx)
-                            })?;
+                            })?.is_break() {
+                                return Ok(());
+                            }
                         }
                     }
                     _ = keepalive_timer => {
                         log::debug!("Sending heartbeat to server...");
 
                         let result = select_biased! {
-                            _ = connection_activity_rx.next().fuse() => {
-                                Ok(())
+                            activity = connection_activity_rx.next().fuse() => {
+                                activity.context("connection activity channel closed").map(|_| ())
                             }
                             ping_result = client.ping(HEARTBEAT_TIMEOUT).fuse() => {
                                 ping_result
@@ -913,9 +915,7 @@ impl RemoteClient {
                         }
                     } else {
                         log::error!("proxy process terminated unexpectedly: {exit_code}");
-                        this.update(cx, |this, cx| {
-                            this.reconnect(cx).ok();
-                        })?;
+                        this.update(cx, |this, cx| this.reconnect(cx))??;
                     }
                 }
                 Err(error) => {
@@ -923,9 +923,7 @@ impl RemoteClient {
                         "remote io task died with error: {:?}. reconnecting...",
                         error
                     );
-                    this.update(cx, |this, cx| {
-                        this.reconnect(cx).ok();
-                    })?;
+                    this.update(cx, |this, cx| this.reconnect(cx))??;
                 }
             }
 
@@ -1456,6 +1454,33 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_channel_client_handles_closed_outgoing_channel(cx: &mut TestAppContext) {
+        let (_incoming_sender, incoming_receiver) = mpsc::unbounded::<Envelope>();
+        let (outgoing_sender, outgoing_receiver) = mpsc::unbounded::<Envelope>();
+        drop(outgoing_receiver);
+
+        let client = cx.update(|cx| {
+            ChannelClient::new(incoming_receiver, outgoing_sender, cx, "test-client", false)
+        });
+
+        let error = client
+            .request_dynamic(
+                proto::Test { id: 1 }.into_envelope(0, None, None),
+                "Test",
+                false,
+            )
+            .await
+            .expect_err("unbuffered requests should fail when the outgoing channel is closed");
+        assert!(error.to_string().contains("remote outgoing channel closed"));
+        assert!(client.response_channels.lock().is_empty());
+
+        client
+            .send_dynamic(proto::Test { id: 2 }.into_envelope(0, None, None))
+            .expect("buffered messages should remain queued while disconnected");
+        assert_eq!(client.buffer.lock().len(), 1);
+    }
+
+    #[gpui::test]
     async fn test_channel_client_dropping_stream_request_before_response_cleans_up_channel(
         cx: &mut TestAppContext,
     ) {
@@ -1510,7 +1535,7 @@ mod tests {
         incoming_tx
             .unbounded_send(proto::Test { id: 1 }.into_envelope(100, Some(request_id), None))
             .unwrap();
-        let _ = stream.next().await.unwrap().unwrap();
+        stream.next().await.unwrap().unwrap();
 
         assert_eq!(client.stream_response_channels.lock().len(), 1);
 
@@ -1613,33 +1638,35 @@ type StreamResponseChannels =
     Arc<Mutex<HashMap<MessageId, UnboundedSender<(Result<Envelope>, oneshot::Sender<()>)>>>>;
 
 struct Signal<T> {
-    tx: Mutex<Option<oneshot::Sender<T>>>,
-    rx: Shared<Task<Option<T>>>,
+    sender: Mutex<Option<oneshot::Sender<T>>>,
+    receiver: Shared<Task<Option<T>>>,
 }
 
 impl<T: Send + Clone + 'static> Signal<T> {
     pub fn new(cx: &App) -> Self {
-        let (tx, rx) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel();
 
         let task = cx
             .background_executor()
-            .spawn(async move { rx.await.ok() })
+            .spawn(async move { receiver.await.ok() })
             .shared();
 
         Self {
-            tx: Mutex::new(Some(tx)),
-            rx: task,
+            sender: Mutex::new(Some(sender)),
+            receiver: task,
         }
     }
 
     fn set(&self, value: T) {
-        if let Some(tx) = self.tx.lock().take() {
-            let _ = tx.send(value);
+        if let Some(sender) = self.sender.lock().take()
+            && sender.send(value).is_err()
+        {
+            log::debug!("remote signal receiver already closed");
         }
     }
 
     fn wait(&self) -> Shared<Task<Option<T>>> {
-        self.rx.clone()
+        self.receiver.clone()
     }
 }
 
@@ -1690,6 +1717,13 @@ impl ChannelClient {
         self.remote_started.wait()
     }
 
+    fn send_outgoing(&self, envelope: Envelope) -> Result<()> {
+        self.outgoing_tx
+            .lock()
+            .unbounded_send(envelope)
+            .map_err(|_| anyhow!("remote outgoing channel closed"))
+    }
+
     fn start_handling_messages(
         this: Weak<Self>,
         mut incoming_rx: mpsc::UnboundedReceiver<Envelope>,
@@ -1698,7 +1732,8 @@ impl ChannelClient {
         cx.spawn(async move |cx| {
             if let Some(this) = this.upgrade() {
                 let envelope = proto::RemoteStarted {}.into_envelope(0, None, None);
-                this.outgoing_tx.lock().unbounded_send(envelope).ok();
+                this.send_outgoing(envelope)
+                    .context("sending remote-started handshake")?;
             };
 
             let peer_id = PeerId { owner_id: 0, id: 0 };
@@ -1721,15 +1756,14 @@ impl ChannelClient {
                     {
                         let buffer = this.buffer.lock();
                         for envelope in buffer.iter() {
-                            this.outgoing_tx
-                                .lock()
-                                .unbounded_send(envelope.clone())
-                                .ok();
+                            this.send_outgoing(envelope.clone())
+                                .context("replaying buffered remote message")?;
                         }
                     }
                     let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
                     envelope.id = this.next_message_id.fetch_add(1, SeqCst);
-                    this.outgoing_tx.lock().unbounded_send(envelope).ok();
+                    this.send_outgoing(envelope)
+                        .context("acknowledging buffered remote messages")?;
                     continue;
                 }
 
@@ -1737,7 +1771,8 @@ impl ChannelClient {
                     this.remote_started.set(());
                     let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
                     envelope.id = this.next_message_id.fetch_add(1, SeqCst);
-                    this.outgoing_tx.lock().unbounded_send(envelope).ok();
+                    this.send_outgoing(envelope)
+                        .context("acknowledging remote-started handshake")?;
                     continue;
                 }
 
@@ -1754,9 +1789,10 @@ impl ChannelClient {
                     }
                     let sender = this.response_channels.lock().remove(&request_id);
                     if let Some(sender) = sender {
-                        let (tx, rx) = oneshot::channel();
-                        sender.send((incoming, tx)).ok();
-                        rx.await.ok();
+                        let (barrier_sender, barrier_receiver) = oneshot::channel();
+                        if sender.send((incoming, barrier_sender)).is_ok() {
+                            let _barrier_result = barrier_receiver.await;
+                        }
                     } else {
                         let terminal_stream_response = matches!(
                             &incoming.payload,
@@ -1774,12 +1810,15 @@ impl ChannelClient {
                                 .cloned()
                         };
                         if let Some(sender) = sender {
-                            let (tx, rx) = oneshot::channel();
-                            if sender.unbounded_send((Ok(incoming), tx)).is_err() {
+                            let (barrier_sender, barrier_receiver) = oneshot::channel();
+                            if sender
+                                .unbounded_send((Ok(incoming), barrier_sender))
+                                .is_err()
+                            {
                                 this.stream_response_channels.lock().remove(&request_id);
                                 continue;
                             }
-                            rx.await.ok();
+                            let _barrier_result = barrier_receiver.await;
                         }
                     }
                 } else if let Some(envelope) =
@@ -1880,10 +1919,8 @@ impl ChannelClient {
                     .await?;
 
                 for envelope in self.buffer.lock().iter() {
-                    self.outgoing_tx
-                        .lock()
-                        .unbounded_send(envelope.clone())
-                        .ok();
+                    self.send_outgoing(envelope.clone())
+                        .context("replaying buffered message during resync")?;
                 }
                 Ok(())
             },
@@ -1921,9 +1958,10 @@ impl ChannelClient {
         use_buffer: bool,
     ) -> impl 'static + Future<Output = Result<proto::Envelope>> {
         envelope.id = self.next_message_id.fetch_add(1, SeqCst);
-        let (tx, rx) = oneshot::channel();
+        let message_id = MessageId(envelope.id);
+        let (response_sender, response_receiver) = oneshot::channel();
         let mut response_channels_lock = self.response_channels.lock();
-        response_channels_lock.insert(MessageId(envelope.id), tx);
+        response_channels_lock.insert(message_id, response_sender);
         drop(response_channels_lock);
 
         let result = if use_buffer {
@@ -1931,13 +1969,16 @@ impl ChannelClient {
         } else {
             self.send_unbuffered(envelope)
         };
+        if result.is_err() {
+            self.response_channels.lock().remove(&message_id);
+        }
         async move {
             if let Err(error) = &result {
                 log::error!("failed to send message: {error}");
                 anyhow::bail!("failed to send message: {error}");
             }
 
-            let response = rx.await.context("connection lost")?.0;
+            let response = response_receiver.await.context("connection lost")?.0;
             if let Some(proto::envelope::Payload::Error(error)) = &response.payload {
                 return Err(RpcError::from_proto(error, type_name));
             }
@@ -2002,16 +2043,15 @@ impl ChannelClient {
     fn send_buffered(&self, mut envelope: proto::Envelope) -> Result<()> {
         envelope.ack_id = Some(self.max_received.load(SeqCst));
         self.buffer.lock().push_back(envelope.clone());
-        // ignore errors on send (happen while we're reconnecting)
-        // assume that the global "disconnected" overlay is sufficient.
-        self.outgoing_tx.lock().unbounded_send(envelope).ok();
+        if self.send_outgoing(envelope).is_err() {
+            log::debug!("buffered remote message queued while the connection is unavailable");
+        }
         Ok(())
     }
 
     fn send_unbuffered(&self, mut envelope: proto::Envelope) -> Result<()> {
         envelope.ack_id = Some(self.max_received.load(SeqCst));
-        self.outgoing_tx.lock().unbounded_send(envelope).ok();
-        Ok(())
+        self.send_outgoing(envelope)
     }
 }
 
