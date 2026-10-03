@@ -146,7 +146,6 @@ impl PartialEq for UnimplementedSettingField {
 
 impl<T: 'static> SettingField<T> {
     /// Helper for settings with types that are not yet implemented.
-    #[allow(unused)]
     fn unimplemented(self) -> SettingField<UnimplementedSettingField> {
         SettingField {
             pick: |_| Some(&UnimplementedSettingField),
@@ -1523,7 +1522,6 @@ fn all_language_names(cx: &App) -> Vec<SharedString> {
         .collect()
 }
 
-#[allow(unused)]
 #[derive(Clone, PartialEq, Debug)]
 enum SettingsUiFile {
     User,
