@@ -1570,7 +1570,7 @@ mod tests {
                 })
             })
             .await
-            .ok();
+            .expect("closing bar.rs tab should succeed");
 
         cx.run_until_parked();
 
