@@ -1390,18 +1390,18 @@ mod windows {
     use std::path::{Path, PathBuf};
     use std::process::{ExitStatus, Stdio};
 
-    fn check_single_instance() -> bool {
+    fn check_single_instance() -> anyhow::Result<bool> {
         let mutex = unsafe {
             CreateMutexW(
                 None,
                 false,
                 &HSTRING::from(format!("{}-Instance-Mutex", app_identifier())),
             )
-            .expect("Unable to create instance sync event")
-        };
-        let last_err = unsafe { GetLastError() };
-        let _ = unsafe { CloseHandle(mutex) };
-        last_err != ERROR_ALREADY_EXISTS
+        }
+        .context("creating instance mutex")?;
+        let last_error = unsafe { GetLastError() };
+        unsafe { CloseHandle(mutex) }.context("closing instance mutex")?;
+        Ok(last_error != ERROR_ALREADY_EXISTS)
     }
 
     struct App(PathBuf);
@@ -1425,16 +1425,17 @@ mod windows {
         }
 
         fn launch(&self, ipc_url: String, user_data_dir: Option<&str>) -> anyhow::Result<()> {
-            if check_single_instance() {
-                let mut cmd = std::process::Command::new(self.0.clone());
-                cmd.arg(ipc_url);
-                if let Some(dir) = user_data_dir {
-                    cmd.arg("--user-data-dir").arg(dir);
+            if check_single_instance()? {
+                let mut command = std::process::Command::new(self.0.clone());
+                command.arg(ipc_url);
+                if let Some(custom_data_dir) = user_data_dir {
+                    command.arg("--user-data-dir").arg(custom_data_dir);
                 }
-                cmd.stdin(Stdio::null())
+                command
+                    .stdin(Stdio::null())
                     .stdout(Stdio::null())
                     .stderr(Stdio::null());
-                cmd.spawn()?;
+                command.spawn()?;
             } else {
                 unsafe {
                     let pipe = CreateFileW(
@@ -1448,8 +1449,16 @@ mod windows {
                     )?;
                     let message = ipc_url.as_bytes();
                     let mut bytes_written = 0;
-                    WriteFile(pipe, Some(message), Some(&mut bytes_written), None)?;
-                    CloseHandle(pipe)?;
+                    let write_result =
+                        WriteFile(pipe, Some(message), Some(&mut bytes_written), None);
+                    let close_result = CloseHandle(pipe);
+                    write_result.context("writing to the ZZZ named pipe")?;
+                    close_result.context("closing the ZZZ named pipe")?;
+                    anyhow::ensure!(
+                        bytes_written as usize == message.len(),
+                        "writing to the ZZZ named pipe wrote {bytes_written} of {} bytes",
+                        message.len()
+                    );
                 }
             }
             Ok(())
@@ -1460,12 +1469,12 @@ mod windows {
             ipc_url: String,
             user_data_dir: Option<&str>,
         ) -> io::Result<ExitStatus> {
-            let mut cmd = std::process::Command::new(self.0.clone());
-            cmd.arg(ipc_url).arg("--foreground");
-            if let Some(dir) = user_data_dir {
-                cmd.arg("--user-data-dir").arg(dir);
+            let mut command = std::process::Command::new(self.0.clone());
+            command.arg(ipc_url).arg("--foreground");
+            if let Some(custom_data_dir) = user_data_dir {
+                command.arg("--user-data-dir").arg(custom_data_dir);
             }
-            cmd.spawn()?.wait()
+            command.spawn()?.wait()
         }
 
         fn path(&self) -> PathBuf {
@@ -1479,14 +1488,20 @@ mod windows {
                 path.to_path_buf().canonicalize()?
             } else {
                 let cli = std::env::current_exe()?;
-                let dir = cli.parent().context("no parent path for cli")?;
+                let directory = cli.parent().context("no parent path for cli")?;
 
                 // ../ZZZ.exe is the standard, lib/zzz is for MSYS2, ./zzz.exe is for the target
                 // directory in development builds.
                 let possible_locations = ["../ZZZ.exe", "../lib/zzz/zzz-editor.exe", "./zzz.exe"];
                 possible_locations
                     .iter()
-                    .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))
+                    .find_map(|path| {
+                        directory
+                            .join(path)
+                            .canonicalize()
+                            .ok()
+                            .filter(|path| path != &cli)
+                    })
                     .context(format!(
                         "could not find any of: {}",
                         possible_locations.join(", ")
