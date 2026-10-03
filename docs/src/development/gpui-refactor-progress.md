@@ -140,6 +140,8 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 - 保留 `request_layout → prepaint → paint`、cached replay、input dispatch 和
   Entity/Context 所有权语义；新增端到端 TestPlatform 检查验证 coalescing 和 input
   provenance。
+- 增加 deterministic `frame_diagnostics_runner`：固定 100 次 dirty frame 和 100 次
+  keyboard input，输出 draw/phase/input-to-present percentile 与 ring 丢失计数。
 
 当前仍待完成：
 
@@ -158,8 +160,11 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 | `cargo test --locked -p gpui --features frame-diagnostics`  | `PASS`            | 215 unit + 1 integration，0 failed；含 frame lifecycle test                                                  |
 | `./script/clippy -p gpui --features frame-diagnostics`      | `PASS`            | all-features release clippy，含 philosophy check                                                             |
 | `git diff --check`                                          | `PASS`            | `.tmp/gpui-refactor/phase-1/diff-check.log`                                                                  |
+| `cargo test --locked -p gpui --features frame-diagnostics frame_diagnostics_runner -- --nocapture` | `PASS` | 100 dirty + 100 input iterations；draw p50/p95/p99 = 78,989/97,855/150,304 ns；input-to-present = 111,530/151,295/231,436 ns；0 dropped events；raw log in `.tmp/gpui-refactor/phase-1/frame-diagnostics-runner.log` |
 | `cargo fmt --all -- --check`                                | `FAIL (baseline)` | 仅剩 `crates/grammars/vendor/tree-sitter-typst/benches/bench_main.rs` 的既有排序漂移；本阶段文件已单独格式化 |
-| EXP-001/002/011                                             | `NOT RUN`         | runner 与 allocation probe 尚待本阶段后半段                                                                  |
+| EXP-001                                                     | `PARTIAL`         | deterministic input-to-present runner now samples p50/p95/p99; platform frame skip and 10-second editor scroll workload remain |
+| EXP-002                                                     | `PARTIAL`         | phase timing runner emits layout/prepaint/paint totals; cached replay corpus and dirty single-entity comparison remain |
+| EXP-011                                                     | `NOT RUN`         | allocation probe not yet added; `/usr/bin/time` RSS is recorded for the runner only |
 
 上游 A/B/C 审查（均基于 `decbf641b18f1982b3475c037e7c5c554471574f` 之后的
 live `FETCH_HEAD=a84689073d296dfd39987bc7dd478e43ef76d83a`；未 cherry-pick）：
@@ -180,12 +185,11 @@ frame-observation invariant, but it does not copy upstream code; the table recor
 the source decisions required by the absorbing-upstream workflow. No upstream local
 commit was created for this stage.
 
-提交：待 EXP-001/002/011 runner 完成后，先提交当前 diagnostics core 作为一个可回退
-逻辑变更，再提交 runner/probe separately。
+提交：core commit `8d410f4b55cc77ef30cba627aff0dcfc326cc308`；runner test commit 待
+本账本更新后回填。
 
-下一步：增加 deterministic frame diagnostics benchmark/test runner，记录 phase counts,
-input-to-present samples and allocation probe outputs without enabling diagnostics in
-the default product build。
+下一步：补充 cached replay/dirty single-entity workload和 allocation probe；再复跑
+EXP-001/002/011 的正式阈值比较，且默认产品构建继续不启用 diagnostics feature。
 
 ### 阶段 2：并发与 accessibility 边界
 

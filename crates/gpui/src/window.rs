@@ -6664,6 +6664,8 @@ mod tests {
         FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector, KeyDownEvent,
         Keystroke, PlatformInput,
     };
+    #[cfg(feature = "frame-diagnostics")]
+    use scheduler::Instant;
     use std::{cell::Cell, rc::Rc};
 
     struct RootView {
@@ -6676,6 +6678,23 @@ mod tests {
     impl Render for EmptyView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             div()
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct DiagnosticsInputView {
+        focus: FocusHandle,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for DiagnosticsInputView {
+        fn render(&mut self, _: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .size_full()
+                .track_focus(&self.focus)
+                .on_key_down(|_, window, _| window.refresh())
+                .child("frame diagnostics")
+                .into_any_element()
         }
     }
 
@@ -6878,6 +6897,97 @@ mod tests {
                     && timing.input == Some(FrameInputProvenance::Keyboard)
                     && timing.input_to_present.is_some()
         )));
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn frame_diagnostics_runner(cx: &mut TestAppContext) {
+        const ITERATIONS: usize = 100;
+        let mut collector = FrameTimingCollector::new();
+        let window = cx.add_window(|_, cx| DiagnosticsInputView {
+            focus: cx.focus_handle(),
+        });
+        let handle: AnyWindowHandle = window.into();
+        let test_window = cx.test_window(handle);
+
+        window
+            .update(cx, |view, window, cx| view.focus.focus(window, cx))
+            .expect("diagnostics window should remain open");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        collector.snapshot();
+
+        let dirty_started_at = Instant::now();
+        for _ in 0..ITERATIONS {
+            cx.update_window(handle, |_, window, _| window.refresh())
+                .expect("diagnostics window should remain open");
+            test_window.simulate_frame_request(RequestFrameOptions::default());
+        }
+        for _ in 0..ITERATIONS {
+            cx.simulate_keystrokes(handle, "a");
+            test_window.simulate_frame_request(RequestFrameOptions::default());
+        }
+        let elapsed = dirty_started_at.elapsed();
+        let snapshot = collector.snapshot();
+
+        let mut draw_durations = Vec::new();
+        let mut input_latencies = Vec::new();
+        let mut phase_durations = [0u128; 5];
+        let mut presented = 0usize;
+        for event in snapshot.events {
+            match event {
+                FrameEvent::DrawFinished(timing) => {
+                    draw_durations.push(timing.draw_duration().as_nanos());
+                }
+                FrameEvent::Presented(timing) => {
+                    presented += 1;
+                    if let Some(latency) = timing.input_to_present {
+                        input_latencies.push(latency.as_nanos());
+                    }
+                }
+                FrameEvent::Phase(timing) => {
+                    let index = match timing.phase {
+                        FramePhase::RequestLayout => 0,
+                        FramePhase::Prepaint => 1,
+                        FramePhase::Paint => 2,
+                        FramePhase::PrepaintCacheReplay => 3,
+                        FramePhase::PaintCacheReplay => 4,
+                    };
+                    phase_durations[index] += timing.duration.as_nanos();
+                }
+                FrameEvent::Invalidated(_) | FrameEvent::DrawStarted { .. } => {}
+            }
+        }
+
+        fn percentile(samples: &mut [u128], numerator: usize, denominator: usize) -> u128 {
+            samples.sort_unstable();
+            let index = samples
+                .len()
+                .saturating_mul(numerator)
+                .div_ceil(denominator)
+                .saturating_sub(1);
+            samples.get(index).copied().unwrap_or_default()
+        }
+
+        assert!(presented >= ITERATIONS * 2);
+        assert!(!draw_durations.is_empty());
+        assert!(!input_latencies.is_empty());
+        println!(
+            "GPUI_FRAME_DIAGNOSTICS iterations={ITERATIONS} elapsed_ns={} dropped_events={} draws={} draw_p50_ns={} draw_p95_ns={} draw_p99_ns={} input_p50_ns={} input_p95_ns={} input_p99_ns={} phase_request_layout_ns={} phase_prepaint_ns={} phase_paint_ns={} phase_prepaint_replay_ns={} phase_paint_replay_ns={}",
+            elapsed.as_nanos(),
+            snapshot.dropped_events,
+            draw_durations.len(),
+            percentile(&mut draw_durations, 50, 100),
+            percentile(&mut draw_durations, 95, 100),
+            percentile(&mut draw_durations, 99, 100),
+            percentile(&mut input_latencies, 50, 100),
+            percentile(&mut input_latencies, 95, 100),
+            percentile(&mut input_latencies, 99, 100),
+            phase_durations[0],
+            phase_durations[1],
+            phase_durations[2],
+            phase_durations[3],
+            phase_durations[4],
+        );
     }
 
     #[gpui::test]
