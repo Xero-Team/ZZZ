@@ -7,6 +7,7 @@ use gpui::{
     Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Size,
     Subscription, anchored, canvas, prelude::*, px,
 };
+use gpui_util::ResultExt as _;
 use menu::{SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious};
 use std::{
     cell::{Cell, RefCell},
@@ -1483,7 +1484,7 @@ impl ContextMenu {
                                                 cx.emit(DismissEvent);
                                             }
                                         })
-                                        .ok();
+                                        .log_err();
                                     }
                                 })
                             })
@@ -2013,7 +2014,7 @@ impl ContextMenu {
                                                 this.rebuild(window, cx);
                                                 cx.notify();
                                             })
-                                            .ok();
+                                            .log_err();
                                         }
                                     });
 
@@ -2041,7 +2042,7 @@ impl ContextMenu {
                                     cx.emit(DismissEvent);
                                 }
                             })
-                            .ok();
+                            .log_err();
                         }
                     }),
             )
