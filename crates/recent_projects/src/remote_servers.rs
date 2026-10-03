@@ -2094,7 +2094,7 @@ impl RemoteServerProjects {
                             &[ok_label.as_str()],
                         )
                         .await
-                        .ok();
+                        .log_err();
                     }
                 })
                 .detach();
@@ -2408,7 +2408,7 @@ impl RemoteServerProjects {
                             &[ok_label.as_str()],
                         )
                         .await
-                        .ok();
+                        .log_err();
                         entity
                             .update_in(cx, |remote_server_projects, window, cx| {
                                 remote_server_projects.allow_dismissal = true;
@@ -2475,7 +2475,7 @@ impl RemoteServerProjects {
                     &[ok_label.as_str()],
                 )
                 .await
-                .ok();
+                .log_err();
             }
         })
         .detach();
