@@ -208,7 +208,7 @@ pub fn init(cx: &mut App) {
                                     .update(cx, |workspace, cx| {
                                         workspace.show_portal_error(err.to_string(), cx);
                                     })
-                                    .ok();
+                                    .log_err();
                                 return None;
                             }
                         };
@@ -235,7 +235,7 @@ pub fn init(cx: &mut App) {
                                             cx,
                                         );
                                     })
-                                    .ok();
+                                    .log_err();
                             }
                         }
 
@@ -507,7 +507,7 @@ impl ExtensionsPage {
                         cx,
                     );
                 })
-                .ok();
+                .log_err();
             return;
         }
 
@@ -526,7 +526,7 @@ impl ExtensionsPage {
                         cx,
                     );
                 })
-                .ok();
+                .log_err();
         }
     }
 
@@ -1463,7 +1463,7 @@ impl ExtensionsPage {
                     cx,
                 );
             })
-            .ok();
+            .log_err();
         }));
     }
 
