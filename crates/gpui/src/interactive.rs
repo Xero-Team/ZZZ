@@ -711,13 +711,40 @@ mod test {
 
     use crate::{
         self as gpui, AppContext as _, Context, FocusHandle, InteractiveElement, IntoElement,
-        KeyBinding, Keystroke, Modifiers, ParentElement, Render, TestAppContext, Window, div,
+        KeyBinding, Keystroke, Modifiers, ParentElement, Render, TestAppContext,
+        VisualContext as _, Window, div,
     };
+    use std::{cell::RefCell, rc::Rc};
 
     struct TestView {
         saw_key_down: bool,
         saw_action: bool,
         focus_handle: FocusHandle,
+    }
+
+    struct RoutingView {
+        focus_handle: FocusHandle,
+        events: Rc<RefCell<Vec<&'static str>>>,
+    }
+
+    impl Render for RoutingView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let capture_parent = self.events.clone();
+            let bubble_parent = self.events.clone();
+            let capture_child = self.events.clone();
+            let bubble_child = self.events.clone();
+            div()
+                .capture_key_down(move |_, _, _| capture_parent.borrow_mut().push("parent-capture"))
+                .on_key_down(move |_, _, _| bubble_parent.borrow_mut().push("parent-bubble"))
+                .child(
+                    div()
+                        .track_focus(&self.focus_handle)
+                        .capture_key_down(move |_, _, _| {
+                            capture_child.borrow_mut().push("child-capture")
+                        })
+                        .on_key_down(move |_, _, _| bubble_child.borrow_mut().push("child-bubble")),
+                )
+        }
     }
 
     actions!(test_only, [TestAction]);
@@ -805,5 +832,28 @@ mod test {
         cx.simulate_modifiers_change(Modifiers::shift());
         cx.simulate_modifiers_change(Modifiers::none());
         assert!(test_view.read_with(cx, |test_view, _| test_view.saw_action));
+    }
+
+    #[gpui::test]
+    fn test_key_routing_order_snapshot(cx: &mut TestAppContext) {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let (view, cx) = cx.add_window_view(|_, cx| RoutingView {
+            focus_handle: cx.focus_handle(),
+            events: events.clone(),
+        });
+
+        view.update_in(cx, |view, window, cx| window.focus(&view.focus_handle, cx));
+        let window_handle = cx.window_handle();
+        cx.dispatch_keystroke(window_handle, Keystroke::parse("a").unwrap());
+
+        assert_eq!(
+            &*events.borrow(),
+            &[
+                "parent-capture",
+                "child-capture",
+                "child-bubble",
+                "parent-bubble"
+            ]
+        );
     }
 }
