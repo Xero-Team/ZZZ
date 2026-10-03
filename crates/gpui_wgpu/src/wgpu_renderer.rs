@@ -97,8 +97,10 @@ pub struct WgpuSurfaceConfig {
 /// Shared GPU context reference, used to coordinate device recovery across multiple windows.
 pub type GpuContext = Rc<RefCell<Option<WgpuContext>>>;
 
+mod pipelines;
 mod resources;
-use resources::{WgpuBindGroupLayouts, WgpuPipelines, WgpuResources};
+use pipelines::{WgpuBindGroupLayouts, WgpuPipelines};
+use resources::WgpuResources;
 
 pub struct WgpuRenderer {
     /// Shared GPU context for device recovery coordination (unused on WASM).
