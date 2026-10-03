@@ -23,7 +23,7 @@ pub fn derive_refineable(input: TokenStream) -> TokenStream {
     let mut refinement_traits_to_derive = vec![];
 
     if let Some(refineable_attr) = refineable_attr {
-        let _ = refineable_attr.parse_nested_meta(|meta| {
+        if let Err(error) = refineable_attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("Debug") {
                 impl_debug_on_refinement = true;
             } else {
@@ -33,7 +33,9 @@ pub fn derive_refineable(input: TokenStream) -> TokenStream {
                 refinement_traits_to_derive.push(meta.path);
             }
             Ok(())
-        });
+        }) {
+            return error.to_compile_error().into();
+        }
     }
 
     let refinement_ident = format_ident!("{}Refinement", ident);
