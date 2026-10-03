@@ -931,11 +931,6 @@ impl GitStore {
         self.shared_diffs.clear();
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn forget_shared_diffs_for(&mut self, peer_id: &proto::PeerId) {
-        self.shared_diffs.remove(peer_id);
-    }
-
     pub fn active_repository(&self) -> Option<Entity<Repository>> {
         self.active_repo_id
             .as_ref()
