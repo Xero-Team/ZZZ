@@ -35,7 +35,7 @@ impl HeadlessClient {
                     runnable.run();
                 }
             })
-            .ok();
+            .log_err();
 
         HeadlessClient(Rc::new(RefCell::new(HeadlessClientState {
             event_loop: Some(event_loop),
