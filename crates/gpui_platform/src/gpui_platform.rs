@@ -70,9 +70,45 @@ pub fn current_headless_renderer() -> Option<Box<dyn gpui::PlatformHeadlessRende
         ))
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "windows"))]
+    {
+        gpui_wgpu::WgpuHeadlessRenderer::new()
+            .map(|renderer| Box::new(renderer) as Box<dyn gpui::PlatformHeadlessRenderer>)
+            .map_err(|error| log::error!("failed to initialize WGPU headless renderer: {error}"))
+            .ok()
+    }
+
+    #[cfg(target_family = "wasm")]
     {
         None
+    }
+}
+
+#[cfg(all(
+    test,
+    feature = "test-support",
+    not(target_os = "macos"),
+    not(target_family = "wasm")
+))]
+mod headless_tests {
+    use super::*;
+    use gpui::{DevicePixels, Scene, Size};
+
+    #[test]
+    fn current_platform_provides_real_headless_renderer() {
+        let mut renderer = current_headless_renderer().expect("headless renderer should exist");
+        let mut scene = Scene::default();
+        scene.finish();
+        let image = renderer
+            .render_scene_to_image(
+                &scene,
+                Size {
+                    width: DevicePixels(16),
+                    height: DevicePixels(16),
+                },
+            )
+            .expect("empty scene should render");
+        assert_eq!(image.dimensions(), (16, 16));
     }
 }
 

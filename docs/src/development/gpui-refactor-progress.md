@@ -188,8 +188,10 @@ frame-observation invariant, but it does not copy upstream code; the table recor
 the source decisions required by the absorbing-upstream workflow. No upstream local
 commit was created for this stage.
 
-提交：core commit `8d410f4b55cc77ef30cba627aff0dcfc326cc308`；runner test commit 待
-本账本更新后回填。
+提交：core `8d410f4b55cc77ef30cba627aff0dcfc326cc308`；runner
+`d031aa92deb7547e56d671420d8772f08434e167`；cached replay
+`766b7cb85cd58c35a56b3182208f5e6c2bd6cf40`；batched journal/allocation probe
+`567ff2f4c39edb84a60e99dfebbd6033c50ce6e3`。
 
 下一步：把 runner 接到 Editor 100k-line/scroll workload，复跑 EXP-001/002/011 的正式
 阈值比较，并记录 production-like timing 与 peak RSS；默认产品构建继续不启用
@@ -236,7 +238,38 @@ screen-reader runbook。当前 core snapshot/action tests 为 `PASS`；EXP-008 �
 
 ### 阶段 3：真实 headless renderer
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
+
+已完成：
+
+- `gpui_wgpu` 增加 surface-free `WgpuContext::new_headless`、offscreen texture、padded
+  readback buffer 和 `WgpuHeadlessRenderer`；窗口 swapchain 继续走原有 surface path。
+- `gpui_platform::current_headless_renderer` 在 Linux/FreeBSD/Windows test-support
+  下返回 WGPU renderer；macOS 继续使用 Metal headless renderer。
+- 同一 primitive corpus（quad/border/shadow/underline/monochrome text/SVG atlas、
+  polychrome image/emoji atlas、path）在 RADV hardware 与 llvmpipe fallback 各连续
+  运行 100 次，无 hang 或初始化失败。
+
+EXP-003 当前结果：
+
+| 检查                                                                                | 结果               | 证据                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| gpui-ce reference `headless_primitives`                                             | `FAIL (reference)` | 当前 RADV 主机 4 tests 中 3 passed；`smoothed_primitives_share_one_contour` pixel assertion failed；未放宽阈值        |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer` | `PASS`             | hardware + fallback each 100 runs；`.tmp/gpui-refactor/phase-3/headless-renderer.log`                                 |
+| Hardware/fallback pixel comparison                                                  | `PASS`             | 54/20,000 differing pixels = 0.27%；max channel delta 1；≤0.5% threshold                                              |
+| Hardware pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/hardware.png`, SHA-256 `a153441213a6a9626d05669c516ec876a269b29d58af3d92bd0daeaf8362a658` |
+| Fallback pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/fallback.png`, SHA-256 `07be370bfc32685d553602de7e6d7a3394aa17d8a272b94e12912dad18cf1ab8` |
+| `cargo test --locked -p gpui_wgpu --features test-support`                          | `PASS`             | 15 unit + 2 headless integration tests                                                                                |
+| `./script/clippy -p gpui_wgpu --features test-support`                              | `PASS`             | release/all-target checks + philosophy                                                                                |
+| `cargo test --locked -p gpui_platform --features test-support`                      | `PASS`             | platform factory returns real renderer on Linux                                                                       |
+| Windows hardware/software adapter runtime                                           | `NOT RUN`          | 当前主机无法执行；保留同一 test command 给 Windows QA                                                                 |
+
+当前仍待完成：明确 1x/2x font-dependent text/emoji/SVG golden policy、Windows 同 corpus
+runtime，以及将 Linux pixel artifacts 纳入后续 renderer/Window migration regression gate。
+因此 EXP-003 在当前 Linux 主机的 primitive/readback 部分达标，阶段 3 保持
+`IN PROGRESS`，不声称跨平台完成。
+
+提交：renderer core `0347f6196e`；platform factory commit 待本账本更新后回填。
 
 ### 阶段 4：拆分 `Window`
 
