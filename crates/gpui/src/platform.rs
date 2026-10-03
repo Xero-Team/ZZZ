@@ -1550,6 +1550,13 @@ impl PlatformInputHandler {
         })
     }
 
+    pub fn character_index_for_point(&mut self, point: Point<Pixels>) -> Option<usize> {
+        self.cx
+            .update(|window, cx| self.handler.character_index_for_point(point, window, cx))
+            .ok()
+            .flatten()
+    }
+
     pub fn accepts_text_input(&mut self, window: &mut Window, cx: &mut App) -> bool {
         self.handler.accepts_text_input(window, cx)
     }
