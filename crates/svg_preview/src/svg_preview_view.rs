@@ -117,11 +117,15 @@ impl SvgPreviewView {
         self._refresh = cx.spawn_in(window, async move |this, cx| {
             let result = background_task.await;
 
-            this.update_in(cx, |view, window, cx| {
+            let Some(this) = this.upgrade() else {
+                return;
+            };
+            let Ok(()) = this.update_in(cx, |view, window, cx| {
                 let current = result.map_err(|e| e.to_string().into());
                 view.set_current(Some(current), window, cx);
-            })
-            .ok();
+            }) else {
+                return;
+            };
         });
     }
 
