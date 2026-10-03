@@ -4,12 +4,9 @@
 //!
 mod input_field;
 
-use std::{
-    any::Any,
-    sync::{Arc, OnceLock},
-};
+use std::{any::Any, sync::Arc};
 
-use gpui::{FocusHandle, Subscription};
+use gpui::{FocusHandle, Global, Subscription};
 pub use input_field::*;
 use ui::{AnyElement, App, Window};
 
@@ -39,5 +36,14 @@ pub enum ErasedEditorEvent {
     BufferEdited,
     Blurred,
 }
-pub static ERASED_EDITOR_FACTORY: OnceLock<fn(&mut Window, &mut App) -> Arc<dyn ErasedEditor>> =
-    OnceLock::new();
+/// Per-application factory for the editor adapter used by generic input fields.
+pub struct ErasedEditorFactory(pub fn(&mut Window, &mut App) -> Arc<dyn ErasedEditor>);
+
+impl Global for ErasedEditorFactory {}
+
+pub fn set_editor_factory(
+    cx: &mut App,
+    factory: fn(&mut Window, &mut App) -> Arc<dyn ErasedEditor>,
+) {
+    cx.set_global(ErasedEditorFactory(factory));
+}

@@ -387,7 +387,7 @@ pub fn init(cx: &mut App) {
         )
         .detach_and_log_err(cx);
     });
-    _ = ui_input::ERASED_EDITOR_FACTORY.set(|window, cx| {
+    ui_input::set_editor_factory(cx, |window, cx| {
         Arc::new(ErasedEditorImpl(
             cx.new(|cx| Editor::single_line(window, cx)),
         )) as Arc<dyn ErasedEditor>

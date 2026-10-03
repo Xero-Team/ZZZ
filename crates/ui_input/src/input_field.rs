@@ -7,7 +7,7 @@ use std::sync::Arc;
 use ui::Tooltip;
 use ui::prelude::*;
 
-use crate::ErasedEditor;
+use crate::{ErasedEditor, ErasedEditorFactory};
 
 pub struct InputFieldStyle {
     text_color: Hsla,
@@ -52,10 +52,7 @@ impl Focusable for InputField {
 
 impl InputField {
     pub fn new(window: &mut Window, cx: &mut App, placeholder_text: &str) -> Self {
-        let editor_factory = crate::ERASED_EDITOR_FACTORY
-            .get()
-            .expect("ErasedEditorFactory to be initialized");
-        let editor = (editor_factory)(window, cx);
+        let editor = (cx.global::<ErasedEditorFactory>().0)(window, cx);
         editor.set_placeholder_text(placeholder_text, window, cx);
 
         Self {

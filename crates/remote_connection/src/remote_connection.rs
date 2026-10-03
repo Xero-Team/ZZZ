@@ -16,7 +16,7 @@ use ui::{
     ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, Tooltip,
     prelude::*,
 };
-use ui_input::{ERASED_EDITOR_FACTORY, ErasedEditor};
+use ui_input::{ErasedEditor, ErasedEditorFactory};
 use util::ResultExt as _;
 use workspace::{DismissDecision, ModalView, Workspace};
 
@@ -158,10 +158,7 @@ impl RemoteConnectionPrompt {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let editor_factory = ERASED_EDITOR_FACTORY
-            .get()
-            .expect("ErasedEditorFactory to be initialized");
-        let editor = (editor_factory)(window, cx);
+        let editor = (cx.global::<ErasedEditorFactory>().0)(window, cx);
 
         Self {
             connection_string: connection_string.into(),
