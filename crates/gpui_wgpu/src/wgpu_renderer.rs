@@ -517,55 +517,10 @@ impl WgpuRenderer {
                 ],
             });
 
-        let surfaces = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("surfaces_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: NonZeroU64::new(
-                            std::mem::size_of::<SurfaceParams>() as u64
-                        ),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
         WgpuBindGroupLayouts {
             globals,
             instances,
             instances_with_texture,
-            surfaces,
         }
     }
 
@@ -814,18 +769,6 @@ impl WgpuRenderer {
             &layouts.globals,
             &layouts.instances_with_texture,
             wgpu::PrimitiveTopology::TriangleStrip,
-            &[Some(color_target.clone())],
-            1,
-            &shader_module,
-        );
-
-        let surfaces = create_pipeline(
-            "surfaces",
-            "vs_surface",
-            "fs_surface",
-            &layouts.globals,
-            &layouts.surfaces,
-            wgpu::PrimitiveTopology::TriangleStrip,
             &[Some(color_target)],
             1,
             &shader_module,
@@ -840,7 +783,6 @@ impl WgpuRenderer {
             mono_sprites,
             subpixel_sprites,
             poly_sprites,
-            surfaces,
         }
     }
 
@@ -1004,14 +946,6 @@ impl WgpuRenderer {
                 path_sample_count,
                 dual_source_blending,
             );
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn viewport_size(&self) -> Size<DevicePixels> {
-        Size {
-            width: DevicePixels(self.surface_config.width as i32),
-            height: DevicePixels(self.surface_config.height as i32),
         }
     }
 

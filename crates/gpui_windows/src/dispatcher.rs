@@ -115,6 +115,11 @@ impl PlatformDispatcher for WindowsDispatcher {
         ThreadTaskTimings::convert(&global_thread_timings)
     }
 
+    fn get_recent_timings(&self, maximum_timings_per_thread: usize) -> Vec<ThreadTaskTimings> {
+        let global_thread_timings = GLOBAL_THREAD_TIMINGS.lock();
+        ThreadTaskTimings::convert_recent(&global_thread_timings, maximum_timings_per_thread)
+    }
+
     fn get_current_thread_timings(&self) -> gpui::ThreadTaskTimings {
         gpui::profiler::get_current_thread_task_timings()
     }

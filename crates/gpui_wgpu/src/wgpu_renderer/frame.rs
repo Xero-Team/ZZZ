@@ -25,13 +25,6 @@ impl From<Bounds<ScaledPixels>> for PodBounds {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub(super) struct SurfaceParams {
-    pub(super) bounds: PodBounds,
-    pub(super) content_mask: PodBounds,
-}
-
 pub(super) struct ReadbackCopy<'a> {
     pub(super) texture: &'a wgpu::Texture,
     pub(super) buffer: &'a wgpu::Buffer,

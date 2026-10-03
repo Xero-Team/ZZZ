@@ -128,8 +128,8 @@ impl CsvPreviewView {
     }
 }
 
-#[allow(dead_code)]
-pub fn from_buffer(buffer_snapshot: &BufferSnapshot, delimiter: char) -> TableLikeContent {
+#[cfg(test)]
+fn from_buffer(buffer_snapshot: &BufferSnapshot, delimiter: char) -> TableLikeContent {
     from_buffer_with_options(buffer_snapshot, delimiter, HeaderMode::FirstRow, false)
 }
 

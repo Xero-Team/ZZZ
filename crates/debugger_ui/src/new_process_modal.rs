@@ -256,7 +256,7 @@ impl NewProcessModal {
                                         picker.refresh(window, cx);
                                         cx.notify();
                                     })
-                                    .ok();
+                                    .log_err();
                             }
 
                             if let Some(active_cwd) = task_contexts
@@ -267,7 +267,7 @@ impl NewProcessModal {
                                     .update_in(cx, |configure_mode, window, cx| {
                                         configure_mode.load(active_cwd, window, cx);
                                     })
-                                    .ok();
+                                    .log_err();
                             }
 
                             task_modal
@@ -282,12 +282,12 @@ impl NewProcessModal {
                                         cx,
                                     );
                                 })
-                                .ok();
+                                .log_err();
 
                             this.update(cx, |_, cx| {
                                 cx.notify();
                             })
-                            .ok();
+                            .log_err();
 
                             anyhow::Ok(())
                         }
@@ -430,7 +430,7 @@ impl NewProcessModal {
             this.update(cx, |_, cx| {
                 cx.emit(DismissEvent);
             })
-            .ok();
+            .log_err();
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);
@@ -559,7 +559,7 @@ impl NewProcessModal {
                                 Self::update_attach_picker(&this.attach_mode, &name, window, cx);
                             }
                         })
-                        .ok();
+                        .log_err();
                     }
                 };
 
@@ -1052,7 +1052,7 @@ impl ConfigureMode {
                             this.update(cx, |this, _| {
                                 this.stop_on_entry = *state;
                             })
-                            .ok();
+                            .log_err();
                         }
                     }),
             )
@@ -1098,7 +1098,7 @@ impl AttachMode {
                     });
                     modal.save_debug_scenario(window, cx);
                 })
-                .ok();
+                .log_err();
         });
         let attach_picker = cx.new(|cx| {
             let modal = AttachModal::new(
@@ -1340,7 +1340,7 @@ impl DebugDelegate {
                     )
                     .collect();
             })
-            .ok();
+            .log_err();
         })
     }
 }
@@ -1574,7 +1574,7 @@ impl PickerDelegate for DebugDelegate {
                         cx,
                     );
                 })
-                .ok();
+                .log_err();
         }
 
         cx.emit(DismissEvent);

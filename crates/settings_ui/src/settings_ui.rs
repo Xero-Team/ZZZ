@@ -146,7 +146,6 @@ impl PartialEq for UnimplementedSettingField {
 
 impl<T: 'static> SettingField<T> {
     /// Helper for settings with types that are not yet implemented.
-    #[allow(unused)]
     fn unimplemented(self) -> SettingField<UnimplementedSettingField> {
         SettingField {
             pick: |_| Some(&UnimplementedSettingField),
@@ -1523,7 +1522,6 @@ fn all_language_names(cx: &App) -> Vec<SharedString> {
         .collect()
 }
 
-#[allow(unused)]
 #[derive(Clone, PartialEq, Debug)]
 enum SettingsUiFile {
     User,
@@ -2767,29 +2765,6 @@ impl SettingsWindow {
             SettingsUiFile::Server(file) => Some(file.to_string()),
         }
     }
-
-    // TODO:
-    //  Reconsider this after preview launch
-    // fn file_location_str(&self) -> String {
-    //     match &self.current_file {
-    //         SettingsUiFile::User => "settings.json".to_string(),
-    //         SettingsUiFile::Project((worktree_id, path)) => self
-    //             .worktree_root_dirs
-    //             .get(&worktree_id)
-    //             .map(|directory_name| {
-    //                 let path_style = PathStyle::local();
-    //                 let file_path = path.join(paths::local_settings_file_relative_path());
-    //                 format!(
-    //                     "{}{}{}",
-    //                     directory_name,
-    //                     path_style.separator(),
-    //                     file_path.display(path_style)
-    //                 )
-    //             })
-    //             .expect("Current file should always be present in root dir map"),
-    //         SettingsUiFile::Server(file) => file.to_string(),
-    //     }
-    // }
 
     fn render_search(
         &self,

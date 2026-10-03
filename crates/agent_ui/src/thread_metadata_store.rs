@@ -649,7 +649,7 @@ impl ThreadMetadataStore {
 
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             })
             .shared();
         self.reload_task = Some(reload_task.clone());
@@ -1102,7 +1102,7 @@ impl ThreadMetadataStore {
                         .update(cx, |store, _cx| {
                             store.conversation_subscriptions.remove(&entity_id);
                         })
-                        .ok();
+                        .log_err();
                 }
             })
             .detach();
@@ -1113,7 +1113,7 @@ impl ThreadMetadataStore {
                     this.conversation_subscriptions
                         .insert(entity_id, subscription);
                 })
-                .ok();
+                .log_err();
         })
         .detach();
 
@@ -1350,15 +1350,6 @@ impl Domain for ThreadMetadataDb {
 db::static_connection!(ThreadMetadataDb, []);
 
 impl ThreadMetadataDb {
-    #[allow(dead_code)]
-    pub fn list_ids(&self) -> anyhow::Result<Vec<ThreadId>> {
-        self.select::<ThreadId>(
-            "SELECT thread_id FROM sidebar_threads \
-             WHERE session_id IS NOT NULL \
-             ORDER BY updated_at DESC",
-        )?()
-    }
-
     const LIST_QUERY: &str = "SELECT thread_id, session_id, agent_id, title, updated_at, \
         created_at, interacted_at, folder_paths, folder_paths_order, archived, main_worktree_paths, \
         main_worktree_paths_order, remote_connection \

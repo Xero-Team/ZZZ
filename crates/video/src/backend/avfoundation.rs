@@ -43,7 +43,6 @@ struct CGSize {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-#[allow(dead_code)]
 struct CGAffineTransform {
     a: f64,
     b: f64,

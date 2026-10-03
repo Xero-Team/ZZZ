@@ -19,7 +19,7 @@ Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
   script/freebsd
   ```
 
-  If preferred, you can inspect [`script/freebsd`](../../script/freebsd) and perform the steps manually.
+  If preferred, you can inspect [`script/freebsd`](../../../script/freebsd) and perform the steps manually.
 
 ## Building from source
 

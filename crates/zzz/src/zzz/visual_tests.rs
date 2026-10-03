@@ -41,6 +41,7 @@ use image::{ImageBuffer, Rgba, RgbaImage};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use util::ResultExt as _;
 use workspace::AppState;
 
 /// Initialize a visual test context with all necessary ZZZ subsystems.
@@ -301,11 +302,11 @@ pub fn assert_screenshot_matches(
     } else {
         let diff_path = baseline_path.with_extension("diff.png");
         if let Some(diff_image) = &comparison.diff_image {
-            diff_image.save(&diff_path).ok();
+            diff_image.save(&diff_path).log_err();
         }
 
         let actual_path = baseline_path.with_extension("actual.png");
-        actual.save(&actual_path).ok();
+        actual.save(&actual_path).log_err();
 
         Err(anyhow!(
             "Screenshot does not match baseline.\n\

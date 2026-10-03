@@ -42,8 +42,6 @@ pub struct TestApp {
     platform: Rc<TestPlatform>,
     background_executor: BackgroundExecutor,
     foreground_executor: ForegroundExecutor,
-    #[allow(dead_code)]
-    dispatcher: TestDispatcher,
     text_system: Arc<TextSystem>,
 }
 
@@ -77,7 +75,7 @@ impl TestApp {
         asset_source: Arc<dyn crate::AssetSource>,
     ) -> Self {
         let dispatcher = TestDispatcher::new(seed);
-        let arc_dispatcher = Arc::new(dispatcher.clone());
+        let arc_dispatcher = Arc::new(dispatcher);
         let background_executor = BackgroundExecutor::new(arc_dispatcher.clone());
         let foreground_executor = ForegroundExecutor::new(arc_dispatcher);
         let platform = match platform_text_system.clone() {
@@ -101,7 +99,6 @@ impl TestApp {
             platform,
             background_executor,
             foreground_executor,
-            dispatcher,
             text_system,
         }
     }

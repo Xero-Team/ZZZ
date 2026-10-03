@@ -11,6 +11,10 @@ use crate::{
     types::{DataRow, DisplayRow, LineNumber},
 };
 
+const ESTIMATED_CHARACTER_WIDTH_PX: f32 = 9.0;
+const ROW_IDENTIFIER_PADDING_PX: f32 = 20.0;
+const MIN_ROW_IDENTIFIER_WIDTH_PX: f32 = 60.0;
+
 pub enum RowIdentDisplayMode {
     /// Show only the logical row's starting source line.
     /// E.g.
@@ -72,16 +76,8 @@ impl CsvPreviewView {
             (max_line_number as f32).log10().floor() as usize + 1
         };
 
-        // if !self.settings.multiline_cells_enabled {
-        //     // Uses horizontal line numbers layout like `123-456`. Needs twice the size
-        //     digit_count *= 2;
-        // }
-
-        let char_width_px = 9.0; // TODO: get real width of the characters
-        let base_width = (digit_count as f32) * char_width_px;
-        let padding = 20.0;
-        let min_width = 60.0;
-        (base_width + padding).max(min_width)
+        let base_width = (digit_count as f32) * ESTIMATED_CHARACTER_WIDTH_PX;
+        (base_width + ROW_IDENTIFIER_PADDING_PX).max(MIN_ROW_IDENTIFIER_WIDTH_PX)
     }
 
     /// Calculate width needed for sequential row numbers
@@ -94,11 +90,8 @@ impl CsvPreviewView {
             (max_row_number as f32).log10().floor() as usize + 1
         };
 
-        let char_width_px = 9.0; // TODO: get real width of the characters
-        let base_width = (digit_count as f32) * char_width_px;
-        let padding = 20.0;
-        let min_width = 60.0;
-        (base_width + padding).max(min_width)
+        let base_width = (digit_count as f32) * ESTIMATED_CHARACTER_WIDTH_PX;
+        (base_width + ROW_IDENTIFIER_PADDING_PX).max(MIN_ROW_IDENTIFIER_WIDTH_PX)
     }
 
     pub(crate) fn create_row_identifier_header(

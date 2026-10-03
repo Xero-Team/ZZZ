@@ -106,7 +106,6 @@ impl WindowControlType {
 
 #[allow(unused)]
 pub struct WindowControlStyle {
-    background: Hsla,
     background_hover: Hsla,
     icon: Hsla,
     icon_hover: Hsla,
@@ -117,18 +116,10 @@ impl WindowControlStyle {
         let colors = cx.theme().colors();
 
         Self {
-            background: colors.ghost_element_background,
             background_hover: colors.ghost_element_hover,
             icon: colors.icon,
             icon_hover: colors.icon_muted,
         }
-    }
-
-    #[allow(unused)]
-    /// Sets the background color of the control.
-    pub fn background(mut self, color: impl Into<Hsla>) -> Self {
-        self.background = color.into();
-        self
     }
 
     #[allow(unused)]

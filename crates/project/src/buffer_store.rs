@@ -65,8 +65,6 @@ enum BufferStoreState {
 }
 
 struct RemoteBufferStore {
-    #[allow(dead_code)]
-    shared_with_me: HashSet<Entity<Buffer>>,
     upstream_client: AnyProtoClient,
     project_id: u64,
     loading_remote_buffers_by_id: HashMap<BufferId, Entity<Buffer>>,
@@ -808,7 +806,6 @@ impl BufferStore {
     ) -> Self {
         Self {
             state: BufferStoreState::Remote(RemoteBufferStore {
-                shared_with_me: Default::default(),
                 loading_remote_buffers_by_id: Default::default(),
                 remote_buffer_listeners: Default::default(),
                 project_id: remote_id,

@@ -1009,18 +1009,6 @@ impl Worktree {
         }
     }
 
-    // pub fn rename_entry(
-    //     &mut self,
-    //     entry_id: ProjectEntryId,
-    //     new_path: Arc<RelPath>,
-    //     cx: &Context<Self>,
-    // ) -> Task<Result<CreatedEntry>> {
-    //     match self {
-    //         Worktree::Local(this) => this.rename_entry(entry_id, new_path, cx),
-    //         Worktree::Remote(this) => this.rename_entry(entry_id, new_path, cx),
-    //     }
-    // }
-
     pub fn copy_external_entries(
         &mut self,
         target_directory: Arc<RelPath>,
@@ -2354,41 +2342,6 @@ impl RemoteWorktree {
             })
         }))
     }
-
-    // fn rename_entry(
-    //     &self,
-    //     entry_id: ProjectEntryId,
-    //     new_path: impl Into<Arc<RelPath>>,
-    //     cx: &Context<Worktree>,
-    // ) -> Task<Result<CreatedEntry>> {
-    //     let new_path: Arc<RelPath> = new_path.into();
-    //     let response = self.client.request(proto::RenameProjectEntry {
-    //         project_id: self.project_id,
-    //         entry_id: entry_id.to_proto(),
-    //         new_worktree_id: new_path.worktree_id,
-    //         new_path: new_path.as_ref().to_proto(),
-    //     });
-    //     cx.spawn(async move |this, cx| {
-    //         let response = response.await?;
-    //         match response.entry {
-    //             Some(entry) => this
-    //                 .update(cx, |this, cx| {
-    //                     this.as_remote_mut().unwrap().insert_entry(
-    //                         entry,
-    //                         response.worktree_scan_id as usize,
-    //                         cx,
-    //                     )
-    //                 })?
-    //                 .await
-    //                 .map(CreatedEntry::Included),
-    //             None => {
-    //                 let abs_path =
-    //                     this.read_with(cx, |worktree, _| worktree.absolutize(&new_path))?;
-    //                 Ok(CreatedEntry::Excluded { abs_path })
-    //             }
-    //         }
-    //     })
-    // }
 
     fn copy_external_entries(
         &self,
@@ -6480,7 +6433,6 @@ impl WorktreeModelHandle for Entity<Worktree> {
 
         let scan_id_increased = |tree: &mut Worktree, git_dir_scan_id: &mut usize| {
             let tree = tree.as_local().expect("should be a local instance");
-            // let repository = tree.repositories.first().unwrap();
             let local_repo_entry = tree
                 .git_repositories
                 .values()

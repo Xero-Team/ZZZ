@@ -499,7 +499,7 @@ pub fn python_env_kernel_specifications(
         python_language,
         cx,
     );
-    #[allow(unused)]
+    #[cfg(target_os = "windows")]
     let worktree_root_path: Option<std::sync::Arc<std::path::Path>> = project
         .read(cx)
         .worktree_for_id(worktree_id, cx)
@@ -631,7 +631,7 @@ pub fn python_env_kernel_specifications(
                 })
             });
 
-        #[allow(unused_mut)]
+        #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
         let mut kernel_specs: Vec<KernelSpecification> = futures::stream::iter(kernelspecs)
             .buffer_unordered(4)
             .filter_map(|x| async move { x })

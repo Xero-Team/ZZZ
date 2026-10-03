@@ -40,6 +40,7 @@ use ui::{
     Icon, IconButton, Label, LabelCommon, ListItem, ListItemSpacing, Severity, Tab, Tooltip,
 };
 use ui::{ContextMenu, ContextMenuEntry, right_click_menu};
+use util::ResultExt as _;
 use workspace::dock::{DockPosition, Panel, PanelEvent};
 use workspace::notifications::NotificationId;
 use workspace::{
@@ -396,7 +397,7 @@ impl TelegramPanel {
                 cx.defer(move |cx| {
                     panel
                         .update(cx, |panel, cx| panel.maybe_load_older(cx))
-                        .ok();
+                        .log_err();
                 });
             });
         this
@@ -1027,7 +1028,7 @@ impl TelegramPanel {
                     cx,
                 );
             })
-            .ok();
+            .log_err();
         })
         .detach();
         true
@@ -1076,7 +1077,7 @@ impl TelegramPanel {
                     this.stage_composer_item(ComposerItem::Attachment(attachment), window, cx);
                 }
             })
-            .ok();
+            .log_err();
         })
         .detach();
     }
@@ -1127,7 +1128,7 @@ impl TelegramPanel {
                 };
                 this.stage_composer_item(ComposerItem::Attachment(attachment), window, cx);
             })
-            .ok();
+            .log_err();
         })
         .detach();
     }
@@ -1162,7 +1163,7 @@ impl TelegramPanel {
                 this.update_in(cx, |this, window, cx| {
                     this.stage_attachment_paths(paths, window, cx);
                 })
-                .ok();
+                .log_err();
             }
             Ok(Ok(None)) => {}
             Ok(Err(error)) => log::warn!("failed to open the file picker: {error}"),
@@ -1249,7 +1250,7 @@ impl TelegramPanel {
                 });
                 cx.notify();
             })
-            .ok();
+            .log_err();
         }));
     }
 
@@ -1737,7 +1738,7 @@ impl TelegramPanel {
                 .on_click(move |_, _, cx| {
                     panel
                         .update(cx, |panel, cx| panel.open_chat(chat_id, cx))
-                        .ok();
+                        .log_err();
                 })
                 .start_slot(avatar)
                 .end_slot(end_slot)
@@ -2350,7 +2351,7 @@ impl TelegramPanel {
                         Some(message) => {
                             click_panel
                                 .update(cx, |panel, cx| panel.open_chat_at(chat_id, message, cx))
-                                .ok();
+                                .log_err();
                         }
                         None => {
                             click_panel
@@ -2359,7 +2360,7 @@ impl TelegramPanel {
                                     panel.engine.send(Command::ClearSearch);
                                     panel.open_chat(chat_id, cx);
                                 })
-                                .ok();
+                                .log_err();
                         }
                     })
                     .child(
@@ -2566,7 +2567,7 @@ fn render_message(
                                 .update(cx, |panel, cx| {
                                     panel.dispatch(Command::RetrySend { chat_id, local_id }, cx)
                                 })
-                                .ok();
+                                .log_err();
                         }
                     }),
                 )
@@ -2628,7 +2629,7 @@ fn wrap_in_context_menu(
                                 .update(cx, |panel, cx| {
                                     panel.dispatch(Command::MarkRead { chat_id }, cx)
                                 })
-                                .ok();
+                                .log_err();
                         }
                     });
 
@@ -2641,7 +2642,7 @@ fn wrap_in_context_menu(
                             .update(cx, |panel, cx| {
                                 panel.forward_message(chat_id, message_id, window, cx)
                             })
-                            .ok();
+                            .log_err();
                     }
                 });
 
@@ -2660,7 +2661,7 @@ fn wrap_in_context_menu(
                                     cx,
                                 )
                             })
-                            .ok();
+                            .log_err();
                     }
                 });
 
@@ -2682,7 +2683,7 @@ fn wrap_in_context_menu(
                                 cx,
                             )
                         })
-                        .ok();
+                        .log_err();
                 }
             });
 
@@ -2721,7 +2722,7 @@ fn media_toggle(
                 }
                 cx.notify();
             })
-            .ok();
+            .log_err();
     })
 }
 
@@ -2916,7 +2917,7 @@ fn render_media_preview(
                                     cx,
                                 )
                             })
-                            .ok();
+                            .log_err();
                     }
                 })
                 .into_any_element()
@@ -3017,7 +3018,7 @@ fn render_media_action(
                         cx,
                     )
                 })
-                .ok();
+                .log_err();
         })
     })
     .into_any_element()
@@ -3087,7 +3088,7 @@ fn render_voice_action(
                     .update(cx, |panel, cx| {
                         panel.toggle_voice(chat_id, message_id, path, cx)
                     })
-                    .ok();
+                    .log_err();
             }),
         )
         .child(
@@ -3447,7 +3448,7 @@ fn composer_chip_placeholder(
                         .on_click(move |_, window, cx| {
                             remove_panel
                                 .update(cx, |panel, cx| panel.remove_composer_item(id, window, cx))
-                                .ok();
+                                .log_err();
                         }),
                 )
                 .into_any_element()
@@ -3888,7 +3889,7 @@ fn reveal_point_in_item(item: &dyn ItemHandle, point: Point, cx: &mut gpui::Asyn
                 |selections| selections.select_ranges([point..point]),
             );
         })
-        .ok();
+        .log_err();
 }
 
 fn local_offset() -> UtcOffset {

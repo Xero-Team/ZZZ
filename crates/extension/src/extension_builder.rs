@@ -450,7 +450,14 @@ impl ExtensionBuilder {
 
         let tar_out_dir = self.cache_dir.join("wasi-sdk-temp");
 
-        fs::remove_dir_all(&tar_out_dir).ok();
+        if let Err(error) = fs::remove_dir_all(&tar_out_dir)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!(
+                "failed to remove stale WASI SDK extraction directory {:?}: {error}",
+                tar_out_dir
+            );
+        }
         fs::create_dir_all(&tar_out_dir).context("failed to create extraction directory")?;
 
         let mut response = self.http.get(&url, AsyncBody::default(), true).await?;
@@ -489,7 +496,14 @@ impl ExtensionBuilder {
         log::info!("finished downloading wasi-sdk");
 
         // Clean up the temporary tar.gz file
-        fs::remove_file(&tar_gz_path).ok();
+        if let Err(error) = fs::remove_file(&tar_gz_path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!(
+                "failed to remove temporary WASI SDK archive {:?}: {error}",
+                tar_gz_path
+            );
+        }
 
         let inner_dir = fs::read_dir(&tar_out_dir)?
             .next()
@@ -502,7 +516,14 @@ impl ExtensionBuilder {
             Err(error) => return Err(error).context("failed to remove outdated wasi-sdk"),
         }
         fs::rename(&inner_dir, wasi_sdk_dir).context("failed to move extracted wasi dir")?;
-        fs::remove_dir_all(&tar_out_dir).ok();
+        if let Err(error) = fs::remove_dir_all(&tar_out_dir)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!(
+                "failed to remove WASI SDK extraction directory {:?}: {error}",
+                tar_out_dir
+            );
+        }
 
         Ok(())
     }

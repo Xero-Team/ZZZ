@@ -1636,7 +1636,7 @@ impl Terminal {
             .iter()
             .any(|line| line.contains(marker))
         {
-            let _ = self.write_init_command_after_startup(cx);
+            self.write_init_command_after_startup(cx);
         }
     }
 
@@ -2502,7 +2502,7 @@ impl Terminal {
         if let Some(e) = exit_status {
             self.child_exited = Some(e);
         }
-        let _ = self.write_init_command_after_startup(cx);
+        self.write_init_command_after_startup(cx);
         let Some(task) = &mut self.task else {
             // For interactive shells (no task), we need to differentiate:
             // 1. User-initiated exits (typed "exit", Ctrl+D, etc.) - always close,

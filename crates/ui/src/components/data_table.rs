@@ -17,6 +17,7 @@ use gpui::{
     ListHorizontalSizingBehavior, ListSizingBehavior, ListState, Point, ScrollHandle, Stateful,
     UniformListScrollHandle, WeakEntity, list, transparent_black, uniform_list,
 };
+use gpui_util::ResultExt as _;
 
 pub mod table_row;
 #[cfg(test)]
@@ -259,7 +260,7 @@ impl TableInteractionState {
     ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
         let view = this.downgrade();
         move |e: &E, window: &mut Window, cx: &mut App| {
-            view.update(cx, |view, cx| f(view, e, window, cx)).ok();
+            view.update(cx, |view, cx| f(view, e, window, cx)).log_err();
         }
     }
 }

@@ -866,18 +866,14 @@ impl ThreadView {
         this.sync_generating_indicator(cx);
         this.sync_editor_mode_for_empty_state(cx);
         this.sync_existing_elicitation_states(window, cx);
-        let list_state_for_scroll = this.list_state.clone();
         let thread_view = cx.entity().downgrade();
 
         this.list_state
             .set_scroll_handler(move |_event, _window, cx| {
-                let list_state = list_state_for_scroll.clone();
                 let thread_view = thread_view.clone();
                 // N.B. We must defer because the scroll handler is called while the
-                // ListState's RefCell is mutably borrowed. Reading logical_scroll_top()
-                // directly would panic from a double borrow.
+                // ListState's RefCell is mutably borrowed.
                 cx.defer(move |cx| {
-                    let _ = list_state.logical_scroll_top();
                     thread_view
                         .update(cx, |this, cx| {
                             this.schedule_save(cx);
@@ -1243,13 +1239,12 @@ impl ThreadView {
                 return Ok(None);
             }
 
-            let _ = cx
-                .update(|window, cx| {
-                    message_editor.update(cx, |message_editor, cx| {
-                        message_editor.clear(window, cx);
-                    });
-                })
-                .log_err();
+            cx.update(|window, cx| {
+                message_editor.update(cx, |message_editor, cx| {
+                    message_editor.clear(window, cx);
+                });
+            })
+            .log_err();
 
             Ok(Some((contents, tracked_buffers)))
         });
@@ -4684,8 +4679,8 @@ impl Render for TokenUsageTooltip {
                                                         .size(IconSize::XSmall),
                                                 )
                                                 .on_click(move |_, window, cx| {
-                                                    let _ =
-                                                        workspace.update(cx, |workspace, cx| {
+                                                    workspace
+                                                        .update(cx, |workspace, cx| {
                                                             let project =
                                                                 workspace.project().read(cx);
                                                             let paths = project_entry_ids
@@ -4702,7 +4697,8 @@ impl Render for TokenUsageTooltip {
                                                                     )
                                                                     .detach_and_log_err(cx);
                                                             }
-                                                        });
+                                                        })
+                                                        .log_err();
                                                 }),
                                             )
                                         }),

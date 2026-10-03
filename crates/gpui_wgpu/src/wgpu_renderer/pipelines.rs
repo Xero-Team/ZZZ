@@ -8,13 +8,10 @@ pub(super) struct WgpuPipelines {
     pub(super) mono_sprites: wgpu::RenderPipeline,
     pub(super) subpixel_sprites: Option<wgpu::RenderPipeline>,
     pub(super) poly_sprites: wgpu::RenderPipeline,
-    #[allow(dead_code)]
-    pub(super) surfaces: wgpu::RenderPipeline,
 }
 
 pub(super) struct WgpuBindGroupLayouts {
     pub(super) globals: wgpu::BindGroupLayout,
     pub(super) instances: wgpu::BindGroupLayout,
     pub(super) instances_with_texture: wgpu::BindGroupLayout,
-    pub(super) surfaces: wgpu::BindGroupLayout,
 }

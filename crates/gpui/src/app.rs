@@ -605,9 +605,12 @@ impl SystemWindowTabController {
             .expect("position should be present");
         let next_index = (current_index + 1) % tabs.len();
 
-        let _ = &tabs[next_index].handle.update(cx, |_, window, _| {
-            window.activate_window();
-        });
+        tabs[next_index]
+            .handle
+            .update(cx, |_, window, _| {
+                window.activate_window();
+            })
+            .log_err();
     }
 
     /// Selects the previous tab in the tab group in the leading direction.
@@ -627,9 +630,12 @@ impl SystemWindowTabController {
             current_index - 1
         };
 
-        let _ = &tabs[previous_index].handle.update(cx, |_, window, _| {
-            window.activate_window();
-        });
+        tabs[previous_index]
+            .handle
+            .update(cx, |_, window, _| {
+                window.activate_window();
+            })
+            .log_err();
     }
 }
 
@@ -2051,7 +2057,9 @@ impl App {
     {
         let window_handle = window.handle;
         self.observe_release(handle, move |entity, cx| {
-            let _ = window_handle.update(cx, |_, window, cx| on_release(entity, window, cx));
+            window_handle
+                .update(cx, |_, window, cx| on_release(entity, window, cx))
+                .log_err();
         })
     }
 

@@ -23,6 +23,7 @@ use ui::{
     ContextMenu, Divider, DropdownMenu, FluentBuilder, IntoElement, PopoverMenuHandle, Render,
     ScrollableHandle, StatefulInteractiveElement, Tooltip, WithScrollbar, prelude::*,
 };
+use util::ResultExt as _;
 use workspace::Workspace;
 
 use crate::{ToggleDataBreakpoint, session::running::stack_frame_list::StackFrameList};
@@ -293,7 +294,7 @@ impl MemoryView {
                 }));
                 this.jump_to_address(as_address, cx);
             })
-            .ok();
+            .log_err();
         })
         .detach();
     }

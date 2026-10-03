@@ -1597,7 +1597,6 @@ mod tests {
 
         // Test with various distances
         let distances = vec![1, 5, 10, 50, 100, u32::MAX];
-        // let distances = vec![150];
 
         for distance in distances {
             let chunks = fold_snapshot.chunks_at(FoldPoint::new(0, 0));
@@ -1707,7 +1706,6 @@ mod tests {
         }
 
         // Test with various distances
-        // let distances = vec![1, 5, 10, 50, 100, u32::MAX];
         let distances = vec![150];
 
         for distance in distances {

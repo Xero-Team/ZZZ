@@ -1355,7 +1355,7 @@ fn render_mention_fold_button(
                 this.loading = None;
                 cx.notify();
             })
-            .ok();
+            .log_err();
         });
         LoadingContext {
             id: cx.entity_id(),
@@ -1416,7 +1416,7 @@ impl Render for LoadingContext {
                                         cx.notify();
                                     }
                                 })
-                                .ok();
+                                .log_err();
                             }
                         }),
                     })

@@ -53,9 +53,9 @@ struct DirectWriteComponents {
 impl Drop for DirectWriteComponents {
     fn drop(&mut self) {
         unsafe {
-            let _ = self
-                .factory
-                .UnregisterFontFileLoader(&self.in_memory_loader);
+            self.factory
+                .UnregisterFontFileLoader(&self.in_memory_loader)
+                .log_err();
         }
     }
 }
@@ -421,7 +421,7 @@ impl DirectWriteState {
                 };
                 let font = font_face.CreateFontFace()?;
                 let mut count = 0;
-                font.GetUnicodeRanges(None, &mut count).ok();
+                font.GetUnicodeRanges(None, &mut count).log_err();
                 if count == 0 {
                     continue;
                 }

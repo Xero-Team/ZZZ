@@ -2,12 +2,18 @@ use anyhow::Context as _;
 use futures::StreamExt;
 use gpui::{App, SerializedThreadTaskTimings};
 use log::info;
-use std::{thread::ThreadId, time::Duration};
+use std::{
+    io::{BufWriter, Write as _},
+    path::Path,
+    thread::ThreadId,
+    time::Duration,
+};
 use util::ResultExt;
 
 use crate::STARTUP_TIME;
 
 const MAX_HANG_TRACES: usize = 3;
+const MAX_HANG_TRACE_TIMINGS_PER_THREAD: usize = 16 * 1024;
 
 pub fn init(cx: &mut App) {
     if cfg!(debug_assertions) {
@@ -35,28 +41,21 @@ fn monitor_hangs(cx: &App) {
             async move {
                 cleanup_old_hang_traces();
 
-                let mut hang_time = None;
-
                 let mut hanging = false;
                 loop {
                     background_executor.timer(Duration::from_secs(1)).await;
                     match tx.try_send(()) {
                         Ok(_) => {
-                            hang_time = None;
                             hanging = false;
                         }
                         Err(e) => {
                             let is_full = e.into_send_error().is_full();
                             if is_full && !hanging {
                                 hanging = true;
-                                hang_time = Some(chrono::Local::now());
-                            }
-
-                            if is_full {
                                 save_hang_trace(
                                     main_thread_id,
                                     &background_executor,
-                                    hang_time.expect("value should be present"),
+                                    chrono::Local::now(),
                                 );
                             }
                         }
@@ -93,7 +92,9 @@ fn save_hang_trace(
     background_executor: &gpui::BackgroundExecutor,
     hang_time: chrono::DateTime<chrono::Local>,
 ) {
-    let thread_timings = background_executor.dispatcher().get_all_timings();
+    let thread_timings = background_executor
+        .dispatcher()
+        .get_recent_timings(MAX_HANG_TRACE_TIMINGS_PER_THREAD);
     let thread_timings = thread_timings
         .into_iter()
         .map(|mut timings| {
@@ -112,13 +113,6 @@ fn save_hang_trace(
         "hang-{}.miniprof.json",
         hang_time.format("%Y-%m-%d_%H-%M-%S")
     ));
-
-    let Some(timings) = serde_json::to_string(&thread_timings)
-        .context("hang timings serialization")
-        .log_err()
-    else {
-        return;
-    };
 
     if let Ok(entries) = std::fs::read_dir(paths::hang_traces_dir()) {
         let mut files: Vec<_> = entries
@@ -139,12 +133,26 @@ fn save_hang_trace(
         }
     }
 
-    std::fs::write(&trace_path, timings)
-        .context("hang trace file writing")
-        .log_err();
+    if write_hang_trace(&trace_path, &thread_timings)
+        .log_err()
+        .is_none()
+    {
+        return;
+    }
 
     info!(
         "hang detected, trace file saved at: {}",
         trace_path.display()
     );
+}
+
+fn write_hang_trace(
+    path: &Path,
+    thread_timings: &[SerializedThreadTaskTimings],
+) -> anyhow::Result<()> {
+    let file = std::fs::File::create(path).context("hang trace file creation")?;
+    let mut writer = BufWriter::new(file);
+    serde_json::to_writer(&mut writer, thread_timings).context("hang timings serialization")?;
+    writer.flush().context("hang trace file writing")?;
+    Ok(())
 }

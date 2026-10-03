@@ -202,13 +202,6 @@ impl BreakpointStore {
         self.downstream_client = Some((downstream_client, project_id));
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn unshared(&mut self, cx: &mut Context<Self>) {
-        self.downstream_client.take();
-
-        cx.notify();
-    }
-
     async fn handle_breakpoints_for_file(
         this: Entity<Self>,
         message: TypedEnvelope<proto::BreakpointsForFile>,
@@ -313,31 +306,6 @@ impl BreakpointStore {
             );
         });
         Ok(proto::Ack {})
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn broadcast(&self) {
-        if let Some((client, project_id)) = &self.downstream_client {
-            for (path, breakpoint_set) in &self.breakpoints {
-                client
-                    .send(proto::BreakpointsForFile {
-                        project_id: *project_id,
-                        path: path.to_string_lossy().into_owned(),
-                        breakpoints: breakpoint_set
-                            .breakpoints
-                            .iter()
-                            .filter_map(|breakpoint| {
-                                breakpoint.bp.bp.to_proto(
-                                    path,
-                                    breakpoint.position(),
-                                    &breakpoint.session_state,
-                                )
-                            })
-                            .collect(),
-                    })
-                    .log_err();
-            }
-        }
     }
 
     pub(crate) fn update_session_breakpoint(

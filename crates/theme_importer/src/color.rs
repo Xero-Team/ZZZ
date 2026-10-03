@@ -1,9 +1,12 @@
+#[cfg(test)]
 use anyhow::Result;
+#[cfg(test)]
 use gpui::Hsla;
+#[cfg(test)]
 use palette::FromColor;
 
-#[allow(unused)]
-pub(crate) fn try_parse_color(color: &str) -> Result<Hsla> {
+#[cfg(test)]
+fn try_parse_color(color: &str) -> Result<Hsla> {
     let rgba = gpui::Rgba::try_from(color)?;
     let rgba = palette::rgb::Srgba::from_components((rgba.r, rgba.g, rgba.b, rgba.a));
     let hsla = palette::Hsla::from_color(rgba);
@@ -18,8 +21,8 @@ pub(crate) fn try_parse_color(color: &str) -> Result<Hsla> {
     Ok(hsla)
 }
 
-#[allow(unused)]
-pub(crate) fn pack_color(color: Hsla) -> u32 {
+#[cfg(test)]
+fn pack_color(color: Hsla) -> u32 {
     let hsla = palette::Hsla::from_components((color.h * 360., color.s, color.l, color.a));
     let rgba = palette::rgb::Srgba::from_color(hsla);
     let rgba = rgba.into_format::<u8, u8>();

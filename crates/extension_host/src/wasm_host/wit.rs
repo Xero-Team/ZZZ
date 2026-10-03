@@ -74,8 +74,6 @@ pub fn is_supported_wasm_api_version(release_channel: ReleaseChannel, version: V
 #[inline(always)]
 pub fn wasm_api_version_range(release_channel: ReleaseChannel) -> RangeInclusive<Version> {
     // Note: The release channel can be used to stage a new version of the extension API.
-    let _ = release_channel;
-
     let max_version = match release_channel {
         ReleaseChannel::Dev => latest::MAX_VERSION,
         ReleaseChannel::Stable => since_v0_6_0::MAX_VERSION,
@@ -128,8 +126,6 @@ impl Extension {
         component: &Component,
     ) -> Result<Self> {
         // Note: The release channel can be used to stage a new version of the extension API.
-        let _ = release_channel;
-
         if version >= latest::MIN_VERSION {
             authorize_access_to_unreleased_wasm_api_version(release_channel)?;
 

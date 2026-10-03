@@ -605,7 +605,7 @@ impl Dock {
             .update(cx, |workspace, cx| {
                 workspace.serialize_workspace(window, cx);
             })
-            .ok();
+            .log_err();
         cx.notify();
     }
 
@@ -691,7 +691,7 @@ impl Dock {
                         .update(cx, |workspace, cx| {
                             workspace.serialize_workspace(window, cx);
                         })
-                        .ok();
+                        .log_err();
                 }
             }),
             {
@@ -734,7 +734,7 @@ impl Dock {
                                     Some(panel.read(cx).position(window, cx));
                                 cx.emit(Event::ZoomChanged);
                             })
-                            .ok();
+                            .log_err();
                     }
                     PanelEvent::ZoomOut => {
                         this.set_panel_zoomed(&panel.to_any(), false, window, cx);
@@ -747,7 +747,7 @@ impl Dock {
                                 }
                                 cx.notify();
                             })
-                            .ok();
+                            .log_err();
                     }
                     PanelEvent::Activate => {
                         if let Some(ix) = this
@@ -1258,7 +1258,7 @@ impl Dock {
             .update(cx, |workspace, cx| {
                 workspace.persist_panel_button_order(position, order, cx);
             })
-            .ok();
+            .log_err();
 
         cx.notify();
     }
@@ -1328,7 +1328,7 @@ impl Render for Dock {
                                     .update(cx, |workspace, cx| {
                                         workspace.serialize_workspace(window, cx);
                                     })
-                                    .ok();
+                                    .log_err();
                                 cx.stop_propagation();
                             }
                         }),

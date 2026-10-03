@@ -10,11 +10,9 @@ use std::process;
 use std::sync::OnceLock;
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 enum Os {
     MacOs,
     Linux,
-    Windows,
 }
 
 #[derive(Clone, Copy)]
@@ -33,7 +31,7 @@ impl KeymapOverlay {
     fn keymap(self, os: Os, keymaps: &LoadedKeymaps) -> &KeymapFile {
         match (self, os) {
             (Self::JetBrains, Os::MacOs) => &keymaps.jetbrains_macos,
-            (Self::JetBrains, Os::Linux | Os::Windows) => &keymaps.jetbrains_linux,
+            (Self::JetBrains, Os::Linux) => &keymaps.jetbrains_linux,
         }
     }
 }
@@ -41,7 +39,6 @@ impl KeymapOverlay {
 struct LoadedKeymaps {
     macos: KeymapFile,
     linux: KeymapFile,
-    windows: KeymapFile,
     jetbrains_macos: KeymapFile,
     jetbrains_linux: KeymapFile,
 }
@@ -53,8 +50,6 @@ impl LoadedKeymaps {
                 .context("failed to load macOS keymap")?,
             linux: load_keymap("keymaps/default-linux.json")
                 .context("failed to load Linux keymap")?,
-            windows: load_keymap("keymaps/default-windows.json")
-                .context("failed to load Windows keymap")?,
             jetbrains_macos: load_keymap("keymaps/macos/jetbrains.json")
                 .context("failed to load JetBrains macOS keymap")?,
             jetbrains_linux: load_keymap("keymaps/linux/jetbrains.json")
@@ -66,7 +61,6 @@ impl LoadedKeymaps {
         match os {
             Os::MacOs => &self.macos,
             Os::Linux => &self.linux,
-            Os::Windows => &self.windows,
         }
     }
 }

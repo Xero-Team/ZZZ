@@ -884,6 +884,17 @@ pub type TimerResolutionGuard = gpui_util::Deferred<Box<dyn FnOnce() + Send>>;
 #[doc(hidden)]
 pub trait PlatformDispatcher: Send + Sync {
     fn get_all_timings(&self) -> Vec<ThreadTaskTimings>;
+    fn get_recent_timings(&self, maximum_timings_per_thread: usize) -> Vec<ThreadTaskTimings> {
+        let mut all_timings = self.get_all_timings();
+        for thread_timings in &mut all_timings {
+            let timings_to_remove = thread_timings
+                .timings
+                .len()
+                .saturating_sub(maximum_timings_per_thread);
+            thread_timings.timings.drain(..timings_to_remove);
+        }
+        all_timings
+    }
     fn get_current_thread_timings(&self) -> ThreadTaskTimings;
     fn is_main_thread(&self) -> bool;
     fn dispatch(&self, runnable: RunnableVariant, priority: Priority);
@@ -1324,13 +1335,6 @@ impl<T> ops::Index<usize> for AtlasTextureList<T> {
 }
 
 impl<T> AtlasTextureList<T> {
-    #[allow(unused)]
-    pub fn drain(&mut self) -> std::vec::Drain<'_, Option<T>> {
-        self.free_list.clear();
-        self.textures.drain(..)
-    }
-
-    #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut T> {
         self.textures.iter_mut().flatten()
     }
@@ -1491,7 +1495,6 @@ impl PlatformInputHandler {
             .flatten()
     }
 
-    #[allow(dead_code)]
     pub fn apple_press_and_hold_enabled(&mut self) -> bool {
         self.handler.apple_press_and_hold_enabled()
     }
@@ -1547,20 +1550,10 @@ impl PlatformInputHandler {
         })
     }
 
-    #[allow(unused)]
-    pub fn character_index_for_point(&mut self, point: Point<Pixels>) -> Option<usize> {
-        self.cx
-            .update(|window, cx| self.handler.character_index_for_point(point, window, cx))
-            .ok()
-            .flatten()
-    }
-
-    #[allow(dead_code)]
     pub fn accepts_text_input(&mut self, window: &mut Window, cx: &mut App) -> bool {
         self.handler.accepts_text_input(window, cx)
     }
 
-    #[allow(dead_code)]
     pub fn query_accepts_text_input(&mut self) -> bool {
         self.cx
             .update(|window, cx| self.handler.accepts_text_input(window, cx))
@@ -1684,7 +1677,6 @@ pub trait InputHandler: 'static {
     /// sending these to the platform.
     /// TODO: Ideally we should be able to set ApplePressAndHoldEnabled in NSUserDefaults
     /// (which is how iTerm does it) but it doesn't seem to work for me.
-    #[allow(dead_code)]
     fn apple_press_and_hold_enabled(&mut self) -> bool {
         true
     }
@@ -2064,7 +2056,6 @@ impl PromptButton {
     }
 
     /// Returns true if this button is a cancel button.
-    #[allow(dead_code)]
     pub fn is_cancel(&self) -> bool {
         matches!(self, PromptButton::Cancel(_))
     }

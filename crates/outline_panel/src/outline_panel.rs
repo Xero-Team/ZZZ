@@ -1980,7 +1980,7 @@ impl OutlinePanel {
                         outline_panel.scroll_editor_to_entry(&selection, false, false, window, cx);
                     }
                 })
-                .ok();
+                .log_err();
         })
     }
 
@@ -3145,7 +3145,7 @@ impl OutlinePanel {
 
                     cx.notify();
                 })
-                .ok();
+                .log_err();
         });
     }
 
@@ -3517,7 +3517,7 @@ impl OutlinePanel {
 
                             outline_panel.update_cached_entries(debounce, window, cx);
                         })
-                        .ok();
+                        .log_err();
                 }),
             );
         }
@@ -3672,7 +3672,7 @@ impl OutlinePanel {
 
                     cx.notify();
                 })
-                .ok();
+                .log_err();
         });
     }
 
@@ -5090,7 +5090,7 @@ impl Panel for OutlinePanel {
                     }
                     outline_panel.serialize(cx);
                 })
-                .ok();
+                .log_err();
         })
         .detach()
     }

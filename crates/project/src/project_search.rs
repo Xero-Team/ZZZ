@@ -302,7 +302,7 @@ impl Search {
 
                         let issue_remote_buffers_request = cx
                             .spawn(async move |cx| {
-                                let _ = maybe!(async move {
+                                maybe!(async move {
                                     request.await?;
 
                                     let (buffer_tx, buffer_rx) = bounded(24);

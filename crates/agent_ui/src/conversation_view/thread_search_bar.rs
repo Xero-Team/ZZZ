@@ -258,18 +258,6 @@ impl ThreadSearchBar {
         }));
     }
 
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(super) fn match_count(&self) -> usize {
-        self.matches.len()
-    }
-
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub(super) fn active_match_index(&self) -> Option<usize> {
-        self.active_match
-    }
-
     pub fn active_match_text(&self, cx: &App) -> Option<String> {
         if self.query_editor.read(cx).text(cx).is_empty() {
             return None;

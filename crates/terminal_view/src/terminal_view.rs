@@ -1528,7 +1528,7 @@ impl Item for TerminalView {
             .on_action(move |action: &RenameTerminal, window, cx| {
                 self_handle
                     .update(cx, |this, cx| this.rename_terminal(action, window, cx))
-                    .ok();
+                    .log_err();
             })
             .child(
                 h_flex()
@@ -1573,14 +1573,14 @@ impl Item for TerminalView {
                                         .update(cx, |this, cx| {
                                             this.finish_renaming(true, window, cx)
                                         })
-                                        .ok();
+                                        .log_err();
                                 })
                                 .on_action(move |_: &menu::Cancel, window, cx| {
                                     self_handle_cancel
                                         .update(cx, |this, cx| {
                                             this.finish_renaming(false, window, cx)
                                         })
-                                        .ok();
+                                        .log_err();
                                 }),
                         )
                     }),
@@ -1700,7 +1700,7 @@ impl Item for TerminalView {
                                 cx,
                             );
                         })
-                        .ok();
+                        .log_err();
                     })
                     .detach();
 

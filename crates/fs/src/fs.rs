@@ -1169,10 +1169,8 @@ impl Fs for RealFs {
 
         (
             Box::pin(rx.filter_map({
-                let watcher = watcher.clone();
                 let executor = executor.clone();
                 move |_| {
-                    let _ = watcher.clone();
                     let pending_paths = pending_paths.clone();
                     let executor = executor.clone();
                     async move {
@@ -3489,15 +3487,14 @@ pub async fn copy_recursive<'a>(
                 }
                 anyhow::bail!("{target_item:?} already exists");
             }
-            let _ = fs
-                .remove_dir(
-                    &target_item,
-                    RemoveOptions {
-                        recursive: true,
-                        ignore_if_not_exists: true,
-                    },
-                )
-                .await;
+            fs.remove_dir(
+                &target_item,
+                RemoveOptions {
+                    recursive: true,
+                    ignore_if_not_exists: true,
+                },
+            )
+            .await?;
             fs.create_dir(&target_item).await?;
         } else {
             fs.copy_file(&item, &target_item, options).await?;
@@ -3587,7 +3584,14 @@ fn atomic_replace<P: AsRef<Path>>(
     };
 
     // If the file does not exist, create it.
-    let _ = std::fs::File::create_new(replaced_file.as_ref());
+    if let Err(error) = std::fs::File::create_new(replaced_file.as_ref())
+        && error.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        log::warn!(
+            "failed to create replacement target {:?}: {error}",
+            replaced_file.as_ref()
+        );
+    }
 
     unsafe {
         ReplaceFileW(

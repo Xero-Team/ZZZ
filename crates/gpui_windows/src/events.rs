@@ -277,8 +277,8 @@ impl WindowsWindowInner {
         // Re-enable parent window if this was a modal dialog
         if let Some(parent_hwnd) = self.parent_hwnd {
             unsafe {
-                let _ = EnableWindow(parent_hwnd, true);
-                let _ = SetForegroundWindow(parent_hwnd);
+                EnableWindow(parent_hwnd, true).ok().log_err();
+                SetForegroundWindow(parent_hwnd).ok().log_err();
             }
         }
 

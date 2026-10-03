@@ -309,8 +309,6 @@ enum BufferOrderedMessage {
         message: proto::update_language_server::Variant,
         name: Option<LanguageServerName>,
     },
-    #[allow(dead_code)]
-    Resync,
 }
 
 /// A link to display in a toast notification, useful to point to documentation.
@@ -2275,7 +2273,7 @@ impl Project {
                         new_abs_path: new_abs_path.clone(),
                     });
                 })
-                .ok();
+                .log_err();
 
             lsp_store
                 .read_with(cx, |this, _| {
@@ -2863,17 +2861,6 @@ impl Project {
                             .push(operation);
                     }
 
-                    BufferOrderedMessage::Resync => {
-                        operations_by_buffer_id.clear();
-                        if project
-                            .update(cx, |this, cx| this.synchronize_remote_buffers(cx))?
-                            .await
-                            .is_ok()
-                        {
-                            needs_resync_with_host = false;
-                        }
-                    }
-
                     BufferOrderedMessage::LanguageServerUpdate {
                         language_server_id,
                         message,
@@ -3293,14 +3280,14 @@ impl Project {
                             buffer_id: buffer_id.to_proto(),
                             operations: vec![operation.clone()],
                         })
-                        .ok();
+                        .log_err();
                 }
 
                 self.enqueue_buffer_ordered_message(BufferOrderedMessage::Operation {
                     buffer_id,
                     operation,
                 })
-                .ok();
+                .log_err();
             }
 
             _ => {}
@@ -4361,13 +4348,6 @@ impl Project {
         });
     }
 
-    #[allow(dead_code)]
-    fn add_worktree(&mut self, worktree: &Entity<Worktree>, cx: &mut Context<Self>) {
-        self.worktree_store.update(cx, |worktree_store, cx| {
-            worktree_store.add(worktree, cx);
-        });
-    }
-
     pub fn set_active_path(&mut self, entry: Option<ProjectPath>, cx: &mut Context<Self>) {
         let new_active_entry = entry.and_then(|project_path| {
             let worktree = self.worktree_for_id(project_path.worktree_id, cx)?;
@@ -5191,12 +5171,6 @@ impl Project {
         }
     }
 
-    fn synchronize_remote_buffers(&mut self, _cx: &mut Context<Self>) -> Task<Result<()>> {
-        Task::ready(Err(anyhow!(
-            "can't synchronize remote buffers on a local project"
-        )))
-    }
-
     pub fn worktree_metadata_protos(&self, cx: &App) -> Vec<proto::WorktreeMetadata> {
         self.worktree_store.read(cx).worktree_metadata_protos(cx)
     }
@@ -5388,7 +5362,7 @@ impl Project {
             old_location
                 .buffer
                 .update(cx, |buffer, cx| buffer.remove_agent_selections(cx))
-                .ok();
+                .log_err();
         }
 
         if let Some(location) = new_location.as_ref() {
@@ -5408,7 +5382,7 @@ impl Project {
                         cx,
                     )
                 })
-                .ok();
+                .log_err();
         }
 
         self.agent_location = new_location;

@@ -51,23 +51,30 @@ pub struct FocusFollowsMouse {
     pub debounce: Duration,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct ActivePanelModifiers {
     /// Size of the border surrounding the active pane.
     /// When set to 0, the active pane doesn't have any border.
     /// The border is drawn inset.
     ///
     /// Default: `0.0`
-    // TODO: make this not an option, it is never None
-    pub border_size: Option<f32>,
+    pub border_size: f32,
     /// Opacity of inactive panels.
     /// When set to 1.0, the inactive panes have the same opacity as the active one.
     /// If set to 0, the inactive panes content will not be visible at all.
     /// Values are clamped to the [0.0, 1.0] range.
     ///
     /// Default: `1.0`
-    // TODO: make this not an option, it is never None
-    pub inactive_opacity: Option<InactiveOpacity>,
+    pub inactive_opacity: InactiveOpacity,
+}
+
+impl Default for ActivePanelModifiers {
+    fn default() -> Self {
+        Self {
+            border_size: 0.0,
+            inactive_opacity: InactiveOpacity::from(1.0),
+        }
+    }
 }
 
 #[derive(Deserialize, RegisterSetting)]
@@ -86,20 +93,16 @@ impl Settings for WorkspaceSettings {
                 .display_language
                 .expect("display_language should be present"),
             active_pane_modifiers: ActivePanelModifiers {
-                border_size: Some(
-                    workspace
-                        .active_pane_modifiers
-                        .expect("active_pane_modifiers should be present")
-                        .border_size
-                        .expect("border_size should be present"),
-                ),
-                inactive_opacity: Some(
-                    workspace
-                        .active_pane_modifiers
-                        .expect("active_pane_modifiers should be present")
-                        .inactive_opacity
-                        .expect("inactive_opacity should be present"),
-                ),
+                border_size: workspace
+                    .active_pane_modifiers
+                    .expect("active_pane_modifiers should be present")
+                    .border_size
+                    .expect("border_size should be present"),
+                inactive_opacity: workspace
+                    .active_pane_modifiers
+                    .expect("active_pane_modifiers should be present")
+                    .inactive_opacity
+                    .expect("inactive_opacity should be present"),
             },
             bottom_dock_layout: workspace
                 .bottom_dock_layout

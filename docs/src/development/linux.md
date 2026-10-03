@@ -79,9 +79,9 @@ ZZZ has two main binaries:
 
 - You will need to build `crates/cli` and make its binary available in `$PATH` with the name `zzz`.
 - You will need to build `~/.local/lib/zzz/zzz-editor` and put it at `~/.local/lib/zzz/zzz-editor`. For example, if you are going to put the CLI at `~/.local/lib/zzz/zzz-editor`, put `zzz` at `~/.local/lib/zzz/zzz-editor`. As some Linux distributions (notably Arch) discourage the use of `libexec`, you can also put this binary at `~/.local/lib/zzz/zzz-editor` instead.
-- If you are going to provide a `.desktop` file you can find a template in `crates/zzz/resources/zzz.desktop.in`, and use `envsubst` to populate it with the values required. This file should also be renamed to `$APP_ID.desktop` so that the file [follows the FreeDesktop standards](`crates/zzz/resources/zzz.desktop.in`). You should also make this desktop file executable (`chmod 755`).
-- You will need to ensure that the necessary libraries are installed. You can get the current list by inspecting the built binary; see [`script/bundle-linux`](../../script/bundle-linux).
-- For an example of a complete build script, see [`script/bundle-linux`](../../script/bundle-linux).
+- If you are going to provide a `.desktop` file you can find a template in `crates/zzz/resources/zzz.desktop.in`, and use `envsubst` to populate it with the values required. This file should also be renamed to `$APP_ID.desktop` so that the file follows the FreeDesktop standards. You should also make this desktop file executable (`chmod 755`).
+- You will need to ensure that the necessary libraries are installed. You can get the current list by inspecting the built binary; see [`script/bundle-linux`](../../../script/bundle-linux).
+- For an example of a complete build script, see [`script/bundle-linux`](../../../script/bundle-linux).
 - You can disable ZZZ's auto updates and provide instructions for users who try to update ZZZ manually by building (or running) ZZZ with the environment variable `ZZZ_UPDATE_EXPLANATION`. For example: ZZZ_UPDATE_EXPLANATION.
 - Make sure to update the contents of the `crates/zzz/RELEASE_CHANNEL` file to `stable` or `dev`, with no newline. Packaged builds that should use the system credentials manager should use `stable`.
 
@@ -90,7 +90,7 @@ ZZZ has two main binaries:
 ZZZ moves quickly, and distribution maintainers often have different constraints and priorities. The points below describe current trade-offs:
 
 - ZZZ is a fast-moving project. We typically publish 2-3 builds per week to address reported issues and ship larger changes.
-- There are a couple of other `zed-cli` binaries that may be present on Linux systems ([1](`zed-cli`), [2](`zed-cli`)). If you want to rename our CLI binary because of these issues, we suggest `zedit`, `zeditor`, or `zed-cli`.
+- There are a couple of other binaries named `zed-cli` that may be present on Linux systems. If you want to rename our CLI binary because of these issues, we suggest `zedit`, `zeditor`, or `zed-cli`.
 - ZZZ automatically installs versions of common developer tools, similar to rustup/rbenv/pyenv.
 - Users can install extensions locally and from the public Zed marketplace at `https://api.zed.dev`. Extensions may install additional tools such as language servers.
 - A fresh ZZZ install does not create an account, send telemetry, or contact hosted collaboration. Language-server, debug adapter, Prettier, Node, and extension downloads may contact third-party hosts.

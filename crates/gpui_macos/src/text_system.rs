@@ -794,27 +794,6 @@ fn bounds_from_rect_i(rect: RectI) -> Bounds<DevicePixels> {
     }
 }
 
-// impl From<Vector2I> for Size<DevicePixels> {
-//     fn from(value: Vector2I) -> Self {
-//         size(value.x().into(), value.y().into())
-//     }
-// }
-
-// impl From<RectI> for Bounds<i32> {
-//     fn from(rect: RectI) -> Self {
-//         Bounds {
-//             origin: point(rect.origin_x(), rect.origin_y()),
-//             size: size(rect.width(), rect.height()),
-//         }
-//     }
-// }
-
-// impl From<Point<u32>> for Vector2I {
-//     fn from(size: Point<u32>) -> Self {
-//         Vector2I::new(size.x as i32, size.y as i32)
-//     }
-// }
-
 fn size_from_vector2f(vec: Vector2F) -> Size<f32> {
     size(vec.x(), vec.y())
 }

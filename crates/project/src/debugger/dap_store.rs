@@ -571,28 +571,6 @@ impl DapStore {
         &self.worktree_store
     }
 
-    #[allow(dead_code)]
-    async fn handle_ignore_breakpoint_state(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::IgnoreBreakpointState>,
-        mut cx: AsyncApp,
-    ) -> Result<()> {
-        let session_id = SessionId::from_proto(envelope.payload.session_id);
-
-        this.update(&mut cx, |this, cx| {
-            if let Some(session) = this.session_by_id(&session_id) {
-                session.update(cx, |session, cx| {
-                    session.set_ignore_breakpoints(envelope.payload.ignore, cx)
-                })
-            } else {
-                Task::ready(HashMap::default())
-            }
-        })
-        .await;
-
-        Ok(())
-    }
-
     fn delegate(
         &self,
         worktree: &Entity<Worktree>,

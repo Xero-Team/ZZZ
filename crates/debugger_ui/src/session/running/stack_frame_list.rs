@@ -252,7 +252,7 @@ impl StackFrameList {
                     let new_stack_frames = this.stack_frames(cx);
                     new_stack_frames.unwrap_or_default().is_empty() && !this.entries.is_empty()
                 })
-                .ok()
+                .log_err()
                 .unwrap_or_default();
 
             if debounce {
@@ -261,7 +261,7 @@ impl StackFrameList {
             this.update_in(cx, |this, window, cx| {
                 this.build_entries(select_first, window, cx);
             })
-            .ok();
+            .log_err();
         })
     }
 

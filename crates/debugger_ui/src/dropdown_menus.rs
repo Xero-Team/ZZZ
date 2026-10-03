@@ -5,7 +5,7 @@ use gpui::{Anchor, App, Entity, WeakEntity};
 use i18n::tr;
 use project::debugger::session::{ThreadId, ThreadStatus};
 use ui::{CommonAnimationExt, ContextMenu, DropdownMenu, DropdownStyle, Indicator, prelude::*};
-use util::{maybe, truncate_and_trailoff};
+use util::{ResultExt as _, maybe, truncate_and_trailoff};
 
 use crate::{
     debugger_panel::DebugPanel,
@@ -223,7 +223,7 @@ impl DebugPanel {
                                 weak.update(cx, |panel, cx| {
                                     panel.activate_session(leaf.clone(), window, cx);
                                 })
-                                .ok();
+                                .log_err();
                             }
                         },
                     );
@@ -279,12 +279,12 @@ impl DebugPanel {
                             weak.update(cx, |panel, cx| {
                                 panel.close_session(session_entity_id, window, cx);
                             })
-                            .ok();
+                            .log_err();
                             context_menu
                                 .update(cx, |this, cx| {
                                     this.cancel(&Default::default(), window, cx);
                                 })
-                                .ok();
+                                .log_err();
                         }
                     }),
             )

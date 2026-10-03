@@ -164,7 +164,7 @@ Non-compliance with these rules will be raised during the publishing process by 
 
 > Prior to publishing your extension, you should have installed as well as tested it locally thoroughly. Furthermore, you should have read the [prerequisites above](#extension-publishing-prerequisites). Note that untested extension submissions where the extension is not functioning at all will be closed eagerly without further feedback.
 
-To publish an extension, open a PR to [the `zed-industries/extensions` repo](`zed-industries/extensions`).
+To publish an extension, open a PR to [the `zed-industries/extensions` repo](https://github.com/zed-industries/extensions).
 
 In your PR, do the following:
 
@@ -202,7 +202,7 @@ Once your PR is merged, the extension will be packaged and published to the ZZZ 
 
 ## Updating an extension
 
-To update an extension, open a PR to [the `zed-industries/extensions` repo](`zed-industries/extensions`).
+To update an extension, open a PR to [the `zed-industries/extensions` repo](https://github.com/zed-industries/extensions).
 
 In your PR do the following:
 

@@ -1674,21 +1674,6 @@ mod tests {
             wrap_snapshot
         }
 
-        // These two should pass but dont, see the comparison note in
-        // prev_row_boundary about why.
-        //
-        // //                                      0123  4567  wrap_rows
-        // let wrap_snapshot = test_wrap_snapshot("1234\n5678", 1, cx);
-        // assert_eq!(wrap_snapshot.text(), "1\n2\n3\n4\n5\n6\n7\n8");
-        // let row = wrap_snapshot.prev_row_boundary(wrap_snapshot.max_point());
-        // assert_eq!(row.0, 3);
-
-        // //                                      012  345  678  wrap_rows
-        // let wrap_snapshot = test_wrap_snapshot("123\n456\n789", 1, cx);
-        // assert_eq!(wrap_snapshot.text(), "1\n2\n3\n4\n5\n6\n7\n8\n9");
-        // let row = wrap_snapshot.prev_row_boundary(wrap_snapshot.max_point());
-        // assert_eq!(row.0, 5);
-
         //                                      012345678  wrap_rows
         let wrap_snapshot = test_wrap_snapshot("123456789", 1, cx);
         assert_eq!(wrap_snapshot.text(), "1\n2\n3\n4\n5\n6\n7\n8\n9");

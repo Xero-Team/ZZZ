@@ -994,7 +994,6 @@ impl NotebookEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // let previous_index = self.selected_cell_index;
         self.selected_cell_index = index;
         let current_index = self.selected_cell_index;
 
@@ -1888,52 +1887,6 @@ impl NotebookItem {
 impl EventEmitter<()> for NotebookItem {}
 
 impl EventEmitter<()> for NotebookEditor {}
-
-// pub struct NotebookControls {
-//     pane_focused: bool,
-//     active_item: Option<Box<dyn ItemHandle>>,
-//     // subscription: Option<Subscription>,
-// }
-
-// impl NotebookControls {
-//     pub fn new() -> Self {
-//         Self {
-//             pane_focused: false,
-//             active_item: Default::default(),
-//             // subscription: Default::default(),
-//         }
-//     }
-// }
-
-// impl EventEmitter<ToolbarItemEvent> for NotebookControls {}
-
-// impl Render for NotebookControls {
-//     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-//         div().child("notebook controls")
-//     }
-// }
-
-// impl ToolbarItemView for NotebookControls {
-//     fn set_active_pane_item(
-//         &mut self,
-//         active_pane_item: Option<&dyn workspace::ItemHandle>,
-//         window: &mut Window, cx: &mut Context<Self>,
-//     ) -> workspace::ToolbarItemLocation {
-//         cx.notify();
-//         self.active_item = None;
-
-//         let Some(item) = active_pane_item else {
-//             return ToolbarItemLocation::Hidden;
-//         };
-
-//         ToolbarItemLocation::PrimaryLeft
-//     }
-
-//     fn pane_focus_update(&mut self, pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {
-//         self.pane_focused = pane_focused;
-//     }
-// }
-
 impl Item for NotebookEditor {
     type Event = ();
 

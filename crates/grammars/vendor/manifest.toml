@@ -284,6 +284,19 @@ constant = "TAGS_QUERY"
 path = "queries/tags.scm"
 
 [[packages]]
+directory = "tree-sitter-scheme"
+compile-name = "tree-sitter-scheme"
+display-name = "Scheme"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_scheme"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Scheme"
+
+[[packages]]
 directory = "tree-sitter-syslog"
 compile-name = "tree-sitter-syslog"
 display-name = "Syslog"

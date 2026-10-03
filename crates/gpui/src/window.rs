@@ -1046,8 +1046,10 @@ impl Window {
             let window_id = handle.window_id();
             let mut cx = cx.to_async();
             move || {
-                let _ = handle.update(&mut cx, |_, window, _| window.remove_window());
-                let _ = cx.update(|cx| {
+                handle
+                    .update(&mut cx, |_, window, _| window.remove_window())
+                    .log_err();
+                cx.update(|cx| {
                     SystemWindowTabController::remove_tab(cx, window_id);
                 });
             }
@@ -1738,7 +1740,9 @@ impl Window {
             entity_id,
             Box::new(move |entity, cx| {
                 let entity = entity.downcast_mut().expect("invalid entity type");
-                let _ = window_handle.update(cx, |_, window, cx| on_release(entity, window, cx));
+                window_handle
+                    .update(cx, |_, window, cx| on_release(entity, window, cx))
+                    .log_err();
             }),
         );
         activate();
@@ -5225,7 +5229,7 @@ impl Window {
             modifiers: self.interaction.modifiers,
             pressed_button: None,
         });
-        let _ = self.dispatch_event(event, cx);
+        self.dispatch_event(event, cx);
     }
 }
 

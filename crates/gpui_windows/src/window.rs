@@ -713,8 +713,8 @@ impl gpui::WindowHost for WindowsWindow {
                         ShowWindowAsync(hwnd, SW_RESTORE).ok().log_err();
                     }
 
-                    SetActiveWindow(hwnd).ok();
-                    SetFocus(Some(hwnd)).ok();
+                    SetActiveWindow(hwnd).ok().log_err();
+                    SetFocus(Some(hwnd)).ok().log_err();
                 }
 
                 // premium ragebait by windows, this is needed because the window
@@ -993,7 +993,7 @@ impl gpui::SystemServices for WindowsWindow {
 
     fn play_system_bell(&self) {
         // MB_OK: The sound specified as the Windows Default Beep sound.
-        let _ = unsafe { MessageBeep(MB_OK) };
+        unsafe { MessageBeep(MB_OK).ok().log_err() };
     }
 }
 
@@ -1578,7 +1578,9 @@ fn set_window_composition_attribute(hwnd: HWND, color: Option<Color>, state: u32
                 pv_data: &accent as *const _ as *mut _,
                 cb_data: std::mem::size_of::<AccentPolicy>(),
             };
-            let _ = set_window_composition_attribute(hwnd, &mut data as *mut _ as _);
+            set_window_composition_attribute(hwnd, &mut data as *mut _ as _)
+                .ok()
+                .log_err();
         }
     }
 }

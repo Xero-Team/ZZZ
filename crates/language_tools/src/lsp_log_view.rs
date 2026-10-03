@@ -72,7 +72,7 @@ pub fn open(
                         }
                     });
                 })
-                .ok();
+                .log_err();
         })
         .detach();
     })
@@ -593,7 +593,7 @@ impl LspLogView {
 
             server
                 .notify::<SetTrace>(SetTraceParams { value: level })
-                .ok();
+                .log_err();
         }
     }
 
@@ -676,7 +676,7 @@ fn send_toggle_log_message(
                         .log_err();
                 }
             })
-            .ok();
+            .log_err();
     }
 }
 

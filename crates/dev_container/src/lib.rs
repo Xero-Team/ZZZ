@@ -380,7 +380,7 @@ impl PickerDelegate for TemplatePickerDelegate {
                 };
                 fun(confirmed_entry.clone(), modal, window, cx);
             })
-            .ok();
+            .log_err();
     }
 
     fn dismissed(&mut self, window: &mut Window, cx: &mut Context<picker::Picker<Self>>) {
@@ -388,7 +388,7 @@ impl PickerDelegate for TemplatePickerDelegate {
             .update(cx, |modal, cx| {
                 modal.dismiss(&menu::Cancel, window, cx);
             })
-            .ok();
+            .log_err();
     }
 
     fn render_match(
@@ -545,7 +545,7 @@ impl PickerDelegate for FeaturePickerDelegate {
                 .update(cx, |modal, cx| {
                     (self.on_confirm)(self.template_entry.clone(), modal, window, cx)
                 })
-                .ok();
+                .log_err();
         } else {
             if self.matching_indices.is_empty() {
                 return;
@@ -577,7 +577,7 @@ impl PickerDelegate for FeaturePickerDelegate {
             .update(cx, |modal, cx| {
                 modal.dismiss(&menu::Cancel, window, cx);
             })
-            .ok();
+            .log_err();
     }
 
     fn render_match(
@@ -1165,14 +1165,14 @@ impl StatefulModal for DevContainerModal {
                             this.update_in(cx, |this, window, cx| {
                                 this.accept_message(message, window, cx);
                             })
-                            .ok();
+                            .log_err();
                         }
                         Err(e) => {
                             let message = DevContainerMessage::ErrorRetrievingTemplates(e);
                             this.update_in(cx, |this, window, cx| {
                                 this.accept_message(message, window, cx);
                             })
-                            .ok();
+                            .log_err();
                         }
                     }
                 })
@@ -1331,7 +1331,7 @@ impl StatefulModal for DevContainerModal {
                     this.update_in(cx, |this, window, cx| {
                         this.accept_message(message, window, cx);
                     })
-                    .ok();
+                    .log_err();
                 })
                 .detach();
                 Some(DevContainerState::QueryingFeatures(template_entry))
@@ -1593,7 +1593,7 @@ fn dispatch_apply_templates(
                         cx,
                     );
                 })
-                .ok();
+                .log_err();
                 return;
             }
 
@@ -1609,7 +1609,7 @@ fn dispatch_apply_templates(
                         cx,
                     );
                 })
-                .ok();
+                .log_err();
                 return;
             };
 
@@ -1634,7 +1634,7 @@ fn dispatch_apply_templates(
                             cx,
                         );
                     })
-                    .ok();
+                    .log_err();
                     return;
                 }
             };
@@ -1662,7 +1662,7 @@ fn dispatch_apply_templates(
             this.update_in(cx, |this, window, cx| {
                 this.dismiss(&menu::Cancel, window, cx);
             })
-            .ok();
+            .log_err();
         }
     })
     .detach();

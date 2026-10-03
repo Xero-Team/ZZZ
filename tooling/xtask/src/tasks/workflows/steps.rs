@@ -28,14 +28,6 @@ pub(crate) fn cargo_nextest(platform: Platform) -> Nextest {
 }
 
 impl Nextest {
-    #[allow(dead_code)]
-    pub(crate) fn with_filter_expr(mut self, filter_expr: &str) -> Self {
-        if let Some(nextest_command) = self.0.value.run.as_mut() {
-            nextest_command.push_str(&format!(r#" -E "{filter_expr}""#));
-        }
-        self
-    }
-
     pub(crate) fn with_changed_packages_filter(mut self, orchestrate_job: &str) -> Self {
         if let Some(nextest_command) = self.0.value.run.as_mut() {
             nextest_command.push_str(&format!(
@@ -393,7 +385,6 @@ impl<T> FluentBuilder for Step<T> {}
 /// A helper trait for building complex objects with imperative conditionals in a fluent style.
 /// Copied from GPUI to avoid adding GPUI as dependency
 /// todo(ci) just put this in gh-workflow
-#[allow(unused)]
 pub trait FluentBuilder {
     /// Imperatively modify self with the given closure.
     fn map<U>(self, f: impl FnOnce(Self) -> U) -> U
@@ -545,7 +536,6 @@ pub fn git_checkout(ref_name: &dyn std::fmt::Display) -> Step<Run> {
 ///
 /// See https://github.com/actions/create-github-app-token?tab=readme-ov-file#permission-permission-name
 /// and beyond for a full list of available permissions.
-#[allow(unused)]
 pub(crate) enum TokenPermissions {
     Contents,
     Issues,
@@ -739,13 +729,6 @@ impl GitRef {
         }
     }
 
-    fn update_ref_path(&self) -> String {
-        match self {
-            Self::Tag(name) => format!("tags/{name}"),
-            Self::Branch(name) => format!("heads/{name}"),
-        }
-    }
-
     fn kind(&self) -> &'static str {
         match self {
             Self::Tag(_) => "tag",
@@ -754,10 +737,8 @@ impl GitRef {
     }
 }
 
-#[allow(unused)]
 enum RefOperation {
     Create,
-    Update { force: bool },
 }
 
 struct RefOp {
@@ -769,17 +750,11 @@ struct RefOp {
 
 impl From<RefOp> for Step<Use> {
     fn from(op: RefOp) -> Self {
-        let (api_method, ref_path, force_line) = match &op.operation {
-            RefOperation::Create => ("createRef", op.git_ref.create_ref_path(), String::new()),
-            RefOperation::Update { force } => (
-                "updateRef",
-                op.git_ref.update_ref_path(),
-                format!(",\n    force: {force}"),
-            ),
+        let (api_method, ref_path) = match &op.operation {
+            RefOperation::Create => ("createRef", op.git_ref.create_ref_path()),
         };
         let step_name = match &op.operation {
             RefOperation::Create => format!("steps::create_{}", op.git_ref.kind()),
-            RefOperation::Update { .. } => format!("steps::update_{}", op.git_ref.kind()),
         };
         let sha = &op.sha;
         let script = indoc::formatdoc! {r#"
@@ -787,7 +762,7 @@ impl From<RefOp> for Step<Use> {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: '{ref_path}',
-                sha: '{sha}'{force_line}
+                sha: '{sha}'
             }})
         "#};
         Step::new(step_name)
@@ -812,21 +787,6 @@ pub(crate) fn create_ref(
     RefOp {
         git_ref,
         operation: RefOperation::Create,
-        sha: sha.to_string(),
-        token: token.to_string(),
-    }
-}
-
-#[allow(unused)]
-pub(crate) fn update_ref(
-    git_ref: GitRef,
-    sha: impl ToString,
-    token: &StepOutput,
-    force: bool,
-) -> impl Into<Step<Use>> {
-    RefOp {
-        git_ref,
-        operation: RefOperation::Update { force },
         sha: sha.to_string(),
         token: token.to_string(),
     }

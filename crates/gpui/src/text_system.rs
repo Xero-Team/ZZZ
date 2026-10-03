@@ -1326,7 +1326,6 @@ impl FontMetrics {
 }
 
 /// Maps well-known virtual font names to their concrete equivalents.
-#[allow(unused)]
 pub fn font_name_with_fallbacks<'a>(name: &'a str, system: &'a str) -> &'a str {
     // Note: the "ZZZ Plex" fonts were deprecated as we are not allowed to use "Plex"
     // in a derived font name. They are essentially indistinguishable from IBM Plex/Lilex,
@@ -1340,7 +1339,6 @@ pub fn font_name_with_fallbacks<'a>(name: &'a str, system: &'a str) -> &'a str {
 }
 
 /// Like [`font_name_with_fallbacks`] but accepts and returns [`SharedString`] references.
-#[allow(unused)]
 pub fn font_name_with_fallbacks_shared<'a>(
     name: &'a SharedString,
     system: &'a SharedString,

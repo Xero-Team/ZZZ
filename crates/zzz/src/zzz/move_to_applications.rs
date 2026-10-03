@@ -113,7 +113,7 @@ impl MoveToApplicationsRequest {
                         workspace
                             .toggle_modal(window, cx, |_window, cx| InstallingZZZModal::new(cx));
                     })
-                    .ok();
+                    .log_err();
                 if let Err(error) = move_to_applications(&self.app_path, cx).await {
                     let error_title = cx.update(|_, cx| {
                         tr(
@@ -129,7 +129,7 @@ impl MoveToApplicationsRequest {
                                 modal.update(cx, |modal, cx| modal.finished(cx));
                             }
                         })
-                        .ok();
+                        .log_err();
                     cx.prompt(
                         PromptLevel::Critical,
                         &error_title,

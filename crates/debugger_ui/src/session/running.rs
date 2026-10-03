@@ -1511,7 +1511,7 @@ impl RunningState {
 
                 let kvp = this
                     .read_with(cx, |_, cx| db::kvp::KeyValueStore::global(cx))
-                    .ok();
+                    .log_err();
                 if let Some(kvp) = kvp {
                     persistence::serialize_pane_layout(adapter_name, pane_layout, kvp)
                         .await
@@ -1521,7 +1521,7 @@ impl RunningState {
                 this.update(cx, |this, _| {
                     this._schedule_serialize.take();
                 })
-                .ok();
+                .log_err();
             }));
         }
     }
@@ -1573,7 +1573,7 @@ impl RunningState {
                 .update(cx, |workspace, cx| {
                     workspace.activate_pane_in_direction(direction, window, cx)
                 })
-                .ok();
+                .log_err();
         }
     }
 
@@ -1799,7 +1799,7 @@ impl RunningState {
                         cx,
                     )
                 })
-                .ok();
+                .log_err();
         } else {
             self.restart_session(cx);
         }

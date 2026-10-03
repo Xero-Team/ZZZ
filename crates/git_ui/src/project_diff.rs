@@ -414,7 +414,6 @@ impl ProjectDiff {
     }
 
     #[cfg(test)]
-    #[allow(dead_code)]
     fn new_with_default_branch(
         project: Entity<Project>,
         workspace: Entity<Workspace>,
