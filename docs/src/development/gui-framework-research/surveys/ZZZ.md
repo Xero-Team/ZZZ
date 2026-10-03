@@ -1,19 +1,19 @@
 # Static survey: ZZZ
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ`
-- HEAD: `34fb99e58d0dac953afb9a577a3aae6f99fb0c71`
-- Tracked files: 4920
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ`
+- HEAD: `152a5eb983a883c69a6cc4eae082312ba75aa9f9`
+- Tracked files: 5132
 
 ## Top-level subsystems
 
-- `crates`: 3012 files
+- `crates`: 3181 files
 - `vendor`: 913 files
 - `assets`: 472 files
-- `docs`: 221 files
-- `script`: 124 files
-- `tooling`: 49 files
+- `docs`: 242 files
+- `script`: 127 files
+- `tooling`: 50 files
 - `extensions`: 46 files
-- `.agents`: 12 files
+- `.agents`: 30 files
 - `nix`: 9 files
 - `.factory`: 8 files
 - `.github`: 6 files
@@ -119,7 +119,7 @@
 - `crates/grammars/vendor/tree-sitter-cmd/Cargo.toml`
 - `crates/grammars/vendor/tree-sitter-csv/Cargo.toml`
 - `crates/grammars/vendor/tree-sitter-dockerfile/Cargo.toml`
-- … 192 more
+- … 198 more
 
 ## Candidate entrypoints
 
@@ -152,6 +152,8 @@
 - `crates/grammars/vendor/tree-sitter-toml/bindings/rust/lib.rs`
 - `crates/grammars/vendor/tree-sitter-typescript/bindings/node/index.js`
 - `crates/grammars/vendor/tree-sitter-typescript/bindings/rust/lib.rs`
+- `crates/grammars/vendor/tree-sitter-typst/bindings/node/index.js`
+- `crates/grammars/vendor/tree-sitter-typst/bindings/rust/lib.rs`
 - `crates/languages/src/lib.rs`
 - `crates/project_benchmarks/src/main.rs`
 - `crates/release_channel/src/lib.rs`
@@ -201,9 +203,7 @@
 - `vendor/wgpu/wgpu-macros/src/lib.rs`
 - `vendor/wgpu/wgpu-naga-bridge/src/lib.rs`
 - `vendor/wgpu/wgpu-types/src/lib.rs`
-- `vendor/wgpu/wgpu/src/lib.rs`
-- `vendor/windows-capture/src/lib.rs`
-- … 6 more
+- … 8 more
 
 ## Tests, benchmarks, and evals
 
@@ -255,39 +255,39 @@
 - `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/issues.txt`
 - `crates/grammars/vendor/tree-sitter-md/tree-sitter-markdown/test/corpus/spec.txt`
 - `crates/grammars/vendor/tree-sitter-typescript/bindings/python/tests/test_binding.py`
+- `crates/grammars/vendor/tree-sitter-typst/bindings/python/tests/test_binding.py`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/audit_fixes.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/feedback.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/issues.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/modern_markup.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/proposed_matrix.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/regressions.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/scanner_edges.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/corpus/synthetic.txt`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/collections.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/equations.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/feedback-malformed.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/incremental.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/indent.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/invalid/expectations.json`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/invalid/malformed-nodes.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/invalid/missing-token.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/math-attachments.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/raw-modes.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/real_world_manifest.json`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/synthetic/complex-dashboard.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/fixtures/typst-015.typ`
+- `crates/grammars/vendor/tree-sitter-typst/test/incremental/delimiters.js`
+- `crates/grammars/vendor/tree-sitter-typst/test/incremental/edits.js`
+- `crates/grammars/vendor/tree-sitter-typst/test/incremental/package.json`
+- `crates/grammars/vendor/tree-sitter-typst/test/incremental/stress.js`
+- `crates/grammars/vendor/tree-sitter-typst/test/incremental/strings.js`
+- `crates/grammars/vendor/tree-sitter-typst/test/incremental/syntax-issues.js`
+- `crates/grammars/vendor/tree-sitter-typst/test/scanner/scanner_test.c`
 - `crates/mermaid_render/tests/check_invalid_attrs.rs`
 - `crates/project/tests/integration/agent_registry_store.rs`
 - `crates/project/tests/integration/bookmark_store.rs`
-- `crates/project/tests/integration/color_extractor.rs`
-- `crates/project/tests/integration/context_server_store.rs`
-- `crates/project/tests/integration/debugger.rs`
-- `crates/project/tests/integration/git_store.rs`
-- `crates/project/tests/integration/image_store.rs`
-- `crates/project/tests/integration/lsp_command.rs`
-- `crates/project/tests/integration/lsp_store.rs`
-- `crates/project/tests/integration/manifest_tree.rs`
-- `crates/project/tests/integration/project_search.rs`
-- `crates/project/tests/integration/project_tests.rs`
-- `crates/project/tests/integration/search.rs`
-- `crates/project/tests/integration/search_history.rs`
-- `crates/project/tests/integration/signature_help.rs`
-- `crates/project/tests/integration/task_inventory.rs`
-- `crates/project/tests/integration/trusted_worktrees.rs`
-- `crates/project/tests/integration/yarn.rs`
-- `crates/project_panel/src/tests/undo.rs`
-- `crates/scheduler/src/test_scheduler.rs`
-- `crates/task/test_data/rust-analyzer.json`
-- `crates/task/test_data/tasks-npm.json`
-- `crates/task/test_data/tasks-without-labels.json`
-- `crates/task/test_data/typescript.json`
-- `crates/util/src/test/assertions.rs`
-- `crates/util/src/test/marked_text.rs`
-- `crates/vim/src/test/neovim_backed_test_context.rs`
-- `crates/vim/src/test/neovim_connection.rs`
-- `crates/vim/src/test/vim_test_context.rs`
-- `crates/vim/test_data/neovim_backed_test_context_works.json`
-- `crates/vim/test_data/test_a.json`
-- … 326 more
+- … 355 more
 
 ## Architecture and policy documents
 
@@ -313,6 +313,9 @@
 - `crates/grammars/vendor/tree-sitter-md/bindings/swift/README.md`
 - `crates/grammars/vendor/tree-sitter-toml/README.md`
 - `crates/grammars/vendor/tree-sitter-typescript/README.md`
+- `crates/grammars/vendor/tree-sitter-typst/README.md`
+- `crates/grammars/vendor/tree-sitter-typst/editors/emacs/README.md`
+- `crates/grammars/vendor/tree-sitter-typst/editors/helix/README.md`
 - `crates/icons/README.md`
 - `crates/inspector_ui/README.md`
 - `crates/schema_generator/README.md`
@@ -392,6 +395,7 @@
 - `backtrace`
 - `base64`
 - `betlang`
+- `bindgen`
 - `bit-set`
 - `bit-vec`
 - `bitflags`
@@ -418,7 +422,6 @@
 - `client`
 - `clock`
 - `cloud_api_types`
-- `codebook-tree-sitter-typst`
 - `codespan-reporting`
 - `collections`
 - `colored`
@@ -433,33 +436,33 @@
 - `cpal`
 - `credentials_provider`
 - `criterion`
-- … 472 more
+- … 476 more
 
 ## Architecture keyword hints
 
 - **agent**: `.ZZZ/settings.json`, `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/absorbing-upstream/SKILL.md`, `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/auditing-upstream/SKILL.md`, `.agents/skills/creating-agents/REFERENCE.md`, `.agents/skills/creating-agents/SKILL.md`, `.agents/skills/creating-skills/REFERENCE.md`, `.agents/skills/creating-skills/SKILL.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `.agents/skills/hunting-code-smells/REFERENCE.md`
-- **benchmark**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `Cargo.toml`, `crates/editor/benches/display_map.rs`, `crates/editor/benches/editor_render.rs`, `crates/editor_benchmarks/Cargo.toml`, `crates/editor_benchmarks/src/main.rs`, `crates/eval_utils/src/eval_utils.rs`, `crates/extension_host/Cargo.toml`, `crates/extension_host/benches/extension_compilation_benchmark.rs`, `crates/fs_benchmarks/Cargo.toml`, `crates/fuzzy_nucleo/Cargo.toml`, `crates/fuzzy_nucleo/benches/match_benchmark.rs`
-- **browser**: `assets/locales/en.json`, `crates/agent_servers/src/custom.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/client/src/client.rs`, `crates/context_server/src/oauth.rs`, `crates/dap_adapters/src/codelldb.rs`, `crates/dap_adapters/src/go.rs`, `crates/dap_adapters/src/javascript.rs`, `crates/dap_adapters/src/python.rs`, `crates/debugger_ui/src/debugger_ui.rs`, `crates/dev_container/src/devcontainer_json.rs`, `crates/docs/src/docs.rs`
-- **cache**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.cargo/config.toml`, `Cargo.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent/src/db.rs`, `crates/agent/src/tool_permissions.rs`, `crates/agent_ui/src/agent_panel.rs`, `crates/agent_ui/src/config_options.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_metadata_store.rs`, `crates/agent_ui/src/threads_archive_view.rs`
-- **checkpoint**: `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_worktree_archive.rs`, `crates/fs/src/fake_git_repo.rs`, `crates/fs/src/fs.rs`, `crates/fs/tests/integration/fake_git_repo_tests.rs`, `crates/git/src/repository.rs`, `crates/project/src/git_store.rs`, `crates/proto/src/proto.rs`, `crates/remote_server/src/remote_editing_tests.rs`
-- **citation**: `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_diff.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/agent_ui/src/conversation_view/thread_search_bar.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/entry_view_state.rs`, `crates/html_to_markdown/src/structure/wikipedia.rs`
-- **embed**: `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.github/workflows/ci.yaml`, `Cargo.toml`, `assets/locales/en.json`, `assets/themes/ayu/ayu.json`, `assets/themes/gruvbox/gruvbox.json`, `assets/themes/one/one.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_ui/src/agent_panel.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_search_bar.rs`
-- **evaluation**: `Cargo.toml`, `crates/agent_settings/src/agent_settings.rs`, `crates/editor/src/runnables.rs`, `crates/eval_utils/src/eval_utils.rs`, `docs/src/development/text-layout.md`, `vendor/dap-types/dap-types/src/types.rs`, `vendor/dap-types/schema.json`, `vendor/gh-workflow/crates/gh-workflow/src/expression.rs`, `vendor/lsp-types/src/inline_value.rs`, `vendor/wgpu/naga/src/back/mod.rs`, `vendor/wgpu/naga/src/back/msl/writer.rs`, `vendor/wgpu/naga/src/back/pipeline_constants.rs`
-- **graph**: `.config/nextest.toml`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/taboo-phrases.md`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/emacs.json`, `assets/keymaps/macos/emacs.json`, `assets/keymaps/vim.json`
-- **index**: `.agents/skills/hunting-code-smells/REFERENCE.md`, `.factory/prompts/crash/investigate.md`, `CLAUDE.md`, `Cargo.toml`, `GEMINI.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `clippy.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/acp_thread/src/mention.rs`
-- **mcp**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.factory/prompts/crash/investigate.md`, `.factory/prompts/crash/link-issues.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/agent/src/tool_permissions.rs`, `crates/agent/src/tool_protocol.rs`, `crates/agent/src/tools/context_server_registry.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_servers/src/agent_servers.rs`
-- **oauth**: `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_configuration/configure_context_server_modal.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/context_server/src/client.rs`, `crates/context_server/src/context_server.rs`, `crates/context_server/src/oauth.rs`, `crates/context_server/src/protocol.rs`, `crates/context_server/src/transport.rs`, `crates/context_server/src/transport/http.rs`
-- **plugin**: `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/agent/src/tool_permissions.rs`, `crates/dev_container/src/devcontainer_manifest.rs`, `crates/extension_host/src/extension_host.rs`, `crates/grammars/src/xml/config.toml`, `crates/grammars/src/xsd/config.toml`, `crates/json_schema_store/src/schemas/tsconfig.json`, `crates/language/src/language.rs`, `crates/language/src/language_settings.rs`, `crates/languages/src/python.rs`
-- **provider**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `Cargo.toml`, `README.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent/src/tool_protocol.rs`, `crates/agent/src/tools.rs`
-- **queue**: `CLAUDE.md`, `GEMINI.md`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_ui.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_metadata_store.rs`
-- **rank**: `.agents/skills/hunting-code-smells/SKILL.md`, `crates/command_palette/src/command_palette.rs`, `crates/editor/src/code_completion_tests.rs`, `crates/editor/src/cursor_animation.rs`, `crates/fuzzy_nucleo/src/fuzzy_nucleo.rs`, `crates/fuzzy_nucleo/src/strings.rs`, `crates/git_ui/src/worktree_names.rs`, `crates/gpui_wgpu/src/wgpu_context.rs`, `crates/recent_projects/src/remote_servers/filter.rs`, `crates/repl/src/outputs.rs`, `crates/terminal/src/terminal_hyperlinks.rs`, `crates/theme_importer/src/vscode/syntax.rs`
-- **retriev**: `.agents/skills/creating-agents/REFERENCE.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/connection.rs`, `crates/agent/src/db.rs`, `crates/agent_ui/src/thread_metadata_store.rs`, `crates/cli/src/main.rs`, `crates/command_palette/src/persistence.rs`, `crates/dev_container/src/lib.rs`, `crates/editor/src/display_map/fold_map.rs`, `crates/editor/src/document_colors.rs`, `crates/editor/src/editor.rs`
-- **sandbox**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/unicode_confusables.rs`, `crates/cli/src/main.rs`, `docs/src/development/linux.md`, `docs/src/development/upstream-sync-2026-07-03.md`, `docs/src/development/upstream-sync-2026-08-07.md`, `docs/src/development/upstream-sync-2026-09-02.md`, `docs/src/development/upstream-sync-2026-09-22-acp-elicitation.md`, `docs/src/development/upstream-sync-2026-10-02.md`
-- **search**: `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/creating-agents/REFERENCE.md`, `.agents/skills/creating-agents/SKILL.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/voice-examples.md`, `.factory/skills/humanizer/SKILL.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`
-- **symbol**: `.cargo/config.toml`, `.factory/skills/humanizer/SKILL.md`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/atom.json`, `assets/keymaps/linux/emacs.json`, `assets/keymaps/linux/jetbrains.json`, `assets/keymaps/linux/sublime_text.json`, `assets/keymaps/macos/atom.json`
-- **telemetry**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `.agents/skills/hunting-code-smells/REFERENCE.md`, `.agents/skills/hunting-code-smells/SKILL.md`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `README.md`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_panel.rs`
-- **tree_sitter**: `crates/debugger_ui/src/debugger_panel.rs`, `crates/debugger_ui/src/tests/inline_values.rs`, `crates/editor/src/bracket_colorization.rs`, `crates/editor/src/code_lens.rs`, `crates/editor/src/display_map.rs`, `crates/editor/src/display_map/block_map.rs`, `crates/editor/src/display_map/custom_highlights.rs`, `crates/editor/src/display_map/fold_map.rs`, `crates/editor/src/display_map/inlay_map.rs`, `crates/editor/src/display_map/tab_map.rs`, `crates/editor/src/display_map/wrap_map.rs`, `crates/editor/src/document_symbols.rs`
-- **vector**: `Cargo.toml`, `crates/agent_ui/src/message_editor.rs`, `crates/clock/src/clock.rs`, `crates/collections/src/vecmap.rs`, `crates/diagnostics/src/buffer_diagnostics.rs`, `crates/editor/src/cursor_animation.rs`, `crates/editor/src/display_map/tab_map.rs`, `crates/editor/src/hover_popover.rs`, `crates/fs/src/fs.rs`, `crates/gpui/src/elements/deferred.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/path_builder.rs`
+- **benchmark**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/evidence-reporting.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `Cargo.toml`, `crates/editor/benches/display_map.rs`, `crates/editor/benches/editor_render.rs`, `crates/editor_benchmarks/Cargo.toml`, `crates/editor_benchmarks/src/main.rs`
+- **browser**: `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `assets/locales/en.json`, `crates/agent_servers/src/custom.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/client/src/client.rs`, `crates/context_server/src/oauth.rs`, `crates/dap_adapters/src/codelldb.rs`, `crates/dap_adapters/src/go.rs`
+- **cache**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.cargo/config.toml`, `Cargo.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent/src/db.rs`, `crates/agent/src/tool_permissions.rs`, `crates/agent_ui/src/agent_panel.rs`, `crates/agent_ui/src/config_options.rs`
+- **checkpoint**: `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_worktree_archive.rs`, `crates/fs/src/fake_git_repo.rs`, `crates/fs/src/fs.rs`, `crates/fs/tests/integration/fake_git_repo_tests.rs`, `crates/git/src/repository.rs`
+- **citation**: `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/evidence-reporting.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_diff.rs`
+- **embed**: `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/_common.py`, `.agents/skills/repository-research/scripts/clone_sources.py`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.agents/skills/repository-research/scripts/verify_sources.py`, `.github/workflows/ci.yaml`, `Cargo.toml`, `assets/locales/en.json`, `assets/themes/ayu/ayu.json`, `assets/themes/gruvbox/gruvbox.json`
+- **evaluation**: `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/evidence-reporting.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `Cargo.toml`, `crates/agent_settings/src/agent_settings.rs`, `crates/editor/src/runnables.rs`, `crates/eval_utils/src/eval_utils.rs`, `docs/src/development/gui-framework-research/surveys/ZZZ.md`, `docs/src/development/gui-framework-research/surveys/gpui-ce.md`
+- **graph**: `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.config/nextest.toml`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/taboo-phrases.md`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`
+- **index**: `.agents/skills/hunting-code-smells/REFERENCE.md`, `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/evidence-reporting.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.factory/prompts/crash/investigate.md`, `CLAUDE.md`, `Cargo.toml`, `GEMINI.md`, `assets/locales/en.json`
+- **mcp**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.factory/prompts/crash/investigate.md`, `.factory/prompts/crash/link-issues.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`
+- **oauth**: `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_configuration/configure_context_server_modal.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/context_server/src/client.rs`, `crates/context_server/src/context_server.rs`, `crates/context_server/src/oauth.rs`, `crates/context_server/src/protocol.rs`, `crates/context_server/src/transport.rs`
+- **plugin**: `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`, `crates/agent/src/tool_permissions.rs`, `crates/dev_container/src/devcontainer_manifest.rs`, `crates/extension_host/src/extension_host.rs`, `crates/grammars/src/xml/config.toml`, `crates/grammars/src/xsd/config.toml`, `crates/grammars/vendor/tree-sitter-typst/README.md`
+- **provider**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `Cargo.toml`, `README.md`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `assets/settings/default.json`
+- **queue**: `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `CLAUDE.md`, `GEMINI.md`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_ui.rs`, `crates/agent_ui/src/conversation_view.rs`
+- **rank**: `.agents/skills/hunting-code-smells/SKILL.md`, `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `crates/command_palette/src/command_palette.rs`, `crates/editor/src/code_completion_tests.rs`, `crates/editor/src/cursor_animation.rs`, `crates/fuzzy_nucleo/src/fuzzy_nucleo.rs`, `crates/fuzzy_nucleo/src/strings.rs`, `crates/git_ui/src/worktree_names.rs`
+- **retriev**: `.agents/skills/creating-agents/REFERENCE.md`, `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/references/acquisition.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `assets/locales/en.json`, `assets/locales/zh-CN.json`, `crates/acp_thread/src/connection.rs`, `crates/agent/src/db.rs`, `crates/agent_ui/src/thread_metadata_store.rs`
+- **sandbox**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent_ui/src/conversation_view.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/unicode_confusables.rs`, `crates/cli/src/main.rs`, `docs/src/development/gui-framework-research/surveys/ZZZ.md`, `docs/src/development/gui-framework-research/surveys/avalonia.md`
+- **search**: `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/creating-agents/REFERENCE.md`, `.agents/skills/creating-agents/SKILL.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/repository-research/SKILL.md`, `.agents/skills/repository-research/agents/openai.yaml`, `.agents/skills/repository-research/references/acquisition.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/evidence-reporting.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/_common.py`
+- **symbol**: `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.cargo/config.toml`, `.factory/skills/humanizer/SKILL.md`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/atom.json`
+- **telemetry**: `.agents/skills/absorbing-upstream/REFERENCE.md`, `.agents/skills/auditing-upstream/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/REFERENCE.md`, `.agents/skills/enforcing-philosophy-absence/SKILL.md`, `.agents/skills/hunting-code-smells/REFERENCE.md`, `.agents/skills/hunting-code-smells/SKILL.md`, `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/comparison.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `README.md`, `crates/acp_thread/src/acp_thread.rs`
+- **tree_sitter**: `.agents/skills/repository-research/scripts/survey_repositories.py`, `crates/debugger_ui/src/debugger_panel.rs`, `crates/debugger_ui/src/tests/inline_values.rs`, `crates/editor/src/bracket_colorization.rs`, `crates/editor/src/code_lens.rs`, `crates/editor/src/display_map.rs`, `crates/editor/src/display_map/block_map.rs`, `crates/editor/src/display_map/custom_highlights.rs`, `crates/editor/src/display_map/fold_map.rs`, `crates/editor/src/display_map/inlay_map.rs`, `crates/editor/src/display_map/tab_map.rs`, `crates/editor/src/display_map/wrap_map.rs`
+- **vector**: `.agents/skills/repository-research/references/codebase-analysis.md`, `.agents/skills/repository-research/references/research-systems.md`, `.agents/skills/repository-research/scripts/survey_repositories.py`, `Cargo.toml`, `crates/agent_ui/src/message_editor.rs`, `crates/clock/src/clock.rs`, `crates/collections/src/vecmap.rs`, `crates/diagnostics/src/buffer_diagnostics.rs`, `crates/editor/src/cursor_animation.rs`, `crates/editor/src/display_map/tab_map.rs`, `crates/editor/src/hover_popover.rs`, `crates/fs/src/fs.rs`
 
 ## Interpretation limit
 

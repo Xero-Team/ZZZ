@@ -1,7 +1,7 @@
 repository_a	repository_b	common_paths	byte_identical	changed_common_paths	only_a	only_b
-zzz	zed	77	9	68	1	16
-zzz	gpui-ce	76	7	69	2	25
-zzz	gpui-toolkit	77	13	64	1	6
-zed	gpui-ce	89	26	63	4	12
-zed	gpui-toolkit	81	26	55	12	2
-gpui-ce	gpui-toolkit	80	22	58	21	3
+zzz	zed	119	11	108	1	25
+zzz	gpui-ce	78	8	70	42	80
+zzz	gpui-toolkit	79	14	65	41	6
+zed	gpui-ce	98	28	70	46	60
+zed	gpui-toolkit	83	27	56	61	2
+gpui-ce	gpui-toolkit	81	24	57	77	4

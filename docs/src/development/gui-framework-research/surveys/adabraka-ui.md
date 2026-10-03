@@ -1,6 +1,6 @@
 # Static survey: adabraka-ui
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/adabraka-ui`
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ/.tmp/ui_ref/adabraka-ui`
 - HEAD: `e158684b23d9cb043fed3989ca252212046dabca`
 - Tracked files: 3634
 

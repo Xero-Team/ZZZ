@@ -1,6 +1,6 @@
 # Static survey: avalonia
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/avalonia`
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ/.tmp/ui_ref/avalonia`
 - HEAD: `17350180c33b063f0e98abbfd19aa3cae63f5d56`
 - Tracked files: 5905
 

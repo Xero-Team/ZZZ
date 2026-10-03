@@ -1,12 +1,12 @@
 # Static survey: zed
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/zed`
-- HEAD: `23d10a4754bb917e635b584b5686bc492ea25995`
-- Tracked files: 4350
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ/.tmp/ui_ref/zed`
+- HEAD: `a84689073d296dfd39987bc7dd478e43ef76d83a`
+- Tracked files: 4356
 
 ## Top-level subsystems
 
-- `crates`: 3217 files
+- `crates`: 3223 files
 - `assets`: 471 files
 - `docs`: 229 files
 - `script`: 130 files
@@ -289,105 +289,113 @@
 
 ## Declared dependencies
 
+- `@types/node`
 - `accesskit`
+- `acp_thread`
+- `acp_tools`
+- `action_log`
+- `activity_indicator`
+- `agent`
+- `agent-client-protocol`
+- `agent_servers`
+- `agent_settings`
+- `agent_skills`
+- `agent_ui`
+- `aho-corasick`
+- `ai_onboarding`
+- `alacritty_terminal`
+- `annotate-snippets`
+- `anthropic`
+- `any_vec`
 - `anyhow`
+- `arc-swap`
+- `arrayvec`
+- `askpass`
+- `assets`
+- `async-channel`
+- `async-compat`
+- `async-compression`
+- `async-dispatcher`
+- `async-fs`
+- `async-io`
+- `async-lock`
+- `async-pipe`
+- `async-process`
+- `async-recursion`
+- `async-tar`
 - `async-task`
+- `async-trait`
+- `async-tungstenite`
+- `async_zip`
+- `audio`
+- `auto_update`
+- `auto_update_ui`
+- `aws-config`
+- `aws-credential-types`
+- `aws-sdk-bedrockruntime`
+- `aws-sdk-kinesis`
+- `aws-sdk-s3`
+- `aws-sigv4`
+- `aws-smithy-runtime-api`
+- `aws-smithy-types`
+- `aws_http_client`
+- `axum`
 - `backtrace`
+- `base64`
+- `bedrock`
 - `bench_metrics`
+- `betlang`
 - `bitflags`
+- `breadcrumbs`
+- `brush-parser`
+- `buffer_diff`
 - `bytemuck`
+- `bytes`
+- `call`
+- `call_hierarchy`
+- `cargo_metadata`
+- `cargo_toml`
+- `channel`
+- `chardetng`
 - `chrono`
-- `collections`
-- `cosmic-text`
-- `criterion`
-- `ctor`
-- `derive_more`
-- `embed-resource`
-- `env_logger`
-- `etagere`
-- `font-kit`
-- `futures`
-- `futures-concurrency`
-- `gpui`
-- `gpui_macros`
-- `gpui_platform`
-- `gpui_shared_string`
-- `gpui_util`
-- `hdrhistogram`
-- `heapless`
-- `heck`
-- `http_client`
-- `image`
-- `inventory`
-- `itertools`
-- `log`
-- `lyon`
-- `naga`
-- `num_cpus`
-- `parking`
-- `parking_lot`
-- `pin-project`
-- `pollster`
-- `postage`
-- `proc-macro2`
-- `profiling`
-- `proptest`
-- `quote`
-- `rand`
-- `raw-window-handle`
-- `refineable`
-- `regex`
-- `resvg`
-- `scheduler`
-- `schemars`
-- `seahash`
-- `serde`
-- `serde_json`
-- `slotmap`
-- `smallvec`
-- `smol_str`
-- `spin`
-- `stacksafe`
-- `strum`
-- `sum_tree`
-- `swash`
-- `syn`
-- `taffy`
-- `thiserror`
-- `tokio`
-- `ttf-parser`
-- `unicode-bidi`
-- `unicode-properties`
-- `unicode-script`
-- `unicode-segmentation`
-- `url`
-- `usvg`
-- `util_macros`
-- `uuid`
-- `waker-fn`
-- `wasm-bindgen`
-- `wasm_thread`
-- `web-sys`
-- `web-time`
-- … 1 more
+- `ciborium`
+- `circular-buffer`
+- `clap`
+- `clap_complete`
+- `clap_complete_nushell`
+- `cli`
+- `client`
+- `clippy_utils`
+- `clock`
+- `cloud_api_client`
+- `cloud_api_types`
+- … 450 more
 
 ## Architecture keyword hints
 
-- **agent**: `crates/gpui/examples/image/image.rs`, `crates/gpui/examples/image_gallery.rs`, `crates/gpui/src/app.rs`, `crates/gpui/src/keymap.rs`, `crates/gpui_macros/src/derive_inspector_reflection.rs`, `crates/gpui_macros/tests/derive_inspector_reflection.rs`, `crates/gpui_web/src/events.rs`, `crates/gpui_web/src/http_client.rs`, `crates/gpui_web/src/platform.rs`, `crates/gpui_windows/src/window.rs`
-- **benchmark**: `crates/gpui/examples/README.md`, `crates/gpui/src/app/bench_context.rs`, `crates/gpui/src/gpui.rs`, `crates/gpui/src/platform/test/platform.rs`, `crates/gpui/src/platform/threaded_dispatcher.rs`, `crates/gpui/src/randomized_element_tree.rs`, `crates/gpui/src/seeds.rs`, `crates/gpui_apple/src/metal_renderer.rs`, `crates/gpui_macros/src/bench.rs`, `crates/gpui_macros/src/gpui_macros.rs`, `crates/gpui_platform/benches/randomized_element_tree.rs`, `crates/gpui_platform/src/gpui_platform.rs`
-- **browser**: `crates/gpui/examples/README.md`, `crates/gpui/src/_accessibility.rs`, `crates/gpui/src/app.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/geometry.rs`, `crates/gpui/src/gestures.rs`, `crates/gpui/src/platform.rs`, `crates/gpui_linux/src/linux/wayland/client.rs`, `crates/gpui_web/examples/hello_web/dynamic_fonts.rs`, `crates/gpui_web/examples/hello_web/queue_test.rs`, `crates/gpui_web/src/canvas_fallback.rs`, `crates/gpui_web/src/dispatcher.rs`
-- **cache**: `crates/gpui/examples/README.md`, `crates/gpui/examples/image_gallery.rs`, `crates/gpui/examples/image_loading.rs`, `crates/gpui/examples/view_example/example_editor.rs`, `crates/gpui/examples/view_example/example_input.rs`, `crates/gpui/examples/view_example/example_text_area.rs`, `crates/gpui/src/app.rs`, `crates/gpui/src/app/bench_context.rs`, `crates/gpui/src/asset_cache.rs`, `crates/gpui/src/assets.rs`, `crates/gpui/src/bounds_tree.rs`, `crates/gpui/src/elements/deferred.rs`
-- **embed**: `crates/gpui/Cargo.toml`, `crates/gpui/build.rs`, `crates/gpui/examples/view_example/example_editor.rs`, `crates/gpui/src/app.rs`, `crates/gpui/src/asset_cache.rs`, `crates/gpui/src/elements/img.rs`, `crates/gpui/src/view.rs`, `crates/gpui_apple/build.rs`, `crates/gpui_macos/src/text_system.rs`, `crates/gpui_web/examples/hello_web/main.rs`, `crates/gpui_web/examples/hello_web/trunk.toml`, `crates/gpui_windows/src/clipboard.rs`
-- **graph**: `crates/gpui/examples/README.md`, `crates/gpui/examples/input.rs`, `crates/gpui/examples/text.rs`, `crates/gpui/examples/view_example/example_editor.rs`, `crates/gpui/src/app.rs`, `crates/gpui/src/asset_cache.rs`, `crates/gpui/src/geometry.rs`, `crates/gpui/src/platform.rs`, `crates/gpui/src/text_system.rs`, `crates/gpui/src/view.rs`, `crates/gpui_apple/Cargo.toml`, `crates/gpui_apple/src/metal_renderer.rs`
-- **index**: `crates/gpui/examples/README.md`, `crates/gpui/examples/anchor.rs`, `crates/gpui/examples/focus_visible.rs`, `crates/gpui/examples/input.rs`, `crates/gpui/examples/list_example.rs`, `crates/gpui/examples/tab_stop.rs`, `crates/gpui/examples/view_example/example_editor.rs`, `crates/gpui/src/_accessibility.rs`, `crates/gpui/src/app.rs`, `crates/gpui/src/app/async_context.rs`, `crates/gpui/src/arena.rs`, `crates/gpui/src/assets.rs`
-- **provider**: `crates/gpui/examples/image_gallery.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/elements/image_cache.rs`, `crates/gpui_macos/src/text_system.rs`, `crates/gpui_macos/src/window.rs`, `crates/gpui_windows/src/events.rs`, `crates/gpui_windows/src/platform.rs`, `crates/gpui_windows/src/vsync.rs`, `crates/gpui_windows/src/window.rs`
-- **queue**: `crates/gpui/src/app.rs`, `crates/gpui/src/app/async_context.rs`, `crates/gpui/src/app/bench_context.rs`, `crates/gpui/src/executor.rs`, `crates/gpui/src/gpui.rs`, `crates/gpui/src/platform.rs`, `crates/gpui/src/platform/test/platform.rs`, `crates/gpui/src/platform/threaded_dispatcher.rs`, `crates/gpui/src/platform_scheduler.rs`, `crates/gpui/src/profiler/journal.rs`, `crates/gpui/src/queue.rs`, `crates/gpui/src/text_system.rs`
-- **rank**: `crates/gpui/src/keymap.rs`, `crates/gpui_wgpu/src/wgpu_context.rs`
-- **retriev**: `crates/gpui/src/app/test_context.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/elements/text.rs`, `crates/gpui/src/keymap/binding.rs`, `crates/gpui/src/platform.rs`, `crates/gpui/src/text_system/line_layout.rs`, `crates/gpui_apple/src/metal_renderer.rs`, `crates/gpui_linux/src/linux/x11/client.rs`, `crates/gpui_macos/src/text_system.rs`, `crates/gpui_wgpu/src/cosmic_text_system.rs`, `crates/gpui_windows/src/events.rs`, `crates/gpui_windows/src/vsync.rs`
-- **search**: `crates/gpui/src/app.rs`, `crates/gpui/src/bounds_tree.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/key_dispatch.rs`, `crates/gpui/src/platform.rs`, `crates/gpui/src/window.rs`, `crates/gpui_linux/src/linux/platform.rs`, `crates/gpui_macos/src/text_system.rs`, `crates/gpui_web/examples/hello_web/main.rs`, `crates/gpui_web/src/ime_mirror.rs`
-- **symbol**: `crates/gpui/examples/data_table.rs`, `crates/gpui/src/app/entity_map.rs`, `crates/gpui/src/svg_renderer.rs`, `crates/gpui_linux/src/linux/platform.rs`, `crates/gpui_macos/src/open_type.rs`, `crates/gpui_macos/src/text_system.rs`, `crates/gpui_web/src/canvas_fallback.rs`, `crates/gpui_windows/src/direct_write.rs`
-- **telemetry**: `crates/gpui/src/interactive.rs`, `crates/gpui/src/profiler/hang.rs`
-- **vector**: `crates/gpui/src/elements/deferred.rs`, `crates/gpui/src/elements/div.rs`, `crates/gpui/src/gestures.rs`, `crates/gpui/src/path_builder.rs`, `crates/gpui/src/scene.rs`, `crates/gpui/src/window.rs`, `crates/gpui_macos/src/text_system.rs`, `crates/gpui_web/src/run_replacements.rs`, `crates/gpui_web/src/text_system.rs`, `crates/gpui_wgpu/src/cosmic_text_system.rs`, `crates/gpui_windows/src/direct_write.rs`
+- **agent**: `.agents/skills/gpui-bench/SKILL.md`, `.config/typos.toml`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/humanizer/SKILL.md`, `.github/ISSUE_TEMPLATE/10_bug_report.yml`, `.zed/settings.json`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `Cargo.toml`, `GEMINI.md`, `assets/keymaps/default-linux.json`
+- **benchmark**: `.agents/skills/gpui-bench/SKILL.md`, `.github/pull_request_template.md`, `.github/workflows/run_tests.yml`, `.wezel/schema.json`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `Cargo.toml`, `GEMINI.md`, `crates/bench_metrics/src/bench_metrics.rs`, `crates/benchmarks/Cargo.toml`, `crates/benchmarks/benches/display_map.rs`
+- **browser**: `crates/acp_thread/src/acp_thread.rs`, `crates/agent/src/tools/context_server_registry.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_servers/src/custom.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/auto_update/src/auto_update.rs`, `crates/auto_update_ui/src/auto_update_ui.rs`, `crates/client/src/client.rs`, `crates/context_server/src/oauth.rs`, `crates/dap_adapters/src/codelldb.rs`, `crates/dap_adapters/src/go.rs`, `crates/dap_adapters/src/javascript.rs`
+- **cache**: `.agents/skills/gpui-bench/SKILL.md`, `.agents/skills/lint-creator/SKILL.md`, `.cargo/config.toml`, `.github/workflows/autofix_pr.yml`, `.github/workflows/community_update_all_top_ranking_issues.yml`, `.github/workflows/community_update_weekly_top_ranking_issues.yml`, `.github/workflows/compliance_check.yml`, `.github/workflows/danger.yml`, `.github/workflows/deploy_collab.yml`, `.github/workflows/deploy_docs.yml`, `.github/workflows/extension_bump.yml`, `.github/workflows/extension_tests.yml`
+- **checkpoint**: `corgi.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent/src/tests/mod.rs`, `crates/agent_ui/src/conversation_view/thread_view.rs`, `crates/agent_ui/src/thread_worktree_archive.rs`, `crates/collab/src/rpc.rs`, `crates/fs/src/fake_git_repo.rs`, `crates/fs/src/fs.rs`, `crates/fs/tests/integration/fake_git_repo_tests.rs`, `crates/git/src/repository.rs`, `crates/project/src/git_store.rs`, `crates/project/tests/integration/project_tests.rs`
+- **citation**: `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/agent/src/agent.rs`, `crates/agent/src/thread.rs`, `crates/agent/src/tools/ask_user_tool.rs`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_diff.rs`, `crates/agent_ui/src/agent_panel.rs`, `crates/agent_ui/src/conversation_view.rs`
+- **embed**: `.wezel/schema.json`, `Cargo.toml`, `assets/themes/ayu/ayu.json`, `assets/themes/gruvbox/gruvbox.json`, `assets/themes/one/one.json`, `corgi.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/acp_thread/src/content.rs`, `crates/agent/Cargo.toml`, `crates/agent/src/agent.rs`, `crates/agent/src/templates.rs`
+- **evaluation**: `crates/agent/src/tools/evals/fixtures/disable_cursor_blinking/before.rs`, `crates/agent_settings/src/agent_settings.rs`, `crates/edit_prediction_cli/src/example.rs`, `crates/edit_prediction_cli/src/main.rs`, `crates/edit_prediction_cli/src/qa.rs`, `crates/edit_prediction_cli/src/split_commit.rs`, `crates/edit_prediction_metrics/src/main.rs`, `crates/editor/src/runnables.rs`, `crates/eval_cli/README.md`, `crates/eval_cli/src/main.rs`, `crates/eval_cli/zed_eval/rejudge.py`, `crates/eval_utils/src/eval_utils.rs`
+- **graph**: `.agents/skills/gpui-bench/SKILL.md`, `.config/nextest.toml`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/taboo-phrases.md`, `.github/workflows/extension_bump.yml`, `.github/workflows/run_tests.yml`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/emacs.json`
+- **index**: `.agents/skills/gpui-bench/SKILL.md`, `.agents/skills/zed-cherry-pick/SKILL.md`, `.cloudflare/docs-proxy/src/worker.js`, `.factory/prompts/crash/investigate.md`, `.github/workflows/docs_suggestions.yml`, `.github/workflows/slack_notify_first_responders.yml`, `AGENTS.md`, `CLAUDE.md`, `Cargo.toml`, `GEMINI.md`, `assets/settings/default.json`, `clippy.toml`
+- **mcp**: `.factory/prompts/crash/investigate.md`, `.factory/prompts/crash/link-issues.md`, `.github/ISSUE_TEMPLATE/10_bug_report.yml`, `assets/settings/default.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/agent/src/agent.rs`, `crates/agent/src/tests/mod.rs`, `crates/agent/src/thread.rs`, `crates/agent/src/tool_permissions.rs`, `crates/agent/src/tools.rs`, `crates/agent/src/tools/context_server_registry.rs`, `crates/agent/src/tools/evals/fixtures/from_pixels_constructor/before.rs`
+- **oauth**: `Cargo.toml`, `crates/agent_servers/src/acp.rs`, `crates/agent_ui/src/agent_configuration/configure_context_server_modal.rs`, `crates/agent_ui/src/conversation_view/elicitation.rs`, `crates/context_server/Cargo.toml`, `crates/context_server/src/client.rs`, `crates/context_server/src/context_server.rs`, `crates/context_server/src/oauth.rs`, `crates/context_server/src/protocol.rs`, `crates/context_server/src/transport.rs`, `crates/context_server/src/transport/http.rs`, `crates/copilot/src/copilot.rs`
+- **plugin**: `.wezel/schema.json`, `assets/settings/default.json`, `crates/agent/src/tool_permissions.rs`, `crates/collab/tests/integration/integration_tests.rs`, `crates/collab/tests/integration/remote_editing_collaboration_tests.rs`, `crates/copilot/src/copilot.rs`, `crates/copilot/src/request.rs`, `crates/dev_container/src/devcontainer_manifest.rs`, `crates/edit_prediction_context/src/fake_definition_lsp.rs`, `crates/extension_host/src/extension_host.rs`, `crates/extension_host/src/extension_store_test.rs`, `crates/git_hosting_providers/src/providers/gitiles.rs`
+- **provider**: `.github/ISSUE_TEMPLATE/10_bug_report.yml`, `.github/workflows/nix_build.yml`, `.github/workflows/release_nightly.yml`, `Cargo.toml`, `assets/settings/default.json`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/config_options.rs`, `crates/agent/src/agent.rs`, `crates/agent/src/legacy_thread.rs`, `crates/agent/src/native_agent_server.rs`, `crates/agent/src/tests/mod.rs`, `crates/agent/src/thread.rs`
+- **queue**: `.agents/skills/gpui-bench/SKILL.md`, `.github/workflows/docs_suggestions.yml`, `.github/workflows/slack_notify_community_automation_failure.yml`, `.github/workflows/triage_queue_board.yml`, `AGENTS.md`, `CLAUDE.md`, `Cargo.toml`, `GEMINI.md`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `crates/acp_thread/src/acp_thread.rs`
+- **rank**: `.github/workflows/community_update_all_top_ranking_issues.yml`, `.github/workflows/community_update_weekly_top_ranking_issues.yml`, `.github/workflows/run_tests.yml`, `assets/settings/default.json`, `crates/agent/src/tools/edit_session/streaming_fuzzy_matcher.rs`, `crates/agent_ui/src/completion_provider.rs`, `crates/command_palette/src/command_palette.rs`, `crates/edit_prediction_context/src/bm25_context.rs`, `crates/edit_prediction_context/src/edit_prediction_context.rs`, `crates/edit_prediction_context/src/edit_prediction_context_tests.rs`, `crates/editor/src/code_completion_tests.rs`, `crates/editor/src/cursor_animation.rs`
+- **retriev**: `crates/acp_thread/src/connection.rs`, `crates/agent/src/db.rs`, `crates/agent/src/tools/apply_code_action_tool.rs`, `crates/agent/src/tools/evals/fixtures/disable_cursor_blinking/before.rs`, `crates/agent/src/tools/evals/fixtures/zode/prompt.md`, `crates/agent/src/tools/read_file_tool.rs`, `crates/agent/src/tools/skill_tool.rs`, `crates/agent_ui/src/thread_metadata_store.rs`, `crates/anthropic/src/batches.rs`, `crates/auto_update/src/auto_update.rs`, `crates/cli/src/main.rs`, `crates/client/src/client.rs`
+- **sandbox**: `Cargo.toml`, `corgi.toml`, `crates/acp_thread/Cargo.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/terminal.rs`, `crates/agent/Cargo.toml`, `crates/agent/src/agent.rs`, `crates/agent/src/db.rs`, `crates/agent/src/sandboxing.rs`, `crates/agent/src/templates.rs`, `crates/agent/src/tests/mod.rs`, `crates/agent/src/thread.rs`
+- **search**: `.agents/skills/lint-creator/SKILL.md`, `.config/typos.toml`, `.factory/prompts/crash/link-issues.md`, `.factory/skills/brand-writer/SKILL.md`, `.factory/skills/brand-writer/voice-examples.md`, `.factory/skills/humanizer/SKILL.md`, `.github/ISSUE_TEMPLATE/10_bug_report.yml`, `.github/workflows/extension_bump.yml`, `.github/workflows/hotfix-review-monitor.yml`, `CONTRIBUTING.md`, `Cargo.toml`, `assets/keymaps/default-linux.json`
+- **symbol**: `.agents/skills/gpui-bench/SKILL.md`, `.cargo/collab-config.toml`, `.cargo/config.toml`, `.config/typos.toml`, `.factory/skills/humanizer/SKILL.md`, `.github/workflows/after_release.yml`, `Cargo.toml`, `assets/keymaps/default-linux.json`, `assets/keymaps/default-macos.json`, `assets/keymaps/default-windows.json`, `assets/keymaps/linux/atom.json`, `assets/keymaps/linux/emacs.json`
+- **telemetry**: `Cargo.toml`, `assets/settings/default.json`, `crates/acp_thread/Cargo.toml`, `crates/acp_thread/src/acp_thread.rs`, `crates/acp_thread/src/connection.rs`, `crates/action_log/Cargo.toml`, `crates/action_log/src/action_log.rs`, `crates/agent/Cargo.toml`, `crates/agent/src/agent.rs`, `crates/agent/src/thread.rs`, `crates/agent/src/tools/evals/fixtures/disable_cursor_blinking/before.rs`, `crates/agent/src/tools/spawn_agent_tool.rs`
+- **tree_sitter**: `Cargo.toml`, `crates/agent/src/tools/evals/edit_file.rs`, `crates/agent/src/tools/evals/fixtures/disable_cursor_blinking/before.rs`, `crates/agent/src/tools/evals/fixtures/use_wasi_sdk_in_compile_parser_to_wasm/before.rs`, `crates/benchmarks/benches/display_map.rs`, `crates/call_hierarchy/src/call_hierarchy.rs`, `crates/collab/tests/integration/integration_tests.rs`, `crates/collab/tests/integration/remote_editing_collaboration_tests.rs`, `crates/debugger_ui/src/tests/inline_values.rs`, `crates/edit_prediction/benches/ts_error_count.rs`, `crates/edit_prediction/src/edit_prediction.rs`, `crates/edit_prediction/src/metrics.rs`
+- **vector**: `.agents/skills/gpui-bench/SKILL.md`, `crates/agent/src/tools/evals/fixtures/from_pixels_constructor/before.rs`, `crates/agent/src/tools/evals/fixtures/translate_doc_comments/before.rs`, `crates/agent_ui/src/message_editor.rs`, `crates/ai_onboarding/src/ai_onboarding.rs`, `crates/clock/src/clock.rs`, `crates/collab/src/db/queries/buffers.rs`, `crates/collab/src/db/queries/channels.rs`, `crates/collab/tests/integration/db_tests/buffer_tests.rs`, `crates/collections/src/vecmap.rs`, `crates/copilot_ui/src/sign_in.rs`, `crates/diagnostics/src/buffer_diagnostics.rs`
 
 ## Interpretation limit
 

@@ -1,6 +1,6 @@
 # Static survey: gpui-mobile
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/gpui-mobile`
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ/.tmp/ui_ref/gpui-mobile`
 - HEAD: `c7cab3a43970bd5f1e05d907695404ed73fcdc95`
 - Tracked files: 261
 

@@ -1,6 +1,6 @@
 # Static survey: gpui-rsx
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/gpui-rsx`
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ/.tmp/ui_ref/gpui-rsx`
 - HEAD: `8e0751e9361c08af1ceec702be10b50fbf4e412f`
 - Tracked files: 143
 

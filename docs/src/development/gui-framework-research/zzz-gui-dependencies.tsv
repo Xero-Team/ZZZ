@@ -55,10 +55,12 @@ git_hosting_providers	crates/git_hosting_providers/Cargo.toml	gpui
 git_ui	crates/git_ui/Cargo.toml	component,gpui,ui,ui_input
 go_to_line	crates/go_to_line/Cargo.toml	gpui,ui
 gpui	crates/gpui/Cargo.toml	gpui_macros,gpui_platform,gpui_shared_string,gpui_util
+gpui_linux	crates/gpui_linux/Cargo.toml	gpui
 gpui_macos	crates/gpui_macos/Cargo.toml	gpui
 gpui_macros	crates/gpui_macros/Cargo.toml	gpui
 gpui_platform	crates/gpui_platform/Cargo.toml	gpui
 gpui_tokio	crates/gpui_tokio/Cargo.toml	gpui
+gpui_web	crates/gpui_web/Cargo.toml	gpui
 gpui_wgpu	crates/gpui_wgpu/Cargo.toml	gpui,gpui_util
 gpui_windows	crates/gpui_windows/Cargo.toml	gpui
 i18n	crates/i18n/Cargo.toml	gpui

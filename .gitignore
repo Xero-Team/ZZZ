@@ -60,6 +60,9 @@ crates/telegram/credentials.toml
 # where yet, so for now they get generated into a gitignored dir.)
 /crates/zzz/test_fixtures/visual_tests/
 
+# Local research checkouts, benchmarks, logs, and scratch build output.
+/.tmp/
+
 # Local documentation audit files
 /december-2025-releases.md
 /docs/december-2025-documentation-gaps.md

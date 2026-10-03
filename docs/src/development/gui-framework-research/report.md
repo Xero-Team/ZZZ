@@ -5,11 +5,12 @@ description: Evidence-backed analysis and staged refactoring plan for ZZZ GUI in
 
 # ZZZ GUI 基础设施架构研究报告
 
-- 研究日期：2026-10-02
+- 研究日期：2026-10-03
 - 目标系统：ZZZ `main`
-- 最终基线 revision：`34fb99e58d0dac953afb9a577a3aae6f99fb0c71`
+- 最终基线 revision：`152a5eb983a883c69a6cc4eae082312ba75aa9f9`
 - 研究方式：本地源码静态分析；未安装依赖，未构建、运行或 benchmark 任何参考仓库
 - 台账：[sources.tsv](./sources.tsv)、[inventory.tsv](./inventory.tsv)、[evidence.tsv](./evidence.tsv)、[experiments.tsv](./experiments.tsv)
+- 实施：[GPUI 完整重构执行计划](./refactoring-plan.md)、[可复制的 `/goal`](./goal.md)
 
 正文中的 `[ZZZ-001]`、`[ZED-001]` 等编号均指向 `evidence.tsv` 中包含 repository、relative path、line locator、commit SHA、evidence kind 与 confidence 的对应 claim。
 
@@ -32,8 +33,10 @@ ZZZ 不需要更换 GUI 框架，也不应把 Avalonia、OpenSwiftUI 或某个 G
 
 推荐的总体方向是：
 
-- 保持 `gpui` 为应用面对的稳定 façade；不要求 147 个直接或开发依赖 `gpui` 的 crate 集体迁移。
-- 先把 Zed 已验证的 frame diagnostics、AccessKit 和生产并发测试能力吸收回来。
+- 保持 `gpui` 为应用面对的稳定 façade；不要求 149 个直接或开发依赖 `gpui` 的 crate 集体迁移。
+- 先按 upstream A/B/C 流程审查并移植 Zed 已验证的 frame diagnostics、
+  AccessKit 和生产并发测试能力；AccessKit core、action routing 与平台 adapter 分开
+  决策。
 - 在同一 crate 内把 `Window` 拆成明确的内部所有者，完成后再评估 crate 抽取。
 - 将 render scene/atlas/submission contract 与 window event loop 分开，使 WGPU、Metal、DirectX 和 headless backend 能遵守同一数据流。
 - 将平台差异表示为 capability，并让 unsupported 状态可查询、可测试。
@@ -45,27 +48,32 @@ ZZZ 不需要更换 GUI 框架，也不应把 Avalonia、OpenSwiftUI 或某个 G
 
 ### 2.1 仓库状态 {#repository-state}
 
-| 仓库         | HEAD           | 分支   | shallow | sparse                     | 工作树                                                     | 研究角色                                      |
-| ------------ | -------------- | ------ | ------- | -------------------------- | ---------------------------------------------------------- | --------------------------------------------- |
-| ZZZ          | `34fb99e58d0`  | `main` | 否      | 否                         | tracked clean；有用户提供的未跟踪 `.agents/...` 与 `.tmp/` | 目标系统                                      |
-| zed          | `23d10a4754b`  | `main` | 是      | 是，仅 GPUI crate patterns | clean                                                      | 同血统主参考                                  |
-| gpui-ce      | `175ef6657881` | `main` | 是      | 否                         | clean                                                      | 同血统核心 fork                               |
-| gpui-kit     | `3467e6476002` | `main` | 是      | 否                         | clean                                                      | GPUI 组件/基础层                              |
-| gpui-mobile  | `c7cab3a43970` | `main` | 是      | 否                         | clean                                                      | iOS/Android platform extension                |
-| gpui-rsx     | `8e0751e9361c` | `main` | 是      | 否                         | clean                                                      | proc-macro DSL                                |
-| gpui-toolkit | `321f98e5d004` | `main` | 是      | 否                         | clean                                                      | vendored core、移动端、设计/组件/测试实验集合 |
-| adabraka-ui  | `e158684b23d9` | `main` | 是      | 否                         | clean                                                      | 组件库；核心 fork 不在 corpus                 |
-| avalonia     | `17350180c33b` | `main` | 是      | 否                         | clean                                                      | 独立 runtime/语言的架构参考                   |
-| openswiftui  | `b17d55b85bb3` | `main` | 是      | 否                         | clean                                                      | 独立声明式/依赖图参考                         |
+| 仓库         | HEAD           | 分支   | shallow | sparse | 工作树           | 研究角色                                      |
+| ------------ | -------------- | ------ | ------- | ------ | ---------------- | --------------------------------------------- |
+| ZZZ          | `152a5eb983a`  | `main` | 否      | 否     | 复核开始时 clean | 目标系统                                      |
+| zed          | `a84689073d2`  | `main` | 是      | 否     | clean            | 同血统主参考                                  |
+| gpui-ce      | `c6b17e616a35` | `main` | 是      | 否     | clean            | 同血统核心 fork                               |
+| gpui-kit     | `edd5d3a42a65` | `main` | 是      | 否     | clean            | GPUI 组件/基础层                              |
+| gpui-mobile  | `c7cab3a43970` | `main` | 是      | 否     | clean            | iOS/Android platform extension                |
+| gpui-rsx     | `8e0751e9361c` | `main` | 是      | 否     | clean            | proc-macro DSL                                |
+| gpui-toolkit | `26c5060dd414` | `main` | 是      | 否     | clean            | vendored core、移动端、设计/组件/测试实验集合 |
+| adabraka-ui  | `e158684b23d9` | `main` | 是      | 否     | clean            | 组件库；核心 fork 不在 corpus                 |
+| avalonia     | `17350180c33b` | `main` | 是      | 否     | clean            | 独立 runtime/语言的架构参考                   |
+| openswiftui  | `b17d55b85bb3` | `main` | 是      | 否     | clean            | 独立声明式/依赖图参考                         |
 
 完整字段见 [inventory.tsv](./inventory.tsv) 与 [repository-state.tsv](./repository-state.tsv)。
 
-研究开始时 ZZZ HEAD 为 `dff8d8c3ddb7`；期间外部状态把 `main` 更新到 `34fb99e58d0`。变化集中在 Editor teardown/cancellation 代码，`crates/gpui` 与 `ui_*` 未变化。最终证据、locator、inventory 和报告均重新固定到 `34fb99e58d0`。详见 [worktree-notes.md](./worktree-notes.md)。
+本次复核开始时 ZZZ HEAD 为 `152a5eb983a`。相对上一版报告的
+`34fb99e58d0`，变化集中在 Editor teardown/cancellation 与 vendored
+Tree-sitter 生成流程，`crates/gpui` 与 `ui_*` 未变化。证据、inventory 和报告已
+重新固定到当前 revision。详见 [worktree-notes.md](./worktree-notes.md)。
 
 ### 2.2 corpus 与限制 {#evidence-limits}
 
-- `zed` 是 sparse checkout，只能检查 GPUI 及相关平台 crates；仓库级文档、历史和非 GPUI 垂直切片不在本地 corpus。
-- 所有参考仓库均为 shallow clone。本报告不使用 shallow clone 的提交日期推断维护活跃度，也不做 contributor/bus-factor 结论。
+- `zed` 当前是完整工作树的 shallow、blob-filtered clone；本报告仍只把 GPUI 与相关
+  platform 路径作为架构证据。
+- 所有参考仓库均为 shallow clone。本报告不使用 shallow clone 的提交日期推断维护
+  活跃度，也不做 contributor/bus-factor 结论。
 - `adabraka-ui` 依赖 crates.io 上的 `adabraka-gpui`，该核心 fork不在 `.tmp/ui_ref`，所以其核心改动未知。[ADA-001]
 - OpenSwiftUI 的 `OpenAttributeGraph`、`OpenRenderBox` 和可选 private framework dependencies 不在本地 corpus；关键 render path 仍有 WIP/Blocked/stub 标记。[OSU-008][OSU-009]
 - 未运行任何参考仓库的 build、test、example、benchmark、simulator、screen reader 或 GPU workload。
@@ -75,7 +83,8 @@ ZZZ 不需要更换 GUI 框架，也不应把 Avalonia、OpenSwiftUI 或某个 G
 ### 2.3 License 边界 {#license-boundary}
 
 - ZZZ 为 AGPL-3.0-or-later。
-- Zed GPUI manifest 为 Apache-2.0；Zed 仓库另有双许可证文件，但 sparse checkout 未物化根文件。[ZED-001]
+- Zed GPUI manifest 为 Apache-2.0；仓库根同时包含 Apache-2.0 与 GPL 许可证文件。
+  [ZED-001]
 - gpui-ce、gpui-kit 的相关 crate 为 Apache-2.0。[CE-001][KIT-006]
 - gpui-mobile 提供 GPL-3.0-or-later、AGPL-3.0-or-later 或 Apache-2.0。[MOB-008]
 - gpui-rsx、adabraka-ui、Avalonia、OpenSwiftUI 为 MIT；gpui-toolkit 根许可证是 ISC 风格许可。[RSX-006][ADA-004][AVA-010][OSU-010][GTK-011]
@@ -157,7 +166,7 @@ flowchart LR
     WGPU --> GPUI
 ```
 
-静态 manifest 扫描见 [zzz-gui-dependencies.tsv](./zzz-gui-dependencies.tsv)：含 dev-dependencies 时，有 147 个 workspace crate 直接声明 `gpui`，68 个声明 `ui`。这个规模决定了重构必须保留 façade 与 re-export，不能要求全仓同时迁移。
+静态 manifest 扫描见 [zzz-gui-dependencies.tsv](./zzz-gui-dependencies.tsv)：含 dev-dependencies 时，有 149 个 workspace crate 直接声明 `gpui`，68 个声明 `ui`。这个规模决定了重构必须保留 façade 与 re-export，不能要求全仓同时迁移。
 
 | 当前 crate/module | 实际职责                                                                                                     | 主要问题                                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
@@ -279,7 +288,9 @@ platform text system → `PlatformInputHandler` → 本帧由 Editor element注�
 
 **Validation evidence**：accessibility debug tree、platform adapter implementation、frame collector、ThreadedDispatcher tests。
 
-**Limitations**：不能把同血统实现当独立设计投票；sparse checkout没有完整产品使用证据。最合理的采用方式是走 ZZZ upstream absorption，而不是手工复制。
+**Limitations**：不能把同血统实现当独立设计投票；shallow 静态 checkout
+没有产品 runtime 证据。最合理的采用方式是走 ZZZ upstream absorption，而不是
+手工复制。
 
 ### 5.2 gpui-ce {#reference-gpui-ce}
 
@@ -448,7 +459,7 @@ platform text system → `PlatformInputHandler` → 本帧由 Editor element注�
 | 项目         | Headless/测试                               | 诊断/benchmark                     | 边界质量                                 | 对ZZZ采用            |
 | ------------ | ------------------------------------------- | ---------------------------------- | ---------------------------------------- | -------------------- |
 | ZZZ          | verified deterministic；partial real pixels | partial                            | partial：Window/platform集中             | 基线                 |
-| zed          | verified + concurrent harness               | verified frame journal/collector   | partial但领先ZZZ                         | 直接吸收优先         |
+| zed          | verified + concurrent harness               | verified frame journal/collector   | partial但领先ZZZ                         | A/B/C审查后移植      |
 | gpui-ce      | verified WGPU headless实现                  | verified profiler/bench演进        | partial：文件拆分好，crate依赖未完全倒置 | 改造采用             |
 | gpui-kit     | verified组件tests                           | partial benches                    | verified app façade/behavior-style分层   | 模式采用             |
 | gpui-mobile  | partial unit tests                          | partial                            | partial：FFI/global state                | 思想采用，代码需重做 |
@@ -460,21 +471,21 @@ platform text system → `PlatformInputHandler` → 本帧由 Editor element注�
 
 ## 7. 可迁移设计模式清单 {#transferable-patterns}
 
-| 模式                                             | 来源与证据                                   | ZZZ具体问题                                                         | 建议采用方式                                           | 收益                                                   | 成本/风险                                | 失效条件                                     |
-| ------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------- | -------------------------------------------- |
-| Frame journal + phase timing + collector         | Zed [ZED-008]                                | 无法量化Window拆分与cache命中                                       | 直接吸收，同血统feature-gated                          | 重构前后可证伪；定位latency来源                        | profiler开销、数据量                     | 开销>2%或无法稳定关联input/frame             |
-| Production-like threaded dispatcher              | Zed [ZED-009][ZED-010]                       | 单线程virtual tests隐藏handoff/race                                 | 改造吸收，限定bench/integration                        | 覆盖真实并发且保留deterministic tests                  | flaky与真实timer噪声                     | 100-run稳定性不达标                          |
-| AccessKit tree in Element prepaint               | Zed [ZED-002]–[ZED-007]                      | ZZZ无core/native a11y链                                             | 通过upstream absorption直接采用                        | 语义与layout bounds同帧；原生adapter现成               | 组件语义补标、平台QA                     | native walkthrough不通过或API与ZZZ delta冲突 |
-| WGPU renderer内部模块化                          | gpui-ce [CE-003]                             | `wgpu_renderer.rs`集中资源/提交/表面恢复                            | 改造采用，先仅文件/module拆分                          | 降低修改冲突；更易独测surface/headless                 | 机械拆分可能无收益                       | 编译时间/维护没有改善且增加公开surface       |
-| Surface-free WGPU headless                       | gpui-ce [CE-004]                             | 非macOS缺真实像素验证                                               | 先实验，成功后接入test-support                         | Linux/Windows visual regression；renderer contract验证 | 软件adapter差异、GPU CI不稳定            | 不能在CI稳定初始化或pixel drift过大          |
-| 明确的 measure/arrange/render dirty queue        | Avalonia [AVA-002][AVA-003]                  | `notify`通常使cached view完整layout/prepaint/paint                  | 仅做内部opt-in实验，不引入property system              | 高频局部变化可减少phase work                           | API/正确性复杂度；状态变化未声明影响范围 | phase work下降<20%或出现像素/input差异       |
-| 窄 TextInputClient                               | Avalonia [AVA-007][AVA-008]                  | PlatformInputHandler携带AsyncWindowContext，platform边界知道runtime | 改造采用：平台只见text client capability               | 缩窄IME边界；便于Web/mobile/headless                   | 迁移macOS/Windows/Linux文本桥            | 无法表达Editor multi-cursor/UTF-16语义       |
-| Behavior layer 与 styled layer 分离              | gpui-kit [KIT-002][KIT-003]                  | ZZZ `ui`中状态、交互、视觉常混合                                    | 新组件逐步采用；不重写全部现有组件                     | 测试更小、theme变化影响更窄                            | 双层API可能过度抽象                      | 概念数增加且组件实现反而重复                 |
-| Semantic tokens独立于组件名                      | gpui-kit/toolkit [KIT-004][GTK-005][GTK-006] | theme/style改动扩散，platform适配难测                               | 在现有theme/ui styles中渐进整理                        | 可测试、可序列化、适配density/reduced motion           | 与现有ThemeStyles重叠                    | 无法减少重复token或增加迁移负担              |
-| Pure solver + property/allocation contracts      | gpui-toolkit [GTK-002]–[GTK-004][GTK-009]    | workspace adaptive layout难以独测；无alloc预算                      | 仅用于复杂shell layout和测试基础                       | deterministic、可fuzz、可设alloc gate                  | 不应替换Taffy；两套layout概念            | 不能映射真实workspace需求或产生重复布局真相  |
-| Semantic accessibility snapshot/readiness matrix | gpui-toolkit [GTK-007][GTK-008]              | native a11y需要组件级可重复断言                                     | 在Zed AccessKit port后借鉴测试层                       | 组件semantics gate + 明确platform QA欠账               | 不能证明screen reader真实行为            | 被误用为native QA替代品                      |
-| Foreign event loop/run_embedded lifecycle        | gpui-mobile/OpenSwiftUI host                 | Web/mobile由外部run loop驱动                                        | 仅抽象lifecycle capability；保留`run_embedded`         | 为Web/mobile/embedding准备                             | raw pointer/FFI安全、资源暂停恢复        | 桌面重构被移动端需求拖累                     |
-| Transaction + versioned display output           | OpenSwiftUI [OSU-002][OSU-003][OSU-005]      | effects/frame更新缺少显式dirty reasons/version diagnostics          | 借鉴为FrameBuildId/dirty reasons；不引入AttributeGraph | 更清晰的frame provenance、cache诊断                    | 过度设计                                 | 没有可测debug/性能收益                       |
+| 模式                                             | 来源与证据                                   | ZZZ具体问题                                                         | 建议采用方式                                           | 收益                                                   | 成本/风险                                | 失效条件                                    |
+| ------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------- | ------------------------------------------- |
+| Frame journal + phase timing + collector         | Zed [ZED-008]                                | 无法量化Window拆分与cache命中                                       | 按A/B/C审查后移植，同血统feature-gated                 | 重构前后可证伪；定位latency来源                        | profiler开销、数据量                     | 开销>2%或无法稳定关联input/frame            |
+| Production-like threaded dispatcher              | Zed [ZED-009][ZED-010]                       | 单线程virtual tests隐藏handoff/race                                 | 改造吸收，限定bench/integration                        | 覆盖真实并发且保留deterministic tests                  | flaky与真实timer噪声                     | 100-run稳定性不达标                         |
+| AccessKit tree in Element prepaint               | Zed [ZED-002]–[ZED-007]                      | ZZZ无core/native a11y链                                             | core、action routing、平台adapter分别A/B/C审查与移植   | 语义与layout bounds同帧；原生adapter可参考             | 缺失writer路径、组件语义补标、平台QA     | native walkthrough不通过或无法隔离缺失架构  |
+| WGPU renderer内部模块化                          | gpui-ce [CE-003]                             | `wgpu_renderer.rs`集中资源/提交/表面恢复                            | 改造采用，先仅文件/module拆分                          | 降低修改冲突；更易独测surface/headless                 | 机械拆分可能无收益                       | 编译时间/维护没有改善且增加公开surface      |
+| Surface-free WGPU headless                       | gpui-ce [CE-004]                             | 非macOS缺真实像素验证                                               | 先实验，成功后接入test-support                         | Linux/Windows visual regression；renderer contract验证 | 软件adapter差异、GPU CI不稳定            | 不能在CI稳定初始化或pixel drift过大         |
+| 明确的 measure/arrange/render dirty queue        | Avalonia [AVA-002][AVA-003]                  | `notify`通常使cached view完整layout/prepaint/paint                  | 仅做内部opt-in实验，不引入property system              | 高频局部变化可减少phase work                           | API/正确性复杂度；状态变化未声明影响范围 | phase work下降<20%或出现像素/input差异      |
+| 窄 TextInputClient                               | Avalonia [AVA-007][AVA-008]                  | PlatformInputHandler携带AsyncWindowContext，platform边界知道runtime | 改造采用：平台只见text client capability               | 缩窄IME边界；便于Web/mobile/headless                   | 迁移macOS/Windows/Linux文本桥            | 无法表达Editor multi-cursor/UTF-16语义      |
+| Behavior layer 与 styled layer 分离              | gpui-kit [KIT-002][KIT-003]                  | ZZZ `ui`中状态、交互、视觉常混合                                    | 新组件逐步采用；不重写全部现有组件                     | 测试更小、theme变化影响更窄                            | 双层API可能过度抽象                      | 概念数增加且组件实现反而重复                |
+| Semantic tokens独立于组件名                      | gpui-kit/toolkit [KIT-004][GTK-005][GTK-006] | theme/style改动扩散，platform适配难测                               | 在现有theme/ui styles中渐进整理                        | 可测试、可序列化、适配density/reduced motion           | 与现有ThemeStyles重叠                    | 无法减少重复token或增加迁移负担             |
+| Pure solver + property/allocation contracts      | gpui-toolkit [GTK-002]–[GTK-004][GTK-009]    | workspace adaptive layout难以独测；无alloc预算                      | 仅用于复杂shell layout和测试基础                       | deterministic、可fuzz、可设alloc gate                  | 不应替换Taffy；两套layout概念            | 不能映射真实workspace需求或产生重复布局真相 |
+| Semantic accessibility snapshot/readiness matrix | gpui-toolkit [GTK-007][GTK-008]              | native a11y需要组件级可重复断言                                     | 在Zed AccessKit port后借鉴测试层                       | 组件semantics gate + 明确platform QA欠账               | 不能证明screen reader真实行为            | 被误用为native QA替代品                     |
+| Foreign event loop/run_embedded lifecycle        | gpui-mobile/OpenSwiftUI host                 | Web/mobile由外部run loop驱动                                        | 仅抽象lifecycle capability；保留`run_embedded`         | 为Web/mobile/embedding准备                             | raw pointer/FFI安全、资源暂停恢复        | 桌面重构被移动端需求拖累                    |
+| Transaction + versioned display output           | OpenSwiftUI [OSU-002][OSU-003][OSU-005]      | effects/frame更新缺少显式dirty reasons/version diagnostics          | 借鉴为FrameBuildId/dirty reasons；不引入AttributeGraph | 更清晰的frame provenance、cache诊断                    | 过度设计                                 | 没有可测debug/性能收益                      |
 
 ## 8. 当前不适合 ZZZ 的设计 {#rejected-designs}
 
@@ -533,7 +544,7 @@ frame build完成后，renderer与platform adapter只读这些输出；下一帧
 | `view/`          | `Element`、`AnyView`、style、Taffy bridge、standard elements                             | `element.rs`、`view.rs`、`style.rs`、`elements/*`                 |
 | `interaction/`   | hit testing、dispatch tree、focus/tab、keymap/actions、pointer capture                   | `window.rs`、`interactive.rs`、`key_dispatch.rs`                  |
 | `text_input/`    | `TextInputClient` contract、EntityInputHandler adapter、candidate geometry               | `input.rs`、`platform.rs`中的PlatformInputHandler、window注册逻辑 |
-| `accessibility/` | Zed AccessKit semantics、tree builder、debug snapshot/action routing                     | 从Zed吸收                                                         |
+| `accessibility/` | AccessKit semantics、tree builder、debug snapshot/action routing                         | 按A/B/C流程从Zed分段移植                                          |
 | `render_api/`    | Scene、atlas/resource contracts、renderer target/submission                              | `scene.rs`、`platform.rs` atlas/draw相关部分                      |
 | `window/`        | 公开Window façade；组合以上模块并保持现有methods                                         | 当前 `window.rs`薄化                                              |
 | `platform_api/`  | lifecycle、window host、services与capability query                                       | 当前 `platform.rs`拆分                                            |
@@ -587,10 +598,13 @@ frame build完成后，renderer与platform adapter只读这些输出；下一帧
 
 ## 10. 分阶段重构路线 {#roadmap}
 
+本节保留决策级摘要。执行顺序、提交边界、持续验证和完整完成条件以
+[GPUI 完整重构执行计划](./refactoring-plan.md)为准。
+
 ### 阶段 0：建立可证伪基线（可以立即实施） {#phase-0}
 
 - **涉及**：`gpui/profiler`、`WindowInvalidator`、`BenchAppContext`、`input_latency_ui`、benchmark scripts。
-- **目标**：吸收Zed frame event/journal/collector；给layout/prepaint/paint/cache replay/present统一ID与timing；保存clean/incremental build基线。
+- **目标**：按A/B/C审查并移植Zed frame event/journal/collector；给layout/prepaint/paint/cache replay/present统一ID与timing；保存clean/incremental build基线。
 - **前置**：无。
 - **验收**：EXP-001/002 instrumentation overhead ≤2%；能关联input、dirty、draw、present与skipped frame。
 - **风险**：profiling本身改变timing。
@@ -599,7 +613,7 @@ frame build完成后，renderer与platform adapter只读这些输出；下一帧
 ### 阶段 1：补齐验证与 accessibility 边界（可以立即实施，但平台QA需实验） {#phase-1}
 
 - **涉及**：`gpui` Element/Window、`gpui_macos/windows/linux`、test support。
-- **目标**：按upstream流程吸收Zed AccessKit；加入semantic snapshot/action tests；引入ThreadedDispatcher作为bench/integration harness。
+- **目标**：按upstream流程分别审查并移植Zed AccessKit core、action routing与平台adapter；加入semantic snapshot/action tests；引入ThreadedDispatcher作为bench/integration harness。
 - **前置**：阶段0能观察frame开销。
 - **验收**：EXP-006/008；现有input/focus/IME tests全通过；无默认性能回归。
 - **风险**：组件缺少stable ID/role；平台adapter差异。
@@ -621,7 +635,7 @@ frame build完成后，renderer与platform adapter只读这些输出；下一帧
 - **前置**：阶段0/1测试与metrics可用。
 - **验收**：公开API零变化；golden Scene/semantic/input tests一致；EXP-001/002/011不回退。
 - **风险**：range replay索引错位、focus/input handler生命周期改变。
-- **回滚**：逐模块小PR；每次保持旧owner和adapter，可单独revert。
+- **回滚**：逐模块小提交；每次保持旧owner和adapter，可单独revert。
 
 ### 阶段 4：renderer contract与WGPU模块化（需要先做实验） {#phase-4}
 

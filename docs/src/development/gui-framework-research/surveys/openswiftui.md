@@ -1,6 +1,6 @@
 # Static survey: openswiftui
 
-- Checkout: `/home/begonia/Documents/Github/XeroTeam/ZZZ/.tmp/ui_ref/openswiftui`
+- Checkout: `/home/begonia/Documents/Github/Xero-Team/ZZZ/.tmp/ui_ref/openswiftui`
 - HEAD: `b17d55b85bb3380a45afeca183426b846e990b98`
 - Tracked files: 1728
 
