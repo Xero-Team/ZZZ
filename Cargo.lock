@@ -17138,6 +17138,8 @@ dependencies = [
  "component",
  "gpui",
  "i18n",
+ "log",
+ "parking_lot",
  "ui",
 ]
 

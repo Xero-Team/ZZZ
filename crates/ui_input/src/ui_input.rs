@@ -4,7 +4,7 @@
 //!
 mod input_field;
 
-use std::{any::Any, sync::Arc};
+use std::{any::Any, fmt, sync::Arc};
 
 use gpui::{FocusHandle, Global, Subscription};
 pub use input_field::*;
@@ -41,9 +41,33 @@ pub struct ErasedEditorFactory(pub fn(&mut Window, &mut App) -> Arc<dyn ErasedEd
 
 impl Global for ErasedEditorFactory {}
 
+/// Error returned when an application has not registered an editor adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EditorFactoryUnavailable;
+
+impl fmt::Display for EditorFactoryUnavailable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("no ErasedEditorFactory is registered for this application")
+    }
+}
+
+impl std::error::Error for EditorFactoryUnavailable {}
+
 pub fn set_editor_factory(
     cx: &mut App,
     factory: fn(&mut Window, &mut App) -> Arc<dyn ErasedEditor>,
 ) {
     cx.set_global(ErasedEditorFactory(factory));
+}
+
+/// Creates an editor through the adapter registered for the current application.
+pub fn create_editor(
+    window: &mut Window,
+    cx: &mut App,
+) -> Result<Arc<dyn ErasedEditor>, EditorFactoryUnavailable> {
+    let factory = cx
+        .try_global::<ErasedEditorFactory>()
+        .map(|factory| factory.0)
+        .ok_or(EditorFactoryUnavailable)?;
+    Ok(factory(window, cx))
 }

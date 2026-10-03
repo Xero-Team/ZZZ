@@ -15,7 +15,12 @@ path = "src/ui_input.rs"
 component.workspace = true
 gpui.workspace = true
 i18n.workspace = true
+log.workspace = true
+parking_lot.workspace = true
 ui.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
 
 [features]
 default = []

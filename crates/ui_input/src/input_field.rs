@@ -1,13 +1,14 @@
 use component::{example_group, single_example};
 
-use gpui::{App, FocusHandle, Focusable, Hsla, Length};
+use gpui::{App, FocusHandle, Focusable, Hsla, Length, Subscription};
 use i18n::tr;
-use std::sync::Arc;
+use parking_lot::Mutex;
+use std::{any::Any, sync::Arc};
 
 use ui::Tooltip;
 use ui::prelude::*;
 
-use crate::{ErasedEditor, ErasedEditorFactory};
+use crate::{EditorFactoryUnavailable, ErasedEditor, create_editor};
 
 pub struct InputFieldStyle {
     text_color: Hsla,
@@ -52,10 +53,35 @@ impl Focusable for InputField {
 
 impl InputField {
     pub fn new(window: &mut Window, cx: &mut App, placeholder_text: &str) -> Self {
-        let editor = (cx.global::<ErasedEditorFactory>().0)(window, cx);
+        Self::try_new(window, cx, placeholder_text).unwrap_or_else(|error| {
+            log::error!("failed to create InputField editor: {error}");
+            Self::from_editor(
+                Arc::new(UnavailableEditor::new(cx, placeholder_text)),
+                window,
+                cx,
+                placeholder_text,
+            )
+        })
+    }
+
+    pub fn try_new(
+        window: &mut Window,
+        cx: &mut App,
+        placeholder_text: &str,
+    ) -> Result<Self, EditorFactoryUnavailable> {
+        let editor = create_editor(window, cx)?;
+        Ok(Self::from_editor(editor, window, cx, placeholder_text))
+    }
+
+    fn from_editor(
+        editor: Arc<dyn ErasedEditor>,
+        window: &mut Window,
+        cx: &mut App,
+        placeholder_text: &str,
+    ) -> Self {
         editor.set_placeholder_text(placeholder_text, window, cx);
 
-        Self {
+        InputField {
             label: None,
             label_size: LabelSize::Small,
             placeholder: SharedString::new(placeholder_text),
@@ -126,6 +152,76 @@ impl InputField {
 
     pub fn set_masked(&self, masked: bool, window: &mut Window, cx: &mut App) {
         self.editor().set_masked(masked, window, cx)
+    }
+}
+
+struct UnavailableEditor {
+    focus_handle: FocusHandle,
+    text: Mutex<String>,
+    placeholder: Mutex<String>,
+}
+
+impl UnavailableEditor {
+    fn new(cx: &App, placeholder: &str) -> Self {
+        Self {
+            focus_handle: cx.focus_handle(),
+            text: Mutex::new(String::new()),
+            placeholder: Mutex::new(placeholder.to_owned()),
+        }
+    }
+}
+
+impl ErasedEditor for UnavailableEditor {
+    fn text(&self, _: &App) -> String {
+        self.text.lock().clone()
+    }
+
+    fn set_text(&self, text: &str, _: &mut Window, _: &mut App) {
+        *self.text.lock() = text.to_owned();
+    }
+
+    fn clear(&self, _: &mut Window, _: &mut App) {
+        self.text.lock().clear();
+    }
+
+    fn set_placeholder_text(&self, text: &str, _: &mut Window, _: &mut App) {
+        *self.placeholder.lock() = text.to_owned();
+    }
+
+    fn move_selection_to_end(&self, _: &mut Window, _: &mut App) {}
+
+    fn select_all(&self, _: &mut Window, _: &mut App) {}
+
+    fn set_masked(&self, _: bool, _: &mut Window, _: &mut App) {}
+
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+
+    fn subscribe(
+        &self,
+        _: Box<dyn FnMut(crate::ErasedEditorEvent, &mut Window, &mut App) + 'static>,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Subscription {
+        Subscription::new(|| {})
+    }
+
+    fn render(&self, _: &mut Window, _: &App) -> AnyElement {
+        let text = self.text.lock();
+        let display_text = if text.is_empty() {
+            self.placeholder.lock().clone()
+        } else {
+            text.clone()
+        };
+        div()
+            .track_focus(&self.focus_handle)
+            .child(display_text)
+            .into_any_element()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -251,5 +347,41 @@ impl Component for InputField {
                 ])])
                 .into_any_element(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::TestAppContext;
+
+    struct EmptyView;
+
+    impl Render for EmptyView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+        }
+    }
+
+    #[gpui::test]
+    fn missing_editor_factory_returns_error_and_uses_non_panicking_fallback(
+        cx: &mut TestAppContext,
+    ) {
+        let window = cx.add_window(|_, _| EmptyView);
+        window
+            .update(cx, |_, window, cx| {
+                assert_eq!(
+                    InputField::try_new(window, cx, "placeholder").err(),
+                    Some(EditorFactoryUnavailable)
+                );
+
+                let field = InputField::new(window, cx, "placeholder");
+                assert_eq!(field.text(cx), "");
+                field.set_text("fallback text", window, cx);
+                assert_eq!(field.text(cx), "fallback text");
+                field.clear(window, cx);
+                assert_eq!(field.text(cx), "");
+            })
+            .expect("test window should remain open");
     }
 }
