@@ -622,7 +622,6 @@ impl Asset for ImageAssetLoader {
     ) -> impl Future<Output = Self::Output> + Send + 'static {
         let client = cx.http_client();
         // TODO: Can we make SVGs always rescale?
-        // let scale_factor = cx.scale_factor();
         let svg_renderer = cx.svg_renderer();
         let asset_source = cx.asset_source().clone();
         async move {
