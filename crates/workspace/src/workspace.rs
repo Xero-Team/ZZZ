@@ -8488,7 +8488,7 @@ pub async fn restore_multiworkspace(
         .update(cx, |_, window, _cx| {
             window.activate_window();
         })
-        .ok();
+        .log_err();
 
     Ok(window_handle)
 }
@@ -8541,7 +8541,7 @@ pub async fn apply_restored_multiworkspace_state(
             .update(cx, |multi_workspace, _window, cx| {
                 multi_workspace.restore_project_groups(resolved_groups, cx);
             })
-            .ok();
+            .log_err();
     }
 
     if *sidebar_open {
@@ -8549,7 +8549,7 @@ pub async fn apply_restored_multiworkspace_state(
             .update(cx, |multi_workspace, _, cx| {
                 multi_workspace.restore_open_sidebar(cx);
             })
-            .ok();
+            .log_err();
     }
 
     if let Some(sidebar_state) = sidebar_state {
@@ -8560,7 +8560,7 @@ pub async fn apply_restored_multiworkspace_state(
                 }
                 multi_workspace.serialize(cx);
             })
-            .ok();
+            .log_err();
     }
 }
 
@@ -8650,7 +8650,7 @@ pub fn activate_any_workspace_window(cx: &mut AsyncApp) -> Option<WindowHandle<M
             if let Some(workspace_window) = window.downcast::<MultiWorkspace>() {
                 workspace_window
                     .update(cx, |_, window, _| window.activate_window())
-                    .ok();
+                    .log_err();
                 return Some(workspace_window);
             }
         }
@@ -9198,7 +9198,7 @@ pub fn open_new(
             .update(cx, |_, window, _cx| {
                 window.activate_window();
             })
-            .ok();
+            .log_err();
         Ok(())
     })
 }
