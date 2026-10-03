@@ -289,7 +289,7 @@ impl LanguageServerState {
                                     lsp_store.stop_all_language_servers(cx);
                                 }
                             })
-                            .ok();
+                            .log_err();
                     }
                 });
 
@@ -567,7 +567,7 @@ impl LanguageServerState {
                                             cx,
                                         );
                                     })
-                                    .ok();
+                                    .log_err();
                             },
                         );
 
@@ -663,7 +663,7 @@ impl LanguageServerState {
                                                 cx,
                                             );
                                         })
-                                        .ok();
+                                        .log_err();
                                 }
                             },
                         );
@@ -688,7 +688,7 @@ impl LanguageServerState {
                                                 )
                                                 .detach_and_log_err(cx);
                                         })
-                                        .ok();
+                                        .log_err();
                                 },
                             );
                         }
@@ -1226,7 +1226,7 @@ impl LspButton {
                         }
                     }
                 })
-                .ok();
+                .log_err();
 
             let mut servers_per_worktree = BTreeMap::<SharedString, Vec<ServerData>>::new();
             let mut servers_with_health_checks = HashSet::default();
@@ -1359,7 +1359,7 @@ impl LspButton {
                         );
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
             });
         }
     }
