@@ -124,7 +124,7 @@ pub fn init(startup_time: Instant, cx: &mut App) {
             {
                 window
                     .update(cx, |_, window, _| window.remove_window())
-                    .ok();
+                    .log_err();
             }
         }
     })
