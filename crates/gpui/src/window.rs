@@ -66,6 +66,8 @@ use crate::util::{
 pub use prompts::*;
 
 #[cfg(feature = "frame-diagnostics")]
+use crate::frame::FrameDiagnosticsSnapshot as BuiltFrameDiagnosticsSnapshot;
+#[cfg(feature = "frame-diagnostics")]
 use crate::profiler::{
     FrameEvent, FrameInputProvenance, FramePhase, FramePhaseTiming, FramePresentationTiming,
     FrameTiming,
@@ -733,8 +735,6 @@ pub struct Window {
     pub(crate) input_rate_tracker: Rc<RefCell<InputRateTracker>>,
     #[cfg(feature = "input-latency-histogram")]
     input_latency_tracker: InputLatencyTracker,
-    #[cfg(feature = "frame-diagnostics")]
-    pending_frame_timing: Option<FrameTiming>,
     pub(crate) refreshing: bool,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
     prompt: Option<RenderablePromptHandle>,
@@ -1357,8 +1357,6 @@ impl Window {
             input_rate_tracker,
             #[cfg(feature = "input-latency-histogram")]
             input_latency_tracker: InputLatencyTracker::new()?,
-            #[cfg(feature = "frame-diagnostics")]
-            pending_frame_timing: None,
             refreshing: false,
             activation_observers: SubscriberSet::new(),
             prompt: None,
@@ -2345,7 +2343,8 @@ impl Window {
             };
             self.invalidator
                 .record_event(FrameEvent::DrawFinished(timing));
-            self.pending_frame_timing = Some(timing);
+            self.interaction.rendered_frame.diagnostics =
+                BuiltFrameDiagnosticsSnapshot::from_timing(timing);
         }
 
         ArenaClearNeeded::new(&cx.element_arena)
@@ -2378,6 +2377,8 @@ impl Window {
         #[cfg(feature = "frame-diagnostics")]
         let present_start = Instant::now();
         let built_frame = self.interaction.built_frame(&self.text_input);
+        #[cfg(feature = "frame-diagnostics")]
+        let frame_timing = built_frame.diagnostics.timing();
         self.platform_window
             .update_accessibility(built_frame.accessibility.clone())
             .log_err();
@@ -2387,7 +2388,7 @@ impl Window {
         );
         debug_assert!(submission.submitted);
         #[cfg(feature = "frame-diagnostics")]
-        if let Some(frame) = self.pending_frame_timing.take() {
+        if let Some(frame) = frame_timing {
             let present_end = Instant::now();
             self.invalidator
                 .record_event(FrameEvent::Presented(FramePresentationTiming {
@@ -5729,6 +5730,8 @@ pub fn outline(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "accessibility")]
+    use crate::{AccessibilityUpdate, SemanticTreeBuilder};
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
         AnyView, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
@@ -5752,6 +5755,18 @@ mod tests {
 
     impl Render for EmptyView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    struct AccessibilityView;
+
+    #[cfg(feature = "accessibility")]
+    impl Render for AccessibilityView {
+        fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            window.interaction.next_frame.accessibility =
+                AccessibilityUpdate::from_semantic_snapshot(SemanticTreeBuilder::new().snapshot());
             div()
         }
     }
@@ -5909,6 +5924,19 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn built_frame_carries_accessibility_update(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| AccessibilityView);
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw(cx).clear();
+            let built_frame = window.interaction.built_frame(&window.text_input);
+            assert!(built_frame.accessibility.semantic_snapshot().is_some());
+        })
+        .expect("accessibility window should remain open");
+    }
+
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
     fn test_frame_diagnostics_follow_build_through_present(cx: &mut TestAppContext) {
@@ -5931,6 +5959,14 @@ mod tests {
                 _ => None,
             })
             .expect("initial frame should be presented");
+        cx.update_window(handle, |_, window, _| {
+            let built_frame = window.interaction.built_frame(&window.text_input);
+            assert_eq!(
+                built_frame.diagnostics.build_id,
+                Some(initial_build_id.as_u64())
+            );
+        })
+        .expect("diagnostics window should remain open");
         assert!(initial.events.iter().any(|event| matches!(
             event,
             FrameEvent::Invalidated(invalidation)

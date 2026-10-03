@@ -19,7 +19,7 @@ use std::{cell::RefCell, mem, rc::Rc};
 #[cfg(feature = "frame-diagnostics")]
 use crate::profiler::{
     FrameBuildId, FrameDirtyReason, FrameEvent, FrameInputProvenance, FrameInvalidation,
-    next_frame_build_id, record_frame_events,
+    FrameTiming, next_frame_build_id, record_frame_events,
 };
 #[cfg(feature = "frame-diagnostics")]
 use scheduler::Instant;
@@ -396,6 +396,8 @@ pub(crate) struct Frame {
     pub(crate) deferred_draws: Vec<DeferredDraw>,
     pub(crate) tooltip_requests: Vec<Option<TooltipRequest>>,
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
+    pub(crate) accessibility: AccessibilityUpdate,
+    pub(crate) diagnostics: FrameDiagnosticsSnapshot,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
     #[cfg(any(test, feature = "test-support"))]
@@ -472,6 +474,23 @@ pub(crate) struct TextInputSnapshot {
 )]
 pub(crate) struct FrameDiagnosticsSnapshot {
     pub(crate) build_id: Option<u64>,
+    #[cfg(feature = "frame-diagnostics")]
+    timing: Option<FrameTiming>,
+}
+
+impl FrameDiagnosticsSnapshot {
+    #[cfg(feature = "frame-diagnostics")]
+    pub(crate) fn from_timing(timing: FrameTiming) -> Self {
+        Self {
+            build_id: Some(timing.build_id.as_u64()),
+            timing: Some(timing),
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    pub(crate) fn timing(self) -> Option<FrameTiming> {
+        self.timing
+    }
 }
 
 impl<'a> BuiltFrame<'a> {
@@ -494,8 +513,8 @@ impl<'a> BuiltFrame<'a> {
                 rendered_handler_count: text_input.rendered_handlers.len(),
                 next_handler_count: text_input.next_handlers.len(),
             },
-            accessibility: AccessibilityUpdate::default(),
-            diagnostics: FrameDiagnosticsSnapshot::default(),
+            accessibility: frame.accessibility.clone(),
+            diagnostics: frame.diagnostics,
         }
     }
 }
@@ -521,6 +540,8 @@ impl Frame {
             deferred_draws: Vec::new(),
             tooltip_requests: Vec::new(),
             cursor_styles: Vec::new(),
+            accessibility: AccessibilityUpdate::default(),
+            diagnostics: FrameDiagnosticsSnapshot::default(),
 
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds: FxHashMap::default(),
@@ -544,6 +565,8 @@ impl Frame {
         self.scene.clear();
         self.tooltip_requests.clear();
         self.cursor_styles.clear();
+        self.accessibility = AccessibilityUpdate::default();
+        self.diagnostics = FrameDiagnosticsSnapshot::default();
         self.hitboxes.clear();
         self.window_control_hitboxes.clear();
         self.deferred_draws.clear();
