@@ -439,33 +439,41 @@ pub fn open_input_stream(
     Ok(stream)
 }
 
-pub fn resolve_device(device_id: Option<&DeviceId>, input: bool) -> anyhow::Result<cpal::Device> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioDeviceKind {
+    Input,
+    Output,
+}
+
+pub fn resolve_device(
+    device_id: Option<&DeviceId>,
+    device_kind: AudioDeviceKind,
+) -> anyhow::Result<cpal::Device> {
     if let Some(id) = device_id {
         if let Some(device) = default_host().device_by_id(id) {
             return Ok(device);
         }
         log::warn!("Selected audio device not found, falling back to default");
     }
-    if input {
-        default_host()
+    match device_kind {
+        AudioDeviceKind::Input => default_host()
             .default_input_device()
-            .context("no audio input device available")
-    } else {
-        default_host()
+            .context("no audio input device available"),
+        AudioDeviceKind::Output => default_host()
             .default_output_device()
-            .context("no audio output device available")
+            .context("no audio output device available"),
     }
 }
 
 pub fn open_test_output(device_id: Option<DeviceId>) -> anyhow::Result<MixerDeviceSink> {
-    let device = resolve_device(device_id.as_ref(), false)?;
+    let device = resolve_device(device_id.as_ref(), AudioDeviceKind::Output)?;
     DeviceSinkBuilder::from_device(device)?
         .open_stream()
         .context("Could not open output stream")
 }
 
 pub fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<(MixerDeviceSink, Mixer)> {
-    let device = resolve_device(device_id.as_ref(), false)?;
+    let device = resolve_device(device_id.as_ref(), AudioDeviceKind::Output)?;
     let mut output_handle = DeviceSinkBuilder::from_device(device)?
         .open_stream()
         .context("Could not open output stream")?;
@@ -486,16 +494,15 @@ pub struct AudioDeviceInfo {
 }
 
 impl AudioDeviceInfo {
-    pub fn matches_input(&self, is_input: bool) -> bool {
-        if is_input {
-            self.desc.supports_input()
-        } else {
-            self.desc.supports_output()
+    pub fn supports(&self, device_kind: AudioDeviceKind) -> bool {
+        match device_kind {
+            AudioDeviceKind::Input => self.desc.supports_input(),
+            AudioDeviceKind::Output => self.desc.supports_output(),
         }
     }
 
-    pub fn matches(&self, id: &DeviceId, is_input: bool) -> bool {
-        &self.id == id && self.matches_input(is_input)
+    pub fn matches(&self, id: &DeviceId, device_kind: AudioDeviceKind) -> bool {
+        &self.id == id && self.supports(device_kind)
     }
 }
 

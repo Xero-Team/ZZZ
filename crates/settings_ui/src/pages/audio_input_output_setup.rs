@@ -1,4 +1,4 @@
-use audio::{AudioDeviceInfo, AvailableAudioDevices};
+use audio::{AudioDeviceInfo, AudioDeviceKind, AvailableAudioDevices};
 use cpal::DeviceId;
 use gpui::{AnyElement, App, ElementId, ReadGlobal, SharedString, Window};
 use i18n as app_i18n;
@@ -11,7 +11,7 @@ use crate::{SettingField, SettingsFieldMetadata, SettingsUiFile, update_settings
 
 pub(crate) fn get_current_device(
     current_id: Option<&DeviceId>,
-    is_input: bool,
+    device_kind: AudioDeviceKind,
     devices: &[AudioDeviceInfo],
 ) -> Option<AudioDeviceInfo> {
     let Some(current_id) = current_id else {
@@ -19,14 +19,14 @@ pub(crate) fn get_current_device(
     };
     devices
         .iter()
-        .find(|d| d.matches(current_id, is_input))
+        .find(|d| d.matches(current_id, device_kind))
         .cloned()
 }
 
 pub(crate) fn render_audio_device_dropdown<F>(
     dropdown_id: impl Into<ElementId>,
     current_device_id: Option<DeviceId>,
-    is_input: bool,
+    device_kind: AudioDeviceKind,
     on_select: F,
     window: &mut Window,
     cx: &mut App,
@@ -36,7 +36,7 @@ where
 {
     audio::ensure_devices_initialized(cx);
     let devices = cx.global::<AvailableAudioDevices>().0.clone();
-    let current_device = get_current_device(current_device_id.as_ref(), is_input, &devices);
+    let current_device = get_current_device(current_device_id.as_ref(), device_kind, &devices);
 
     let menu = ContextMenu::build(window, cx, {
         let current_device = current_device.clone();
@@ -57,10 +57,10 @@ where
                 },
             );
 
-            for device in devices.iter().filter(|d| d.matches_input(is_input)) {
+            for device in devices.iter().filter(|d| d.supports(device_kind)) {
                 let is_current = current_device
                     .as_ref()
-                    .is_some_and(|info| info.matches(&device.id, is_input));
+                    .is_some_and(|info| info.matches(&device.id, device_kind));
                 let device_id = device.id.clone();
 
                 menu = menu.toggleable_entry(
@@ -96,7 +96,7 @@ where
 fn render_settings_audio_device_dropdown<T: AsRef<Option<String>> + From<Option<String>> + Send>(
     field: SettingField<T>,
     file: SettingsUiFile,
-    is_input: bool,
+    device_kind: AudioDeviceKind,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -105,16 +105,15 @@ fn render_settings_audio_device_dropdown<T: AsRef<Option<String>> + From<Option<
     let current_device_id =
         current_value.and_then(|x| x.as_ref().clone().and_then(|x| DeviceId::from_str(&x).ok()));
 
-    let dropdown_id: SharedString = if is_input {
-        "input-audio-device-dropdown".into()
-    } else {
-        "output-audio-device-dropdown".into()
+    let dropdown_id: SharedString = match device_kind {
+        AudioDeviceKind::Input => "input-audio-device-dropdown".into(),
+        AudioDeviceKind::Output => "output-audio-device-dropdown".into(),
     };
 
     render_audio_device_dropdown(
         dropdown_id,
         current_device_id,
-        is_input,
+        device_kind,
         move |device_id, window, cx| {
             let value: Option<T> = device_id.map(|id| T::from(Some(id.to_string())));
             update_settings_file(
@@ -140,7 +139,7 @@ pub fn render_input_audio_device_dropdown(
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
-    render_settings_audio_device_dropdown(field, file, true, window, cx)
+    render_settings_audio_device_dropdown(field, file, AudioDeviceKind::Input, window, cx)
 }
 
 pub fn render_output_audio_device_dropdown(
@@ -150,5 +149,5 @@ pub fn render_output_audio_device_dropdown(
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
-    render_settings_audio_device_dropdown(field, file, false, window, cx)
+    render_settings_audio_device_dropdown(field, file, AudioDeviceKind::Output, window, cx)
 }
