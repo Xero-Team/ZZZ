@@ -1,5 +1,8 @@
 use crate::window::{AnyObserver, AnyWindowFocusListener, HitTest};
-use crate::{Capslock, FocusId, Frame, HitboxId, Keystroke, Modifiers, SubscriberSet, Task};
+use crate::{
+    Bounds, Capslock, ContentMask, CursorStyle, FocusId, Frame, Hitbox, HitboxBehavior, HitboxId,
+    Keystroke, Modifiers, Pixels, Point, SubscriberSet, Task, Window,
+};
 use smallvec::SmallVec;
 
 /// Runtime interaction state owned by a window.
@@ -53,6 +56,44 @@ impl InteractionOwner {
             pending_modifier: ModifierState::default(),
             pending_input_observers: SubscriberSet::new(),
         }
+    }
+
+    pub(crate) fn insert_hitbox(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        content_mask: ContentMask<Pixels>,
+        behavior: HitboxBehavior,
+    ) -> Hitbox {
+        let id = self.next_hitbox_id;
+        self.next_hitbox_id = id.next();
+        let hitbox = Hitbox {
+            id,
+            bounds,
+            content_mask,
+            behavior,
+        };
+        self.next_frame.hitboxes.push(hitbox.clone());
+        hitbox
+    }
+
+    pub(crate) fn update_mouse_hit_test(&mut self, position: Point<Pixels>) -> bool {
+        let hit_test = self.rendered_frame.hit_test(position);
+        if hit_test == self.mouse_hit_test {
+            false
+        } else {
+            self.mouse_hit_test = hit_test;
+            true
+        }
+    }
+
+    pub(crate) fn push_cursor_style(&mut self, hitbox_id: Option<HitboxId>, style: CursorStyle) {
+        self.next_frame
+            .cursor_styles
+            .push(crate::window::CursorStyleRequest { hitbox_id, style });
+    }
+
+    pub(crate) fn cursor_style(&self, window: &Window) -> Option<CursorStyle> {
+        self.rendered_frame.cursor_style(window)
     }
 }
 

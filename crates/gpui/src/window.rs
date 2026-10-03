@@ -544,7 +544,7 @@ impl HitboxId {
         window.interaction.mouse_hit_test.ids.contains(&self)
     }
 
-    fn next(mut self) -> HitboxId {
+    pub(crate) fn next(self) -> HitboxId {
         HitboxId(self.0.wrapping_add(1))
     }
 }
@@ -2981,13 +2981,7 @@ impl Window {
     /// during the paint phase of element drawing.
     pub fn set_cursor_style(&mut self, style: CursorStyle, hitbox: &Hitbox) {
         self.invalidator.debug_assert_paint();
-        self.interaction
-            .next_frame
-            .cursor_styles
-            .push(CursorStyleRequest {
-                hitbox_id: Some(hitbox.id),
-                style,
-            });
+        self.interaction.push_cursor_style(Some(hitbox.id), style);
     }
 
     /// Updates the cursor style for the entire window at the platform level. A cursor
@@ -2996,13 +2990,7 @@ impl Window {
     /// phase of element drawing.
     pub fn set_window_cursor_style(&mut self, style: CursorStyle) {
         self.invalidator.debug_assert_paint();
-        self.interaction
-            .next_frame
-            .cursor_styles
-            .push(CursorStyleRequest {
-                hitbox_id: None,
-                style,
-            })
+        self.interaction.push_cursor_style(None, style)
     }
 
     /// Sets a tooltip to be rendered for the upcoming frame. This method should only be called
@@ -4141,16 +4129,8 @@ impl Window {
         self.invalidator.debug_assert_prepaint();
 
         let content_mask = self.content_mask();
-        let mut id = self.interaction.next_hitbox_id;
-        self.interaction.next_hitbox_id = self.interaction.next_hitbox_id.next();
-        let hitbox = Hitbox {
-            id,
-            bounds,
-            content_mask,
-            behavior,
-        };
-        self.interaction.next_frame.hitboxes.push(hitbox.clone());
-        hitbox
+        self.interaction
+            .insert_hitbox(bounds, content_mask, behavior)
     }
 
     /// Set a hitbox which will act as a control area of the platform window.
@@ -4390,7 +4370,6 @@ impl Window {
         if self.is_window_hovered() {
             let style = self
                 .interaction
-                .rendered_frame
                 .cursor_style(self)
                 .unwrap_or(CursorStyle::Arrow);
             cx.platform.set_cursor_style(style);
@@ -4592,12 +4571,10 @@ impl Window {
     }
 
     fn dispatch_mouse_event(&mut self, event: &dyn Any, cx: &mut App) {
-        let hit_test = self
+        if self
             .interaction
-            .rendered_frame
-            .hit_test(self.mouse_position());
-        if hit_test != self.interaction.mouse_hit_test {
-            self.interaction.mouse_hit_test = hit_test;
+            .update_mouse_hit_test(self.mouse_position())
+        {
             self.reset_cursor_style(cx);
         }
 
