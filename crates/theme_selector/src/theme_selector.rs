@@ -15,7 +15,6 @@ use theme_settings::{
     ThemeAppearanceMode, ThemeName, ThemeSelection, ThemeSettings, appearance_to_mode,
 };
 use ui::{ListItem, ListItemSpacing, prelude::*, v_flex};
-use util::ResultExt;
 use workspace::{ModalView, Workspace, ui::HighlightedLabel, with_active_or_new_workspace};
 use zzz_actions::{ExtensionCategoryFilter, Extensions};
 
@@ -397,19 +396,19 @@ impl PickerDelegate for ThemeSelectorDelegate {
             theme_settings::set_theme(settings, theme_name, theme_appearance, system_appearance);
         });
 
-        self.selector
-            .update(cx, |_, cx| {
+        if let Some(selector) = self.selector.upgrade() {
+            selector.update(cx, |_, cx| {
                 cx.emit(DismissEvent);
-            })
-            .ok();
+            });
+        }
     }
 
     fn dismissed(&mut self, _: &mut Window, cx: &mut Context<Picker<ThemeSelectorDelegate>>) {
         self.revert_theme(cx);
 
-        self.selector
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .log_err();
+        if let Some(selector) = self.selector.upgrade() {
+            selector.update(cx, |_, cx| cx.emit(DismissEvent));
+        }
     }
 
     fn selected_index(&self) -> usize {
@@ -465,6 +464,9 @@ impl PickerDelegate for ThemeSelectorDelegate {
                 .await
             };
 
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, cx| {
                 this.delegate.matches = matches;
                 if query.is_empty() && this.delegate.selected_theme.is_none() {
@@ -488,8 +490,7 @@ impl PickerDelegate for ThemeSelectorDelegate {
                 if let Some(theme) = this.delegate.show_selected_theme(cx) {
                     this.delegate.selected_theme = Some(theme);
                 }
-            })
-            .log_err();
+            });
         })
     }
 
