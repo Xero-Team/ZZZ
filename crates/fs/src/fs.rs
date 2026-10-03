@@ -3586,7 +3586,14 @@ fn atomic_replace<P: AsRef<Path>>(
     };
 
     // If the file does not exist, create it.
-    let _ = std::fs::File::create_new(replaced_file.as_ref());
+    if let Err(error) = std::fs::File::create_new(replaced_file.as_ref())
+        && error.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        log::warn!(
+            "failed to create replacement target {:?}: {error}",
+            replaced_file.as_ref()
+        );
+    }
 
     unsafe {
         ReplaceFileW(
