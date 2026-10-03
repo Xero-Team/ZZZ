@@ -413,7 +413,28 @@ immutable `BuiltFrame`。
 
 ### 阶段 6：platform capability 与 lifecycle
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
+
+已完成的第一步：
+
+- `PlatformWindow` 增加可查询的 `PlatformCapabilities`，覆盖 text input、accessibility、
+  headless renderer、frame callbacks 和 window controls。
+- 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
+  `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
+- 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
+
+验证：
+
+| 命令或检查                                                                                   | 结果   | 证据                                              |
+| -------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                               | `PASS` | capability façade 编译通过                        |
+| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS` | capability default test passed                    |
+| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS` | all-target release clippy 与 philosophy gate 通过 |
+| `git diff --check`                                                                           | `PASS` | platform capability change 无 whitespace error    |
+
+提交：`982cb1642a`。
+下一步：由 Linux/Windows/macOS/Web adapters 分别声明 capability matrix，并覆盖
+frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
 ### 阶段 7：UI 集成边界
 
