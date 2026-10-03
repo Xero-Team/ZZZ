@@ -63,7 +63,7 @@ impl RemoteClientDelegate for BenchmarkRemoteClient {
         }
     }
 
-    fn set_status(&self, status: Option<&str>, _: &mut gpui::AsyncApp) {
+    fn set_status(&self, status: Option<remote::RemoteConnectionStatus>, _: &mut gpui::AsyncApp) {
         if let Some(status) = status {
             println!("SSH status: {status}");
         }

@@ -27,7 +27,8 @@ use gpui::{App, AppContext, AsyncApp, Task};
 use rpc::proto::Envelope;
 
 use crate::{
-    RemoteClientDelegate, RemoteConnection, RemoteConnectionOptions, RemoteOs, RemotePlatform,
+    RemoteClientDelegate, RemoteConnection, RemoteConnectionOptions, RemoteConnectionStatus,
+    RemoteOs, RemotePlatform,
     remote_client::{CommandTemplate, Interactive},
     transport::parse_platform,
 };
@@ -373,7 +374,10 @@ impl DockerExecConnection {
         delegate: &Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<()> {
-        delegate.set_status(Some("Extracting remote development server"), cx);
+        delegate.set_status(
+            Some(RemoteConnectionStatus::ExtractingRemoteDevelopmentServer),
+            cx,
+        );
         let server_mode = 0o755;
 
         let shell_kind = ShellKind::Posix;
@@ -432,7 +436,10 @@ impl DockerExecConnection {
         let size = src_stat.len();
 
         let t0 = Instant::now();
-        delegate.set_status(Some("Uploading remote development server"), cx);
+        delegate.set_status(
+            Some(RemoteConnectionStatus::UploadingRemoteDevelopmentServer),
+            cx,
+        );
         log::info!(
             "uploading remote development server to {:?} ({}kb)",
             tmp_path_gz,
@@ -619,7 +626,7 @@ impl RemoteConnection for DockerExecConnection {
             };
         }
 
-        delegate.set_status(Some("Starting proxy"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::StartingProxy), cx);
 
         let Some(remote_binary_relpath) = self.remote_binary_relpath.clone() else {
             return Task::ready(Err(anyhow!("Remote binary path not set")));

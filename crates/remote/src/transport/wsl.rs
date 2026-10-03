@@ -1,5 +1,5 @@
 use crate::{
-    RemoteArch, RemoteClientDelegate, RemoteOs, RemotePlatform,
+    RemoteArch, RemoteClientDelegate, RemoteConnectionStatus, RemoteOs, RemotePlatform,
     remote_client::{CommandTemplate, Interactive, RemoteConnection, RemoteConnectionOptions},
     transport::{parse_platform, parse_shell},
 };
@@ -87,7 +87,7 @@ impl WslRemoteConnection {
             default_system_shell: String::from("/bin/sh"),
             has_wsl_interop: false,
         };
-        delegate.set_status(Some("Detecting WSL environment"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::DetectingWslEnvironment), cx);
         this.shell = this
             .detect_shell()
             .await
@@ -331,7 +331,7 @@ impl WslRemoteConnection {
         delegate: &Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<()> {
-        delegate.set_status(Some("Uploading remote server"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::UploadingRemoteServer), cx);
 
         if let Some(parent) = dst_path.parent() {
             let parent = parent.display(PathStyle::Posix);
@@ -380,7 +380,7 @@ impl WslRemoteConnection {
         delegate: &Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<()> {
-        delegate.set_status(Some("Extracting remote server"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::ExtractingRemoteServer), cx);
 
         let tmp_path_str = tmp_path.display(PathStyle::Posix);
         let dst_path_str = dst_path.display(PathStyle::Posix);
@@ -418,7 +418,7 @@ impl RemoteConnection for WslRemoteConnection {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
-        delegate.set_status(Some("Starting proxy"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::StartingProxy), cx);
 
         let Some(remote_binary_path) = &self.remote_binary_path else {
             return Task::ready(Err(anyhow!("Remote binary path not set")));

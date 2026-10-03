@@ -121,14 +121,79 @@ pub enum Interactive {
     No,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RemoteConnectionStatus {
+    AddingRustupTarget,
+    PreparingMacOsSdk,
+    BuildingRemoteServerFromSource,
+    InstallingCargoZigbuild,
+    BuildingRemoteBinaryWithZig { target: String },
+    AddingLlvmTools,
+    BuildingRemoteBinaryWithXwin { target: String },
+    CompressingBinary,
+    DetectingWslEnvironment,
+    UploadingRemoteServer,
+    ExtractingRemoteServer,
+    StartingProxy,
+    ConnectingReusingSession,
+    Connecting,
+    UploadingRemoteDevelopmentServer,
+    ExtractingRemoteDevelopmentServer,
+    WaitingForExistingConnectionAttempt,
+    Error(String),
+}
+
+impl fmt::Display for RemoteConnectionStatus {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AddingRustupTarget => {
+                formatter.write_str("Adding rustup target for cross-compilation")
+            }
+            Self::PreparingMacOsSdk => formatter.write_str("Preparing macOS SDK"),
+            Self::BuildingRemoteServerFromSource => {
+                formatter.write_str("Building remote server binary from source")
+            }
+            Self::InstallingCargoZigbuild => {
+                formatter.write_str("Installing cargo-zigbuild for cross-compilation")
+            }
+            Self::BuildingRemoteBinaryWithZig { target } => write!(
+                formatter,
+                "Building remote binary from source for {target} with Zig"
+            ),
+            Self::AddingLlvmTools => formatter.write_str("Adding llvm-tools for cross-compilation"),
+            Self::BuildingRemoteBinaryWithXwin { target } => write!(
+                formatter,
+                "Building remote binary from source for {target} with xwin"
+            ),
+            Self::CompressingBinary => formatter.write_str("Compressing binary"),
+            Self::DetectingWslEnvironment => formatter.write_str("Detecting WSL environment"),
+            Self::UploadingRemoteServer => formatter.write_str("Uploading remote server"),
+            Self::ExtractingRemoteServer => formatter.write_str("Extracting remote server"),
+            Self::StartingProxy => formatter.write_str("Starting proxy"),
+            Self::ConnectingReusingSession => formatter.write_str("Connecting (reusing session)"),
+            Self::Connecting => formatter.write_str("Connecting"),
+            Self::UploadingRemoteDevelopmentServer => {
+                formatter.write_str("Uploading remote development server")
+            }
+            Self::ExtractingRemoteDevelopmentServer => {
+                formatter.write_str("Extracting remote development server")
+            }
+            Self::WaitingForExistingConnectionAttempt => {
+                formatter.write_str("Waiting for existing connection attempt")
+            }
+            Self::Error(error) => formatter.write_str(error),
+        }
+    }
+}
+
 pub trait RemoteClientDelegate: Send + Sync {
     fn ask_password(
         &self,
         prompt: String,
-        tx: oneshot::Sender<EncryptedPassword>,
+        password_sender: oneshot::Sender<EncryptedPassword>,
         cx: &mut AsyncApp,
     );
-    fn set_status(&self, status: Option<&str>, cx: &mut AsyncApp);
+    fn set_status(&self, status: Option<RemoteConnectionStatus>, cx: &mut AsyncApp);
 }
 
 const MAX_MISSED_HEARTBEATS: usize = 5;
@@ -609,7 +674,13 @@ impl RemoteClient {
         let reconnect_task = cx.spawn(async move |this, cx| {
             macro_rules! failed {
                 ($error:expr, $attempts:expr, $remote_connection:expr, $delegate:expr) => {
-                    delegate.set_status(Some(&format!("{error:#}", error = $error)), cx);
+                    delegate.set_status(
+                        Some(RemoteConnectionStatus::Error(format!(
+                            "{error:#}",
+                            error = $error
+                        ))),
+                        cx,
+                    );
                     return State::ReconnectFailed {
                         error: anyhow!($error),
                         attempts: $attempts,
@@ -1185,7 +1256,10 @@ impl ConnectionPool {
                 if let Some(task) = task.upgrade() {
                     log::debug!("Connecting task is still alive");
                     cx.spawn(async move |cx| {
-                        delegate.set_status(Some("Waiting for existing connection attempt"), cx)
+                        delegate.set_status(
+                            Some(RemoteConnectionStatus::WaitingForExistingConnectionAttempt),
+                            cx,
+                        )
                     })
                     .detach();
                     return task;

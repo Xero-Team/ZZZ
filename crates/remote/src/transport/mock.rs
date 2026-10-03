@@ -31,7 +31,7 @@
 
 use crate::remote_client::{
     ChannelClient, CommandTemplate, Interactive, RemoteClientDelegate, RemoteConnection,
-    RemoteConnectionOptions,
+    RemoteConnectionOptions, RemoteConnectionStatus,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -326,5 +326,5 @@ impl RemoteClientDelegate for MockDelegate {
         unreachable!("MockDelegate::ask_password should not be called in tests")
     }
 
-    fn set_status(&self, _status: Option<&str>, _cx: &mut AsyncApp) {}
+    fn set_status(&self, _status: Option<RemoteConnectionStatus>, _cx: &mut AsyncApp) {}
 }

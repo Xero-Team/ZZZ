@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::{
-    RemoteArch, RemoteOs, RemotePlatform,
+    RemoteArch, RemoteConnectionStatus, RemoteOs, RemotePlatform,
     json_log::LogRecord,
     protocol::{MESSAGE_LEN_SIZE, message_len_from_buffer, read_message_with_len, write_message},
 };
@@ -417,7 +417,7 @@ async fn build_remote_server_from_source(
         let rustup = which("rustup", cx)
             .await?
             .context("rustup not found on $PATH, install rustup (see https://rustup.rs/)")?;
-        delegate.set_status(Some("Adding rustup target for cross-compilation"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::AddingRustupTarget), cx);
         log::info!("adding rustup target");
         run_cmd(
             new_command(rustup)
@@ -476,7 +476,7 @@ async fn build_remote_server_from_source(
         }
     }
     let macos_sdkroot = if platform.os == RemoteOs::MacOs {
-        delegate.set_status(Some("Preparing macOS SDK"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::PreparingMacOsSdk), cx);
         let output = new_command(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../script/ensure-macos-sdk"
@@ -510,7 +510,10 @@ async fn build_remote_server_from_source(
 
     match remote_build_mode {
         RemoteServerBuildMode::Native => {
-            delegate.set_status(Some("Building remote server binary from source"), cx);
+            delegate.set_status(
+                Some(RemoteConnectionStatus::BuildingRemoteServerFromSource),
+                cx,
+            );
             log::info!("building remote server binary from source");
         }
         RemoteServerBuildMode::Zig => {
@@ -525,16 +528,16 @@ async fn build_remote_server_from_source(
             ensure_rustup_target(&triple, delegate, cx).await?;
 
             if which("cargo-zigbuild", cx).await?.is_none() {
-                delegate.set_status(Some("Installing cargo-zigbuild for cross-compilation"), cx);
+                delegate.set_status(Some(RemoteConnectionStatus::InstallingCargoZigbuild), cx);
                 log::info!("installing cargo-zigbuild");
                 run_cmd(new_command("cargo").args(["install", "--locked", "cargo-zigbuild"]))
                     .await?;
             }
 
             delegate.set_status(
-                Some(&format!(
-                    "Building remote binary from source for {triple} with Zig"
-                )),
+                Some(RemoteConnectionStatus::BuildingRemoteBinaryWithZig {
+                    target: triple.clone(),
+                }),
                 cx,
             );
             log::info!("building remote binary from source for {triple} with Zig");
@@ -560,7 +563,7 @@ async fn build_remote_server_from_source(
 
             ensure_rustup_target(&triple, delegate, cx).await?;
 
-            delegate.set_status(Some("Adding llvm-tools for cross-compilation"), cx);
+            delegate.set_status(Some(RemoteConnectionStatus::AddingLlvmTools), cx);
             log::info!("adding llvm-tools component");
             run_cmd(
                 new_command("rustup")
@@ -570,9 +573,9 @@ async fn build_remote_server_from_source(
             .await?;
 
             delegate.set_status(
-                Some(&format!(
-                    "Building remote binary from source for {triple} with xwin"
-                )),
+                Some(RemoteConnectionStatus::BuildingRemoteBinaryWithXwin {
+                    target: triple.clone(),
+                }),
                 cx,
             );
             log::info!("building remote binary from source for {triple} with xwin");
@@ -615,7 +618,7 @@ async fn build_remote_server_from_source(
     let path = if build_remote_server.contains("nocompress") {
         bin_path
     } else {
-        delegate.set_status(Some("Compressing binary"), cx);
+        delegate.set_status(Some(RemoteConnectionStatus::CompressingBinary), cx);
 
         #[cfg(not(target_os = "windows"))]
         let archive_path = {

@@ -9,7 +9,7 @@ use gpui::{
 };
 use i18n::tr;
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
-use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions};
+use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions, RemoteConnectionStatus};
 use settings::Settings;
 use theme_settings::ThemeSettings;
 use ui::{
@@ -29,6 +29,95 @@ fn send_cancellation(sender: oneshot::Sender<()>) {
 fn send_password(sender: oneshot::Sender<EncryptedPassword>, password: EncryptedPassword) {
     if sender.send(password).is_err() {
         log::debug!("remote connection password receiver already closed");
+    }
+}
+
+fn localized_status(status: RemoteConnectionStatus, cx: &App) -> String {
+    match status {
+        RemoteConnectionStatus::AddingRustupTarget => tr(
+            cx,
+            "remote_connection.status.adding_rustup_target",
+            "Adding rustup target for cross-compilation",
+        ),
+        RemoteConnectionStatus::PreparingMacOsSdk => tr(
+            cx,
+            "remote_connection.status.preparing_macos_sdk",
+            "Preparing macOS SDK",
+        ),
+        RemoteConnectionStatus::BuildingRemoteServerFromSource => tr(
+            cx,
+            "remote_connection.status.building_remote_server_from_source",
+            "Building remote server binary from source",
+        ),
+        RemoteConnectionStatus::InstallingCargoZigbuild => tr(
+            cx,
+            "remote_connection.status.installing_cargo_zigbuild",
+            "Installing cargo-zigbuild for cross-compilation",
+        ),
+        RemoteConnectionStatus::BuildingRemoteBinaryWithZig { target } => tr(
+            cx,
+            "remote_connection.status.building_remote_binary_with_zig",
+            "Building remote binary from source for {} with Zig",
+        )
+        .replacen("{}", &target, 1),
+        RemoteConnectionStatus::AddingLlvmTools => tr(
+            cx,
+            "remote_connection.status.adding_llvm_tools",
+            "Adding llvm-tools for cross-compilation",
+        ),
+        RemoteConnectionStatus::BuildingRemoteBinaryWithXwin { target } => tr(
+            cx,
+            "remote_connection.status.building_remote_binary_with_xwin",
+            "Building remote binary from source for {} with xwin",
+        )
+        .replacen("{}", &target, 1),
+        RemoteConnectionStatus::CompressingBinary => tr(
+            cx,
+            "remote_connection.status.compressing_binary",
+            "Compressing binary",
+        ),
+        RemoteConnectionStatus::DetectingWslEnvironment => tr(
+            cx,
+            "remote_connection.status.detecting_wsl_environment",
+            "Detecting WSL environment",
+        ),
+        RemoteConnectionStatus::UploadingRemoteServer => tr(
+            cx,
+            "remote_connection.status.uploading_remote_server",
+            "Uploading remote server",
+        ),
+        RemoteConnectionStatus::ExtractingRemoteServer => tr(
+            cx,
+            "remote_connection.status.extracting_remote_server",
+            "Extracting remote server",
+        ),
+        RemoteConnectionStatus::StartingProxy => tr(
+            cx,
+            "remote_connection.status.starting_proxy",
+            "Starting proxy",
+        ),
+        RemoteConnectionStatus::ConnectingReusingSession => tr(
+            cx,
+            "remote_connection.status.connecting_reusing_session",
+            "Connecting (reusing session)",
+        ),
+        RemoteConnectionStatus::Connecting => tr(cx, "remote_connection.connecting", "Connecting"),
+        RemoteConnectionStatus::UploadingRemoteDevelopmentServer => tr(
+            cx,
+            "remote_connection.status.uploading_remote_development_server",
+            "Uploading remote development server",
+        ),
+        RemoteConnectionStatus::ExtractingRemoteDevelopmentServer => tr(
+            cx,
+            "remote_connection.status.extracting_remote_development_server",
+            "Extracting remote development server",
+        ),
+        RemoteConnectionStatus::WaitingForExistingConnectionAttempt => tr(
+            cx,
+            "remote_connection.status.waiting_for_existing_connection_attempt",
+            "Waiting for existing connection attempt",
+        ),
+        RemoteConnectionStatus::Error(error) => error,
     }
 }
 
@@ -491,17 +580,18 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
         }
     }
 
-    fn set_status(&self, status: Option<&str>, cx: &mut AsyncApp) {
+    fn set_status(&self, status: Option<RemoteConnectionStatus>, cx: &mut AsyncApp) {
+        let status = cx.update(|cx| status.map(|status| localized_status(status, cx)));
         self.update_status(status, cx)
     }
 }
 
 impl RemoteClientDelegate {
-    fn update_status(&self, status: Option<&str>, cx: &mut AsyncApp) {
+    fn update_status(&self, status: Option<String>, cx: &mut AsyncApp) {
         cx.update(|cx| {
             self.ui
                 .update(cx, |modal, cx| {
-                    modal.set_status(status.map(str::to_owned), cx);
+                    modal.set_status(status, cx);
                 })
                 .log_err();
         });
@@ -607,7 +697,7 @@ impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
         );
     }
 
-    fn set_status(&self, _status: Option<&str>, _cx: &mut AsyncApp) {}
+    fn set_status(&self, _status: Option<RemoteConnectionStatus>, _cx: &mut AsyncApp) {}
 }
 
 pub fn connect(
