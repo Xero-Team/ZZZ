@@ -1632,7 +1632,7 @@ impl Pane {
                             pane.update(cx, |pane, cx| pane.activate_unpinned_tab(window, cx));
                         }
                     })
-                    .ok();
+                    .log_err();
             });
 
             return Task::ready(Ok(()));
@@ -2089,11 +2089,11 @@ impl Pane {
                             cx,
                         );
                     })
-                    .ok();
+                    .log_err();
                 }
             }
 
-            pane.update(cx, |_, cx| cx.notify()).ok();
+            pane.update(cx, |_, cx| cx.notify()).log_err();
             Ok(())
         })
     }
@@ -3446,7 +3446,7 @@ impl Pane {
                                                         ProjectEntryId::from_proto(entry_id),
                                                     ))
                                                 })
-                                                .ok();
+                                                .log_err();
                                         }),
                                     )
                                 })
@@ -3938,7 +3938,7 @@ impl Pane {
                                         .update_in(cx, |pane, window, cx| {
                                             pane.add_item(item, true, true, None, window, cx)
                                         })
-                                        .ok();
+                                        .log_err();
                                 }
                             })
                             .detach();
@@ -4227,7 +4227,7 @@ impl Pane {
                                         cx,
                                     );
                                 })
-                                .ok();
+                                .log_err();
                             return;
                         }
                         translated
