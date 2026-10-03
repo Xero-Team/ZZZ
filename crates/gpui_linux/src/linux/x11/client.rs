@@ -294,8 +294,7 @@ impl X11ClientStatePtr {
                 );
             })
             .build();
-        let _ = ximc
-            .set_ic_values(xim_handler.im_id, xim_handler.ic_id, ic_attributes)
+        ximc.set_ic_values(xim_handler.im_id, xim_handler.ic_id, ic_attributes)
             .log_err();
         state.ximc = Some(ximc);
         state.xim_handler = Some(xim_handler);
