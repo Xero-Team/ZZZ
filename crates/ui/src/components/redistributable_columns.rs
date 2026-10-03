@@ -15,6 +15,7 @@ use crate::{
     IntoElement, ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, div, h_flex,
     px,
 };
+use gpui_util::ResultExt as _;
 
 pub(crate) const RESIZE_COLUMN_WIDTH: f32 = 8.0;
 pub(crate) const RESIZE_DIVIDER_WIDTH: f32 = 1.0;
@@ -88,14 +89,14 @@ impl HeaderResizeInfo {
                     state.reset_column_to_initial_width(col_idx, window);
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             }
             ColumnsStateRef::Resizable(weak) => {
                 weak.update(cx, |state, cx| {
                     state.reset_column_to_initial_width(col_idx);
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             }
         }
     }
