@@ -1401,6 +1401,233 @@ impl gpui::WindowHost for MacWindow {
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.as_ref().lock().request_frame_callback = Some(callback);
     }
+
+    fn bounds(&self) -> Bounds<Pixels> {
+        self.0.as_ref().lock().bounds()
+    }
+
+    fn is_maximized(&self) -> bool {
+        self.0.as_ref().lock().is_maximized()
+    }
+
+    fn window_bounds(&self) -> WindowBounds {
+        self.0.as_ref().lock().window_bounds()
+    }
+
+    fn content_size(&self) -> Size<Pixels> {
+        self.0.as_ref().lock().content_size()
+    }
+
+    fn resize(&mut self, size: Size<Pixels>) {
+        let this = self.0.lock();
+        let window = this.native_window;
+        let closed = this.closed.clone();
+        this.foreground_executor
+            .spawn(async move {
+                if_window_not_closed(closed, || unsafe {
+                    window.setContentSize_(NSSize {
+                        width: size.width.as_f32() as f64,
+                        height: size.height.as_f32() as f64,
+                    });
+                })
+            })
+            .detach();
+    }
+
+    fn scale_factor(&self) -> f32 {
+        self.0.as_ref().lock().scale_factor()
+    }
+
+    fn appearance(&self) -> WindowAppearance {
+        unsafe {
+            let appearance: id = msg_send![self.0.lock().native_window, effectiveAppearance];
+            crate::window_appearance::window_appearance_from_native(appearance)
+        }
+    }
+
+    fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
+        unsafe {
+            let screen = self.0.lock().native_window.screen();
+            if screen.is_null() {
+                return None;
+            }
+            let device_description: id = msg_send![screen, deviceDescription];
+            let screen_number: id =
+                NSDictionary::valueForKey_(device_description, ns_string("NSScreenNumber"));
+
+            let screen_number: u32 = msg_send![screen_number, unsignedIntValue];
+
+            Some(Rc::new(MacDisplay(screen_number)))
+        }
+    }
+
+    fn activate(&self) {
+        let lock = self.0.lock();
+        let window = lock.native_window;
+        let closed = lock.closed.clone();
+        let executor = lock.foreground_executor.clone();
+        executor
+            .spawn(async move {
+                if !closed.load(Ordering::Acquire) {
+                    unsafe {
+                        let _: () = msg_send![window, makeKeyAndOrderFront: nil];
+                    }
+                }
+            })
+            .detach();
+    }
+
+    fn request_attention(&self) {
+        if self.is_active() {
+            return;
+        }
+
+        let executor = self.0.lock().foreground_executor.clone();
+        executor
+            .spawn(async move {
+                unsafe {
+                    let app = NSApplication::sharedApplication(nil);
+                    app.requestUserAttention_(NSRequestUserAttentionType::NSInformationalRequest);
+                }
+            })
+            .detach();
+    }
+
+    fn is_active(&self) -> bool {
+        unsafe { self.0.lock().native_window.isKeyWindow() == YES }
+    }
+
+    fn is_hovered(&self) -> bool {
+        false
+    }
+
+    fn background_appearance(&self) -> WindowBackgroundAppearance {
+        self.0.as_ref().lock().background_appearance
+    }
+
+    fn set_title(&mut self, title: &str) {
+        unsafe {
+            let app = NSApplication::sharedApplication(nil);
+            let window = self.0.lock().native_window;
+            let title = ns_string(title);
+            let _: () = msg_send![app, changeWindowsItem:window title:title filename:false];
+            let _: () = msg_send![window, setTitle: title];
+            self.0.lock().move_traffic_light();
+        }
+    }
+
+    fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
+        let mut this = self.0.as_ref().lock();
+        this.background_appearance = background_appearance;
+
+        let opaque = background_appearance == WindowBackgroundAppearance::Opaque;
+        this.renderer.update_transparency(!opaque);
+
+        unsafe {
+            this.native_window.setOpaque_(opaque as BOOL);
+            let background_color = if opaque {
+                NSColor::colorWithSRGBRed_green_blue_alpha_(nil, 0f64, 0f64, 0f64, 1f64)
+            } else {
+                // Not using `+[NSColor clearColor]` to avoid broken shadow.
+                NSColor::colorWithSRGBRed_green_blue_alpha_(nil, 0f64, 0f64, 0f64, 0.0001)
+            };
+            this.native_window.setBackgroundColor_(background_color);
+
+            if background_appearance != WindowBackgroundAppearance::Blurred {
+                if let Some(blur_view) = this.blurred_view {
+                    NSView::removeFromSuperview(blur_view);
+                    this.blurred_view = None;
+                }
+            } else if this.blurred_view.is_none() {
+                let content_view = this.native_window.contentView();
+                let frame = NSView::bounds(content_view);
+                let mut blur_view: id = msg_send![BLURRED_VIEW_CLASS, alloc];
+                blur_view = NSView::initWithFrame_(blur_view, frame);
+                blur_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable);
+
+                let _: () = msg_send![
+                    content_view,
+                    addSubview: blur_view
+                    positioned: NSWindowOrderingMode::NSWindowBelow
+                    relativeTo: nil
+                ];
+                this.blurred_view = Some(blur_view.autorelease());
+            }
+        }
+    }
+
+    fn minimize(&self) {
+        let window = self.0.lock().native_window;
+        unsafe {
+            window.miniaturize_(nil);
+        }
+    }
+
+    fn zoom(&self) {
+        let this = self.0.lock();
+        let window = this.native_window;
+        let closed = this.closed.clone();
+        this.foreground_executor
+            .spawn(async move {
+                if_window_not_closed(closed, || unsafe {
+                    window.zoom_(nil);
+                })
+            })
+            .detach();
+    }
+
+    fn toggle_fullscreen(&self) {
+        let this = self.0.lock();
+        let window = this.native_window;
+        let closed = this.closed.clone();
+        this.foreground_executor
+            .spawn(async move {
+                if_window_not_closed(closed, || unsafe {
+                    window.toggleFullScreen_(nil);
+                })
+            })
+            .detach();
+    }
+
+    fn is_fullscreen(&self) -> bool {
+        let this = self.0.lock();
+        let window = this.native_window;
+
+        unsafe {
+            window
+                .styleMask()
+                .contains(NSWindowStyleMask::NSFullScreenWindowMask)
+        }
+    }
+
+    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
+        self.0.as_ref().lock().activate_callback = Some(callback);
+    }
+
+    fn on_hover_status_change(&self, _: Box<dyn FnMut(bool)>) {}
+
+    fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>) {
+        self.0.as_ref().lock().resize_callback = Some(callback);
+    }
+
+    fn on_moved(&self, callback: Box<dyn FnMut()>) {
+        self.0.as_ref().lock().moved_callback = Some(callback);
+    }
+
+    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>) {
+        self.0.as_ref().lock().should_close_callback = Some(callback);
+    }
+
+    fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
+    }
+
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        self.0.as_ref().lock().close_callback = Some(callback);
+    }
+
+    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
+        self.0.lock().appearance_changed_callback = Some(callback);
+    }
 }
 
 impl gpui::SystemServices for MacWindow {
@@ -1520,38 +1747,6 @@ impl gpui::PlatformRenderTarget for MacWindow {
 }
 
 impl PlatformWindow for MacWindow {
-    fn bounds(&self) -> Bounds<Pixels> {
-        self.0.as_ref().lock().bounds()
-    }
-
-    fn window_bounds(&self) -> WindowBounds {
-        self.0.as_ref().lock().window_bounds()
-    }
-
-    fn is_maximized(&self) -> bool {
-        self.0.as_ref().lock().is_maximized()
-    }
-
-    fn content_size(&self) -> Size<Pixels> {
-        self.0.as_ref().lock().content_size()
-    }
-
-    fn resize(&mut self, size: Size<Pixels>) {
-        let this = self.0.lock();
-        let window = this.native_window;
-        let closed = this.closed.clone();
-        this.foreground_executor
-            .spawn(async move {
-                if_window_not_closed(closed, || unsafe {
-                    window.setContentSize_(NSSize {
-                        width: size.width.as_f32() as f64,
-                        height: size.height.as_f32() as f64,
-                    });
-                })
-            })
-            .detach();
-    }
-
     fn merge_all_windows(&self) {
         let native_window = self.0.lock().native_window;
         extern "C" fn merge_windows_async(context: *mut std::ffi::c_void) {
@@ -1611,90 +1806,13 @@ impl PlatformWindow for MacWindow {
         }
     }
 
-    fn scale_factor(&self) -> f32 {
-        self.0.as_ref().lock().scale_factor()
-    }
-
     fn set_traffic_light_position(&self, position: Point<Pixels>) {
         let mut state = self.0.lock();
         state.traffic_light_position = Some(position);
         state.move_traffic_light();
     }
 
-    fn appearance(&self) -> WindowAppearance {
-        unsafe {
-            let appearance: id = msg_send![self.0.lock().native_window, effectiveAppearance];
-            crate::window_appearance::window_appearance_from_native(appearance)
-        }
-    }
-
-    fn display(&self) -> Option<Rc<dyn PlatformDisplay>> {
-        unsafe {
-            let screen = self.0.lock().native_window.screen();
-            if screen.is_null() {
-                return None;
-            }
-            let device_description: id = msg_send![screen, deviceDescription];
-            let screen_number: id =
-                NSDictionary::valueForKey_(device_description, ns_string("NSScreenNumber"));
-
-            let screen_number: u32 = msg_send![screen_number, unsignedIntValue];
-
-            Some(Rc::new(MacDisplay(screen_number)))
-        }
-    }
-
-    fn activate(&self) {
-        let lock = self.0.lock();
-        let window = lock.native_window;
-        let closed = lock.closed.clone();
-        let executor = lock.foreground_executor.clone();
-        executor
-            .spawn(async move {
-                if !closed.load(Ordering::Acquire) {
-                    unsafe {
-                        let _: () = msg_send![window, makeKeyAndOrderFront: nil];
-                    }
-                }
-            })
-            .detach();
-    }
-
-    fn request_attention(&self) {
-        if self.is_active() {
-            return;
-        }
-
-        let executor = self.0.lock().foreground_executor.clone();
-        executor
-            .spawn(async move {
-                unsafe {
-                    let app = NSApplication::sharedApplication(nil);
-                    app.requestUserAttention_(NSRequestUserAttentionType::NSInformationalRequest);
-                }
-            })
-            .detach();
-    }
-
-    fn is_active(&self) -> bool {
-        unsafe { self.0.lock().native_window.isKeyWindow() == YES }
-    }
-
     // is_hovered is unused on macOS. See Window::is_window_hovered.
-    fn is_hovered(&self) -> bool {
-        false
-    }
-
-    fn set_title(&mut self, title: &str) {
-        unsafe {
-            let app = NSApplication::sharedApplication(nil);
-            let window = self.0.lock().native_window;
-            let title = ns_string(title);
-            let _: () = msg_send![app, changeWindowsItem:window title:title filename:false];
-            let _: () = msg_send![window, setTitle: title];
-            self.0.lock().move_traffic_light();
-        }
-    }
 
     fn get_title(&self) -> String {
         unsafe {
@@ -1708,50 +1826,6 @@ impl PlatformWindow for MacWindow {
     }
 
     fn set_app_id(&mut self, _app_id: &str) {}
-
-    fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
-        let mut this = self.0.as_ref().lock();
-        this.background_appearance = background_appearance;
-
-        let opaque = background_appearance == WindowBackgroundAppearance::Opaque;
-        this.renderer.update_transparency(!opaque);
-
-        unsafe {
-            this.native_window.setOpaque_(opaque as BOOL);
-            let background_color = if opaque {
-                NSColor::colorWithSRGBRed_green_blue_alpha_(nil, 0f64, 0f64, 0f64, 1f64)
-            } else {
-                // Not using `+[NSColor clearColor]` to avoid broken shadow.
-                NSColor::colorWithSRGBRed_green_blue_alpha_(nil, 0f64, 0f64, 0f64, 0.0001)
-            };
-            this.native_window.setBackgroundColor_(background_color);
-
-            if background_appearance != WindowBackgroundAppearance::Blurred {
-                if let Some(blur_view) = this.blurred_view {
-                    NSView::removeFromSuperview(blur_view);
-                    this.blurred_view = None;
-                }
-            } else if this.blurred_view.is_none() {
-                let content_view = this.native_window.contentView();
-                let frame = NSView::bounds(content_view);
-                let mut blur_view: id = msg_send![BLURRED_VIEW_CLASS, alloc];
-                blur_view = NSView::initWithFrame_(blur_view, frame);
-                blur_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable);
-
-                let _: () = msg_send![
-                    content_view,
-                    addSubview: blur_view
-                    positioned: NSWindowOrderingMode::NSWindowBelow
-                    relativeTo: nil
-                ];
-                this.blurred_view = Some(blur_view.autorelease());
-            }
-        }
-    }
-
-    fn background_appearance(&self) -> WindowBackgroundAppearance {
-        self.0.as_ref().lock().background_appearance
-    }
 
     fn set_edited(&mut self, edited: bool) {
         unsafe {
@@ -1789,39 +1863,6 @@ impl PlatformWindow for MacWindow {
             .detach();
     }
 
-    fn minimize(&self) {
-        let window = self.0.lock().native_window;
-        unsafe {
-            window.miniaturize_(nil);
-        }
-    }
-
-    fn zoom(&self) {
-        let this = self.0.lock();
-        let window = this.native_window;
-        let closed = this.closed.clone();
-        this.foreground_executor
-            .spawn(async move {
-                if_window_not_closed(closed, || unsafe {
-                    window.zoom_(nil);
-                })
-            })
-            .detach();
-    }
-
-    fn toggle_fullscreen(&self) {
-        let this = self.0.lock();
-        let window = this.native_window;
-        let closed = this.closed.clone();
-        this.foreground_executor
-            .spawn(async move {
-                if_window_not_closed(closed, || unsafe {
-                    window.toggleFullScreen_(nil);
-                })
-            })
-            .detach();
-    }
-
     fn toggle_simple_fullscreen(&self) {
         let state = self.0.clone();
         let (foreground_executor, closed) = {
@@ -1849,46 +1890,6 @@ impl PlatformWindow for MacWindow {
 
     fn is_simple_fullscreen(&self) -> bool {
         self.0.lock().simple_fullscreen_state.is_some()
-    }
-
-    fn is_fullscreen(&self) -> bool {
-        let this = self.0.lock();
-        let window = this.native_window;
-
-        unsafe {
-            window
-                .styleMask()
-                .contains(NSWindowStyleMask::NSFullScreenWindowMask)
-        }
-    }
-
-    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
-        self.0.as_ref().lock().activate_callback = Some(callback);
-    }
-
-    fn on_hover_status_change(&self, _: Box<dyn FnMut(bool)>) {}
-
-    fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>) {
-        self.0.as_ref().lock().resize_callback = Some(callback);
-    }
-
-    fn on_moved(&self, callback: Box<dyn FnMut()>) {
-        self.0.as_ref().lock().moved_callback = Some(callback);
-    }
-
-    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>) {
-        self.0.as_ref().lock().should_close_callback = Some(callback);
-    }
-
-    fn on_close(&self, callback: Box<dyn FnOnce()>) {
-        self.0.as_ref().lock().close_callback = Some(callback);
-    }
-
-    fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
-    }
-
-    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
-        self.0.lock().appearance_changed_callback = Some(callback);
     }
 
     fn tabbed_windows(&self) -> Option<Vec<SystemWindowTab>> {

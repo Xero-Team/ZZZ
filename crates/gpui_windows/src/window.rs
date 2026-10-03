@@ -645,140 +645,7 @@ impl gpui::WindowHost for WindowsWindow {
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.state.callbacks.request_frame.set(Some(callback));
     }
-}
 
-impl gpui::SystemServices for WindowsWindow {
-    fn prompt(
-        &self,
-        level: PromptLevel,
-        msg: &str,
-        detail: Option<&str>,
-        answers: &[PromptButton],
-    ) -> Option<Receiver<usize>> {
-        let (mut done_tx, done_rx) = oneshot::channel();
-        let msg = msg.to_string();
-        let detail_string = detail.map(|detail| detail.to_string());
-        let answers = answers.to_vec();
-        let dialog = crate::dialog::show_dialog(
-            Some(self.0.dialog_owner.clone()),
-            &self.0.executor,
-            move |handle| {
-                unsafe {
-                    let mut config = TASKDIALOGCONFIG::default();
-                    config.cbSize = std::mem::size_of::<TASKDIALOGCONFIG>() as _;
-                    config.hwndParent = handle;
-                    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
-                    let title;
-                    let main_icon;
-                    match level {
-                        PromptLevel::Info => {
-                            title = windows::core::w!("Info");
-                            main_icon = TD_INFORMATION_ICON;
-                        }
-                        PromptLevel::Warning => {
-                            title = windows::core::w!("Warning");
-                            main_icon = TD_WARNING_ICON;
-                        }
-                        PromptLevel::Critical => {
-                            title = windows::core::w!("Critical");
-                            main_icon = TD_ERROR_ICON;
-                        }
-                    };
-                    config.pszWindowTitle = title;
-                    config.Anonymous1.pszMainIcon = main_icon;
-                    let instruction = HSTRING::from(msg);
-                    config.pszMainInstruction = PCWSTR::from_raw(instruction.as_ptr());
-                    let hints_encoded;
-                    if let Some(ref hints) = detail_string {
-                        hints_encoded = HSTRING::from(hints);
-                        config.pszContent = PCWSTR::from_raw(hints_encoded.as_ptr());
-                    };
-                    let mut button_id_map = Vec::with_capacity(answers.len());
-                    let mut buttons = Vec::new();
-                    let mut btn_encoded = Vec::new();
-                    for (index, btn) in answers.iter().enumerate() {
-                        let encoded = HSTRING::from(btn.label().as_ref());
-                        let button_id = match btn {
-                            PromptButton::Ok(_) => IDOK.0,
-                            PromptButton::Cancel(_) => IDCANCEL.0,
-                            // the first few low integer values are reserved for known buttons
-                            // so for simplicity we just go backwards from -1
-                            PromptButton::Other(_) => -(index as i32) - 1,
-                        };
-                        button_id_map.push(button_id);
-                        buttons.push(TASKDIALOG_BUTTON {
-                            nButtonID: button_id,
-                            pszButtonText: PCWSTR::from_raw(encoded.as_ptr()),
-                        });
-                        btn_encoded.push(encoded);
-                    }
-                    config.cButtons = buttons.len() as _;
-                    config.pButtons = buttons.as_ptr();
-
-                    config.pfCallback = Some(crate::dialog::task_dialog_callback);
-                    config.lpCallbackData = button_id_map.contains(&IDCANCEL.0) as isize;
-                    let mut res = std::mem::zeroed();
-                    TaskDialogIndirect(&config, Some(&mut res), None, None)
-                        .context("unable to create task dialog")?;
-                    Ok(button_id_map.iter().position(|&button_id| button_id == res))
-                }
-            },
-        );
-        self.0
-            .executor
-            .spawn(async move {
-                if let futures::future::Either::Left((result, _)) =
-                    futures::future::select(dialog, done_tx.cancellation()).await
-                    && let Some(Some(clicked)) = result
-                        .context("native dialog thread stopped")
-                        .and_then(|result| result)
-                        .log_err()
-                {
-                    done_tx.send(clicked).ok();
-                }
-            })
-            .detach();
-
-        Some(done_rx)
-    }
-
-    fn play_system_bell(&self) {
-        // MB_OK: The sound specified as the Windows Default Beep sound.
-        let _ = unsafe { MessageBeep(MB_OK) };
-    }
-}
-
-impl gpui::PlatformRenderTarget for WindowsWindow {
-    fn draw(&self, scene: &Scene) {
-        self.state
-            .renderer
-            .borrow_mut()
-            .draw(scene, self.state.background_appearance.get())
-            .log_err();
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        self.state.renderer.borrow().sprite_atlas()
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        true
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        self.state.renderer.borrow().gpu_specs().log_err()
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
-        self.state
-            .renderer
-            .borrow_mut()
-            .render_to_image(scene, self.state.background_appearance.get())
-    }
-}
-
-impl PlatformWindow for WindowsWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.state.bounds()
     }
@@ -791,10 +658,6 @@ impl PlatformWindow for WindowsWindow {
         self.state.window_bounds()
     }
 
-    /// get the logical size of the app's drawable area.
-    ///
-    /// Currently, GPUI uses the logical size of the app to handle mouse interactions (such as
-    /// whether the mouse collides with other elements of GPUI).
     fn content_size(&self) -> Size<Pixels> {
         self.state.content_size()
     }
@@ -1012,16 +875,16 @@ impl PlatformWindow for WindowsWindow {
         self.state.callbacks.should_close.set(Some(callback));
     }
 
-    fn on_close(&self, callback: Box<dyn FnOnce()>) {
-        self.state.callbacks.close.set(Some(callback));
-    }
-
     fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
         self.0
             .state
             .callbacks
             .hit_test_window_control
             .set(Some(callback));
+    }
+
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        self.state.callbacks.close.set(Some(callback));
     }
 
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
@@ -1031,6 +894,144 @@ impl PlatformWindow for WindowsWindow {
             .appearance_changed
             .set(Some(callback));
     }
+}
+
+impl gpui::SystemServices for WindowsWindow {
+    fn prompt(
+        &self,
+        level: PromptLevel,
+        msg: &str,
+        detail: Option<&str>,
+        answers: &[PromptButton],
+    ) -> Option<Receiver<usize>> {
+        let (mut done_tx, done_rx) = oneshot::channel();
+        let msg = msg.to_string();
+        let detail_string = detail.map(|detail| detail.to_string());
+        let answers = answers.to_vec();
+        let dialog = crate::dialog::show_dialog(
+            Some(self.0.dialog_owner.clone()),
+            &self.0.executor,
+            move |handle| {
+                unsafe {
+                    let mut config = TASKDIALOGCONFIG::default();
+                    config.cbSize = std::mem::size_of::<TASKDIALOGCONFIG>() as _;
+                    config.hwndParent = handle;
+                    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
+                    let title;
+                    let main_icon;
+                    match level {
+                        PromptLevel::Info => {
+                            title = windows::core::w!("Info");
+                            main_icon = TD_INFORMATION_ICON;
+                        }
+                        PromptLevel::Warning => {
+                            title = windows::core::w!("Warning");
+                            main_icon = TD_WARNING_ICON;
+                        }
+                        PromptLevel::Critical => {
+                            title = windows::core::w!("Critical");
+                            main_icon = TD_ERROR_ICON;
+                        }
+                    };
+                    config.pszWindowTitle = title;
+                    config.Anonymous1.pszMainIcon = main_icon;
+                    let instruction = HSTRING::from(msg);
+                    config.pszMainInstruction = PCWSTR::from_raw(instruction.as_ptr());
+                    let hints_encoded;
+                    if let Some(ref hints) = detail_string {
+                        hints_encoded = HSTRING::from(hints);
+                        config.pszContent = PCWSTR::from_raw(hints_encoded.as_ptr());
+                    };
+                    let mut button_id_map = Vec::with_capacity(answers.len());
+                    let mut buttons = Vec::new();
+                    let mut btn_encoded = Vec::new();
+                    for (index, btn) in answers.iter().enumerate() {
+                        let encoded = HSTRING::from(btn.label().as_ref());
+                        let button_id = match btn {
+                            PromptButton::Ok(_) => IDOK.0,
+                            PromptButton::Cancel(_) => IDCANCEL.0,
+                            // the first few low integer values are reserved for known buttons
+                            // so for simplicity we just go backwards from -1
+                            PromptButton::Other(_) => -(index as i32) - 1,
+                        };
+                        button_id_map.push(button_id);
+                        buttons.push(TASKDIALOG_BUTTON {
+                            nButtonID: button_id,
+                            pszButtonText: PCWSTR::from_raw(encoded.as_ptr()),
+                        });
+                        btn_encoded.push(encoded);
+                    }
+                    config.cButtons = buttons.len() as _;
+                    config.pButtons = buttons.as_ptr();
+
+                    config.pfCallback = Some(crate::dialog::task_dialog_callback);
+                    config.lpCallbackData = button_id_map.contains(&IDCANCEL.0) as isize;
+                    let mut res = std::mem::zeroed();
+                    TaskDialogIndirect(&config, Some(&mut res), None, None)
+                        .context("unable to create task dialog")?;
+                    Ok(button_id_map.iter().position(|&button_id| button_id == res))
+                }
+            },
+        );
+        self.0
+            .executor
+            .spawn(async move {
+                if let futures::future::Either::Left((result, _)) =
+                    futures::future::select(dialog, done_tx.cancellation()).await
+                    && let Some(Some(clicked)) = result
+                        .context("native dialog thread stopped")
+                        .and_then(|result| result)
+                        .log_err()
+                {
+                    done_tx.send(clicked).ok();
+                }
+            })
+            .detach();
+
+        Some(done_rx)
+    }
+
+    fn play_system_bell(&self) {
+        // MB_OK: The sound specified as the Windows Default Beep sound.
+        let _ = unsafe { MessageBeep(MB_OK) };
+    }
+}
+
+impl gpui::PlatformRenderTarget for WindowsWindow {
+    fn draw(&self, scene: &Scene) {
+        self.state
+            .renderer
+            .borrow_mut()
+            .draw(scene, self.state.background_appearance.get())
+            .log_err();
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        self.state.renderer.borrow().sprite_atlas()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        true
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        self.state.renderer.borrow().gpu_specs().log_err()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
+        self.state
+            .renderer
+            .borrow_mut()
+            .render_to_image(scene, self.state.background_appearance.get())
+    }
+}
+
+impl PlatformWindow for WindowsWindow {
+    /// get the logical size of the app's drawable area.
+    ///
+    /// Currently, GPUI uses the logical size of the app to handle mouse interactions (such as
+    /// whether the mouse collides with other elements of GPUI).
 
     fn get_raw_handle(&self) -> HWND {
         self.0.hwnd

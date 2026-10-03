@@ -34,8 +34,8 @@ use gpui::{
     PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
     PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, Tiling,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls,
-    WindowDecorations, WindowKind, WindowParams, layer_shell::LayerShellNotSupportedError, px,
-    size,
+    WindowDecorations, WindowHost as _, WindowKind, WindowParams,
+    layer_shell::LayerShellNotSupportedError, px, size,
 };
 use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig, wgpu};
 
@@ -1206,86 +1206,7 @@ impl gpui::WindowHost for WaylandWindow {
 
         state.renderer_presented = false;
     }
-}
 
-impl gpui::SystemServices for WaylandWindow {
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<Receiver<usize>> {
-        None
-    }
-
-    fn play_system_bell(&self) {
-        let state = self.borrow();
-        let surface = if state.surface_state.toplevel().is_some() {
-            Some(&state.surface)
-        } else {
-            None
-        };
-        if let Some(bell) = state.globals.system_bell.as_ref() {
-            bell.ring(surface);
-        }
-    }
-}
-
-impl gpui::PlatformRenderTarget for WaylandWindow {
-    fn draw(&self, scene: &Scene) {
-        let mut state = self.borrow_mut();
-
-        if state.renderer.device_lost() {
-            let raw_window = RawWindow {
-                window: state.surface.id().as_ptr().cast::<std::ffi::c_void>(),
-                display: state
-                    .surface
-                    .backend()
-                    .upgrade()
-                    .expect("entity should be alive")
-                    .display_ptr()
-                    .cast::<std::ffi::c_void>(),
-            };
-            match state.renderer.recover(&raw_window) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
-                }
-            }
-
-            state.force_render_after_recovery = true;
-            return;
-        }
-
-        state.renderer_presented = state.renderer.draw(scene);
-
-        if state.renderer.needs_redraw() {
-            state.force_render_after_recovery = true;
-        }
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        let state = self.borrow();
-        state.renderer.sprite_atlas().clone()
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        let client = self.borrow().client.get_client();
-        let state = client.borrow();
-        state
-            .gpu_context
-            .borrow()
-            .as_ref()
-            .is_some_and(|ctx| ctx.supports_dual_source_blending())
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        self.borrow().renderer.gpu_specs().into()
-    }
-}
-
-impl PlatformWindow for WaylandWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
     }
@@ -1303,19 +1224,6 @@ impl PlatformWindow for WaylandWindow {
         } else {
             drop(state);
             WindowBounds::Windowed(self.bounds())
-        }
-    }
-
-    fn inner_window_bounds(&self) -> WindowBounds {
-        let state = self.borrow();
-        if state.fullscreen {
-            WindowBounds::Fullscreen(state.window_bounds)
-        } else if state.maximized {
-            WindowBounds::Maximized(state.window_bounds)
-        } else {
-            let inset = state.inset();
-            drop(state);
-            WindowBounds::Windowed(self.bounds().inset(inset))
         }
     }
 
@@ -1401,28 +1309,20 @@ impl PlatformWindow for WaylandWindow {
         self.borrow().hovered
     }
 
+    fn background_appearance(&self) -> WindowBackgroundAppearance {
+        self.borrow().background_appearance
+    }
+
     fn set_title(&mut self, title: &str) {
         if let Some(toplevel) = self.borrow().surface_state.toplevel() {
             toplevel.set_title(title.to_owned());
         }
     }
 
-    fn set_app_id(&mut self, app_id: &str) {
-        let mut state = self.borrow_mut();
-        if let Some(toplevel) = state.surface_state.toplevel() {
-            toplevel.set_app_id(app_id.to_owned());
-        }
-        state.app_id = Some(app_id.to_owned());
-    }
-
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
         let mut state = self.borrow_mut();
         state.background_appearance = background_appearance;
         update_window(state);
-    }
-
-    fn background_appearance(&self) -> WindowBackgroundAppearance {
-        self.borrow().background_appearance
     }
 
     fn minimize(&self) {
@@ -1477,11 +1377,11 @@ impl PlatformWindow for WaylandWindow {
         self.0.callbacks.borrow_mut().should_close = Some(callback);
     }
 
-    fn on_close(&self, callback: Box<dyn FnOnce()>) {
-        self.0.callbacks.borrow_mut().close = Some(callback);
+    fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
     }
 
-    fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        self.0.callbacks.borrow_mut().close = Some(callback);
     }
 
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
@@ -1490,6 +1390,106 @@ impl PlatformWindow for WaylandWindow {
 
     fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.callbacks.borrow_mut().button_layout_changed = Some(callback);
+    }
+}
+
+impl gpui::SystemServices for WaylandWindow {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<Receiver<usize>> {
+        None
+    }
+
+    fn play_system_bell(&self) {
+        let state = self.borrow();
+        let surface = if state.surface_state.toplevel().is_some() {
+            Some(&state.surface)
+        } else {
+            None
+        };
+        if let Some(bell) = state.globals.system_bell.as_ref() {
+            bell.ring(surface);
+        }
+    }
+}
+
+impl gpui::PlatformRenderTarget for WaylandWindow {
+    fn draw(&self, scene: &Scene) {
+        let mut state = self.borrow_mut();
+
+        if state.renderer.device_lost() {
+            let raw_window = RawWindow {
+                window: state.surface.id().as_ptr().cast::<std::ffi::c_void>(),
+                display: state
+                    .surface
+                    .backend()
+                    .upgrade()
+                    .expect("entity should be alive")
+                    .display_ptr()
+                    .cast::<std::ffi::c_void>(),
+            };
+            match state.renderer.recover(&raw_window) {
+                Ok(()) => {}
+                Err(err) => {
+                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
+                }
+            }
+
+            state.force_render_after_recovery = true;
+            return;
+        }
+
+        state.renderer_presented = state.renderer.draw(scene);
+
+        if state.renderer.needs_redraw() {
+            state.force_render_after_recovery = true;
+        }
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        let state = self.borrow();
+        state.renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        let client = self.borrow().client.get_client();
+        let state = client.borrow();
+        state
+            .gpu_context
+            .borrow()
+            .as_ref()
+            .is_some_and(|ctx| ctx.supports_dual_source_blending())
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        self.borrow().renderer.gpu_specs().into()
+    }
+}
+
+impl PlatformWindow for WaylandWindow {
+    fn inner_window_bounds(&self) -> WindowBounds {
+        let state = self.borrow();
+        if state.fullscreen {
+            WindowBounds::Fullscreen(state.window_bounds)
+        } else if state.maximized {
+            WindowBounds::Maximized(state.window_bounds)
+        } else {
+            let inset = state.inset();
+            drop(state);
+            WindowBounds::Windowed(self.bounds().inset(inset))
+        }
+    }
+
+    fn set_app_id(&mut self, app_id: &str) {
+        let mut state = self.borrow_mut();
+        if let Some(toplevel) = state.surface_state.toplevel() {
+            toplevel.set_app_id(app_id.to_owned());
+        }
+        state.app_id = Some(app_id.to_owned());
     }
 
     fn show_window_menu(&self, position: Point<Pixels>) {

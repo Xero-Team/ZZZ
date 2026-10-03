@@ -133,38 +133,7 @@ impl gpui::InputSource for HeadlessWindow {
 
 impl gpui::WindowHost for HeadlessWindow {
     fn on_request_frame(&self, _callback: Box<dyn FnMut(RequestFrameOptions)>) {}
-}
 
-impl gpui::SystemServices for HeadlessWindow {
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        // Fall back to GPUI's rendered prompts.
-        None
-    }
-}
-
-impl gpui::PlatformRenderTarget for HeadlessWindow {
-    fn draw(&self, _scene: &Scene) {}
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        Arc::new(HeadlessAtlas::default())
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        false
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        None
-    }
-}
-
-impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
     }
@@ -215,10 +184,6 @@ impl PlatformWindow for HeadlessWindow {
         self.0.borrow_mut().title = Some(title.to_owned());
     }
 
-    fn get_title(&self) -> String {
-        self.0.borrow().title.clone().unwrap_or_default()
-    }
-
     fn set_background_appearance(&self, _background: WindowBackgroundAppearance) {}
 
     fn minimize(&self) {}
@@ -234,9 +199,6 @@ impl PlatformWindow for HeadlessWindow {
         self.0.borrow().is_fullscreen
     }
 
-    // No compositor drives a frame loop, so frame and status callbacks are
-    // dropped: anything that awaits a frame will never resolve headlessly.
-
     fn on_active_status_change(&self, _callback: Box<dyn FnMut(bool)>) {}
 
     fn on_hover_status_change(&self, _callback: Box<dyn FnMut(bool)>) {}
@@ -247,12 +209,50 @@ impl PlatformWindow for HeadlessWindow {
 
     fn on_should_close(&self, _callback: Box<dyn FnMut() -> bool>) {}
 
-    fn on_close(&self, _callback: Box<dyn FnOnce()>) {}
-
     fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
     }
 
+    fn on_close(&self, _callback: Box<dyn FnOnce()>) {}
+
     fn on_appearance_changed(&self, _callback: Box<dyn FnMut()>) {}
+}
+
+impl gpui::SystemServices for HeadlessWindow {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        // Fall back to GPUI's rendered prompts.
+        None
+    }
+}
+
+impl gpui::PlatformRenderTarget for HeadlessWindow {
+    fn draw(&self, _scene: &Scene) {}
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        Arc::new(HeadlessAtlas::default())
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        false
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        None
+    }
+}
+
+impl PlatformWindow for HeadlessWindow {
+    fn get_title(&self) -> String {
+        self.0.borrow().title.clone().unwrap_or_default()
+    }
+
+    // No compositor drives a frame loop, so frame and status callbacks are
+    // dropped: anything that awaits a frame will never resolve headlessly.
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
         headless_capabilities()

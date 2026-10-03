@@ -637,57 +637,7 @@ impl gpui::WindowHost for WebWindow {
     fn completed_frame(&self) {
         // On web, presentation happens automatically via wgpu surface present
     }
-}
 
-impl gpui::SystemServices for WebWindow {
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        None
-    }
-}
-
-impl gpui::PlatformRenderTarget for WebWindow {
-    fn draw(&self, scene: &Scene) {
-        if let Some((width, height)) = self.inner.pending_physical_size.take() {
-            if self.inner.canvas.width() != width || self.inner.canvas.height() != height {
-                self.inner.canvas.set_width(width);
-                self.inner.canvas.set_height(height);
-            }
-
-            let mut state = self.inner.state.borrow_mut();
-            state.renderer.update_drawable_size(Size {
-                width: DevicePixels(width as i32),
-                height: DevicePixels(height as i32),
-            });
-            drop(state);
-        }
-
-        self.inner.state.borrow_mut().renderer.draw(scene);
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        self.inner.state.borrow().renderer.sprite_atlas().clone()
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        self.inner
-            .state
-            .borrow()
-            .renderer
-            .supports_dual_source_blending()
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        Some(self.inner.state.borrow().renderer.gpu_specs())
-    }
-}
-
-impl PlatformWindow for WebWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.inner.state.borrow().bounds
     }
@@ -798,18 +748,68 @@ impl PlatformWindow for WebWindow {
         self.inner.callbacks.borrow_mut().should_close = Some(callback);
     }
 
-    fn on_close(&self, callback: Box<dyn FnOnce()>) {
-        self.inner.callbacks.borrow_mut().close = Some(callback);
-    }
-
     fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
         self.inner.callbacks.borrow_mut().hit_test_window_control = Some(callback);
+    }
+
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        self.inner.callbacks.borrow_mut().close = Some(callback);
     }
 
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
         self.inner.callbacks.borrow_mut().appearance_changed = Some(callback);
     }
+}
 
+impl gpui::SystemServices for WebWindow {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        None
+    }
+}
+
+impl gpui::PlatformRenderTarget for WebWindow {
+    fn draw(&self, scene: &Scene) {
+        if let Some((width, height)) = self.inner.pending_physical_size.take() {
+            if self.inner.canvas.width() != width || self.inner.canvas.height() != height {
+                self.inner.canvas.set_width(width);
+                self.inner.canvas.set_height(height);
+            }
+
+            let mut state = self.inner.state.borrow_mut();
+            state.renderer.update_drawable_size(Size {
+                width: DevicePixels(width as i32),
+                height: DevicePixels(height as i32),
+            });
+            drop(state);
+        }
+
+        self.inner.state.borrow_mut().renderer.draw(scene);
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        self.inner.state.borrow().renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        self.inner
+            .state
+            .borrow()
+            .renderer
+            .supports_dual_source_blending()
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        Some(self.inner.state.borrow().renderer.gpu_specs())
+    }
+}
+
+impl PlatformWindow for WebWindow {
     fn request_decorations(&self, _decorations: WindowDecorations) {}
 
     fn show_window_menu(&self, _position: Point<Pixels>) {}

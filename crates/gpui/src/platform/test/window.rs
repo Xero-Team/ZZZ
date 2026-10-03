@@ -2,7 +2,8 @@ use crate::{
     AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, GpuSpecs, HeadlessAtlas, Pixels,
     PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformInputHandler,
     PlatformWindow, Point, PromptButton, RequestFrameOptions, Scene, Size, TestPlatform,
-    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowHost as _,
+    WindowParams,
 };
 use image::RgbaImage;
 use parking_lot::Mutex;
@@ -214,6 +215,113 @@ impl crate::WindowHost for TestWindow {
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.lock().request_frame_callback = Some(callback);
     }
+
+    fn bounds(&self) -> Bounds<Pixels> {
+        self.0.lock().bounds
+    }
+
+    fn is_maximized(&self) -> bool {
+        false
+    }
+
+    fn window_bounds(&self) -> WindowBounds {
+        WindowBounds::Windowed(self.bounds())
+    }
+
+    fn content_size(&self) -> Size<Pixels> {
+        self.bounds().size
+    }
+
+    fn resize(&mut self, size: Size<Pixels>) {
+        let mut lock = self.0.lock();
+        lock.bounds.size = size;
+    }
+
+    fn scale_factor(&self) -> f32 {
+        self.0.lock().scale_factor
+    }
+
+    fn appearance(&self) -> WindowAppearance {
+        self.0.lock().appearance
+    }
+
+    fn display(&self) -> Option<std::rc::Rc<dyn crate::PlatformDisplay>> {
+        Some(self.0.lock().display.clone())
+    }
+
+    fn activate(&self) {
+        self.0
+            .lock()
+            .platform
+            .upgrade()
+            .expect("entity should be alive")
+            .set_active_window(Some(self.clone()))
+    }
+
+    fn is_active(&self) -> bool {
+        false
+    }
+
+    fn is_hovered(&self) -> bool {
+        false
+    }
+
+    fn background_appearance(&self) -> WindowBackgroundAppearance {
+        WindowBackgroundAppearance::Opaque
+    }
+
+    fn set_title(&mut self, title: &str) {
+        self.0.lock().title = Some(title.to_owned());
+    }
+
+    fn set_background_appearance(&self, _background: WindowBackgroundAppearance) {}
+
+    fn minimize(&self) {
+        unimplemented!()
+    }
+
+    fn zoom(&self) {
+        unimplemented!()
+    }
+
+    fn toggle_fullscreen(&self) {
+        let mut lock = self.0.lock();
+        lock.is_fullscreen = !lock.is_fullscreen;
+    }
+
+    fn is_fullscreen(&self) -> bool {
+        self.0.lock().is_fullscreen
+    }
+
+    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
+        self.0.lock().active_status_change_callback = Some(callback)
+    }
+
+    fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>) {
+        self.0.lock().hover_status_change_callback = Some(callback)
+    }
+
+    fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>) {
+        self.0.lock().resize_callback = Some(callback)
+    }
+
+    fn on_moved(&self, callback: Box<dyn FnMut()>) {
+        self.0.lock().moved_callback = Some(callback)
+    }
+
+    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>) {
+        self.0.lock().should_close_handler = Some(callback);
+    }
+
+    fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
+        self.0.lock().hit_test_window_control_callback = Some(callback);
+    }
+
+    fn on_close(&self, _callback: Box<dyn FnOnce()>) {}
+
+    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
+        self.0.lock().appearance_change_callback = Some(callback);
+    }
 }
 
 impl crate::SystemServices for TestWindow {
@@ -265,67 +373,7 @@ impl crate::PlatformRenderTarget for TestWindow {
 }
 
 impl PlatformWindow for TestWindow {
-    fn bounds(&self) -> Bounds<Pixels> {
-        self.0.lock().bounds
-    }
-
-    fn window_bounds(&self) -> WindowBounds {
-        WindowBounds::Windowed(self.bounds())
-    }
-
-    fn is_maximized(&self) -> bool {
-        false
-    }
-
-    fn content_size(&self) -> Size<Pixels> {
-        self.bounds().size
-    }
-
-    fn resize(&mut self, size: Size<Pixels>) {
-        let mut lock = self.0.lock();
-        lock.bounds.size = size;
-    }
-
-    fn scale_factor(&self) -> f32 {
-        self.0.lock().scale_factor
-    }
-
-    fn appearance(&self) -> WindowAppearance {
-        self.0.lock().appearance
-    }
-
-    fn display(&self) -> Option<std::rc::Rc<dyn crate::PlatformDisplay>> {
-        Some(self.0.lock().display.clone())
-    }
-
-    fn activate(&self) {
-        self.0
-            .lock()
-            .platform
-            .upgrade()
-            .expect("entity should be alive")
-            .set_active_window(Some(self.clone()))
-    }
-
-    fn is_active(&self) -> bool {
-        false
-    }
-
-    fn is_hovered(&self) -> bool {
-        false
-    }
-
-    fn background_appearance(&self) -> WindowBackgroundAppearance {
-        WindowBackgroundAppearance::Opaque
-    }
-
-    fn set_title(&mut self, title: &str) {
-        self.0.lock().title = Some(title.to_owned());
-    }
-
     fn set_app_id(&mut self, _app_id: &str) {}
-
-    fn set_background_appearance(&self, _background: WindowBackgroundAppearance) {}
 
     fn set_edited(&mut self, edited: bool) {
         self.0.lock().edited = edited;
@@ -337,53 +385,6 @@ impl PlatformWindow for TestWindow {
 
     fn show_character_palette(&self) {
         unimplemented!()
-    }
-
-    fn minimize(&self) {
-        unimplemented!()
-    }
-
-    fn zoom(&self) {
-        unimplemented!()
-    }
-
-    fn toggle_fullscreen(&self) {
-        let mut lock = self.0.lock();
-        lock.is_fullscreen = !lock.is_fullscreen;
-    }
-
-    fn is_fullscreen(&self) -> bool {
-        self.0.lock().is_fullscreen
-    }
-
-    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
-        self.0.lock().active_status_change_callback = Some(callback)
-    }
-
-    fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>) {
-        self.0.lock().hover_status_change_callback = Some(callback)
-    }
-
-    fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>) {
-        self.0.lock().resize_callback = Some(callback)
-    }
-
-    fn on_moved(&self, callback: Box<dyn FnMut()>) {
-        self.0.lock().moved_callback = Some(callback)
-    }
-
-    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>) {
-        self.0.lock().should_close_handler = Some(callback);
-    }
-
-    fn on_close(&self, _callback: Box<dyn FnOnce()>) {}
-
-    fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
-        self.0.lock().hit_test_window_control_callback = Some(callback);
-    }
-
-    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
-        self.0.lock().appearance_change_callback = Some(callback);
     }
 
     fn capabilities(&self) -> crate::PlatformCapabilities {

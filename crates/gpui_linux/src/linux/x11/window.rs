@@ -7,7 +7,7 @@ use gpui::{
     Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
     Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size,
     Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
-    WindowDecorations, WindowKind, WindowParams, px,
+    WindowDecorations, WindowHost as _, WindowKind, WindowParams, px,
 };
 use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig};
 
@@ -1417,85 +1417,7 @@ impl gpui::WindowHost for X11Window {
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.callbacks.borrow_mut().request_frame = Some(callback);
     }
-}
 
-impl gpui::SystemServices for X11Window {
-    fn prompt(
-        &self,
-        _level: PromptLevel,
-        _msg: &str,
-        _detail: Option<&str>,
-        _answers: &[PromptButton],
-    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
-        None
-    }
-
-    fn play_system_bell(&self) {
-        // Volume 0% means don't increase or decrease from system volume
-        let _ = self.0.xcb.bell(0);
-    }
-}
-
-impl gpui::PlatformRenderTarget for X11Window {
-    fn draw(&self, scene: &Scene) {
-        let mut inner = self.0.state.borrow_mut();
-
-        if inner.renderer.device_lost() {
-            let raw_window = RawWindow {
-                connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
-                    &*self.0.xcb,
-                )
-                .cast(),
-                screen_id: inner.x_screen_index,
-                window_id: self.0.x_window,
-                visual_id: inner.visual_id,
-            };
-            match inner.renderer.recover(&raw_window) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
-                }
-            }
-
-            inner.force_render_after_recovery = true;
-            return;
-        }
-
-        inner.renderer.draw(scene);
-
-        if inner.renderer.needs_redraw() {
-            inner.force_render_after_recovery = true;
-        }
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
-        let inner = self.0.state.borrow();
-        inner.renderer.sprite_atlas().clone()
-    }
-
-    fn is_subpixel_rendering_supported(&self) -> bool {
-        self.0
-            .state
-            .borrow()
-            .client
-            .0
-            .upgrade()
-            .is_some_and(|ref_cell| {
-                let state = ref_cell.borrow();
-                state
-                    .gpu_context
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|ctx| ctx.supports_dual_source_blending())
-            })
-    }
-
-    fn gpu_specs(&self) -> Option<GpuSpecs> {
-        self.0.state.borrow().renderer.gpu_specs().into()
-    }
-}
-
-impl PlatformWindow for X11Window {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
     }
@@ -1513,30 +1435,6 @@ impl PlatformWindow for X11Window {
             WindowBounds::Maximized(state.bounds)
         } else {
             WindowBounds::Windowed(state.bounds)
-        }
-    }
-
-    fn inner_window_bounds(&self) -> WindowBounds {
-        let state = self.0.state.borrow();
-        if self.is_maximized() {
-            WindowBounds::Maximized(state.bounds)
-        } else {
-            let mut bounds = state.bounds;
-            let [left, right, top, bottom] = state.last_insets;
-
-            let [left, right, top, bottom] = [
-                px((left as f32) / state.scale_factor),
-                px((right as f32) / state.scale_factor),
-                px((top as f32) / state.scale_factor),
-                px((bottom as f32) / state.scale_factor),
-            ];
-
-            bounds.origin.x += left;
-            bounds.origin.y += top;
-            bounds.size.width -= left + right;
-            bounds.size.height -= top + bottom;
-
-            WindowBounds::Windowed(bounds)
         }
     }
 
@@ -1619,6 +1517,10 @@ impl PlatformWindow for X11Window {
         self.0.state.borrow().hovered
     }
 
+    fn background_appearance(&self) -> WindowBackgroundAppearance {
+        self.0.state.borrow().background_appearance
+    }
+
     fn set_title(&mut self, title: &str) {
         check_reply(
             || "X11 ChangeProperty8 on WM_NAME failed.",
@@ -1646,43 +1548,11 @@ impl PlatformWindow for X11Window {
         xcb_flush(&self.0.xcb);
     }
 
-    fn set_app_id(&mut self, app_id: &str) {
-        let mut data = Vec::with_capacity(app_id.len() * 2 + 2);
-        data.extend(app_id.bytes()); // instance https://unix.stackexchange.com/a/494170
-        data.push(b'\0');
-        data.extend(app_id.bytes()); // class
-        data.push(b'\0');
-
-        check_reply(
-            || "X11 ChangeProperty8 for WM_CLASS failed.",
-            self.0.xcb.change_property8(
-                xproto::PropMode::REPLACE,
-                self.0.x_window,
-                xproto::AtomEnum::WM_CLASS,
-                xproto::AtomEnum::STRING,
-                &data,
-            ),
-        )
-        .log_err();
-    }
-
-    fn map_window(&mut self) -> anyhow::Result<()> {
-        check_reply(
-            || "X11 MapWindow failed.",
-            self.0.xcb.map_window(self.0.x_window),
-        )?;
-        Ok(())
-    }
-
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
         let mut state = self.0.state.borrow_mut();
         state.background_appearance = background_appearance;
         let transparent = state.is_transparent();
         state.renderer.update_transparency(transparent);
-    }
-
-    fn background_appearance(&self) -> WindowBackgroundAppearance {
-        self.0.state.borrow().background_appearance
     }
 
     fn minimize(&self) {
@@ -1752,11 +1622,11 @@ impl PlatformWindow for X11Window {
         self.0.callbacks.borrow_mut().should_close = Some(callback);
     }
 
-    fn on_close(&self, callback: Box<dyn FnOnce()>) {
-        self.0.callbacks.borrow_mut().close = Some(callback);
+    fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
     }
 
-    fn on_hit_test_window_control(&self, _callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        self.0.callbacks.borrow_mut().close = Some(callback);
     }
 
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
@@ -1765,6 +1635,136 @@ impl PlatformWindow for X11Window {
 
     fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.callbacks.borrow_mut().button_layout_changed = Some(callback);
+    }
+}
+
+impl gpui::SystemServices for X11Window {
+    fn prompt(
+        &self,
+        _level: PromptLevel,
+        _msg: &str,
+        _detail: Option<&str>,
+        _answers: &[PromptButton],
+    ) -> Option<futures::channel::oneshot::Receiver<usize>> {
+        None
+    }
+
+    fn play_system_bell(&self) {
+        // Volume 0% means don't increase or decrease from system volume
+        let _ = self.0.xcb.bell(0);
+    }
+}
+
+impl gpui::PlatformRenderTarget for X11Window {
+    fn draw(&self, scene: &Scene) {
+        let mut inner = self.0.state.borrow_mut();
+
+        if inner.renderer.device_lost() {
+            let raw_window = RawWindow {
+                connection: as_raw_xcb_connection::AsRawXcbConnection::as_raw_xcb_connection(
+                    &*self.0.xcb,
+                )
+                .cast(),
+                screen_id: inner.x_screen_index,
+                window_id: self.0.x_window,
+                visual_id: inner.visual_id,
+            };
+            match inner.renderer.recover(&raw_window) {
+                Ok(()) => {}
+                Err(err) => {
+                    log::warn!("GPU recovery failed, will retry on next frame: {err}");
+                }
+            }
+
+            inner.force_render_after_recovery = true;
+            return;
+        }
+
+        inner.renderer.draw(scene);
+
+        if inner.renderer.needs_redraw() {
+            inner.force_render_after_recovery = true;
+        }
+    }
+
+    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
+        let inner = self.0.state.borrow();
+        inner.renderer.sprite_atlas().clone()
+    }
+
+    fn is_subpixel_rendering_supported(&self) -> bool {
+        self.0
+            .state
+            .borrow()
+            .client
+            .0
+            .upgrade()
+            .is_some_and(|ref_cell| {
+                let state = ref_cell.borrow();
+                state
+                    .gpu_context
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|ctx| ctx.supports_dual_source_blending())
+            })
+    }
+
+    fn gpu_specs(&self) -> Option<GpuSpecs> {
+        self.0.state.borrow().renderer.gpu_specs().into()
+    }
+}
+
+impl PlatformWindow for X11Window {
+    fn inner_window_bounds(&self) -> WindowBounds {
+        let state = self.0.state.borrow();
+        if self.is_maximized() {
+            WindowBounds::Maximized(state.bounds)
+        } else {
+            let mut bounds = state.bounds;
+            let [left, right, top, bottom] = state.last_insets;
+
+            let [left, right, top, bottom] = [
+                px((left as f32) / state.scale_factor),
+                px((right as f32) / state.scale_factor),
+                px((top as f32) / state.scale_factor),
+                px((bottom as f32) / state.scale_factor),
+            ];
+
+            bounds.origin.x += left;
+            bounds.origin.y += top;
+            bounds.size.width -= left + right;
+            bounds.size.height -= top + bottom;
+
+            WindowBounds::Windowed(bounds)
+        }
+    }
+
+    fn set_app_id(&mut self, app_id: &str) {
+        let mut data = Vec::with_capacity(app_id.len() * 2 + 2);
+        data.extend(app_id.bytes()); // instance https://unix.stackexchange.com/a/494170
+        data.push(b'\0');
+        data.extend(app_id.bytes()); // class
+        data.push(b'\0');
+
+        check_reply(
+            || "X11 ChangeProperty8 for WM_CLASS failed.",
+            self.0.xcb.change_property8(
+                xproto::PropMode::REPLACE,
+                self.0.x_window,
+                xproto::AtomEnum::WM_CLASS,
+                xproto::AtomEnum::STRING,
+                &data,
+            ),
+        )
+        .log_err();
+    }
+
+    fn map_window(&mut self) -> anyhow::Result<()> {
+        check_reply(
+            || "X11 MapWindow failed.",
+            self.0.xcb.map_window(self.0.x_window),
+        )?;
+        Ok(())
     }
 
     fn show_window_menu(&self, position: Point<Pixels>) {

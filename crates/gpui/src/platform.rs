@@ -703,10 +703,38 @@ pub trait InputSource {
 /// Platform host for window frame scheduling and completion lifecycle.
 #[expect(missing_docs)]
 pub trait WindowHost {
+    fn bounds(&self) -> Bounds<Pixels>;
+    fn is_maximized(&self) -> bool;
+    fn window_bounds(&self) -> WindowBounds;
+    fn content_size(&self) -> Size<Pixels>;
+    fn resize(&mut self, size: Size<Pixels>);
+    fn scale_factor(&self) -> f32;
+    fn appearance(&self) -> WindowAppearance;
+    fn display(&self) -> Option<Rc<dyn PlatformDisplay>>;
+    fn activate(&self);
+    fn request_attention(&self) {}
+    fn is_active(&self) -> bool;
+    fn is_hovered(&self) -> bool;
+    fn background_appearance(&self) -> WindowBackgroundAppearance;
+    fn set_title(&mut self, title: &str);
+    fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance);
+    fn minimize(&self);
+    fn zoom(&self);
+    fn toggle_fullscreen(&self);
+    fn is_fullscreen(&self) -> bool;
     fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
         None
     }
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>);
+    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>);
+    fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>);
+    fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>);
+    fn on_moved(&self, callback: Box<dyn FnMut()>);
+    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>);
+    fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>);
+    fn on_close(&self, callback: Box<dyn FnOnce()>);
+    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
+    fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}
     fn completed_frame(&self) {}
 }
 
@@ -760,36 +788,6 @@ pub trait PlatformWindow:
     + TextInputBridge
     + WindowHost
 {
-    fn bounds(&self) -> Bounds<Pixels>;
-    fn is_maximized(&self) -> bool;
-    fn window_bounds(&self) -> WindowBounds;
-    fn content_size(&self) -> Size<Pixels>;
-    fn resize(&mut self, size: Size<Pixels>);
-    fn scale_factor(&self) -> f32;
-    fn appearance(&self) -> WindowAppearance;
-    fn display(&self) -> Option<Rc<dyn PlatformDisplay>>;
-    fn activate(&self);
-    /// Requests that the operating system draw attention to this window.
-    fn request_attention(&self) {}
-    fn is_active(&self) -> bool;
-    fn is_hovered(&self) -> bool;
-    fn background_appearance(&self) -> WindowBackgroundAppearance;
-    fn set_title(&mut self, title: &str);
-    fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance);
-    fn minimize(&self);
-    fn zoom(&self);
-    fn toggle_fullscreen(&self);
-    fn is_fullscreen(&self) -> bool;
-    fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>);
-    fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>);
-    fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>);
-    fn on_moved(&self, callback: Box<dyn FnMut()>);
-    fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>);
-    fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>);
-    fn on_close(&self, callback: Box<dyn FnOnce()>);
-    fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
-    fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}
-
     // macOS specific methods
     fn get_title(&self) -> String {
         String::new()
