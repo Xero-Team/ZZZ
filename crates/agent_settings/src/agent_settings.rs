@@ -1131,7 +1131,8 @@ mod tests {
             AgentSettings::set_layout(WindowLayout::agent(), fs.clone(), cx)
         })
         .await
-        .ok();
+        .expect("layout update should report completion")
+        .expect("setting the agent layout should succeed");
 
         cx.run_until_parked();
 
