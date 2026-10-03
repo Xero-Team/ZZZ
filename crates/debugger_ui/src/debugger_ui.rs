@@ -12,7 +12,7 @@ use session::DebugSession;
 
 use tasks_ui::{Spawn, TaskOverrides};
 use ui::{FluentBuilder, InteractiveElement};
-use util::maybe;
+use util::{ResultExt as _, maybe};
 use workspace::{ShutdownDebugAdapters, Workspace};
 use zzz_actions::debug_panel::{Toggle, ToggleFocus};
 
@@ -210,32 +210,40 @@ pub fn init(cx: &mut App) {
                     div.on_action(move |_: &Pause, _, cx| {
                         active_item
                             .update(cx, |item, cx| item.pause_thread(cx))
-                            .ok();
+                            .log_err();
                     })
                 })
                 .when(status == Some(ThreadStatus::Stopped), |div| {
                     div.on_action({
                         let active_item = active_item.clone();
                         move |_: &StepInto, _, cx| {
-                            active_item.update(cx, |item, cx| item.step_in(cx)).ok();
+                            active_item
+                                .update(cx, |item, cx| item.step_in(cx))
+                                .log_err();
                         }
                     })
                     .on_action({
                         let active_item = active_item.clone();
                         move |_: &StepOver, _, cx| {
-                            active_item.update(cx, |item, cx| item.step_over(cx)).ok();
+                            active_item
+                                .update(cx, |item, cx| item.step_over(cx))
+                                .log_err();
                         }
                     })
                     .on_action({
                         let active_item = active_item.clone();
                         move |_: &StepOut, _, cx| {
-                            active_item.update(cx, |item, cx| item.step_out(cx)).ok();
+                            active_item
+                                .update(cx, |item, cx| item.step_out(cx))
+                                .log_err();
                         }
                     })
                     .when(supports_step_back, |div| {
                         let active_item = active_item.clone();
                         div.on_action(move |_: &StepBack, _, cx| {
-                            active_item.update(cx, |item, cx| item.step_back(cx)).ok();
+                            active_item
+                                .update(cx, |item, cx| item.step_back(cx))
+                                .log_err();
                         })
                     })
                     .on_action({
@@ -243,7 +251,7 @@ pub fn init(cx: &mut App) {
                         move |_: &Continue, _, cx| {
                             active_item
                                 .update(cx, |item, cx| item.continue_program(cx))
-                                .ok();
+                                .log_err();
                         }
                     })
                     .when(supports_single_thread_execution_requests, |div| {
@@ -251,7 +259,7 @@ pub fn init(cx: &mut App) {
                         div.on_action(move |_: &ContinueThread, _, cx| {
                             active_item
                                 .update(cx, |item, cx| item.continue_thread(cx))
-                                .ok();
+                                .log_err();
                         })
                     })
                 })
@@ -260,7 +268,7 @@ pub fn init(cx: &mut App) {
                     div.on_action(move |_: &Detach, _, cx| {
                         active_item
                             .update(cx, |item, cx| item.detach_client(cx))
-                            .ok();
+                            .log_err();
                     })
                 })
                 .on_action({
@@ -268,7 +276,7 @@ pub fn init(cx: &mut App) {
                     move |_: &Restart, _, cx| {
                         active_item
                             .update(cx, |item, cx| item.restart_session(cx))
-                            .ok();
+                            .log_err();
                     }
                 })
                 .on_action({
@@ -276,13 +284,15 @@ pub fn init(cx: &mut App) {
                     move |_: &RerunSession, window, cx| {
                         active_item
                             .update(cx, |item, cx| item.rerun_session(window, cx))
-                            .ok();
+                            .log_err();
                     }
                 })
                 .on_action({
                     let active_item = active_item.clone();
                     move |_: &Stop, _, cx| {
-                        active_item.update(cx, |item, cx| item.stop_thread(cx)).ok();
+                        active_item
+                            .update(cx, |item, cx| item.stop_thread(cx))
+                            .log_err();
                     }
                 })
                 .on_action({
@@ -290,7 +300,7 @@ pub fn init(cx: &mut App) {
                     move |_: &ToggleIgnoreBreakpoints, _, cx| {
                         active_item
                             .update(cx, |item, cx| item.toggle_ignore_breakpoints(cx))
-                            .ok();
+                            .log_err();
                     }
                 })
                 .on_action(move |_: &ToggleUserFrames, _, cx| {
