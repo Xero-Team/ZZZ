@@ -328,11 +328,12 @@ impl AcpTools {
                     IconPosition::Start,
                     None,
                     move |_window, cx| {
-                        acp_tools
-                            .update(cx, |this, cx| {
-                                this.select_connection(Some(AgentId(label.clone())), cx);
-                            })
-                            .ok();
+                        let Some(acp_tools) = acp_tools.upgrade() else {
+                            return;
+                        };
+                        acp_tools.update(cx, |this, cx| {
+                            this.select_connection(Some(AgentId(label.clone())), cx);
+                        });
                     },
                 );
             }
