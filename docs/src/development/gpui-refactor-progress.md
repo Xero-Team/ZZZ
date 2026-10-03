@@ -227,6 +227,10 @@ diagnostics feature。
 adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher EXP-008 已
 达标；AccessKit EXP-006 尚未运行。
 
+后续边界进展：`AccessibilityBridge` 现在接收 backend-neutral `AccessibilityUpdate`；
+空更新在所有 backend 可通过，非空 semantic update 在未接 native adapter 时返回明确
+unsupported error。没有导入缺失的 AccessKit writer/adapter 路径。
+
 阶段 2 验证：
 
 | 命令或检查                                                                | 结果      | 原始数据/说明                                                                                                                                                                                  |
@@ -366,6 +370,8 @@ immutable `BuiltFrame`。
   scene view；frame owner 继续负责构建、交换和 cache replay。
 - 这是 4D 的第一步，snapshot 的 accessibility/diagnostics 数据接线和 renderer contract
   仍待阶段 5；当前不宣称 immutable ownership 已完全收敛。
+- `BuiltFrame.accessibility` 已替换为真实 `AccessibilityUpdate` contract，并在 present
+  时提交给 platform bridge；当前尚无 native adapter，因此 frame payload 仍为空。
 
 验证：
 
@@ -448,6 +454,8 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 - 新增 `AppLifecycle` supertrait，将 run/quit/restart、activation/hide 和 quit/reopen
   callbacks 从宽 `Platform` 抽离；Test/visual、Linux、macOS、Windows、Web event-loop
   实现均只做所有权移动。
+- 新增 `AccessibilityBridge` supertrait；所有 backend 显式实现，未支持平台对非空
+  semantic update 返回 error，避免 silent no-op。
 
 当前矩阵：
 
@@ -472,6 +480,7 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 | `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 221 tests passed after TextInputBridge split            |
 | `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                    |
 | `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | input/action routing tests, 3 passed                    |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                  |
 | `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux            |
 | `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过       |
 | `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过 |
@@ -479,8 +488,8 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
-`9c8de23b7c`；app lifecycle `1ff5d99840`。
-下一步：建立 `AccessibilityBridge` 和 renderer factory 内部 traits，并覆盖
+`9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`。
+下一步：建立 renderer factory 内部 trait，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
 ### 阶段 7：UI 集成边界
