@@ -243,19 +243,22 @@ pub fn match_fixed_path_set(
 
     let mut results = Vec::new();
 
-    path_match_helper(
-        &mut matcher,
-        &query,
-        candidates.into_iter(),
-        &mut results,
-        worktree_id,
-        &path_prefix,
-        root_is_file,
-        &None,
-        path_style,
-        &AtomicBool::new(false),
-    )
-    .ok();
+    assert!(
+        path_match_helper(
+            &mut matcher,
+            &query,
+            candidates.into_iter(),
+            &mut results,
+            worktree_id,
+            &path_prefix,
+            root_is_file,
+            &None,
+            path_style,
+            &AtomicBool::new(false),
+        )
+        .is_ok(),
+        "fixed path matching cannot be cancelled"
+    );
     util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
     matcher::return_matcher(matcher);
     results
