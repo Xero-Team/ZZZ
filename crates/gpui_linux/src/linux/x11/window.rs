@@ -1411,6 +1411,12 @@ impl gpui::InputSource for X11Window {
     }
 }
 
+impl gpui::WindowHost for X11Window {
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.0.callbacks.borrow_mut().request_frame = Some(callback);
+    }
+}
+
 impl PlatformWindow for X11Window {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
@@ -1673,10 +1679,6 @@ impl PlatformWindow for X11Window {
 
     fn is_fullscreen(&self) -> bool {
         self.0.state.borrow().fullscreen
-    }
-
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
-        self.0.callbacks.borrow_mut().request_frame = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

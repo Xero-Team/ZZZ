@@ -1395,6 +1395,12 @@ impl gpui::InputSource for MacWindow {
     }
 }
 
+impl gpui::WindowHost for MacWindow {
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.0.as_ref().lock().request_frame_callback = Some(callback);
+    }
+}
+
 impl PlatformWindow for MacWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.as_ref().lock().bounds()
@@ -1825,10 +1831,6 @@ impl PlatformWindow for MacWindow {
                 .styleMask()
                 .contains(NSWindowStyleMask::NSFullScreenWindowMask)
         }
-    }
-
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
-        self.0.as_ref().lock().request_frame_callback = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

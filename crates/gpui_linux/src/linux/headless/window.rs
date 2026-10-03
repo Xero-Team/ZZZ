@@ -129,6 +129,10 @@ impl gpui::InputSource for HeadlessWindow {
     fn on_input(&self, _callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>) {}
 }
 
+impl gpui::WindowHost for HeadlessWindow {
+    fn on_request_frame(&self, _callback: Box<dyn FnMut(RequestFrameOptions)>) {}
+}
+
 impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
@@ -212,7 +216,6 @@ impl PlatformWindow for HeadlessWindow {
 
     // No compositor drives a frame loop, so frame and status callbacks are
     // dropped: anything that awaits a frame will never resolve headlessly.
-    fn on_request_frame(&self, _callback: Box<dyn FnMut(RequestFrameOptions)>) {}
 
     fn on_active_status_change(&self, _callback: Box<dyn FnMut(bool)>) {}
 

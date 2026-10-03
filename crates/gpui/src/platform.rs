@@ -661,9 +661,19 @@ pub trait InputSource {
     fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> DispatchEventResult>);
 }
 
+/// Platform host for window frame scheduling and completion lifecycle.
+#[expect(missing_docs)]
+pub trait WindowHost {
+    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
+        None
+    }
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>);
+    fn completed_frame(&self) {}
+}
+
 #[expect(missing_docs)]
 pub trait PlatformWindow:
-    HasWindowHandle + HasDisplayHandle + InputSource + TextInputBridge
+    HasWindowHandle + HasDisplayHandle + InputSource + TextInputBridge + WindowHost
 {
     fn bounds(&self) -> Bounds<Pixels>;
     fn is_maximized(&self) -> bool;
@@ -692,10 +702,6 @@ pub trait PlatformWindow:
     fn zoom(&self);
     fn toggle_fullscreen(&self);
     fn is_fullscreen(&self) -> bool;
-    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
-        None
-    }
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>);
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>);
     fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>);
     fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>);
@@ -706,7 +712,6 @@ pub trait PlatformWindow:
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
     fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}
     fn draw(&self, scene: &Scene);
-    fn completed_frame(&self) {}
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
     fn is_subpixel_rendering_supported(&self) -> bool;
 

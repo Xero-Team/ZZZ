@@ -618,6 +618,25 @@ impl gpui::InputSource for WebWindow {
     }
 }
 
+impl gpui::WindowHost for WebWindow {
+    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
+        let inner = Rc::downgrade(&self.inner);
+        Some(Rc::new(move || {
+            if let Some(inner) = inner.upgrade() {
+                inner.wake_frame_loop();
+            }
+        }))
+    }
+
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.inner.callbacks.borrow_mut().request_frame = Some(callback);
+    }
+
+    fn completed_frame(&self) {
+        // On web, presentation happens automatically via wgpu surface present
+    }
+}
+
 impl PlatformWindow for WebWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.inner.state.borrow().bounds
@@ -719,19 +738,6 @@ impl PlatformWindow for WebWindow {
         self.inner.state.borrow().is_fullscreen
     }
 
-    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
-        let inner = Rc::downgrade(&self.inner);
-        Some(Rc::new(move || {
-            if let Some(inner) = inner.upgrade() {
-                inner.wake_frame_loop();
-            }
-        }))
-    }
-
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
-        self.inner.callbacks.borrow_mut().request_frame = Some(callback);
-    }
-
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
         self.inner.callbacks.borrow_mut().active_status_change = Some(callback);
     }
@@ -780,10 +786,6 @@ impl PlatformWindow for WebWindow {
         }
 
         self.inner.state.borrow_mut().renderer.draw(scene);
-    }
-
-    fn completed_frame(&self) {
-        // On web, presentation happens automatically via wgpu surface present
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

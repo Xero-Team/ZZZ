@@ -639,6 +639,12 @@ impl gpui::InputSource for WindowsWindow {
     }
 }
 
+impl gpui::WindowHost for WindowsWindow {
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.state.callbacks.request_frame.set(Some(callback));
+    }
+}
+
 impl PlatformWindow for WindowsWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.state.bounds()
@@ -941,10 +947,6 @@ impl PlatformWindow for WindowsWindow {
 
     fn is_fullscreen(&self) -> bool {
         self.state.is_fullscreen()
-    }
-
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
-        self.state.callbacks.request_frame.set(Some(callback));
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

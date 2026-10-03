@@ -201,6 +201,19 @@ impl crate::InputSource for TestWindow {
     }
 }
 
+impl crate::WindowHost for TestWindow {
+    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
+        let frame_wake_count = self.0.lock().frame_wake_count.clone();
+        Some(Rc::new(move || {
+            frame_wake_count.set(frame_wake_count.get() + 1);
+        }))
+    }
+
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.0.lock().request_frame_callback = Some(callback);
+    }
+}
+
 impl PlatformWindow for TestWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.lock().bounds
@@ -312,17 +325,6 @@ impl PlatformWindow for TestWindow {
 
     fn is_fullscreen(&self) -> bool {
         self.0.lock().is_fullscreen
-    }
-
-    fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
-        let frame_wake_count = self.0.lock().frame_wake_count.clone();
-        Some(Rc::new(move || {
-            frame_wake_count.set(frame_wake_count.get() + 1);
-        }))
-    }
-
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
-        self.0.lock().request_frame_callback = Some(callback);
     }
 
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {

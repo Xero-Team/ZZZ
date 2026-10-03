@@ -1188,6 +1188,24 @@ impl gpui::InputSource for WaylandWindow {
     }
 }
 
+impl gpui::WindowHost for WaylandWindow {
+    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
+        self.0.callbacks.borrow_mut().request_frame = Some(callback);
+    }
+
+    fn completed_frame(&self) {
+        let mut state = self.borrow_mut();
+
+        // Work around a bug in old versions of wlroots where committing without a buffer attached
+        // can cause invalid synchronization that leads to graphical corruption.
+        if !state.renderer_presented {
+            state.surface.commit();
+        }
+
+        state.renderer_presented = false;
+    }
+}
+
 impl PlatformWindow for WaylandWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
@@ -1380,10 +1398,6 @@ impl PlatformWindow for WaylandWindow {
         self.borrow().fullscreen
     }
 
-    fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
-        self.0.callbacks.borrow_mut().request_frame = Some(callback);
-    }
-
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>) {
         self.0.callbacks.borrow_mut().active_status_change = Some(callback);
     }
@@ -1449,18 +1463,6 @@ impl PlatformWindow for WaylandWindow {
         if state.renderer.needs_redraw() {
             state.force_render_after_recovery = true;
         }
-    }
-
-    fn completed_frame(&self) {
-        let mut state = self.borrow_mut();
-
-        // Work around a bug in old versions of wlroots where committing without a buffer attached
-        // can cause invalid synchronization that leads to graphical corruption.
-        if !state.renderer_presented {
-            state.surface.commit();
-        }
-
-        state.renderer_presented = false;
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
