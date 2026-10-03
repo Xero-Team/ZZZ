@@ -697,7 +697,7 @@ impl Asset for ImageAssetLoader {
                         let mut decoder = WebPDecoder::new(Cursor::new(&bytes))?;
 
                         if decoder.has_animation() {
-                            let _ = decoder.set_background_color(Rgba([0, 0, 0, 0]));
+                            decoder.set_background_color(Rgba([0, 0, 0, 0])).log_err();
                             let mut frames = SmallVec::new();
 
                             for frame in decoder.into_frames() {
