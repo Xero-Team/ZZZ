@@ -543,7 +543,7 @@ pub fn init(cx: &mut App) {
                         &[ok_label.as_str()],
                     )
                     .await
-                    .ok();
+                    .log_err();
                 })
                 .detach();
                 return;
