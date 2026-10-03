@@ -29,17 +29,14 @@ impl Head {
         editor
             .subscribe(
                 Box::new(move |event, window, cx| {
-                    this.update(cx, |this, cx| (edit_handler)(this, &event, window, cx))
-                        .ok();
+                    if let Some(this) = this.upgrade() {
+                        this.update(cx, |this, cx| (edit_handler)(this, &event, window, cx));
+                    }
                 }),
                 window,
                 cx,
             )
             .detach();
-        // cx.subscribe_in(&editor, window, |v, _, event, window, cx| {
-        //     edit_handler(v, event, window, cx);
-        // })
-        // .detach();
         Self::Editor(editor)
     }
 
