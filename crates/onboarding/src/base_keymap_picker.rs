@@ -9,7 +9,6 @@ use project::Fs;
 use settings::{BaseKeymap, Settings, update_settings_file};
 use std::sync::Arc;
 use ui::{ListItem, ListItemSpacing, prelude::*};
-use util::ResultExt;
 use workspace::{ModalView, Workspace, ui::HighlightedLabel};
 
 actions!(
@@ -166,14 +165,16 @@ impl PickerDelegate for BaseKeymapSelectorDelegate {
                 .await
             };
 
+            let Some(this) = this.upgrade() else {
+                return;
+            };
             this.update(cx, |this, _| {
                 this.delegate.matches = matches;
                 this.delegate.selected_index = this
                     .delegate
                     .selected_index
                     .min(this.delegate.matches.len().saturating_sub(1));
-            })
-            .log_err();
+            });
         })
     }
 
@@ -191,19 +192,19 @@ impl PickerDelegate for BaseKeymapSelectorDelegate {
             });
         }
 
-        self.selector
-            .update(cx, |_, cx| {
+        if let Some(selector) = self.selector.upgrade() {
+            selector.update(cx, |_, cx| {
                 cx.emit(DismissEvent);
-            })
-            .ok();
+            });
+        }
     }
 
     fn dismissed(&mut self, _: &mut Window, cx: &mut Context<Picker<BaseKeymapSelectorDelegate>>) {
-        self.selector
-            .update(cx, |_, cx| {
+        if let Some(selector) = self.selector.upgrade() {
+            selector.update(cx, |_, cx| {
                 cx.emit(DismissEvent);
-            })
-            .log_err();
+            });
+        }
     }
 
     fn render_match(
