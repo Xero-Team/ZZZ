@@ -268,35 +268,32 @@ impl PickerDelegate for DevContainerPickerDelegate {
 
     fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         let selected_config = self.matching_candidates.get(self.selected_index).cloned();
-        self.parent_modal
-            .update(cx, move |modal, cx| {
+        if let Some(parent_modal) = self.parent_modal.upgrade() {
+            parent_modal.update(cx, move |modal, cx| {
                 if secondary {
                     modal.edit_in_dev_container_json(selected_config.clone(), window, cx);
-                } else if let Some((app_state, context)) = modal
-                    .workspace
-                    .read_with(cx, |workspace, cx| {
+                } else if let Some(workspace) = modal.workspace.upgrade()
+                    && let Some((app_state, context)) = workspace.read_with(cx, |workspace, cx| {
                         let app_state = workspace.app_state().clone();
                         let context = DevContainerContext::from_workspace(workspace, cx)?;
                         Some((app_state, context))
                     })
-                    .ok()
-                    .flatten()
                 {
                     modal.open_dev_container(selected_config, app_state, context, window, cx);
                     modal.view_in_progress_dev_container(window, cx);
                 } else {
                     log::error!("No active project directory for Dev Container");
                 }
-            })
-            .ok();
+            });
+        }
     }
 
     fn dismissed(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.parent_modal
-            .update(cx, |modal, cx| {
+        if let Some(parent_modal) = self.parent_modal.upgrade() {
+            parent_modal.update(cx, |modal, cx| {
                 modal.cancel(&menu::Cancel, window, cx);
-            })
-            .ok();
+            });
+        }
     }
 
     fn render_match(
