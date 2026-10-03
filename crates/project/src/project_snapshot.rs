@@ -1,6 +1,7 @@
 use git::repository::DiffType;
 use gpui::{App, Entity, Task};
 use serde::{Deserialize, Serialize};
+use util::ResultExt as _;
 use worktree::Worktree;
 
 use crate::{
@@ -91,7 +92,7 @@ impl ProjectWorktreeSnapshot {
 
                             let remote_url = backend.remote_url("origin").await;
                             let head_sha = backend.head_sha().await;
-                            let diff = backend.diff(DiffType::HeadToWorktree).await.ok();
+                            let diff = backend.diff(DiffType::HeadToWorktree).await.log_err();
 
                             GitState {
                                 remote_url,
@@ -104,7 +105,7 @@ impl ProjectWorktreeSnapshot {
                 });
 
             let git_state = match git_state {
-                Some(receiver) => receiver.await.ok(),
+                Some(receiver) => receiver.await.log_err(),
                 None => None,
             };
 
