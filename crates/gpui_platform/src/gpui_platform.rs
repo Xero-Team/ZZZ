@@ -33,6 +33,7 @@ pub fn web_init() {
 }
 
 /// Returns the default [`Platform`] for the current OS.
+#[cfg(not(target_family = "wasm"))]
 pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
     #[cfg(target_os = "macos")]
     {
@@ -51,12 +52,12 @@ pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
     {
         gpui_linux::current_platform(headless)
     }
+}
 
-    #[cfg(target_family = "wasm")]
-    {
-        let _ = headless;
-        Rc::new(gpui_web::WebPlatform::new(true))
-    }
+/// Returns the multithreaded web [`Platform`].
+#[cfg(target_family = "wasm")]
+pub fn current_platform(_headless: bool) -> Rc<dyn Platform> {
+    Rc::new(gpui_web::WebPlatform::new(true))
 }
 
 /// Returns a new [`HeadlessRenderer`] for the current platform, if available.
@@ -82,12 +83,9 @@ mod tests {
     use std::cell::RefCell;
     use std::time::Duration;
 
-    // Note: All VisualTestAppContext tests are ignored by default because they require
-    // the macOS main thread. Standard Rust tests run on worker threads, which causes
-    // SIGABRT when interacting with macOS AppKit/Cocoa APIs.
-    //
-    // To run these tests, use:
-    // cargo test -p gpui visual_test_context -- --ignored --test-threads=1
+    // These tests require the macOS main thread. Standard Rust tests run on worker threads, which
+    // abort when they interact with AppKit or Cocoa.
+    // Run them with: cargo test -p gpui_platform -- --ignored --test-threads=1
 
     #[test]
     #[ignore = "Requires macOS main thread"]
@@ -96,8 +94,6 @@ mod tests {
 
         let task_ran = Rc::new(RefCell::new(false));
 
-        // Spawn a foreground task via the App's spawn method
-        // This should use our TestDispatcher, not the MacDispatcher
         {
             let task_ran = task_ran.clone();
             cx.update(|cx| {
@@ -108,13 +104,10 @@ mod tests {
             });
         }
 
-        // The task should not have run yet
         assert!(!*task_ran.borrow());
 
-        // Run until parked should execute the foreground task
         cx.run_until_parked();
 
-        // Now the task should have run
         assert!(*task_ran.borrow());
     }
 
@@ -125,7 +118,6 @@ mod tests {
 
         let task_ran = Rc::new(RefCell::new(false));
 
-        // Spawn a task that waits for a timer
         {
             let task_ran = task_ran.clone();
             let executor = cx.background_executor.clone();
@@ -138,14 +130,11 @@ mod tests {
             });
         }
 
-        // Run until parked - the task should be waiting on the timer
         cx.run_until_parked();
         assert!(!*task_ran.borrow());
 
-        // Advance clock past the timer duration
         cx.advance_clock(Duration::from_millis(600));
 
-        // Now the task should have completed
         assert!(*task_ran.borrow());
     }
 
@@ -160,8 +149,6 @@ mod tests {
             .open_offscreen_window_default(|_, cx| cx.new(|_| Empty))
             .expect("Failed to open window");
 
-        // Spawn a task via window.spawn - this is the critical test case
-        // for tooltip behavior, as tooltips use window.spawn for delayed show
         {
             let task_ran = task_ran.clone();
             cx.update_window(window.into(), |_, window, cx| {
@@ -171,16 +158,13 @@ mod tests {
                     })
                     .detach();
             })
-            .ok();
+            .expect("offscreen window should remain open");
         }
 
-        // The task should not have run yet
         assert!(!*task_ran.borrow());
 
-        // Run until parked should execute the foreground task spawned via window
         cx.run_until_parked();
 
-        // Now the task should have run
         assert!(*task_ran.borrow());
     }
 }
