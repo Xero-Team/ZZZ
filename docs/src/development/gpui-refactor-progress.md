@@ -464,6 +464,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 - 新增 `RendererFactory` contract；`gpui_platform::current_headless_renderer` 继续作为
   compatibility façade，并委托 current-platform factory 创建 Metal 或 WGPU offscreen
   renderer。
+- 新增 `PlatformRenderTarget` supertrait，将 scene draw、atlas、subpixel capability、
+  GPU specs 和 test readback 从 `PlatformWindow` 抽离；render contract 的 compatibility
+  adapter 仍通过 composite façade 提交同一 `Scene`。
 
 当前矩阵：
 
@@ -485,9 +488,9 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 | `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                          |
 | `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                     |
 | `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                 |
-| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 221 tests passed after TextInputBridge split            |
+| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 223 tests passed after platform splits                  |
 | `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                    |
-| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | input/action routing tests, 3 passed                    |
+| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                |
 | `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                  |
 | `cargo test --locked -p gpui_platform --features test-support`                               | `PASS`                      | renderer factory returns real Linux renderer            |
 | `./script/clippy -p gpui_platform --features test-support`                                   | `PASS`                      | renderer factory contract passes release clippy         |
@@ -499,7 +502,7 @@ consumer/build graph 和 pixel evidence；只有达标才评估独立 `gpui_rend
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
 `9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`；renderer
-factory `85fffe8fe5`。
+factory `85fffe8fe5`；platform render target `c3f2d1bb90`。
 下一步：继续拆 `WindowHost`/platform system capability，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
