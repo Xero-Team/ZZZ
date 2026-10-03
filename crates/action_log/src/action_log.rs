@@ -32,33 +32,31 @@ pub enum UndoBufferStatus {
     /// - `had_existing_content: true` - Agent overwrote an existing file. On reject, the
     ///   original content was restored. Undo is supported: we restore the agent's content.
     /// - `had_existing_content: false` - Agent created a new file that didn't exist before.
-    ///   On reject, the file was deleted. Undo is NOT currently supported (would require
-    ///   recreating the file). Future TODO.
+    ///   On reject, the file was deleted. Undo is not supported because recreating it would
+    ///   require restoring the project entry state.
     Created {
         had_existing_content: bool,
     },
 }
 
-/// Stores undo information for the most recent reject operation
+/// Stores undo information for the most recent reject operation.
 #[derive(Clone)]
 pub struct LastRejectUndo {
-    /// Per-buffer undo information
+    /// Per-buffer undo information.
     pub buffers: Vec<PerBufferUndo>,
 }
 
-/// Tracks actions performed by tools in a thread
+/// Tracks actions performed by tools in a thread.
 pub struct ActionLog {
     /// Buffers that we want to notify the model about when they change.
     tracked_buffers: BTreeMap<Entity<Buffer>, TrackedBuffer>,
-    /// The project this action log is associated with
     project: Entity<Project>,
     /// An action log to forward all public methods to
     /// Useful in cases like subagents, where we want to track individual diffs for this subagent,
     /// but also want to associate the reads/writes with a parent review experience
     linked_action_log: Option<Entity<ActionLog>>,
-    /// Stores undo information for the most recent reject operation
     last_reject_undo: Option<LastRejectUndo>,
-    /// Tracks the last time files were read by the agent, to detect external modifications
+    /// Tracks read times so external modifications can invalidate stale agent context.
     file_read_times: HashMap<PathBuf, MTime>,
 }
 
@@ -313,7 +311,10 @@ impl ActionLog {
                         break;
                     }
                 }
-                _ = git_diff_updates_rx.changed().fuse() => {
+                git_diff_update = git_diff_updates_rx.changed().fuse() => {
+                    if git_diff_update.is_err() {
+                        break;
+                    }
                     if let Some(git_diff) = git_diff.as_ref() {
                         Self::keep_committed_edits(&this, &buffer, git_diff, cx).await?;
                     }
@@ -783,12 +784,8 @@ impl ActionLog {
                             Ok(())
                         })
                     } else {
-                        // Not sure how to disentangle edits made by the user
-                        // from edits made by the AI at this point.
-                        // For now, preserve both to avoid data loss.
-                        //
-                        // TODO: Better solution (disable "Reject" after user makes some
-                        // edit or find a way to differentiate between AI and user edits)
+                        // User and agent edits cannot be separated reliably here, so preserve both
+                        // to avoid data loss.
                         Task::ready(Ok(()))
                     }
                 };
@@ -928,7 +925,6 @@ impl ActionLog {
             });
         }
 
-        // Store the undo information if we have any
         if !undo_buffers.is_empty() {
             self.last_reject_undo = Some(LastRejectUndo {
                 buffers: undo_buffers,
