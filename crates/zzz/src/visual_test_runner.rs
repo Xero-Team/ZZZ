@@ -759,8 +759,6 @@ struct ImageComparison {
     match_percentage: f64,
     diff_image: RgbaImage,
     diff_pixel_count: u32,
-    #[allow(dead_code)]
-    total_pixels: u32,
 }
 
 #[cfg(target_os = "macos")]
@@ -804,7 +802,6 @@ fn compare_images(actual: &RgbaImage, expected: &RgbaImage) -> ImageComparison {
         match_percentage,
         diff_image,
         diff_pixel_count,
-        total_pixels,
     }
 }
 
