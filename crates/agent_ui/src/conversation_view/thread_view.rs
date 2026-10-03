@@ -1243,13 +1243,12 @@ impl ThreadView {
                 return Ok(None);
             }
 
-            let _ = cx
-                .update(|window, cx| {
-                    message_editor.update(cx, |message_editor, cx| {
-                        message_editor.clear(window, cx);
-                    });
-                })
-                .log_err();
+            cx.update(|window, cx| {
+                message_editor.update(cx, |message_editor, cx| {
+                    message_editor.clear(window, cx);
+                });
+            })
+            .log_err();
 
             Ok(Some((contents, tracked_buffers)))
         });
