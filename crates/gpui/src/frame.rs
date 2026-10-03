@@ -4,8 +4,8 @@ use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest
 use crate::{
     AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId, DispatchTree,
     ElementId, EntityId, FocusId, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
-    LineLayoutIndex, Pixels, PlatformInputHandler, Point, Scene, TabStopMap, TextStyleRefinement,
-    Window, WindowControlArea,
+    LineLayoutIndex, Pixels, Point, Scene, TabStopMap, TextStyleRefinement, Window,
+    WindowControlArea,
 };
 use crate::{App, Effect};
 use collections::FxHashMap;
@@ -394,7 +394,6 @@ pub(crate) struct Frame {
     pub(crate) hitboxes: Vec<Hitbox>,
     pub(crate) window_control_hitboxes: Vec<(WindowControlArea, Hitbox)>,
     pub(crate) deferred_draws: Vec<DeferredDraw>,
-    pub(crate) input_handlers: Vec<Option<PlatformInputHandler>>,
     pub(crate) tooltip_requests: Vec<Option<TooltipRequest>>,
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
     #[cfg(any(test, feature = "test-support"))]
@@ -450,7 +449,6 @@ impl Frame {
             hitboxes: Vec::new(),
             window_control_hitboxes: Vec::new(),
             deferred_draws: Vec::new(),
-            input_handlers: Vec::new(),
             tooltip_requests: Vec::new(),
             cursor_styles: Vec::new(),
 
@@ -474,7 +472,6 @@ impl Frame {
         self.mouse_listeners.clear();
         self.dispatch_tree.clear();
         self.scene.clear();
-        self.input_handlers.clear();
         self.tooltip_requests.clear();
         self.cursor_styles.clear();
         self.hitboxes.clear();

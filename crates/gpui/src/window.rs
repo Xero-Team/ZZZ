@@ -15,8 +15,8 @@ use crate::{
     RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
     SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size,
     StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
-    SystemWindowTabController, TaffyLayoutEngine, Task, TextRenderingMode, TextStyle,
-    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    SystemWindowTabController, TaffyLayoutEngine, Task, TextInputOwner, TextRenderingMode,
+    TextStyle, TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
     WindowInvalidator, WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems,
     size, transparent_black,
@@ -713,6 +713,7 @@ pub struct Window {
     pub(crate) requested_autoscroll: Option<Bounds<Pixels>>,
     pub(crate) image_cache_stack: Vec<AnyImageCache>,
     pub(crate) interaction: InteractionOwner,
+    pub(crate) text_input: TextInputOwner,
     pub(crate) next_tooltip_id: TooltipId,
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
     next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
@@ -1338,6 +1339,7 @@ impl Window {
                 modifiers,
                 capslock,
             ),
+            text_input: TextInputOwner::new(),
             next_frame_callbacks,
             next_tooltip_id: TooltipId::default(),
             tooltip_bounds: None,
@@ -2272,21 +2274,7 @@ impl Window {
         // cached paint_range indices in reuse_paint find the handler at the
         // expected position.
         if let Some(input_handler) = self.platform_window.take_input_handler() {
-            if let Some(slot) = self
-                .interaction
-                .rendered_frame
-                .input_handlers
-                .iter_mut()
-                .rev()
-                .find(|h| h.is_none())
-            {
-                *slot = Some(input_handler);
-            } else {
-                self.interaction
-                    .rendered_frame
-                    .input_handlers
-                    .push(Some(input_handler));
-            }
+            self.text_input.restore_rendered_handler(input_handler);
         }
         if !cx.mode.skip_drawing() {
             self.draw_roots(cx);
@@ -2300,9 +2288,8 @@ impl Window {
         // Search backwards to find the last Some entry, since reuse_paint may
         // have copied None slots from the previous frame. (Fixes #50456)
         if let Some(input_handler) = self
-            .interaction
-            .next_frame
-            .input_handlers
+            .text_input
+            .next_handlers
             .iter_mut()
             .rev()
             .find_map(|h| h.take())
@@ -2889,7 +2876,7 @@ impl Window {
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds_index: self.interaction.next_frame.debug_bounds_records.len(),
             mouse_listeners_index: self.interaction.next_frame.mouse_listeners.len(),
-            input_handlers_index: self.interaction.next_frame.input_handlers.len(),
+            input_handlers_index: self.text_input.next_handlers.len(),
             cursor_styles_index: self.interaction.next_frame.cursor_styles.len(),
             accessed_element_states_index: self
                 .interaction
@@ -2919,12 +2906,8 @@ impl Window {
                 .iter()
                 .cloned(),
         );
-        self.interaction.next_frame.input_handlers.extend(
-            self.interaction.rendered_frame.input_handlers
-                [range.start.input_handlers_index..range.end.input_handlers_index]
-                .iter_mut()
-                .map(|handler| handler.take()),
-        );
+        self.text_input
+            .reuse_handlers(range.start.input_handlers_index..range.end.input_handlers_index);
         self.interaction.next_frame.mouse_listeners.extend(
             self.interaction.rendered_frame.mouse_listeners
                 [range.start.mouse_listeners_index..range.end.mouse_listeners_index]
@@ -4238,9 +4221,8 @@ impl Window {
 
         if focus_handle.is_focused(self) {
             let cx = self.to_async(cx);
-            self.interaction
-                .next_frame
-                .input_handlers
+            self.text_input
+                .next_handlers
                 .push(Some(PlatformInputHandler::new(cx, Box::new(input_handler))));
         }
     }
@@ -5197,12 +5179,9 @@ impl Window {
 
     /// Updates the IME panel position suggestions for languages like japanese, chinese.
     pub fn invalidate_character_coordinates(&self) {
-        self.on_next_frame(|window, cx| {
-            if let Some(mut input_handler) = window.platform_window.take_input_handler() {
-                if let Some(bounds) = input_handler.selected_bounds(window, cx) {
-                    window.platform_window.update_ime_position(bounds);
-                }
-                window.platform_window.set_input_handler(input_handler);
+        self.on_next_frame(|window, _cx| {
+            if let Some(bounds) = window.text_input.candidate_bounds() {
+                window.platform_window.update_ime_position(bounds);
             }
         });
     }
