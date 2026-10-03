@@ -19,7 +19,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 执行基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 1：frame diagnostics 与预算           |
+| 当前阶段                   | 阶段 4A：frame owner 拆分                  |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -241,7 +241,7 @@ adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher 
 
 提交：ThreadedDispatcher core `49b351afb1edab173ca46dd073c663b44aabbf14`；
 AccessKit semantic core `a7745abdefe9d3e2cebb33482aac35d5e6a0289f`；EXP-008
-BenchAppContext/panic follow-up commit 待本账本更新后回填。
+BenchAppContext/panic follow-up `41f6fccba1edab173ca46dd073c663b44aabbf14`。
 
 ### 阶段 3：真实 headless renderer
 
@@ -276,7 +276,7 @@ runtime，以及将 Linux pixel artifacts 纳入后续 renderer/Window migration
 因此 EXP-003 在当前 Linux 主机的 primitive/readback 部分达标，阶段 3 保持
 `IN PROGRESS`，不声称跨平台完成。
 
-提交：renderer core `0347f6196e`；platform factory commit 待本账本更新后回填。
+提交：renderer core `0347f6196e`；platform factory `b28b235a09`。
 
 ### 阶段 4：拆分 `Window`
 
@@ -287,11 +287,23 @@ runtime，以及将 Linux pixel artifacts 纳入后续 renderer/Window migration
 - 新增内部 `frame.rs`，迁入 `WindowInvalidator`、dirty views/update count、draw phase、
   platform waker、`FrameBuildId` lifecycle 和 frame diagnostics event batching。
 - `Window` 继续持有并委托 `WindowInvalidator`；公开 invalidate/draw/present API 未变化。
-- 第一提交仅移动状态和私有算法，不改变行为；`Frame`/cache ranges 和不可变
-  `BuiltFrame` 尚未迁移。
+- `Frame`、`DeferredDraw`、`PrepaintStateIndex`、`PaintIndex` 及 cache range 状态已迁入
+  `frame.rs`；`Window` 只保留绘制 orchestration 和必要的 `pub(crate)` owner 边界。
+- 第一、第二提交都只移动状态和私有算法，不改变行为；不可变 `BuiltFrame` 尚未迁移。
 
-验证：默认/`frame-diagnostics` `cargo check -p gpui` 均通过；frame lifecycle focused
-test 通过。完整 GPUI suite 与 clippy 在提交前运行。
+验证：
+
+| 命令或检查                                                       | 结果   | 证据                                                    |
+| ---------------------------------------------------------------- | ------ | ------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                   | `PASS` | 默认配置编译通过                                        |
+| `cargo check --locked -p gpui --features frame-diagnostics`      | `PASS` | diagnostics 配置编译通过                                |
+| `cargo test --locked -p gpui --lib`                              | `PASS` | 218 tests passed                                        |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 220 tests passed，含 frame diagnostics runner/lifecycle |
+| `git diff --check`                                               | `PASS` | frame/window 迁移无 whitespace error                    |
+
+提交：invalidation owner `1946811f30`；completed frame state owner `ccd2a038df`。
+下一步：继续 4B，先抽出 hitbox、dispatch tree、focus/tab、pointer capture 和 key/action
+routing owner，并固定 routing order 回归测试。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
