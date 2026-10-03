@@ -889,11 +889,6 @@ async fn test_folds(cx: &mut gpui::TestAppContext) {
         .await;
     cx.simulate_shared_keystrokes("shift-v j z f").await;
 
-    // visual display is now:
-    // fn boop () {
-    //  [FOLDED]
-    // }
-
     // TODO: this should not be needed but currently zf does not
     // return to normal mode.
     cx.simulate_shared_keystrokes("escape").await;
