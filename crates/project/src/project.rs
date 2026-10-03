@@ -2275,7 +2275,7 @@ impl Project {
                         new_abs_path: new_abs_path.clone(),
                     });
                 })
-                .ok();
+                .log_err();
 
             lsp_store
                 .read_with(cx, |this, _| {
@@ -5388,7 +5388,7 @@ impl Project {
             old_location
                 .buffer
                 .update(cx, |buffer, cx| buffer.remove_agent_selections(cx))
-                .ok();
+                .log_err();
         }
 
         if let Some(location) = new_location.as_ref() {
@@ -5408,7 +5408,7 @@ impl Project {
                         cx,
                     )
                 })
-                .ok();
+                .log_err();
         }
 
         self.agent_location = new_location;
