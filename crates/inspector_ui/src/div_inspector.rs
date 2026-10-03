@@ -19,14 +19,12 @@ use project::{
     Completion, CompletionDisplayOptions, CompletionResponse, CompletionSource, Project,
     ProjectPath,
 };
-use std::fmt::Write as _;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::LazyLock;
 use ui::{Label, LabelSize, Tooltip, prelude::*, styled_ext_reflection, v_flex};
-use util::rel_path::RelPath;
-use util::split_str_with_ranges;
+use util::{ResultExt as _, rel_path::RelPath, split_str_with_ranges};
 
 /// Path used for unsaved buffer that contains style json. To support the json language server, this
 /// matches the name used in the generated schemas.
@@ -119,7 +117,7 @@ impl DivInspector {
                                 }
                             }
                         })
-                        .ok();
+                        .log_err();
                     }
                     Err(err) => {
                         this.update(cx, |this, cx| {
@@ -133,7 +131,7 @@ impl DivInspector {
                                 .into(),
                             };
                         })
-                        .ok();
+                        .log_err();
                     }
                 }
             }
@@ -436,7 +434,8 @@ impl DivInspector {
         let mut style = StyleRefinement::default();
         let mut unrecognized_ranges = Vec::new();
         for (range, name) in method_names {
-            if let Some((_, method)) = STYLE_METHODS.iter().find(|(_, m)| m.name == name) {
+            if let Some((_, method)) = STYLE_METHODS.iter().find(|(_, method)| method.name == name)
+            {
                 style = method.invoke(style);
             } else if let Some(range) = range {
                 unrecognized_ranges
@@ -453,23 +452,24 @@ impl DivInspector {
         snapshot: &BufferSnapshot,
         cx: &mut Context<Buffer>,
     ) {
-        let diagnostic_entries = unrecognized_ranges
-            .into_iter()
-            .enumerate()
-            .map(|(ix, range)| DiagnosticEntry {
-                range,
-                diagnostic: Diagnostic {
-                    message: tr(
-                        cx,
-                        "inspector_ui.div_inspector.unrecognized",
-                        "unrecognized",
-                    ),
-                    severity: DiagnosticSeverity::WARNING,
-                    is_primary: true,
-                    group_id: ix,
-                    ..Default::default()
-                },
-            });
+        let diagnostic_entries =
+            unrecognized_ranges
+                .into_iter()
+                .enumerate()
+                .map(|(index, range)| DiagnosticEntry {
+                    range,
+                    diagnostic: Diagnostic {
+                        message: tr(
+                            cx,
+                            "inspector_ui.div_inspector.unrecognized",
+                            "unrecognized",
+                        ),
+                        severity: DiagnosticSeverity::WARNING,
+                        is_primary: true,
+                        group_id: index,
+                        ..Default::default()
+                    },
+                });
         let diagnostics = DiagnosticSet::from_sorted_entries(diagnostic_entries, snapshot);
         rust_style_buffer.update_diagnostics(LanguageServerId(0), diagnostics, cx);
     }
@@ -683,7 +683,9 @@ fn guess_rust_code_from_style(goal_style: &StyleRefinement) -> (String, StyleRef
         let before_change = style.clone();
         style = method.invoke(style);
         if before_change != style {
-            let _ = write!(code, "\n        .{}()", method.name);
+            code.push_str("\n        .");
+            code.push_str(method.name);
+            code.push_str("()");
         }
     }
     code.push_str("\n}");
@@ -691,8 +693,8 @@ fn guess_rust_code_from_style(goal_style: &StyleRefinement) -> (String, StyleRef
     (code, style)
 }
 
-fn is_not_identifier_char(c: char) -> bool {
-    !c.is_alphanumeric() && c != '_'
+fn is_not_identifier_char(character: char) -> bool {
+    !character.is_alphanumeric() && character != '_'
 }
 
 struct RustStyleCompletionProvider {
@@ -757,15 +759,21 @@ impl CompletionProvider for RustStyleCompletionProvider {
         completion_replace_range(&buffer.read(cx).snapshot(), &position).is_some()
     }
 
-    fn selection_changed(&self, mat: Option<&StringMatch>, _window: &mut Window, cx: &mut App) {
+    fn selection_changed(
+        &self,
+        matched_completion: Option<&StringMatch>,
+        _window: &mut Window,
+        cx: &mut App,
+    ) {
         let div_inspector = self.div_inspector.clone();
-        let rust_completion = mat.as_ref().map(|mat| mat.string.clone());
+        let rust_completion =
+            matched_completion.map(|matched_completion| matched_completion.string.clone());
         cx.defer(move |cx| {
             div_inspector
                 .update(cx, |div_inspector, cx| {
                     div_inspector.handle_rust_completion_selection_change(rust_completion, cx);
                 })
-                .ok();
+                .log_err();
         });
     }
 
@@ -783,10 +791,12 @@ fn completion_replace_range(snapshot: &BufferSnapshot, anchor: &Anchor) -> Optio
     let line = lines.next()?;
 
     let start_in_line = &line[..offset - line_start]
-        .rfind(|c| is_not_identifier_char(c) && c != '.')
-        .map_or(0, |ix| ix + 1);
+        .rfind(|character| is_not_identifier_char(character) && character != '.')
+        .map_or(0, |index| index + 1);
     let end_in_line = &line[offset - line_start..]
-        .rfind(|c| is_not_identifier_char(c) && c != '(' && c != ')')
+        .rfind(|character| {
+            is_not_identifier_char(character) && character != '(' && character != ')'
+        })
         .unwrap_or(line_end - line_start);
 
     if end_in_line > start_in_line {

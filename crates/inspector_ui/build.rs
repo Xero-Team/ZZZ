@@ -1,5 +1,6 @@
 fn main() {
-    let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let cargo_manifest_dir =
+        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set by Cargo");
     let mut path = std::path::PathBuf::from(&cargo_manifest_dir);
 
     assert!(

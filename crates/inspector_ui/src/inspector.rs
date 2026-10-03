@@ -119,8 +119,8 @@ fn render_inspector_id(inspector_id: &InspectorElementId, cx: &App) -> Div {
     let source_location_string = source_location.to_string();
     let source_location_string = source_location_string
         .strip_prefix(env!("ZZZ_REPO_DIR"))
-        .and_then(|s| s.strip_prefix("/"))
-        .map(|s| s.to_string())
+        .and_then(|path| path.strip_prefix("/"))
+        .map(|path| path.to_string())
         .unwrap_or(source_location_string);
 
     v_flex()
