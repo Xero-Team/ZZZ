@@ -86,6 +86,21 @@ impl HeadlessWindow {
     }
 }
 
+fn headless_capabilities() -> gpui::PlatformCapabilities {
+    gpui::PlatformCapabilities {
+        text_input: false,
+        accessibility: false,
+        headless_renderer: false,
+        frame_callbacks: false,
+        window_controls: gpui::WindowControls {
+            fullscreen: true,
+            maximize: false,
+            minimize: false,
+            window_menu: false,
+        },
+    }
+}
+
 impl PlatformWindow for HeadlessWindow {
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.borrow().bounds
@@ -222,7 +237,26 @@ impl PlatformWindow for HeadlessWindow {
 
     fn update_ime_position(&self, _bounds: Bounds<Pixels>) {}
 
+    fn capabilities(&self) -> gpui::PlatformCapabilities {
+        headless_capabilities()
+    }
+
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capability_matrix_marks_compositor_services_unsupported() {
+        let capabilities = headless_capabilities();
+        assert!(!capabilities.text_input);
+        assert!(!capabilities.accessibility);
+        assert!(!capabilities.headless_renderer);
+        assert!(!capabilities.frame_callbacks);
+        assert!(capabilities.window_controls.fullscreen);
     }
 }

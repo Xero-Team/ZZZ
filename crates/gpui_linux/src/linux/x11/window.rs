@@ -1924,6 +1924,10 @@ impl PlatformWindow for X11Window {
         client.update_ime_position(bounds);
     }
 
+    fn capabilities(&self) -> gpui::PlatformCapabilities {
+        x11_capabilities()
+    }
+
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.0.state.borrow().renderer.gpu_specs().into()
     }
@@ -1931,5 +1935,33 @@ impl PlatformWindow for X11Window {
     fn play_system_bell(&self) {
         // Volume 0% means don't increase or decrease from system volume
         let _ = self.0.xcb.bell(0);
+    }
+}
+
+fn x11_capabilities() -> gpui::PlatformCapabilities {
+    gpui::PlatformCapabilities {
+        text_input: true,
+        accessibility: false,
+        headless_renderer: false,
+        frame_callbacks: true,
+        window_controls: gpui::WindowControls::default(),
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+
+    #[test]
+    fn capability_matrix_matches_x11_services() {
+        let capabilities = x11_capabilities();
+        assert!(capabilities.text_input);
+        assert!(capabilities.frame_callbacks);
+        assert!(!capabilities.accessibility);
+        assert!(!capabilities.headless_renderer);
+        assert_eq!(
+            capabilities.window_controls,
+            gpui::WindowControls::default()
+        );
     }
 }

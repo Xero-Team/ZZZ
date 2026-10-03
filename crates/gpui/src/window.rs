@@ -6397,6 +6397,23 @@ mod tests {
     }
 
     #[gpui::test]
+    fn test_platform_capability_matrix(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        window
+            .update(cx, |_, window, _| {
+                let capabilities = window.platform_capabilities();
+                assert!(capabilities.text_input);
+                assert!(capabilities.frame_callbacks);
+                assert!(!capabilities.accessibility);
+                assert!(capabilities.window_controls.fullscreen);
+                assert!(!capabilities.window_controls.maximize);
+                assert!(!capabilities.window_controls.minimize);
+                assert!(!capabilities.window_controls.window_menu);
+            })
+            .expect("test window should remain open");
+    }
+
+    #[gpui::test]
     fn test_pending_next_frame_callbacks_are_not_stranded(cx: &mut TestAppContext) {
         let window = cx.add_window(|_, _| EmptyView);
         let test_window = cx.test_window(window.into());

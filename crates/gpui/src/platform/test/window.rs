@@ -351,6 +351,21 @@ impl PlatformWindow for TestWindow {
 
     fn draw(&self, _scene: &Scene) {}
 
+    fn capabilities(&self) -> crate::PlatformCapabilities {
+        crate::PlatformCapabilities {
+            text_input: true,
+            accessibility: false,
+            headless_renderer: self.0.lock().renderer.is_some(),
+            frame_callbacks: true,
+            window_controls: crate::WindowControls {
+                fullscreen: true,
+                maximize: false,
+                minimize: false,
+                window_menu: false,
+            },
+        }
+    }
+
     fn sprite_atlas(&self) -> sync::Arc<dyn crate::PlatformAtlas> {
         self.0.lock().sprite_atlas.clone()
     }

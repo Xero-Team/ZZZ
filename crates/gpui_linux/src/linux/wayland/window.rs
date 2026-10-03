@@ -1567,6 +1567,10 @@ impl PlatformWindow for WaylandWindow {
         state.client.update_ime_position(bounds);
     }
 
+    fn capabilities(&self) -> gpui::PlatformCapabilities {
+        wayland_capabilities(self.window_controls())
+    }
+
     fn gpu_specs(&self) -> Option<GpuSpecs> {
         self.borrow().renderer.gpu_specs().into()
     }
@@ -1581,6 +1585,37 @@ impl PlatformWindow for WaylandWindow {
         if let Some(bell) = state.globals.system_bell.as_ref() {
             bell.ring(surface);
         }
+    }
+}
+
+fn wayland_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
+    gpui::PlatformCapabilities {
+        text_input: true,
+        accessibility: false,
+        headless_renderer: false,
+        frame_callbacks: true,
+        window_controls,
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+
+    #[test]
+    fn capability_matrix_preserves_compositor_window_controls() {
+        let window_controls = WindowControls {
+            fullscreen: true,
+            maximize: false,
+            minimize: true,
+            window_menu: false,
+        };
+        let capabilities = wayland_capabilities(window_controls);
+        assert!(capabilities.text_input);
+        assert!(capabilities.frame_callbacks);
+        assert!(!capabilities.accessibility);
+        assert!(!capabilities.headless_renderer);
+        assert_eq!(capabilities.window_controls, window_controls);
     }
 }
 

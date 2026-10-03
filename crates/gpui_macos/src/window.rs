@@ -1925,6 +1925,10 @@ impl PlatformWindow for MacWindow {
             .detach()
     }
 
+    fn capabilities(&self) -> gpui::PlatformCapabilities {
+        macos_capabilities()
+    }
+
     fn titlebar_double_click(&self) {
         let this = self.0.lock();
         if this.simple_fullscreen_state.is_some() {
@@ -2006,6 +2010,16 @@ impl PlatformWindow for MacWindow {
     fn render_to_image(&self, scene: &gpui::Scene) -> Result<RgbaImage> {
         let mut this = self.0.lock();
         this.renderer.render_to_image(scene)
+    }
+}
+
+fn macos_capabilities() -> gpui::PlatformCapabilities {
+    gpui::PlatformCapabilities {
+        text_input: true,
+        accessibility: false,
+        headless_renderer: cfg!(any(test, feature = "test-support")),
+        frame_callbacks: true,
+        window_controls: gpui::WindowControls::default(),
     }
 }
 
@@ -3364,6 +3378,18 @@ extern "C" fn toggle_tab_bar(this: &Object, _sel: Sel, _id: id) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capability_matrix_matches_macos_services() {
+        let capabilities = macos_capabilities();
+        assert!(capabilities.text_input);
+        assert!(capabilities.frame_callbacks);
+        assert!(!capabilities.accessibility);
+        assert_eq!(
+            capabilities.window_controls,
+            gpui::WindowControls::default()
+        );
+    }
 
     #[test]
     fn display_id_for_screen_returns_none_for_null_screen() {

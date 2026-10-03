@@ -1019,9 +1019,23 @@ impl PlatformWindow for WindowsWindow {
         self.0.update_ime_position(self.0.hwnd, caret_position);
     }
 
+    fn capabilities(&self) -> gpui::PlatformCapabilities {
+        windows_capabilities()
+    }
+
     fn play_system_bell(&self) {
         // MB_OK: The sound specified as the Windows Default Beep sound.
         let _ = unsafe { MessageBeep(MB_OK) };
+    }
+}
+
+fn windows_capabilities() -> gpui::PlatformCapabilities {
+    gpui::PlatformCapabilities {
+        text_input: true,
+        accessibility: false,
+        headless_renderer: cfg!(any(test, feature = "test-support")),
+        frame_callbacks: true,
+        window_controls: gpui::WindowControls::default(),
     }
 }
 
@@ -1569,9 +1583,21 @@ fn set_non_rude_hwnd(hwnd: HWND, non_rude: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::ClickState;
+    use super::{ClickState, windows_capabilities};
     use gpui::{DevicePixels, MouseButton, point};
     use std::time::Duration;
+
+    #[test]
+    fn capability_matrix_matches_windows_services() {
+        let capabilities = windows_capabilities();
+        assert!(capabilities.text_input);
+        assert!(capabilities.frame_callbacks);
+        assert!(!capabilities.accessibility);
+        assert_eq!(
+            capabilities.window_controls,
+            gpui::WindowControls::default()
+        );
+    }
 
     #[test]
     fn test_double_click_interval() {

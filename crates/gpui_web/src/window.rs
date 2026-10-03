@@ -821,5 +821,40 @@ impl PlatformWindow for WebWindow {
         }
     }
 
+    fn capabilities(&self) -> gpui::PlatformCapabilities {
+        web_capabilities(self.window_controls())
+    }
+
     fn set_client_inset(&self, _inset: Pixels) {}
+}
+
+fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
+    gpui::PlatformCapabilities {
+        text_input: false,
+        accessibility: false,
+        headless_renderer: false,
+        frame_callbacks: true,
+        window_controls,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capability_matrix_exposes_web_gaps() {
+        let window_controls = WindowControls {
+            fullscreen: true,
+            maximize: false,
+            minimize: false,
+            window_menu: false,
+        };
+        let capabilities = web_capabilities(window_controls);
+        assert!(!capabilities.text_input);
+        assert!(!capabilities.accessibility);
+        assert!(!capabilities.headless_renderer);
+        assert!(capabilities.frame_callbacks);
+        assert_eq!(capabilities.window_controls, window_controls);
+    }
 }
