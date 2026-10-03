@@ -23,7 +23,6 @@ pub trait ContextProvider: Send + Sync {
         _toolchains: Arc<dyn LanguageToolchainStore>,
         _cx: &mut App,
     ) -> Task<Result<TaskVariables>> {
-        let _ = _location;
         Task::ready(Ok(TaskVariables::default()))
     }
 
