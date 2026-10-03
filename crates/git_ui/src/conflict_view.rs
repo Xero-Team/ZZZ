@@ -441,30 +441,30 @@ fn render_conflict_buttons(
                 .on_click({
                     let conflict = conflict.clone();
                     move |_, window, cx| {
-                        let content = editor
-                            .update(cx, |editor, cx| {
-                                let multibuffer = editor.buffer().read(cx);
-                                let buffer_id = conflict.ours.end.buffer_id;
-                                let buffer = multibuffer.buffer(buffer_id)?;
-                                let buffer_read = buffer.read(cx);
-                                let snapshot = buffer_read.snapshot();
-                                let conflict_text = snapshot
-                                    .text_for_range(conflict.range.clone())
-                                    .collect::<String>();
-                                let file_path = buffer_read
-                                    .file()
-                                    .and_then(|file| file.as_local())
-                                    .map(|f| f.abs_path(cx).to_string_lossy().to_string())
-                                    .unwrap_or_default();
-                                Some(ConflictContent {
-                                    file_path,
-                                    conflict_text,
-                                    ours_branch_name: conflict.ours_branch_name.to_string(),
-                                    theirs_branch_name: conflict.theirs_branch_name.to_string(),
-                                })
+                        let Some(editor) = editor.upgrade() else {
+                            return;
+                        };
+                        let content = editor.update(cx, |editor, cx| {
+                            let multibuffer = editor.buffer().read(cx);
+                            let buffer_id = conflict.ours.end.buffer_id;
+                            let buffer = multibuffer.buffer(buffer_id)?;
+                            let buffer_read = buffer.read(cx);
+                            let snapshot = buffer_read.snapshot();
+                            let conflict_text = snapshot
+                                .text_for_range(conflict.range.clone())
+                                .collect::<String>();
+                            let file_path = buffer_read
+                                .file()
+                                .and_then(|file| file.as_local())
+                                .map(|f| f.abs_path(cx).to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            Some(ConflictContent {
+                                file_path,
+                                conflict_text,
+                                ours_branch_name: conflict.ours_branch_name.to_string(),
+                                theirs_branch_name: conflict.theirs_branch_name.to_string(),
                             })
-                            .ok()
-                            .flatten();
+                        });
                         if let Some(content) = content {
                             window.dispatch_action(
                                 Box::new(ResolveConflictsWithAgent {
@@ -516,43 +516,46 @@ pub(crate) fn resolve_conflict(
     cx: &mut App,
 ) -> Task<()> {
     window.spawn(cx, async move |cx| {
-        editor
-            .update(cx, |editor, cx| {
-                let multibuffer = editor.buffer().clone();
-                let buffer_id = resolved_conflict.ours.end.buffer_id;
-                let buffer = multibuffer.read(cx).buffer(buffer_id)?;
-                resolved_conflict.resolve(buffer.clone(), &ranges, cx);
-                let conflict_addon = editor
-                    .addon_mut::<ConflictAddon>()
-                    .expect("value should be present");
-                let snapshot = multibuffer.read(cx).snapshot(cx);
-                let buffer_snapshot = buffer.read(cx).snapshot();
-                let state = conflict_addon
-                    .buffers
-                    .get_mut(&buffer_snapshot.remote_id())?;
-                let ix = state
-                    .block_ids
-                    .binary_search_by(|(range, _)| {
-                        range
-                            .start
-                            .cmp(&resolved_conflict.range.start, &buffer_snapshot)
-                    })
-                    .ok()?;
-                let &(_, block_id) = &state.block_ids[ix];
-                let range =
-                    snapshot.buffer_anchor_range_to_anchor_range(resolved_conflict.range)?;
+        let Some(editor) = editor.upgrade() else {
+            return;
+        };
+        editor.update(cx, |editor, cx| {
+            let multibuffer = editor.buffer().clone();
+            let buffer_id = resolved_conflict.ours.end.buffer_id;
+            let Some(buffer) = multibuffer.read(cx).buffer(buffer_id) else {
+                return;
+            };
+            resolved_conflict.resolve(buffer.clone(), &ranges, cx);
+            let conflict_addon = editor
+                .addon_mut::<ConflictAddon>()
+                .expect("value should be present");
+            let snapshot = multibuffer.read(cx).snapshot(cx);
+            let buffer_snapshot = buffer.read(cx).snapshot();
+            let Some(state) = conflict_addon.buffers.get_mut(&buffer_snapshot.remote_id()) else {
+                return;
+            };
+            let Ok(index) = state.block_ids.binary_search_by(|(range, _)| {
+                range
+                    .start
+                    .cmp(&resolved_conflict.range.start, &buffer_snapshot)
+            }) else {
+                return;
+            };
+            let &(_, block_id) = &state.block_ids[index];
+            let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(resolved_conflict.range)
+            else {
+                return;
+            };
 
-                editor.remove_gutter_highlights::<ConflictsOuter>(vec![range.clone()], cx);
+            editor.remove_gutter_highlights::<ConflictsOuter>(vec![range.clone()], cx);
 
-                editor.remove_highlighted_rows::<ConflictsOuter>(vec![range.clone()], cx);
-                editor.remove_highlighted_rows::<ConflictsOurs>(vec![range.clone()], cx);
-                editor.remove_highlighted_rows::<ConflictsTheirs>(vec![range.clone()], cx);
-                editor.remove_highlighted_rows::<ConflictsOursMarker>(vec![range.clone()], cx);
-                editor.remove_highlighted_rows::<ConflictsTheirsMarker>(vec![range], cx);
-                editor.remove_blocks(HashSet::from_iter([block_id]), None, cx);
-                Some(())
-            })
-            .ok();
+            editor.remove_highlighted_rows::<ConflictsOuter>(vec![range.clone()], cx);
+            editor.remove_highlighted_rows::<ConflictsOurs>(vec![range.clone()], cx);
+            editor.remove_highlighted_rows::<ConflictsTheirs>(vec![range.clone()], cx);
+            editor.remove_highlighted_rows::<ConflictsOursMarker>(vec![range.clone()], cx);
+            editor.remove_highlighted_rows::<ConflictsTheirsMarker>(vec![range], cx);
+            editor.remove_blocks(HashSet::from_iter([block_id]), None, cx);
+        });
     })
 }
 
