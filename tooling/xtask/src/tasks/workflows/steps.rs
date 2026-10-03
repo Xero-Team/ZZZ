@@ -28,14 +28,6 @@ pub(crate) fn cargo_nextest(platform: Platform) -> Nextest {
 }
 
 impl Nextest {
-    #[allow(dead_code)]
-    pub(crate) fn with_filter_expr(mut self, filter_expr: &str) -> Self {
-        if let Some(nextest_command) = self.0.value.run.as_mut() {
-            nextest_command.push_str(&format!(r#" -E "{filter_expr}""#));
-        }
-        self
-    }
-
     pub(crate) fn with_changed_packages_filter(mut self, orchestrate_job: &str) -> Self {
         if let Some(nextest_command) = self.0.value.run.as_mut() {
             nextest_command.push_str(&format!(
