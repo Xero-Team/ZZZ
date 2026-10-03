@@ -1236,12 +1236,13 @@ impl ProjectSearchView {
                 .language_for_name("regex")
                 .await
                 .context("loading regex language")?;
-            project_search_view
-                .update(cx, |project_search_view, cx| {
-                    project_search_view.regex_language = Some(regex_language);
-                    project_search_view.adjust_query_regex_language(cx);
-                })
-                .ok();
+            let Some(project_search_view) = project_search_view.upgrade() else {
+                return anyhow::Ok(());
+            };
+            project_search_view.update(cx, |project_search_view, cx| {
+                project_search_view.regex_language = Some(regex_language);
+                project_search_view.adjust_query_regex_language(cx);
+            });
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);
