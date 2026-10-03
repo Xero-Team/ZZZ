@@ -196,7 +196,7 @@ impl ApiKeyState {
             ent.update(cx, |ent, _cx| {
                 get_this(ent).load_status.clone().into_authenticate_result()
             })
-            .ok();
+            .log_err();
             Ok(())
         })
     }
@@ -218,7 +218,7 @@ impl ApiKeyState {
                     this.load_task = None;
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             }
         })
     }
