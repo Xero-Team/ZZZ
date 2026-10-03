@@ -6655,9 +6655,10 @@ pub fn outline(
 #[cfg(test)]
 mod tests {
     use crate::{
-        AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
-        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
-        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
+        AnyView, AnyWindowHandle, AppContext as _, Bounds, Context, Entity, FocusHandle,
+        InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render,
+        RequestFrameOptions, StyleRefinement, Styled as _, TestAppContext, Window,
+        WindowAppearance, canvas, div, px, size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
@@ -6682,8 +6683,19 @@ mod tests {
     }
 
     #[cfg(feature = "frame-diagnostics")]
+    struct DiagnosticsPanel;
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for DiagnosticsPanel {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child("cached panel")
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
     struct DiagnosticsInputView {
         focus: FocusHandle,
+        panel: Entity<DiagnosticsPanel>,
     }
 
     #[cfg(feature = "frame-diagnostics")]
@@ -6693,7 +6705,7 @@ mod tests {
                 .size_full()
                 .track_focus(&self.focus)
                 .on_key_down(|_, window, _| window.refresh())
-                .child("frame diagnostics")
+                .child(AnyView::from(self.panel.clone()).cached(StyleRefinement::default()))
                 .into_any_element()
         }
     }
@@ -6904,8 +6916,13 @@ mod tests {
     fn frame_diagnostics_runner(cx: &mut TestAppContext) {
         const ITERATIONS: usize = 100;
         let mut collector = FrameTimingCollector::new();
-        let window = cx.add_window(|_, cx| DiagnosticsInputView {
-            focus: cx.focus_handle(),
+        let panel = cx.new(|_| DiagnosticsPanel);
+        let window = cx.add_window({
+            let panel = panel.clone();
+            move |_, cx| DiagnosticsInputView {
+                focus: cx.focus_handle(),
+                panel,
+            }
         });
         let handle: AnyWindowHandle = window.into();
         let test_window = cx.test_window(handle);
@@ -6918,8 +6935,13 @@ mod tests {
 
         let dirty_started_at = Instant::now();
         for _ in 0..ITERATIONS {
-            cx.update_window(handle, |_, window, _| window.refresh())
+            window
+                .update(cx, |_, _, cx| cx.notify())
                 .expect("diagnostics window should remain open");
+            test_window.simulate_frame_request(RequestFrameOptions::default());
+        }
+        for _ in 0..ITERATIONS {
+            panel.update(cx, |_, cx| cx.notify());
             test_window.simulate_frame_request(RequestFrameOptions::default());
         }
         for _ in 0..ITERATIONS {
@@ -6932,6 +6954,8 @@ mod tests {
         let mut draw_durations = Vec::new();
         let mut input_latencies = Vec::new();
         let mut phase_durations = [0u128; 5];
+        let mut prepaint_replays = 0usize;
+        let mut paint_replays = 0usize;
         let mut presented = 0usize;
         for event in snapshot.events {
             match event {
@@ -6953,6 +6977,12 @@ mod tests {
                         FramePhase::PaintCacheReplay => 4,
                     };
                     phase_durations[index] += timing.duration.as_nanos();
+                    if timing.phase == FramePhase::PrepaintCacheReplay {
+                        prepaint_replays += 1;
+                    }
+                    if timing.phase == FramePhase::PaintCacheReplay {
+                        paint_replays += 1;
+                    }
                 }
                 FrameEvent::Invalidated(_) | FrameEvent::DrawStarted { .. } => {}
             }
@@ -6972,7 +7002,7 @@ mod tests {
         assert!(!draw_durations.is_empty());
         assert!(!input_latencies.is_empty());
         println!(
-            "GPUI_FRAME_DIAGNOSTICS iterations={ITERATIONS} elapsed_ns={} dropped_events={} draws={} draw_p50_ns={} draw_p95_ns={} draw_p99_ns={} input_p50_ns={} input_p95_ns={} input_p99_ns={} phase_request_layout_ns={} phase_prepaint_ns={} phase_paint_ns={} phase_prepaint_replay_ns={} phase_paint_replay_ns={}",
+            "GPUI_FRAME_DIAGNOSTICS iterations={ITERATIONS} elapsed_ns={} dropped_events={} draws={} draw_p50_ns={} draw_p95_ns={} draw_p99_ns={} input_p50_ns={} input_p95_ns={} input_p99_ns={} prepaint_replays={} paint_replays={} phase_request_layout_ns={} phase_prepaint_ns={} phase_paint_ns={} phase_prepaint_replay_ns={} phase_paint_replay_ns={}",
             elapsed.as_nanos(),
             snapshot.dropped_events,
             draw_durations.len(),
@@ -6982,6 +7012,8 @@ mod tests {
             percentile(&mut input_latencies, 50, 100),
             percentile(&mut input_latencies, 95, 100),
             percentile(&mut input_latencies, 99, 100),
+            prepaint_replays,
+            paint_replays,
             phase_durations[0],
             phase_durations[1],
             phase_durations[2],
