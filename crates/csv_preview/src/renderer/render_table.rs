@@ -157,11 +157,13 @@ impl CsvPreviewView {
                         parent.child(div().text_color(row_identifier_text_color).child(
                             match table_cell {
                                 TableCell::Real { position: pos, .. } => {
-                                    let slv = pos.start.timestamp().value;
-                                    let so = pos.start.offset;
-                                    let elv = pos.end.timestamp().value;
-                                    let eo = pos.end.offset;
-                                    format!("Pos {so}(L{slv})-{eo}(L{elv})")
+                                    let start_line = pos.start.timestamp().value;
+                                    let start_offset = pos.start.offset;
+                                    let end_line = pos.end.timestamp().value;
+                                    let end_offset = pos.end.offset;
+                                    format!(
+                                        "Pos {start_offset}(L{start_line})-{end_offset}(L{end_line})"
+                                    )
                                 }
                                 TableCell::Synthetic { .. } => "Synthetic cell".into(),
                                 TableCell::Virtual => "Virtual cell".into(),
