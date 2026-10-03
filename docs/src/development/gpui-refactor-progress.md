@@ -485,6 +485,12 @@ EXP-001/002 的 production-like Editor workload 和正式 phase budget 尚未完
 
 状态：`NOT STARTED`
 
+最新 workspace validation：`cargo test --workspace --locked --no-fail-fast` 完成 workspace
+编译，但测试阶段包含已在计划 baseline 复现的 agent_ui action/focus failures，并有多个
+editor formatter/inlay tests 长时间运行；为避免无界 session 已中断。精确记录见
+`.tmp/gpui-refactor/phase-9/workspace-test-summary.txt`。最终阶段仍需在收敛后重新运行
+并区分 baseline failure、environment hang 和真实回归。
+
 ## Upstream A/B/C 记录
 
 尚未移植 Zed 代码。开始 frame diagnostics、`ThreadedDispatcher` 或 AccessKit
