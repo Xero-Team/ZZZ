@@ -67,7 +67,9 @@ impl AskPassModal {
             });
             let pw = askpass::EncryptedPassword::try_from(text.as_ref()).ok()?;
             text.zeroize();
-            tx.send(pw).ok();
+            if tx.send(pw).is_err() {
+                log::debug!("askpass receiver was dropped before password confirmation");
+            }
             Some(())
         });
 
