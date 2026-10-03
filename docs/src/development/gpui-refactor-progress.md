@@ -391,7 +391,8 @@ immutable `BuiltFrame`。
 - 没有引入 `App`、`Entity` 或公开 `Window` 到 render contract；没有改变 WGPU/Metal
   swapchain 行为。
 - `gpui_wgpu/src/wgpu_renderer/resources.rs` 现在承载 GPU resource lifetime，
-  `pipelines.rs` 承载 pipeline/layout definitions；headless path 保持独立。
+  `pipelines.rs` 承载 pipeline/layout definitions，`surface.rs` 承载 surface config/context
+  alias；headless path 保持独立。
 
 验证：
 
@@ -406,7 +407,7 @@ immutable `BuiltFrame`。
 | `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过      |
 | `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error          |
 
-提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`。
+提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split `90e8f62f3e`；surface split `bffcfd6e62`.
 下一步：把 `gpui_wgpu` 的 frame/surface/drawing/headless 按 contract
 拆分，运行 EXP-004/005；只有达标才评估独立 `gpui_render` crate。
 
