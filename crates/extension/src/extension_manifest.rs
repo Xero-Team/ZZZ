@@ -206,25 +206,6 @@ pub struct LibManifestEntry {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct TargetConfig {
-    /// URL to download the archive from (e.g., "https://github.com/owner/repo/releases/download/v1.0.0/myagent-darwin-arm64.zip")
-    pub archive: String,
-    /// Command to run (e.g., "./myagent" or "./myagent.exe")
-    pub cmd: String,
-    /// Command-line arguments to pass to the agent server.
-    #[serde(default)]
-    pub args: Vec<String>,
-    /// Optional SHA-256 hash of the archive for verification.
-    /// If not provided and the URL is a GitHub release, we'll attempt to fetch it from GitHub.
-    #[serde(default)]
-    pub sha256: Option<String>,
-    /// Environment variables to set when launching the agent server.
-    /// These target-specific env vars will override any env vars set at the agent level.
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub enum ExtensionLibraryKind {
     Rust,
 }
