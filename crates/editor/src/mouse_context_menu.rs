@@ -16,6 +16,7 @@ use workspace::OpenInTerminal;
 use zzz_actions::agent::AddSelectionToThread;
 use zzz_actions::preview::{
     markdown::OpenPreview as OpenMarkdownPreview, svg::OpenPreview as OpenSvgPreview,
+    typst::OpenPreview as OpenTypstPreview,
 };
 
 #[derive(Debug)]
@@ -244,6 +245,13 @@ pub fn deploy_context_menu(
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
             });
 
+        let is_typst = editor
+            .buffer()
+            .read(cx)
+            .as_singleton()
+            .and_then(|buffer| buffer.read(cx).language())
+            .is_some_and(|language| language.name().as_ref() == "Typst");
+
         ui::ContextMenu::build(window, cx, |menu, _window, cx| {
             let builder = menu
                 .on_blur_subscription(Subscription::new(|| {}))
@@ -363,6 +371,16 @@ pub fn deploy_context_menu(
                             "Open SVG Preview",
                         ),
                         Box::new(OpenSvgPreview),
+                    )
+                })
+                .when(is_typst, |builder| {
+                    builder.action(
+                        tr(
+                            cx,
+                            "editor.context_menu.open_typst_preview",
+                            "Open Typst Preview",
+                        ),
+                        Box::new(OpenTypstPreview),
                     )
                 })
                 .action_disabled_when(

@@ -1209,6 +1209,17 @@
     },
   },
   {
+    "context": "TypstPreview",
+    "bindings": {
+      "ctrl-u": "typst::ScrollPageUp",
+      "ctrl-d": "typst::ScrollPageDown",
+      "ctrl-y": "typst::ScrollUp",
+      "ctrl-e": "typst::ScrollDown",
+      "g g": "typst::ScrollToTop",
+      "shift-g": "typst::ScrollToBottom",
+    },
+  },
+  {
     "context": "FileHistoryView",
     "bindings": {
       "j": "menu::SelectNext",

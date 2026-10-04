@@ -138,6 +138,7 @@
 - [Tailwind CSS](./languages/tailwindcss.md)
 - [Terraform](./languages/terraform.md)
 - [TOML](./languages/toml.md)
+- [Typst](./languages/typst.md)
 - [TypeScript](./languages/typescript.md)
 - [Uiua](./languages/uiua.md)
 - [Vue](./languages/vue.md)

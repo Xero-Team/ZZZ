@@ -61,6 +61,7 @@ use std::{
     time::Duration,
 };
 use theme_settings::ThemeSettings;
+use typst_preview::typst_preview_view::TypstPreviewView;
 use ui::{
     Color, ContextMenu, DecoratedIcon, Divider, Icon, IconDecoration, IconDecorationKind,
     IndentGuideColors, IndentGuideLayout, Indicator, KeyBinding, Label, LabelSize, ListItem,
@@ -434,6 +435,8 @@ actions!(
         Redo,
         /// Opens a markdown preview for the selected file.
         OpenMarkdownPreview,
+        /// Opens a Typst preview for the selected file.
+        OpenTypstPreview,
         /// Opens the context menu for the selected entry.
         OpenContextMenu,
     ]
@@ -1127,6 +1130,7 @@ impl ProjectPanel {
             let is_remote = project.is_remote();
             let is_local = project.is_local() || project.is_via_wsl_with_host_interop(cx);
             let is_markdown = !is_dir && MarkdownPreviewView::is_markdown_path(&*entry.path);
+            let is_typst = !is_dir && TypstPreviewView::is_typst_path(&*entry.path);
 
             let settings = ProjectPanelSettings::get_global(cx);
             let visible_worktrees_count = project.visible_worktrees(cx).count();
@@ -1163,6 +1167,16 @@ impl ProjectPanel {
                                     "Open Markdown Preview",
                                 ),
                                 Box::new(OpenMarkdownPreview),
+                            )
+                        })
+                        .when(is_typst, |menu| {
+                            menu.action(
+                                tr(
+                                    cx,
+                                    "project_panel.menu.open_typst_preview",
+                                    "Open Typst Preview",
+                                ),
+                                Box::new(OpenTypstPreview),
                             )
                         })
                         .when(is_dir, |menu| {
@@ -1213,6 +1227,16 @@ impl ProjectPanel {
                                     "Open Markdown Preview",
                                 ),
                                 Box::new(OpenMarkdownPreview),
+                            )
+                        })
+                        .when(is_typst, |menu| {
+                            menu.action(
+                                tr(
+                                    cx,
+                                    "project_panel.menu.open_typst_preview",
+                                    "Open Typst Preview",
+                                ),
+                                Box::new(OpenTypstPreview),
                             )
                         })
                         .when(is_dir, |menu| {
@@ -1981,6 +2005,30 @@ impl ProjectPanel {
         self.workspace
             .update(cx, |workspace, cx| {
                 MarkdownPreviewView::open_for_project_path(project_path, workspace, window, cx);
+            })
+            .log_err();
+    }
+
+    fn open_typst_preview(
+        &mut self,
+        _: &OpenTypstPreview,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((worktree, entry)) = self.selected_entry(cx) else {
+            return;
+        };
+        if !entry.is_file() || !TypstPreviewView::is_typst_path(&*entry.path) {
+            return;
+        }
+
+        let project_path = ProjectPath {
+            worktree_id: worktree.id(),
+            path: entry.path.clone(),
+        };
+        self.workspace
+            .update(cx, |workspace, cx| {
+                TypstPreviewView::open_for_project_path(project_path, workspace, window, cx);
             })
             .log_err();
     }
@@ -7381,6 +7429,7 @@ impl Render for ProjectPanel {
                 .on_action(cx.listener(Self::open_split_vertical))
                 .on_action(cx.listener(Self::open_split_horizontal))
                 .on_action(cx.listener(Self::open_markdown_preview))
+                .on_action(cx.listener(Self::open_typst_preview))
                 .on_action(cx.listener(Self::confirm))
                 .on_action(cx.listener(Self::cancel))
                 .on_action(cx.listener(Self::copy_path))

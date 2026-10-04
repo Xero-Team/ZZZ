@@ -11,6 +11,10 @@ use svg_preview::{
     OpenPreview as SvgOpenPreview, OpenPreviewToTheSide as SvgOpenPreviewToTheSide,
     svg_preview_view::SvgPreviewView,
 };
+use typst_preview::{
+    OpenPreview as TypstOpenPreview, OpenPreviewToTheSide as TypstOpenPreviewToTheSide,
+    typst_preview_view::TypstPreviewView,
+};
 use ui::{Tooltip, prelude::*, text_for_keystroke};
 use workspace::Workspace;
 
@@ -21,6 +25,7 @@ enum PreviewType {
     Markdown,
     Svg,
     Csv,
+    Typst,
 }
 
 impl QuickActionBar {
@@ -44,6 +49,10 @@ impl QuickActionBar {
                     .is_some()
                 {
                     preview_type = Some(PreviewType::Csv);
+                } else if TypstPreviewView::resolve_active_item_as_typst_editor(workspace, cx)
+                    .is_some()
+                {
+                    preview_type = Some(PreviewType::Typst);
                 }
             });
         }
@@ -80,6 +89,13 @@ impl QuickActionBar {
                     Box::new(CsvOpenPreview) as Box<dyn gpui::Action>,
                     Box::new(CsvOpenPreviewToTheSide) as Box<dyn gpui::Action>,
                     &csv_preview::OpenPreview as &dyn gpui::Action,
+                ),
+                PreviewType::Typst => (
+                    "toggle-typst-preview",
+                    tr(cx, "zzz.quick_action_bar.preview_typst", "Preview Typst"),
+                    Box::new(TypstOpenPreview) as Box<dyn gpui::Action>,
+                    Box::new(TypstOpenPreviewToTheSide) as Box<dyn gpui::Action>,
+                    &typst_preview::OpenPreview as &dyn gpui::Action,
                 ),
             };
 

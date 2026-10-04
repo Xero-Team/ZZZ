@@ -618,6 +618,14 @@
     },
   },
   {
+    "context": "Editor && extension == typ",
+    "use_key_equivalents": true,
+    "bindings": {
+      "ctrl-k v": "typst::OpenPreviewToTheSide",
+      "ctrl-shift-v": "typst::OpenPreview",
+    },
+  },
+  {
     "context": "Editor && mode == full",
     "bindings": {
       "ctrl-shift-o": "outline::Toggle",
@@ -1312,6 +1320,18 @@
       "ctrl-shift-v": "markdown::CloseAndReturnToEditor",
       "find": "buffer_search::Deploy",
       "ctrl-f": "buffer_search::Deploy",
+    },
+  },
+  {
+    "context": "TypstPreview",
+    "bindings": {
+      "pageup": "typst::ScrollPageUp",
+      "pagedown": "typst::ScrollPageDown",
+      "up": "typst::ScrollUp",
+      "down": "typst::ScrollDown",
+      "ctrl-home": "typst::ScrollToTop",
+      "ctrl-end": "typst::ScrollToBottom",
+      "ctrl-shift-v": "typst::CloseAndReturnToEditor",
     },
   },
   {

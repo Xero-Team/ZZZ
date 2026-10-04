@@ -652,6 +652,7 @@ fn main() {
         markdown_preview::init(cx);
         csv_preview::init(cx);
         svg_preview::init(cx);
+        typst_preview::init(cx);
         title_bar::init(cx);
         onboarding::init(cx);
         settings_ui::init(cx);
