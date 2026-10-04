@@ -717,7 +717,6 @@ pub struct Window {
     pub(crate) frame_scheduler: FrameScheduler,
     pub(crate) next_tooltip_id: TooltipId,
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
-    mouse_position: Point<Pixels>,
     scale_factor: f32,
     pub(crate) bounds_observers: SubscriberSet<(), AnyObserver>,
     appearance: WindowAppearance,
@@ -1332,6 +1331,7 @@ impl Window {
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 HitboxId(0),
+                mouse_position,
                 modifiers,
                 capslock,
             ),
@@ -1339,7 +1339,6 @@ impl Window {
             frame_scheduler,
             next_tooltip_id: TooltipId::default(),
             tooltip_bounds: None,
-            mouse_position,
             scale_factor,
             bounds_observers: SubscriberSet::new(),
             appearance,
@@ -1839,7 +1838,7 @@ impl Window {
         self.scale_factor = self.platform_window.scale_factor();
         self.viewport_size = self.platform_window.content_size();
         self.display_id = self.platform_window.display().map(|display| display.id());
-        self.mouse_position = self.platform_window.mouse_position();
+        self.interaction.mouse_position = self.platform_window.mouse_position();
 
         self.refresh();
 
@@ -2205,7 +2204,7 @@ impl Window {
 
     /// The position of the mouse relative to the window.
     pub fn mouse_position(&self) -> Point<Pixels> {
-        self.mouse_position
+        self.interaction.mouse_position
     }
 
     /// Captures the pointer for the given hitbox. While captured, all mouse move and mouse up
@@ -2558,7 +2557,10 @@ impl Window {
             tooltip_element = self.prepaint_tooltip(cx);
         }
 
-        self.interaction.mouse_hit_test = self.interaction.next_frame.hit_test(self.mouse_position);
+        self.interaction.mouse_hit_test = self
+            .interaction
+            .next_frame
+            .hit_test(self.interaction.mouse_position);
 
         #[cfg(feature = "frame-diagnostics")]
         {
@@ -4469,17 +4471,17 @@ impl Window {
             // Track the mouse position with our own state, since accessing the platform
             // API for the mouse position can only occur on the main thread.
             PlatformInput::MouseMove(mouse_move) => {
-                self.mouse_position = mouse_move.position;
+                self.interaction.mouse_position = mouse_move.position;
                 self.interaction.modifiers = mouse_move.modifiers;
                 PlatformInput::MouseMove(mouse_move)
             }
             PlatformInput::MouseDown(mouse_down) => {
-                self.mouse_position = mouse_down.position;
+                self.interaction.mouse_position = mouse_down.position;
                 self.interaction.modifiers = mouse_down.modifiers;
                 PlatformInput::MouseDown(mouse_down)
             }
             PlatformInput::MouseUp(mouse_up) => {
-                self.mouse_position = mouse_up.position;
+                self.interaction.mouse_position = mouse_up.position;
                 self.interaction.modifiers = mouse_up.modifiers;
                 PlatformInput::MouseUp(mouse_up)
             }
@@ -4496,12 +4498,12 @@ impl Window {
                 PlatformInput::ModifiersChanged(modifiers_changed)
             }
             PlatformInput::ScrollWheel(scroll_wheel) => {
-                self.mouse_position = scroll_wheel.position;
+                self.interaction.mouse_position = scroll_wheel.position;
                 self.interaction.modifiers = scroll_wheel.modifiers;
                 PlatformInput::ScrollWheel(scroll_wheel)
             }
             PlatformInput::Pinch(pinch) => {
-                self.mouse_position = pinch.position;
+                self.interaction.mouse_position = pinch.position;
                 self.interaction.modifiers = pinch.modifiers;
                 PlatformInput::Pinch(pinch)
             }
@@ -4509,7 +4511,7 @@ impl Window {
             // to internal drag and drop events.
             PlatformInput::FileDrop(file_drop) => match file_drop {
                 FileDropEvent::Entered { position, paths } => {
-                    self.mouse_position = position;
+                    self.interaction.mouse_position = position;
                     if cx.active_drag.is_none() {
                         cx.active_drag = Some(AnyDrag {
                             value: Arc::new(paths.clone()),
@@ -4525,7 +4527,7 @@ impl Window {
                     })
                 }
                 FileDropEvent::Pending { position } => {
-                    self.mouse_position = position;
+                    self.interaction.mouse_position = position;
                     PlatformInput::MouseMove(MouseMoveEvent {
                         position,
                         pressed_button: Some(MouseButton::Left),
@@ -4534,7 +4536,7 @@ impl Window {
                 }
                 FileDropEvent::Submit { position } => {
                     cx.activate(true);
-                    self.mouse_position = position;
+                    self.interaction.mouse_position = position;
                     PlatformInput::MouseUp(MouseUpEvent {
                         button: MouseButton::Left,
                         position,

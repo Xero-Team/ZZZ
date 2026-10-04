@@ -23,6 +23,7 @@ pub(crate) struct InteractionOwner {
     pub(crate) focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
     pub(crate) focus_lost_listeners: SubscriberSet<(), AnyObserver>,
     pub(crate) default_prevented: bool,
+    pub(crate) mouse_position: Point<Pixels>,
     pub(crate) modifiers: Modifiers,
     pub(crate) capslock: Capslock,
     pub(crate) last_input_modality: InputModality,
@@ -39,6 +40,7 @@ impl InteractionOwner {
         rendered_frame: Frame,
         next_frame: Frame,
         next_hitbox_id: HitboxId,
+        mouse_position: Point<Pixels>,
         modifiers: Modifiers,
         capslock: Capslock,
     ) -> Self {
@@ -51,6 +53,7 @@ impl InteractionOwner {
             focus_listeners: SubscriberSet::new(),
             focus_lost_listeners: SubscriberSet::new(),
             default_prevented: true,
+            mouse_position,
             modifiers,
             capslock,
             last_input_modality: InputModality::Mouse,
