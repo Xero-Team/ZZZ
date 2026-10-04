@@ -262,8 +262,8 @@ impl TestPlatform {
 }
 
 impl crate::AppLifecycle for TestPlatform {
-    fn run(&self, _on_finish_launching: Box<dyn FnOnce()>) {
-        unimplemented!()
+    fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
+        on_finish_launching();
     }
 
     fn quit(&self) {}

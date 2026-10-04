@@ -2933,12 +2933,45 @@ impl<T> Drop for GpuiBorrow<'_, T> {
 
 #[cfg(test)]
 mod test {
-    use std::{cell::RefCell, ffi::OsString, path::PathBuf, rc::Rc};
+    use std::{
+        cell::{Cell, RefCell},
+        ffi::OsString,
+        path::PathBuf,
+        rc::Rc,
+        sync::Arc,
+    };
 
     #[cfg(unix)]
     use std::os::unix::ffi::OsStringExt;
 
-    use crate::{AppContext, TestAppContext};
+    use crate::{
+        AppContext, BackgroundExecutor, ForegroundExecutor, TestAppContext, TestDispatcher,
+        TestPlatform,
+    };
+
+    #[test]
+    fn run_embedded_preserves_external_event_loop_ownership() {
+        let dispatcher = Arc::new(TestDispatcher::new(0));
+        let platform = TestPlatform::new(
+            BackgroundExecutor::new(dispatcher.clone()),
+            ForegroundExecutor::new(dispatcher),
+        );
+        let launch_count = Rc::new(Cell::new(0));
+
+        let application = super::Application::with_platform(platform);
+        let handle = application.run_embedded({
+            let launch_count = launch_count.clone();
+            move |_| launch_count.set(launch_count.get() + 1)
+        });
+
+        assert_eq!(launch_count.get(), 1);
+        assert_eq!(handle.update(|_| 42), 42);
+
+        let app = Rc::downgrade(&handle.app);
+        assert!(app.upgrade().is_some());
+        drop(handle);
+        assert!(app.upgrade().is_none());
+    }
 
     #[test]
     fn test_gpui_borrow() {
