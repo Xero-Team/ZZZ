@@ -863,6 +863,7 @@ fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabiliti
         headless_renderer: false,
         frame_callbacks: true,
         system_bell: false,
+        native_prompt: false,
         window_controls,
     }
 }
@@ -886,6 +887,7 @@ mod tests {
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
         assert!(capabilities.frame_callbacks);
         assert_eq!(capabilities.window_controls, window_controls);
     }

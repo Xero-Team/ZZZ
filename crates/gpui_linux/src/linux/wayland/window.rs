@@ -1614,6 +1614,7 @@ fn wayland_capabilities(
         headless_renderer: false,
         frame_callbacks: true,
         system_bell,
+        native_prompt: false,
         window_controls,
     }
 }
@@ -1638,6 +1639,7 @@ mod capability_tests {
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
         assert!(!capabilities.window_controls.attention);
         assert_eq!(capabilities.window_controls, window_controls);
     }

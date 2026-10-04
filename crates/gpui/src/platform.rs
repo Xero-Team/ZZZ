@@ -442,6 +442,8 @@ pub struct PlatformCapabilities {
     pub frame_callbacks: bool,
     /// Whether the platform can play its native system bell.
     pub system_bell: bool,
+    /// Whether the platform can present a native prompt dialog.
+    pub native_prompt: bool,
     /// Window control operations supported by the backend.
     pub window_controls: WindowControls,
 }
@@ -455,6 +457,7 @@ impl Default for PlatformCapabilities {
             headless_renderer: false,
             frame_callbacks: false,
             system_bell: false,
+            native_prompt: false,
             window_controls: WindowControls {
                 attention: false,
                 fullscreen: false,
@@ -2828,6 +2831,7 @@ mod tests {
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);
         assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
         assert_eq!(
             capabilities.window_controls,
             WindowControls {

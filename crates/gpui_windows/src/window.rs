@@ -1051,6 +1051,7 @@ fn windows_capabilities() -> gpui::PlatformCapabilities {
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
         system_bell: true,
+        native_prompt: true,
         window_controls: gpui::WindowControls::default(),
     }
 }
@@ -1612,6 +1613,7 @@ mod tests {
         assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
         assert!(capabilities.system_bell);
+        assert!(capabilities.native_prompt);
         assert!(!capabilities.accessibility);
         assert!(capabilities.window_controls.attention);
         assert_eq!(

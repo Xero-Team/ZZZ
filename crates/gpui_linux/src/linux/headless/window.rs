@@ -94,6 +94,7 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
         headless_renderer: false,
         frame_callbacks: false,
         system_bell: false,
+        native_prompt: false,
         window_controls: gpui::WindowControls {
             attention: false,
             fullscreen: true,
@@ -277,6 +278,7 @@ mod tests {
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);
         assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
         assert!(!capabilities.window_controls.attention);
         assert!(capabilities.window_controls.fullscreen);
     }

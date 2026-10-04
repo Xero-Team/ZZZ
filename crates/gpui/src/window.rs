@@ -4766,13 +4766,16 @@ impl Window {
             .collect::<Vec<_>>();
 
         let receiver = match &prompt_builder {
-            PromptBuilder::Default => self
+            PromptBuilder::Default if self.platform_window.capabilities().native_prompt => self
                 .platform_window
                 .prompt(level, message, detail, &answers)
                 .unwrap_or_else(|| {
                     self.build_custom_prompt(&prompt_builder, level, message, detail, &answers, cx)
                 }),
             PromptBuilder::Custom(_) => {
+                self.build_custom_prompt(&prompt_builder, level, message, detail, &answers, cx)
+            }
+            PromptBuilder::Default => {
                 self.build_custom_prompt(&prompt_builder, level, message, detail, &answers, cx)
             }
         };
@@ -5972,6 +5975,7 @@ mod tests {
                 assert!(capabilities.text_input);
                 assert!(!capabilities.ime_candidate_position);
                 assert!(capabilities.frame_callbacks);
+                assert!(capabilities.native_prompt);
                 assert!(!capabilities.accessibility);
                 assert!(capabilities.window_controls.fullscreen);
                 assert!(!capabilities.window_controls.maximize);

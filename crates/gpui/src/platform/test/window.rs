@@ -403,6 +403,7 @@ impl PlatformWindow for TestWindow {
             headless_renderer: self.0.lock().renderer.is_some(),
             frame_callbacks: true,
             system_bell: false,
+            native_prompt: true,
             window_controls: crate::WindowControls {
                 attention: false,
                 fullscreen: true,

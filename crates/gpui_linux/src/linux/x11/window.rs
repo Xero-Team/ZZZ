@@ -1944,6 +1944,7 @@ fn x11_capabilities() -> gpui::PlatformCapabilities {
         headless_renderer: false,
         frame_callbacks: true,
         system_bell: true,
+        native_prompt: false,
         window_controls: gpui::WindowControls::default(),
     }
 }
@@ -1961,6 +1962,7 @@ mod capability_tests {
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
         assert_eq!(
             capabilities.window_controls,
             gpui::WindowControls::default()
