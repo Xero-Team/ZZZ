@@ -289,6 +289,9 @@ BenchAppContext/panic follow-up `41f6fccba1edab173ca46dd073c663b44aabbf14`。
 - 同一 primitive corpus（quad/border/shadow/underline/monochrome text/SVG atlas、
   polychrome image/emoji atlas、path）在 RADV hardware 与 llvmpipe fallback 各连续
   运行 100 次，无 hang 或初始化失败。
+- corpus 已补齐显式 clip boundary，并在 1x、2x 分别运行；对初始 headless commit
+  `0347f6196e` 和当前实现使用同一测试 harness 后，hardware/fallback 四组 PNG 的
+  pre/post-refactor SHA-256 均完全相同。
 
 EXP-003 当前结果：
 
@@ -299,17 +302,22 @@ EXP-003 当前结果：
 | Hardware/fallback pixel comparison                                                  | `PASS`             | 54/20,000 differing pixels = 0.27%；max channel delta 1；≤0.5% threshold                                              |
 | Hardware pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/hardware.png`, SHA-256 `a153441213a6a9626d05669c516ec876a269b29d58af3d92bd0daeaf8362a658` |
 | Fallback pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/fallback.png`, SHA-256 `07be370bfc32685d553602de7e6d7a3394aa17d8a272b94e12912dad18cf1ab8` |
+| 1x/2x per-adapter pre/post-refactor golden                                          | `PASS`             | RADV 与 llvmpipe 各自 1x/2x hash 全部相同；artifacts in `.tmp/gpui-refactor/phase-3/{baseline,current}-1x-2x/`        |
 | `cargo test --locked -p gpui_wgpu --features test-support`                          | `PASS`             | 15 unit + 2 headless integration tests                                                                                |
 | `./script/clippy -p gpui_wgpu --features test-support`                              | `PASS`             | release/all-target checks + philosophy                                                                                |
 | `cargo test --locked -p gpui_platform --features test-support`                      | `PASS`             | platform factory returns real renderer on Linux                                                                       |
 | Windows hardware/software adapter runtime                                           | `NOT RUN`          | 当前主机无法执行；保留同一 test command 给 Windows QA                                                                 |
 
-当前仍待完成：明确 1x/2x font-dependent text/emoji/SVG golden policy、Windows 同 corpus
-runtime，以及将 Linux pixel artifacts 纳入后续 renderer/Window migration regression gate。
-因此 EXP-003 在当前 Linux 主机的 primitive/readback 部分达标，阶段 3 保持
-`IN PROGRESS`，不声称跨平台完成。
+一次 hardware-vs-llvmpipe 2x 比较得到 1.1375% 像素差异；该比较混合两个 adapter，
+不符合 EXP-003 的 per-platform baseline 定义，记录在
+`.tmp/gpui-refactor/phase-3/headless-1x-2x-comparison-repeats.log` 作为 `INVALID SAMPLE`，
+没有放宽 0.5% 阈值。正确的同 adapter、同 scale、pre/post-refactor 比较为 0 差异。
 
-提交：renderer core `0347f6196e`；platform factory `b28b235a09`。
+当前仍待完成：Windows 同 corpus runtime 和 exact runbook。因此 EXP-003 在当前 Linux
+主机达标，阶段 3 保持 `IN PROGRESS`，不声称跨平台完成。
+
+提交：renderer core `0347f6196e`；platform factory `b28b235a09`；1x/2x golden gate
+`aae393b8c4`。
 
 ### 阶段 4：拆分 `Window`
 
