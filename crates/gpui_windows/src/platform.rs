@@ -773,6 +773,10 @@ impl Platform for WindowsPlatform {
         should_auto_hide_scrollbars().log_err().unwrap_or(false)
     }
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::READ_WRITE
+    }
+
     fn write_to_clipboard(&self, item: ClipboardItem) {
         write_to_clipboard(item);
     }

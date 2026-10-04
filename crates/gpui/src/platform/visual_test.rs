@@ -216,6 +216,10 @@ impl Platform for VisualTestPlatform {
         self.platform.should_auto_hide_scrollbars()
     }
 
+    fn clipboard_capabilities(&self) -> crate::ClipboardCapabilities {
+        crate::ClipboardCapabilities::READ_WRITE
+    }
+
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {
         self.clipboard.lock().clone()
     }

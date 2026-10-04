@@ -451,6 +451,10 @@ impl Platform for TestPlatform {
         false
     }
 
+    fn clipboard_capabilities(&self) -> crate::ClipboardCapabilities {
+        crate::ClipboardCapabilities::READ_WRITE
+    }
+
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {
         self.current_clipboard_item.lock().clone()
     }

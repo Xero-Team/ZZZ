@@ -5977,6 +5977,10 @@ mod tests {
                 assert!(capabilities.frame_callbacks);
                 assert!(capabilities.native_prompt);
                 assert!(!capabilities.accessibility);
+                assert_eq!(
+                    capabilities.clipboard,
+                    crate::ClipboardCapabilities::READ_WRITE
+                );
                 assert!(capabilities.window_controls.fullscreen);
                 assert!(!capabilities.window_controls.maximize);
                 assert!(!capabilities.window_controls.minimize);

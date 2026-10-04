@@ -42,9 +42,9 @@ use crate::InspectorElementRegistry;
 use crate::asset_cache::CachedLoad;
 use crate::{
     Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext, Arena,
-    ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardItem, CursorStyle,
-    DispatchPhase, DisplayId, EventEmitter, FocusHandle, FocusMap, ForegroundExecutor, Global,
-    KeyBinding, KeyContext, Keymap, Keystroke, LayoutId, Menu, MenuItem, OwnedMenu,
+    ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardCapabilities, ClipboardItem,
+    CursorStyle, DispatchPhase, DisplayId, EventEmitter, FocusHandle, FocusMap, ForegroundExecutor,
+    Global, KeyBinding, KeyContext, Keymap, Keystroke, LayoutId, Menu, MenuItem, OwnedMenu,
     PathPromptOptions, Pixels, Platform, PlatformDisplay, PlatformKeyboardLayout,
     PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton, PromptHandle,
     PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation, ScreenCaptureSource,
@@ -1346,6 +1346,11 @@ impl App {
     /// Returns the window button layout configuration when supported.
     pub fn button_layout(&self) -> Option<WindowButtonLayout> {
         self.platform.button_layout()
+    }
+
+    /// Returns the clipboard operations implemented by the current platform backend.
+    pub fn clipboard_capabilities(&self) -> ClipboardCapabilities {
+        self.platform.clipboard_capabilities()
     }
 
     /// Reads data from the platform clipboard.
@@ -2966,6 +2971,10 @@ mod test {
 
         assert_eq!(launch_count.get(), 1);
         assert_eq!(handle.update(|_| 42), 42);
+        assert_eq!(
+            handle.update(|cx| cx.clipboard_capabilities()),
+            crate::ClipboardCapabilities::READ_WRITE
+        );
 
         let app = Rc::downgrade(&handle.app);
         assert!(app.upgrade().is_some());

@@ -337,6 +337,10 @@ impl Platform for WebPlatform {
         true
     }
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::WRITE_ONLY
+    }
+
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {
         None
     }

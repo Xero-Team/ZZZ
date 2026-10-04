@@ -1945,6 +1945,7 @@ fn x11_capabilities() -> gpui::PlatformCapabilities {
         frame_callbacks: true,
         system_bell: true,
         native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls: gpui::WindowControls::default(),
     }
 }
@@ -1963,6 +1964,10 @@ mod capability_tests {
         assert!(!capabilities.headless_renderer);
         assert!(capabilities.system_bell);
         assert!(!capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
+        );
         assert_eq!(
             capabilities.window_controls,
             gpui::WindowControls::default()

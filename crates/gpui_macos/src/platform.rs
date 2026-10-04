@@ -1100,6 +1100,10 @@ impl Platform for MacPlatform {
         }
     }
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::READ_WRITE
+    }
+
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {
         let state = self.0.lock();
         state.general_pasteboard.read()

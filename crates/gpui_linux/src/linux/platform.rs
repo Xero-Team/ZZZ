@@ -88,6 +88,7 @@ pub(crate) trait LinuxClient {
     }
     fn open_uri(&self, uri: &str);
     fn reveal_path(&self, path: PathBuf);
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities;
     fn write_to_primary(&self, item: ClipboardItem);
     fn write_to_clipboard(&self, item: ClipboardItem);
     fn read_from_primary(&self) -> Option<ClipboardItem>;
@@ -627,6 +628,10 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
 
     fn register_url_scheme(&self, _: &str) -> Task<anyhow::Result<()>> {
         Task::ready(Err(anyhow!("register_url_scheme unimplemented")))
+    }
+
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        self.inner.clipboard_capabilities()
     }
 
     fn write_to_primary(&self, item: ClipboardItem) {

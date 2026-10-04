@@ -2036,6 +2036,7 @@ fn macos_capabilities() -> gpui::PlatformCapabilities {
         frame_callbacks: true,
         system_bell: true,
         native_prompt: true,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls: gpui::WindowControls::default(),
     }
 }
@@ -3404,6 +3405,10 @@ mod tests {
         assert!(capabilities.frame_callbacks);
         assert!(capabilities.system_bell);
         assert!(capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
+        );
         assert!(!capabilities.accessibility);
         assert!(capabilities.window_controls.attention);
         assert_eq!(

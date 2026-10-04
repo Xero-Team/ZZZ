@@ -237,6 +237,9 @@ pub trait Platform: AppLifecycle + 'static {
 
     fn should_auto_hide_scrollbars(&self) -> bool;
 
+    fn clipboard_capabilities(&self) -> ClipboardCapabilities {
+        ClipboardCapabilities::NONE
+    }
     fn read_from_clipboard(&self) -> Option<ClipboardItem>;
     fn write_to_clipboard(&self, item: ClipboardItem);
 
@@ -444,6 +447,8 @@ pub struct PlatformCapabilities {
     pub system_bell: bool,
     /// Whether the platform can present a native prompt dialog.
     pub native_prompt: bool,
+    /// Clipboard operations supported by this backend.
+    pub clipboard: ClipboardCapabilities,
     /// Window control operations supported by the backend.
     pub window_controls: WindowControls,
 }
@@ -458,6 +463,7 @@ impl Default for PlatformCapabilities {
             frame_callbacks: false,
             system_bell: false,
             native_prompt: false,
+            clipboard: ClipboardCapabilities::NONE,
             window_controls: WindowControls {
                 attention: false,
                 fullscreen: false,
@@ -2204,6 +2210,35 @@ pub struct ClipboardItem {
     pub entries: Vec<ClipboardEntry>,
 }
 
+/// Clipboard operations supported by a platform backend.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ClipboardCapabilities {
+    /// Whether [`Platform::read_from_clipboard`] can synchronously read clipboard data.
+    pub read: bool,
+    /// Whether [`Platform::write_to_clipboard`] supports at least plain-text writes.
+    pub write: bool,
+}
+
+impl ClipboardCapabilities {
+    /// No synchronous clipboard operations are available.
+    pub const NONE: Self = Self {
+        read: false,
+        write: false,
+    };
+
+    /// Clipboard reads and writes are available.
+    pub const READ_WRITE: Self = Self {
+        read: true,
+        write: true,
+    };
+
+    /// Clipboard writes are available, but synchronous reads are not.
+    pub const WRITE_ONLY: Self = Self {
+        read: false,
+        write: true,
+    };
+}
+
 /// Either a ClipboardString or a ClipboardImage
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClipboardEntry {
@@ -2832,6 +2867,7 @@ mod tests {
         assert!(!capabilities.frame_callbacks);
         assert!(!capabilities.system_bell);
         assert!(!capabilities.native_prompt);
+        assert_eq!(capabilities.clipboard, ClipboardCapabilities::NONE);
         assert_eq!(
             capabilities.window_controls,
             WindowControls {

@@ -110,6 +110,10 @@ impl LinuxClient for HeadlessClient {
 
     fn reveal_path(&self, _path: std::path::PathBuf) {}
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::NONE
+    }
+
     fn write_to_primary(&self, _item: gpui::ClipboardItem) {}
 
     fn write_to_clipboard(&self, _item: gpui::ClipboardItem) {}

@@ -864,6 +864,7 @@ fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabiliti
         frame_callbacks: true,
         system_bell: false,
         native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::WRITE_ONLY,
         window_controls,
     }
 }
@@ -888,6 +889,10 @@ mod tests {
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.system_bell);
         assert!(!capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::WRITE_ONLY
+        );
         assert!(capabilities.frame_callbacks);
         assert_eq!(capabilities.window_controls, window_controls);
     }

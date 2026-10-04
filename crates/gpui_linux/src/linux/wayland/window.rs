@@ -1615,6 +1615,7 @@ fn wayland_capabilities(
         frame_callbacks: true,
         system_bell,
         native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls,
     }
 }
@@ -1640,6 +1641,10 @@ mod capability_tests {
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.system_bell);
         assert!(!capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
+        );
         assert!(!capabilities.window_controls.attention);
         assert_eq!(capabilities.window_controls, window_controls);
     }

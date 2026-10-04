@@ -404,6 +404,7 @@ impl PlatformWindow for TestWindow {
             frame_callbacks: true,
             system_bell: false,
             native_prompt: true,
+            clipboard: crate::ClipboardCapabilities::READ_WRITE,
             window_controls: crate::WindowControls {
                 attention: false,
                 fullscreen: true,
