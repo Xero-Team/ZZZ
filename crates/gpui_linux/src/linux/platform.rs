@@ -164,6 +164,10 @@ pub(crate) struct LinuxPlatform<P> {
 }
 
 impl<P: LinuxClient + 'static> gpui::AppLifecycle for LinuxPlatform<P> {
+    fn lifecycle_capabilities(&self) -> gpui::AppLifecycleCapabilities {
+        gpui::AppLifecycleCapabilities::BASIC_DESKTOP
+    }
+
     fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
         on_finish_launching();
 

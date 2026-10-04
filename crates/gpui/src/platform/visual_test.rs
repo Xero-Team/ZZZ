@@ -65,6 +65,10 @@ impl VisualTestPlatform {
 }
 
 impl crate::AppLifecycle for VisualTestPlatform {
+    fn lifecycle_capabilities(&self) -> crate::AppLifecycleCapabilities {
+        crate::AppLifecycleCapabilities::default()
+    }
+
     fn run(&self, _on_finish_launching: Box<dyn 'static + FnOnce()>) {
         panic!("VisualTestPlatform::run should not be called in tests")
     }

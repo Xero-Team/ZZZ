@@ -123,6 +123,9 @@ pub fn guess_compositor() -> &'static str {
 /// Application lifecycle owned by the platform event loop.
 #[expect(missing_docs)]
 pub trait AppLifecycle {
+    fn lifecycle_capabilities(&self) -> AppLifecycleCapabilities {
+        AppLifecycleCapabilities::default()
+    }
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>);
     fn quit(&self);
     fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>);
@@ -132,6 +135,55 @@ pub trait AppLifecycle {
     fn unhide_other_apps(&self);
     fn on_quit(&self, callback: Box<dyn FnMut()>);
     fn on_reopen(&self, callback: Box<dyn FnMut()>);
+}
+
+/// Application lifecycle operations supported by a platform backend.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AppLifecycleCapabilities {
+    /// Whether `run` returns control to an external event loop after launching.
+    pub external_event_loop: bool,
+    /// Whether the backend can terminate the application event loop.
+    pub quit: bool,
+    /// Whether the backend can restart the application process.
+    pub restart: bool,
+    /// Whether the backend can activate the application.
+    pub activate: bool,
+    /// Whether the backend can hide the application.
+    pub hide: bool,
+    /// Whether the backend can hide and restore other applications.
+    pub hide_other_apps: bool,
+}
+
+impl AppLifecycleCapabilities {
+    /// Complete desktop lifecycle control.
+    pub const FULL_DESKTOP: Self = Self {
+        external_event_loop: false,
+        quit: true,
+        restart: true,
+        activate: true,
+        hide: true,
+        hide_other_apps: true,
+    };
+
+    /// Desktop lifecycle without application activation or visibility control.
+    pub const BASIC_DESKTOP: Self = Self {
+        external_event_loop: false,
+        quit: true,
+        restart: true,
+        activate: false,
+        hide: false,
+        hide_other_apps: false,
+    };
+
+    /// An application hosted by an external event loop without process controls.
+    pub const EXTERNAL_EVENT_LOOP_ONLY: Self = Self {
+        external_event_loop: true,
+        quit: false,
+        restart: false,
+        activate: false,
+        hide: false,
+        hide_other_apps: false,
+    };
 }
 
 #[expect(missing_docs)]

@@ -41,16 +41,16 @@ pub use visual_test_context::*;
 use crate::InspectorElementRegistry;
 use crate::asset_cache::CachedLoad;
 use crate::{
-    Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext, Arena,
-    ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardCapabilities, ClipboardItem,
-    CursorStyle, DispatchPhase, DisplayId, EventEmitter, FocusHandle, FocusMap, ForegroundExecutor,
-    Global, KeyBinding, KeyContext, Keymap, Keystroke, LayoutId, Menu, MenuItem, OwnedMenu,
-    PathPromptOptions, Pixels, Platform, PlatformDisplay, PlatformKeyboardLayout,
-    PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton, PromptHandle,
-    PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation, ScreenCaptureSource,
-    SharedString, SubscriberSet, Subscription, SvgRenderer, Task, TextRenderingMode, TextSystem,
-    ThermalState, Window, WindowAppearance, WindowButtonLayout, WindowHandle, WindowId,
-    WindowInvalidator,
+    Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext,
+    AppLifecycleCapabilities, Arena, ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds,
+    ClipboardCapabilities, ClipboardItem, CursorStyle, DispatchPhase, DisplayId, EventEmitter,
+    FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
+    LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
+    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton,
+    PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation,
+    ScreenCaptureSource, SharedString, SubscriberSet, Subscription, SvgRenderer, Task,
+    TextRenderingMode, TextSystem, ThermalState, Window, WindowAppearance, WindowButtonLayout,
+    WindowHandle, WindowId, WindowInvalidator,
     colors::{Colors, GlobalColors},
     hash, init_app_menus,
 };
@@ -192,6 +192,11 @@ impl Application {
     pub fn with_restart_arguments(self, arguments: Vec<OsString>) -> Self {
         self.0.borrow_mut().restart_arguments = arguments;
         self
+    }
+
+    /// Returns the lifecycle operations implemented by the current platform backend.
+    pub fn lifecycle_capabilities(&self) -> AppLifecycleCapabilities {
+        self.0.borrow().platform.lifecycle_capabilities()
     }
 
     /// Sets the HTTP client for the application.
@@ -1247,22 +1252,35 @@ impl App {
 
     /// Instructs the platform to activate the application by bringing it to the foreground.
     pub fn activate(&self, ignoring_other_apps: bool) {
-        self.platform.activate(ignoring_other_apps);
+        if self.platform.lifecycle_capabilities().activate {
+            self.platform.activate(ignoring_other_apps);
+        }
     }
 
     /// Hide the application at the platform level.
     pub fn hide(&self) {
-        self.platform.hide();
+        if self.platform.lifecycle_capabilities().hide {
+            self.platform.hide();
+        }
     }
 
     /// Hide other applications at the platform level.
     pub fn hide_other_apps(&self) {
-        self.platform.hide_other_apps();
+        if self.platform.lifecycle_capabilities().hide_other_apps {
+            self.platform.hide_other_apps();
+        }
     }
 
     /// Unhide other applications at the platform level.
     pub fn unhide_other_apps(&self) {
-        self.platform.unhide_other_apps();
+        if self.platform.lifecycle_capabilities().hide_other_apps {
+            self.platform.unhide_other_apps();
+        }
+    }
+
+    /// Returns the lifecycle operations implemented by the current platform backend.
+    pub fn lifecycle_capabilities(&self) -> AppLifecycleCapabilities {
+        self.platform.lifecycle_capabilities()
     }
 
     /// Returns the list of currently active displays.
@@ -2964,6 +2982,7 @@ mod test {
         let launch_count = Rc::new(Cell::new(0));
 
         let application = super::Application::with_platform(platform);
+        assert!(application.lifecycle_capabilities().external_event_loop);
         let handle = application.run_embedded({
             let launch_count = launch_count.clone();
             move |_| launch_count.set(launch_count.get() + 1)
@@ -2971,6 +2990,7 @@ mod test {
 
         assert_eq!(launch_count.get(), 1);
         assert_eq!(handle.update(|_| 42), 42);
+        assert!(handle.update(|cx| cx.lifecycle_capabilities().external_event_loop));
         assert_eq!(
             handle.update(|cx| cx.clipboard_capabilities()),
             crate::ClipboardCapabilities::READ_WRITE
