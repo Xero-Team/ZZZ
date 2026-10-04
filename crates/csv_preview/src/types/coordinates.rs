@@ -16,11 +16,6 @@ impl DisplayRow {
     pub fn new(row: usize) -> Self {
         Self(row)
     }
-
-    /// Get the inner row value
-    pub fn get(self) -> usize {
-        self.0
-    }
 }
 
 impl Deref for DisplayRow {
@@ -118,10 +113,5 @@ impl DisplayCellId {
             row: row.into(),
             col: col.into(),
         }
-    }
-
-    /// Returns (row, column)
-    pub fn to_raw(&self) -> (usize, usize) {
-        (self.row.0, self.col.0)
     }
 }

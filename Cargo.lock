@@ -3358,7 +3358,10 @@ dependencies = [
  "gpui",
  "i18n",
  "log",
+ "settings",
  "text",
+ "theme",
+ "theme_settings",
  "ui",
  "workspace",
 ]

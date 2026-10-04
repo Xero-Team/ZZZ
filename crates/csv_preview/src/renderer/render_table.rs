@@ -1,13 +1,27 @@
 use crate::types::TableCell;
-use gpui::{AnyElement, Entity};
+use gpui::{AnyElement, Div, Entity, Stateful};
 use std::ops::Range;
 use ui::{ColumnWidthConfig, ResizableColumnsState, Table, UncheckedTableRow, div, prelude::*};
 
 use crate::{
     CsvPreviewView,
+    renderer::table_cell::create_table_cell,
     settings::RowRenderMechanism,
     types::{AnyColumn, DisplayCellId, DisplayRow},
 };
+
+fn render_data_cell(cell: Stateful<Div>, debug_information: Option<AnyElement>) -> AnyElement {
+    match debug_information {
+        Some(debug_information) => v_flex()
+            .w_full()
+            .min_w_0()
+            .items_stretch()
+            .child(debug_information)
+            .child(cell.flex_grow())
+            .into_any_element(),
+        None => cell.into_any_element(),
+    }
+}
 
 impl CsvPreviewView {
     /// Creates a new table.
@@ -138,44 +152,207 @@ impl CsvPreviewView {
 
             let display_cell_id = DisplayCellId::new(display_row, col);
 
-            let cell = div()
-                .w_full()
-                .min_w_0()
-                .child(CsvPreviewView::create_selectable_cell(
-                    display_cell_id,
-                    cell_content,
-                    this.settings.multiline_cells_enabled,
-                    this.settings.vertical_alignment,
-                    cx,
-                ));
-
-            elements.push(
-                div()
-                    .w_full()
-                    .min_w_0()
-                    .when(this.settings.show_debug_info, |parent| {
-                        parent.child(div().text_color(row_identifier_text_color).child(
-                            match table_cell {
-                                TableCell::Real { position: pos, .. } => {
-                                    let start_line = pos.start.timestamp().value;
-                                    let start_offset = pos.start.offset;
-                                    let end_line = pos.end.timestamp().value;
-                                    let end_offset = pos.end.offset;
-                                    format!(
-                                        "Pos {start_offset}(L{start_line})-{end_offset}(L{end_line})"
-                                    )
-                                }
-                                TableCell::Synthetic { .. } => "Synthetic cell".into(),
-                                TableCell::Virtual => "Virtual cell".into(),
-                            },
-                        ))
-                    })
-                    .text_ui(cx)
-                    .child(cell)
-                    .into_any_element(),
+            let cell = create_table_cell(
+                display_cell_id,
+                cell_content,
+                this.settings.multiline_cells_enabled,
+                this.settings.vertical_alignment,
+                cx,
             );
+
+            let debug_information = this.settings.show_debug_info.then(|| {
+                let description = match table_cell {
+                    TableCell::Real { position, .. } => {
+                        let start_line = position.start.timestamp().value;
+                        let start_offset = position.start.offset;
+                        let end_line = position.end.timestamp().value;
+                        let end_offset = position.end.offset;
+                        format!("Pos {start_offset}(L{start_line})-{end_offset}(L{end_line})")
+                    }
+                    TableCell::Synthetic { .. } => "Synthetic cell".into(),
+                    TableCell::Virtual => "Virtual cell".into(),
+                };
+
+                div()
+                    .text_color(row_identifier_text_color)
+                    .text_ui(cx)
+                    .child(description)
+                    .into_any_element()
+            });
+
+            elements.push(render_data_cell(cell, debug_information));
         }
 
         Some(elements)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::{ListAlignment, Render, TestAppContext, Window, px};
+    use settings::SettingsStore;
+
+    const ROW_COUNT: usize = 5;
+
+    struct TestTable {
+        list_state: gpui::ListState,
+    }
+
+    impl Render for TestTable {
+        fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            Table::new(2)
+                .width_config(ColumnWidthConfig::explicit(vec![px(80.), px(240.)]))
+                .disable_base_style()
+                .hide_row_borders()
+                .hide_row_hover()
+                .pin_cols(1)
+                .variable_row_height_list(ROW_COUNT, self.list_state.clone(), {
+                    cx.processor(|_, row_index, _, cx| test_row(row_index, cx))
+                })
+        }
+    }
+
+    fn test_cell(
+        row_index: usize,
+        selector: &'static str,
+        content: &'static str,
+        cx: &App,
+    ) -> Stateful<Div> {
+        let vertical_alignment = if row_index == 2 {
+            crate::settings::VerticalAlignment::Center
+        } else {
+            crate::settings::VerticalAlignment::Top
+        };
+        create_table_cell(
+            DisplayCellId::new(DisplayRow(row_index), AnyColumn(0)),
+            content.into(),
+            true,
+            vertical_alignment,
+            cx,
+        )
+        .debug_selector(move || selector.to_owned())
+    }
+
+    fn test_row(row_index: usize, cx: &App) -> UncheckedTableRow<AnyElement> {
+        match row_index {
+            0 => vec![
+                div()
+                    .debug_selector(|| "tall-identifier".into())
+                    .h(px(64.))
+                    .into_any_element(),
+                render_data_cell(test_cell(row_index, "single-line-cell", "value", cx), None),
+            ],
+            1 => vec![
+                div()
+                    .debug_selector(|| "short-identifier".into())
+                    .child("3")
+                    .into_any_element(),
+                render_data_cell(
+                    test_cell(row_index, "multiline-cell", "first\nsecond\nthird", cx),
+                    None,
+                ),
+            ],
+            2 => vec![
+                div()
+                    .debug_selector(|| "debug-identifier".into())
+                    .h(px(80.))
+                    .into_any_element(),
+                render_data_cell(
+                    test_cell(row_index, "debug-cell", "value", cx),
+                    Some(div().h(px(16.)).into_any_element()),
+                ),
+            ],
+            3 => vec![
+                div()
+                    .debug_selector(|| "empty-identifier".into())
+                    .h(px(64.))
+                    .into_any_element(),
+                render_data_cell(test_cell(row_index, "empty-cell", "", cx), None),
+            ],
+            4 => vec![
+                div()
+                    .debug_selector(|| "wrapped-identifier".into())
+                    .child("6")
+                    .into_any_element(),
+                render_data_cell(
+                    test_cell(
+                        row_index,
+                        "wrapped-cell",
+                        "a deliberately long value that must wrap across several visual lines in a narrow column",
+                        cx,
+                    ),
+                    None,
+                ),
+            ],
+            _ => unreachable!("the table renders exactly five rows"),
+        }
+    }
+
+    #[gpui::test]
+    fn pinned_data_cells_fill_variable_height_rows(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings_store = SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+
+        let list_state = gpui::ListState::new(ROW_COUNT, ListAlignment::Top, px(0.)).measure_all();
+        let (_, cx) = cx.add_window_view(|_, _| TestTable { list_state });
+
+        let tall_identifier = cx
+            .debug_bounds("tall-identifier")
+            .expect("tall identifier should be rendered");
+        let single_line_cell = cx
+            .debug_bounds("single-line-cell")
+            .expect("single-line cell should be rendered");
+        assert_eq!(single_line_cell.top(), tall_identifier.top());
+        assert_eq!(single_line_cell.size.height, tall_identifier.size.height);
+        assert_eq!(single_line_cell.bottom(), tall_identifier.bottom());
+
+        let short_identifier = cx
+            .debug_bounds("short-identifier")
+            .expect("short identifier should be rendered");
+        let multiline_cell = cx
+            .debug_bounds("multiline-cell")
+            .expect("multiline cell should be rendered");
+        assert_eq!(short_identifier.top(), tall_identifier.bottom());
+        assert_eq!(multiline_cell.top(), short_identifier.top());
+        assert_eq!(short_identifier.size.height, multiline_cell.size.height);
+        assert_eq!(short_identifier.bottom(), multiline_cell.bottom());
+        assert!(multiline_cell.size.height > px(40.));
+
+        let debug_identifier = cx
+            .debug_bounds("debug-identifier")
+            .expect("debug identifier should be rendered");
+        let debug_cell = cx
+            .debug_bounds("debug-cell")
+            .expect("debug cell should be rendered");
+        assert_eq!(debug_identifier.top(), short_identifier.bottom());
+        assert!(debug_cell.top() > debug_identifier.top());
+        assert_eq!(debug_cell.bottom(), debug_identifier.bottom());
+
+        let empty_identifier = cx
+            .debug_bounds("empty-identifier")
+            .expect("empty identifier should be rendered");
+        let empty_cell = cx
+            .debug_bounds("empty-cell")
+            .expect("empty cell should be rendered");
+        assert_eq!(empty_identifier.top(), debug_identifier.bottom());
+        assert_eq!(empty_cell.top(), empty_identifier.top());
+        assert_eq!(empty_cell.size.height, empty_identifier.size.height);
+        assert_eq!(empty_cell.bottom(), empty_identifier.bottom());
+
+        let wrapped_identifier = cx
+            .debug_bounds("wrapped-identifier")
+            .expect("wrapped identifier should be rendered");
+        let wrapped_cell = cx
+            .debug_bounds("wrapped-cell")
+            .expect("wrapped cell should be rendered");
+        assert_eq!(wrapped_identifier.top(), empty_identifier.bottom());
+        assert_eq!(wrapped_cell.top(), wrapped_identifier.top());
+        assert_eq!(wrapped_identifier.size.height, wrapped_cell.size.height);
+        assert_eq!(wrapped_identifier.bottom(), wrapped_cell.bottom());
+        assert!(wrapped_cell.size.height > px(40.));
     }
 }

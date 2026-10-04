@@ -20,5 +20,11 @@ text.workspace = true
 [features]
 dev-tools = []
 
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+settings = { workspace = true, features = ["test-support"] }
+theme.workspace = true
+theme_settings.workspace = true
+
 [lints]
 workspace = true

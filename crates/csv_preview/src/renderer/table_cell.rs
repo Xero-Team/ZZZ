@@ -1,39 +1,18 @@
 //! Table Cell Rendering
 
-use gpui::{AnyElement, ElementId};
+use gpui::{AnyElement, App, ElementId, Stateful};
 use ui::{SharedString, Tooltip, div, prelude::*, v_flex};
 
-use crate::{CsvPreviewView, settings::VerticalAlignment, types::DisplayCellId};
-
-impl CsvPreviewView {
-    /// Create selectable table cell with mouse event handlers.
-    pub fn create_selectable_cell(
-        display_cell_id: DisplayCellId,
-        cell_content: SharedString,
-        multiline_cells_enabled: bool,
-        vertical_alignment: VerticalAlignment,
-        cx: &Context<CsvPreviewView>,
-    ) -> AnyElement {
-        create_table_cell(
-            display_cell_id,
-            cell_content,
-            multiline_cells_enabled,
-            vertical_alignment,
-            cx,
-        )
-        // Mouse events handlers will be here
-        .into_any_element()
-    }
-}
+use crate::{settings::VerticalAlignment, types::DisplayCellId};
 
 /// Create styled table cell div element.
-fn create_table_cell(
+pub(super) fn create_table_cell(
     display_cell_id: DisplayCellId,
     cell_content: SharedString,
     multiline_cells_enabled: bool,
     vertical_alignment: VerticalAlignment,
-    cx: &Context<'_, CsvPreviewView>,
-) -> gpui::Stateful<Div> {
+    cx: &App,
+) -> Stateful<Div> {
     let cell_body = render_cell_content(cell_content.clone(), multiline_cells_enabled);
 
     div()
@@ -49,17 +28,13 @@ fn create_table_cell(
         .w_full()
         .min_w_0()
         .px_1()
-        .bg(cx.theme().colors().editor_background)
         .border_b_1()
         .border_color(cx.theme().colors().border_variant)
         .map(|div| match vertical_alignment {
-            VerticalAlignment::Top => div.items_start(),
-            VerticalAlignment::Center => div.items_center(),
+            VerticalAlignment::Top => div.items_start().content_start(),
+            VerticalAlignment::Center => div.items_center().content_center(),
         })
-        .map(|div| match vertical_alignment {
-            VerticalAlignment::Top => div.content_start(),
-            VerticalAlignment::Center => div.content_center(),
-        })
+        .text_ui(cx)
         .font_buffer(cx)
         .tooltip(Tooltip::text(cell_content))
         .child(cell_body)
