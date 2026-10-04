@@ -481,6 +481,37 @@ name = "My Language LSP"
 languages = ["My Language"]
 ```
 
+### Opt-In Language Servers {#opt-in-language-servers}
+
+If your extension provides an alternative language server that should only run
+when someone opts in, list the languages where it is disabled by default in
+`opt_in_languages`. Every language in `opt_in_languages` must also appear in
+`languages`:
+
+```toml
+[language_servers.my-alternative-server]
+name = "My Alternative LSP"
+languages = ["My Language", "My Other Language"]
+opt_in_languages = ["My Language"]
+```
+
+For those languages, the `"..."` wildcard in the
+[`language_servers`](../configuring-languages.md#choosing-language-servers)
+setting does not include the server. Enable it by naming it explicitly:
+
+```json [settings]
+{
+  "languages": {
+    "My Language": {
+      "language_servers": ["my-alternative-server", "..."]
+    }
+  }
+}
+```
+
+> **Note:** ZZZ versions that do not support `opt_in_languages` ignore it and
+> start the server for all entries in `languages`.
+
 Then, in the Rust code for your extension, implement the `language_server_command` method on your extension:
 
 ```rust
