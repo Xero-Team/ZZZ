@@ -4684,6 +4684,9 @@ impl Window {
 
     /// Updates the IME panel position suggestions for languages like japanese, chinese.
     pub fn invalidate_character_coordinates(&self) {
+        if !self.platform_window.capabilities().ime_candidate_position {
+            return;
+        }
         self.on_next_frame(|window, _cx| {
             if let Some(bounds) = window.text_input.candidate_bounds() {
                 window.platform_window.update_ime_position(bounds);
@@ -5906,6 +5909,7 @@ mod tests {
             .update(cx, |_, window, _| {
                 let capabilities = window.platform_capabilities();
                 assert!(capabilities.text_input);
+                assert!(!capabilities.ime_candidate_position);
                 assert!(capabilities.frame_callbacks);
                 assert!(!capabilities.accessibility);
                 assert!(capabilities.window_controls.fullscreen);

@@ -857,6 +857,7 @@ impl PlatformWindow for WebWindow {
 fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: false,
+        ime_candidate_position: false,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
@@ -878,6 +879,7 @@ mod tests {
         };
         let capabilities = web_capabilities(window_controls);
         assert!(!capabilities.text_input);
+        assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(capabilities.frame_callbacks);

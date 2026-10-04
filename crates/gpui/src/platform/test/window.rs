@@ -392,6 +392,7 @@ impl PlatformWindow for TestWindow {
     fn capabilities(&self) -> crate::PlatformCapabilities {
         crate::PlatformCapabilities {
             text_input: true,
+            ime_candidate_position: false,
             accessibility: false,
             headless_renderer: self.0.lock().renderer.is_some(),
             frame_callbacks: true,

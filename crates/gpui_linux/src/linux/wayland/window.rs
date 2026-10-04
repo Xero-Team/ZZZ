@@ -1604,6 +1604,7 @@ impl PlatformWindow for WaylandWindow {
 fn wayland_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
@@ -1625,6 +1626,7 @@ mod capability_tests {
         };
         let capabilities = wayland_capabilities(window_controls);
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);

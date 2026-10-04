@@ -89,6 +89,7 @@ impl HeadlessWindow {
 fn headless_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: false,
+        ime_candidate_position: false,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: false,
@@ -269,6 +270,7 @@ mod tests {
     fn capability_matrix_marks_compositor_services_unsupported() {
         let capabilities = headless_capabilities();
         assert!(!capabilities.text_input);
+        assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);

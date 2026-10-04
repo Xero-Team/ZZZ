@@ -430,6 +430,8 @@ pub struct WindowControls {
 pub struct PlatformCapabilities {
     /// Whether the platform has a text-input/IME bridge.
     pub text_input: bool,
+    /// Whether the platform can position its native IME candidate window.
+    pub ime_candidate_position: bool,
     /// Whether a native accessibility bridge is connected.
     pub accessibility: bool,
     /// Whether a real headless renderer is available.
@@ -444,6 +446,7 @@ impl Default for PlatformCapabilities {
     fn default() -> Self {
         Self {
             text_input: false,
+            ime_candidate_position: false,
             accessibility: false,
             headless_renderer: false,
             frame_callbacks: false,
@@ -2804,6 +2807,7 @@ mod tests {
     fn default_platform_capabilities_are_explicitly_unsupported() {
         let capabilities = PlatformCapabilities::default();
         assert!(!capabilities.text_input);
+        assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);

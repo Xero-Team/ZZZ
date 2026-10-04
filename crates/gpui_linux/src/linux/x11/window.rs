@@ -1939,6 +1939,7 @@ impl PlatformWindow for X11Window {
 fn x11_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
@@ -1954,6 +1955,7 @@ mod capability_tests {
     fn capability_matrix_matches_x11_services() {
         let capabilities = x11_capabilities();
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);

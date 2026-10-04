@@ -1046,6 +1046,7 @@ impl PlatformWindow for WindowsWindow {
 fn windows_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
