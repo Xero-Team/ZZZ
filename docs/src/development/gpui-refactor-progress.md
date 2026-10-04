@@ -17,6 +17,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 工作分支                   | `refactor/gpui-architecture`               |
 | 计划基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 执行基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
+| 2026-10-04 续作基线        | `101f0985632b6134ee096308ed02cc7bdaea5175` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
 | 当前阶段                   | 阶段 6/7：platform 与 UI 边界              |
@@ -25,6 +26,34 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
 `.tmp/ui_ref/` 参考仓库。这些内容原样保留；重构提交只显式暂存本账本和本 Goal
 产生的文件。
+
+### 2026-10-04 续作基线复核
+
+续作开始时工作树 clean，但当前 checkout 位于 `main`。在修改代码前从
+`101f0985632b6134ee096308ed02cc7bdaea5175` 创建并切换到
+`refactor/gpui-architecture`，没有 reset、clean、覆盖或丢弃现有内容。
+
+相对最后一笔进度账本提交 `ee456111775ac48dc0e90c0903a7f873dc70a79a`，当前
+HEAD 已通过 `34e859630f` 合入另一条本地 `main` 历史，并在本计划覆盖范围修改 63
+个文件。逐文件 diff 复核结果：变更主要是 fallible operation 错误可见性、dead-code
+清理、dispatcher recent timing 查询和 UI/workspace 清理；没有恢复账号、遥测、协作、
+原生 Agent 或其它商业表面，也没有撤销 frame/interaction/text-input/render/platform
+owner 边界。两项直接兼容修复分别恢复
+`PlatformInputHandler::character_index_for_point`（`9598cf0b72`）并补齐 macOS
+`WindowHost` trait import（`405a750eff`）。
+
+续作基线验证：
+
+| 命令或检查                                                                                                           | 结果            | 证据                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------- |
+| covered-crate diff `ee45611177..101f098563`                                                                          | `PASS`          | 63 files；318 insertions、659 deletions；未发现 owner/capability/philosophy 回退          |
+| `cargo check --locked -p gpui -p gpui_platform -p gpui_wgpu -p gpui_linux -p gpui_macos -p gpui_windows -p gpui_web` | `PASS`          | 13.39 s；`.tmp/gpui-refactor/continuation-2026-10-04/covered-crates-check.log`            |
+| GPUI lib test，`frame-diagnostics,accessibility`                                                                     | `FAIL` → `PASS` | 首轮发现跨 test context 的 WindowId journal 串扰；修复提交 `7869cc90ff`                   |
+| 同一 230-test GPUI suite 连续运行 10 次                                                                              | `PASS`          | 2,300 tests，0 failed；`.tmp/gpui-refactor/continuation-2026-10-04/gpui-lib-test-10x.log` |
+| `cargo fmt --all -- --check` / `git diff --check`                                                                    | `PASS`          | continuation fix 已格式化，无 whitespace error                                            |
+
+续作下一步：继续收敛阶段 1/2/3/5/6/7 的开放验证项；在 EXP-001/002 正式 workload
+完成前不进入 scoped invalidation 产品实现。
 
 ## 环境基线
 
