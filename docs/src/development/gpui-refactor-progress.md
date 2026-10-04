@@ -263,6 +263,12 @@ diagnostics feature。
   frame，`Window::dispatch_accessibility_action` 每次只调用一个 `(node, action)` handler。
   accessibility feature 开启时完整重建 semantic tree，避免 cached view 产生不完整树；
   默认构建继续使用原 cache path，因此没有 accessibility runtime 开销。
+- AccessKit nodes now advertise registered actions and support feature-gated disabled,
+  selected, expanded, toggled and value properties. GPUI re-exports core AccessKit types
+  only when `accessibility` is enabled.
+- `ui` adds an opt-in `accessibility` feature. Button/ButtonLike/IconButton, Tab and
+  TreeViewItem emit semantic roles and state; a real `ui` integration snapshot covers
+  Button, Tab and TreeViewItem roles, labels and state.
 
 阶段 2 上游 A/B/C 决策：
 
@@ -272,9 +278,9 @@ diagnostics feature。
 | `cc053a4a6fa2fd0e8793201ed9099466af1be0b1` | C     | AccessKit writer/semantic tree is absent from ZZZ; the one-line author-id builder cannot be isolated from the missing accessibility chain.                                                        |
 | `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | C     | ZZZ has no macOS AccessKit adapter or SubclassingAdapter ownership to release.                                                                                                                    |
 
-当前仍待完成：GPUI semantic node/action 与 Window/Element 集成、Linux/Windows/macOS
-adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher EXP-008 已
-达标；AccessKit EXP-006 尚未运行。
+当前仍待完成：Button/Input/Editor/List/Tree/Tabs/Dialog/Status 的全量产品 annotation、
+Linux/Windows/macOS adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher
+EXP-008 已达标；AccessKit EXP-006 仍为 core/UI snapshot partial，native QA 未运行。
 
 后续边界进展：`AccessibilityBridge` 现在接收 backend-neutral `AccessibilityUpdate`；
 空更新在所有 backend 可通过，非空 semantic update 在未接 native adapter 时返回明确
@@ -291,13 +297,17 @@ unsupported error。没有导入缺失的 AccessKit writer/adapter 路径。
 | `cargo test --locked -p gpui --features accessibility accessibility`           | `PASS`    | 3 semantic snapshot/action tests                                                                                                                                                               |
 | `cargo test --locked -p gpui --lib --features accessibility,frame-diagnostics` | `PASS`    | 232 tests passed，含 nested element prepaint tree、action dispatch 与完整 cached-frame rebuild                                                                                                 |
 | `./script/clippy -p gpui --features accessibility`                             | `PASS`    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                  |
+| `cargo test --locked -p ui --features accessibility --test accessibility`      | `PASS`    | Button/Tab/TreeViewItem roles, labels, disabled/selected/expanded/toggled state snapshot                                                                                                       |
+| `./script/clippy -p ui --features accessibility`                               | `PASS`    | UI accessibility feature all-target release clippy + philosophy gate                                                                                                                           |
 | EXP-006 native adapter/screen-reader QA                                        | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                                                                                                                          |
 | EXP-008 100-seed parity/hang/leak gate                                         | `PASS`    | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
 
 提交：ThreadedDispatcher core `49b351afb1edab173ca46dd073c663b44aabbf14`；
 AccessKit semantic core `a7745abdefe9d3e2cebb33482aac35d5e6a0289f`；EXP-008
 BenchAppContext/panic follow-up `41f6fccba156b795d49b8564bbe357712f9b2aa5`；element
-prepaint semantics `83fe764989`；completed tree/action routing `03342d511d`。
+prepaint semantics `83fe764989`；completed tree/action routing `03342d511d`；action
+advertisement `d530264622`；semantic state properties `e662afa392`；UI component
+semantics `e7f4ccb52a`、`57b1caf569`。
 
 ### 阶段 3：真实 headless renderer
 
