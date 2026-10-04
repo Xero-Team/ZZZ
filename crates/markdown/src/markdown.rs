@@ -1878,8 +1878,14 @@ impl MarkdownElement {
             .last_mut()
             .expect("collection should not be empty")
             .line_break_mode = LineBreakMode::FlexWrap;
+        let in_table_cell = builder.table.in_cell;
         builder.modify_current_div(move |el| {
-            let mut image_container = el.flex().flex_row().flex_wrap().items_start();
+            let mut image_container = el.flex().flex_row().flex_wrap();
+            image_container = if in_table_cell {
+                image_container.items_center().content_center()
+            } else {
+                image_container.items_start()
+            };
 
             image_container = match align {
                 TextAlign::Left => image_container.justify_start(),
@@ -1888,7 +1894,11 @@ impl MarkdownElement {
             };
 
             let image_element = {
-                let wrapper = div().id(("markdown-image-link", range.start)).min_w_0();
+                let image_start = range.start;
+                let wrapper = div()
+                    .id(("markdown-image-link", range.start))
+                    .debug_selector(move || format!("markdown_image_{image_start}"))
+                    .min_w_0();
                 let wrapper = if !self.style.prevent_mouse_interaction
                     && let Some(url) = enclosing_link_url.clone()
                 {
@@ -3093,6 +3103,7 @@ impl Element for MarkdownElement {
                             builder.table.start_row();
                         }
                         MarkdownTag::TableCell => {
+                            builder.table.start_cell();
                             let is_header = builder.table.in_head;
                             let row_index = builder.table.row_index;
                             let col_index = builder.table.col_index;
@@ -3102,6 +3113,13 @@ impl Element for MarkdownElement {
                                 .unwrap_or(self.style.base_text_style.text_align);
 
                             let mut cell_div = div()
+                                .debug_selector(|| {
+                                    if is_header {
+                                        format!("markdown_table_header_cell_{col_index}")
+                                    } else {
+                                        format!("markdown_table_cell_{row_index}_{col_index}")
+                                    }
+                                })
                                 .flex()
                                 .flex_col()
                                 .h_full()
@@ -3682,6 +3700,7 @@ impl ParentElement for AnyDiv {
 struct TableState {
     alignments: Vec<Alignment>,
     in_head: bool,
+    in_cell: bool,
     row_index: usize,
     col_index: usize,
 }
@@ -3690,6 +3709,7 @@ impl TableState {
     fn start(&mut self, alignments: Vec<Alignment>) {
         self.alignments = alignments;
         self.in_head = false;
+        self.in_cell = false;
         self.row_index = 0;
         self.col_index = 0;
     }
@@ -3697,6 +3717,7 @@ impl TableState {
     fn end(&mut self) {
         self.alignments.clear();
         self.in_head = false;
+        self.in_cell = false;
         self.row_index = 0;
         self.col_index = 0;
     }
@@ -3717,7 +3738,12 @@ impl TableState {
         self.row_index += 1;
     }
 
+    fn start_cell(&mut self) {
+        self.in_cell = true;
+    }
+
     fn end_cell(&mut self) {
+        self.in_cell = false;
         self.col_index += 1;
     }
 
@@ -4777,7 +4803,7 @@ impl RenderedText {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{RenderImage, TestAppContext, UpdateGlobal, size};
+    use gpui::{RenderImage, TestAppContext, UpdateGlobal, VisualTestContext, size};
     use language::{Language, LanguageConfig, LanguageMatcher};
     use std::sync::{
         Arc,
@@ -5563,6 +5589,159 @@ mod tests {
     fn test_table_state_current_cell_alignment_outside_table() {
         let table = TableState::default();
         assert_eq!(table.current_cell_alignment(), None);
+    }
+
+    #[test]
+    fn test_table_state_tracks_whether_inside_a_cell() {
+        let mut table = TableState::default();
+        assert!(!table.in_cell);
+
+        table.start(vec![Alignment::Left]);
+        assert!(!table.in_cell);
+        table.start_head();
+        table.start_cell();
+        assert!(table.in_cell);
+        table.end_cell();
+        assert!(!table.in_cell);
+        table.end_head();
+
+        table.start_row();
+        table.start_cell();
+        assert!(table.in_cell);
+        table.end();
+        assert!(!table.in_cell);
+    }
+
+    struct ImageLayoutView {
+        markdown: Entity<Markdown>,
+        icon: Arc<RenderImage>,
+        tall_image: Arc<RenderImage>,
+    }
+
+    impl Render for ImageLayoutView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let icon = self.icon.clone();
+            let tall_image = self.tall_image.clone();
+            div().size_full().child(
+                MarkdownElement::new(self.markdown.clone(), MarkdownStyle::default())
+                    .image_resolver(move |dest_url| {
+                        let image = if dest_url == "tall.png" {
+                            tall_image.clone()
+                        } else {
+                            icon.clone()
+                        };
+                        Some(ImageSource::Render(image))
+                    }),
+            )
+        }
+    }
+
+    fn render_image_layout(source: &'static str, cx: &mut TestAppContext) -> VisualTestContext {
+        ensure_theme_initialized(cx);
+        let render_svg = |svg: &'static [u8], cx: &mut TestAppContext| {
+            cx.update(|cx| {
+                cx.svg_renderer()
+                    .render_single_frame(svg, 1.0)
+                    .expect("test svg should render")
+            })
+        };
+        let icon = render_svg(
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>"#,
+            cx,
+        );
+        let tall_image = render_svg(
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="80"></svg>"#,
+            cx,
+        );
+        let window = cx.open_window(size(px(800.), px(600.)), |_, cx| {
+            let markdown = cx.new(|cx| Markdown::new(source.into(), None, None, cx));
+            ImageLayoutView {
+                markdown,
+                icon,
+                tall_image,
+            }
+        });
+        cx.run_until_parked();
+        VisualTestContext::from_window(window.into(), cx)
+    }
+
+    fn image_selectors(source: &str) -> Vec<&'static str> {
+        source
+            .match_indices("![")
+            .map(|(offset, _)| &*format!("markdown_image_{offset}").leak())
+            .collect()
+    }
+
+    #[gpui::test]
+    fn test_images_in_table_cells_follow_column_alignment(cx: &mut TestAppContext) {
+        let source = "| Left column | Center column | Right column | Tall |\n\
+                      |:---|:---:|---:|:---|\n\
+                      | ![](icon.png) | ![](icon.png) | ![](icon.png) | ![](tall.png) |";
+        let mut cx = render_image_layout(source, cx);
+        let selectors = image_selectors(source);
+        let [left_image, center_image, right_image, _] = selectors.as_slice() else {
+            panic!("expected four images, found {}", selectors.len());
+        };
+
+        let mut gaps = |image: &'static str, cell: &'static str| {
+            let image = cx.debug_bounds(image).expect("image should be rendered");
+            let cell = cx.debug_bounds(cell).expect("cell should be rendered");
+            (
+                image.left() - cell.left(),
+                cell.right() - image.right(),
+                image.top() - cell.top(),
+                cell.bottom() - image.bottom(),
+                cell.size.height,
+            )
+        };
+        let left = gaps(left_image, "markdown_table_cell_0_0");
+        let center = gaps(center_image, "markdown_table_cell_0_1");
+        let right = gaps(right_image, "markdown_table_cell_0_2");
+
+        assert!(
+            left.0 < px(8.) && left.1 > px(20.),
+            "image in a left-aligned column should sit at the left edge: {left:?}"
+        );
+        assert!(
+            (center.0 - center.1).abs() <= px(1.5) && center.0 > px(8.),
+            "image in a center-aligned column should be horizontally centered: {center:?}"
+        );
+        assert!(
+            right.1 < px(8.) && right.0 > px(20.),
+            "image in a right-aligned column should sit at the right edge: {right:?}"
+        );
+
+        for (column, gaps) in [("left", left), ("center", center), ("right", right)] {
+            assert!(
+                gaps.4 > px(60.),
+                "the tall image should make the row taller than the icon: {gaps:?}"
+            );
+            assert!(
+                (gaps.2 - gaps.3).abs() <= px(1.5),
+                "image in the {column} column should be vertically centered in a tall row: {gaps:?}"
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn test_images_outside_tables_keep_top_alignment(cx: &mut TestAppContext) {
+        let source = "![](icon.png)![](tall.png)";
+        let mut cx = render_image_layout(source, cx);
+        let selectors = image_selectors(source);
+        let [icon, tall_image] = selectors.as_slice() else {
+            panic!("expected two images, found {}", selectors.len());
+        };
+
+        let icon = cx.debug_bounds(icon).expect("icon should be rendered");
+        let tall_image = cx
+            .debug_bounds(tall_image)
+            .expect("tall image should be rendered");
+        assert_eq!(
+            icon.top(),
+            tall_image.top(),
+            "images in a paragraph should stay top-aligned"
+        );
+        assert!(icon.left() < tall_image.left());
     }
 
     #[test]
