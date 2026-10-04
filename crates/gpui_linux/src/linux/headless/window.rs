@@ -14,8 +14,8 @@ use uuid::Uuid;
 
 use gpui::{
     Bounds, Capslock, DispatchEventResult, DisplayId, GpuSpecs, HeadlessAtlas, Modifiers, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, Scene, Size, WindowAppearance,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, Scene, Size, TextInputClient, WindowAppearance,
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams, px,
 };
 
@@ -50,7 +50,7 @@ impl PlatformDisplay for HeadlessDisplay {
 struct HeadlessWindowState {
     bounds: Bounds<Pixels>,
     display: Rc<dyn PlatformDisplay>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     title: Option<String>,
     is_fullscreen: bool,
 }
@@ -89,10 +89,17 @@ impl HeadlessWindow {
 fn headless_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: false,
+        ime_candidate_position: false,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: false,
+        system_bell: false,
+        native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::NONE,
         window_controls: gpui::WindowControls {
+            attention: false,
+            move_window: false,
+            resize_window: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -104,11 +111,11 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
 impl gpui::AccessibilityBridge for HeadlessWindow {}
 
 impl gpui::TextInputBridge for HeadlessWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.borrow_mut().input_handler.take()
     }
 
@@ -231,7 +238,9 @@ impl gpui::SystemServices for HeadlessWindow {
 }
 
 impl gpui::PlatformRenderTarget for HeadlessWindow {
-    fn draw(&self, _scene: &Scene) {}
+    fn draw(&self, _scene: &Scene) -> bool {
+        false
+    }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
         Arc::new(HeadlessAtlas::default())
@@ -267,9 +276,16 @@ mod tests {
     fn capability_matrix_marks_compositor_services_unsupported() {
         let capabilities = headless_capabilities();
         assert!(!capabilities.text_input);
+        assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);
+        assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
+        assert_eq!(capabilities.clipboard, gpui::ClipboardCapabilities::NONE);
+        assert!(!capabilities.window_controls.attention);
+        assert!(!capabilities.window_controls.move_window);
+        assert!(!capabilities.window_controls.resize_window);
         assert!(capabilities.window_controls.fullscreen);
     }
 }

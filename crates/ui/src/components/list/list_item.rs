@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use component::{Component, ComponentScope, example_group_with_title, single_example};
 use gpui::{AnyElement, AnyView, ClickEvent, MouseButton, MouseDownEvent, Pixels, px};
 use smallvec::SmallVec;
+use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
 use crate::{Disclosure, prelude::*};
 
@@ -53,6 +53,8 @@ pub struct ListItem {
     focused: Option<bool>,
     docked_right: bool,
     height: Option<DefiniteLength>,
+    #[cfg(feature = "accessibility")]
+    accessibility_label: Option<SharedString>,
 }
 
 impl ListItem {
@@ -84,6 +86,8 @@ impl ListItem {
             focused: None,
             docked_right: false,
             height: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_label: None,
         }
     }
 
@@ -211,6 +215,12 @@ impl ListItem {
         self.height = Some(height.into());
         self
     }
+
+    #[cfg(feature = "accessibility")]
+    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
 }
 
 impl Disableable for ListItem {
@@ -235,8 +245,18 @@ impl ParentElement for ListItem {
 
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        h_flex()
-            .id(self.id)
+        let item = h_flex().id(self.id);
+        #[cfg(feature = "accessibility")]
+        let item = item
+            .role(gpui::accesskit::Role::ListItem)
+            .aria_disabled(self.disabled)
+            .aria_selected(self.selected)
+            .when_some(self.toggle, |this, expanded| this.aria_expanded(expanded))
+            .when_some(self.accessibility_label, |this, label| {
+                this.aria_label(label)
+            });
+
+        item
             .when_some(self.group_name, |this, group| this.group(group))
             .w_full()
             .when_some(self.height, |this, height| this.h(height))

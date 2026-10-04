@@ -262,8 +262,19 @@ impl TestPlatform {
 }
 
 impl crate::AppLifecycle for TestPlatform {
-    fn run(&self, _on_finish_launching: Box<dyn FnOnce()>) {
-        unimplemented!()
+    fn lifecycle_capabilities(&self) -> crate::AppLifecycleCapabilities {
+        crate::AppLifecycleCapabilities {
+            external_event_loop: true,
+            quit: false,
+            restart: true,
+            activate: false,
+            hide: false,
+            hide_other_apps: false,
+        }
+    }
+
+    fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
+        on_finish_launching();
     }
 
     fn quit(&self) {}
@@ -449,6 +460,10 @@ impl Platform for TestPlatform {
 
     fn should_auto_hide_scrollbars(&self) -> bool {
         false
+    }
+
+    fn clipboard_capabilities(&self) -> crate::ClipboardCapabilities {
+        crate::ClipboardCapabilities::READ_WRITE
     }
 
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {

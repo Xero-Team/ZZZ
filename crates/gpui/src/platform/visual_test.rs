@@ -65,6 +65,10 @@ impl VisualTestPlatform {
 }
 
 impl crate::AppLifecycle for VisualTestPlatform {
+    fn lifecycle_capabilities(&self) -> crate::AppLifecycleCapabilities {
+        crate::AppLifecycleCapabilities::default()
+    }
+
     fn run(&self, _on_finish_launching: Box<dyn 'static + FnOnce()>) {
         panic!("VisualTestPlatform::run should not be called in tests")
     }
@@ -214,6 +218,10 @@ impl Platform for VisualTestPlatform {
 
     fn should_auto_hide_scrollbars(&self) -> bool {
         self.platform.should_auto_hide_scrollbars()
+    }
+
+    fn clipboard_capabilities(&self) -> crate::ClipboardCapabilities {
+        crate::ClipboardCapabilities::READ_WRITE
     }
 
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {

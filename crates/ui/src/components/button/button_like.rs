@@ -5,6 +5,7 @@ use gpui::{
     transparent_black,
 };
 use smallvec::SmallVec;
+use std::rc::Rc;
 
 use crate::{DynamicSpacing, ElevationIndex, prelude::*};
 
@@ -355,10 +356,12 @@ pub struct ButtonLike {
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
     hoverable_tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
     cursor_style: CursorStyle,
-    on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     on_right_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     children: SmallVec<[AnyElement; 2]>,
     focus_handle: Option<FocusHandle>,
+    #[cfg(feature = "accessibility")]
+    accessibility_label: Option<SharedString>,
 }
 
 impl ButtonLike {
@@ -383,6 +386,8 @@ impl ButtonLike {
             layer: None,
             tab_index: None,
             focus_handle: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_label: None,
         }
     }
 
@@ -421,6 +426,12 @@ impl ButtonLike {
         self
     }
 
+    #[cfg(feature = "accessibility")]
+    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
     pub fn hoverable_tooltip(
         mut self,
         tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
@@ -453,7 +464,7 @@ impl SelectableButton for ButtonLike {
 
 impl Clickable for ButtonLike {
     fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
-        self.on_click = Some(Box::new(handler));
+        self.on_click = Some(Rc::new(handler));
         self
     }
 
@@ -536,114 +547,125 @@ impl RenderOnce for ButtonLike {
             ButtonStyle::Outlined | ButtonStyle::OutlinedGhost | ButtonStyle::OutlinedCustom(_)
         );
 
-        self.base
-            .h_flex()
-            .id(self.id.clone())
-            .when_some(self.tab_index, |this, tab_index| {
-                // Keep an already-focused button registered so disabling it does not
-                // move focus outside the view.
-                this.tab_index(tab_index).tab_stop(!self.disabled)
-            })
-            .when_some(self.focus_handle, |this, focus_handle| {
-                this.track_focus(&focus_handle)
-            })
-            .font_ui(cx)
-            .group("")
-            .flex_none()
-            .h(self.height.unwrap_or(self.size.rems().into()))
-            .when_some(self.width, |this, width| {
-                this.w(width).justify_center().text_center()
-            })
-            .when(is_outlined, |this| this.border_1())
-            .when_some(self.rounding, |this, rounding| {
-                this.when(rounding.top_left, |this| this.rounded_tl_sm())
-                    .when(rounding.top_right, |this| this.rounded_tr_sm())
-                    .when(rounding.bottom_right, |this| this.rounded_br_sm())
-                    .when(rounding.bottom_left, |this| this.rounded_bl_sm())
-            })
-            .gap(DynamicSpacing::Base04.rems(cx))
-            .map(|this| match self.size {
-                ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),
-                ButtonSize::Default | ButtonSize::Compact => {
-                    this.px(DynamicSpacing::Base04.rems(cx))
-                }
-                ButtonSize::None => this.px_px(),
-            })
-            .border_color(style.enabled(self.layer, cx).border_color)
-            .bg(style.enabled(self.layer, cx).background)
-            .when(self.disabled, |this| {
-                if self.cursor_style == CursorStyle::PointingHand {
-                    this.cursor_not_allowed()
-                } else {
-                    this.cursor(self.cursor_style)
-                }
-            })
-            .when(!self.disabled, |this| {
-                let hovered_style = style.hovered(self.layer, cx);
-                let focus_color =
-                    |refinement: StyleRefinement| refinement.bg(hovered_style.background);
+        let base = self.base.h_flex().id(self.id.clone());
+        #[cfg(feature = "accessibility")]
+        let base = base
+            .role(gpui::accesskit::Role::Button)
+            .aria_disabled(self.disabled)
+            .aria_toggled(self.selected.into())
+            .when_some(self.accessibility_label, |this, label| {
+                this.aria_label(label)
+            });
 
+        base.when_some(self.tab_index, |this, tab_index| {
+            // Keep an already-focused button registered so disabling it does not
+            // move focus outside the view.
+            this.tab_index(tab_index).tab_stop(!self.disabled)
+        })
+        .when_some(self.focus_handle, |this, focus_handle| {
+            this.track_focus(&focus_handle)
+        })
+        .font_ui(cx)
+        .group("")
+        .flex_none()
+        .h(self.height.unwrap_or(self.size.rems().into()))
+        .when_some(self.width, |this, width| {
+            this.w(width).justify_center().text_center()
+        })
+        .when(is_outlined, |this| this.border_1())
+        .when_some(self.rounding, |this, rounding| {
+            this.when(rounding.top_left, |this| this.rounded_tl_sm())
+                .when(rounding.top_right, |this| this.rounded_tr_sm())
+                .when(rounding.bottom_right, |this| this.rounded_br_sm())
+                .when(rounding.bottom_left, |this| this.rounded_bl_sm())
+        })
+        .gap(DynamicSpacing::Base04.rems(cx))
+        .map(|this| match self.size {
+            ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),
+            ButtonSize::Default | ButtonSize::Compact => this.px(DynamicSpacing::Base04.rems(cx)),
+            ButtonSize::None => this.px_px(),
+        })
+        .border_color(style.enabled(self.layer, cx).border_color)
+        .bg(style.enabled(self.layer, cx).background)
+        .when(self.disabled, |this| {
+            if self.cursor_style == CursorStyle::PointingHand {
+                this.cursor_not_allowed()
+            } else {
                 this.cursor(self.cursor_style)
-                    .hover(focus_color)
-                    .map(|this| {
-                        if is_outlined {
-                            this.focus_visible(|s| {
-                                s.border_color(cx.theme().colors().border_focused)
-                            })
-                        } else {
-                            this.focus_visible(focus_color)
-                        }
-                    })
-                    .active(|active| active.bg(style.active(cx).background))
-            })
-            .when_some(
-                self.on_right_click.filter(|_| !self.disabled),
-                |this, on_right_click| {
-                    this.on_mouse_down(MouseButton::Right, |_event, window, cx| {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    })
-                    .on_mouse_up(
-                        MouseButton::Right,
-                        move |event, window, cx| {
-                            cx.stop_propagation();
-                            let click_event = ClickEvent::Mouse(MouseClickEvent {
-                                down: MouseDownEvent {
-                                    button: MouseButton::Right,
-                                    position: event.position,
-                                    modifiers: event.modifiers,
-                                    click_count: 1,
-                                    first_mouse: false,
-                                },
-                                up: MouseUpEvent {
-                                    button: MouseButton::Right,
-                                    position: event.position,
-                                    modifiers: event.modifiers,
-                                    click_count: 1,
-                                },
-                            });
-                            (on_right_click)(&click_event, window, cx)
+            }
+        })
+        .when(!self.disabled, |this| {
+            let hovered_style = style.hovered(self.layer, cx);
+            let focus_color = |refinement: StyleRefinement| refinement.bg(hovered_style.background);
+
+            this.cursor(self.cursor_style)
+                .hover(focus_color)
+                .map(|this| {
+                    if is_outlined {
+                        this.focus_visible(|s| s.border_color(cx.theme().colors().border_focused))
+                    } else {
+                        this.focus_visible(focus_color)
+                    }
+                })
+                .active(|active| active.bg(style.active(cx).background))
+        })
+        .when_some(
+            self.on_right_click.filter(|_| !self.disabled),
+            |this, on_right_click| {
+                this.on_mouse_down(MouseButton::Right, |_event, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                })
+                .on_mouse_up(MouseButton::Right, move |event, window, cx| {
+                    cx.stop_propagation();
+                    let click_event = ClickEvent::Mouse(MouseClickEvent {
+                        down: MouseDownEvent {
+                            button: MouseButton::Right,
+                            position: event.position,
+                            modifiers: event.modifiers,
+                            click_count: 1,
+                            first_mouse: false,
                         },
-                    )
-                },
-            )
-            .when_some(
-                self.on_click.filter(|_| !self.disabled),
-                |this, on_click| {
-                    this.on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-                        .on_click(move |event, window, cx| {
-                            cx.stop_propagation();
-                            (on_click)(event, window, cx)
-                        })
-                },
-            )
-            .when_some(self.tooltip, |this, tooltip| {
-                this.tooltip(move |window, cx| tooltip(window, cx))
-            })
-            .when_some(self.hoverable_tooltip, |this, tooltip| {
-                this.hoverable_tooltip(move |window, cx| tooltip(window, cx))
-            })
-            .children(self.children)
+                        up: MouseUpEvent {
+                            button: MouseButton::Right,
+                            position: event.position,
+                            modifiers: event.modifiers,
+                            click_count: 1,
+                        },
+                    });
+                    (on_right_click)(&click_event, window, cx)
+                })
+            },
+        )
+        .when_some(
+            self.on_click.filter(|_| !self.disabled),
+            |this, on_click| {
+                let on_click_for_mouse = on_click.clone();
+                let this = this
+                    .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+                    .on_click(move |event, window, cx| {
+                        cx.stop_propagation();
+                        (on_click_for_mouse)(event, window, cx)
+                    });
+                #[cfg(feature = "accessibility")]
+                let this =
+                    this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                        (on_click)(
+                            &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                            window,
+                            cx,
+                        )
+                    });
+                this
+            },
+        )
+        .when_some(self.tooltip, |this, tooltip| {
+            this.tooltip(move |window, cx| tooltip(window, cx))
+        })
+        .when_some(self.hoverable_tooltip, |this, tooltip| {
+            this.hoverable_tooltip(move |window, cx| tooltip(window, cx))
+        })
+        .children(self.children)
     }
 }
 

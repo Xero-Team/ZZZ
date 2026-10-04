@@ -1192,6 +1192,68 @@ pub trait InteractiveElement: Sized {
 /// A trait for elements that want to use the standard GPUI interactivity features
 /// that require state.
 pub trait StatefulInteractiveElement: InteractiveElement {
+    /// Set the accessible role for this element.
+    #[cfg(feature = "accessibility")]
+    fn role(mut self, role: accesskit::Role) -> Self {
+        self.interactivity().accessibility_role = Some(role);
+        self
+    }
+
+    /// Set the accessible label for this element.
+    #[cfg(feature = "accessibility")]
+    fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.interactivity().accessibility_label = Some(label.into());
+        self
+    }
+
+    /// Set whether this element is disabled for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_disabled(mut self, disabled: bool) -> Self {
+        self.interactivity().accessibility_disabled = disabled;
+        self
+    }
+
+    /// Set this element's selected state for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_selected(mut self, selected: bool) -> Self {
+        self.interactivity().accessibility_selected = Some(selected);
+        self
+    }
+
+    /// Set this element's expanded state for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_expanded(mut self, expanded: bool) -> Self {
+        self.interactivity().accessibility_expanded = Some(expanded);
+        self
+    }
+
+    /// Set this element's toggled state for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_toggled(mut self, toggled: accesskit::Toggled) -> Self {
+        self.interactivity().accessibility_toggled = Some(toggled);
+        self
+    }
+
+    /// Set this element's current value for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_value(mut self, value: impl Into<SharedString>) -> Self {
+        self.interactivity().accessibility_value = Some(value.into());
+        self
+    }
+
+    /// Register a handler for an accessibility action on this element.
+    #[cfg(feature = "accessibility")]
+    fn on_a11y_action(
+        mut self,
+        action: accesskit::Action,
+        listener: impl FnMut(Option<&accesskit::ActionData>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.interactivity()
+            .accessibility_action_listeners
+            .push((action, Box::new(listener)));
+        self
+    }
+
     /// Set this element to focusable.
     fn focusable(mut self) -> Self {
         self.interactivity().focusable = true;
@@ -1505,6 +1567,47 @@ impl Element for Div {
         self.interactivity.source_location()
     }
 
+    #[cfg(feature = "accessibility")]
+    fn a11y_role(&self) -> Option<accesskit::Role> {
+        self.interactivity.accessibility_role
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn write_a11y_info(&self, node: &mut accesskit::Node) {
+        if let Some(label) = &self.interactivity.accessibility_label {
+            node.set_label(label.to_string());
+        }
+        if self.interactivity.accessibility_disabled {
+            node.set_disabled();
+        }
+        if let Some(selected) = self.interactivity.accessibility_selected {
+            node.set_selected(selected);
+        }
+        if let Some(expanded) = self.interactivity.accessibility_expanded {
+            node.set_expanded(expanded);
+        }
+        if let Some(toggled) = self.interactivity.accessibility_toggled {
+            node.set_toggled(toggled);
+        }
+        if let Some(value) = &self.interactivity.accessibility_value {
+            node.set_value(value.to_string());
+        }
+        for (action, _) in &self.interactivity.accessibility_action_listeners {
+            node.add_action(*action);
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
+        for (action, listener) in self.interactivity.accessibility_action_listeners.drain(..) {
+            window
+                .interaction
+                .next_frame
+                .accessibility_actions
+                .register_boxed(node_id, action, listener);
+        }
+    }
+
     #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn request_layout(
         &mut self,
@@ -1741,6 +1844,23 @@ pub struct Interactivity {
     pub(crate) tab_index: Option<isize>,
     pub(crate) tab_group: bool,
     pub(crate) tab_stop: bool,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_role: Option<accesskit::Role>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_disabled: bool,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_selected: Option<bool>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_expanded: Option<bool>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_toggled: Option<accesskit::Toggled>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_value: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_action_listeners:
+        Vec<(accesskit::Action, crate::SemanticActionListener)>,
 
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) source_location: Option<&'static core::panic::Location<'static>>,
@@ -3381,6 +3501,21 @@ where
 
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
         self.element.source_location()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn a11y_role(&self) -> Option<accesskit::Role> {
+        self.element.a11y_role()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn write_a11y_info(&self, node: &mut accesskit::Node) {
+        self.element.write_a11y_info(node);
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
+        self.element.register_a11y_actions(node_id, window);
     }
 
     fn request_layout(

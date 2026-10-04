@@ -29,7 +29,7 @@ fn main() {
         .init();
 
     gpui_platform::application().with_assets(Assets).run(|cx| {
-        component::init();
+        ui_component_registry::init();
 
         cx.on_action(quit);
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);

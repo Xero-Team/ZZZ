@@ -1740,6 +1740,10 @@ impl LinuxClient for X11Client {
         );
     }
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::READ_WRITE
+    }
+
     fn write_to_primary(&self, item: gpui::ClipboardItem) {
         let state = self.0.borrow_mut();
         let mut string = ClipboardString::new(item.text().unwrap_or_default());

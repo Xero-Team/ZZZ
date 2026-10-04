@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::{Disclosure, prelude::*};
-use component::{Component, ComponentScope, example_group_with_title, single_example};
 use gpui::{AnyElement, ClickEvent};
 use theme::UiDensity;
+use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct ListHeader {

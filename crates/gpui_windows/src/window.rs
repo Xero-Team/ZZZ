@@ -54,7 +54,7 @@ pub struct WindowsWindowState {
     pub restore_from_minimized: Cell<Option<Box<dyn FnMut(RequestFrameOptions)>>>,
 
     pub callbacks: Callbacks,
-    pub input_handler: Cell<Option<PlatformInputHandler>>,
+    pub input_handler: Cell<Option<TextInputClient>>,
     pub ime_enabled: Cell<bool>,
     pub pending_surrogate: Cell<Option<u16>>,
     pub last_reported_modifiers: Cell<Option<Modifiers>>,
@@ -594,11 +594,11 @@ impl Drop for WindowsWindow {
 impl gpui::AccessibilityBridge for WindowsWindow {}
 
 impl gpui::TextInputBridge for WindowsWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.state.input_handler.set(Some(input_handler));
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.state.input_handler.take()
     }
 
@@ -998,12 +998,13 @@ impl gpui::SystemServices for WindowsWindow {
 }
 
 impl gpui::PlatformRenderTarget for WindowsWindow {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         self.state
             .renderer
             .borrow_mut()
             .draw(scene, self.state.background_appearance.get())
-            .log_err();
+            .log_err()
+            .is_some()
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
@@ -1045,10 +1046,18 @@ impl PlatformWindow for WindowsWindow {
 fn windows_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
-        window_controls: gpui::WindowControls::default(),
+        system_bell: true,
+        native_prompt: true,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
+        window_controls: gpui::WindowControls {
+            move_window: false,
+            resize_window: false,
+            ..gpui::WindowControls::default()
+        },
     }
 }
 
@@ -1606,12 +1615,22 @@ mod tests {
     fn capability_matrix_matches_windows_services() {
         let capabilities = windows_capabilities();
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
-        assert!(!capabilities.accessibility);
+        assert!(capabilities.system_bell);
+        assert!(capabilities.native_prompt);
         assert_eq!(
-            capabilities.window_controls,
-            gpui::WindowControls::default()
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
         );
+        assert!(!capabilities.accessibility);
+        assert!(capabilities.window_controls.attention);
+        assert!(!capabilities.window_controls.move_window);
+        assert!(!capabilities.window_controls.resize_window);
+        assert!(capabilities.window_controls.fullscreen);
+        assert!(capabilities.window_controls.maximize);
+        assert!(capabilities.window_controls.minimize);
+        assert!(capabilities.window_controls.window_menu);
     }
 
     #[test]

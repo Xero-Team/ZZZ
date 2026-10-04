@@ -486,6 +486,10 @@ impl MacPlatform {
 }
 
 impl gpui::AppLifecycle for MacPlatform {
+    fn lifecycle_capabilities(&self) -> gpui::AppLifecycleCapabilities {
+        gpui::AppLifecycleCapabilities::FULL_DESKTOP
+    }
+
     fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
         let mut state = self.0.lock();
         if state.headless {
@@ -1098,6 +1102,10 @@ impl Platform for MacPlatform {
             let style: NSInteger = msg_send![class!(NSScroller), preferredScrollerStyle];
             style == NSScrollerStyleOverlay
         }
+    }
+
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::READ_WRITE
     }
 
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {

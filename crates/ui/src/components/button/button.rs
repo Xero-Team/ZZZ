@@ -386,7 +386,12 @@ impl RenderOnce for Button {
         };
         let loading_icon_id = (self.base.id().clone(), "loading");
 
-        self.base.child(
+        #[cfg(feature = "accessibility")]
+        let base = self.base.aria_label(label.clone());
+        #[cfg(not(feature = "accessibility"))]
+        let base = self.base;
+
+        base.child(
             h_flex()
                 .when(self.truncate, |this| this.min_w_0().overflow_hidden())
                 .gap(DynamicSpacing::Base04.rems(cx))

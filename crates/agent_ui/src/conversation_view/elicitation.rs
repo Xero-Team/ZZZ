@@ -1,7 +1,6 @@
 use acp_thread::{Elicitation, ElicitationEntryId, ElicitationStatus};
 use agent_client_protocol::schema::v1 as acp;
 use collections::{HashMap, HashSet};
-use component::{Component, ComponentScope, example_group_with_title, single_example};
 use editor::Editor;
 use futures::channel::oneshot;
 use gpui::{AnyElement, App, Div, Empty, Entity, Focusable, Hsla, SharedString, Window, div};
@@ -12,6 +11,7 @@ use ui::{
     Button, Checkbox, Color, Icon, IconName, IconSize, Indicator, Label, LabelSize, ToggleState,
     prelude::*,
 };
+use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
 fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
     app_i18n::tr(cx, key, fallback).into()

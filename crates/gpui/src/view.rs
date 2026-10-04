@@ -7,7 +7,6 @@ use crate::{Empty, Window};
 use anyhow::Result;
 use collections::FxHashSet;
 use refineable::Refineable;
-use std::mem;
 use std::rc::Rc;
 use std::{any::TypeId, fmt, ops::Range};
 
@@ -113,6 +112,9 @@ impl Element for AnyView {
     ) -> (LayoutId, Self::RequestLayoutState) {
         window.with_rendered_view(self.entity_id(), |window| {
             // Disable caching when inspecting so that mouse_hit_test has all hitboxes.
+            #[cfg(feature = "accessibility")]
+            let caching_disabled = true;
+            #[cfg(not(feature = "accessibility"))]
             let caching_disabled = window.is_inspector_picking(cx);
             match self.cached_style.as_ref() {
                 Some(style) if !caching_disabled => {
@@ -156,8 +158,8 @@ impl Element for AnyView {
                         && element_state.cache_key.bounds == bounds
                         && element_state.cache_key.content_mask == content_mask
                         && element_state.cache_key.text_style == text_style
-                        && !window.dirty_views.contains(&self.entity_id())
-                        && !window.refreshing
+                        && !window.is_view_dirty(self.entity_id())
+                        && !window.is_refreshing()
                     {
                         let prepaint_start = window.prepaint_index();
                         window.reuse_prepaint(element_state.prepaint_range.clone());
@@ -169,7 +171,7 @@ impl Element for AnyView {
                         return (None, element_state);
                     }
 
-                    let refreshing = mem::replace(&mut window.refreshing, true);
+                    let refreshing = window.replace_refreshing(true);
                     let prepaint_start = window.prepaint_index();
                     let (mut element, accessed_entities) = cx.detect_accessed_entities(|cx| {
                         let mut element = (self.render)(self, window, cx);
@@ -179,7 +181,7 @@ impl Element for AnyView {
                     });
 
                     let prepaint_end = window.prepaint_index();
-                    window.refreshing = refreshing;
+                    window.replace_refreshing(refreshing);
 
                     (
                         Some(element),
@@ -210,6 +212,9 @@ impl Element for AnyView {
         cx: &mut App,
     ) {
         window.with_rendered_view(self.entity_id(), |window| {
+            #[cfg(feature = "accessibility")]
+            let caching_disabled = true;
+            #[cfg(not(feature = "accessibility"))]
             let caching_disabled = window.is_inspector_picking(cx);
             if self.cached_style.is_some() && !caching_disabled {
                 window.with_element_state::<AnyViewState, _>(
@@ -220,9 +225,9 @@ impl Element for AnyView {
                         let paint_start = window.paint_index();
 
                         if let Some(element) = element {
-                            let refreshing = mem::replace(&mut window.refreshing, true);
+                            let refreshing = window.replace_refreshing(true);
                             element.paint(window, cx);
-                            window.refreshing = refreshing;
+                            window.replace_refreshing(refreshing);
                         } else {
                             window.reuse_paint(element_state.paint_range.clone());
                         }

@@ -5,10 +5,10 @@ use std::{cell::Cell, cell::RefCell, rc::Rc};
 
 use gpui::{
     AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, DispatchEventResult, GpuSpecs,
-    Modifiers, MouseButton, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel, RequestFrameOptions,
-    ResizeEdge, Scene, Size, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
-    WindowControlArea, WindowControls, WindowDecorations, WindowParams, px,
+    Modifiers, MouseButton, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow,
+    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size,
+    TextInputClient, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
+    WindowControls, WindowDecorations, WindowParams, px,
 };
 use gpui_wgpu::{WgpuContext, WgpuRenderer, WgpuSurfaceConfig};
 use wasm_bindgen::prelude::*;
@@ -33,7 +33,7 @@ pub(crate) struct WebWindowMutableState {
     pub(crate) scale_factor: f32,
     pub(crate) max_texture_dimension: u32,
     pub(crate) title: String,
-    pub(crate) input_handler: Option<PlatformInputHandler>,
+    pub(crate) input_handler: Option<TextInputClient>,
     pub(crate) is_fullscreen: bool,
     pub(crate) is_active: bool,
     pub(crate) is_hovered: bool,
@@ -482,7 +482,7 @@ impl WebWindowInner {
 
     pub(crate) fn with_input_handler<R>(
         &self,
-        f: impl FnOnce(&mut PlatformInputHandler) -> R,
+        f: impl FnOnce(&mut TextInputClient) -> R,
     ) -> Option<R> {
         let mut handler = self.state.borrow_mut().input_handler.take()?;
         let result = f(&mut handler);
@@ -605,11 +605,11 @@ impl raw_window_handle::HasDisplayHandle for WebWindow {
 impl gpui::AccessibilityBridge for WebWindow {}
 
 impl gpui::TextInputBridge for WebWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.inner.state.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.inner.state.borrow_mut().input_handler.take()
     }
 
@@ -788,7 +788,7 @@ impl gpui::SystemServices for WebWindow {
 }
 
 impl gpui::PlatformRenderTarget for WebWindow {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         if let Some((width, height)) = self.inner.pending_physical_size.take() {
             if self.inner.canvas.width() != width || self.inner.canvas.height() != height {
                 self.inner.canvas.set_width(width);
@@ -803,7 +803,7 @@ impl gpui::PlatformRenderTarget for WebWindow {
             drop(state);
         }
 
-        self.inner.state.borrow_mut().renderer.draw(scene);
+        self.inner.state.borrow_mut().renderer.draw(scene)
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
@@ -840,6 +840,9 @@ impl PlatformWindow for WebWindow {
 
     fn window_controls(&self) -> WindowControls {
         WindowControls {
+            attention: false,
+            move_window: false,
+            resize_window: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -857,9 +860,13 @@ impl PlatformWindow for WebWindow {
 fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: false,
+        ime_candidate_position: false,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
+        system_bell: false,
+        native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::WRITE_ONLY,
         window_controls,
     }
 }
@@ -871,6 +878,9 @@ mod tests {
     #[test]
     fn capability_matrix_exposes_web_gaps() {
         let window_controls = WindowControls {
+            attention: false,
+            move_window: false,
+            resize_window: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -878,8 +888,15 @@ mod tests {
         };
         let capabilities = web_capabilities(window_controls);
         assert!(!capabilities.text_input);
+        assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
+        assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::WRITE_ONLY
+        );
         assert!(capabilities.frame_callbacks);
         assert_eq!(capabilities.window_controls, window_controls);
     }

@@ -572,6 +572,15 @@ pub enum FrameEvent {
     DrawFinished(FrameTiming),
     /// A newly drawn frame completed platform submission.
     Presented(FramePresentationTiming),
+    /// A completed frame could not be submitted by the platform render target.
+    SubmissionSkipped {
+        /// The frame build that was not submitted.
+        build_id: FrameBuildId,
+        /// The window whose render target rejected the submission.
+        window_id: WindowId,
+        /// When the failed submission attempt completed.
+        at: Instant,
+    },
 }
 
 #[cfg(feature = "frame-diagnostics")]

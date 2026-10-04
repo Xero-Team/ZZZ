@@ -1157,6 +1157,10 @@ impl LinuxClient for WaylandClient {
             .log_err();
     }
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::READ_WRITE
+    }
+
     fn write_to_primary(&self, item: gpui::ClipboardItem) {
         let mut state = self.0.borrow_mut();
         let (Some(primary_selection_manager), Some(primary_selection)) = (

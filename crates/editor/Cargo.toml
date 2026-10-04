@@ -13,6 +13,7 @@ path = "src/editor.rs"
 doctest = false
 
 [features]
+frame-diagnostics = ["gpui/frame-diagnostics"]
 test-support = [
     "text/test-support",
     "language/test-support",
@@ -154,4 +155,8 @@ harness = false
 
 [[bench]]
 name = "display_map"
+harness = false
+
+[[bench]]
+name = "editor_frame_workload"
 harness = false

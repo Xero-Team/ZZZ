@@ -387,7 +387,6 @@ dependencies = [
  "clock",
  "collections",
  "command_palette_hooks",
- "component",
  "context_server",
  "db",
  "editor",
@@ -455,6 +454,7 @@ dependencies = [
  "time",
  "tree-sitter-md",
  "ui",
+ "ui_component_registry",
  "ui_input",
  "unindent",
  "url",
@@ -2509,19 +2509,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "component"
-version = "0.1.0"
-dependencies = [
- "collections",
- "documented",
- "gpui",
- "inventory",
- "parking_lot",
- "strum 0.28.0",
- "theme",
-]
-
-[[package]]
 name = "component_preview"
 version = "0.1.0"
 dependencies = [
@@ -2529,7 +2516,6 @@ dependencies = [
  "assets",
  "client",
  "collections",
- "component",
  "db",
  "editor",
  "env_logger 0.11.11",
@@ -2548,6 +2534,7 @@ dependencies = [
  "theme",
  "theme_settings",
  "ui",
+ "ui_component_registry",
  "ui_input",
  "uuid",
  "workspace",
@@ -4009,7 +3996,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
- "component",
  "ctor",
  "editor",
  "futures-lite 2.6.1",
@@ -4031,6 +4017,7 @@ dependencies = [
  "theme",
  "theme_settings",
  "ui",
+ "ui_component_registry",
  "unindent",
  "util",
  "workspace",
@@ -5941,7 +5928,6 @@ dependencies = [
  "askpass",
  "buffer_diff",
  "collections",
- "component",
  "ctor",
  "db",
  "editor",
@@ -5984,6 +5970,7 @@ dependencies = [
  "tracing",
  "tree-sitter-md",
  "ui",
+ "ui_component_registry",
  "ui_input",
  "unindent",
  "util",
@@ -8407,7 +8394,6 @@ dependencies = [
  "anyhow",
  "collections",
  "command_palette",
- "component",
  "db",
  "editor",
  "fs",
@@ -8432,6 +8418,7 @@ dependencies = [
  "tree-sitter-json",
  "tree-sitter-rust",
  "ui",
+ "ui_component_registry",
  "ui_input",
  "util",
  "workspace",
@@ -10082,10 +10069,10 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 name = "notifications"
 version = "0.1.0"
 dependencies = [
- "component",
  "gpui",
  "i18n",
  "ui",
+ "ui_component_registry",
  "workspace",
  "zzz_actions",
 ]
@@ -10746,7 +10733,6 @@ dependencies = [
  "anyhow",
  "client",
  "collections",
- "component",
  "db",
  "documented",
  "fs",
@@ -10763,6 +10749,7 @@ dependencies = [
  "theme",
  "theme_settings",
  "ui",
+ "ui_component_registry",
  "util",
  "vim_mode_setting",
  "workspace",
@@ -14976,7 +14963,6 @@ dependencies = [
  "agent_settings",
  "anyhow",
  "audio",
- "component",
  "cpal",
  "editor",
  "feature_flags",
@@ -15008,6 +14994,7 @@ dependencies = [
  "theme_settings",
  "title_bar",
  "ui",
+ "ui_component_registry",
  "util",
  "workspace",
  "zzz_actions",
@@ -18075,7 +18062,6 @@ name = "ui"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "component",
  "documented",
  "gpui",
  "gpui_macros",
@@ -18088,35 +18074,50 @@ dependencies = [
  "release_channel",
  "schemars 1.2.2",
  "serde",
+ "settings",
  "smallvec",
  "strum 0.28.0",
  "theme",
  "theme_settings",
+ "ui_component_registry",
  "ui_macros",
  "web-time",
  "windows 0.62.2",
 ]
 
 [[package]]
+name = "ui_component_registry"
+version = "0.1.0"
+dependencies = [
+ "collections",
+ "documented",
+ "gpui",
+ "inventory",
+ "parking_lot",
+ "strum 0.28.0",
+ "theme",
+]
+
+[[package]]
 name = "ui_input"
 version = "0.1.0"
 dependencies = [
- "component",
  "gpui",
  "i18n",
  "log",
  "parking_lot",
  "ui",
+ "ui_component_registry",
 ]
 
 [[package]]
 name = "ui_macros"
 version = "0.1.0"
 dependencies = [
- "component",
  "quote",
  "syn 3.0.6",
  "ui",
+ "ui_component_registry",
 ]
 
 [[package]]
@@ -20744,7 +20745,6 @@ dependencies = [
  "client",
  "clock",
  "collections",
- "component",
  "db",
  "dirs 7.0.0",
  "fs",
@@ -20780,6 +20780,7 @@ dependencies = [
  "theme",
  "theme_settings",
  "ui",
+ "ui_component_registry",
  "ui_input",
  "util",
  "uuid",
@@ -21769,7 +21770,6 @@ dependencies = [
  "clock",
  "collections",
  "command_palette",
- "component",
  "component_preview",
  "csv_preview",
  "dap_adapters",
@@ -21881,6 +21881,7 @@ dependencies = [
  "tracing",
  "typst_preview",
  "ui",
+ "ui_component_registry",
  "ui_prompt",
  "url",
  "urlencoding",

@@ -790,6 +790,9 @@ mod tests {
     use settings::KeymapFile;
     use workspace::{AppState, MultiWorkspace, Workspace};
 
+    #[cfg(feature = "frame-diagnostics")]
+    use gpui::profiler::{FrameEvent, FramePhase, FrameTimingCollector};
+
     #[test]
     fn test_humanize_action_name() {
         assert_eq!(
@@ -916,6 +919,62 @@ mod tests {
         palette.read_with(cx, |palette, _| {
             assert!(palette.delegate.matches.is_empty())
         });
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    async fn test_command_palette_frame_diagnostics(cx: &mut TestAppContext) {
+        let app_state = init_test(cx);
+        let project = Project::test(app_state.fs.clone(), [], cx).await;
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace =
+            multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
+        let mut collector = FrameTimingCollector::new();
+
+        cx.simulate_keystrokes("cmd-shift-p");
+        for query in ["", "b", "ba", "bck", "bcksp"] {
+            let palette = workspace.update(cx, |workspace, cx| {
+                workspace
+                    .active_modal::<CommandPalette>(cx)
+                    .expect("command palette should be open")
+                    .read(cx)
+                    .picker
+                    .clone()
+            });
+            palette.update_in(cx, |picker, window, cx| {
+                picker.set_query(query, window, cx);
+            });
+            cx.run_until_parked();
+            cx.update(|window, app| window.draw_and_present_for_test(app));
+        }
+
+        let mut phases = [0u128; 5];
+        let mut presented = 0usize;
+        for event in collector.snapshot().events {
+            match event {
+                FrameEvent::Phase(timing) => {
+                    let index = match timing.phase {
+                        FramePhase::RequestLayout => 0,
+                        FramePhase::Prepaint => 1,
+                        FramePhase::Paint => 2,
+                        FramePhase::PrepaintCacheReplay => 3,
+                        FramePhase::PaintCacheReplay => 4,
+                    };
+                    phases[index] += timing.duration.as_nanos();
+                }
+                FrameEvent::Presented(_) => presented += 1,
+                FrameEvent::Invalidated(_)
+                | FrameEvent::DrawStarted { .. }
+                | FrameEvent::DrawFinished(_)
+                | FrameEvent::SubmissionSkipped { .. } => {}
+            }
+        }
+        assert!(presented > 0);
+        println!(
+            "COMMAND_PALETTE_FRAME_DIAGNOSTICS presented={presented} request_layout_ns={} prepaint_ns={} paint_ns={} prepaint_replay_ns={} paint_replay_ns={}",
+            phases[0], phases[1], phases[2], phases[3], phases[4]
+        );
     }
 
     #[gpui::test]

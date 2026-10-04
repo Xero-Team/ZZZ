@@ -12,17 +12,17 @@ pub fn derive_register_component(input: TokenStream) -> TokenStream {
     );
     let expanded = quote! {
         const _: () = {
-            struct AssertComponent<T: component::Component>(::std::marker::PhantomData<T>);
+            struct AssertComponent<T: ui_component_registry::Component>(::std::marker::PhantomData<T>);
             let _ = AssertComponent::<#name>(::std::marker::PhantomData);
         };
 
         #[allow(non_snake_case)]
         fn #register_fn_name() {
-            component::register_component::<#name>();
+            ui_component_registry::register_component::<#name>();
         }
 
-        component::__private::inventory::submit! {
-            component::ComponentFn::new(#register_fn_name)
+        ui_component_registry::__private::inventory::submit! {
+            ui_component_registry::ComponentFn::new(#register_fn_name)
         }
     };
     expanded.into()

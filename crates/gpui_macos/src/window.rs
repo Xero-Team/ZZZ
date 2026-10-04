@@ -27,8 +27,8 @@ use gpui::{
     AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, CursorStyle, ExternalPaths,
     FileDropEvent, ForegroundExecutor, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton,
-    PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab, WindowAppearance,
+    PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton, PromptLevel,
+    RequestFrameOptions, SharedString, Size, SystemWindowTab, TextInputClient, WindowAppearance,
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowHost as _, WindowKind,
     WindowParams, point, px, size,
 };
@@ -587,7 +587,7 @@ struct MacWindowState {
     should_close_callback: Option<Box<dyn FnMut() -> bool>>,
     close_callback: Option<Box<dyn FnOnce()>>,
     appearance_changed_callback: Option<Box<dyn FnMut()>>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     last_key_equivalent: Option<KeyDownEvent>,
     synthetic_drag_counter: usize,
     traffic_light_position: Option<Point<Pixels>>,
@@ -1326,11 +1326,11 @@ fn if_window_not_closed(closed: Arc<AtomicBool>, f: impl FnOnce()) {
 impl gpui::AccessibilityBridge for MacWindow {}
 
 impl gpui::TextInputBridge for MacWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.as_ref().lock().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.as_ref().lock().input_handler.take()
     }
 
@@ -1722,9 +1722,10 @@ impl gpui::SystemServices for MacWindow {
 }
 
 impl gpui::PlatformRenderTarget for MacWindow {
-    fn draw(&self, scene: &gpui::Scene) {
+    fn draw(&self, scene: &gpui::Scene) -> bool {
         let mut this = self.0.lock();
         this.renderer.draw(scene);
+        true
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
@@ -2029,10 +2030,17 @@ impl PlatformWindow for MacWindow {
 fn macos_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
-        window_controls: gpui::WindowControls::default(),
+        system_bell: true,
+        native_prompt: true,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
+        window_controls: gpui::WindowControls {
+            resize_window: false,
+            ..gpui::WindowControls::default()
+        },
     }
 }
 
@@ -3211,7 +3219,7 @@ fn drag_event_position(window_state: &Mutex<MacWindowState>, dragging_info: id) 
 
 fn with_input_handler<F, R>(window: &Object, f: F) -> Option<R>
 where
-    F: FnOnce(&mut PlatformInputHandler) -> R,
+    F: FnOnce(&mut TextInputClient) -> R,
 {
     let window_state = unsafe { get_window_state(window) };
     let mut lock = window_state.as_ref().lock();
@@ -3396,12 +3404,22 @@ mod tests {
     fn capability_matrix_matches_macos_services() {
         let capabilities = macos_capabilities();
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
-        assert!(!capabilities.accessibility);
+        assert!(capabilities.system_bell);
+        assert!(capabilities.native_prompt);
         assert_eq!(
-            capabilities.window_controls,
-            gpui::WindowControls::default()
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
         );
+        assert!(!capabilities.accessibility);
+        assert!(capabilities.window_controls.attention);
+        assert!(capabilities.window_controls.move_window);
+        assert!(!capabilities.window_controls.resize_window);
+        assert!(capabilities.window_controls.fullscreen);
+        assert!(capabilities.window_controls.maximize);
+        assert!(capabilities.window_controls.minimize);
+        assert!(capabilities.window_controls.window_menu);
     }
 
     #[test]

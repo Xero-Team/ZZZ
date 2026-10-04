@@ -2,7 +2,6 @@ mod persistence;
 
 use client::UserStore;
 use collections::HashMap;
-use component::{ComponentId, ComponentMetadata, ComponentStatus, components};
 use gpui::{
     App, Entity, EventEmitter, FocusHandle, Focusable, Task, WeakEntity, Window, list, prelude::*,
 };
@@ -13,6 +12,7 @@ use persistence::ComponentPreviewDb;
 use project::Project;
 use std::{iter::Iterator, ops::Range, sync::Arc};
 use ui::{ButtonLike, Divider, HighlightedLabel, ListItem, ListSubHeader, Tooltip, prelude::*};
+use ui_component_registry::{ComponentId, ComponentMetadata, ComponentStatus, components};
 use ui_input::InputField;
 use workspace::AppState;
 use workspace::{

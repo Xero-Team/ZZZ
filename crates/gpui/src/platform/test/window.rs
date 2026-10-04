@@ -1,7 +1,7 @@
 use crate::{
     AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, GpuSpecs, HeadlessAtlas, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformInputHandler,
-    PlatformWindow, Point, PromptButton, RequestFrameOptions, Scene, Size, TestPlatform,
+    PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformWindow, Point,
+    PromptButton, RequestFrameOptions, Scene, Size, TestPlatform, TextInputClient,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowHost as _,
     WindowParams,
 };
@@ -35,7 +35,8 @@ pub(crate) struct TestWindowState {
     appearance_change_callback: Option<Box<dyn FnMut()>>,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
     frame_wake_count: Rc<Cell<usize>>,
-    input_handler: Option<PlatformInputHandler>,
+    draw_result: bool,
+    input_handler: Option<TextInputClient>,
     is_fullscreen: bool,
     scale_factor: f32,
     appearance: WindowAppearance,
@@ -94,6 +95,7 @@ impl TestWindow {
             appearance_change_callback: None,
             request_frame_callback: None,
             frame_wake_count: Rc::new(Cell::new(0)),
+            draw_result: true,
             input_handler: None,
             is_fullscreen: false,
             // Preserve the test platform's historical 2x default.
@@ -150,6 +152,10 @@ impl TestWindow {
         self.0.lock().frame_wake_count.get()
     }
 
+    pub fn set_draw_result(&self, submitted: bool) {
+        self.0.lock().draw_result = submitted;
+    }
+
     pub fn simulate_frame_request(&self, options: RequestFrameOptions) {
         let mut lock = self.0.lock();
         let Some(mut callback) = lock.request_frame_callback.take() else {
@@ -175,11 +181,11 @@ impl TestWindow {
 impl crate::AccessibilityBridge for TestWindow {}
 
 impl crate::TextInputBridge for TestWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.lock().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.lock().input_handler.take()
     }
 
@@ -344,7 +350,9 @@ impl crate::SystemServices for TestWindow {
 }
 
 impl crate::PlatformRenderTarget for TestWindow {
-    fn draw(&self, _scene: &Scene) {}
+    fn draw(&self, _scene: &Scene) -> bool {
+        self.0.lock().draw_result
+    }
 
     fn sprite_atlas(&self) -> sync::Arc<dyn crate::PlatformAtlas> {
         self.0.lock().sprite_atlas.clone()
@@ -390,10 +398,17 @@ impl PlatformWindow for TestWindow {
     fn capabilities(&self) -> crate::PlatformCapabilities {
         crate::PlatformCapabilities {
             text_input: true,
+            ime_candidate_position: false,
             accessibility: false,
             headless_renderer: self.0.lock().renderer.is_some(),
             frame_callbacks: true,
+            system_bell: false,
+            native_prompt: true,
+            clipboard: crate::ClipboardCapabilities::READ_WRITE,
             window_controls: crate::WindowControls {
+                attention: false,
+                move_window: true,
+                resize_window: false,
                 fullscreen: true,
                 maximize: false,
                 minimize: false,

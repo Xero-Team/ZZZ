@@ -107,6 +107,10 @@ impl WebPlatform {
 }
 
 impl gpui::AppLifecycle for WebPlatform {
+    fn lifecycle_capabilities(&self) -> gpui::AppLifecycleCapabilities {
+        gpui::AppLifecycleCapabilities::EXTERNAL_EVENT_LOOP_ONLY
+    }
+
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>) {
         let wgpu_context = self.wgpu_context.clone();
         let browser_window = self.browser_window.clone();
@@ -132,15 +136,27 @@ impl gpui::AppLifecycle for WebPlatform {
         log::warn!("WebPlatform::quit called, but quitting is not supported in the browser .");
     }
 
-    fn restart(&self, _binary_path: Option<PathBuf>, _arguments: Vec<std::ffi::OsString>) {}
+    fn restart(&self, _binary_path: Option<PathBuf>, _arguments: Vec<std::ffi::OsString>) {
+        log::warn!("WebPlatform::restart called, but restart is not supported in the browser");
+    }
 
-    fn activate(&self, _ignoring_other_apps: bool) {}
+    fn activate(&self, _ignoring_other_apps: bool) {
+        log::warn!("WebPlatform::activate called, but activation is not supported in the browser");
+    }
 
-    fn hide(&self) {}
+    fn hide(&self) {
+        log::warn!("WebPlatform::hide called, but hiding is not supported in the browser");
+    }
 
-    fn hide_other_apps(&self) {}
+    fn hide_other_apps(&self) {
+        log::warn!("WebPlatform::hide_other_apps called, but hiding other apps is not supported");
+    }
 
-    fn unhide_other_apps(&self) {}
+    fn unhide_other_apps(&self) {
+        log::warn!(
+            "WebPlatform::unhide_other_apps called, but restoring other apps is not supported"
+        );
+    }
 
     fn on_quit(&self, callback: Box<dyn FnMut()>) {
         self.callbacks.borrow_mut().quit = Some(callback);
@@ -337,18 +353,31 @@ impl Platform for WebPlatform {
         true
     }
 
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::WRITE_ONLY
+    }
+
     fn read_from_clipboard(&self) -> Option<ClipboardItem> {
         None
     }
 
     fn write_to_clipboard(&self, item: ClipboardItem) {
-        if let Some(text) = item.text()
-            && let Some(window) = web_sys::window()
-        {
-            // Fire-and-forget; called synchronously inside the user's input
-            // event, which satisfies the browser's user-activation requirement.
-            drop(window.navigator().clipboard().write_text(&text));
-        }
+        let Some(text) = item.text() else {
+            log::warn!("Web clipboard writes only support text items");
+            return;
+        };
+        let Some(window) = web_sys::window() else {
+            log::warn!("Cannot write to the Web clipboard without a browser window");
+            return;
+        };
+
+        // Start the write synchronously while the browser still recognizes the input gesture.
+        let write = window.navigator().clipboard().write_text(&text);
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Err(error) = wasm_bindgen_futures::JsFuture::from(write).await {
+                log::warn!("Failed to write to the Web clipboard: {error:?}");
+            }
+        });
     }
 
     fn write_credentials(&self, _url: &str, _username: &str, _password: &[u8]) -> Task<Result<()>> {

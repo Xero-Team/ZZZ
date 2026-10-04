@@ -403,6 +403,10 @@ fn encode_restart_arguments(arguments: &[OsString]) -> OsString {
 }
 
 impl gpui::AppLifecycle for WindowsPlatform {
+    fn lifecycle_capabilities(&self) -> gpui::AppLifecycleCapabilities {
+        gpui::AppLifecycleCapabilities::BASIC_DESKTOP
+    }
+
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>) {
         on_finish_launching();
         if !self.headless {
@@ -501,16 +505,20 @@ impl gpui::AppLifecycle for WindowsPlatform {
             .detach();
     }
 
-    fn activate(&self, _ignoring_other_apps: bool) {}
+    fn activate(&self, _ignoring_other_apps: bool) {
+        log::warn!("WindowsPlatform::activate is not supported");
+    }
 
-    fn hide(&self) {}
+    fn hide(&self) {
+        log::warn!("WindowsPlatform::hide is not supported");
+    }
 
     fn hide_other_apps(&self) {
-        unimplemented!()
+        log::warn!("WindowsPlatform::hide_other_apps is not supported");
     }
 
     fn unhide_other_apps(&self) {
-        unimplemented!()
+        log::warn!("WindowsPlatform::unhide_other_apps is not supported");
     }
 
     fn on_quit(&self, callback: Box<dyn FnMut()>) {
@@ -771,6 +779,10 @@ impl Platform for WindowsPlatform {
 
     fn should_auto_hide_scrollbars(&self) -> bool {
         should_auto_hide_scrollbars().log_err().unwrap_or(false)
+    }
+
+    fn clipboard_capabilities(&self) -> gpui::ClipboardCapabilities {
+        gpui::ClipboardCapabilities::READ_WRITE
     }
 
     fn write_to_clipboard(&self, item: ClipboardItem) {

@@ -1,4 +1,6 @@
-use crate::window::{AnyObserver, AnyWindowFocusListener, DispatchPhase, HitTest};
+use crate::window::{
+    AnyObserver, AnyWindowFocusListener, DispatchPhase, HitTest, TooltipBounds, TooltipId,
+};
 use crate::{
     Action, App, Bounds, BuiltFrame, Capslock, ContentMask, CursorHideMode, CursorStyle,
     DispatchActionListener, DispatchNodeId, FocusHandle, FocusId, Frame, Hitbox, HitboxBehavior,
@@ -20,9 +22,12 @@ pub(crate) struct InteractionOwner {
     pub(crate) next_hitbox_id: HitboxId,
     pub(crate) mouse_hit_test: HitTest,
     pub(crate) captured_hitbox: Option<HitboxId>,
+    pub(crate) next_tooltip_id: TooltipId,
+    pub(crate) tooltip_bounds: Option<TooltipBounds>,
     pub(crate) focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
     pub(crate) focus_lost_listeners: SubscriberSet<(), AnyObserver>,
     pub(crate) default_prevented: bool,
+    pub(crate) mouse_position: Point<Pixels>,
     pub(crate) modifiers: Modifiers,
     pub(crate) capslock: Capslock,
     pub(crate) last_input_modality: InputModality,
@@ -39,6 +44,7 @@ impl InteractionOwner {
         rendered_frame: Frame,
         next_frame: Frame,
         next_hitbox_id: HitboxId,
+        mouse_position: Point<Pixels>,
         modifiers: Modifiers,
         capslock: Capslock,
     ) -> Self {
@@ -48,9 +54,12 @@ impl InteractionOwner {
             next_hitbox_id,
             mouse_hit_test: HitTest::default(),
             captured_hitbox: None,
+            next_tooltip_id: TooltipId::default(),
+            tooltip_bounds: None,
             focus_listeners: SubscriberSet::new(),
             focus_lost_listeners: SubscriberSet::new(),
             default_prevented: true,
+            mouse_position,
             modifiers,
             capslock,
             last_input_modality: InputModality::Mouse,

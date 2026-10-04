@@ -1,4 +1,4 @@
-//! # Component
+//! # UI Component Registry
 //!
 //! This module provides the Component trait, which is used to define
 //! components for visual testing and debugging.
@@ -250,9 +250,9 @@ pub trait Component {
     /// An element returned here will be shown in the component's preview.
     ///
     /// Useful component helpers:
-    /// - [`component::single_example`]
-    /// - [`component::component_group`]
-    /// - [`component::component_group_with_title`]
+    /// - [`ui_component_registry::single_example`]
+    /// - [`ui_component_registry::component_group`]
+    /// - [`ui_component_registry::component_group_with_title`]
     ///
     /// Note: Any arbitrary element can be returned here.
     ///

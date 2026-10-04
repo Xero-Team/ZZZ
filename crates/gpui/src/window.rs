@@ -5,17 +5,17 @@ use crate::{
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
     Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
     DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
-    FileDropEvent, FontId, Frame, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla, InputHandler,
-    InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext, KeyDownEvent,
-    KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
+    FileDropEvent, FontId, Frame, FrameScheduler, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
+    InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
+    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
     MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
-    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority,
-    PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams,
-    RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
-    SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine,
-    Task, TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
+    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow,
+    Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render,
+    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, ResizeEdge,
+    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow,
+    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
+    SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine, Task, TextInputClient,
+    TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
     TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
     WindowParams, WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
@@ -23,7 +23,6 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
 use collections::FxHashMap;
-use collections::FxHashSet;
 #[cfg(target_os = "macos")]
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
@@ -454,8 +453,6 @@ impl<M: Focusable + EventEmitter<DismissEvent> + Render> ManagedView for M {}
 /// Emitted by implementers of [`ManagedView`] to indicate the view should be dismissed, such as when a view is presented as a modal.
 pub struct DismissEvent;
 
-type FrameCallback = Box<dyn FnOnce(&mut Window, &mut App)>;
-
 pub(crate) type AnyMouseListener =
     Box<dyn FnMut(&dyn Any, DispatchPhase, &mut Window, &mut App) + 'static>;
 
@@ -666,6 +663,7 @@ impl TooltipId {
     /// Checks if the tooltip is currently hovered.
     pub fn is_hovered(&self, window: &Window) -> bool {
         window
+            .interaction
             .tooltip_bounds
             .as_ref()
             .is_some_and(|tooltip_bounds| {
@@ -717,11 +715,7 @@ pub struct Window {
     pub(crate) image_cache_stack: Vec<AnyImageCache>,
     pub(crate) interaction: InteractionOwner,
     pub(crate) text_input: TextInputOwner,
-    pub(crate) next_tooltip_id: TooltipId,
-    pub(crate) tooltip_bounds: Option<TooltipBounds>,
-    next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
-    pub(crate) dirty_views: FxHashSet<EntityId>,
-    mouse_position: Point<Pixels>,
+    pub(crate) frame_scheduler: FrameScheduler,
     scale_factor: f32,
     pub(crate) bounds_observers: SubscriberSet<(), AnyObserver>,
     appearance: WindowAppearance,
@@ -729,13 +723,11 @@ pub struct Window {
     pub(crate) button_layout_observers: SubscriberSet<(), AnyObserver>,
     active: Rc<Cell<bool>>,
     hovered: Rc<Cell<bool>>,
-    pub(crate) needs_present: Rc<Cell<bool>>,
     /// Tracks recent input event timestamps to determine if input is arriving at a high rate.
     /// Used to selectively enable VRR optimization only when input rate exceeds 60fps.
     pub(crate) input_rate_tracker: Rc<RefCell<InputRateTracker>>,
     #[cfg(feature = "input-latency-histogram")]
     input_latency_tracker: InputLatencyTracker,
-    pub(crate) refreshing: bool,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
     prompt: Option<RenderablePromptHandle>,
     pub(crate) client_inset: Option<Pixels>,
@@ -1027,8 +1019,9 @@ impl Window {
         let invalidator = WindowInvalidator::new(handle.window_id());
         let active = Rc::new(Cell::new(platform_window.is_active()));
         let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
-        let needs_present = Rc::new(Cell::new(false));
-        let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Default::default();
+        let frame_scheduler = FrameScheduler::new();
+        let needs_present = frame_scheduler.needs_present_handle();
+        let next_frame_callbacks = frame_scheduler.next_frame_callbacks_handle();
         let input_rate_tracker = Rc::new(RefCell::new(InputRateTracker::default()));
         let last_frame_time = Rc::new(Cell::new(None));
 
@@ -1058,8 +1051,6 @@ impl Window {
             let mut cx = cx.to_async();
             let invalidator = invalidator.clone();
             let active = active.clone();
-            let needs_present = needs_present.clone();
-            let next_frame_callbacks = next_frame_callbacks.clone();
             let input_rate_tracker = input_rate_tracker.clone();
             move |request_frame_options| {
                 let thermal_state = handle
@@ -1339,15 +1330,12 @@ impl Window {
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 HitboxId(0),
+                mouse_position,
                 modifiers,
                 capslock,
             ),
             text_input: TextInputOwner::new(),
-            next_frame_callbacks,
-            next_tooltip_id: TooltipId::default(),
-            tooltip_bounds: None,
-            dirty_views: FxHashSet::default(),
-            mouse_position,
+            frame_scheduler,
             scale_factor,
             bounds_observers: SubscriberSet::new(),
             appearance,
@@ -1355,11 +1343,9 @@ impl Window {
             button_layout_observers: SubscriberSet::new(),
             active,
             hovered,
-            needs_present,
             input_rate_tracker,
             #[cfg(feature = "input-latency-histogram")]
             input_latency_tracker: InputLatencyTracker::new()?,
-            refreshing: false,
             activation_observers: SubscriberSet::new(),
             prompt: None,
             client_inset: None,
@@ -1419,10 +1405,27 @@ impl Window {
             .dispatch_tree
             .view_path_reversed(view_id)
         {
-            if !self.dirty_views.insert(view_id) {
+            if !self.frame_scheduler.insert_dirty_view(view_id) {
                 break;
             }
         }
+    }
+
+    pub(crate) fn is_view_dirty(&self, view_id: EntityId) -> bool {
+        self.frame_scheduler.is_view_dirty(view_id)
+    }
+
+    pub(crate) fn is_refreshing(&self) -> bool {
+        self.frame_scheduler.is_refreshing()
+    }
+
+    pub(crate) fn replace_refreshing(&mut self, refreshing: bool) -> bool {
+        self.frame_scheduler.replace_refreshing(refreshing)
+    }
+
+    pub(crate) fn force_refresh(&mut self) {
+        self.frame_scheduler.set_refreshing(true);
+        self.invalidator.set_dirty(true);
     }
 
     /// Registers a callback to be invoked when the window appearance changes.
@@ -1490,8 +1493,7 @@ impl Window {
     /// Mark the window as dirty, scheduling it to be redrawn on the next frame.
     pub fn refresh(&mut self) {
         if self.invalidator.not_drawing() {
-            self.refreshing = true;
-            self.invalidator.set_dirty(true);
+            self.force_refresh();
         }
     }
 
@@ -1558,7 +1560,13 @@ impl Window {
 
     /// Start a window resize operation if this window is resizable.
     pub fn start_window_resize(&self, edge: ResizeEdge) {
-        if self.is_resizable {
+        if self.is_resizable
+            && self
+                .platform_window
+                .capabilities()
+                .window_controls
+                .resize_window
+        {
             self.platform_window.start_window_resize(edge);
         }
     }
@@ -1582,6 +1590,33 @@ impl Window {
     /// Returns the capabilities declared by this window's platform backend.
     pub fn platform_capabilities(&self) -> PlatformCapabilities {
         self.platform_window.capabilities()
+    }
+
+    /// Dispatches one accessibility action against the completed frame.
+    #[cfg(feature = "accessibility")]
+    pub fn dispatch_accessibility_action(
+        &mut self,
+        node_id: accesskit::NodeId,
+        action: accesskit::Action,
+        data: Option<&accesskit::ActionData>,
+        cx: &mut App,
+    ) -> bool {
+        let mut actions = mem::take(&mut self.interaction.rendered_frame.accessibility_actions);
+        let handled = actions.dispatch(node_id, action, data, self, cx);
+        self.interaction.rendered_frame.accessibility_actions = actions;
+        handled
+    }
+
+    /// Returns the completed semantic snapshot for integration tests.
+    #[cfg(all(feature = "accessibility", any(test, feature = "test-support")))]
+    pub fn accessibility_snapshot_for_test(
+        &self,
+    ) -> Option<crate::accessibility::SemanticSnapshot> {
+        self.interaction
+            .built_frame(&self.text_input)
+            .accessibility
+            .semantic_snapshot()
+            .cloned()
     }
 
     /// Return the `WindowBounds` excluding insets (Wayland and X11)
@@ -1757,7 +1792,7 @@ impl Window {
 
     /// Schedule the given closure to be run directly after the current frame is rendered.
     pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
-        RefCell::borrow_mut(&self.next_frame_callbacks).push(Box::new(callback));
+        self.frame_scheduler.queue_next_frame(Box::new(callback));
         self.invalidator.wake_platform();
     }
 
@@ -1818,7 +1853,7 @@ impl Window {
         self.scale_factor = self.platform_window.scale_factor();
         self.viewport_size = self.platform_window.content_size();
         self.display_id = self.platform_window.display().map(|display| display.id());
-        self.mouse_position = self.platform_window.mouse_position();
+        self.interaction.mouse_position = self.platform_window.mouse_position();
 
         self.refresh();
 
@@ -1904,12 +1939,21 @@ impl Window {
 
     /// Toggle zoom on the window.
     pub fn zoom_window(&self) {
-        self.platform_window.zoom();
+        if self.platform_window.capabilities().window_controls.maximize {
+            self.platform_window.zoom();
+        }
     }
 
     /// Opens the native title bar context menu, useful when implementing client side decorations (Wayland and X11)
     pub fn show_window_menu(&self, position: Point<Pixels>) {
-        self.platform_window.show_window_menu(position)
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .window_menu
+        {
+            self.platform_window.show_window_menu(position)
+        }
     }
 
     /// Handle window movement for Linux and macOS.
@@ -1917,7 +1961,14 @@ impl Window {
     ///
     /// Events may not be received during a move operation.
     pub fn start_window_move(&self) {
-        self.platform_window.start_window_move()
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .move_window
+        {
+            self.platform_window.start_window_move()
+        }
     }
 
     /// When using client side decorations, set this to the width of the invisible decorations (Wayland and X11)
@@ -2175,7 +2226,7 @@ impl Window {
 
     /// The position of the mouse relative to the window.
     pub fn mouse_position(&self) -> Point<Pixels> {
-        self.mouse_position
+        self.interaction.mouse_position
     }
 
     /// Captures the pointer for the given hitbox. While captured, all mouse move and mouse up
@@ -2246,7 +2297,7 @@ impl Window {
         if !cx.mode.skip_drawing() {
             self.draw_roots(cx);
         }
-        self.dirty_views.clear();
+        self.frame_scheduler.clear_dirty_views();
         self.interaction.next_frame.window_active = self.active.get();
 
         // Register requested input handler with the platform window.
@@ -2324,14 +2375,14 @@ impl Window {
         debug_assert!(self.rendered_entity_stack.is_empty());
         self.record_entities_accessed(cx);
         self.reset_cursor_style(cx);
-        self.refreshing = false;
+        self.frame_scheduler.set_refreshing(false);
         self.invalidator.set_phase(DrawPhase::None);
         // Focus movement during listener dispatch is suppressed while drawing. Redraw so the
         // new focus state and its corresponding events are delivered on the next frame.
         if self.interaction.focus != focus_before_listeners {
             self.refresh();
         }
-        self.needs_present.set(true);
+        self.frame_scheduler.mark_present_pending();
 
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = self.invalidator.finish_frame() {
@@ -2383,19 +2434,23 @@ impl Window {
         let built_frame = self.interaction.built_frame(&self.text_input);
         #[cfg(feature = "frame-diagnostics")]
         let frame_timing = built_frame.diagnostics.timing();
-        self.platform_window
-            .update_accessibility(built_frame.accessibility.clone())
-            .log_err();
+        if self.platform_window.capabilities().accessibility {
+            self.platform_window
+                .update_accessibility(built_frame.accessibility.clone())
+                .log_err();
+        }
         let submission = crate::render_api::submit_compat(
             self.platform_window.as_mut(),
             crate::render_api::RenderScene::new(built_frame.scene),
         );
-        debug_assert!(submission.submitted);
+        if !submission.submitted {
+            log::debug!("platform render target skipped frame submission");
+        }
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = frame_timing {
             let present_end = Instant::now();
-            self.invalidator
-                .record_event(FrameEvent::Presented(FramePresentationTiming {
+            let event = if submission.submitted {
+                FrameEvent::Presented(FramePresentationTiming {
                     build_id: frame.build_id,
                     window_id: self.handle.window_id(),
                     present_start,
@@ -2404,20 +2459,36 @@ impl Window {
                         .input_started_at
                         .map(|started_at| present_end.duration_since(started_at)),
                     input: frame.input,
-                }));
+                })
+            } else {
+                FrameEvent::SubmissionSkipped {
+                    build_id: frame.build_id,
+                    window_id: self.handle.window_id(),
+                    at: present_end,
+                }
+            };
+            self.invalidator.record_event(event);
         }
         #[cfg(feature = "input-latency-histogram")]
-        self.input_latency_tracker.record_frame_presented();
-        self.needs_present.set(false);
+        if submission.submitted {
+            self.input_latency_tracker.record_frame_presented();
+        }
+        self.frame_scheduler.clear_present_pending();
         #[cfg(feature = "frame-diagnostics")]
         self.invalidator.flush_events();
         profiling::finish_frame!();
     }
 
     /// Builds and presents one frame for benchmark and integration-test infrastructure.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn draw_and_present_for_test(&mut self, cx: &mut App) {
         self.draw(cx).clear();
+        self.present();
+    }
+
+    /// Presents the most recently built frame for benchmark and integration-test infrastructure.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn present_for_test(&mut self) {
         self.present();
     }
 
@@ -2435,7 +2506,7 @@ impl Window {
         let mut request_layout_duration = Duration::ZERO;
         #[cfg(feature = "frame-diagnostics")]
         let mut request_layout_operations = 0;
-        self.tooltip_bounds.take();
+        self.interaction.tooltip_bounds.take();
 
         let _inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
         let root_size = {
@@ -2514,7 +2585,10 @@ impl Window {
             tooltip_element = self.prepaint_tooltip(cx);
         }
 
-        self.interaction.mouse_hit_test = self.interaction.next_frame.hit_test(self.mouse_position);
+        self.interaction.mouse_hit_test = self
+            .interaction
+            .next_frame
+            .hit_test(self.interaction.mouse_position);
 
         #[cfg(feature = "frame-diagnostics")]
         {
@@ -2642,7 +2716,7 @@ impl Window {
                 element.prepaint(window, cx)
             });
 
-            self.tooltip_bounds = Some(TooltipBounds {
+            self.interaction.tooltip_bounds = Some(TooltipBounds {
                 id: tooltip_request.id,
                 bounds: tooltip_bounds,
             });
@@ -2962,7 +3036,7 @@ impl Window {
     /// during the paint phase of element drawing.
     pub fn set_tooltip(&mut self, tooltip: AnyTooltip) -> TooltipId {
         self.invalidator.debug_assert_prepaint();
-        let id = TooltipId(post_inc(&mut self.next_tooltip_id.0));
+        let id = TooltipId(post_inc(&mut self.interaction.next_tooltip_id.0));
         self.interaction
             .next_frame
             .tooltip_requests
@@ -4205,7 +4279,7 @@ impl Window {
             let cx = self.to_async(cx);
             self.text_input
                 .next_handlers
-                .push(Some(PlatformInputHandler::new(cx, Box::new(input_handler))));
+                .push(Some(TextInputClient::new(cx, Box::new(input_handler))));
         }
     }
 
@@ -4357,7 +4431,14 @@ impl Window {
         }
 
         if let Some(input) = keystroke.key_char {
-            return self.dispatch_text_input(&input, cx);
+            #[cfg(feature = "frame-diagnostics")]
+            let input_scope = self
+                .invalidator
+                .input_scope(Instant::now(), FrameInputProvenance::Keyboard);
+            let handled = self.dispatch_text_input(&input, cx);
+            #[cfg(feature = "frame-diagnostics")]
+            drop(input_scope);
+            return handled;
         }
 
         false
@@ -4425,17 +4506,17 @@ impl Window {
             // Track the mouse position with our own state, since accessing the platform
             // API for the mouse position can only occur on the main thread.
             PlatformInput::MouseMove(mouse_move) => {
-                self.mouse_position = mouse_move.position;
+                self.interaction.mouse_position = mouse_move.position;
                 self.interaction.modifiers = mouse_move.modifiers;
                 PlatformInput::MouseMove(mouse_move)
             }
             PlatformInput::MouseDown(mouse_down) => {
-                self.mouse_position = mouse_down.position;
+                self.interaction.mouse_position = mouse_down.position;
                 self.interaction.modifiers = mouse_down.modifiers;
                 PlatformInput::MouseDown(mouse_down)
             }
             PlatformInput::MouseUp(mouse_up) => {
-                self.mouse_position = mouse_up.position;
+                self.interaction.mouse_position = mouse_up.position;
                 self.interaction.modifiers = mouse_up.modifiers;
                 PlatformInput::MouseUp(mouse_up)
             }
@@ -4452,12 +4533,12 @@ impl Window {
                 PlatformInput::ModifiersChanged(modifiers_changed)
             }
             PlatformInput::ScrollWheel(scroll_wheel) => {
-                self.mouse_position = scroll_wheel.position;
+                self.interaction.mouse_position = scroll_wheel.position;
                 self.interaction.modifiers = scroll_wheel.modifiers;
                 PlatformInput::ScrollWheel(scroll_wheel)
             }
             PlatformInput::Pinch(pinch) => {
-                self.mouse_position = pinch.position;
+                self.interaction.mouse_position = pinch.position;
                 self.interaction.modifiers = pinch.modifiers;
                 PlatformInput::Pinch(pinch)
             }
@@ -4465,7 +4546,7 @@ impl Window {
             // to internal drag and drop events.
             PlatformInput::FileDrop(file_drop) => match file_drop {
                 FileDropEvent::Entered { position, paths } => {
-                    self.mouse_position = position;
+                    self.interaction.mouse_position = position;
                     if cx.active_drag.is_none() {
                         cx.active_drag = Some(AnyDrag {
                             value: Arc::new(paths.clone()),
@@ -4481,7 +4562,7 @@ impl Window {
                     })
                 }
                 FileDropEvent::Pending { position } => {
-                    self.mouse_position = position;
+                    self.interaction.mouse_position = position;
                     PlatformInput::MouseMove(MouseMoveEvent {
                         position,
                         pressed_button: Some(MouseButton::Left),
@@ -4490,7 +4571,7 @@ impl Window {
                 }
                 FileDropEvent::Submit { position } => {
                     cx.activate(true);
-                    self.mouse_position = position;
+                    self.interaction.mouse_position = position;
                     PlatformInput::MouseUp(MouseUpEvent {
                         button: MouseButton::Left,
                         position,
@@ -4649,17 +4730,33 @@ impl Window {
 
     /// Requests that the operating system draw attention to this window.
     pub fn request_attention(&self) {
-        self.platform_window.request_attention();
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .attention
+        {
+            self.platform_window.request_attention();
+        }
     }
 
     /// Minimize the current window at the platform level.
     pub fn minimize_window(&self) {
-        self.platform_window.minimize();
+        if self.platform_window.capabilities().window_controls.minimize {
+            self.platform_window.minimize();
+        }
     }
 
     /// Toggle full screen status on the current window at the platform level.
     pub fn toggle_fullscreen(&self) {
-        self.platform_window.toggle_fullscreen();
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .fullscreen
+        {
+            self.platform_window.toggle_fullscreen();
+        }
     }
 
     /// Toggle simple (borderless) fullscreen, where the window covers the entire
@@ -4672,6 +4769,9 @@ impl Window {
 
     /// Updates the IME panel position suggestions for languages like japanese, chinese.
     pub fn invalidate_character_coordinates(&self) {
+        if !self.platform_window.capabilities().ime_candidate_position {
+            return;
+        }
         self.on_next_frame(|window, _cx| {
             if let Some(bounds) = window.text_input.candidate_bounds() {
                 window.platform_window.update_ime_position(bounds);
@@ -4704,13 +4804,16 @@ impl Window {
             .collect::<Vec<_>>();
 
         let receiver = match &prompt_builder {
-            PromptBuilder::Default => self
+            PromptBuilder::Default if self.platform_window.capabilities().native_prompt => self
                 .platform_window
                 .prompt(level, message, detail, &answers)
                 .unwrap_or_else(|| {
                     self.build_custom_prompt(&prompt_builder, level, message, detail, &answers, cx)
                 }),
             PromptBuilder::Custom(_) => {
+                self.build_custom_prompt(&prompt_builder, level, message, detail, &answers, cx)
+            }
+            PromptBuilder::Default => {
                 self.build_custom_prompt(&prompt_builder, level, message, detail, &answers, cx)
             }
         };
@@ -5009,7 +5112,9 @@ impl Window {
     /// Request the OS to play an alert sound. On some platforms this is associated
     /// with the window, for others it's just a simple global function call.
     pub fn play_system_bell(&self) {
-        self.platform_window.play_system_bell()
+        if self.platform_window.capabilities().system_bell {
+            self.platform_window.play_system_bell()
+        }
     }
 
     /// Toggles the inspector mode on this window.
@@ -5735,11 +5840,12 @@ pub fn outline(
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "accessibility")]
-    use crate::{AccessibilityUpdate, SemanticTreeBuilder};
+    use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
-        AnyView, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
-        KeyDownEvent, Keystroke, PlatformInput, StyleRefinement,
+        AnyView, App, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
+        InputHandler, KeyDownEvent, Keystroke, PlatformInput, Point, StyleRefinement,
+        TextInputClient, UTF16Selection,
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
@@ -5748,6 +5854,8 @@ mod tests {
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
+    #[cfg(feature = "frame-diagnostics")]
+    use std::ops::Range;
     use std::{cell::Cell, rc::Rc};
 
     struct RootView {
@@ -5764,14 +5872,31 @@ mod tests {
     }
 
     #[cfg(feature = "accessibility")]
-    struct AccessibilityView;
+    struct AccessibilityView {
+        action_count: Rc<Cell<usize>>,
+    }
 
     #[cfg(feature = "accessibility")]
     impl Render for AccessibilityView {
-        fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            window.interaction.next_frame.accessibility =
-                AccessibilityUpdate::from_semantic_snapshot(SemanticTreeBuilder::new().snapshot());
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let action_count = self.action_count.clone();
             div()
+                .id("accessibility-group")
+                .role(accesskit::Role::Group)
+                .child(
+                    div()
+                        .id("accessibility-button")
+                        .role(accesskit::Role::Button)
+                        .aria_label("Activate")
+                        .aria_disabled(true)
+                        .aria_selected(true)
+                        .aria_expanded(false)
+                        .aria_toggled(accesskit::Toggled::True)
+                        .aria_value("ready")
+                        .on_a11y_action(accesskit::Action::Click, move |_, _, _| {
+                            action_count.set(action_count.get() + 1);
+                        }),
+                )
         }
     }
 
@@ -5800,6 +5925,76 @@ mod tests {
                 .on_key_down(|_, window, _| window.refresh())
                 .child(AnyView::from(self.panel.clone()).cached(StyleRefinement::default()))
                 .into_any_element()
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct RefreshingTextInput;
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl InputHandler for RefreshingTextInput {
+        fn selected_text_range(
+            &mut self,
+            _: bool,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<UTF16Selection> {
+            None
+        }
+
+        fn marked_text_range(&mut self, _: &mut Window, _: &mut App) -> Option<Range<usize>> {
+            None
+        }
+
+        fn text_for_range(
+            &mut self,
+            _: Range<usize>,
+            _: &mut Option<Range<usize>>,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<String> {
+            None
+        }
+
+        fn replace_text_in_range(
+            &mut self,
+            _: Option<Range<usize>>,
+            _: &str,
+            window: &mut Window,
+            _: &mut App,
+        ) {
+            window.refresh();
+        }
+
+        fn replace_and_mark_text_in_range(
+            &mut self,
+            _: Option<Range<usize>>,
+            _: &str,
+            _: Option<Range<usize>>,
+            window: &mut Window,
+            _: &mut App,
+        ) {
+            window.refresh();
+        }
+
+        fn unmark_text(&mut self, _: &mut Window, _: &mut App) {}
+
+        fn bounds_for_range(
+            &mut self,
+            _: Range<usize>,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<Bounds<Pixels>> {
+            None
+        }
+
+        fn character_index_for_point(
+            &mut self,
+            _: Point<Pixels>,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<usize> {
+            None
         }
     }
 
@@ -5894,9 +6089,17 @@ mod tests {
             .update(cx, |_, window, _| {
                 let capabilities = window.platform_capabilities();
                 assert!(capabilities.text_input);
+                assert!(!capabilities.ime_candidate_position);
                 assert!(capabilities.frame_callbacks);
+                assert!(capabilities.native_prompt);
                 assert!(!capabilities.accessibility);
+                assert_eq!(
+                    capabilities.clipboard,
+                    crate::ClipboardCapabilities::READ_WRITE
+                );
                 assert!(capabilities.window_controls.fullscreen);
+                assert!(capabilities.window_controls.move_window);
+                assert!(!capabilities.window_controls.resize_window);
                 assert!(!capabilities.window_controls.maximize);
                 assert!(!capabilities.window_controls.minimize);
                 assert!(!capabilities.window_controls.window_menu);
@@ -5928,15 +6131,101 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn printable_text_input_is_linked_to_presented_frame(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw_and_present_for_test(cx);
+            let input = TextInputClient::new(window.to_async(cx), Box::new(RefreshingTextInput));
+            window.platform_window.set_input_handler(input);
+        })
+        .expect("diagnostics window should remain open");
+
+        let mut collector = FrameTimingCollector::new();
+        cx.dispatch_keystroke(handle, Keystroke::parse("a").expect("valid keystroke"));
+        cx.update_window(handle, |_, window, _| window.present_for_test())
+            .expect("diagnostics window should remain open");
+
+        assert!(collector.snapshot().events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Presented(timing)
+                if timing.input == Some(FrameInputProvenance::Keyboard)
+                    && timing.input_to_present.is_some()
+        )));
+    }
+
     #[cfg(feature = "accessibility")]
     #[gpui::test]
     fn built_frame_carries_accessibility_update(cx: &mut TestAppContext) {
-        let window = cx.add_window(|_, _| AccessibilityView);
+        let action_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let action_count = action_count.clone();
+            move |_, _| AccessibilityView { action_count }
+        });
         let handle: AnyWindowHandle = window.into();
         cx.update_window(handle, |_, window, cx| {
+            window.refresh();
             window.draw(cx).clear();
+            assert_eq!(
+                window
+                    .interaction
+                    .rendered_frame
+                    .accessibility_builder
+                    .node_count(),
+                3
+            );
             let built_frame = window.interaction.built_frame(&window.text_input);
-            assert!(built_frame.accessibility.semantic_snapshot().is_some());
+            let snapshot = built_frame
+                .accessibility
+                .semantic_snapshot()
+                .expect("built frame should contain a semantic snapshot");
+            let (group_id, group) = snapshot
+                .update
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == accesskit::Role::Group)
+                .expect("semantic group should be present");
+            let (button_id, button) = snapshot
+                .update
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == accesskit::Role::Button)
+                .expect("semantic button should be present");
+            assert_eq!(group.children(), &[*button_id]);
+            assert_eq!(button.label(), Some("Activate"));
+            assert!(button.is_disabled());
+            assert_eq!(button.is_selected(), Some(true));
+            assert_eq!(button.is_expanded(), Some(false));
+            assert_eq!(button.toggled(), Some(accesskit::Toggled::True));
+            assert_eq!(button.value(), Some("ready"));
+            assert!(button.supports_action(accesskit::Action::Click));
+            assert!(snapshot.update.nodes[0].1.children().contains(group_id));
+            let button_id = *button_id;
+
+            assert!(window.dispatch_accessibility_action(
+                button_id,
+                accesskit::Action::Click,
+                None,
+                cx,
+            ));
+            assert_eq!(action_count.get(), 1);
+            assert!(!window.dispatch_accessibility_action(
+                button_id,
+                accesskit::Action::Focus,
+                None,
+                cx,
+            ));
+            assert_eq!(action_count.get(), 1);
+
+            window.draw(cx).clear();
+            let cached_frame = window.interaction.built_frame(&window.text_input);
+            let cached_snapshot = cached_frame
+                .accessibility
+                .semantic_snapshot()
+                .expect("accessibility frames should rebuild complete semantic trees");
+            assert_eq!(cached_snapshot.update.nodes.len(), 3);
         })
         .expect("accessibility window should remain open");
     }
@@ -5953,24 +6242,29 @@ mod tests {
         test_window.simulate_frame_request(RequestFrameOptions::default());
         let initial = collector.snapshot();
         assert_eq!(initial.dropped_events, 0);
+        let completed_build_id = cx
+            .update_window(handle, |_, window, _| {
+                window
+                    .interaction
+                    .built_frame(&window.text_input)
+                    .diagnostics
+                    .build_id
+            })
+            .expect("diagnostics window should remain open")
+            .expect("completed frame should carry a build ID");
         let initial_build_id = initial
             .events
             .iter()
             .find_map(|event| match event {
-                FrameEvent::Presented(timing) if timing.window_id == window_id => {
+                FrameEvent::Presented(timing)
+                    if timing.window_id == window_id
+                        && timing.build_id.as_u64() == completed_build_id =>
+                {
                     Some(timing.build_id)
                 }
                 _ => None,
             })
             .expect("initial frame should be presented");
-        cx.update_window(handle, |_, window, _| {
-            let built_frame = window.interaction.built_frame(&window.text_input);
-            assert_eq!(
-                built_frame.diagnostics.build_id,
-                Some(initial_build_id.as_u64())
-            );
-        })
-        .expect("diagnostics window should remain open");
         assert!(initial.events.iter().any(|event| matches!(
             event,
             FrameEvent::Invalidated(invalidation)
@@ -6044,6 +6338,40 @@ mod tests {
 
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
+    fn frame_diagnostics_record_skipped_submission(cx: &mut TestAppContext) {
+        let mut collector = FrameTimingCollector::new();
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+        let window_id = handle.window_id();
+        let test_window = cx.test_window(handle);
+        collector.snapshot();
+
+        test_window.set_draw_result(false);
+        window
+            .update(cx, |_, window, _| window.refresh())
+            .expect("diagnostics window should remain open");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+
+        let snapshot = collector.snapshot();
+        let skipped_build_id = snapshot.events.iter().find_map(|event| match event {
+            FrameEvent::SubmissionSkipped {
+                build_id,
+                window_id: event_window_id,
+                ..
+            } if *event_window_id == window_id => Some(*build_id),
+            _ => None,
+        });
+        assert!(skipped_build_id.is_some());
+        assert!(!snapshot.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Presented(timing)
+                if timing.window_id == window_id
+                    && Some(timing.build_id) == skipped_build_id
+        )));
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
     fn frame_diagnostics_runner(cx: &mut TestAppContext) {
         const ITERATIONS: usize = 100;
         let mut collector = FrameTimingCollector::new();
@@ -6088,6 +6416,7 @@ mod tests {
         let mut prepaint_replays = 0usize;
         let mut paint_replays = 0usize;
         let mut presented = 0usize;
+        let mut submissions_skipped = 0usize;
         for event in snapshot.events {
             match event {
                 FrameEvent::DrawFinished(timing) => {
@@ -6115,6 +6444,7 @@ mod tests {
                         paint_replays += 1;
                     }
                 }
+                FrameEvent::SubmissionSkipped { .. } => submissions_skipped += 1,
                 FrameEvent::Invalidated(_) | FrameEvent::DrawStarted { .. } => {}
             }
         }
@@ -6130,6 +6460,7 @@ mod tests {
         }
 
         assert!(presented >= ITERATIONS * 2);
+        assert_eq!(submissions_skipped, 0);
         assert!(!draw_durations.is_empty());
         assert!(!input_latencies.is_empty());
         println!(

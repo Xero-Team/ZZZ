@@ -4,8 +4,8 @@ use x11rb::connection::RequestConnection;
 use crate::linux::X11ClientStatePtr;
 use gpui::{
     AnyWindowHandle, Bounds, Decorations, DevicePixels, ForegroundExecutor, GpuSpecs, Modifiers,
-    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
-    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size,
+    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size, TextInputClient,
     Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
     WindowDecorations, WindowHost as _, WindowKind, WindowParams, px,
 };
@@ -253,7 +253,7 @@ pub struct X11WindowState {
     scale_factor: f32,
     renderer: WgpuRenderer,
     display: Rc<dyn PlatformDisplay>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     appearance: WindowAppearance,
     background_appearance: WindowBackgroundAppearance,
     maximized_vertical: bool,
@@ -1339,11 +1339,11 @@ impl X11WindowStatePtr {
 impl gpui::AccessibilityBridge for X11Window {}
 
 impl gpui::TextInputBridge for X11Window {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.state.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.state.borrow_mut().input_handler.take()
     }
 
@@ -1641,7 +1641,7 @@ impl gpui::SystemServices for X11Window {
 }
 
 impl gpui::PlatformRenderTarget for X11Window {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         let mut inner = self.0.state.borrow_mut();
 
         if inner.renderer.device_lost() {
@@ -1662,14 +1662,15 @@ impl gpui::PlatformRenderTarget for X11Window {
             }
 
             inner.force_render_after_recovery = true;
-            return;
+            return false;
         }
 
-        inner.renderer.draw(scene);
+        let submitted = inner.renderer.draw(scene);
 
         if inner.renderer.needs_redraw() {
             inner.force_render_after_recovery = true;
         }
+        submitted
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
@@ -1938,9 +1939,13 @@ impl PlatformWindow for X11Window {
 fn x11_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
+        system_bell: true,
+        native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls: gpui::WindowControls::default(),
     }
 }
@@ -1953,9 +1958,16 @@ mod capability_tests {
     fn capability_matrix_matches_x11_services() {
         let capabilities = x11_capabilities();
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
+        assert!(capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
+        );
         assert_eq!(
             capabilities.window_controls,
             gpui::WindowControls::default()

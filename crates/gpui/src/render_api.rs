@@ -14,7 +14,7 @@ impl<'a> RenderScene<'a> {
 
 /// Target receiving one completed scene submission.
 pub(crate) trait RenderTarget {
-    fn submit_scene(&mut self, scene: RenderScene<'_>);
+    fn submit_scene(&mut self, scene: RenderScene<'_>) -> bool;
 }
 
 /// Result of submitting one completed frame to a render target.
@@ -32,8 +32,9 @@ struct CompatibilityRenderer;
 
 impl Renderer for CompatibilityRenderer {
     fn submit(&mut self, scene: RenderScene<'_>, target: &mut dyn RenderTarget) -> FrameSubmission {
-        target.submit_scene(scene);
-        FrameSubmission { submitted: true }
+        FrameSubmission {
+            submitted: target.submit_scene(scene),
+        }
     }
 }
 
@@ -42,8 +43,8 @@ struct PlatformWindowTarget<'a> {
 }
 
 impl RenderTarget for PlatformWindowTarget<'_> {
-    fn submit_scene(&mut self, scene: RenderScene<'_>) {
-        self.window.draw(scene.scene);
+    fn submit_scene(&mut self, scene: RenderScene<'_>) -> bool {
+        self.window.draw(scene.scene)
     }
 }
 
@@ -54,4 +55,31 @@ pub(crate) fn submit_compat(
 ) -> FrameSubmission {
     let mut target = PlatformWindowTarget { window };
     CompatibilityRenderer.submit(scene, &mut target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestRenderTarget {
+        submission_result: bool,
+    }
+
+    impl RenderTarget for TestRenderTarget {
+        fn submit_scene(&mut self, _: RenderScene<'_>) -> bool {
+            self.submission_result
+        }
+    }
+
+    #[test]
+    fn renderer_propagates_target_submission_result() {
+        let scene = Scene::default();
+        for submitted in [false, true] {
+            let mut target = TestRenderTarget {
+                submission_result: submitted,
+            };
+            let result = CompatibilityRenderer.submit(RenderScene::new(&scene), &mut target);
+            assert_eq!(result.submitted, submitted);
+        }
+    }
 }

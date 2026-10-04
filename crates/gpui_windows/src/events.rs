@@ -1299,7 +1299,7 @@ impl WindowsWindowInner {
 
     fn with_input_handler<F, R>(&self, f: F) -> Option<R>
     where
-        F: FnOnce(&mut PlatformInputHandler) -> R,
+        F: FnOnce(&mut TextInputClient) -> R,
     {
         let mut input_handler = self.state.input_handler.take()?;
         let result = f(&mut input_handler);
@@ -1309,7 +1309,7 @@ impl WindowsWindowInner {
 
     fn with_input_handler_and_scale_factor<F, R>(&self, f: F) -> Option<R>
     where
-        F: FnOnce(&mut PlatformInputHandler, f32) -> Option<R>,
+        F: FnOnce(&mut TextInputClient, f32) -> Option<R>,
     {
         let mut input_handler = self.state.input_handler.take()?;
         let scale_factor = self.state.scale_factor.get();

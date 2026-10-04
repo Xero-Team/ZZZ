@@ -123,6 +123,9 @@ pub fn guess_compositor() -> &'static str {
 /// Application lifecycle owned by the platform event loop.
 #[expect(missing_docs)]
 pub trait AppLifecycle {
+    fn lifecycle_capabilities(&self) -> AppLifecycleCapabilities {
+        AppLifecycleCapabilities::default()
+    }
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>);
     fn quit(&self);
     fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>);
@@ -132,6 +135,55 @@ pub trait AppLifecycle {
     fn unhide_other_apps(&self);
     fn on_quit(&self, callback: Box<dyn FnMut()>);
     fn on_reopen(&self, callback: Box<dyn FnMut()>);
+}
+
+/// Application lifecycle operations supported by a platform backend.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AppLifecycleCapabilities {
+    /// Whether `run` returns control to an external event loop after launching.
+    pub external_event_loop: bool,
+    /// Whether the backend can terminate the application event loop.
+    pub quit: bool,
+    /// Whether the backend can restart the application process.
+    pub restart: bool,
+    /// Whether the backend can activate the application.
+    pub activate: bool,
+    /// Whether the backend can hide the application.
+    pub hide: bool,
+    /// Whether the backend can hide and restore other applications.
+    pub hide_other_apps: bool,
+}
+
+impl AppLifecycleCapabilities {
+    /// Complete desktop lifecycle control.
+    pub const FULL_DESKTOP: Self = Self {
+        external_event_loop: false,
+        quit: true,
+        restart: true,
+        activate: true,
+        hide: true,
+        hide_other_apps: true,
+    };
+
+    /// Desktop lifecycle without application activation or visibility control.
+    pub const BASIC_DESKTOP: Self = Self {
+        external_event_loop: false,
+        quit: true,
+        restart: true,
+        activate: false,
+        hide: false,
+        hide_other_apps: false,
+    };
+
+    /// An application hosted by an external event loop without process controls.
+    pub const EXTERNAL_EVENT_LOOP_ONLY: Self = Self {
+        external_event_loop: true,
+        quit: false,
+        restart: false,
+        activate: false,
+        hide: false,
+        hide_other_apps: false,
+    };
 }
 
 #[expect(missing_docs)]
@@ -237,6 +289,9 @@ pub trait Platform: AppLifecycle + 'static {
 
     fn should_auto_hide_scrollbars(&self) -> bool;
 
+    fn clipboard_capabilities(&self) -> ClipboardCapabilities {
+        ClipboardCapabilities::NONE
+    }
     fn read_from_clipboard(&self) -> Option<ClipboardItem>;
     fn write_to_clipboard(&self, item: ClipboardItem);
 
@@ -415,6 +470,12 @@ pub enum Decorations {
 /// What window controls this platform supports
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct WindowControls {
+    /// Whether this platform supports requesting user attention.
+    pub attention: bool,
+    /// Whether the platform can begin an interactive window move.
+    pub move_window: bool,
+    /// Whether the platform can begin an interactive window resize.
+    pub resize_window: bool,
     /// Whether this platform supports fullscreen
     pub fullscreen: bool,
     /// Whether this platform supports maximize
@@ -430,12 +491,20 @@ pub struct WindowControls {
 pub struct PlatformCapabilities {
     /// Whether the platform has a text-input/IME bridge.
     pub text_input: bool,
+    /// Whether the platform can position its native IME candidate window.
+    pub ime_candidate_position: bool,
     /// Whether a native accessibility bridge is connected.
     pub accessibility: bool,
     /// Whether a real headless renderer is available.
     pub headless_renderer: bool,
     /// Whether frame callbacks can be requested from the platform event loop.
     pub frame_callbacks: bool,
+    /// Whether the platform can play its native system bell.
+    pub system_bell: bool,
+    /// Whether the platform can present a native prompt dialog.
+    pub native_prompt: bool,
+    /// Clipboard operations supported by this backend.
+    pub clipboard: ClipboardCapabilities,
     /// Window control operations supported by the backend.
     pub window_controls: WindowControls,
 }
@@ -444,10 +513,17 @@ impl Default for PlatformCapabilities {
     fn default() -> Self {
         Self {
             text_input: false,
+            ime_candidate_position: false,
             accessibility: false,
             headless_renderer: false,
             frame_callbacks: false,
+            system_bell: false,
+            native_prompt: false,
+            clipboard: ClipboardCapabilities::NONE,
             window_controls: WindowControls {
+                attention: false,
+                move_window: false,
+                resize_window: false,
                 fullscreen: false,
                 maximize: false,
                 minimize: false,
@@ -497,6 +573,9 @@ impl Default for WindowControls {
     fn default() -> Self {
         // Assume that we can do anything, unless told otherwise
         Self {
+            attention: true,
+            move_window: true,
+            resize_window: true,
             fullscreen: true,
             maximize: true,
             minimize: true,
@@ -686,8 +765,8 @@ pub struct RequestFrameOptions {
 /// Platform bridge for native text input and IME candidate positioning.
 #[expect(missing_docs)]
 pub trait TextInputBridge {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler);
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler>;
+    fn set_input_handler(&mut self, input_handler: TextInputClient);
+    fn take_input_handler(&mut self) -> Option<TextInputClient>;
     fn update_ime_position(&self, bounds: Bounds<Pixels>);
 }
 
@@ -766,7 +845,7 @@ pub trait AccessibilityBridge {
 /// Render target owned by a platform window backend.
 #[expect(missing_docs)]
 pub trait PlatformRenderTarget {
-    fn draw(&self, scene: &Scene);
+    fn draw(&self, scene: &Scene) -> bool;
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
     fn is_subpixel_rendering_supported(&self) -> bool;
     fn gpu_specs(&self) -> Option<GpuSpecs>;
@@ -1399,10 +1478,19 @@ impl From<TileId> for etagere::AllocId {
 }
 
 #[expect(missing_docs)]
-pub struct PlatformInputHandler {
+pub struct TextInputClient {
     cx: AsyncWindowContext,
     handler: Box<dyn InputHandler>,
 }
+
+/// Backward-compatible name for [`TextInputClient`].
+///
+/// Remove this alias after downstream platform integrations have migrated to the client name.
+#[deprecated(
+    since = "1.24.0",
+    note = "use TextInputClient; this alias will be removed in the next breaking GPUI release"
+)]
+pub type PlatformInputHandler = TextInputClient;
 
 #[expect(missing_docs)]
 #[cfg_attr(
@@ -1412,7 +1500,7 @@ pub struct PlatformInputHandler {
     ),
     allow(dead_code)
 )]
-impl PlatformInputHandler {
+impl TextInputClient {
     pub fn new(cx: AsyncWindowContext, handler: Box<dyn InputHandler>) -> Self {
         Self { cx, handler }
     }
@@ -2182,6 +2270,35 @@ pub struct ClipboardItem {
     pub entries: Vec<ClipboardEntry>,
 }
 
+/// Clipboard operations supported by a platform backend.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ClipboardCapabilities {
+    /// Whether [`Platform::read_from_clipboard`] can synchronously read clipboard data.
+    pub read: bool,
+    /// Whether [`Platform::write_to_clipboard`] supports at least plain-text writes.
+    pub write: bool,
+}
+
+impl ClipboardCapabilities {
+    /// No synchronous clipboard operations are available.
+    pub const NONE: Self = Self {
+        read: false,
+        write: false,
+    };
+
+    /// Clipboard reads and writes are available.
+    pub const READ_WRITE: Self = Self {
+        read: true,
+        write: true,
+    };
+
+    /// Clipboard writes are available, but synchronous reads are not.
+    pub const WRITE_ONLY: Self = Self {
+        read: false,
+        write: true,
+    };
+}
+
 /// Either a ClipboardString or a ClipboardImage
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClipboardEntry {
@@ -2804,12 +2921,19 @@ mod tests {
     fn default_platform_capabilities_are_explicitly_unsupported() {
         let capabilities = PlatformCapabilities::default();
         assert!(!capabilities.text_input);
+        assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);
+        assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
+        assert_eq!(capabilities.clipboard, ClipboardCapabilities::NONE);
         assert_eq!(
             capabilities.window_controls,
             WindowControls {
+                attention: false,
+                move_window: false,
+                resize_window: false,
                 fullscreen: false,
                 maximize: false,
                 minimize: false,

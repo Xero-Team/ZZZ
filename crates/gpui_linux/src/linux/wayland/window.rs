@@ -31,8 +31,8 @@ use crate::linux::wayland::{display::WaylandDisplay, serial::SerialKind};
 use crate::linux::{Globals, Output, WaylandClientStatePtr, get_window};
 use gpui::{
     AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, GpuSpecs, Modifiers, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, Tiling,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, TextInputClient, Tiling,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls,
     WindowDecorations, WindowHost as _, WindowKind, WindowParams,
     layer_shell::LayerShellNotSupportedError, px, size,
@@ -105,7 +105,7 @@ pub struct WaylandWindowState {
     renderer: WgpuRenderer,
     bounds: Bounds<Pixels>,
     scale: f32,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     decorations: WindowDecorations,
     background_appearance: WindowBackgroundAppearance,
     fullscreen: bool,
@@ -818,6 +818,9 @@ impl WaylandWindowStatePtr {
             }
             xdg_toplevel::Event::WmCapabilities { capabilities } => {
                 let mut window_controls = WindowControls {
+                    attention: false,
+                    move_window: true,
+                    resize_window: true,
                     maximize: false,
                     minimize: false,
                     fullscreen: false,
@@ -1150,11 +1153,11 @@ impl rwh::HasDisplayHandle for WaylandWindow {
 impl gpui::AccessibilityBridge for WaylandWindow {}
 
 impl gpui::TextInputBridge for WaylandWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.borrow_mut().input_handler.take()
     }
 
@@ -1418,7 +1421,7 @@ impl gpui::SystemServices for WaylandWindow {
 }
 
 impl gpui::PlatformRenderTarget for WaylandWindow {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         let mut state = self.borrow_mut();
 
         if state.renderer.device_lost() {
@@ -1440,7 +1443,7 @@ impl gpui::PlatformRenderTarget for WaylandWindow {
             }
 
             state.force_render_after_recovery = true;
-            return;
+            return false;
         }
 
         state.renderer_presented = state.renderer.draw(scene);
@@ -1448,6 +1451,7 @@ impl gpui::PlatformRenderTarget for WaylandWindow {
         if state.renderer.needs_redraw() {
             state.force_render_after_recovery = true;
         }
+        state.renderer_presented
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
@@ -1596,16 +1600,24 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
-        wayland_capabilities(self.window_controls())
+        let state = self.borrow();
+        wayland_capabilities(state.window_controls, state.globals.system_bell.is_some())
     }
 }
 
-fn wayland_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
+fn wayland_capabilities(
+    window_controls: WindowControls,
+    system_bell: bool,
+) -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
+        ime_candidate_position: true,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
+        system_bell,
+        native_prompt: false,
+        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls,
     }
 }
@@ -1617,16 +1629,29 @@ mod capability_tests {
     #[test]
     fn capability_matrix_preserves_compositor_window_controls() {
         let window_controls = WindowControls {
+            attention: false,
+            move_window: true,
+            resize_window: true,
             fullscreen: true,
             maximize: false,
             minimize: true,
             window_menu: false,
         };
-        let capabilities = wayland_capabilities(window_controls);
+        let capabilities = wayland_capabilities(window_controls, false);
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
+        assert!(!capabilities.system_bell);
+        assert!(!capabilities.native_prompt);
+        assert_eq!(
+            capabilities.clipboard,
+            gpui::ClipboardCapabilities::READ_WRITE
+        );
+        assert!(!capabilities.window_controls.attention);
+        assert!(capabilities.window_controls.move_window);
+        assert!(capabilities.window_controls.resize_window);
         assert_eq!(capabilities.window_controls, window_controls);
     }
 }

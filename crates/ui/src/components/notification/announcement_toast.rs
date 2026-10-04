@@ -1,7 +1,7 @@
 use crate::{ListBulletItem, prelude::*};
-use component::{Component, ComponentScope, example_group, single_example};
 use gpui::{AnyElement, ClickEvent, IntoElement, ParentElement, SharedString};
 use smallvec::SmallVec;
+use ui_component_registry::{Component, ComponentScope, example_group, single_example};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct AnnouncementToast {

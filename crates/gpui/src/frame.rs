@@ -8,13 +8,19 @@ use crate::{
     WindowControlArea,
 };
 use crate::{App, Effect};
+#[cfg(feature = "accessibility")]
+use crate::{SemanticActionRouter, SemanticTreeBuilder};
 use collections::FxHashMap;
 use collections::FxHashSet;
 use itertools::FoldWhile::{Continue, Done};
 use itertools::Itertools;
 use smallvec::SmallVec;
 use std::{any::TypeId, ops::Range};
-use std::{cell::RefCell, mem, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    mem,
+    rc::Rc,
+};
 
 #[cfg(feature = "frame-diagnostics")]
 use crate::profiler::{
@@ -30,6 +36,72 @@ pub(crate) enum DrawPhase {
     Prepaint,
     Paint,
     Focus,
+}
+
+pub(crate) struct FrameScheduler {
+    next_frame_callbacks: Rc<RefCell<Vec<Box<dyn FnOnce(&mut Window, &mut App)>>>>,
+    dirty_views: FxHashSet<EntityId>,
+    needs_present: Rc<Cell<bool>>,
+    refreshing: bool,
+}
+
+impl FrameScheduler {
+    pub(crate) fn new() -> Self {
+        Self {
+            next_frame_callbacks: Rc::new(RefCell::new(Vec::new())),
+            dirty_views: FxHashSet::default(),
+            needs_present: Rc::new(Cell::new(false)),
+            refreshing: false,
+        }
+    }
+
+    pub(crate) fn next_frame_callbacks_handle(
+        &self,
+    ) -> Rc<RefCell<Vec<Box<dyn FnOnce(&mut Window, &mut App)>>>> {
+        self.next_frame_callbacks.clone()
+    }
+
+    pub(crate) fn needs_present_handle(&self) -> Rc<Cell<bool>> {
+        self.needs_present.clone()
+    }
+
+    pub(crate) fn queue_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
+        self.next_frame_callbacks
+            .borrow_mut()
+            .push(Box::new(callback));
+    }
+
+    pub(crate) fn insert_dirty_view(&mut self, entity_id: EntityId) -> bool {
+        self.dirty_views.insert(entity_id)
+    }
+
+    pub(crate) fn is_view_dirty(&self, entity_id: EntityId) -> bool {
+        self.dirty_views.contains(&entity_id)
+    }
+
+    pub(crate) fn clear_dirty_views(&mut self) {
+        self.dirty_views.clear();
+    }
+
+    pub(crate) fn is_refreshing(&self) -> bool {
+        self.refreshing
+    }
+
+    pub(crate) fn set_refreshing(&mut self, refreshing: bool) {
+        self.refreshing = refreshing;
+    }
+
+    pub(crate) fn replace_refreshing(&mut self, refreshing: bool) -> bool {
+        mem::replace(&mut self.refreshing, refreshing)
+    }
+
+    pub(crate) fn mark_present_pending(&self) {
+        self.needs_present.set(true);
+    }
+
+    pub(crate) fn clear_present_pending(&self) {
+        self.needs_present.set(false);
+    }
 }
 
 struct WindowInvalidatorInner {
@@ -397,6 +469,10 @@ pub(crate) struct Frame {
     pub(crate) tooltip_requests: Vec<Option<TooltipRequest>>,
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
     pub(crate) accessibility: AccessibilityUpdate,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_builder: SemanticTreeBuilder,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_actions: SemanticActionRouter,
     pub(crate) diagnostics: FrameDiagnosticsSnapshot,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
@@ -541,6 +617,10 @@ impl Frame {
             tooltip_requests: Vec::new(),
             cursor_styles: Vec::new(),
             accessibility: AccessibilityUpdate::default(),
+            #[cfg(feature = "accessibility")]
+            accessibility_builder: SemanticTreeBuilder::new(),
+            #[cfg(feature = "accessibility")]
+            accessibility_actions: SemanticActionRouter::default(),
             diagnostics: FrameDiagnosticsSnapshot::default(),
 
             #[cfg(any(test, feature = "test-support"))]
@@ -566,6 +646,11 @@ impl Frame {
         self.tooltip_requests.clear();
         self.cursor_styles.clear();
         self.accessibility = AccessibilityUpdate::default();
+        #[cfg(feature = "accessibility")]
+        {
+            self.accessibility_builder.clear();
+            self.accessibility_actions = SemanticActionRouter::default();
+        }
         self.diagnostics = FrameDiagnosticsSnapshot::default();
         self.hitboxes.clear();
         self.window_control_hitboxes.clear();
@@ -641,5 +726,10 @@ impl Frame {
         }
 
         self.scene.finish();
+        #[cfg(feature = "accessibility")]
+        {
+            self.accessibility =
+                AccessibilityUpdate::from_semantic_snapshot(self.accessibility_builder.snapshot());
+        }
     }
 }

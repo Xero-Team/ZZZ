@@ -14,7 +14,7 @@ path = "src/ui.rs"
 
 [dependencies]
 chrono.workspace = true
-component.workspace = true
+ui_component_registry.workspace = true
 documented.workspace = true
 gpui.workspace = true
 gpui_macros.workspace = true
@@ -39,9 +39,17 @@ windows.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+theme.workspace = true
+settings = { workspace = true, features = ["test-support"] }
+
+[[test]]
+name = "accessibility"
+path = "tests/accessibility.rs"
+required-features = ["accessibility"]
 
 [package.metadata.cargo-machete]
 ignored = ["log"]
 
 [features]
 default = []
+accessibility = ["gpui/accessibility"]
