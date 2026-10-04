@@ -6178,6 +6178,7 @@ mod tests {
                 .expect("semantic button should be present");
             assert_eq!(group.children(), &[*button_id]);
             assert_eq!(button.label(), Some("Activate"));
+            assert!(button.supports_action(accesskit::Action::Click));
             assert!(snapshot.update.nodes[0].1.children().contains(group_id));
             let button_id = *button_id;
 

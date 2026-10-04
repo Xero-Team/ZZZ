@@ -1542,6 +1542,9 @@ impl Element for Div {
         if let Some(label) = &self.interactivity.accessibility_label {
             node.set_label(label.to_string());
         }
+        for (action, _) in &self.interactivity.accessibility_action_listeners {
+            node.add_action(*action);
+        }
     }
 
     #[cfg(feature = "accessibility")]
