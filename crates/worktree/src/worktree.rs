@@ -5229,6 +5229,11 @@ impl BackgroundScanner {
         let mut root_canonical_path = None;
         let mut new_entries: Vec<Entry> = Vec::new();
         let mut new_jobs: Vec<Option<ScanJob>> = Vec::new();
+
+        // Watch before reading so a child created during enumeration still
+        // produces an event.
+        self.watcher.add(job.abs_path.as_ref()).log_err();
+
         let mut child_paths = self
             .fs
             .read_dir(&job.abs_path)
@@ -5438,8 +5443,6 @@ impl BackgroundScanner {
         }
 
         state.populate_dir(job.path.clone(), new_entries, new_ignore);
-
-        self.watcher.add(job.abs_path.as_ref()).log_err();
 
         let entry_id = state
             .snapshot
