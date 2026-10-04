@@ -359,6 +359,8 @@ pub struct ButtonLike {
     on_right_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     children: SmallVec<[AnyElement; 2]>,
     focus_handle: Option<FocusHandle>,
+    #[cfg(feature = "accessibility")]
+    accessibility_label: Option<SharedString>,
 }
 
 impl ButtonLike {
@@ -383,6 +385,8 @@ impl ButtonLike {
             layer: None,
             tab_index: None,
             focus_handle: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_label: None,
         }
     }
 
@@ -418,6 +422,12 @@ impl ButtonLike {
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_right_click = Some(Box::new(handler));
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
         self
     }
 
@@ -536,10 +546,17 @@ impl RenderOnce for ButtonLike {
             ButtonStyle::Outlined | ButtonStyle::OutlinedGhost | ButtonStyle::OutlinedCustom(_)
         );
 
-        self.base
-            .h_flex()
-            .id(self.id.clone())
-            .when_some(self.tab_index, |this, tab_index| this.tab_index(tab_index))
+        let base = self.base.h_flex().id(self.id.clone());
+        #[cfg(feature = "accessibility")]
+        let base = base
+            .role(gpui::accesskit::Role::Button)
+            .aria_disabled(self.disabled)
+            .aria_toggled(self.selected.into())
+            .when_some(self.accessibility_label, |this, label| {
+                this.aria_label(label)
+            });
+
+        base.when_some(self.tab_index, |this, tab_index| this.tab_index(tab_index))
             .when_some(self.focus_handle, |this, focus_handle| {
                 this.track_focus(&focus_handle)
             })

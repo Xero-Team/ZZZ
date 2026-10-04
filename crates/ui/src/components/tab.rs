@@ -142,8 +142,15 @@ impl RenderOnce for Tab {
             }
         };
 
-        self.div
-            .h(Tab::container_height(cx))
+        #[cfg(feature = "accessibility")]
+        let div = self
+            .div
+            .role(gpui::accesskit::Role::Tab)
+            .aria_selected(self.selected);
+        #[cfg(not(feature = "accessibility"))]
+        let div = self.div;
+
+        div.h(Tab::container_height(cx))
             .bg(tab_bg)
             .border_color(cx.theme().colors().border)
             .map(|this| match self.position {

@@ -1607,6 +1607,18 @@ impl Window {
         handled
     }
 
+    /// Returns the completed semantic snapshot for integration tests.
+    #[cfg(all(feature = "accessibility", any(test, feature = "test-support")))]
+    pub fn accessibility_snapshot_for_test(
+        &self,
+    ) -> Option<crate::accessibility::SemanticSnapshot> {
+        self.interaction
+            .built_frame(&self.text_input)
+            .accessibility
+            .semantic_snapshot()
+            .cloned()
+    }
+
     /// Return the `WindowBounds` excluding insets (Wayland and X11)
     pub fn inner_window_bounds(&self) -> WindowBounds {
         self.platform_window.inner_window_bounds()

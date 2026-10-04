@@ -151,9 +151,16 @@ impl RenderOnce for TreeViewItem {
                     .bg(cx.theme().colors().border.opacity(0.5)),
             );
 
-        h_flex()
-            .id(self.id)
-            .when_some(self.group_name, |this, group| this.group(group))
+        let item = h_flex().id(self.id);
+        #[cfg(feature = "accessibility")]
+        let item = item
+            .role(gpui::accesskit::Role::TreeItem)
+            .aria_label(self.label.clone())
+            .aria_disabled(self.disabled)
+            .aria_selected(self.selected)
+            .aria_expanded(self.expanded);
+
+        item.when_some(self.group_name, |this, group| this.group(group))
             .w_full()
             .child(
                 h_flex()

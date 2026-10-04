@@ -1,4 +1,4 @@
-use gpui::{AnyView, DefiniteLength, Hsla};
+use gpui::{AnyView, DefiniteLength, Hsla, SharedString};
 
 use super::button_like::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle};
 use crate::{
@@ -94,6 +94,12 @@ impl IconButton {
     pub fn indicator_border_color(mut self, color: Option<Hsla>) -> Self {
         self.indicator_border_color = color;
 
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.base = self.base.aria_label(label);
         self
     }
 }

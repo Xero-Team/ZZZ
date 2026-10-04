@@ -17,6 +17,8 @@ mod app;
 
 #[cfg(feature = "accessibility")]
 pub mod accessibility;
+#[cfg(feature = "accessibility")]
+pub use accesskit;
 mod arena;
 mod asset_cache;
 mod assets;
