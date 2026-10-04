@@ -663,6 +663,7 @@ impl TooltipId {
     /// Checks if the tooltip is currently hovered.
     pub fn is_hovered(&self, window: &Window) -> bool {
         window
+            .interaction
             .tooltip_bounds
             .as_ref()
             .is_some_and(|tooltip_bounds| {
@@ -715,8 +716,6 @@ pub struct Window {
     pub(crate) interaction: InteractionOwner,
     pub(crate) text_input: TextInputOwner,
     pub(crate) frame_scheduler: FrameScheduler,
-    pub(crate) next_tooltip_id: TooltipId,
-    pub(crate) tooltip_bounds: Option<TooltipBounds>,
     scale_factor: f32,
     pub(crate) bounds_observers: SubscriberSet<(), AnyObserver>,
     appearance: WindowAppearance,
@@ -1337,8 +1336,6 @@ impl Window {
             ),
             text_input: TextInputOwner::new(),
             frame_scheduler,
-            next_tooltip_id: TooltipId::default(),
-            tooltip_bounds: None,
             scale_factor,
             bounds_observers: SubscriberSet::new(),
             appearance,
@@ -2478,7 +2475,7 @@ impl Window {
         let mut request_layout_duration = Duration::ZERO;
         #[cfg(feature = "frame-diagnostics")]
         let mut request_layout_operations = 0;
-        self.tooltip_bounds.take();
+        self.interaction.tooltip_bounds.take();
 
         let _inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
         let root_size = {
@@ -2688,7 +2685,7 @@ impl Window {
                 element.prepaint(window, cx)
             });
 
-            self.tooltip_bounds = Some(TooltipBounds {
+            self.interaction.tooltip_bounds = Some(TooltipBounds {
                 id: tooltip_request.id,
                 bounds: tooltip_bounds,
             });
@@ -3008,7 +3005,7 @@ impl Window {
     /// during the paint phase of element drawing.
     pub fn set_tooltip(&mut self, tooltip: AnyTooltip) -> TooltipId {
         self.invalidator.debug_assert_prepaint();
-        let id = TooltipId(post_inc(&mut self.next_tooltip_id.0));
+        let id = TooltipId(post_inc(&mut self.interaction.next_tooltip_id.0));
         self.interaction
             .next_frame
             .tooltip_requests
