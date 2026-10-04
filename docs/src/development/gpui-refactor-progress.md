@@ -446,6 +446,9 @@ completed-frame payload `8897cb326c`。
   `pipelines.rs` 承载 pipeline/layout definitions，`surface.rs` 承载 surface config/context
   alias，`frame.rs` 承载 upload/readback POD，`drawing.rs` 承载 primitive/path draw calls；
   headless path 保持独立。
+- `PlatformRenderTarget::draw` 与 render contract 传播真实 submission outcome；headless
+  discard、surface/device recovery 和 DirectX error 不再被 `Window::present` 记作成功
+  present，frame journal 以 `SubmissionSkipped` 记录未提交帧。
 
 验证：
 
@@ -463,13 +466,15 @@ completed-frame payload `8897cb326c`。
 | EXP-004 paired clean `cargo check --locked -p gpui`                                                                                 | `PASS` | `e321e6fa0b` baseline median 19.84 s；`cee87f046e` candidate median 19.80 s；ratio 0.998；各 3 个独立 target    |
 | EXP-004 dependency/source audit                                                                                                     | `PASS` | no normal dependency cycle；0 product source edits；`gpui_platform` downstream count 8，未增加                  |
 | EXP-005 `release-fast` binary size                                                                                                  | `PASS` | file 5,339,438,400 vs 5,339,134,088 bytes（1.000057×）；ELF total 271,792,740 vs 271,657,972 bytes（1.000496×） |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`                                                      | `PASS` | 231 tests passed，含 submission-result contract 与 completed-frame diagnostics                                  |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                                                          | `PASS` | 15 unit + hardware/fallback 各 100-run headless integration tests                                               |
 | `./script/clippy -p gpui_wgpu --features test-support`                                                                              | `PASS` | WGPU all-target release clippy 与 philosophy gate 通过                                                          |
 | `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过                                                               |
 | `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error                                                                   |
 
 提交：render contract adapter `32d3b403a8`；resource split `f0284a014f`；pipeline split
 `90e8f62f3e`；surface split `bffcfd6e62`；frame helper split `ea29cf0afc`；drawing split
-`cee87f046e`。
+`cee87f046e`；submission outcome `1520da4179`。
 EXP-004/005 当前状态：`PASS`。compatibility façade 没有产品 consumer edit；依赖图无
 cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实验允许继续抽 crate，
 `gpui_wgpu` 仍直接依赖 GPUI 的 text、geometry、atlas 和 image types；单独创建
@@ -490,6 +495,8 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 
 - `PlatformWindow` 增加可查询的 `PlatformCapabilities`，覆盖 text input、accessibility、
   headless renderer、frame callbacks 和 window controls。
+- capability matrix 单独声明 native IME candidate-position 能力；Web、Linux headless 和
+  TestWindow 的 unsupported 状态不再进入静默 `update_ime_position` 调用。
 - 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
@@ -524,15 +531,15 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 
 当前矩阵：
 
-| Backend               | Text input | Accessibility | Offscreen/headless window render | Frame callbacks | Window controls       |
-| --------------------- | ---------- | ------------- | -------------------------------- | --------------- | --------------------- |
-| TestWindow            | yes        | no            | runtime renderer dependent       | yes             | fullscreen only       |
-| Linux X11             | yes        | no            | no                               | yes             | full desktop set      |
-| Linux Wayland         | yes        | no            | no                               | yes             | compositor dependent  |
-| Linux headless window | no         | no            | no; scene is discarded           | no              | fullscreen state only |
-| macOS                 | yes        | no            | test-support only                | yes             | full desktop set      |
-| Windows               | yes        | no            | test-support only                | yes             | full desktop set      |
-| Web                   | no         | no            | no                               | yes             | fullscreen only       |
+| Backend               | Text input | IME position | Accessibility | Offscreen/headless window render | Frame callbacks | Window controls       |
+| --------------------- | ---------- | ------------ | ------------- | -------------------------------- | --------------- | --------------------- |
+| TestWindow            | yes        | no           | no            | runtime renderer dependent       | yes             | fullscreen only       |
+| Linux X11             | yes        | yes          | no            | no                               | yes             | full desktop set      |
+| Linux Wayland         | yes        | yes          | no            | no                               | yes             | compositor dependent  |
+| Linux headless window | no         | no           | no            | no; scene is discarded           | no              | fullscreen state only |
+| macOS                 | yes        | yes          | no            | test-support only                | yes             | full desktop set      |
+| Windows               | yes        | yes          | no            | test-support only                | yes             | full desktop set      |
+| Web                   | no         | no           | no            | no                               | yes             | fullscreen only       |
 
 验证：
 
@@ -542,6 +549,7 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 | `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                          |
 | `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                     |
 | `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                 |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`               | `PASS`                      | 231 tests passed after render/capability changes        |
 | `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 223 tests passed after platform splits                  |
 | `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                    |
 | `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                |
@@ -557,7 +565,7 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
 `9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`；renderer
 factory `85fffe8fe5`；platform render target `c3f2d1bb90`；completed window host
-`2b2d467ce5`。
+`2b2d467ce5`；IME position capability `c7d7aac2d5`。
 下一步：收敛 platform-specific façade 与 capability error，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
