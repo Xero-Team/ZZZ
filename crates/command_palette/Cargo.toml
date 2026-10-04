@@ -10,6 +10,7 @@ workspace = true
 
 [features]
 test-support = ["db/test-support"]
+frame-diagnostics = ["gpui/frame-diagnostics"]
 
 [lib]
 path = "src/command_palette.rs"
