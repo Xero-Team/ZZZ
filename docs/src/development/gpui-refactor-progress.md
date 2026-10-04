@@ -234,9 +234,9 @@ commit was created for this stage.
 `1520da4179`、`147871401a`；production Editor runner `602836a9f5`、`3e5b9e6c1f`、
 `7b420641d5`；printable input provenance `9ec0114958`。
 
-EXP-001 与 EXP-011 已完成并通过。下一步只需补齐 EXP-002 的 command palette、tabs、
-settings product-view workload；在此之前不启动 EXP-007。默认产品构建继续不启用
-diagnostics feature。
+EXP-001 与 EXP-011 已完成并通过。EXP-002 的 command-palette smoke 现在已记录
+`presented=5` 与 replay phase samples；tabs/settings product-view comparison 仍待补齐，
+因此暂不启动 EXP-007。默认产品构建继续不启用 diagnostics feature。
 
 ### 阶段 2：并发与 accessibility 边界
 
