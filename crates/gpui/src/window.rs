@@ -1584,6 +1584,21 @@ impl Window {
         self.platform_window.capabilities()
     }
 
+    /// Dispatches one accessibility action against the completed frame.
+    #[cfg(feature = "accessibility")]
+    pub fn dispatch_accessibility_action(
+        &mut self,
+        node_id: accesskit::NodeId,
+        action: accesskit::Action,
+        data: Option<&accesskit::ActionData>,
+        cx: &mut App,
+    ) -> bool {
+        let mut actions = mem::take(&mut self.interaction.rendered_frame.accessibility_actions);
+        let handled = actions.dispatch(node_id, action, data, self, cx);
+        self.interaction.rendered_frame.accessibility_actions = actions;
+        handled
+    }
+
     /// Return the `WindowBounds` excluding insets (Wayland and X11)
     pub fn inner_window_bounds(&self) -> WindowBounds {
         self.platform_window.inner_window_bounds()
@@ -5781,11 +5796,14 @@ mod tests {
     }
 
     #[cfg(feature = "accessibility")]
-    struct AccessibilityView;
+    struct AccessibilityView {
+        action_count: Rc<Cell<usize>>,
+    }
 
     #[cfg(feature = "accessibility")]
     impl Render for AccessibilityView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let action_count = self.action_count.clone();
             div()
                 .id("accessibility-group")
                 .role(accesskit::Role::Group)
@@ -5793,7 +5811,10 @@ mod tests {
                     div()
                         .id("accessibility-button")
                         .role(accesskit::Role::Button)
-                        .aria_label("Activate"),
+                        .aria_label("Activate")
+                        .on_a11y_action(accesskit::Action::Click, move |_, _, _| {
+                            action_count.set(action_count.get() + 1);
+                        }),
                 )
         }
     }
@@ -5955,7 +5976,11 @@ mod tests {
     #[cfg(feature = "accessibility")]
     #[gpui::test]
     fn built_frame_carries_accessibility_update(cx: &mut TestAppContext) {
-        let window = cx.add_window(|_, _| AccessibilityView);
+        let action_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let action_count = action_count.clone();
+            move |_, _| AccessibilityView { action_count }
+        });
         let handle: AnyWindowHandle = window.into();
         cx.update_window(handle, |_, window, cx| {
             window.refresh();
@@ -5988,13 +6013,30 @@ mod tests {
             assert_eq!(group.children(), &[*button_id]);
             assert_eq!(button.label(), Some("Activate"));
             assert!(snapshot.update.nodes[0].1.children().contains(group_id));
+            let button_id = *button_id;
+
+            assert!(window.dispatch_accessibility_action(
+                button_id,
+                accesskit::Action::Click,
+                None,
+                cx,
+            ));
+            assert_eq!(action_count.get(), 1);
+            assert!(!window.dispatch_accessibility_action(
+                button_id,
+                accesskit::Action::Focus,
+                None,
+                cx,
+            ));
+            assert_eq!(action_count.get(), 1);
 
             window.draw(cx).clear();
             let cached_frame = window.interaction.built_frame(&window.text_input);
-            assert!(
-                cached_frame.accessibility.is_empty(),
-                "cached frames must not replace the native semantic tree with a root-only update"
-            );
+            let cached_snapshot = cached_frame
+                .accessibility
+                .semantic_snapshot()
+                .expect("accessibility frames should rebuild complete semantic trees");
+            assert_eq!(cached_snapshot.update.nodes.len(), 3);
         })
         .expect("accessibility window should remain open");
     }

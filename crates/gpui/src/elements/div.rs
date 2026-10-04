@@ -1206,6 +1206,19 @@ pub trait StatefulInteractiveElement: InteractiveElement {
         self
     }
 
+    /// Register a handler for an accessibility action on this element.
+    #[cfg(feature = "accessibility")]
+    fn on_a11y_action(
+        mut self,
+        action: accesskit::Action,
+        listener: impl FnMut(Option<&accesskit::ActionData>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.interactivity()
+            .accessibility_action_listeners
+            .push((action, Box::new(listener)));
+        self
+    }
+
     /// Set this element to focusable.
     fn focusable(mut self) -> Self {
         self.interactivity().focusable = true;
@@ -1531,6 +1544,17 @@ impl Element for Div {
         }
     }
 
+    #[cfg(feature = "accessibility")]
+    fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
+        for (action, listener) in self.interactivity.accessibility_action_listeners.drain(..) {
+            window
+                .interaction
+                .next_frame
+                .accessibility_actions
+                .register_boxed(node_id, action, listener);
+        }
+    }
+
     #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn request_layout(
         &mut self,
@@ -1771,6 +1795,9 @@ pub struct Interactivity {
     pub(crate) accessibility_role: Option<accesskit::Role>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_action_listeners:
+        Vec<(accesskit::Action, crate::SemanticActionListener)>,
 
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) source_location: Option<&'static core::panic::Location<'static>>,
@@ -3421,6 +3448,11 @@ where
     #[cfg(feature = "accessibility")]
     fn write_a11y_info(&self, node: &mut accesskit::Node) {
         self.element.write_a11y_info(node);
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
+        self.element.register_a11y_actions(node_id, window);
     }
 
     fn request_layout(

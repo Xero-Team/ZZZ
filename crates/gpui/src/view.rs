@@ -113,6 +113,9 @@ impl Element for AnyView {
     ) -> (LayoutId, Self::RequestLayoutState) {
         window.with_rendered_view(self.entity_id(), |window| {
             // Disable caching when inspecting so that mouse_hit_test has all hitboxes.
+            #[cfg(feature = "accessibility")]
+            let caching_disabled = true;
+            #[cfg(not(feature = "accessibility"))]
             let caching_disabled = window.is_inspector_picking(cx);
             match self.cached_style.as_ref() {
                 Some(style) if !caching_disabled => {
@@ -210,6 +213,9 @@ impl Element for AnyView {
         cx: &mut App,
     ) {
         window.with_rendered_view(self.entity_id(), |window| {
+            #[cfg(feature = "accessibility")]
+            let caching_disabled = true;
+            #[cfg(not(feature = "accessibility"))]
             let caching_disabled = window.is_inspector_picking(cx);
             if self.cached_style.is_some() && !caching_disabled {
                 window.with_element_state::<AnyViewState, _>(

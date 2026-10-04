@@ -4,6 +4,7 @@
 //! consume [`SemanticSnapshot`] values in later platform-specific layers; the
 //! core does not import a native accessibility runtime.
 
+use crate::{App, Window};
 use accesskit::{Action, ActionData, Node, NodeId, Role, Tree, TreeId, TreeUpdate};
 use std::{
     collections::{HashMap, HashSet},
@@ -151,8 +152,10 @@ pub enum SemanticTreeError {
 /// Routes one AccessKit action to at most one registered handler.
 #[derive(Default)]
 pub struct SemanticActionRouter {
-    handlers: HashMap<(NodeId, Action), Box<dyn FnMut(Option<&ActionData>)>>,
+    handlers: HashMap<(NodeId, Action), SemanticActionListener>,
 }
+
+pub(crate) type SemanticActionListener = Box<dyn FnMut(Option<&ActionData>, &mut Window, &mut App)>;
 
 impl SemanticActionRouter {
     /// Registers or replaces a handler for a node/action pair.
@@ -160,15 +163,31 @@ impl SemanticActionRouter {
         &mut self,
         node_id: NodeId,
         action: Action,
-        handler: impl FnMut(Option<&ActionData>) + 'static,
+        handler: impl FnMut(Option<&ActionData>, &mut Window, &mut App) + 'static,
     ) {
         self.handlers.insert((node_id, action), Box::new(handler));
     }
 
+    pub(crate) fn register_boxed(
+        &mut self,
+        node_id: NodeId,
+        action: Action,
+        handler: SemanticActionListener,
+    ) {
+        self.handlers.insert((node_id, action), handler);
+    }
+
     /// Dispatches an action exactly once and reports whether a handler ran.
-    pub fn dispatch(&mut self, node_id: NodeId, action: Action, data: Option<&ActionData>) -> bool {
+    pub fn dispatch(
+        &mut self,
+        node_id: NodeId,
+        action: Action,
+        data: Option<&ActionData>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
         if let Some(handler) = self.handlers.get_mut(&(node_id, action)) {
-            handler(data);
+            handler(data, window, cx);
             true
         } else {
             false
@@ -188,8 +207,6 @@ impl SemanticActionRouter {
 mod tests {
     use super::*;
     use crate::{AccessibilityBridge, AccessibilityUpdate};
-    use std::cell::Cell;
-    use std::rc::Rc;
 
     #[test]
     fn stable_ids_are_repeatable_and_do_not_alias_the_root() {
@@ -220,18 +237,11 @@ mod tests {
     }
 
     #[test]
-    fn action_router_dispatches_once() {
+    fn action_router_registers_one_handler_per_node_action_pair() {
         let node_id = stable_semantic_node_id("button");
-        let count = Rc::new(Cell::new(0));
         let mut router = SemanticActionRouter::default();
-        router.register(node_id, Action::Click, {
-            let count = count.clone();
-            move |_| count.set(count.get() + 1)
-        });
-
-        assert!(router.dispatch(node_id, Action::Click, None));
-        assert_eq!(count.get(), 1);
-        assert!(!router.dispatch(node_id, Action::Focus, None));
+        router.register(node_id, Action::Click, |_, _, _| {});
+        router.register(node_id, Action::Click, |_, _, _| {});
         assert_eq!(router.actions_for(node_id), HashSet::from([Action::Click]));
     }
 

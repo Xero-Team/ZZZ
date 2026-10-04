@@ -113,6 +113,10 @@ pub trait Element: 'static + IntoElement {
     #[cfg(feature = "accessibility")]
     fn write_a11y_info(&self, _node: &mut accesskit::Node) {}
 
+    /// Registers action callbacks for the semantic node created during prepaint.
+    #[cfg(feature = "accessibility")]
+    fn register_a11y_actions(&mut self, _node_id: accesskit::NodeId, _window: &mut Window) {}
+
     /// Convert this element into a dynamically-typed [`AnyElement`].
     fn into_any(self) -> AnyElement {
         AnyElement::new(self)
@@ -459,30 +463,26 @@ impl<E: Element> Drawable<E> {
 
                 let bounds = window.layout_bounds(layout_id);
                 #[cfg(feature = "accessibility")]
-                let pushed_accessibility_node = global_id
-                    .as_ref()
-                    .and_then(|global_id| {
-                        self.element.a11y_role().map(|role| {
-                            let node_id = global_id.accesskit_node_id();
-                            let mut node = accesskit::Node::new(role);
-                            let scale_factor = window.scale_factor();
-                            node.set_bounds(accesskit::Rect {
-                                x0: (bounds.origin.x.0 * scale_factor) as f64,
-                                y0: (bounds.origin.y.0 * scale_factor) as f64,
-                                x1: ((bounds.origin.x.0 + bounds.size.width.0) * scale_factor)
-                                    as f64,
-                                y1: ((bounds.origin.y.0 + bounds.size.height.0) * scale_factor)
-                                    as f64,
-                            });
-                            self.element.write_a11y_info(&mut node);
-                            window
-                                .interaction
-                                .next_frame
-                                .accessibility_builder
-                                .push_node(node_id, node)
-                        })
+                let accessibility_node_id = global_id.as_ref().and_then(|global_id| {
+                    self.element.a11y_role().and_then(|role| {
+                        let node_id = global_id.accesskit_node_id();
+                        let mut node = accesskit::Node::new(role);
+                        let scale_factor = window.scale_factor();
+                        node.set_bounds(accesskit::Rect {
+                            x0: (bounds.origin.x.0 * scale_factor) as f64,
+                            y0: (bounds.origin.y.0 * scale_factor) as f64,
+                            x1: ((bounds.origin.x.0 + bounds.size.width.0) * scale_factor) as f64,
+                            y1: ((bounds.origin.y.0 + bounds.size.height.0) * scale_factor) as f64,
+                        });
+                        self.element.write_a11y_info(&mut node);
+                        window
+                            .interaction
+                            .next_frame
+                            .accessibility_builder
+                            .push_node(node_id, node)
+                            .then_some(node_id)
                     })
-                    .unwrap_or(false);
+                });
                 let node_id = window.interaction.next_frame.dispatch_tree.push_node();
                 let prepaint = self.element.prepaint(
                     global_id.as_ref(),
@@ -495,7 +495,9 @@ impl<E: Element> Drawable<E> {
                 window.interaction.next_frame.dispatch_tree.pop_node();
 
                 #[cfg(feature = "accessibility")]
-                if pushed_accessibility_node {
+                if let Some(accessibility_node_id) = accessibility_node_id {
+                    self.element
+                        .register_a11y_actions(accessibility_node_id, window);
                     window
                         .interaction
                         .next_frame

@@ -1,7 +1,5 @@
 #[cfg(any(test, feature = "test-support"))]
 use crate::Bounds;
-#[cfg(feature = "accessibility")]
-use crate::SemanticTreeBuilder;
 use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest};
 use crate::{
     AccessibilityUpdate, AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId,
@@ -10,6 +8,8 @@ use crate::{
     WindowControlArea,
 };
 use crate::{App, Effect};
+#[cfg(feature = "accessibility")]
+use crate::{SemanticActionRouter, SemanticTreeBuilder};
 use collections::FxHashMap;
 use collections::FxHashSet;
 use itertools::FoldWhile::{Continue, Done};
@@ -401,6 +401,8 @@ pub(crate) struct Frame {
     pub(crate) accessibility: AccessibilityUpdate,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_builder: SemanticTreeBuilder,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_actions: SemanticActionRouter,
     pub(crate) diagnostics: FrameDiagnosticsSnapshot,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
@@ -547,6 +549,8 @@ impl Frame {
             accessibility: AccessibilityUpdate::default(),
             #[cfg(feature = "accessibility")]
             accessibility_builder: SemanticTreeBuilder::new(),
+            #[cfg(feature = "accessibility")]
+            accessibility_actions: SemanticActionRouter::default(),
             diagnostics: FrameDiagnosticsSnapshot::default(),
 
             #[cfg(any(test, feature = "test-support"))]
@@ -573,7 +577,10 @@ impl Frame {
         self.cursor_styles.clear();
         self.accessibility = AccessibilityUpdate::default();
         #[cfg(feature = "accessibility")]
-        self.accessibility_builder.clear();
+        {
+            self.accessibility_builder.clear();
+            self.accessibility_actions = SemanticActionRouter::default();
+        }
         self.diagnostics = FrameDiagnosticsSnapshot::default();
         self.hitboxes.clear();
         self.window_control_hitboxes.clear();
@@ -650,7 +657,7 @@ impl Frame {
 
         self.scene.finish();
         #[cfg(feature = "accessibility")]
-        if self.accessibility_builder.node_count() > 1 {
+        {
             self.accessibility =
                 AccessibilityUpdate::from_semantic_snapshot(self.accessibility_builder.snapshot());
         }
