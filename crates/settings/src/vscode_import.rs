@@ -1072,6 +1072,7 @@ impl VsCodeSettings {
             private_files: None,
             hidden_files: None,
             // ZZZ cannot represent the writable exceptions in `files.readonlyExclude`
+            file_scan_depth: None,
             read_only_files: Self::enabled_patterns(
                 self.read_value("files.readonlyInclude").filter(|_| {
                     !self

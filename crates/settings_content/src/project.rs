@@ -159,6 +159,14 @@ pub struct WorktreeSettingsContent {
     /// occurrence.
     pub file_scan_inclusions: Option<SplicingVec>,
 
+    /// Maximum directory depth to eagerly index outside of git repositories;
+    /// contents of directories at this depth or deeper are indexed on demand.
+    /// Repositories rooted shallower than this depth are always indexed fully.
+    /// `0` means no limit.
+    ///
+    /// Default: 8
+    pub file_scan_depth: Option<u32>,
+
     /// Treat the files matching these globs as `.env` files.
     /// Default: ["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/secrets.yml"]
     pub private_files: Option<ExtendingVec<String>>,

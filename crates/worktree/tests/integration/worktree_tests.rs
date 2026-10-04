@@ -1092,15 +1092,18 @@ async fn test_open_gitignored_files(cx: &mut TestAppContext) {
                 (rel_path(".gitignore"), false),
                 (rel_path("one"), false),
                 (rel_path("one/node_modules"), true),
-                (rel_path("one/node_modules/a"), true),
                 (rel_path("one/node_modules/b"), true),
                 (rel_path("one/node_modules/b/b1.js"), true),
-                (rel_path("one/node_modules/b/b2.js"), true),
-                (rel_path("one/node_modules/c"), true),
                 (rel_path("two"), false),
                 (rel_path("two/x.js"), false),
                 (rel_path("two/y.js"), false),
             ]
+        );
+        assert_eq!(
+            tree.entry_for_path(rel_path("one/node_modules/b"))
+                .unwrap()
+                .kind,
+            EntryKind::UnloadedDir
         );
 
         assert_eq!(
@@ -1108,8 +1111,8 @@ async fn test_open_gitignored_files(cx: &mut TestAppContext) {
             rel_path("one/node_modules/b/b1.js")
         );
 
-        // Only the newly-expanded directories are scanned.
-        assert_eq!(fs.read_dir_call_count() - prev_read_dir_count, 2);
+        // The file is nested under an unloaded directory, so siblings are not enumerated.
+        assert_eq!(fs.read_dir_call_count() - prev_read_dir_count, 0);
     });
 
     // Open another file in a different subdirectory of the same
@@ -1133,12 +1136,9 @@ async fn test_open_gitignored_files(cx: &mut TestAppContext) {
                 (rel_path("one"), false),
                 (rel_path("one/node_modules"), true),
                 (rel_path("one/node_modules/a"), true),
-                (rel_path("one/node_modules/a/a1.js"), true),
                 (rel_path("one/node_modules/a/a2.js"), true),
                 (rel_path("one/node_modules/b"), true),
                 (rel_path("one/node_modules/b/b1.js"), true),
-                (rel_path("one/node_modules/b/b2.js"), true),
-                (rel_path("one/node_modules/c"), true),
                 (rel_path("two"), false),
                 (rel_path("two/x.js"), false),
                 (rel_path("two/y.js"), false),
@@ -1150,8 +1150,7 @@ async fn test_open_gitignored_files(cx: &mut TestAppContext) {
             rel_path("one/node_modules/a/a2.js")
         );
 
-        // Only the newly-expanded directory is scanned.
-        assert_eq!(fs.read_dir_call_count() - prev_read_dir_count, 1);
+        assert_eq!(fs.read_dir_call_count() - prev_read_dir_count, 0);
     });
 
     let path = PathBuf::from("/root/one/node_modules/c/lib");
@@ -1170,6 +1169,92 @@ async fn test_open_gitignored_files(cx: &mut TestAppContext) {
         fs.read_dir_call_count() + fs.metadata_call_count() - prev_fs_call_count - ancestors,
         0
     );
+}
+
+#[gpui::test]
+async fn test_nested_gitignored_file_does_not_scan_build_artifacts(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        "/root",
+        json!({
+            ".gitignore": "target\n",
+            "src": { "main.rs": "fn main() {}" },
+            "target": {
+                "debug": {
+                    "deps": {
+                        "libfoo.rlib": "artifact",
+                        "libbar.rlib": "artifact",
+                    },
+                    "incremental": { "crate-hash": { "dep-graph.bin": "bin" } },
+                    "zzz.d": "dep-info",
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = Worktree::local(
+        Path::new("/root"),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("target")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+        assert!(tree.entry_for_path(rel_path("target/debug")).is_none());
+    });
+
+    let reads_before = fs.read_dir_call_count();
+    let loaded = tree
+        .update(cx, |tree, cx| {
+            tree.load_file(rel_path("target/debug/deps/libfoo.rlib"), cx)
+        })
+        .await
+        .unwrap();
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            loaded.file.path.as_ref(),
+            rel_path("target/debug/deps/libfoo.rlib")
+        );
+        assert!(
+            tree.entry_for_path(rel_path("target/debug/deps/libfoo.rlib"))
+                .is_some()
+        );
+        assert!(
+            tree.entry_for_path(rel_path("target/debug/deps/libbar.rlib"))
+                .is_none()
+        );
+        assert!(
+            tree.entry_for_path(rel_path("target/debug/zzz.d"))
+                .is_none()
+        );
+        assert!(
+            tree.entry_for_path(rel_path("target/debug/incremental"))
+                .is_none()
+        );
+        assert_eq!(
+            tree.entry_for_path(rel_path("target")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+        assert_eq!(
+            tree.entry_for_path(rel_path("target/debug")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+    });
+    assert_eq!(fs.read_dir_call_count(), reads_before);
 }
 
 #[gpui::test]
@@ -1232,7 +1317,8 @@ async fn test_dirs_no_longer_ignored(cx: &mut TestAppContext) {
     .recv()
     .await;
 
-    // Those subdirectories are now loaded.
+    // Only the path to the opened file is materialized. Sibling directories
+    // under the unloaded gitignored root stay unread.
     tree.read_with(cx, |tree, _| {
         assert_eq!(
             tree.entries(true, 0)
@@ -1246,16 +1332,13 @@ async fn test_dirs_no_longer_ignored(cx: &mut TestAppContext) {
                 (rel_path("b"), false),
                 (rel_path("b/b.js"), false),
                 (rel_path("node_modules"), true),
-                (rel_path("node_modules/c"), true),
                 (rel_path("node_modules/d"), true),
                 (rel_path("node_modules/d/d.js"), true),
-                (rel_path("node_modules/d/e"), true),
-                (rel_path("node_modules/d/f"), true),
             ]
         );
     });
     let read_dir_count_2 = fs.read_dir_call_count();
-    assert_eq!(read_dir_count_2 - read_dir_count_1, 2);
+    assert_eq!(read_dir_count_2 - read_dir_count_1, 0);
 
     // Update the gitignore so that node_modules is no longer ignored,
     // but a subdirectory is ignored
@@ -1292,9 +1375,10 @@ async fn test_dirs_no_longer_ignored(cx: &mut TestAppContext) {
         );
     });
 
-    // Each of the newly-loaded directories is scanned only once.
+    // node_modules was still unloaded, so dropping the ignore scans it and its
+    // now-visible children once.
     let read_dir_count_3 = fs.read_dir_call_count();
-    assert_eq!(read_dir_count_3 - read_dir_count_2, 2);
+    assert_eq!(read_dir_count_3 - read_dir_count_2, 6);
 }
 
 #[gpui::test]
@@ -2851,8 +2935,11 @@ async fn test_random_worktree_changes(cx: &mut TestAppContext, mut rng: StdRng) 
 
     let snapshot = worktree.read_with(cx, |tree, _| tree.as_local().unwrap().snapshot());
     snapshot.check_invariants(true);
+    let file_scan_depth = worktree.read_with(cx, |tree, _| {
+        tree.as_local().unwrap().settings().file_scan_depth
+    });
     let expanded_paths = snapshot
-        .expanded_entries()
+        .expanded_entries(file_scan_depth)
         .map(|e| e.path.clone())
         .collect::<Vec<_>>();
 
@@ -3926,8 +4013,9 @@ async fn test_repo_exclude_applies_within_nested_repos(
         );
     });
 
-    // A file written inside the loaded nested repository (e.g. by a tool
-    // working in the clone) must also be ignored.
+    // Opening the nested file only stats its ancestor chain, so a sibling
+    // written afterwards is not indexed until that path is refreshed. It must
+    // still be ignored by the outer repository's exclude rules.
     fs.save(
         path!("/project/.scratch/worktrees/abc/project/src/generated.rs").as_ref(),
         &"fn generated() {}".into(),
@@ -3935,6 +4023,14 @@ async fn test_repo_exclude_applies_within_nested_repos(
     )
     .await
     .unwrap();
+    worktree
+        .update(cx, |worktree, _| {
+            worktree.as_local().unwrap().refresh_entries_for_paths(vec![
+                rel_path(".scratch/worktrees/abc/project/src/generated.rs").into(),
+            ])
+        })
+        .recv()
+        .await;
     cx.run_until_parked();
 
     worktree.update(cx, |worktree, _cx| {
@@ -5107,6 +5203,460 @@ fn init_test(cx: &mut gpui::TestAppContext) {
     });
 }
 
+#[gpui::test]
+async fn test_file_scan_depth_outside_repo(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(2));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {
+                    "b": {
+                        "c": {
+                            "deep.txt": ""
+                        }
+                    }
+                }
+            },
+            "repo": {
+                ".git": {},
+                "src": {
+                    "nested": {
+                        "deep": {
+                            "code.rs": ""
+                        }
+                    }
+                }
+            },
+            "top.txt": ""
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![
+                rel_path(""),
+                rel_path("junk"),
+                rel_path("junk/a"),
+                rel_path("repo"),
+                rel_path("repo/src"),
+                rel_path("repo/src/nested"),
+                rel_path("repo/src/nested/deep"),
+                rel_path("repo/src/nested/deep/code.rs"),
+                rel_path("top.txt"),
+            ]
+        );
+        assert_eq!(
+            tree.entry_for_path(rel_path("junk/a")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+        assert!(!tree.entry_for_path(rel_path("junk/a")).unwrap().is_ignored);
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_inside_repo(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(1));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            ".git": {},
+            "a": {
+                "b": {
+                    "c": {
+                        "deep.txt": ""
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("a/b/c/deep.txt"))
+                .map(|entry| entry.path.as_ref()),
+            Some(rel_path("a/b/c/deep.txt"))
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_inside_ancestor_repo(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(1));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            ".git": {},
+            "sub": {
+                "a": {
+                    "b": {
+                        "c": {
+                            "deep.txt": ""
+                        }
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root/sub"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("a/b/c/deep.txt"))
+                .map(|entry| entry.path.as_ref()),
+            Some(rel_path("a/b/c/deep.txt"))
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_pierced_by_inclusions(cx: &mut TestAppContext) {
+    init_test(cx);
+    cx.update(|cx| {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_depth = Some(1);
+                settings.project.worktree.file_scan_inclusions =
+                    Some(SplicingVec::from(vec!["junk/a/b/c/deep.txt".to_string()]));
+            });
+        });
+    });
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {
+                    "b": {
+                        "c": {
+                            "deep.txt": ""
+                        }
+                    }
+                }
+            },
+            "other": {
+                "x": {}
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("junk/a/b/c/deep.txt"))
+                .map(|entry| entry.path.as_ref()),
+            Some(rel_path("junk/a/b/c/deep.txt"))
+        );
+        assert_eq!(
+            tree.entry_for_path(rel_path("other")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+        assert_eq!(tree.entry_for_path(rel_path("other/x")), None);
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_expansion(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(1));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {
+                    "file.txt": "",
+                    "b": {
+                        "c.txt": ""
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("junk")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+        assert_eq!(tree.entry_for_path(rel_path("junk/a")), None);
+    });
+
+    tree.read_with(cx, |tree, _| {
+        tree.as_local()
+            .unwrap()
+            .refresh_entries_for_paths(vec![rel_path("junk/a").into()])
+    })
+    .recv()
+    .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| (entry.path.as_ref(), entry.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                (rel_path(""), EntryKind::Dir),
+                (rel_path("junk"), EntryKind::Dir),
+                (rel_path("junk/a"), EntryKind::Dir),
+                (rel_path("junk/a/b"), EntryKind::UnloadedDir),
+                (rel_path("junk/a/file.txt"), EntryKind::File),
+            ]
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_fs_event_below_horizon(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(1));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {}
+            },
+            "top.txt": ""
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs.clone(), path!("/root"), cx).await;
+
+    fs.insert_file(Path::new(path!("/root/junk/a/new.txt")), "".into())
+        .await;
+    tree.flush_fs_events(cx).await;
+    cx.run_until_parked();
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| (entry.path.as_ref(), entry.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                (rel_path(""), EntryKind::Dir),
+                (rel_path("junk"), EntryKind::UnloadedDir),
+                (rel_path("top.txt"), EntryKind::File),
+            ]
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_settings_change(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(1));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {
+                    "b": {
+                        "deep.txt": ""
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(tree.entry_for_path(rel_path("junk/a/b/deep.txt")), None);
+    });
+
+    set_file_scan_depth(cx, Some(0));
+    cx.run_until_parked();
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("junk/a/b/deep.txt"))
+                .map(|entry| entry.path.as_ref()),
+            Some(rel_path("junk/a/b/deep.txt"))
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_settings_tightening(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(0));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {
+                    "b": {
+                        "deep.txt": ""
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("junk/a/b/deep.txt"))
+                .map(|entry| entry.path.as_ref()),
+            Some(rel_path("junk/a/b/deep.txt"))
+        );
+    });
+
+    set_file_scan_depth(cx, Some(1));
+    cx.run_until_parked();
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| (entry.path.as_ref(), entry.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                (rel_path(""), EntryKind::Dir),
+                (rel_path("junk"), EntryKind::UnloadedDir),
+            ]
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_from_project_settings(cx: &mut TestAppContext) {
+    init_test(cx);
+    let worktree_id = WorktreeId::from_proto(0);
+    cx.update(|cx| {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store
+                .set_local_settings(
+                    worktree_id,
+                    LocalSettingsPath::InWorktree(Arc::from(RelPath::empty())),
+                    LocalSettingsKind::Settings,
+                    Some(r#"{ "file_scan_depth": 1 }"#),
+                    cx,
+                )
+                .expect("valid project settings");
+        });
+    });
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "junk": {
+                "a": {
+                    "b": {
+                        "deep.txt": ""
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs, path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("junk")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+        assert_eq!(tree.entry_for_path(rel_path("junk/a")), None);
+    });
+}
+
+#[gpui::test]
+async fn test_file_scan_depth_git_init_above_deferred_dirs(cx: &mut TestAppContext) {
+    init_test(cx);
+    set_file_scan_depth(cx, Some(2));
+
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "project": {
+                "src": {
+                    "nested": {
+                        "deep.txt": ""
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    let tree = build_worktree(fs.clone(), path!("/root"), cx).await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("project/src")).unwrap().kind,
+            EntryKind::UnloadedDir
+        );
+    });
+
+    fs.create_dir(Path::new(path!("/root/project/.git")))
+        .await
+        .unwrap();
+    tree.flush_fs_events(cx).await;
+    cx.run_until_parked();
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entry_for_path(rel_path("project/src/nested/deep.txt"))
+                .map(|entry| entry.path.as_ref()),
+            Some(rel_path("project/src/nested/deep.txt"))
+        );
+    });
+}
+
+fn set_file_scan_depth(cx: &mut TestAppContext, depth: Option<u32>) {
+    cx.update(|cx| {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.project.worktree.file_scan_depth = depth;
+            });
+        });
+    });
+}
+
 async fn build_worktree(fs: Arc<FakeFs>, root: &str, cx: &mut TestAppContext) -> Entity<Worktree> {
     let tree = Worktree::local(
         Path::new(root),
@@ -5699,6 +6249,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                     is_fifo: false,
                     size: None,
                     canonical_path: None,
+                    is_unloaded: false,
                 }],
                 removed_entries: vec![],
                 scan_id: 1,
@@ -5793,6 +6344,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                     is_fifo: false,
                     size: None,
                     canonical_path: None,
+                    is_unloaded: false,
                 }],
                 removed_entries: vec![],
                 scan_id: 1,

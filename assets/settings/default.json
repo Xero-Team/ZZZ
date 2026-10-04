@@ -1642,6 +1642,11 @@
   // precedence over these inclusions. A "..." entry expands to the inherited list. Omit it to
   // replace, or use [] to clear.
   "file_scan_inclusions": [".env*"],
+  // Maximum directory depth to eagerly index outside of git repositories.
+  // Directories at this depth or deeper are indexed when expanded or when a
+  // nested file is opened. Repositories rooted above this depth are indexed
+  // fully. `0` means no limit.
+  "file_scan_depth": 8,
   // Globs to match files that will be considered "hidden". These files can be hidden from the
   // project panel by toggling the "hide_hidden" setting.
   "hidden_files": ["**/.*"],

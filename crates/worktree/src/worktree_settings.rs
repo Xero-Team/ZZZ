@@ -18,6 +18,8 @@ pub struct WorktreeSettings {
     pub private_files: PathMatcher,
     pub hidden_files: PathMatcher,
     pub read_only_files: PathMatcher,
+    /// `None` means no limit. `0` in settings is stored as `None`.
+    pub file_scan_depth: Option<u32>,
 }
 
 impl WorktreeSettings {
@@ -84,6 +86,7 @@ impl Settings for WorktreeSettings {
             private_files: valid_path_matchers(private_files, "private_files"),
             hidden_files: valid_path_matchers(hidden_files, "hidden_files"),
             read_only_files: valid_path_matchers(read_only_files, "read_only_files"),
+            file_scan_depth: worktree.file_scan_depth.filter(|depth| *depth > 0),
         }
     }
 }
