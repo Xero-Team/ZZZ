@@ -14,7 +14,7 @@ path = "src/ui.rs"
 
 [dependencies]
 chrono.workspace = true
-component.workspace = true
+ui_component_registry.workspace = true
 documented.workspace = true
 gpui.workspace = true
 gpui_macros.workspace = true

@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use component::{Component, ComponentScope, example_group_with_title, single_example};
+use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct ListSubHeader {

@@ -1,4 +1,4 @@
-use component::{example_group, single_example};
+use ui_component_registry::{example_group, single_example};
 
 use gpui::{App, FocusHandle, Focusable, Hsla, Length, Subscription};
 use i18n::tr;

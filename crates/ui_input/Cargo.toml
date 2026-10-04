@@ -12,7 +12,7 @@ workspace = true
 path = "src/ui_input.rs"
 
 [dependencies]
-component.workspace = true
+ui_component_registry.workspace = true
 gpui.workspace = true
 i18n.workspace = true
 log.workspace = true

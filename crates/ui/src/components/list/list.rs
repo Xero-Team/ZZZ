@@ -1,6 +1,6 @@
-use component::{Component, ComponentScope, example_group_with_title, single_example};
 use gpui::AnyElement;
 use smallvec::SmallVec;
+use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
 use crate::{Label, ListHeader, ListItem, prelude::*};
 

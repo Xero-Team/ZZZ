@@ -272,7 +272,7 @@ collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
 command_palette_hooks = { path = "crates/command_palette_hooks" }
 compliance = { path = "tooling/compliance" }
-component = { path = "crates/component" }
+ui_component_registry = { path = "crates/component" }
 component_preview = { path = "crates/component_preview" }
 console = "0.16"
 context_server = { path = "crates/context_server" }

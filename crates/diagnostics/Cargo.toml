@@ -15,7 +15,7 @@ doctest = false
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
-component.workspace = true
+ui_component_registry.workspace = true
 ctor.workspace = true
 editor.workspace = true
 futures-lite.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "component"
+name = "ui_component_registry"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true

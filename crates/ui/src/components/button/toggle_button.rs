@@ -402,11 +402,11 @@ impl<T: ButtonBuilder, const COLS: usize, const ROWS: usize> RenderOnce
 }
 
 fn register_toggle_button_group() {
-    component::register_component::<ToggleButtonGroup<ToggleButtonSimple>>();
+    ui_component_registry::register_component::<ToggleButtonGroup<ToggleButtonSimple>>();
 }
 
-component::__private::inventory::submit! {
-    component::ComponentFn::new(register_toggle_button_group)
+ui_component_registry::__private::inventory::submit! {
+    ui_component_registry::ComponentFn::new(register_toggle_button_group)
 }
 
 impl<T: ButtonBuilder, const COLS: usize, const ROWS: usize> Component

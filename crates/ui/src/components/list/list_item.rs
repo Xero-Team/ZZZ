@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use component::{Component, ComponentScope, example_group_with_title, single_example};
 use gpui::{AnyElement, AnyView, ClickEvent, MouseButton, MouseDownEvent, Pixels, px};
 use smallvec::SmallVec;
+use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
 use crate::{Disclosure, prelude::*};
 

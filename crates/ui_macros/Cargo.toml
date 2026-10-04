@@ -17,5 +17,5 @@ quote.workspace = true
 syn.workspace = true
 
 [dev-dependencies]
-component.workspace = true
+ui_component_registry.workspace = true
 ui.workspace = true

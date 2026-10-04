@@ -12,7 +12,7 @@ pub fn derive_dynamic_spacing(input: TokenStream) -> TokenStream {
 /// Registers components that implement the `Component` trait.
 ///
 /// This proc macro is used to automatically register structs that implement
-/// the `Component` trait with the [`component::ComponentRegistry`].
+/// the `Component` trait with the [`ui_component_registry::ComponentRegistry`].
 ///
 /// If the component trait is not implemented, it will generate a compile-time error.
 ///
