@@ -698,7 +698,7 @@ pub struct TelegramPanelSettingsContent {
     pub button: Option<bool>,
     /// Where to dock the Telegram panel.
     ///
-    /// Default: bottom
+    /// Default: left (Agentic layout), right (Classic layout)
     pub dock: Option<DockPosition>,
     /// Default width of the panel in pixels, used by the left and right docks.
     ///

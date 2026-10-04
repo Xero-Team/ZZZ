@@ -1038,6 +1038,7 @@
     "settings_ui.page_data.title.code.actions": "Code Actions",
     "settings_ui.page_data.title.code.actions.on.format": "Code Actions On Format",
     "settings_ui.page_data.title.code.lens": "Code Lens",
+    "settings_ui.page_data.title.collaboration": "Collaboration",
     "settings_ui.page_data.title.collapse.untracked.diff": "Collapse Untracked Diff",
     "settings_ui.page_data.title.coloring": "Coloring",
     "settings_ui.page_data.title.colorize.brackets": "Colorize Brackets",

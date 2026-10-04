@@ -1038,6 +1038,7 @@
     "settings_ui.page_data.title.code.actions": "代码操作",
     "settings_ui.page_data.title.code.actions.on.format": "格式化时的代码操作",
     "settings_ui.page_data.title.code.lens": "Code Lens",
+    "settings_ui.page_data.title.collaboration": "协作",
     "settings_ui.page_data.title.collapse.untracked.diff": "折叠未跟踪差异",
     "settings_ui.page_data.title.coloring": "着色",
     "settings_ui.page_data.title.colorize.brackets": "括号着色",

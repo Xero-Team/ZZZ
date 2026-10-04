@@ -65,6 +65,7 @@ pub(crate) fn settings_data(cx: &App) -> Vec<SettingsPage> {
         search_and_files_page(),
         window_and_layout_page(),
         panels_page(),
+        collaboration_page(),
         debugger_page(),
         terminal_page(),
         version_control_page(),
@@ -7456,7 +7457,7 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
-    fn telegram_panel_section() -> [SettingsPageItem; 13] {
+    fn telegram_panel_section() -> [SettingsPageItem; 11] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.telegram.panel",
@@ -7727,6 +7728,27 @@ fn panels_page() -> SettingsPage {
                 metadata: None,
                 files: USER,
             }),
+        ]
+    }
+
+    SettingsPage {
+        title: lt("settings_ui.page_data.title.panels", "Panels"),
+        items: concat_sections![
+            project_panel_section(),
+            terminal_panel_section(),
+            outline_panel_section(),
+            git_panel_section(),
+            debugger_panel_section(),
+            agent_panel_section(),
+            telegram_panel_section(),
+        ],
+    }
+}
+
+fn collaboration_page() -> SettingsPage {
+    SettingsPage {
+        title: lt("settings_ui.page_data.title.collaboration", "Collaboration"),
+        items: Box::new([
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.telegram",
                 "Telegram",
@@ -7753,20 +7775,7 @@ fn panels_page() -> SettingsPage {
                 })),
                 files: USER,
             }),
-        ]
-    }
-
-    SettingsPage {
-        title: lt("settings_ui.page_data.title.panels", "Panels"),
-        items: concat_sections![
-            project_panel_section(),
-            terminal_panel_section(),
-            outline_panel_section(),
-            git_panel_section(),
-            debugger_panel_section(),
-            agent_panel_section(),
-            telegram_panel_section(),
-        ],
+        ]),
     }
 }
 
@@ -12037,6 +12046,22 @@ mod tests {
         write_vim_mode_inner(&mut settings, Some(true));
         assert_eq!(settings.vim_mode, Some(true));
         assert_eq!(settings.helix_mode, Some(false));
+    }
+
+    #[test]
+    fn telegram_connection_settings_are_on_collaboration_page() {
+        let has_telegram_proxy = |page: &SettingsPage| {
+            page.items.iter().any(|item| {
+                matches!(
+                    item,
+                    SettingsPageItem::SettingItem(item)
+                        if item.field.json_path() == Some("telegram.proxy")
+                )
+            })
+        };
+
+        assert!(!has_telegram_proxy(&panels_page()));
+        assert!(has_telegram_proxy(&collaboration_page()));
     }
 
     #[gpui::test]

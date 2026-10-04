@@ -28,6 +28,7 @@ pub struct PanelLayout {
     pub(crate) project_panel_dock: Option<DockSide>,
     pub(crate) outline_panel_dock: Option<DockSide>,
     pub(crate) git_panel_dock: Option<DockPosition>,
+    pub(crate) telegram_panel_dock: Option<DockPosition>,
 }
 
 impl PanelLayout {
@@ -36,6 +37,7 @@ impl PanelLayout {
         project_panel_dock: Some(DockSide::Right),
         outline_panel_dock: Some(DockSide::Right),
         git_panel_dock: Some(DockPosition::Right),
+        telegram_panel_dock: Some(DockPosition::Left),
     };
 
     const EDITOR: Self = Self {
@@ -43,6 +45,7 @@ impl PanelLayout {
         project_panel_dock: Some(DockSide::Left),
         outline_panel_dock: Some(DockSide::Left),
         git_panel_dock: Some(DockPosition::Left),
+        telegram_panel_dock: Some(DockPosition::Right),
     };
 
     pub fn is_agent_layout(&self) -> bool {
@@ -59,6 +62,7 @@ impl PanelLayout {
             project_panel_dock: content.project_panel.as_ref().and_then(|p| p.dock),
             outline_panel_dock: content.outline_panel.as_ref().and_then(|p| p.dock),
             git_panel_dock: content.git_panel.as_ref().and_then(|p| p.dock),
+            telegram_panel_dock: content.telegram_panel.as_ref().and_then(|p| p.dock),
         }
     }
 
@@ -67,6 +71,7 @@ impl PanelLayout {
         settings.project_panel.get_or_insert_default().dock = self.project_panel_dock;
         settings.outline_panel.get_or_insert_default().dock = self.outline_panel_dock;
         settings.git_panel.get_or_insert_default().dock = self.git_panel_dock;
+        settings.telegram_panel.get_or_insert_default().dock = self.telegram_panel_dock;
     }
 
     fn write_diff_to(&self, current_merged: &PanelLayout, settings: &mut SettingsContent) {
@@ -82,6 +87,9 @@ impl PanelLayout {
         if self.git_panel_dock != current_merged.git_panel_dock {
             settings.git_panel.get_or_insert_default().dock = self.git_panel_dock;
         }
+        if self.telegram_panel_dock != current_merged.telegram_panel_dock {
+            settings.telegram_panel.get_or_insert_default().dock = self.telegram_panel_dock;
+        }
     }
 
     fn backfill_to(&self, user_layout: &PanelLayout, settings: &mut SettingsContent) {
@@ -96,6 +104,9 @@ impl PanelLayout {
         }
         if user_layout.git_panel_dock.is_none() {
             settings.git_panel.get_or_insert_default().dock = self.git_panel_dock;
+        }
+        if user_layout.telegram_panel_dock.is_none() {
+            settings.telegram_panel.get_or_insert_default().dock = self.telegram_panel_dock;
         }
     }
 }
@@ -500,6 +511,29 @@ mod tests {
     use serde_json::json;
     use settings::ToolPermissionMode;
     use settings::ToolPermissionsContent;
+
+    #[test]
+    fn test_panel_layout_presets_position_telegram_panel() {
+        let mut settings = SettingsContent::default();
+
+        PanelLayout::AGENT.write_to(&mut settings);
+        assert_eq!(
+            settings
+                .telegram_panel
+                .as_ref()
+                .and_then(|panel| panel.dock),
+            Some(DockPosition::Left)
+        );
+
+        PanelLayout::EDITOR.write_to(&mut settings);
+        assert_eq!(
+            settings
+                .telegram_panel
+                .as_ref()
+                .and_then(|panel| panel.dock),
+            Some(DockPosition::Right)
+        );
+    }
 
     #[test]
     fn test_compiled_regex_case_insensitive() {
@@ -1005,6 +1039,7 @@ mod tests {
         assert_eq!(user_layout.project_panel_dock, None);
         assert_eq!(user_layout.outline_panel_dock, None);
         assert_eq!(user_layout.git_panel_dock, None);
+        assert_eq!(user_layout.telegram_panel_dock, None);
 
         // User sets a combination that doesn't match either preset:
         // agent on the left but project panel also on the left.
@@ -1059,6 +1094,7 @@ mod tests {
             Some(DockSide::Right)
         );
         assert_eq!(original_user_layout.outline_panel_dock, None);
+        assert_eq!(original_user_layout.telegram_panel_dock, None);
 
         // Switch to the agent layout. This overwrites the user settings.
         SettingsStore::update_global(cx, |store, cx| {
@@ -1088,6 +1124,7 @@ mod tests {
             Some(DockSide::Right)
         );
         assert_eq!(restored_user_layout.outline_panel_dock, None);
+        assert_eq!(restored_user_layout.telegram_panel_dock, None);
     }
 
     #[gpui::test]
@@ -1154,6 +1191,7 @@ mod tests {
             assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));
             // Other fields weren't in user settings and didn't need changing.
             assert_eq!(user_layout.outline_panel_dock, None);
+            assert_eq!(user_layout.telegram_panel_dock, None);
 
             // And the merged result should now match agent.
             let layout = AgentSettings::get_layout(cx);
@@ -1223,6 +1261,7 @@ mod tests {
             assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));
             assert_eq!(user_layout.outline_panel_dock, Some(DockSide::Left));
             assert_eq!(user_layout.git_panel_dock, Some(DockPosition::Left));
+            assert_eq!(user_layout.telegram_panel_dock, Some(DockPosition::Right));
 
             // Even though defaults are now agent, the backfilled user settings
             // keep everything in the editor layout. The user's experience
