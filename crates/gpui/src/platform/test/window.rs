@@ -396,7 +396,9 @@ impl PlatformWindow for TestWindow {
             accessibility: false,
             headless_renderer: self.0.lock().renderer.is_some(),
             frame_callbacks: true,
+            system_bell: false,
             window_controls: crate::WindowControls {
+                attention: false,
                 fullscreen: true,
                 maximize: false,
                 minimize: false,

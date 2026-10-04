@@ -415,6 +415,8 @@ pub enum Decorations {
 /// What window controls this platform supports
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct WindowControls {
+    /// Whether this platform supports requesting user attention.
+    pub attention: bool,
     /// Whether this platform supports fullscreen
     pub fullscreen: bool,
     /// Whether this platform supports maximize
@@ -438,6 +440,8 @@ pub struct PlatformCapabilities {
     pub headless_renderer: bool,
     /// Whether frame callbacks can be requested from the platform event loop.
     pub frame_callbacks: bool,
+    /// Whether the platform can play its native system bell.
+    pub system_bell: bool,
     /// Window control operations supported by the backend.
     pub window_controls: WindowControls,
 }
@@ -450,7 +454,9 @@ impl Default for PlatformCapabilities {
             accessibility: false,
             headless_renderer: false,
             frame_callbacks: false,
+            system_bell: false,
             window_controls: WindowControls {
+                attention: false,
                 fullscreen: false,
                 maximize: false,
                 minimize: false,
@@ -500,6 +506,7 @@ impl Default for WindowControls {
     fn default() -> Self {
         // Assume that we can do anything, unless told otherwise
         Self {
+            attention: true,
             fullscreen: true,
             maximize: true,
             minimize: true,
@@ -2820,9 +2827,11 @@ mod tests {
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
         assert!(!capabilities.frame_callbacks);
+        assert!(!capabilities.system_bell);
         assert_eq!(
             capabilities.window_controls,
             WindowControls {
+                attention: false,
                 fullscreen: false,
                 maximize: false,
                 minimize: false,

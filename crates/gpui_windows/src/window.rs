@@ -1050,6 +1050,7 @@ fn windows_capabilities() -> gpui::PlatformCapabilities {
         accessibility: false,
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
+        system_bell: true,
         window_controls: gpui::WindowControls::default(),
     }
 }

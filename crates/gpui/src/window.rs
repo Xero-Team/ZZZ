@@ -1919,12 +1919,21 @@ impl Window {
 
     /// Toggle zoom on the window.
     pub fn zoom_window(&self) {
-        self.platform_window.zoom();
+        if self.platform_window.capabilities().window_controls.maximize {
+            self.platform_window.zoom();
+        }
     }
 
     /// Opens the native title bar context menu, useful when implementing client side decorations (Wayland and X11)
     pub fn show_window_menu(&self, position: Point<Pixels>) {
-        self.platform_window.show_window_menu(position)
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .window_menu
+        {
+            self.platform_window.show_window_menu(position)
+        }
     }
 
     /// Handle window movement for Linux and macOS.
@@ -4678,17 +4687,33 @@ impl Window {
 
     /// Requests that the operating system draw attention to this window.
     pub fn request_attention(&self) {
-        self.platform_window.request_attention();
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .attention
+        {
+            self.platform_window.request_attention();
+        }
     }
 
     /// Minimize the current window at the platform level.
     pub fn minimize_window(&self) {
-        self.platform_window.minimize();
+        if self.platform_window.capabilities().window_controls.minimize {
+            self.platform_window.minimize();
+        }
     }
 
     /// Toggle full screen status on the current window at the platform level.
     pub fn toggle_fullscreen(&self) {
-        self.platform_window.toggle_fullscreen();
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .fullscreen
+        {
+            self.platform_window.toggle_fullscreen();
+        }
     }
 
     /// Toggle simple (borderless) fullscreen, where the window covers the entire
@@ -5041,7 +5066,9 @@ impl Window {
     /// Request the OS to play an alert sound. On some platforms this is associated
     /// with the window, for others it's just a simple global function call.
     pub fn play_system_bell(&self) {
-        self.platform_window.play_system_bell()
+        if self.platform_window.capabilities().system_bell {
+            self.platform_window.play_system_bell()
+        }
     }
 
     /// Toggles the inspector mode on this window.

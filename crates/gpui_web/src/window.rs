@@ -840,6 +840,7 @@ impl PlatformWindow for WebWindow {
 
     fn window_controls(&self) -> WindowControls {
         WindowControls {
+            attention: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -861,6 +862,7 @@ fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabiliti
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
+        system_bell: false,
         window_controls,
     }
 }
@@ -872,6 +874,7 @@ mod tests {
     #[test]
     fn capability_matrix_exposes_web_gaps() {
         let window_controls = WindowControls {
+            attention: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -882,6 +885,7 @@ mod tests {
         assert!(!capabilities.ime_candidate_position);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
+        assert!(!capabilities.system_bell);
         assert!(capabilities.frame_callbacks);
         assert_eq!(capabilities.window_controls, window_controls);
     }

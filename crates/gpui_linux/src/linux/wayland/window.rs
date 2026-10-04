@@ -818,6 +818,7 @@ impl WaylandWindowStatePtr {
             }
             xdg_toplevel::Event::WmCapabilities { capabilities } => {
                 let mut window_controls = WindowControls {
+                    attention: false,
                     maximize: false,
                     minimize: false,
                     fullscreen: false,
@@ -1597,17 +1598,22 @@ impl PlatformWindow for WaylandWindow {
     }
 
     fn capabilities(&self) -> gpui::PlatformCapabilities {
-        wayland_capabilities(self.window_controls())
+        let state = self.borrow();
+        wayland_capabilities(state.window_controls, state.globals.system_bell.is_some())
     }
 }
 
-fn wayland_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
+fn wayland_capabilities(
+    window_controls: WindowControls,
+    system_bell: bool,
+) -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
         ime_candidate_position: true,
         accessibility: false,
         headless_renderer: false,
         frame_callbacks: true,
+        system_bell,
         window_controls,
     }
 }
@@ -1619,17 +1625,20 @@ mod capability_tests {
     #[test]
     fn capability_matrix_preserves_compositor_window_controls() {
         let window_controls = WindowControls {
+            attention: false,
             fullscreen: true,
             maximize: false,
             minimize: true,
             window_menu: false,
         };
-        let capabilities = wayland_capabilities(window_controls);
+        let capabilities = wayland_capabilities(window_controls, false);
         assert!(capabilities.text_input);
         assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
         assert!(!capabilities.accessibility);
         assert!(!capabilities.headless_renderer);
+        assert!(!capabilities.system_bell);
+        assert!(!capabilities.window_controls.attention);
         assert_eq!(capabilities.window_controls, window_controls);
     }
 }
