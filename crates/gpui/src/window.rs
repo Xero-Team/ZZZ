@@ -5,9 +5,9 @@ use crate::{
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
     Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
     DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
-    FileDropEvent, FontId, Frame, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla, InputHandler,
-    InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext, KeyDownEvent,
-    KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
+    FileDropEvent, FontId, Frame, FrameScheduler, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
+    InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
+    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
     MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
     Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow,
     Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render,
@@ -23,7 +23,6 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
 use collections::FxHashMap;
-use collections::FxHashSet;
 #[cfg(target_os = "macos")]
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
@@ -454,8 +453,6 @@ impl<M: Focusable + EventEmitter<DismissEvent> + Render> ManagedView for M {}
 /// Emitted by implementers of [`ManagedView`] to indicate the view should be dismissed, such as when a view is presented as a modal.
 pub struct DismissEvent;
 
-type FrameCallback = Box<dyn FnOnce(&mut Window, &mut App)>;
-
 pub(crate) type AnyMouseListener =
     Box<dyn FnMut(&dyn Any, DispatchPhase, &mut Window, &mut App) + 'static>;
 
@@ -717,10 +714,9 @@ pub struct Window {
     pub(crate) image_cache_stack: Vec<AnyImageCache>,
     pub(crate) interaction: InteractionOwner,
     pub(crate) text_input: TextInputOwner,
+    pub(crate) frame_scheduler: FrameScheduler,
     pub(crate) next_tooltip_id: TooltipId,
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
-    next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>>,
-    pub(crate) dirty_views: FxHashSet<EntityId>,
     mouse_position: Point<Pixels>,
     scale_factor: f32,
     pub(crate) bounds_observers: SubscriberSet<(), AnyObserver>,
@@ -729,13 +725,11 @@ pub struct Window {
     pub(crate) button_layout_observers: SubscriberSet<(), AnyObserver>,
     active: Rc<Cell<bool>>,
     hovered: Rc<Cell<bool>>,
-    pub(crate) needs_present: Rc<Cell<bool>>,
     /// Tracks recent input event timestamps to determine if input is arriving at a high rate.
     /// Used to selectively enable VRR optimization only when input rate exceeds 60fps.
     pub(crate) input_rate_tracker: Rc<RefCell<InputRateTracker>>,
     #[cfg(feature = "input-latency-histogram")]
     input_latency_tracker: InputLatencyTracker,
-    pub(crate) refreshing: bool,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
     prompt: Option<RenderablePromptHandle>,
     pub(crate) client_inset: Option<Pixels>,
@@ -1027,8 +1021,9 @@ impl Window {
         let invalidator = WindowInvalidator::new(handle.window_id());
         let active = Rc::new(Cell::new(platform_window.is_active()));
         let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
-        let needs_present = Rc::new(Cell::new(false));
-        let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Default::default();
+        let frame_scheduler = FrameScheduler::new();
+        let needs_present = frame_scheduler.needs_present_handle();
+        let next_frame_callbacks = frame_scheduler.next_frame_callbacks_handle();
         let input_rate_tracker = Rc::new(RefCell::new(InputRateTracker::default()));
         let last_frame_time = Rc::new(Cell::new(None));
 
@@ -1058,8 +1053,6 @@ impl Window {
             let mut cx = cx.to_async();
             let invalidator = invalidator.clone();
             let active = active.clone();
-            let needs_present = needs_present.clone();
-            let next_frame_callbacks = next_frame_callbacks.clone();
             let input_rate_tracker = input_rate_tracker.clone();
             move |request_frame_options| {
                 let thermal_state = handle
@@ -1343,10 +1336,9 @@ impl Window {
                 capslock,
             ),
             text_input: TextInputOwner::new(),
-            next_frame_callbacks,
+            frame_scheduler,
             next_tooltip_id: TooltipId::default(),
             tooltip_bounds: None,
-            dirty_views: FxHashSet::default(),
             mouse_position,
             scale_factor,
             bounds_observers: SubscriberSet::new(),
@@ -1355,11 +1347,9 @@ impl Window {
             button_layout_observers: SubscriberSet::new(),
             active,
             hovered,
-            needs_present,
             input_rate_tracker,
             #[cfg(feature = "input-latency-histogram")]
             input_latency_tracker: InputLatencyTracker::new()?,
-            refreshing: false,
             activation_observers: SubscriberSet::new(),
             prompt: None,
             client_inset: None,
@@ -1419,10 +1409,27 @@ impl Window {
             .dispatch_tree
             .view_path_reversed(view_id)
         {
-            if !self.dirty_views.insert(view_id) {
+            if !self.frame_scheduler.insert_dirty_view(view_id) {
                 break;
             }
         }
+    }
+
+    pub(crate) fn is_view_dirty(&self, view_id: EntityId) -> bool {
+        self.frame_scheduler.is_view_dirty(view_id)
+    }
+
+    pub(crate) fn is_refreshing(&self) -> bool {
+        self.frame_scheduler.is_refreshing()
+    }
+
+    pub(crate) fn replace_refreshing(&mut self, refreshing: bool) -> bool {
+        self.frame_scheduler.replace_refreshing(refreshing)
+    }
+
+    pub(crate) fn force_refresh(&mut self) {
+        self.frame_scheduler.set_refreshing(true);
+        self.invalidator.set_dirty(true);
     }
 
     /// Registers a callback to be invoked when the window appearance changes.
@@ -1490,8 +1497,7 @@ impl Window {
     /// Mark the window as dirty, scheduling it to be redrawn on the next frame.
     pub fn refresh(&mut self) {
         if self.invalidator.not_drawing() {
-            self.refreshing = true;
-            self.invalidator.set_dirty(true);
+            self.force_refresh();
         }
     }
 
@@ -1772,7 +1778,7 @@ impl Window {
 
     /// Schedule the given closure to be run directly after the current frame is rendered.
     pub fn on_next_frame(&self, callback: impl FnOnce(&mut Window, &mut App) + 'static) {
-        RefCell::borrow_mut(&self.next_frame_callbacks).push(Box::new(callback));
+        self.frame_scheduler.queue_next_frame(Box::new(callback));
         self.invalidator.wake_platform();
     }
 
@@ -2270,7 +2276,7 @@ impl Window {
         if !cx.mode.skip_drawing() {
             self.draw_roots(cx);
         }
-        self.dirty_views.clear();
+        self.frame_scheduler.clear_dirty_views();
         self.interaction.next_frame.window_active = self.active.get();
 
         // Register requested input handler with the platform window.
@@ -2348,14 +2354,14 @@ impl Window {
         debug_assert!(self.rendered_entity_stack.is_empty());
         self.record_entities_accessed(cx);
         self.reset_cursor_style(cx);
-        self.refreshing = false;
+        self.frame_scheduler.set_refreshing(false);
         self.invalidator.set_phase(DrawPhase::None);
         // Focus movement during listener dispatch is suppressed while drawing. Redraw so the
         // new focus state and its corresponding events are delivered on the next frame.
         if self.interaction.focus != focus_before_listeners {
             self.refresh();
         }
-        self.needs_present.set(true);
+        self.frame_scheduler.mark_present_pending();
 
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = self.invalidator.finish_frame() {
@@ -2446,7 +2452,7 @@ impl Window {
         if submission.submitted {
             self.input_latency_tracker.record_frame_presented();
         }
-        self.needs_present.set(false);
+        self.frame_scheduler.clear_present_pending();
         #[cfg(feature = "frame-diagnostics")]
         self.invalidator.flush_events();
         profiling::finish_frame!();
