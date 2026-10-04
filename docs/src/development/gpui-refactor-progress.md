@@ -173,6 +173,8 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
   keyboard input，输出 draw/phase/input-to-present percentile 与 ring 丢失计数。
 - 使用每个 Window 的本地 SmallVec 批量收集事件，在 present 时一次性 flush 到全局
   ring，避免每个 phase/invalidation 都获取全局锁。
+- renderer contract 传播 backend 的真实 submission outcome；未提交帧记录
+  `FrameEvent::SubmissionSkipped`，不会再错误计入 presented/input-latency 样本。
 
 当前仍待完成：
 
@@ -188,7 +190,7 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 | `cargo check --locked -p gpui`                                                                     | `PASS`                      | 0.40 s，RSS 189,612 KiB；`.tmp/gpui-refactor/phase-1/check-default.log`                                                                                                                                                                                                         |
 | `cargo check --locked -p gpui --features frame-diagnostics`                                        | `PASS`                      | 0.40 s，RSS 189,704 KiB；`.tmp/gpui-refactor/phase-1/check-frame-diagnostics.log`                                                                                                                                                                                               |
 | `cargo test --locked -p gpui`                                                                      | `PASS`                      | 214 unit + 1 integration，0 failed                                                                                                                                                                                                                                              |
-| `cargo test --locked -p gpui --features frame-diagnostics`                                         | `PASS`                      | 215 unit + 1 integration，0 failed；含 frame lifecycle test                                                                                                                                                                                                                     |
+| `cargo test --locked -p gpui --features frame-diagnostics`                                         | `PASS`                      | 227+ tests，含 frame lifecycle 与 skipped-submission test                                                                                                                                                                                                                       |
 | `./script/clippy -p gpui --features frame-diagnostics`                                             | `PASS`                      | all-features release clippy，含 philosophy check                                                                                                                                                                                                                                |
 | `git diff --check`                                                                                 | `PASS`                      | `.tmp/gpui-refactor/phase-1/diff-check.log`                                                                                                                                                                                                                                     |
 | `cargo test --locked -p gpui --features frame-diagnostics frame_diagnostics_runner -- --nocapture` | `PASS`                      | 100 root-dirty + 100 cached-panel + 100 input frames；draw p50/p95/p99 = 72,307/92,273/99,438 ns；input-to-present = 105,760/118,914/125,356 ns；100 prepaint + 100 paint cache replays；0 dropped events；raw log in `.tmp/gpui-refactor/phase-1/frame-diagnostics-runner.log` |
@@ -220,7 +222,8 @@ commit was created for this stage.
 提交：core `8d410f4b55cc77ef30cba627aff0dcfc326cc308`；runner
 `d031aa92deb7547e56d671420d8772f08434e167`；cached replay
 `766b7cb85cd58c35a56b3182208f5e6c2bd6cf40`；batched journal/allocation probe
-`567ff2f4c39edb84a60e99dfebbd6033c50ce6e3`。
+`567ff2f4c39edb84a60e99dfebbd6033c50ce6e3`；submission outcome/skip coverage
+`1520da4179`、`147871401a`。
 
 下一步：把 runner 接到 Editor 100k-line/scroll workload，复跑 EXP-001/002/011 的正式
 阈值比较，并记录 production-like timing 与 peak RSS；默认产品构建继续不启用
@@ -341,6 +344,8 @@ EXP-003 当前结果：
 - `Window` 继续持有并委托 `WindowInvalidator`；公开 invalidate/draw/present API 未变化。
 - `Frame`、`DeferredDraw`、`PrepaintStateIndex`、`PaintIndex` 及 cache range 状态已迁入
   `frame.rs`；`Window` 只保留绘制 orchestration 和必要的 `pub(crate)` owner 边界。
+- 新增 `FrameScheduler`，集中持有 next-frame callbacks、expanded dirty views、present
+  demand 和 full-refresh state；`Window` 与 `App` 只通过 owner 方法协调这些状态。
 - 第一、第二提交都只移动状态和私有算法，不改变行为；不可变 `BuiltFrame` 尚未迁移。
 
 验证：
@@ -353,7 +358,8 @@ EXP-003 当前结果：
 | `cargo test --locked -p gpui --lib --features frame-diagnostics` | `PASS` | 220 tests passed，含 frame diagnostics runner/lifecycle |
 | `git diff --check`                                               | `PASS` | frame/window 迁移无 whitespace error                    |
 
-提交：invalidation owner `1946811f30`；completed frame state owner `ccd2a038df`。
+提交：invalidation owner `1946811f30`；completed frame state owner `ccd2a038df`；frame
+scheduler state `9317625c82`。
 下一步：继续 4B，先抽出 hitbox、dispatch tree、focus/tab、pointer capture 和 key/action
 routing owner，并固定 routing order 回归测试。
 
@@ -374,6 +380,8 @@ routing owner，并固定 routing order 回归测试。
 - key/modifier capture/bubble、multi-stroke timeout/replay、focus/tab 与 pending-input cleanup
   已迁入 `InteractionOwner`；platform input handler 的查询和文本提交通过窄 helper 保留原
   take/set 生命周期。
+- pointer position 与 tooltip identity/bounds 已迁入 `InteractionOwner`，Window 不再保存
+  平行 pointer/tooltip 状态。
 
 验证：
 
@@ -390,6 +398,7 @@ order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
 完整 routing snapshots `487347fcff`。
 pointer/action routing owner `d52a99235d`。
 key routing owner `8a2ce07544`；focus/pending-input owner `0ea05bb762`。
+pointer position `3cb415ee42`；tooltip state `be55f5df44`。
 下一步：收敛 4D completed-frame accessibility/diagnostics payload，并继续检查
 `window.rs` 中仍可归属 owner 的平行状态。
 
@@ -522,6 +531,8 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
   headless renderer、frame callbacks 和 window controls。
 - capability matrix 单独声明 native IME candidate-position 能力；Web、Linux headless 和
   TestWindow 的 unsupported 状态不再进入静默 `update_ime_position` 调用。
+- system-bell 和 request-attention 也进入 capability matrix；公开 Window façade 在调用
+  bell、attention、minimize、maximize 或 fullscreen 前检查对应能力。
 - 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
@@ -556,15 +567,15 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 
 当前矩阵：
 
-| Backend               | Text input | IME position | Accessibility | Offscreen/headless window render | Frame callbacks | Window controls       |
-| --------------------- | ---------- | ------------ | ------------- | -------------------------------- | --------------- | --------------------- |
-| TestWindow            | yes        | no           | no            | runtime renderer dependent       | yes             | fullscreen only       |
-| Linux X11             | yes        | yes          | no            | no                               | yes             | full desktop set      |
-| Linux Wayland         | yes        | yes          | no            | no                               | yes             | compositor dependent  |
-| Linux headless window | no         | no           | no            | no; scene is discarded           | no              | fullscreen state only |
-| macOS                 | yes        | yes          | no            | test-support only                | yes             | full desktop set      |
-| Windows               | yes        | yes          | no            | test-support only                | yes             | full desktop set      |
-| Web                   | no         | no           | no            | no                               | yes             | fullscreen only       |
+| Backend               | Text input | IME position | Accessibility | System bell | Offscreen/headless window render | Frame callbacks | Window controls                    |
+| --------------------- | ---------- | ------------ | ------------- | ----------- | -------------------------------- | --------------- | ---------------------------------- |
+| TestWindow            | yes        | no           | no            | no          | runtime renderer dependent       | yes             | fullscreen only                    |
+| Linux X11             | yes        | yes          | no            | yes         | no                               | yes             | full desktop set                   |
+| Linux Wayland         | yes        | yes          | no            | runtime     | no                               | yes             | compositor dependent; no attention |
+| Linux headless window | no         | no           | no            | no          | no; scene is discarded           | no              | fullscreen state only              |
+| macOS                 | yes        | yes          | no            | yes         | test-support only                | yes             | full desktop set                   |
+| Windows               | yes        | yes          | no            | yes         | test-support only                | yes             | full desktop set                   |
+| Web                   | no         | no           | no            | no          | no                               | yes             | fullscreen only; no attention      |
 
 验证：
 
@@ -590,7 +601,8 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
 `9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`；renderer
 factory `85fffe8fe5`；platform render target `c3f2d1bb90`；completed window host
-`2b2d467ce5`；IME position capability `c7d7aac2d5`。
+`2b2d467ce5`；IME position capability `c7d7aac2d5`；optional operation gating
+`3ef63e8c00`。
 下一步：收敛 platform-specific façade 与 capability error，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
