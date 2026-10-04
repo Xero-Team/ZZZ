@@ -2468,9 +2468,15 @@ impl Window {
     }
 
     /// Builds and presents one frame for benchmark and integration-test infrastructure.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn draw_and_present_for_test(&mut self, cx: &mut App) {
         self.draw(cx).clear();
+        self.present();
+    }
+
+    /// Presents the most recently built frame for benchmark and integration-test infrastructure.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn present_for_test(&mut self) {
         self.present();
     }
 
@@ -4413,7 +4419,14 @@ impl Window {
         }
 
         if let Some(input) = keystroke.key_char {
-            return self.dispatch_text_input(&input, cx);
+            #[cfg(feature = "frame-diagnostics")]
+            let input_scope = self
+                .invalidator
+                .input_scope(Instant::now(), FrameInputProvenance::Keyboard);
+            let handled = self.dispatch_text_input(&input, cx);
+            #[cfg(feature = "frame-diagnostics")]
+            drop(input_scope);
+            return handled;
         }
 
         false
@@ -5818,8 +5831,9 @@ mod tests {
     use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
-        AnyView, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
-        KeyDownEvent, Keystroke, PlatformInput, StyleRefinement,
+        AnyView, App, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
+        InputHandler, KeyDownEvent, Keystroke, PlatformInput, Point, StyleRefinement,
+        TextInputClient, UTF16Selection,
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
@@ -5828,6 +5842,8 @@ mod tests {
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
+    #[cfg(feature = "frame-diagnostics")]
+    use std::ops::Range;
     use std::{cell::Cell, rc::Rc};
 
     struct RootView {
@@ -5892,6 +5908,76 @@ mod tests {
                 .on_key_down(|_, window, _| window.refresh())
                 .child(AnyView::from(self.panel.clone()).cached(StyleRefinement::default()))
                 .into_any_element()
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct RefreshingTextInput;
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl InputHandler for RefreshingTextInput {
+        fn selected_text_range(
+            &mut self,
+            _: bool,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<UTF16Selection> {
+            None
+        }
+
+        fn marked_text_range(&mut self, _: &mut Window, _: &mut App) -> Option<Range<usize>> {
+            None
+        }
+
+        fn text_for_range(
+            &mut self,
+            _: Range<usize>,
+            _: &mut Option<Range<usize>>,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<String> {
+            None
+        }
+
+        fn replace_text_in_range(
+            &mut self,
+            _: Option<Range<usize>>,
+            _: &str,
+            window: &mut Window,
+            _: &mut App,
+        ) {
+            window.refresh();
+        }
+
+        fn replace_and_mark_text_in_range(
+            &mut self,
+            _: Option<Range<usize>>,
+            _: &str,
+            _: Option<Range<usize>>,
+            window: &mut Window,
+            _: &mut App,
+        ) {
+            window.refresh();
+        }
+
+        fn unmark_text(&mut self, _: &mut Window, _: &mut App) {}
+
+        fn bounds_for_range(
+            &mut self,
+            _: Range<usize>,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<Bounds<Pixels>> {
+            None
+        }
+
+        fn character_index_for_point(
+            &mut self,
+            _: Point<Pixels>,
+            _: &mut Window,
+            _: &mut App,
+        ) -> Option<usize> {
+            None
         }
     }
 
@@ -6026,6 +6112,31 @@ mod tests {
             test_window.frame_wake_count() > baseline || callback_ran.get(),
             "a frame request with pending next-frame callbacks must either run them or re-arm the frame source"
         );
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn printable_text_input_is_linked_to_presented_frame(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw_and_present_for_test(cx);
+            let input = TextInputClient::new(window.to_async(cx), Box::new(RefreshingTextInput));
+            window.platform_window.set_input_handler(input);
+        })
+        .expect("diagnostics window should remain open");
+
+        let mut collector = FrameTimingCollector::new();
+        cx.dispatch_keystroke(handle, Keystroke::parse("a").expect("valid keystroke"));
+        cx.update_window(handle, |_, window, _| window.present_for_test())
+            .expect("diagnostics window should remain open");
+
+        assert!(collector.snapshot().events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Presented(timing)
+                if timing.input == Some(FrameInputProvenance::Keyboard)
+                    && timing.input_to_present.is_some()
+        )));
     }
 
     #[cfg(feature = "accessibility")]

@@ -191,6 +191,11 @@ fn draw_frame(cx: &mut TestAppContext, window: AnyWindowHandle) {
         .expect("benchmark window should remain open");
 }
 
+fn present_frame(cx: &mut TestAppContext, window: AnyWindowHandle) {
+    cx.update_window(window, |_, window, _| window.present_for_test())
+        .expect("benchmark window should remain open");
+}
+
 fn read_resize_workload(path: &Path) -> Result<Vec<(f32, f32)>> {
     let input = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read resize workload {}", path.display()))?;
@@ -331,7 +336,7 @@ fn main() -> Result<()> {
     let typing = measure(typed_characters, || {
         for keystroke in &typing_keystrokes {
             cx.dispatch_keystroke(window, keystroke.clone());
-            draw_frame(&mut cx, window);
+            present_frame(&mut cx, window);
         }
     });
     report_measurement("typing", typing);
@@ -349,7 +354,7 @@ fn main() -> Result<()> {
                     editor.set_scroll_position(point(0.0, row), window, cx);
                 })
                 .expect("benchmark editor window should remain open");
-            draw_frame(&mut cx, window);
+            present_frame(&mut cx, window);
         }
     });
     report_measurement("scroll_10s_60hz", scrolling);
@@ -363,7 +368,7 @@ fn main() -> Result<()> {
     let resizing = measure(resize_count, || {
         for (width, height) in resize_workload {
             cx.simulate_window_resize(window, size(px(width), px(height)));
-            draw_frame(&mut cx, window);
+            present_frame(&mut cx, window);
         }
     });
     report_measurement("resize", resizing);
