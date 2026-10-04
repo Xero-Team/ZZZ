@@ -1206,6 +1206,41 @@ pub trait StatefulInteractiveElement: InteractiveElement {
         self
     }
 
+    /// Set whether this element is disabled for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_disabled(mut self, disabled: bool) -> Self {
+        self.interactivity().accessibility_disabled = disabled;
+        self
+    }
+
+    /// Set this element's selected state for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_selected(mut self, selected: bool) -> Self {
+        self.interactivity().accessibility_selected = Some(selected);
+        self
+    }
+
+    /// Set this element's expanded state for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_expanded(mut self, expanded: bool) -> Self {
+        self.interactivity().accessibility_expanded = Some(expanded);
+        self
+    }
+
+    /// Set this element's toggled state for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_toggled(mut self, toggled: accesskit::Toggled) -> Self {
+        self.interactivity().accessibility_toggled = Some(toggled);
+        self
+    }
+
+    /// Set this element's current value for accessibility clients.
+    #[cfg(feature = "accessibility")]
+    fn aria_value(mut self, value: impl Into<SharedString>) -> Self {
+        self.interactivity().accessibility_value = Some(value.into());
+        self
+    }
+
     /// Register a handler for an accessibility action on this element.
     #[cfg(feature = "accessibility")]
     fn on_a11y_action(
@@ -1542,6 +1577,21 @@ impl Element for Div {
         if let Some(label) = &self.interactivity.accessibility_label {
             node.set_label(label.to_string());
         }
+        if self.interactivity.accessibility_disabled {
+            node.set_disabled();
+        }
+        if let Some(selected) = self.interactivity.accessibility_selected {
+            node.set_selected(selected);
+        }
+        if let Some(expanded) = self.interactivity.accessibility_expanded {
+            node.set_expanded(expanded);
+        }
+        if let Some(toggled) = self.interactivity.accessibility_toggled {
+            node.set_toggled(toggled);
+        }
+        if let Some(value) = &self.interactivity.accessibility_value {
+            node.set_value(value.to_string());
+        }
         for (action, _) in &self.interactivity.accessibility_action_listeners {
             node.add_action(*action);
         }
@@ -1798,6 +1848,16 @@ pub struct Interactivity {
     pub(crate) accessibility_role: Option<accesskit::Role>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_disabled: bool,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_selected: Option<bool>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_expanded: Option<bool>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_toggled: Option<accesskit::Toggled>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_value: Option<SharedString>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_action_listeners:
         Vec<(accesskit::Action, crate::SemanticActionListener)>,

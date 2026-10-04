@@ -5876,6 +5876,11 @@ mod tests {
                         .id("accessibility-button")
                         .role(accesskit::Role::Button)
                         .aria_label("Activate")
+                        .aria_disabled(true)
+                        .aria_selected(true)
+                        .aria_expanded(false)
+                        .aria_toggled(accesskit::Toggled::True)
+                        .aria_value("ready")
                         .on_a11y_action(accesskit::Action::Click, move |_, _, _| {
                             action_count.set(action_count.get() + 1);
                         }),
@@ -6178,6 +6183,11 @@ mod tests {
                 .expect("semantic button should be present");
             assert_eq!(group.children(), &[*button_id]);
             assert_eq!(button.label(), Some("Activate"));
+            assert!(button.is_disabled());
+            assert_eq!(button.is_selected(), Some(true));
+            assert_eq!(button.is_expanded(), Some(false));
+            assert_eq!(button.toggled(), Some(accesskit::Toggled::True));
+            assert_eq!(button.value(), Some("ready"));
             assert!(button.supports_action(accesskit::Action::Click));
             assert!(snapshot.update.nodes[0].1.children().contains(group_id));
             let button_id = *button_id;
