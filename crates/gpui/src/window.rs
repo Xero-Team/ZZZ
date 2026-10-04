@@ -2383,9 +2383,11 @@ impl Window {
         let built_frame = self.interaction.built_frame(&self.text_input);
         #[cfg(feature = "frame-diagnostics")]
         let frame_timing = built_frame.diagnostics.timing();
-        self.platform_window
-            .update_accessibility(built_frame.accessibility.clone())
-            .log_err();
+        if self.platform_window.capabilities().accessibility {
+            self.platform_window
+                .update_accessibility(built_frame.accessibility.clone())
+                .log_err();
+        }
         let submission = crate::render_api::submit_compat(
             self.platform_window.as_mut(),
             crate::render_api::RenderScene::new(built_frame.scene),
@@ -5750,7 +5752,7 @@ pub fn outline(
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "accessibility")]
-    use crate::{AccessibilityUpdate, SemanticTreeBuilder};
+    use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
         AnyView, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
@@ -5783,10 +5785,16 @@ mod tests {
 
     #[cfg(feature = "accessibility")]
     impl Render for AccessibilityView {
-        fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            window.interaction.next_frame.accessibility =
-                AccessibilityUpdate::from_semantic_snapshot(SemanticTreeBuilder::new().snapshot());
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             div()
+                .id("accessibility-group")
+                .role(accesskit::Role::Group)
+                .child(
+                    div()
+                        .id("accessibility-button")
+                        .role(accesskit::Role::Button)
+                        .aria_label("Activate"),
+                )
         }
     }
 
@@ -5950,9 +5958,43 @@ mod tests {
         let window = cx.add_window(|_, _| AccessibilityView);
         let handle: AnyWindowHandle = window.into();
         cx.update_window(handle, |_, window, cx| {
+            window.refresh();
             window.draw(cx).clear();
+            assert_eq!(
+                window
+                    .interaction
+                    .rendered_frame
+                    .accessibility_builder
+                    .node_count(),
+                3
+            );
             let built_frame = window.interaction.built_frame(&window.text_input);
-            assert!(built_frame.accessibility.semantic_snapshot().is_some());
+            let snapshot = built_frame
+                .accessibility
+                .semantic_snapshot()
+                .expect("built frame should contain a semantic snapshot");
+            let (group_id, group) = snapshot
+                .update
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == accesskit::Role::Group)
+                .expect("semantic group should be present");
+            let (button_id, button) = snapshot
+                .update
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == accesskit::Role::Button)
+                .expect("semantic button should be present");
+            assert_eq!(group.children(), &[*button_id]);
+            assert_eq!(button.label(), Some("Activate"));
+            assert!(snapshot.update.nodes[0].1.children().contains(group_id));
+
+            window.draw(cx).clear();
+            let cached_frame = window.interaction.built_frame(&window.text_input);
+            assert!(
+                cached_frame.accessibility.is_empty(),
+                "cached frames must not replace the native semantic tree with a root-only update"
+            );
         })
         .expect("accessibility window should remain open");
     }

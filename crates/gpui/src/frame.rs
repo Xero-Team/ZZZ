@@ -1,5 +1,7 @@
 #[cfg(any(test, feature = "test-support"))]
 use crate::Bounds;
+#[cfg(feature = "accessibility")]
+use crate::SemanticTreeBuilder;
 use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest};
 use crate::{
     AccessibilityUpdate, AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId,
@@ -397,6 +399,8 @@ pub(crate) struct Frame {
     pub(crate) tooltip_requests: Vec<Option<TooltipRequest>>,
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
     pub(crate) accessibility: AccessibilityUpdate,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_builder: SemanticTreeBuilder,
     pub(crate) diagnostics: FrameDiagnosticsSnapshot,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
@@ -541,6 +545,8 @@ impl Frame {
             tooltip_requests: Vec::new(),
             cursor_styles: Vec::new(),
             accessibility: AccessibilityUpdate::default(),
+            #[cfg(feature = "accessibility")]
+            accessibility_builder: SemanticTreeBuilder::new(),
             diagnostics: FrameDiagnosticsSnapshot::default(),
 
             #[cfg(any(test, feature = "test-support"))]
@@ -566,6 +572,8 @@ impl Frame {
         self.tooltip_requests.clear();
         self.cursor_styles.clear();
         self.accessibility = AccessibilityUpdate::default();
+        #[cfg(feature = "accessibility")]
+        self.accessibility_builder.clear();
         self.diagnostics = FrameDiagnosticsSnapshot::default();
         self.hitboxes.clear();
         self.window_control_hitboxes.clear();
@@ -641,5 +649,10 @@ impl Frame {
         }
 
         self.scene.finish();
+        #[cfg(feature = "accessibility")]
+        if self.accessibility_builder.node_count() > 1 {
+            self.accessibility =
+                AccessibilityUpdate::from_semantic_snapshot(self.accessibility_builder.snapshot());
+        }
     }
 }

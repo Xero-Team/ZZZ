@@ -33,6 +33,7 @@ pub struct SemanticSnapshot {
 /// Builds one complete semantic tree per frame.
 pub struct SemanticTreeBuilder {
     nodes: HashMap<NodeId, Node>,
+    node_stack: Vec<NodeId>,
     focused_node: NodeId,
 }
 
@@ -47,6 +48,7 @@ impl SemanticTreeBuilder {
     pub fn new() -> Self {
         let mut builder = Self {
             nodes: HashMap::new(),
+            node_stack: vec![ROOT_NODE_ID],
             focused_node: ROOT_NODE_ID,
         };
         builder.nodes.insert(ROOT_NODE_ID, Node::new(Role::Window));
@@ -56,6 +58,39 @@ impl SemanticTreeBuilder {
     /// Adds or replaces a node in the current frame.
     pub fn set_node(&mut self, node_id: NodeId, node: Node) {
         self.nodes.insert(node_id, node);
+    }
+
+    /// Adds a node below the current parent and makes it the parent for nested elements.
+    pub(crate) fn push_node(&mut self, node_id: NodeId, node: Node) -> bool {
+        if self.nodes.contains_key(&node_id) {
+            return false;
+        }
+        let parent_id = self.node_stack.last().copied().unwrap_or(ROOT_NODE_ID);
+        if let Some(parent) = self.nodes.get_mut(&parent_id) {
+            let mut children = parent.children().to_vec();
+            children.push(node_id);
+            parent.set_children(children);
+        }
+        self.nodes.insert(node_id, node);
+        self.node_stack.push(node_id);
+        true
+    }
+
+    /// Finishes the current element node and restores its parent.
+    pub(crate) fn pop_node(&mut self) {
+        debug_assert!(self.node_stack.len() > 1);
+        if self.node_stack.len() > 1 {
+            self.node_stack.pop();
+        }
+    }
+
+    /// Clears frame-local nodes while preserving the stable window root.
+    pub(crate) fn clear(&mut self) {
+        self.nodes.clear();
+        self.nodes.insert(ROOT_NODE_ID, Node::new(Role::Window));
+        self.node_stack.clear();
+        self.node_stack.push(ROOT_NODE_ID);
+        self.focused_node = ROOT_NODE_ID;
     }
 
     /// Sets the children of an existing node.
@@ -198,6 +233,38 @@ mod tests {
         assert_eq!(count.get(), 1);
         assert!(!router.dispatch(node_id, Action::Focus, None));
         assert_eq!(router.actions_for(node_id), HashSet::from([Action::Click]));
+    }
+
+    #[test]
+    fn nested_nodes_are_attached_to_the_current_parent() {
+        let group_id = stable_semantic_node_id("group");
+        let button_id = stable_semantic_node_id("button");
+        let mut builder = SemanticTreeBuilder::new();
+        assert!(builder.push_node(group_id, Node::new(Role::Group)));
+        assert!(builder.push_node(button_id, Node::new(Role::Button)));
+        builder.pop_node();
+        builder.pop_node();
+
+        let snapshot = builder.snapshot();
+        let root = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(node_id, _)| *node_id == ROOT_NODE_ID)
+            .expect("root node should exist");
+        let group = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(node_id, _)| *node_id == group_id)
+            .expect("group node should exist");
+        assert_eq!(root.1.children(), &[group_id]);
+        assert_eq!(group.1.children(), &[button_id]);
+
+        builder.clear();
+        let snapshot = builder.snapshot();
+        assert_eq!(snapshot.update.nodes.len(), 1);
+        assert_eq!(snapshot.focused_node, ROOT_NODE_ID);
     }
 
     #[test]

@@ -103,6 +103,16 @@ pub trait Element: 'static + IntoElement {
         cx: &mut App,
     );
 
+    /// Returns the semantic role exposed for this element.
+    #[cfg(feature = "accessibility")]
+    fn a11y_role(&self) -> Option<accesskit::Role> {
+        None
+    }
+
+    /// Writes semantic properties after GPUI has assigned the node's bounds.
+    #[cfg(feature = "accessibility")]
+    fn write_a11y_info(&self, _node: &mut accesskit::Node) {}
+
     /// Convert this element into a dynamically-typed [`AnyElement`].
     fn into_any(self) -> AnyElement {
         AnyElement::new(self)
@@ -302,6 +312,13 @@ impl Display for GlobalElementId {
     }
 }
 
+impl GlobalElementId {
+    #[cfg(feature = "accessibility")]
+    pub(crate) fn accesskit_node_id(&self) -> accesskit::NodeId {
+        crate::stable_semantic_node_id(self)
+    }
+}
+
 trait ElementObject {
     fn inner_element(&mut self) -> &mut dyn Any;
 
@@ -441,6 +458,31 @@ impl<E: Element> Drawable<E> {
                 }
 
                 let bounds = window.layout_bounds(layout_id);
+                #[cfg(feature = "accessibility")]
+                let pushed_accessibility_node = global_id
+                    .as_ref()
+                    .and_then(|global_id| {
+                        self.element.a11y_role().map(|role| {
+                            let node_id = global_id.accesskit_node_id();
+                            let mut node = accesskit::Node::new(role);
+                            let scale_factor = window.scale_factor();
+                            node.set_bounds(accesskit::Rect {
+                                x0: (bounds.origin.x.0 * scale_factor) as f64,
+                                y0: (bounds.origin.y.0 * scale_factor) as f64,
+                                x1: ((bounds.origin.x.0 + bounds.size.width.0) * scale_factor)
+                                    as f64,
+                                y1: ((bounds.origin.y.0 + bounds.size.height.0) * scale_factor)
+                                    as f64,
+                            });
+                            self.element.write_a11y_info(&mut node);
+                            window
+                                .interaction
+                                .next_frame
+                                .accessibility_builder
+                                .push_node(node_id, node)
+                        })
+                    })
+                    .unwrap_or(false);
                 let node_id = window.interaction.next_frame.dispatch_tree.push_node();
                 let prepaint = self.element.prepaint(
                     global_id.as_ref(),
@@ -451,6 +493,15 @@ impl<E: Element> Drawable<E> {
                     cx,
                 );
                 window.interaction.next_frame.dispatch_tree.pop_node();
+
+                #[cfg(feature = "accessibility")]
+                if pushed_accessibility_node {
+                    window
+                        .interaction
+                        .next_frame
+                        .accessibility_builder
+                        .pop_node();
+                }
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();

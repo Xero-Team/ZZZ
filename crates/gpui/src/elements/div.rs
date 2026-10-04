@@ -1192,6 +1192,20 @@ pub trait InteractiveElement: Sized {
 /// A trait for elements that want to use the standard GPUI interactivity features
 /// that require state.
 pub trait StatefulInteractiveElement: InteractiveElement {
+    /// Set the accessible role for this element.
+    #[cfg(feature = "accessibility")]
+    fn role(mut self, role: accesskit::Role) -> Self {
+        self.interactivity().accessibility_role = Some(role);
+        self
+    }
+
+    /// Set the accessible label for this element.
+    #[cfg(feature = "accessibility")]
+    fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.interactivity().accessibility_label = Some(label.into());
+        self
+    }
+
     /// Set this element to focusable.
     fn focusable(mut self) -> Self {
         self.interactivity().focusable = true;
@@ -1505,6 +1519,18 @@ impl Element for Div {
         self.interactivity.source_location()
     }
 
+    #[cfg(feature = "accessibility")]
+    fn a11y_role(&self) -> Option<accesskit::Role> {
+        self.interactivity.accessibility_role
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn write_a11y_info(&self, node: &mut accesskit::Node) {
+        if let Some(label) = &self.interactivity.accessibility_label {
+            node.set_label(label.to_string());
+        }
+    }
+
     #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn request_layout(
         &mut self,
@@ -1741,6 +1767,10 @@ pub struct Interactivity {
     pub(crate) tab_index: Option<isize>,
     pub(crate) tab_group: bool,
     pub(crate) tab_stop: bool,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_role: Option<accesskit::Role>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_label: Option<SharedString>,
 
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) source_location: Option<&'static core::panic::Location<'static>>,
@@ -3381,6 +3411,16 @@ where
 
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
         self.element.source_location()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn a11y_role(&self) -> Option<accesskit::Role> {
+        self.element.a11y_role()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn write_a11y_info(&self, node: &mut accesskit::Node) {
+        self.element.write_a11y_info(node);
     }
 
     fn request_layout(
