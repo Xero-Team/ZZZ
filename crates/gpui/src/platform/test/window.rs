@@ -35,6 +35,7 @@ pub(crate) struct TestWindowState {
     appearance_change_callback: Option<Box<dyn FnMut()>>,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
     frame_wake_count: Rc<Cell<usize>>,
+    draw_result: bool,
     input_handler: Option<TextInputClient>,
     is_fullscreen: bool,
     scale_factor: f32,
@@ -94,6 +95,7 @@ impl TestWindow {
             appearance_change_callback: None,
             request_frame_callback: None,
             frame_wake_count: Rc::new(Cell::new(0)),
+            draw_result: true,
             input_handler: None,
             is_fullscreen: false,
             // Preserve the test platform's historical 2x default.
@@ -148,6 +150,10 @@ impl TestWindow {
 
     pub fn frame_wake_count(&self) -> usize {
         self.0.lock().frame_wake_count.get()
+    }
+
+    pub fn set_draw_result(&self, submitted: bool) {
+        self.0.lock().draw_result = submitted;
     }
 
     pub fn simulate_frame_request(&self, options: RequestFrameOptions) {
@@ -345,7 +351,7 @@ impl crate::SystemServices for TestWindow {
 
 impl crate::PlatformRenderTarget for TestWindow {
     fn draw(&self, _scene: &Scene) -> bool {
-        true
+        self.0.lock().draw_result
     }
 
     fn sprite_atlas(&self) -> sync::Arc<dyn crate::PlatformAtlas> {

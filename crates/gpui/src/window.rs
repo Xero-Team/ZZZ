@@ -6181,6 +6181,40 @@ mod tests {
 
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
+    fn frame_diagnostics_record_skipped_submission(cx: &mut TestAppContext) {
+        let mut collector = FrameTimingCollector::new();
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+        let window_id = handle.window_id();
+        let test_window = cx.test_window(handle);
+        collector.snapshot();
+
+        test_window.set_draw_result(false);
+        window
+            .update(cx, |_, window, _| window.refresh())
+            .expect("diagnostics window should remain open");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+
+        let snapshot = collector.snapshot();
+        let skipped_build_id = snapshot.events.iter().find_map(|event| match event {
+            FrameEvent::SubmissionSkipped {
+                build_id,
+                window_id: event_window_id,
+                ..
+            } if *event_window_id == window_id => Some(*build_id),
+            _ => None,
+        });
+        assert!(skipped_build_id.is_some());
+        assert!(!snapshot.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Presented(timing)
+                if timing.window_id == window_id
+                    && Some(timing.build_id) == skipped_build_id
+        )));
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
     fn frame_diagnostics_runner(cx: &mut TestAppContext) {
         const ITERATIONS: usize = 100;
         let mut collector = FrameTimingCollector::new();
