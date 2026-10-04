@@ -2149,7 +2149,7 @@ impl ThreadView {
         )
     }
 
-    fn handle_authorize_tool_call(
+    pub(crate) fn handle_authorize_tool_call(
         &mut self,
         action: &AuthorizeToolCall,
         window: &mut Window,

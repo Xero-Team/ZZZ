@@ -4509,21 +4509,23 @@ mod tests {
 
         let terminal_id = acp::TerminalId::new(uuid::Uuid::new_v4().to_string());
 
-        // Create a real PTY terminal that runs a command which prints output then sleeps
-        // We use printf instead of echo and chain with && sleep to ensure proper execution
-        let (completion_tx, _completion_rx) = async_channel::unbounded();
-        let (program, args) = ShellBuilder::new(&Shell::System, false)
+        // Create a real PTY terminal with a running task so kill_active_task exercises
+        // the process termination and completion paths.
+        let (completion_tx, completion_rx) = async_channel::bounded(1);
+        let task_state = ::terminal::TaskState {
+            status: ::terminal::TaskStatus::Running,
+            completion_rx,
+            spawned_task: task::SpawnInTerminal::default(),
+        };
+        let (program, args) = ShellBuilder::new(&Shell::Program("/bin/sh".to_owned()), false)
             .non_interactive()
-            .build(
-                Some("printf 'output_before_kill\\n' && sleep 60".to_owned()),
-                &[],
-            );
+            .build(Some("sleep 60".to_owned()), &[]);
 
         let builder = cx
             .update(|cx| {
                 ::terminal::TerminalBuilder::new(
                     None,
-                    None,
+                    Some(task_state),
                     task::Shell::WithArguments {
                         program,
                         args,
@@ -4548,12 +4550,18 @@ mod tests {
 
         let lower_terminal = cx.new(|cx| builder.subscribe(cx));
 
+        // Seed the terminal buffer directly so this test does not depend on a PTY
+        // reader thread being scheduled before the timeout.
+        lower_terminal.update(cx, |terminal, cx| {
+            terminal.write_output(b"output_before_kill\r\n", cx);
+        });
+
         // Create the acp_thread Terminal wrapper
         thread.update(cx, |thread, cx| {
             thread.on_terminal_provider_event(
                 TerminalProviderEvent::Created {
                     terminal_id: terminal_id.clone(),
-                    label: "printf output_before_kill && sleep 60".to_string(),
+                    label: "sleep 60".to_string(),
                     cwd: None,
                     output_byte_limit: None,
                     terminal: lower_terminal.clone(),
@@ -4561,28 +4569,6 @@ mod tests {
                 cx,
             );
         });
-
-        // Poll until the printf command produces output, rather than using a
-        // fixed sleep which is flaky on loaded machines.
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
-        loop {
-            let has_output = thread.read_with(cx, |thread, cx| {
-                let term = thread
-                    .terminals
-                    .get(&terminal_id)
-                    .expect("terminal not found");
-                let content = term.read(cx).inner().read(cx).get_content();
-                content.contains("output_before_kill")
-            });
-            if has_output {
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "Timed out waiting for printf output to appear in terminal",
-            );
-            cx.executor().timer(Duration::from_millis(50)).await;
-        }
 
         // Get the acp_thread Terminal and kill it
         let wait_for_exit = thread.update(cx, |thread, cx| {

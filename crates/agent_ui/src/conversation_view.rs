@@ -1369,6 +1369,32 @@ impl ConversationView {
         }
     }
 
+    fn handle_authorize_tool_call(
+        &mut self,
+        action: &AuthorizeToolCall,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(active) = self.active_thread() {
+            active.update(cx, |active, cx| {
+                active.handle_authorize_tool_call(action, window, cx);
+            });
+        }
+    }
+
+    fn handle_select_permission_granularity(
+        &mut self,
+        action: &crate::SelectPermissionGranularity,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(active) = self.active_thread() {
+            active.update(cx, |active, cx| {
+                active.handle_select_permission_granularity(action, window, cx);
+            });
+        }
+    }
+
     pub fn parent_id(&self) -> ThreadId {
         self.thread_id
     }
@@ -3287,6 +3313,11 @@ impl Render for ConversationView {
 
         v_flex()
             .track_focus(&self.focus_handle)
+            .on_action(cx.listener(|this, _: &menu::Cancel, _, cx| {
+                this.cancel_generation(cx);
+            }))
+            .on_action(cx.listener(Self::handle_authorize_tool_call))
+            .on_action(cx.listener(Self::handle_select_permission_granularity))
             .size_full()
             .bg(cx.theme().colors().panel_background)
             .child(match &self.server_state {
