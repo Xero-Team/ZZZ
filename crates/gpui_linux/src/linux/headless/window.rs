@@ -14,8 +14,8 @@ use uuid::Uuid;
 
 use gpui::{
     Bounds, Capslock, DispatchEventResult, DisplayId, GpuSpecs, HeadlessAtlas, Modifiers, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, Scene, Size, WindowAppearance,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, Scene, Size, TextInputClient, WindowAppearance,
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowParams, px,
 };
 
@@ -50,7 +50,7 @@ impl PlatformDisplay for HeadlessDisplay {
 struct HeadlessWindowState {
     bounds: Bounds<Pixels>,
     display: Rc<dyn PlatformDisplay>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     title: Option<String>,
     is_fullscreen: bool,
 }
@@ -105,11 +105,11 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
 impl gpui::AccessibilityBridge for HeadlessWindow {}
 
 impl gpui::TextInputBridge for HeadlessWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.borrow_mut().input_handler.take()
     }
 

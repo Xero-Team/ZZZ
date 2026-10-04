@@ -54,7 +54,7 @@ pub struct WindowsWindowState {
     pub restore_from_minimized: Cell<Option<Box<dyn FnMut(RequestFrameOptions)>>>,
 
     pub callbacks: Callbacks,
-    pub input_handler: Cell<Option<PlatformInputHandler>>,
+    pub input_handler: Cell<Option<TextInputClient>>,
     pub ime_enabled: Cell<bool>,
     pub pending_surrogate: Cell<Option<u16>>,
     pub last_reported_modifiers: Cell<Option<Modifiers>>,
@@ -594,11 +594,11 @@ impl Drop for WindowsWindow {
 impl gpui::AccessibilityBridge for WindowsWindow {}
 
 impl gpui::TextInputBridge for WindowsWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.state.input_handler.set(Some(input_handler));
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.state.input_handler.take()
     }
 

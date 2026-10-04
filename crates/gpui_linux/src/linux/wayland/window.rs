@@ -31,8 +31,8 @@ use crate::linux::wayland::{display::WaylandDisplay, serial::SerialKind};
 use crate::linux::{Globals, Output, WaylandClientStatePtr, get_window};
 use gpui::{
     AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, GpuSpecs, Modifiers, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, Tiling,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, TextInputClient, Tiling,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls,
     WindowDecorations, WindowHost as _, WindowKind, WindowParams,
     layer_shell::LayerShellNotSupportedError, px, size,
@@ -105,7 +105,7 @@ pub struct WaylandWindowState {
     renderer: WgpuRenderer,
     bounds: Bounds<Pixels>,
     scale: f32,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     decorations: WindowDecorations,
     background_appearance: WindowBackgroundAppearance,
     fullscreen: bool,
@@ -1150,11 +1150,11 @@ impl rwh::HasDisplayHandle for WaylandWindow {
 impl gpui::AccessibilityBridge for WaylandWindow {}
 
 impl gpui::TextInputBridge for WaylandWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.borrow_mut().input_handler.take()
     }
 

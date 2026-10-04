@@ -27,8 +27,8 @@ use gpui::{
     AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, CursorStyle, ExternalPaths,
     FileDropEvent, ForegroundExecutor, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas,
-    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton,
-    PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab, WindowAppearance,
+    PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton, PromptLevel,
+    RequestFrameOptions, SharedString, Size, SystemWindowTab, TextInputClient, WindowAppearance,
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowHost as _, WindowKind,
     WindowParams, point, px, size,
 };
@@ -587,7 +587,7 @@ struct MacWindowState {
     should_close_callback: Option<Box<dyn FnMut() -> bool>>,
     close_callback: Option<Box<dyn FnOnce()>>,
     appearance_changed_callback: Option<Box<dyn FnMut()>>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     last_key_equivalent: Option<KeyDownEvent>,
     synthetic_drag_counter: usize,
     traffic_light_position: Option<Point<Pixels>>,
@@ -1326,11 +1326,11 @@ fn if_window_not_closed(closed: Arc<AtomicBool>, f: impl FnOnce()) {
 impl gpui::AccessibilityBridge for MacWindow {}
 
 impl gpui::TextInputBridge for MacWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.as_ref().lock().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.as_ref().lock().input_handler.take()
     }
 
@@ -3213,7 +3213,7 @@ fn drag_event_position(window_state: &Mutex<MacWindowState>, dragging_info: id) 
 
 fn with_input_handler<F, R>(window: &Object, f: F) -> Option<R>
 where
-    F: FnOnce(&mut PlatformInputHandler) -> R,
+    F: FnOnce(&mut TextInputClient) -> R,
 {
     let window_state = unsafe { get_window_state(window) };
     let mut lock = window_state.as_ref().lock();

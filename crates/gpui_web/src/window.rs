@@ -5,10 +5,10 @@ use std::{cell::Cell, cell::RefCell, rc::Rc};
 
 use gpui::{
     AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, DispatchEventResult, GpuSpecs,
-    Modifiers, MouseButton, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel, RequestFrameOptions,
-    ResizeEdge, Scene, Size, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
-    WindowControlArea, WindowControls, WindowDecorations, WindowParams, px,
+    Modifiers, MouseButton, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow,
+    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size,
+    TextInputClient, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
+    WindowControls, WindowDecorations, WindowParams, px,
 };
 use gpui_wgpu::{WgpuContext, WgpuRenderer, WgpuSurfaceConfig};
 use wasm_bindgen::prelude::*;
@@ -33,7 +33,7 @@ pub(crate) struct WebWindowMutableState {
     pub(crate) scale_factor: f32,
     pub(crate) max_texture_dimension: u32,
     pub(crate) title: String,
-    pub(crate) input_handler: Option<PlatformInputHandler>,
+    pub(crate) input_handler: Option<TextInputClient>,
     pub(crate) is_fullscreen: bool,
     pub(crate) is_active: bool,
     pub(crate) is_hovered: bool,
@@ -482,7 +482,7 @@ impl WebWindowInner {
 
     pub(crate) fn with_input_handler<R>(
         &self,
-        f: impl FnOnce(&mut PlatformInputHandler) -> R,
+        f: impl FnOnce(&mut TextInputClient) -> R,
     ) -> Option<R> {
         let mut handler = self.state.borrow_mut().input_handler.take()?;
         let result = f(&mut handler);
@@ -605,11 +605,11 @@ impl raw_window_handle::HasDisplayHandle for WebWindow {
 impl gpui::AccessibilityBridge for WebWindow {}
 
 impl gpui::TextInputBridge for WebWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.inner.state.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.inner.state.borrow_mut().input_handler.take()
     }
 

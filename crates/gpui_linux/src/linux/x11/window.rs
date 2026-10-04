@@ -4,8 +4,8 @@ use x11rb::connection::RequestConnection;
 use crate::linux::X11ClientStatePtr;
 use gpui::{
     AnyWindowHandle, Bounds, Decorations, DevicePixels, ForegroundExecutor, GpuSpecs, Modifiers,
-    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
-    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size,
+    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size, TextInputClient,
     Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
     WindowDecorations, WindowHost as _, WindowKind, WindowParams, px,
 };
@@ -253,7 +253,7 @@ pub struct X11WindowState {
     scale_factor: f32,
     renderer: WgpuRenderer,
     display: Rc<dyn PlatformDisplay>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     appearance: WindowAppearance,
     background_appearance: WindowBackgroundAppearance,
     maximized_vertical: bool,
@@ -1339,11 +1339,11 @@ impl X11WindowStatePtr {
 impl gpui::AccessibilityBridge for X11Window {}
 
 impl gpui::TextInputBridge for X11Window {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.state.borrow_mut().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.state.borrow_mut().input_handler.take()
     }
 

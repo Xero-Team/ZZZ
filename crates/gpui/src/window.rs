@@ -9,13 +9,13 @@ use crate::{
     InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext, KeyDownEvent,
     KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
     MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
-    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority,
-    PromptButton, PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams,
-    RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ScaledPixels, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
-    SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine,
-    Task, TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
+    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow,
+    Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render,
+    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, ResizeEdge,
+    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow,
+    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
+    SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine, Task, TextInputClient,
+    TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
     TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
     WindowParams, WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
@@ -4217,7 +4217,7 @@ impl Window {
             let cx = self.to_async(cx);
             self.text_input
                 .next_handlers
-                .push(Some(PlatformInputHandler::new(cx, Box::new(input_handler))));
+                .push(Some(TextInputClient::new(cx, Box::new(input_handler))));
         }
     }
 

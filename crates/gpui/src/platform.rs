@@ -689,8 +689,8 @@ pub struct RequestFrameOptions {
 /// Platform bridge for native text input and IME candidate positioning.
 #[expect(missing_docs)]
 pub trait TextInputBridge {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler);
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler>;
+    fn set_input_handler(&mut self, input_handler: TextInputClient);
+    fn take_input_handler(&mut self) -> Option<TextInputClient>;
     fn update_ime_position(&self, bounds: Bounds<Pixels>);
 }
 
@@ -1402,10 +1402,19 @@ impl From<TileId> for etagere::AllocId {
 }
 
 #[expect(missing_docs)]
-pub struct PlatformInputHandler {
+pub struct TextInputClient {
     cx: AsyncWindowContext,
     handler: Box<dyn InputHandler>,
 }
+
+/// Backward-compatible name for [`TextInputClient`].
+///
+/// Remove this alias after downstream platform integrations have migrated to the client name.
+#[deprecated(
+    since = "1.24.0",
+    note = "use TextInputClient; this alias will be removed in the next breaking GPUI release"
+)]
+pub type PlatformInputHandler = TextInputClient;
 
 #[expect(missing_docs)]
 #[cfg_attr(
@@ -1415,7 +1424,7 @@ pub struct PlatformInputHandler {
     ),
     allow(dead_code)
 )]
-impl PlatformInputHandler {
+impl TextInputClient {
     pub fn new(cx: AsyncWindowContext, handler: Box<dyn InputHandler>) -> Self {
         Self { cx, handler }
     }

@@ -1877,7 +1877,7 @@ mod test {
     use editor::{HighlightKey, MultiBufferOffset};
     use gpui::{
         Bounds, DispatchEventResult, ElementInputHandler, KeyBinding, KeyDownEvent, Keystroke,
-        PlatformInput, PlatformInputHandler, UpdateGlobal, VisualTestContext,
+        PlatformInput, TextInputClient, UpdateGlobal, VisualTestContext,
     };
     use indoc::indoc;
     use language::{CursorShape, Point};
@@ -1970,7 +1970,7 @@ mod test {
     fn assert_helix_jump_bypasses_text_input(cx: &mut VimTestContext) {
         let editor = cx.update_editor(|_, _, cx| cx.entity());
         let mut input_handler = cx.update(|window, cx| {
-            PlatformInputHandler::new(
+            TextInputClient::new(
                 window.to_async(cx),
                 Box::new(ElementInputHandler::new(Bounds::default(), editor)),
             )

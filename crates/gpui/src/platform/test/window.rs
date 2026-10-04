@@ -1,7 +1,7 @@
 use crate::{
     AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, GpuSpecs, HeadlessAtlas, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformInputHandler,
-    PlatformWindow, Point, PromptButton, RequestFrameOptions, Scene, Size, TestPlatform,
+    PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformWindow, Point,
+    PromptButton, RequestFrameOptions, Scene, Size, TestPlatform, TextInputClient,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowHost as _,
     WindowParams,
 };
@@ -35,7 +35,7 @@ pub(crate) struct TestWindowState {
     appearance_change_callback: Option<Box<dyn FnMut()>>,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
     frame_wake_count: Rc<Cell<usize>>,
-    input_handler: Option<PlatformInputHandler>,
+    input_handler: Option<TextInputClient>,
     is_fullscreen: bool,
     scale_factor: f32,
     appearance: WindowAppearance,
@@ -175,11 +175,11 @@ impl TestWindow {
 impl crate::AccessibilityBridge for TestWindow {}
 
 impl crate::TextInputBridge for TestWindow {
-    fn set_input_handler(&mut self, input_handler: PlatformInputHandler) {
+    fn set_input_handler(&mut self, input_handler: TextInputClient) {
         self.0.lock().input_handler = Some(input_handler);
     }
 
-    fn take_input_handler(&mut self) -> Option<PlatformInputHandler> {
+    fn take_input_handler(&mut self) -> Option<TextInputClient> {
         self.0.lock().input_handler.take()
     }
 
