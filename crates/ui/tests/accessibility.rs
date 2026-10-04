@@ -3,7 +3,7 @@ use gpui::{
     TestAppContext, Window, div,
 };
 use std::{cell::Cell, rc::Rc};
-use ui::{Button, Clickable as _, Disableable as _, Tab, Toggleable as _, TreeViewItem};
+use ui::{Button, Clickable as _, Disableable as _, ListItem, Tab, Toggleable as _, TreeViewItem};
 
 struct SemanticComponents {
     action_count: Rc<Cell<usize>>,
@@ -25,6 +25,12 @@ impl Render for SemanticComponents {
             .child(
                 TreeViewItem::new("workspace-tree", "Workspace")
                     .expanded(true)
+                    .toggle_state(true),
+            )
+            .child(
+                ListItem::new("list-item")
+                    .aria_label("Item")
+                    .toggle(true)
                     .toggle_state(true),
             )
     }
@@ -59,7 +65,9 @@ fn components_emit_roles_labels_and_state() {
         .update
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == gpui::accesskit::Role::Button)
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Save")
+        })
         .map(|(_, node)| node)
         .expect("button semantic node should exist");
     assert_eq!(button.label(), Some("Save"));
@@ -103,4 +111,15 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(tree_item.label(), Some("Workspace"));
     assert_eq!(tree_item.is_expanded(), Some(true));
     assert_eq!(tree_item.is_selected(), Some(true));
+
+    let list_item = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::ListItem)
+        .map(|(_, node)| node)
+        .expect("list item semantic node should exist");
+    assert_eq!(list_item.label(), Some("Item"));
+    assert_eq!(list_item.is_expanded(), Some(true));
+    assert_eq!(list_item.is_selected(), Some(true));
 }
