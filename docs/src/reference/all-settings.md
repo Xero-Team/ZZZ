@@ -2094,6 +2094,12 @@ Use `"..."` to add patterns without repeating ZZZ's defaults. In project setting
 
 Inherited patterns are inserted at `"..."`, and duplicates keep their first occurrence.
 
+## File Scan Depth
+
+- Setting: `file_scan_depth`
+- Description: Maximum directory depth to eagerly index outside of git repositories. Contents of directories at this depth or deeper are indexed on demand. Repositories rooted shallower than this depth are always indexed fully. `0` means no limit.
+- Default: `8`
+
 ## File Types
 
 - Setting: `file_types`
