@@ -68,23 +68,40 @@ fn record_allocation(pointer: *mut u8, bytes: usize) {
 struct WorkloadMeasurement {
     frames: usize,
     elapsed_nanoseconds: u128,
+    p50_nanoseconds: u128,
+    p95_nanoseconds: u128,
+    p99_nanoseconds: u128,
     allocations: usize,
     allocated_bytes: usize,
 }
 
-fn measure(frames: usize, workload: impl FnOnce()) -> WorkloadMeasurement {
+fn measure<I>(workload: I, mut run_operation: impl FnMut(I::Item)) -> WorkloadMeasurement
+where
+    I: IntoIterator,
+    I::IntoIter: ExactSizeIterator,
+{
+    let workload = workload.into_iter();
+    let frames = workload.len();
+    let mut frame_durations = Vec::with_capacity(frames);
     COUNTING_ENABLED.store(false, Ordering::SeqCst);
     ALLOCATION_COUNT.store(0, Ordering::SeqCst);
     ALLOCATED_BYTES.store(0, Ordering::SeqCst);
     COUNTING_ENABLED.store(true, Ordering::SeqCst);
     let started_at = Instant::now();
-    workload();
+    for item in workload {
+        let frame_started_at = Instant::now();
+        run_operation(item);
+        frame_durations.push(frame_started_at.elapsed().as_nanos());
+    }
     let elapsed_nanoseconds = started_at.elapsed().as_nanos();
     COUNTING_ENABLED.store(false, Ordering::SeqCst);
 
     WorkloadMeasurement {
         frames,
         elapsed_nanoseconds,
+        p50_nanoseconds: percentile(&mut frame_durations, 50),
+        p95_nanoseconds: percentile(&mut frame_durations, 95),
+        p99_nanoseconds: percentile(&mut frame_durations, 99),
         allocations: ALLOCATION_COUNT.load(Ordering::SeqCst),
         allocated_bytes: ALLOCATED_BYTES.load(Ordering::SeqCst),
     }
@@ -92,15 +109,28 @@ fn measure(frames: usize, workload: impl FnOnce()) -> WorkloadMeasurement {
 
 fn report_measurement(name: &str, measurement: WorkloadMeasurement) {
     println!(
-        "EDITOR_FRAME_WORKLOAD workload={name} frames={} elapsed_ns={} allocations={} allocated_bytes={} ns_per_frame={} allocations_per_frame={:.3} bytes_per_frame={:.3}",
+        "EDITOR_FRAME_WORKLOAD workload={name} frames={} elapsed_ns={} ns_per_frame={} p50_ns={} p95_ns={} p99_ns={} allocations={} allocated_bytes={} allocations_per_frame={:.3} bytes_per_frame={:.3}",
         measurement.frames,
         measurement.elapsed_nanoseconds,
+        measurement.elapsed_nanoseconds / measurement.frames as u128,
+        measurement.p50_nanoseconds,
+        measurement.p95_nanoseconds,
+        measurement.p99_nanoseconds,
         measurement.allocations,
         measurement.allocated_bytes,
-        measurement.elapsed_nanoseconds / measurement.frames as u128,
         measurement.allocations as f64 / measurement.frames as f64,
         measurement.allocated_bytes as f64 / measurement.frames as f64,
     );
+}
+
+fn percentile(samples: &mut [u128], percentage: usize) -> u128 {
+    samples.sort_unstable();
+    let index = samples
+        .len()
+        .saturating_mul(percentage)
+        .div_ceil(100)
+        .saturating_sub(1);
+    samples.get(index).copied().unwrap_or_default()
 }
 
 #[cfg(feature = "frame-diagnostics")]
@@ -173,17 +203,6 @@ fn report_diagnostics(name: &str, snapshot: FrameDiagnosticsSnapshot) {
         cache_hits[3],
         cache_hits[4],
     );
-}
-
-#[cfg(feature = "frame-diagnostics")]
-fn percentile(samples: &mut [u128], percentage: usize) -> u128 {
-    samples.sort_unstable();
-    let index = samples
-        .len()
-        .saturating_mul(percentage)
-        .div_ceil(100)
-        .saturating_sub(1);
-    samples.get(index).copied().unwrap_or_default()
 }
 
 fn draw_frame(cx: &mut TestAppContext, window: AnyWindowHandle) {
@@ -320,10 +339,8 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     let mut collector = FrameTimingCollector::new();
 
-    let cached = measure(CACHED_FRAMES, || {
-        for _ in 0..CACHED_FRAMES {
-            draw_frame(&mut cx, window);
-        }
+    let cached = measure(0..CACHED_FRAMES, |_| {
+        draw_frame(&mut cx, window);
     });
     report_measurement("cached", cached);
     #[cfg(feature = "frame-diagnostics")]
@@ -332,12 +349,9 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     collector.snapshot();
 
-    let typed_characters = typing_keystrokes.len();
-    let typing = measure(typed_characters, || {
-        for keystroke in &typing_keystrokes {
-            cx.dispatch_keystroke(window, keystroke.clone());
-            present_frame(&mut cx, window);
-        }
+    let typing = measure(&typing_keystrokes, |keystroke| {
+        cx.dispatch_keystroke(window, keystroke.clone());
+        present_frame(&mut cx, window);
     });
     report_measurement("typing", typing);
     #[cfg(feature = "frame-diagnostics")]
@@ -346,16 +360,14 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     collector.snapshot();
 
-    let scrolling = measure(SCROLL_FRAMES, || {
-        for frame in 0..SCROLL_FRAMES {
-            let row = frame as f64 * 99_999.0 / (SCROLL_FRAMES - 1) as f64;
-            editor
-                .update(&mut cx, |editor, window, cx| {
-                    editor.set_scroll_position(point(0.0, row), window, cx);
-                })
-                .expect("benchmark editor window should remain open");
-            present_frame(&mut cx, window);
-        }
+    let scrolling = measure(0..SCROLL_FRAMES, |frame| {
+        let row = frame as f64 * 99_999.0 / (SCROLL_FRAMES - 1) as f64;
+        editor
+            .update(&mut cx, |editor, window, cx| {
+                editor.set_scroll_position(point(0.0, row), window, cx);
+            })
+            .expect("benchmark editor window should remain open");
+        present_frame(&mut cx, window);
     });
     report_measurement("scroll_10s_60hz", scrolling);
     #[cfg(feature = "frame-diagnostics")]
@@ -364,12 +376,9 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     collector.snapshot();
 
-    let resize_count = resize_workload.len();
-    let resizing = measure(resize_count, || {
-        for (width, height) in resize_workload {
-            cx.simulate_window_resize(window, size(px(width), px(height)));
-            present_frame(&mut cx, window);
-        }
+    let resizing = measure(resize_workload, |(width, height)| {
+        cx.simulate_window_resize(window, size(px(width), px(height)));
+        present_frame(&mut cx, window);
     });
     report_measurement("resize", resizing);
     #[cfg(feature = "frame-diagnostics")]
