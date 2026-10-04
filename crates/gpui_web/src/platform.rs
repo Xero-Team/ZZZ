@@ -346,13 +346,22 @@ impl Platform for WebPlatform {
     }
 
     fn write_to_clipboard(&self, item: ClipboardItem) {
-        if let Some(text) = item.text()
-            && let Some(window) = web_sys::window()
-        {
-            // Fire-and-forget; called synchronously inside the user's input
-            // event, which satisfies the browser's user-activation requirement.
-            drop(window.navigator().clipboard().write_text(&text));
-        }
+        let Some(text) = item.text() else {
+            log::warn!("Web clipboard writes only support text items");
+            return;
+        };
+        let Some(window) = web_sys::window() else {
+            log::warn!("Cannot write to the Web clipboard without a browser window");
+            return;
+        };
+
+        // Start the write synchronously while the browser still recognizes the input gesture.
+        let write = window.navigator().clipboard().write_text(&text);
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Err(error) = wasm_bindgen_futures::JsFuture::from(write).await {
+                log::warn!("Failed to write to the Web clipboard: {error:?}");
+            }
+        });
     }
 
     fn write_credentials(&self, _url: &str, _username: &str, _password: &[u8]) -> Task<Result<()>> {
