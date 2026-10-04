@@ -3399,8 +3399,11 @@ mod tests {
     fn capability_matrix_matches_macos_services() {
         let capabilities = macos_capabilities();
         assert!(capabilities.text_input);
+        assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
+        assert!(capabilities.system_bell);
         assert!(!capabilities.accessibility);
+        assert!(capabilities.window_controls.attention);
         assert_eq!(
             capabilities.window_controls,
             gpui::WindowControls::default()
