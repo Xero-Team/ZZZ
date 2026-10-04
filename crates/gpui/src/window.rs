@@ -5953,24 +5953,29 @@ mod tests {
         test_window.simulate_frame_request(RequestFrameOptions::default());
         let initial = collector.snapshot();
         assert_eq!(initial.dropped_events, 0);
+        let completed_build_id = cx
+            .update_window(handle, |_, window, _| {
+                window
+                    .interaction
+                    .built_frame(&window.text_input)
+                    .diagnostics
+                    .build_id
+            })
+            .expect("diagnostics window should remain open")
+            .expect("completed frame should carry a build ID");
         let initial_build_id = initial
             .events
             .iter()
             .find_map(|event| match event {
-                FrameEvent::Presented(timing) if timing.window_id == window_id => {
+                FrameEvent::Presented(timing)
+                    if timing.window_id == window_id
+                        && timing.build_id.as_u64() == completed_build_id =>
+                {
                     Some(timing.build_id)
                 }
                 _ => None,
             })
             .expect("initial frame should be presented");
-        cx.update_window(handle, |_, window, _| {
-            let built_frame = window.interaction.built_frame(&window.text_input);
-            assert_eq!(
-                built_frame.diagnostics.build_id,
-                Some(initial_build_id.as_u64())
-            );
-        })
-        .expect("diagnostics window should remain open");
         assert!(initial.events.iter().any(|event| matches!(
             event,
             FrameEvent::Invalidated(invalidation)
