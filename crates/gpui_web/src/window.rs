@@ -841,6 +841,8 @@ impl PlatformWindow for WebWindow {
     fn window_controls(&self) -> WindowControls {
         WindowControls {
             attention: false,
+            move_window: false,
+            resize_window: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -877,6 +879,8 @@ mod tests {
     fn capability_matrix_exposes_web_gaps() {
         let window_controls = WindowControls {
             attention: false,
+            move_window: false,
+            resize_window: false,
             fullscreen: true,
             maximize: false,
             minimize: false,

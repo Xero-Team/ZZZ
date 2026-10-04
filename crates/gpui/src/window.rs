@@ -1560,7 +1560,13 @@ impl Window {
 
     /// Start a window resize operation if this window is resizable.
     pub fn start_window_resize(&self, edge: ResizeEdge) {
-        if self.is_resizable {
+        if self.is_resizable
+            && self
+                .platform_window
+                .capabilities()
+                .window_controls
+                .resize_window
+        {
             self.platform_window.start_window_resize(edge);
         }
     }
@@ -1943,7 +1949,14 @@ impl Window {
     ///
     /// Events may not be received during a move operation.
     pub fn start_window_move(&self) {
-        self.platform_window.start_window_move()
+        if self
+            .platform_window
+            .capabilities()
+            .window_controls
+            .move_window
+        {
+            self.platform_window.start_window_move()
+        }
     }
 
     /// When using client side decorations, set this to the width of the invisible decorations (Wayland and X11)
@@ -5982,6 +5995,8 @@ mod tests {
                     crate::ClipboardCapabilities::READ_WRITE
                 );
                 assert!(capabilities.window_controls.fullscreen);
+                assert!(capabilities.window_controls.move_window);
+                assert!(!capabilities.window_controls.resize_window);
                 assert!(!capabilities.window_controls.maximize);
                 assert!(!capabilities.window_controls.minimize);
                 assert!(!capabilities.window_controls.window_menu);

@@ -819,6 +819,8 @@ impl WaylandWindowStatePtr {
             xdg_toplevel::Event::WmCapabilities { capabilities } => {
                 let mut window_controls = WindowControls {
                     attention: false,
+                    move_window: true,
+                    resize_window: true,
                     maximize: false,
                     minimize: false,
                     fullscreen: false,
@@ -1628,6 +1630,8 @@ mod capability_tests {
     fn capability_matrix_preserves_compositor_window_controls() {
         let window_controls = WindowControls {
             attention: false,
+            move_window: true,
+            resize_window: true,
             fullscreen: true,
             maximize: false,
             minimize: true,
@@ -1646,6 +1650,8 @@ mod capability_tests {
             gpui::ClipboardCapabilities::READ_WRITE
         );
         assert!(!capabilities.window_controls.attention);
+        assert!(capabilities.window_controls.move_window);
+        assert!(capabilities.window_controls.resize_window);
         assert_eq!(capabilities.window_controls, window_controls);
     }
 }

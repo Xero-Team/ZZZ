@@ -407,6 +407,8 @@ impl PlatformWindow for TestWindow {
             clipboard: crate::ClipboardCapabilities::READ_WRITE,
             window_controls: crate::WindowControls {
                 attention: false,
+                move_window: true,
+                resize_window: false,
                 fullscreen: true,
                 maximize: false,
                 minimize: false,

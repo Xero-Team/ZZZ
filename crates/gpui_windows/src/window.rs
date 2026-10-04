@@ -1053,7 +1053,11 @@ fn windows_capabilities() -> gpui::PlatformCapabilities {
         system_bell: true,
         native_prompt: true,
         clipboard: gpui::ClipboardCapabilities::READ_WRITE,
-        window_controls: gpui::WindowControls::default(),
+        window_controls: gpui::WindowControls {
+            move_window: false,
+            resize_window: false,
+            ..gpui::WindowControls::default()
+        },
     }
 }
 
@@ -1621,10 +1625,12 @@ mod tests {
         );
         assert!(!capabilities.accessibility);
         assert!(capabilities.window_controls.attention);
-        assert_eq!(
-            capabilities.window_controls,
-            gpui::WindowControls::default()
-        );
+        assert!(!capabilities.window_controls.move_window);
+        assert!(!capabilities.window_controls.resize_window);
+        assert!(capabilities.window_controls.fullscreen);
+        assert!(capabilities.window_controls.maximize);
+        assert!(capabilities.window_controls.minimize);
+        assert!(capabilities.window_controls.window_menu);
     }
 
     #[test]

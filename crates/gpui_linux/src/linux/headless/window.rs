@@ -98,6 +98,8 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
         clipboard: gpui::ClipboardCapabilities::NONE,
         window_controls: gpui::WindowControls {
             attention: false,
+            move_window: false,
+            resize_window: false,
             fullscreen: true,
             maximize: false,
             minimize: false,
@@ -282,6 +284,8 @@ mod tests {
         assert!(!capabilities.native_prompt);
         assert_eq!(capabilities.clipboard, gpui::ClipboardCapabilities::NONE);
         assert!(!capabilities.window_controls.attention);
+        assert!(!capabilities.window_controls.move_window);
+        assert!(!capabilities.window_controls.resize_window);
         assert!(capabilities.window_controls.fullscreen);
     }
 }

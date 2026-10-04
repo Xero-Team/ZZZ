@@ -420,6 +420,10 @@ pub enum Decorations {
 pub struct WindowControls {
     /// Whether this platform supports requesting user attention.
     pub attention: bool,
+    /// Whether the platform can begin an interactive window move.
+    pub move_window: bool,
+    /// Whether the platform can begin an interactive window resize.
+    pub resize_window: bool,
     /// Whether this platform supports fullscreen
     pub fullscreen: bool,
     /// Whether this platform supports maximize
@@ -466,6 +470,8 @@ impl Default for PlatformCapabilities {
             clipboard: ClipboardCapabilities::NONE,
             window_controls: WindowControls {
                 attention: false,
+                move_window: false,
+                resize_window: false,
                 fullscreen: false,
                 maximize: false,
                 minimize: false,
@@ -516,6 +522,8 @@ impl Default for WindowControls {
         // Assume that we can do anything, unless told otherwise
         Self {
             attention: true,
+            move_window: true,
+            resize_window: true,
             fullscreen: true,
             maximize: true,
             minimize: true,
@@ -2872,6 +2880,8 @@ mod tests {
             capabilities.window_controls,
             WindowControls {
                 attention: false,
+                move_window: false,
+                resize_window: false,
                 fullscreen: false,
                 maximize: false,
                 minimize: false,
