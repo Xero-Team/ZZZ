@@ -5,6 +5,7 @@ use gpui::{
     transparent_black,
 };
 use smallvec::SmallVec;
+use std::rc::Rc;
 
 use crate::{DynamicSpacing, ElevationIndex, prelude::*};
 
@@ -355,7 +356,7 @@ pub struct ButtonLike {
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
     hoverable_tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
     cursor_style: CursorStyle,
-    on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     on_right_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     children: SmallVec<[AnyElement; 2]>,
     focus_handle: Option<FocusHandle>,
@@ -463,7 +464,7 @@ impl SelectableButton for ButtonLike {
 
 impl Clickable for ButtonLike {
     fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
-        self.on_click = Some(Box::new(handler));
+        self.on_click = Some(Rc::new(handler));
         self
     }
 
@@ -643,11 +644,25 @@ impl RenderOnce for ButtonLike {
             .when_some(
                 self.on_click.filter(|_| !self.disabled),
                 |this, on_click| {
-                    this.on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+                    let on_click_for_mouse = on_click.clone();
+                    let this = this
+                        .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
                         .on_click(move |event, window, cx| {
                             cx.stop_propagation();
-                            (on_click)(event, window, cx)
-                        })
+                            (on_click_for_mouse)(event, window, cx)
+                        });
+                    #[cfg(feature = "accessibility")]
+                    let this = this.on_a11y_action(
+                        gpui::accesskit::Action::Click,
+                        move |_, window, cx| {
+                            (on_click)(
+                                &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                                window,
+                                cx,
+                            )
+                        },
+                    );
+                    this
                 },
             )
             .when_some(self.tooltip, |this, tooltip| {

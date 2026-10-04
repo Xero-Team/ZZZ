@@ -2,9 +2,12 @@ use gpui::{
     AnyWindowHandle, AppContext as _, Context, IntoElement, ParentElement as _, Render,
     TestAppContext, Window, div,
 };
-use ui::{Button, Disableable as _, Tab, Toggleable as _, TreeViewItem};
+use std::{cell::Cell, rc::Rc};
+use ui::{Button, Clickable as _, Disableable as _, Tab, Toggleable as _, TreeViewItem};
 
-struct SemanticComponents;
+struct SemanticComponents {
+    action_count: Rc<Cell<usize>>,
+}
 
 impl Render for SemanticComponents {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
@@ -14,6 +17,10 @@ impl Render for SemanticComponents {
                     .disabled(true)
                     .toggle_state(true),
             )
+            .child(Button::new("action", "Action").on_click({
+                let action_count = self.action_count.clone();
+                move |_, _, _| action_count.set(action_count.get() + 1)
+            }))
             .child(Tab::new("editor-tab").toggle_state(true).child("Editor"))
             .child(
                 TreeViewItem::new("workspace-tree", "Workspace")
@@ -31,7 +38,11 @@ fn components_emit_roles_labels_and_state() {
         cx.set_global(settings);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
     });
-    let window = cx.add_window(|_, _| SemanticComponents);
+    let action_count = Rc::new(Cell::new(0));
+    let window = cx.add_window({
+        let action_count = action_count.clone();
+        move |_, _| SemanticComponents { action_count }
+    });
     cx.run_until_parked();
     let handle: AnyWindowHandle = window.into();
     let snapshot = cx
@@ -54,6 +65,24 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(button.label(), Some("Save"));
     assert!(button.is_disabled());
     assert_eq!(button.toggled(), Some(gpui::accesskit::Toggled::True));
+
+    let action_button_id = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("Action"))
+        .map(|(node_id, _)| *node_id)
+        .expect("action button semantic node should exist");
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            action_button_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+    })
+    .expect("semantic test window should remain open");
+    assert_eq!(action_count.get(), 1);
 
     let tab = snapshot
         .update
