@@ -7,12 +7,12 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use editor::{Editor, EditorMode, MultiBuffer};
-use gpui::{
-    AnyWindowHandle, AppContext as _, Focusable as _, TestAppContext, TestDispatcher, WindowHandle,
-    point, px, size,
-};
 #[cfg(feature = "frame-diagnostics")]
 use gpui::profiler::{FrameDiagnosticsSnapshot, FrameEvent, FramePhase, FrameTimingCollector};
+use gpui::{
+    AnyWindowHandle, AppContext as _, Focusable as _, Keystroke, TestAppContext, TestDispatcher,
+    WindowHandle, point, px, size,
+};
 use settings::SettingsStore;
 
 const SEED: u64 = 0x5A5A_4750_5549_2026;
@@ -273,6 +273,11 @@ fn main() -> Result<()> {
     if resize_workload.len() != 100 {
         bail!("resize workload must contain exactly 100 rows");
     }
+    let typing_keystrokes = typing
+        .chars()
+        .map(|character| Keystroke::parse(character.encode_utf8(&mut [0; 4])))
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("typing fixture contains an invalid keystroke")?;
     println!(
         "EDITOR_FRAME_FIXTURE source_lines={source_line_count} source_bytes={} typed_characters={} resize_rows={} scroll_frames={SCROLL_FRAMES} seed={SEED:#x}",
         source.len(),
@@ -318,18 +323,23 @@ fn main() -> Result<()> {
     report_measurement("cached", cached);
     #[cfg(feature = "frame-diagnostics")]
     report_diagnostics("cached", collector.snapshot());
+    cx.run_until_parked();
+    #[cfg(feature = "frame-diagnostics")]
+    collector.snapshot();
 
-    let typed_characters = typing.chars().count();
+    let typed_characters = typing_keystrokes.len();
     let typing = measure(typed_characters, || {
-        let mut encoded = [0; 4];
-        for character in typing.chars() {
-            cx.simulate_input(window, character.encode_utf8(&mut encoded));
+        for keystroke in &typing_keystrokes {
+            cx.dispatch_keystroke(window, keystroke.clone());
             draw_frame(&mut cx, window);
         }
     });
     report_measurement("typing", typing);
     #[cfg(feature = "frame-diagnostics")]
     report_diagnostics("typing", collector.snapshot());
+    cx.run_until_parked();
+    #[cfg(feature = "frame-diagnostics")]
+    collector.snapshot();
 
     let scrolling = measure(SCROLL_FRAMES, || {
         for frame in 0..SCROLL_FRAMES {
@@ -339,25 +349,27 @@ fn main() -> Result<()> {
                     editor.set_scroll_position(point(0.0, row), window, cx);
                 })
                 .expect("benchmark editor window should remain open");
-            cx.run_until_parked();
             draw_frame(&mut cx, window);
         }
     });
     report_measurement("scroll_10s_60hz", scrolling);
     #[cfg(feature = "frame-diagnostics")]
     report_diagnostics("scroll_10s_60hz", collector.snapshot());
+    cx.run_until_parked();
+    #[cfg(feature = "frame-diagnostics")]
+    collector.snapshot();
 
     let resize_count = resize_workload.len();
     let resizing = measure(resize_count, || {
         for (width, height) in resize_workload {
             cx.simulate_window_resize(window, size(px(width), px(height)));
-            cx.run_until_parked();
             draw_frame(&mut cx, window);
         }
     });
     report_measurement("resize", resizing);
     #[cfg(feature = "frame-diagnostics")]
     report_diagnostics("resize", collector.snapshot());
+    cx.run_until_parked();
 
     match peak_rss_kib()? {
         Some(peak_rss_kib) => println!("EDITOR_FRAME_RSS peak_kib={peak_rss_kib}"),
