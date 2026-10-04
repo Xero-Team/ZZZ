@@ -2985,25 +2985,50 @@ impl LspCommand for OnTypeFormatting {
 }
 
 impl InlayHints {
+    fn project_hint_kind(kind: Option<lsp::InlayHintKind>) -> Option<InlayHintKind> {
+        kind.and_then(|kind| match kind {
+            lsp::InlayHintKind::TYPE => Some(InlayHintKind::Type),
+            lsp::InlayHintKind::PARAMETER => Some(InlayHintKind::Parameter),
+            _ => None,
+        })
+    }
+
+    fn hint_position_and_bias(
+        lsp_hint: &lsp::InlayHint,
+        snapshot: &BufferSnapshot,
+    ) -> (PointUtf16, Bias) {
+        let position = snapshot.clip_point_utf16(point_from_lsp(lsp_hint.position), Bias::Left);
+        let bias = match Self::project_hint_kind(lsp_hint.kind) {
+            Some(InlayHintKind::Type) => Bias::Right,
+            Some(InlayHintKind::Parameter) => Bias::Left,
+            None => match (
+                lsp_hint.padding_left.unwrap_or(false),
+                lsp_hint.padding_right.unwrap_or(false),
+            ) {
+                (true, false) => Bias::Right,
+                (false, true) => Bias::Left,
+                _ => {
+                    let offset = position.to_offset(snapshot);
+                    let (range, _) = snapshot.surrounding_word(offset, None);
+                    if range.start < offset {
+                        Bias::Right
+                    } else {
+                        Bias::Left
+                    }
+                }
+            },
+        };
+        (position, bias)
+    }
+
     pub fn lsp_to_project_hint(
         lsp_hint: lsp::InlayHint,
-        snapshot: &BufferSnapshot,
+        position: Anchor,
         server_id: LanguageServerId,
         resolve_state: ResolveState,
         force_no_type_left_padding: bool,
     ) -> InlayHint {
-        let kind = lsp_hint.kind.and_then(|kind| match kind {
-            lsp::InlayHintKind::TYPE => Some(InlayHintKind::Type),
-            lsp::InlayHintKind::PARAMETER => Some(InlayHintKind::Parameter),
-            _ => None,
-        });
-
-        let position = snapshot.clip_point_utf16(point_from_lsp(lsp_hint.position), Bias::Left);
-        let position = if kind == Some(InlayHintKind::Parameter) {
-            snapshot.anchor_before(position)
-        } else {
-            snapshot.anchor_after(position)
-        };
+        let kind = Self::project_hint_kind(lsp_hint.kind);
 
         let label = Self::lsp_inlay_label_to_project(lsp_hint.label, server_id);
         let padding_left = if force_no_type_left_padding && kind == Some(InlayHintKind::Type) {
@@ -3448,10 +3473,11 @@ impl LspCommand for InlayHints {
                 } else {
                     ResolveState::Resolved
                 };
+                let (position, bias) = InlayHints::hint_position_and_bias(&lsp_hint, &snapshot);
 
                 InlayHints::lsp_to_project_hint(
                     lsp_hint,
-                    &snapshot,
+                    snapshot.anchor_at(position, bias),
                     server_id,
                     resolve_state,
                     force_no_type_left_padding,
