@@ -788,7 +788,7 @@ impl gpui::SystemServices for WebWindow {
 }
 
 impl gpui::PlatformRenderTarget for WebWindow {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         if let Some((width, height)) = self.inner.pending_physical_size.take() {
             if self.inner.canvas.width() != width || self.inner.canvas.height() != height {
                 self.inner.canvas.set_width(width);
@@ -803,7 +803,7 @@ impl gpui::PlatformRenderTarget for WebWindow {
             drop(state);
         }
 
-        self.inner.state.borrow_mut().renderer.draw(scene);
+        self.inner.state.borrow_mut().renderer.draw(scene)
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

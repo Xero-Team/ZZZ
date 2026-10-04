@@ -766,7 +766,7 @@ pub trait AccessibilityBridge {
 /// Render target owned by a platform window backend.
 #[expect(missing_docs)]
 pub trait PlatformRenderTarget {
-    fn draw(&self, scene: &Scene);
+    fn draw(&self, scene: &Scene) -> bool;
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
     fn is_subpixel_rendering_supported(&self) -> bool;
     fn gpu_specs(&self) -> Option<GpuSpecs>;

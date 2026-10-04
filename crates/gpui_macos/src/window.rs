@@ -1722,9 +1722,10 @@ impl gpui::SystemServices for MacWindow {
 }
 
 impl gpui::PlatformRenderTarget for MacWindow {
-    fn draw(&self, scene: &gpui::Scene) {
+    fn draw(&self, scene: &gpui::Scene) -> bool {
         let mut this = self.0.lock();
         this.renderer.draw(scene);
+        true
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

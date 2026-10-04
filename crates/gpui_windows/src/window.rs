@@ -998,12 +998,13 @@ impl gpui::SystemServices for WindowsWindow {
 }
 
 impl gpui::PlatformRenderTarget for WindowsWindow {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         self.state
             .renderer
             .borrow_mut()
             .draw(scene, self.state.background_appearance.get())
-            .log_err();
+            .log_err()
+            .is_some()
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

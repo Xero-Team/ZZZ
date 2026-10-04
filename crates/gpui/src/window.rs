@@ -2390,12 +2390,14 @@ impl Window {
             self.platform_window.as_mut(),
             crate::render_api::RenderScene::new(built_frame.scene),
         );
-        debug_assert!(submission.submitted);
+        if !submission.submitted {
+            log::debug!("platform render target skipped frame submission");
+        }
         #[cfg(feature = "frame-diagnostics")]
         if let Some(frame) = frame_timing {
             let present_end = Instant::now();
-            self.invalidator
-                .record_event(FrameEvent::Presented(FramePresentationTiming {
+            let event = if submission.submitted {
+                FrameEvent::Presented(FramePresentationTiming {
                     build_id: frame.build_id,
                     window_id: self.handle.window_id(),
                     present_start,
@@ -2404,10 +2406,20 @@ impl Window {
                         .input_started_at
                         .map(|started_at| present_end.duration_since(started_at)),
                     input: frame.input,
-                }));
+                })
+            } else {
+                FrameEvent::SubmissionSkipped {
+                    build_id: frame.build_id,
+                    window_id: self.handle.window_id(),
+                    at: present_end,
+                }
+            };
+            self.invalidator.record_event(event);
         }
         #[cfg(feature = "input-latency-histogram")]
-        self.input_latency_tracker.record_frame_presented();
+        if submission.submitted {
+            self.input_latency_tracker.record_frame_presented();
+        }
         self.needs_present.set(false);
         #[cfg(feature = "frame-diagnostics")]
         self.invalidator.flush_events();
@@ -6093,6 +6105,7 @@ mod tests {
         let mut prepaint_replays = 0usize;
         let mut paint_replays = 0usize;
         let mut presented = 0usize;
+        let mut submissions_skipped = 0usize;
         for event in snapshot.events {
             match event {
                 FrameEvent::DrawFinished(timing) => {
@@ -6120,6 +6133,7 @@ mod tests {
                         paint_replays += 1;
                     }
                 }
+                FrameEvent::SubmissionSkipped { .. } => submissions_skipped += 1,
                 FrameEvent::Invalidated(_) | FrameEvent::DrawStarted { .. } => {}
             }
         }
@@ -6135,6 +6149,7 @@ mod tests {
         }
 
         assert!(presented >= ITERATIONS * 2);
+        assert_eq!(submissions_skipped, 0);
         assert!(!draw_durations.is_empty());
         assert!(!input_latencies.is_empty());
         println!(

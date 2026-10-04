@@ -1641,7 +1641,7 @@ impl gpui::SystemServices for X11Window {
 }
 
 impl gpui::PlatformRenderTarget for X11Window {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         let mut inner = self.0.state.borrow_mut();
 
         if inner.renderer.device_lost() {
@@ -1662,14 +1662,15 @@ impl gpui::PlatformRenderTarget for X11Window {
             }
 
             inner.force_render_after_recovery = true;
-            return;
+            return false;
         }
 
-        inner.renderer.draw(scene);
+        let submitted = inner.renderer.draw(scene);
 
         if inner.renderer.needs_redraw() {
             inner.force_render_after_recovery = true;
         }
+        submitted
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

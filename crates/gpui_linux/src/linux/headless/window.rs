@@ -231,7 +231,9 @@ impl gpui::SystemServices for HeadlessWindow {
 }
 
 impl gpui::PlatformRenderTarget for HeadlessWindow {
-    fn draw(&self, _scene: &Scene) {}
+    fn draw(&self, _scene: &Scene) -> bool {
+        false
+    }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
         Arc::new(HeadlessAtlas::default())

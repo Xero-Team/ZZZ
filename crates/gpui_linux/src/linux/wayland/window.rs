@@ -1418,7 +1418,7 @@ impl gpui::SystemServices for WaylandWindow {
 }
 
 impl gpui::PlatformRenderTarget for WaylandWindow {
-    fn draw(&self, scene: &Scene) {
+    fn draw(&self, scene: &Scene) -> bool {
         let mut state = self.borrow_mut();
 
         if state.renderer.device_lost() {
@@ -1440,7 +1440,7 @@ impl gpui::PlatformRenderTarget for WaylandWindow {
             }
 
             state.force_render_after_recovery = true;
-            return;
+            return false;
         }
 
         state.renderer_presented = state.renderer.draw(scene);
@@ -1448,6 +1448,7 @@ impl gpui::PlatformRenderTarget for WaylandWindow {
         if state.renderer.needs_redraw() {
             state.force_render_after_recovery = true;
         }
+        state.renderer_presented
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

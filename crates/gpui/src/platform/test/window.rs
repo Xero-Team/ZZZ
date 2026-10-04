@@ -344,7 +344,9 @@ impl crate::SystemServices for TestWindow {
 }
 
 impl crate::PlatformRenderTarget for TestWindow {
-    fn draw(&self, _scene: &Scene) {}
+    fn draw(&self, _scene: &Scene) -> bool {
+        true
+    }
 
     fn sprite_atlas(&self) -> sync::Arc<dyn crate::PlatformAtlas> {
         self.0.lock().sprite_atlas.clone()
