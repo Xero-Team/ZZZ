@@ -390,22 +390,28 @@ key routing owner `8a2ce07544`；focus/pending-input owner `0ea05bb762`。
 - 增加窄 `TextInputClient` candidate-geometry seam；UTF-16 selection、marked text 和
   mutation 继续由现有 `InputHandler` compatibility adapter 提供，未引入平台层
   `AsyncWindowContext` 到应用代码。
+- 原 `PlatformInputHandler` adapter 已正式改名为 `TextInputClient`；Linux、macOS、
+  Windows、Web、TestWindow 与 Vim test 均只依赖 client 名称。旧名称只保留一个公开
+  type alias，并明确在下一个 GPUI breaking release 删除。
 - `invalidate_character_coordinates` 通过 owner 读取 IME candidate bounds；公开
   `Window::handle_input` 和 Editor UTF-16/multi-cursor 行为保持不变。
 
 验证：
 
-| 命令或检查                                                             | 结果   | 证据                                              |
-| ---------------------------------------------------------------------- | ------ | ------------------------------------------------- |
-| `cargo check --locked -p gpui`                                         | `PASS` | text input owner 默认配置编译通过                 |
-| `cargo test --locked -p gpui --lib input`                              | `PASS` | pending input handler tests 2 passed              |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics input` | `PASS` | same 2 tests passed with diagnostics              |
-| `./script/clippy -p gpui --features frame-diagnostics`                 | `PASS` | all-target release clippy 与 philosophy gate 通过 |
-| `git diff --check`                                                     | `PASS` | text input owner 迁移无 whitespace error          |
+| 命令或检查                                                                                                     | 结果   | 证据                                                       |
+| -------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                                                 | `PASS` | text input owner 默认配置编译通过                          |
+| `cargo test --locked -p gpui --lib input`                                                                      | `PASS` | pending input handler tests 2 passed                       |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics input`                                         | `PASS` | same 2 tests passed with diagnostics                       |
+| `cargo check --locked -p gpui -p gpui_platform -p gpui_linux -p gpui_macos -p gpui_windows -p gpui_web -p vim` | `PASS` | 所有 platform bridge 与 compatibility alias 编译通过       |
+| `cargo test --locked -p vim test_helix_jump_consumes_label_keystrokes_before_ime`                              | `PASS` | native printable key 与 pending keymap precedence 保持不变 |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                         | `PASS` | all-target release clippy 与 philosophy gate 通过          |
+| `git diff --check`                                                                                             | `PASS` | text input owner 迁移无 whitespace error                   |
 
-提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`；cache-slot swap fix `ff126abc7a`.
-下一步：运行 Editor IME、UTF-16、多 cursor 和 candidate geometry checks，再进入 4D
-immutable `BuiltFrame`。
+提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`；cache-slot swap
+fix `ff126abc7a`；platform client boundary `ad83ac2e12`。
+下一步：完成 native platform IME repetition runbook；当前 Linux 单元层的 Editor IME、
+UTF-16、多 cursor 和 candidate geometry checks 已通过。
 
 4D built frame 当前进度：
 
