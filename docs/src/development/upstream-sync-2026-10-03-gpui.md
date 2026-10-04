@@ -31,10 +31,11 @@ refactor and preserves ZZZ's local-first, no-account, ACP-only boundary.
 | `cd4fc8de4ca8548cca2567352b87bcaaec13328f` | C     | --           | Platform frame-request timestamp APIs require later platform seams and the unabsorbed hang journal.                                                                                                                                                   |
 | `36b6d0951fdee409f0957294a69360ba2e8e980e` | C     | --           | Follow-up to the rejected/unabsorbed hang journal path.                                                                                                                                                                                               |
 | `8886dcb0d4ea0e145e4512d415d3260602eca99`  | B     | `49b351afb1` | Ported worker pool, main-thread handoff, real-time timer queue, idle tracking, and explicit shutdown using ZZZ's existing `PlatformDispatcher` and priority queue. Omitted the upstream rename-only benchmark graph and incompatible profiler fields. |
+| `1d029c5ff5654fb1b1e8caf4462993c8ee13a133` | B     | `83fe764989` | Ported stable element-derived IDs, physical bounds, nested semantic tree construction, and completed-frame snapshots. Omitted native adapters, activation/writer plumbing, synthetic children, and broad product annotations.                         |
 | `cc053a4a6fa2fd0e8793201ed9099466af1be0b1` | C     | --           | AccessKit semantic writer path is absent from ZZZ, so the author-id builder is not an independent safe change.                                                                                                                                        |
 | `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | C     | --           | ZZZ's macOS backend has no AccessKit adapter or `SubclassingAdapter` ownership to release.                                                                                                                                                            |
 
-Totals: one A, one B, and nine C.
+Totals: one A, two B, and nine C.
 
 ## Applied work
 
@@ -50,20 +51,26 @@ it is recorded under the A/B/C decisions above and does not claim a direct upstr
 Its commits are `8d410f4b55` (core), `d031aa92de` (deterministic runner),
 `766b7cb85c` (cache replay runner), and `567ff2f4c3` (batched journal and allocation probe).
 
+On 2026-10-04, the AccessKit core commit was re-reviewed specifically for the staged GPUI
+refactor. `83fe764989` is a B port: it connects only the already-present ZZZ semantic builder
+to element prepaint and immutable completed frames. The native writer and platform adapters
+remain absent and are not prerequisites for the retained deterministic semantic snapshot.
+
 ## Verification
 
-| Check                                                                     | Result    | Notes                                                         |
-| ------------------------------------------------------------------------- | --------- | ------------------------------------------------------------- |
-| Live `git ls-remote`/`git fetch --no-tags`                                | `PASS`    | `FETCH_HEAD=a84689073d296dfd39987bc7dd478e43ef76d83a`         |
-| Reviewed baseline ancestry                                                | `PASS`    | `decbf641...` is an ancestor of `FETCH_HEAD`                  |
-| `cargo check --locked -p gpui --features test-support`                    | `PASS`    | Threaded dispatcher compiles                                  |
-| `cargo test --locked -p gpui --features test-support threaded_dispatcher` | `PASS`    | handoff, timer/cancel, and 100 dispatcher teardown iterations |
-| `./script/clippy -p gpui --features test-support`                         | `PASS`    | all-target release checks and philosophy gate                 |
-| GPUI default/diagnostics test suites                                      | `PASS`    | 214 default tests; 216 diagnostics tests; no failures         |
-| AccessKit native runtime QA                                               | `NOT RUN` | Current host is Linux and ZZZ has no native adapter path      |
+| Check                                                                      | Result    | Notes                                                         |
+| -------------------------------------------------------------------------- | --------- | ------------------------------------------------------------- |
+| Live `git ls-remote`/`git fetch --no-tags`                                 | `PASS`    | `FETCH_HEAD=a84689073d296dfd39987bc7dd478e43ef76d83a`         |
+| Reviewed baseline ancestry                                                 | `PASS`    | `decbf641...` is an ancestor of `FETCH_HEAD`                  |
+| `cargo check --locked -p gpui --features test-support`                     | `PASS`    | Threaded dispatcher compiles                                  |
+| `cargo test --locked -p gpui --features test-support threaded_dispatcher`  | `PASS`    | handoff, timer/cancel, and 100 dispatcher teardown iterations |
+| `./script/clippy -p gpui --features test-support`                          | `PASS`    | all-target release checks and philosophy gate                 |
+| GPUI default/diagnostics test suites                                       | `PASS`    | 214 default tests; 216 diagnostics tests; no failures         |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility` | `PASS`    | Six core, hierarchy, element-prepaint, and bridge tests pass  |
+| AccessKit native runtime QA                                                | `NOT RUN` | Current host is Linux and ZZZ has no native adapter path      |
 
 ## Hard stops and omissions
 
-The AccessKit commits remain C because the required core writer and platform adapters are
-absent in ZZZ. The frame timestamp/hang-journal series remains C until a later platform and
-accessibility review can isolate a ZZZ caller without importing rejected telemetry machinery.
+The AccessKit writer/adapter follow-ups remain C because those paths are absent in ZZZ. The
+frame timestamp/hang-journal series remains C until a later platform and accessibility review
+can isolate a ZZZ caller without importing rejected telemetry machinery.

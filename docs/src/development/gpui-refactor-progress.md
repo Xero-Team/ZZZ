@@ -243,6 +243,10 @@ diagnostics feature。
   deterministic virtual-clock `TestDispatcher`。
 - 增加可选 `accessibility` feature 的 AccessKit core seam：稳定 node ID、完整
   `TreeUpdate` snapshot、focus 映射和一次性 action router；不连接平台 writer。
+- 按 `1d029c5ff5654fb1b1e8caf4462993c8ee13a133` 的 B 类安全子集，把
+  element-derived stable ID、physical bounds、nested semantic tree 接入实际
+  `Element::prepaint` 和 completed `BuiltFrame`。未复制 native adapter、activation/
+  writer state、synthetic children 或产品级批量 annotation。
 
 阶段 2 上游 A/B/C 决策：
 
@@ -262,19 +266,21 @@ unsupported error。没有导入缺失的 AccessKit writer/adapter 路径。
 
 阶段 2 验证：
 
-| 命令或检查                                                                | 结果      | 原始数据/说明                                                                                                                                                                                  |
-| ------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo check --locked -p gpui --features test-support`                    | `PASS`    | ThreadedDispatcher port                                                                                                                                                                        |
-| `cargo test --locked -p gpui --features test-support threaded_dispatcher` | `PASS`    | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
-| `./script/clippy -p gpui --features test-support`                         | `PASS`    | all-target release clippy + philosophy                                                                                                                                                         |
-| `cargo check --locked -p gpui --features accessibility`                   | `PASS`    | AccessKit 0.24.1 core seam                                                                                                                                                                     |
-| `cargo test --locked -p gpui --features accessibility accessibility`      | `PASS`    | 3 semantic snapshot/action tests                                                                                                                                                               |
-| EXP-006 native adapter/screen-reader QA                                   | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                                                                                                                          |
-| EXP-008 100-seed parity/hang/leak gate                                    | `PASS`    | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
+| 命令或检查                                                                 | 结果      | 原始数据/说明                                                                                                                                                                                  |
+| -------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo check --locked -p gpui --features test-support`                     | `PASS`    | ThreadedDispatcher port                                                                                                                                                                        |
+| `cargo test --locked -p gpui --features test-support threaded_dispatcher`  | `PASS`    | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
+| `./script/clippy -p gpui --features test-support`                          | `PASS`    | all-target release clippy + philosophy                                                                                                                                                         |
+| `cargo check --locked -p gpui --features accessibility`                    | `PASS`    | AccessKit 0.24.1 core seam                                                                                                                                                                     |
+| `cargo test --locked -p gpui --features accessibility accessibility`       | `PASS`    | 3 semantic snapshot/action tests                                                                                                                                                               |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility` | `PASS`    | 6 tests passed，含 nested element prepaint tree 与 cached-frame no-op update                                                                                                                   |
+| EXP-006 native adapter/screen-reader QA                                    | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                                                                                                                          |
+| EXP-008 100-seed parity/hang/leak gate                                     | `PASS`    | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
 
 提交：ThreadedDispatcher core `49b351afb1edab173ca46dd073c663b44aabbf14`；
 AccessKit semantic core `a7745abdefe9d3e2cebb33482aac35d5e6a0289f`；EXP-008
-BenchAppContext/panic follow-up `41f6fccba1edab173ca46dd073c663b44aabbf14`。
+BenchAppContext/panic follow-up `41f6fccba156b795d49b8564bbe357712f9b2aa5`；element
+prepaint semantics `83fe764989`。
 
 ### 阶段 3：真实 headless renderer
 
@@ -656,9 +662,10 @@ editor formatter/inlay tests 长时间运行；为避免无界 session 已中断
 
 ## Upstream A/B/C 记录
 
-尚未移植 Zed 代码。开始 frame diagnostics、`ThreadedDispatcher` 或 AccessKit
-工作时，先从通用 reviewed baseline 后的候选 commits 逐个分类；core semantics、
-action routing 和各 platform adapter 分开记录。
+`ThreadedDispatcher` 已按 `8886dcb0` 做 B 类移植；AccessKit element semantics 已按
+`1d029c5f` 做 B 类移植。`cc053a4a` 的 writer follow-up 与 `0eda7703` 的 macOS adapter
+cleanup 保持 C；core semantics、action routing 和各 platform adapter 继续分开记录。
+完整决策见 `upstream-sync-2026-10-03-gpui.md`。
 
 ## 外部平台 QA
 
