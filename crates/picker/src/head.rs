@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use gpui::{App, Entity, FocusHandle, Focusable, prelude::*};
 use ui::prelude::*;
-use ui_input::{ErasedEditor, ErasedEditorEvent, ErasedEditorFactory};
+use ui_input::{ErasedEditor, ErasedEditorEvent, create_editor_or_fallback};
 
 /// The head of a [`Picker`](crate::Picker).
 pub(crate) enum Head {
@@ -20,7 +20,7 @@ impl Head {
         window: &mut Window,
         cx: &mut Context<V>,
     ) -> Self {
-        let editor = (cx.global::<ErasedEditorFactory>().0)(window, cx);
+        let editor = create_editor_or_fallback(window, cx, &placeholder_text);
 
         editor.set_placeholder_text(placeholder_text.as_ref(), window, cx);
         let this = cx.weak_entity();

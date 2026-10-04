@@ -1,14 +1,13 @@
 use ui_component_registry::{example_group, single_example};
 
-use gpui::{App, FocusHandle, Focusable, Hsla, Length, Subscription};
+use gpui::{App, FocusHandle, Focusable, Hsla, Length};
 use i18n::tr;
-use parking_lot::Mutex;
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use ui::Tooltip;
 use ui::prelude::*;
 
-use crate::{EditorFactoryUnavailable, ErasedEditor, create_editor};
+use crate::{EditorFactoryUnavailable, ErasedEditor, create_editor, create_editor_or_fallback};
 
 pub struct InputFieldStyle {
     text_color: Hsla,
@@ -53,15 +52,8 @@ impl Focusable for InputField {
 
 impl InputField {
     pub fn new(window: &mut Window, cx: &mut App, placeholder_text: &str) -> Self {
-        Self::try_new(window, cx, placeholder_text).unwrap_or_else(|error| {
-            log::error!("failed to create InputField editor: {error}");
-            Self::from_editor(
-                Arc::new(UnavailableEditor::new(cx, placeholder_text)),
-                window,
-                cx,
-                placeholder_text,
-            )
-        })
+        let editor = create_editor_or_fallback(window, cx, placeholder_text);
+        Self::from_editor(editor, window, cx, placeholder_text)
     }
 
     pub fn try_new(
@@ -152,76 +144,6 @@ impl InputField {
 
     pub fn set_masked(&self, masked: bool, window: &mut Window, cx: &mut App) {
         self.editor().set_masked(masked, window, cx)
-    }
-}
-
-struct UnavailableEditor {
-    focus_handle: FocusHandle,
-    text: Mutex<String>,
-    placeholder: Mutex<String>,
-}
-
-impl UnavailableEditor {
-    fn new(cx: &App, placeholder: &str) -> Self {
-        Self {
-            focus_handle: cx.focus_handle(),
-            text: Mutex::new(String::new()),
-            placeholder: Mutex::new(placeholder.to_owned()),
-        }
-    }
-}
-
-impl ErasedEditor for UnavailableEditor {
-    fn text(&self, _: &App) -> String {
-        self.text.lock().clone()
-    }
-
-    fn set_text(&self, text: &str, _: &mut Window, _: &mut App) {
-        *self.text.lock() = text.to_owned();
-    }
-
-    fn clear(&self, _: &mut Window, _: &mut App) {
-        self.text.lock().clear();
-    }
-
-    fn set_placeholder_text(&self, text: &str, _: &mut Window, _: &mut App) {
-        *self.placeholder.lock() = text.to_owned();
-    }
-
-    fn move_selection_to_end(&self, _: &mut Window, _: &mut App) {}
-
-    fn select_all(&self, _: &mut Window, _: &mut App) {}
-
-    fn set_masked(&self, _: bool, _: &mut Window, _: &mut App) {}
-
-    fn focus_handle(&self, _: &App) -> FocusHandle {
-        self.focus_handle.clone()
-    }
-
-    fn subscribe(
-        &self,
-        _: Box<dyn FnMut(crate::ErasedEditorEvent, &mut Window, &mut App) + 'static>,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Subscription {
-        Subscription::new(|| {})
-    }
-
-    fn render(&self, _: &mut Window, _: &App) -> AnyElement {
-        let text = self.text.lock();
-        let display_text = if text.is_empty() {
-            self.placeholder.lock().clone()
-        } else {
-            text.clone()
-        };
-        div()
-            .track_focus(&self.focus_handle)
-            .child(display_text)
-            .into_any_element()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

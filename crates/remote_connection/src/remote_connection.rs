@@ -16,7 +16,7 @@ use ui::{
     ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, Tooltip,
     prelude::*,
 };
-use ui_input::{ErasedEditor, ErasedEditorFactory};
+use ui_input::{ErasedEditor, create_editor_or_fallback};
 use util::ResultExt as _;
 use workspace::{DismissDecision, ModalView, Workspace};
 
@@ -158,7 +158,7 @@ impl RemoteConnectionPrompt {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let editor = (cx.global::<ErasedEditorFactory>().0)(window, cx);
+        let editor = create_editor_or_fallback(window, cx, "");
 
         Self {
             connection_string: connection_string.into(),
