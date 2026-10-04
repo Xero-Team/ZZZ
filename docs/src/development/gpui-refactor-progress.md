@@ -266,9 +266,10 @@ diagnostics feature。
 - AccessKit nodes now advertise registered actions and support feature-gated disabled,
   selected, expanded, toggled and value properties. GPUI re-exports core AccessKit types
   only when `accessibility` is enabled.
-- `ui` adds an opt-in `accessibility` feature. Button/ButtonLike/IconButton, Tab and
-  TreeViewItem emit semantic roles and state; a real `ui` integration snapshot covers
-  Button, Tab and TreeViewItem roles, labels and state.
+- `ui` adds an opt-in `accessibility` feature. Button/ButtonLike/IconButton, Tab,
+  ListItem and TreeViewItem emit semantic roles and state; Button accessibility Click is
+  routed through the same callback as mouse activation. A real `ui` integration snapshot
+  covers roles, labels, state and one-shot action dispatch.
 
 阶段 2 上游 A/B/C 决策：
 
