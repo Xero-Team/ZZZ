@@ -533,6 +533,13 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
   TestWindow 的 unsupported 状态不再进入静默 `update_ime_position` 调用。
 - system-bell 和 request-attention 也进入 capability matrix；公开 Window façade 在调用
   bell、attention、minimize、maximize 或 fullscreen 前检查对应能力。
+- native prompt 进入 capability matrix；Linux、Web 和 headless backend 直接选择 GPUI
+  rendered prompt，不再先调用空的 native prompt 实现。
+- clipboard 支持由 `ClipboardCapabilities` 区分同步 read 与 write；`Application`/`App`
+  均可查询。Web 明确为 write-only，Linux headless 为 unsupported；Web clipboard Promise
+  rejection、缺失 browser window 和非文本写入均会记录错误，不再静默丢弃。
+- interactive move/resize 进入 `WindowControls`，公开 façade 只调用 backend 声明支持的
+  操作；Web/headless/Windows 不再接收无效果的 resize/move 请求。
 - 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
@@ -556,6 +563,11 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 - 新增 `AppLifecycle` supertrait，将 run/quit/restart、activation/hide 和 quit/reopen
   callbacks 从宽 `Platform` 抽离；Test/visual、Linux、macOS、Windows、Web event-loop
   实现均只做所有权移动。
+- `AppLifecycleCapabilities` 现在区分 external event loop、quit、restart、activate、hide
+  和 hide-other-apps；Web 的 unsupported lifecycle 调用会明确记录 warning，Windows 的
+  hide-other-apps 路径不再触发 `unimplemented!()`。
+- `run_embedded` 的 TestPlatform integration test 锁定 launch callback、外部 update 重入
+  与 handle-drop 生命周期；Web 明确声明 external-event-loop ownership。
 - 新增 `AccessibilityBridge` supertrait；所有 backend 显式实现，未支持平台对非空
   semantic update 返回 error，避免 silent no-op。
 - 新增 `RendererFactory` contract；`gpui_platform::current_headless_renderer` 继续作为
@@ -567,42 +579,49 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 
 当前矩阵：
 
-| Backend               | Text input | IME position | Accessibility | System bell | Offscreen/headless window render | Frame callbacks | Window controls                    |
-| --------------------- | ---------- | ------------ | ------------- | ----------- | -------------------------------- | --------------- | ---------------------------------- |
-| TestWindow            | yes        | no           | no            | no          | runtime renderer dependent       | yes             | fullscreen only                    |
-| Linux X11             | yes        | yes          | no            | yes         | no                               | yes             | full desktop set                   |
-| Linux Wayland         | yes        | yes          | no            | runtime     | no                               | yes             | compositor dependent; no attention |
-| Linux headless window | no         | no           | no            | no          | no; scene is discarded           | no              | fullscreen state only              |
-| macOS                 | yes        | yes          | no            | yes         | test-support only                | yes             | full desktop set                   |
-| Windows               | yes        | yes          | no            | yes         | test-support only                | yes             | full desktop set                   |
-| Web                   | no         | no           | no            | no          | no                               | yes             | fullscreen only; no attention      |
+| Backend               | Text input | IME position | Native prompt | Clipboard | Accessibility | System bell | Offscreen/headless window render | Frame callbacks | Window controls                                  |
+| --------------------- | ---------- | ------------ | ------------- | --------- | ------------- | ----------- | -------------------------------- | --------------- | ------------------------------------------------ |
+| TestWindow            | yes        | no           | yes           | R/W       | no            | no          | runtime renderer dependent       | yes             | fullscreen + move                                |
+| Linux X11             | yes        | yes          | rendered      | R/W       | no            | yes         | no                               | yes             | full desktop set                                 |
+| Linux Wayland         | yes        | yes          | rendered      | R/W       | no            | runtime     | no                               | yes             | compositor dependent + move/resize; no attention |
+| Linux headless window | no         | no           | rendered      | none      | no            | no          | no; scene is discarded           | no              | fullscreen state only                            |
+| macOS                 | yes        | yes          | native        | R/W       | no            | yes         | test-support only                | yes             | desktop set + move; no interactive resize        |
+| Windows               | yes        | yes          | native        | R/W       | no            | yes         | test-support only                | yes             | desktop set; no interactive move/resize          |
+| Web                   | no         | no           | rendered      | write     | no            | no          | no                               | yes             | fullscreen only                                  |
 
 验证：
 
-| 命令或检查                                                                                   | 结果                        | 证据                                                    |
-| -------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------- |
-| `cargo check --locked -p gpui`                                                               | `PASS`                      | capability façade 编译通过                              |
-| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                          |
-| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                     |
-| `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                 |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`               | `PASS`                      | 231 tests passed after render/capability changes        |
-| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 223 tests passed after platform splits                  |
-| `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                    |
-| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                |
-| `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                  |
-| `cargo test --locked -p gpui_platform --features test-support`                               | `PASS`                      | renderer factory returns real Linux renderer            |
-| `./script/clippy -p gpui_platform --features test-support`                                   | `PASS`                      | renderer factory contract passes release clippy         |
-| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux            |
-| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过       |
-| `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过 |
-| `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error          |
+| 命令或检查                                                                                   | 结果                        | 证据                                                        |
+| -------------------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                               | `PASS`                      | capability façade 编译通过                                  |
+| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                              |
+| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                         |
+| `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                     |
+| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 225 tests，含 `run_embedded` ownership                      |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                    | `PASS`                      | macOS capability tests cross-compile                        |
+| `cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu`                | `BLOCKED`                   | 缺少 `x86_64-w64-mingw32-windres`；未进入 Rust test compile |
+| `RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown` | `PASS`                      | workaround for `wasm_thread` nightly-only feature           |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`               | `PASS`                      | 231 tests passed after render/capability changes            |
+| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 223 tests passed after platform splits                      |
+| `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                        |
+| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                    |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                      |
+| `cargo test --locked -p gpui_platform --features test-support`                               | `PASS`                      | renderer factory returns real Linux renderer                |
+| `./script/clippy -p gpui_platform --features test-support`                                   | `PASS`                      | renderer factory contract passes release clippy             |
+| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux                |
+| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过           |
+| `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过     |
+| `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error              |
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
 `9c8de23b7c`；app lifecycle `1ff5d99840`；accessibility bridge `42a8e9765d`；renderer
 factory `85fffe8fe5`；platform render target `c3f2d1bb90`；completed window host
 `2b2d467ce5`；IME position capability `c7d7aac2d5`；optional operation gating
-`3ef63e8c00`。
+`3ef63e8c00`；desktop assertion coverage `fd778d5672`；embedded lifecycle test
+`a37079c358`；native prompt capability `ff2ae9aaf3`；clipboard capability
+`7542cae1ec`；Web clipboard errors `2cb4199d55`；interactive move/resize gating
+`13a7611025`；lifecycle capability `93aa67658d`。
 下一步：收敛 platform-specific façade 与 capability error，并覆盖
 frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
 
