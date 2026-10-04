@@ -566,8 +566,9 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
   policy 由 `zzz` app composition 决定，generic renderer 只负责 prompt view。
 - 保留 `ErasedEditor` façade 和 Editor UTF-16/IME 行为，未引入跨 crate product API。
 - `create_editor`/`InputField::try_new` 提供显式 factory-missing error；兼容
-  `InputField::new` 不再 panic，而是记录 error 并使用可 focus、可程序化读写的 inert
-  fallback editor，避免 app 初始化顺序导致崩溃。
+  `create_editor_or_fallback` 集中记录 error 并返回可 focus、可程序化读写的 inert
+  editor。`InputField`、`Picker` 和 `RemoteConnectionPrompt` 均通过该入口构造，已不存在
+  绕过错误边界的 `cx.global::<ErasedEditorFactory>()` 调用。
 - 原 `component` Cargo package 已改名为 `ui_component_registry`，明确它只承载 preview
   metadata、registry 和 example layout；`component_preview` 继续承载产品级 workspace
   preview UI。源码目录暂留 `crates/component` 以避免无行为收益的文件搬迁，但 workspace
@@ -578,9 +579,11 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | 命令或检查                                                                                                              | 结果                      | 证据                                                                                                                                                              |
 | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cargo check --locked -p ui_input -p editor -p picker -p remote_connection`                                             | `PASS`                    | app-scoped factory consumers 编译通过                                                                                                                             |
+| `cargo check --locked -p ui_input -p picker -p remote_connection`                                                       | `PASS`                    | 所有 factory consumer 通过统一的非 panic 构造边界                                                                                                                 |
 | `cargo check --locked -p ui_prompt -p zzz`                                                                              | `PASS`                    | prompt policy moved to app composition                                                                                                                            |
 | `cargo test --locked -p ui_input --lib`                                                                                 | `PASS`                    | 1 startup-order/fallback test passed                                                                                                                              |
 | `./script/clippy -p ui_input`                                                                                           | `PASS`                    | all-target release clippy 与 philosophy gate 通过                                                                                                                 |
+| `./script/clippy -p ui_input -p picker -p remote_connection`                                                            | `PASS`                    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                     |
 | `./script/clippy -p ui_prompt`                                                                                          | `PASS`                    | all-target release clippy 与 philosophy gate 通过                                                                                                                 |
 | `cargo test --locked -p editor ime`                                                                                     | `PASS`                    | 6 IME/composition tests passed                                                                                                                                    |
 | `cargo test --locked -p editor focus`                                                                                   | `PASS`                    | 2 focus tests passed                                                                                                                                              |
@@ -592,7 +595,8 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | `cargo test --locked -p agent_ui --lib`                                                                                 | `FAIL (baseline overlap)` | 293 passed；6 agent action/focus failures remain; representative baseline reproduction is recorded in `.tmp/gpui-refactor/phase-9/baseline-agent-ui-form-tab.log` |
 
 提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`；
-non-panicking factory boundary `d296469604`；preview registry rename `7cb589a3ba`。
+non-panicking factory boundary `d296469604`；all-consumer factory fallback `ca93ff5625`；
+preview registry rename `7cb589a3ba`。
 
 EXP-010 当前状态：`PARTIAL`。process-global factory 已删除、缺 factory 不再 panic、prompt
 product policy 已迁出 generic crate；仍待 editor-only incremental rebuild 测量和完整 UI
