@@ -21,7 +21,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 7/9 收敛                              |
+| 当前阶段                   | 阶段 9 收敛                                |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -708,7 +708,7 @@ supported 与 unsupported。
 
 ### 阶段 7：UI 集成边界
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（macOS/Windows native IME runtime 为 `NOT RUN`）
 
 已完成的第一步：
 
@@ -726,6 +726,13 @@ supported 与 unsupported。
   metadata、registry 和 example layout；`component_preview` 继续承载产品级 workspace
   preview UI。源码目录暂留 `crates/component` 以避免无行为收益的文件搬迁，但 workspace
   dependency 和 Rust crate path 已不存在含糊的 `component` 名称。
+- 新增 `script/gpui-ime-smoke`：在隔离 XDG/data directory 中启动 X11 ZZZ，通过临时
+  `/dev/uinput` keyboard/pointer 把真实 kernel input 送入 Fcitx5/Rime/XIM，再验证磁盘
+  文件精确得到 100/100 行 `你好`；同时确认 candidate popup 与 editor window 相交。
+- Linux Fedora/X11 native run 为 `PASS`：0 lost/duplicated commits，candidate window
+  `(168, 1928, 560, 152)`，editor window `(168, 56, 3672, 2104)`，58.580 s。macOS、
+  Windows 和 Web 的 exact steps 与预期结果记录在
+  [原生 IME 验证 runbook](./gui-framework-research/ime-validation-runbook.md)。
 
 验证：
 
@@ -741,6 +748,8 @@ supported 与 unsupported。
 | `cargo test --locked -p editor ime`                                                                                     | `PASS`                    | 6 IME/composition tests passed                                                                                                                                                                      |
 | `cargo test --locked -p editor focus`                                                                                   | `PASS`                    | 2 focus tests passed                                                                                                                                                                                |
 | `cargo test --locked -p editor input`                                                                                   | `PASS`                    | 8 UTF-16/multi-cursor input tests passed                                                                                                                                                            |
+| `python3 -m py_compile script/gpui-ime-smoke`                                                                           | `PASS`                    | Linux native harness syntax/import check 通过                                                                                                                                                       |
+| `script/gpui-ime-smoke --repetitions 100`                                                                               | `PASS`                    | Fcitx5/Rime XIM 100/100 commits；candidate popup 与 editor window 相交；`.tmp/gpui-refactor/phase-7/linux-x11-ime-niz4rous/summary.txt`                                                             |
 | `cargo check --locked -p ui_component_registry -p ui_macros -p ui -p ui_input -p component_preview -p workspace -p zzz` | `PASS`                    | registry rename 的 13 个直接 workspace consumer 全部编译通过                                                                                                                                        |
 | `cargo test --locked -p ui_component_registry -p ui_macros -p component_preview --lib`                                  | `PASS`                    | 4 tests passed，0 failed                                                                                                                                                                            |
 | `./script/clippy -p ui_component_registry -p ui_macros -p component_preview`                                            | `PASS`                    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                       |
@@ -750,14 +759,17 @@ supported 与 unsupported。
 
 提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`；
 non-panicking factory boundary `d296469604`；all-consumer factory fallback `ca93ff5625`；
-preview registry rename `7cb589a3ba`。
+preview registry rename `7cb589a3ba`；Linux native IME harness `5012063343`。
 
 EXP-010 当前状态：`PASS`。process-global factory 已删除；3 个 factory consumer 通过统一
 构造入口且 startup-order fallback test 通过；prompt product policy 已迁出 generic crate；
 editor-only 增量构建保持 generic `ui`、`ui_input`、registry 和 preview crate 为 fresh。
 
-下一步：完成 EXP-009 的平台 IME 重复运行与 native runbook，并在最终 Linux app smoke
-中覆盖实际 UI startup。
+EXP-009 当前状态：`partial-platform`。当前 Linux 主机达到 native threshold：真实 XIM
+preedit/candidate/commit path 完成 100 repetitions，Editor UTF-16、marked range、undo、
+multi-cursor、focus/input 与 Vim native-key bypass tests 全部通过。macOS/Windows runtime
+在当前主机标记 `NOT RUN`，均有可执行 runbook；Web candidate positioning 保持显式
+unsupported。按完成定义的平台欠账规则，阶段 7 标记 `COMPLETE`，下一步进入阶段 9。
 
 ### 阶段 8：invalidation 实验
 
