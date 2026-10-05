@@ -388,8 +388,8 @@ impl<E: Element> Drawable<E> {
         match mem::take(&mut self.phase) {
             ElementDrawPhase::Start => {
                 let global_id = self.element.id().map(|element_id| {
-                    window.element_id_stack.push(element_id);
-                    GlobalElementId(Arc::from(&*window.element_id_stack))
+                    window.frame_builder.element_id_stack.push(element_id);
+                    GlobalElementId(Arc::from(&*window.frame_builder.element_id_stack))
                 });
 
                 let inspector_id;
@@ -398,7 +398,9 @@ impl<E: Element> Drawable<E> {
                     inspector_id = if window.inspector_enabled() {
                         self.element.source_location().map(|source| {
                             let path = crate::InspectorElementPath {
-                                global_id: GlobalElementId(Arc::from(&*window.element_id_stack)),
+                                global_id: GlobalElementId(Arc::from(
+                                    &*window.frame_builder.element_id_stack,
+                                )),
                                 source_location: source,
                             };
                             window.build_inspector_element_id(path)
@@ -420,7 +422,7 @@ impl<E: Element> Drawable<E> {
                 );
 
                 if global_id.is_some() {
-                    window.element_id_stack.pop();
+                    window.frame_builder.element_id_stack.pop();
                 }
 
                 self.phase = ElementDrawPhase::RequestLayout {
@@ -451,13 +453,13 @@ impl<E: Element> Drawable<E> {
                 ..
             } => {
                 if let Some(element_id) = self.element.id() {
-                    window.element_id_stack.push(element_id);
+                    window.frame_builder.element_id_stack.push(element_id);
                     debug_assert_eq!(
                         &*global_id
                             .as_ref()
                             .expect("value should have the expected type")
                             .0,
-                        &*window.element_id_stack
+                        &*window.frame_builder.element_id_stack
                     );
                 }
 
@@ -506,7 +508,7 @@ impl<E: Element> Drawable<E> {
                 }
 
                 if global_id.is_some() {
-                    window.element_id_stack.pop();
+                    window.frame_builder.element_id_stack.pop();
                 }
 
                 self.phase = ElementDrawPhase::Prepaint {
@@ -538,13 +540,13 @@ impl<E: Element> Drawable<E> {
                 ..
             } => {
                 if let Some(element_id) = self.element.id() {
-                    window.element_id_stack.push(element_id);
+                    window.frame_builder.element_id_stack.push(element_id);
                     debug_assert_eq!(
                         &*global_id
                             .as_ref()
                             .expect("value should have the expected type")
                             .0,
-                        &*window.element_id_stack
+                        &*window.frame_builder.element_id_stack
                     );
                 }
 
@@ -564,7 +566,7 @@ impl<E: Element> Drawable<E> {
                 );
 
                 if global_id.is_some() {
-                    window.element_id_stack.pop();
+                    window.frame_builder.element_id_stack.pop();
                 }
 
                 self.phase = ElementDrawPhase::Painted;

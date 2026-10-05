@@ -1,11 +1,10 @@
-#[cfg(any(test, feature = "test-support"))]
-use crate::Bounds;
+use crate::taffy::TaffyLayoutEngine;
 use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest};
 use crate::{
-    AccessibilityUpdate, AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId,
-    DispatchTree, ElementId, EntityId, FocusId, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
-    LineLayoutIndex, Pixels, Point, Scene, TabStopMap, TextInputOwner, TextStyleRefinement, Window,
-    WindowControlArea,
+    AccessibilityUpdate, AnyElement, AnyImageCache, AnyMouseListener, Bounds, ContentMask,
+    CursorStyle, DispatchNodeId, DispatchTree, ElementId, EntityId, FocusId, GlobalElementId,
+    Hitbox, HitboxBehavior, HitboxId, LineLayoutIndex, Pixels, Point, Scene, TabStopMap,
+    TextInputOwner, TextStyleRefinement, Window, WindowControlArea,
 };
 use crate::{App, Effect};
 #[cfg(feature = "accessibility")]
@@ -37,6 +36,35 @@ pub(crate) enum DrawPhase {
     Prepaint,
     Paint,
     Focus,
+}
+
+/// Mutable state used only while constructing a frame.
+pub(crate) struct FrameBuilder {
+    pub(crate) layout_engine: Option<TaffyLayoutEngine>,
+    pub(crate) element_id_stack: SmallVec<[ElementId; 32]>,
+    pub(crate) text_style_stack: Vec<TextStyleRefinement>,
+    pub(crate) rendered_entity_stack: Vec<EntityId>,
+    pub(crate) element_offset_stack: Vec<Point<Pixels>>,
+    pub(crate) element_opacity: f32,
+    pub(crate) content_mask_stack: Vec<ContentMask<Pixels>>,
+    pub(crate) requested_autoscroll: Option<Bounds<Pixels>>,
+    pub(crate) image_cache_stack: Vec<AnyImageCache>,
+}
+
+impl FrameBuilder {
+    pub(crate) fn new() -> Self {
+        Self {
+            layout_engine: Some(TaffyLayoutEngine::new()),
+            element_id_stack: SmallVec::default(),
+            text_style_stack: Vec::new(),
+            rendered_entity_stack: Vec::new(),
+            element_offset_stack: Vec::new(),
+            element_opacity: 1.0,
+            content_mask_stack: Vec::new(),
+            requested_autoscroll: None,
+            image_cache_stack: Vec::new(),
+        }
+    }
 }
 
 pub(crate) struct FrameScheduler {

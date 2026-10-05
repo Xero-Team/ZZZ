@@ -5,16 +5,16 @@ use crate::{
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
     Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
     DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
-    FileDropEvent, FontId, Frame, FrameScheduler, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
-    InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
-    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
-    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
-    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow,
-    Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render,
-    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, ResizeEdge,
-    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow,
-    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
-    SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine, Task, TextInputClient,
+    FileDropEvent, FontId, Frame, FrameBuilder, FrameScheduler, Global, GlobalElementId, GlyphId,
+    GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner, IsZero,
+    KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers,
+    ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent,
+    PaintIndex, Path, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
+    PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton,
+    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
+    ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels,
+    Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet,
+    Subscription, SystemWindowTab, SystemWindowTabController, Task, TextInputClient,
     TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
     TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
@@ -705,16 +705,8 @@ pub struct Window {
     /// a given rem size.
     rem_size_override_stack: SmallVec<[Pixels; 8]>,
     pub(crate) viewport_size: Size<Pixels>,
-    layout_engine: Option<TaffyLayoutEngine>,
     pub(crate) root: Option<AnyView>,
-    pub(crate) element_id_stack: SmallVec<[ElementId; 32]>,
-    pub(crate) text_style_stack: Vec<TextStyleRefinement>,
-    pub(crate) rendered_entity_stack: Vec<EntityId>,
-    pub(crate) element_offset_stack: Vec<Point<Pixels>>,
-    pub(crate) element_opacity: f32,
-    pub(crate) content_mask_stack: Vec<ContentMask<Pixels>>,
-    pub(crate) requested_autoscroll: Option<Bounds<Pixels>>,
-    pub(crate) image_cache_stack: Vec<AnyImageCache>,
+    pub(crate) frame_builder: FrameBuilder,
     pub(crate) interaction: InteractionOwner,
     pub(crate) text_input: TextInputOwner,
     pub(crate) frame_scheduler: FrameScheduler,
@@ -1388,15 +1380,8 @@ impl Window {
             rem_size: px(16.),
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
-            layout_engine: Some(TaffyLayoutEngine::new()),
             root: None,
-            element_id_stack: SmallVec::default(),
-            text_style_stack: Vec::new(),
-            rendered_entity_stack: Vec::new(),
-            element_offset_stack: Vec::new(),
-            content_mask_stack: Vec::new(),
-            element_opacity: 1.0,
-            requested_autoscroll: None,
+            frame_builder: FrameBuilder::new(),
             interaction: InteractionOwner::new(
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
@@ -1420,7 +1405,6 @@ impl Window {
             activation_observers: SubscriberSet::new(),
             prompt: None,
             client_inset: None,
-            image_cache_stack: Vec::new(),
             #[cfg(any(feature = "inspector", debug_assertions))]
             inspector: None,
         })
@@ -1611,7 +1595,7 @@ impl Window {
     /// The current text style. Which is composed of all the style refinements provided to `with_text_style`.
     pub fn text_style(&self) -> TextStyle {
         let mut style = TextStyle::default();
-        for refinement in &self.text_style_stack {
+        for refinement in &self.frame_builder.text_style_stack {
             style.refine(refinement);
         }
         style
@@ -2228,7 +2212,7 @@ impl Window {
         f: impl FnOnce(&GlobalElementId, &mut Self) -> R,
     ) -> R {
         self.with_id(element_id, |this| {
-            let global_id = GlobalElementId(Arc::from(&*this.element_id_stack));
+            let global_id = GlobalElementId(Arc::from(&*this.frame_builder.element_id_stack));
 
             f(&global_id, this)
         })
@@ -2241,9 +2225,9 @@ impl Window {
         element_id: impl Into<ElementId>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.element_id_stack.push(element_id.into());
+        self.frame_builder.element_id_stack.push(element_id.into());
         let result = f(self);
-        self.element_id_stack.pop();
+        self.frame_builder.element_id_stack.pop();
         result
     }
 
@@ -2433,9 +2417,9 @@ impl Window {
 
         self.invalidate_entities();
         cx.entities.clear_accessed();
-        debug_assert!(self.rendered_entity_stack.is_empty());
+        debug_assert!(self.frame_builder.rendered_entity_stack.is_empty());
         self.invalidator.set_dirty(false);
-        self.requested_autoscroll = None;
+        self.frame_builder.requested_autoscroll = None;
 
         // Restore the previously-used input handler.
         // Place it back into a None slot (left by a previous .take()) so that
@@ -2465,7 +2449,8 @@ impl Window {
             self.platform_window.set_input_handler(input_handler);
         }
 
-        self.layout_engine
+        self.frame_builder
+            .layout_engine
             .as_mut()
             .expect("value should have the expected type")
             .clear();
@@ -2522,7 +2507,7 @@ impl Window {
                 .retain(&(), |listener| listener(&event, self, cx));
         }
 
-        debug_assert!(self.rendered_entity_stack.is_empty());
+        debug_assert!(self.frame_builder.rendered_entity_stack.is_empty());
         self.record_entities_accessed(cx);
         self.reset_cursor_style(cx);
         self.frame_scheduler.set_refreshing(false);
@@ -2694,7 +2679,8 @@ impl Window {
             request_layout_duration += request_layout_started_at.elapsed();
             request_layout_operations += 1;
         }
-        self.layout_engine
+        self.frame_builder
+            .layout_engine
             .as_mut()
             .expect("value should have the expected type")
             .stretch_auto_size_to_fill(root_layout_id, root_size, scale_factor);
@@ -2718,7 +2704,8 @@ impl Window {
                 request_layout_duration += request_layout_started_at.elapsed();
                 request_layout_operations += 1;
             }
-            self.layout_engine
+            self.frame_builder
+                .layout_engine
                 .as_mut()
                 .expect("value should have the expected type")
                 .stretch_auto_size_to_fill(prompt_layout_id, root_size, scale_factor);
@@ -2876,7 +2863,7 @@ impl Window {
     }
 
     fn prepaint_deferred_draws(&mut self, cx: &mut App) {
-        assert_eq!(self.element_id_stack.len(), 0);
+        assert_eq!(self.frame_builder.element_id_stack.len(), 0);
 
         // Process deferred draws in multiple rounds to support nesting.
         // Each round processes all current deferred draws, which may push new ones.
@@ -2908,9 +2895,11 @@ impl Window {
                 let (element, parent_node, current_view, rem_size, absolute_offset, prepaint_range) = {
                     let deferred_draw =
                         &mut self.interaction.next_frame.deferred_draws[deferred_draw_ix];
-                    self.element_id_stack
+                    self.frame_builder
+                        .element_id_stack
                         .clone_from(&deferred_draw.element_id_stack);
-                    self.text_style_stack
+                    self.frame_builder
+                        .text_style_stack
                         .clone_from(&deferred_draw.text_style_stack);
                     (
                         deferred_draw.element.take(),
@@ -2945,14 +2934,14 @@ impl Window {
                     prepaint_start..prepaint_end;
             }
 
-            self.element_id_stack.clear();
-            self.text_style_stack.clear();
+            self.frame_builder.element_id_stack.clear();
+            self.frame_builder.text_style_stack.clear();
             round_start = round_end;
         }
     }
 
     fn paint_deferred_draws(&mut self, cx: &mut App) {
-        assert_eq!(self.element_id_stack.len(), 0);
+        assert_eq!(self.frame_builder.element_id_stack.len(), 0);
 
         // Paint all deferred draws in priority order.
         // Since prepaint has already processed nested deferreds, we just paint them all.
@@ -2964,7 +2953,8 @@ impl Window {
         let mut deferred_draws = mem::take(&mut self.interaction.next_frame.deferred_draws);
         for deferred_draw_ix in traversal_order {
             let mut deferred_draw = &mut deferred_draws[deferred_draw_ix];
-            self.element_id_stack
+            self.frame_builder
+                .element_id_stack
                 .clone_from(&deferred_draw.element_id_stack);
             self.interaction
                 .next_frame
@@ -2988,7 +2978,7 @@ impl Window {
             deferred_draw.paint_range = paint_start..paint_end;
         }
         self.interaction.next_frame.deferred_draws = deferred_draws;
-        self.element_id_stack.clear();
+        self.frame_builder.element_id_stack.clear();
     }
 
     fn deferred_draw_traversal_order(&mut self) -> SmallVec<[usize; 8]> {
@@ -3157,9 +3147,9 @@ impl Window {
     {
         self.invalidator.debug_assert_paint_or_prepaint();
         if let Some(style) = style {
-            self.text_style_stack.push(style);
+            self.frame_builder.text_style_stack.push(style);
             let result = f(self);
-            self.text_style_stack.pop();
+            self.frame_builder.text_style_stack.pop();
             result
         } else {
             f(self)
@@ -3207,9 +3197,9 @@ impl Window {
         self.invalidator.debug_assert_paint_or_prepaint();
         if let Some(mask) = mask {
             let mask = mask.intersect(&self.content_mask());
-            self.content_mask_stack.push(mask);
+            self.frame_builder.content_mask_stack.push(mask);
             let result = f(self);
-            self.content_mask_stack.pop();
+            self.frame_builder.content_mask_stack.pop();
             result
         } else {
             f(self)
@@ -3242,9 +3232,9 @@ impl Window {
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
         self.invalidator.debug_assert_prepaint();
-        self.element_offset_stack.push(offset);
+        self.frame_builder.element_offset_stack.push(offset);
         let result = f(self);
-        self.element_offset_stack.pop();
+        self.frame_builder.element_offset_stack.pop();
         result
     }
 
@@ -3259,10 +3249,10 @@ impl Window {
             return f(self);
         };
 
-        let previous_opacity = self.element_opacity;
-        self.element_opacity = previous_opacity * opacity;
+        let previous_opacity = self.frame_builder.element_opacity;
+        self.frame_builder.element_opacity = previous_opacity * opacity;
         let result = f(self);
-        self.element_opacity = previous_opacity;
+        self.frame_builder.element_opacity = previous_opacity;
         result
     }
 
@@ -3308,14 +3298,14 @@ impl Window {
     /// called during the prepaint phase of element drawing.
     pub fn request_autoscroll(&mut self, bounds: Bounds<Pixels>) {
         self.invalidator.debug_assert_prepaint();
-        self.requested_autoscroll = Some(bounds);
+        self.frame_builder.requested_autoscroll = Some(bounds);
     }
 
     /// This method can be called from a containing element such as [`crate::List`] to support the autoscroll behavior
     /// described in [`Self::request_autoscroll`].
     pub fn take_autoscroll(&mut self) -> Option<Bounds<Pixels>> {
         self.invalidator.debug_assert_prepaint();
-        self.requested_autoscroll.take()
+        self.frame_builder.requested_autoscroll.take()
     }
 
     /// Asynchronously load an asset, if the asset hasn't finished loading this will return None.
@@ -3339,7 +3329,8 @@ impl Window {
     /// prepaint phase of element drawing.
     pub fn element_offset(&self) -> Point<Pixels> {
         self.invalidator.debug_assert_prepaint();
-        self.element_offset_stack
+        self.frame_builder
+            .element_offset_stack
             .last()
             .copied()
             .unwrap_or_default()
@@ -3350,13 +3341,14 @@ impl Window {
     #[inline]
     pub(crate) fn element_opacity(&self) -> f32 {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.element_opacity
+        self.frame_builder.element_opacity
     }
 
     /// Obtain the current content mask. This method should only be called during element drawing.
     pub fn content_mask(&self) -> ContentMask<Pixels> {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.content_mask_stack
+        self.frame_builder
+            .content_mask_stack
             .last()
             .cloned()
             .unwrap_or_else(|| ContentMask {
@@ -3374,9 +3366,9 @@ impl Window {
         element_id: impl Into<ElementId>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.element_id_stack.push(element_id.into());
+        self.frame_builder.element_id_stack.push(element_id.into());
         let result = f(self);
-        self.element_id_stack.pop();
+        self.frame_builder.element_id_stack.pop();
         result
     }
 
@@ -3579,8 +3571,8 @@ impl Window {
             .push(DeferredDraw {
                 current_view: self.current_view(),
                 parent_node,
-                element_id_stack: self.element_id_stack.clone(),
-                text_style_stack: self.text_style_stack.clone(),
+                element_id_stack: self.frame_builder.element_id_stack.clone(),
+                text_style_stack: self.frame_builder.text_style_stack.clone(),
                 content_mask,
                 rem_size: self.rem_size(),
                 priority,
@@ -4243,7 +4235,8 @@ impl Window {
         let rem_size = self.rem_size();
         let scale_factor = self.scale_factor();
 
-        self.layout_engine
+        self.frame_builder
+            .layout_engine
             .as_mut()
             .expect("value should have the expected type")
             .request_layout(style, rem_size, scale_factor, &cx.layout_id_buffer)
@@ -4266,7 +4259,8 @@ impl Window {
 
         let rem_size = self.rem_size();
         let scale_factor = self.scale_factor();
-        self.layout_engine
+        self.frame_builder
+            .layout_engine
             .as_mut()
             .expect("value should have the expected type")
             .request_measured_layout(style, rem_size, scale_factor, measure)
@@ -4285,9 +4279,13 @@ impl Window {
     ) {
         self.invalidator.debug_assert_prepaint();
 
-        let mut layout_engine = self.layout_engine.take().expect("entry should be present");
+        let mut layout_engine = self
+            .frame_builder
+            .layout_engine
+            .take()
+            .expect("entry should be present");
         layout_engine.compute_layout(layout_id, available_space, self, cx);
-        self.layout_engine = Some(layout_engine);
+        self.frame_builder.layout_engine = Some(layout_engine);
     }
 
     /// Obtain the bounds computed for the given LayoutId relative to the window. This method will usually be invoked by
@@ -4299,6 +4297,7 @@ impl Window {
 
         let scale_factor = self.scale_factor();
         let mut bounds = self
+            .frame_builder
             .layout_engine
             .as_mut()
             .expect("value should have the expected type")
@@ -4376,7 +4375,8 @@ impl Window {
     /// Get the entity ID for the currently rendering view
     pub fn current_view(&self) -> EntityId {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.rendered_entity_stack
+        self.frame_builder
+            .rendered_entity_stack
             .last()
             .copied()
             .expect("copied should be present")
@@ -4388,9 +4388,9 @@ impl Window {
         id: EntityId,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.rendered_entity_stack.push(id);
+        self.frame_builder.rendered_entity_stack.push(id);
         let result = f(self);
-        self.rendered_entity_stack.pop();
+        self.frame_builder.rendered_entity_stack.pop();
         result
     }
 
@@ -4400,9 +4400,9 @@ impl Window {
         F: FnOnce(&mut Self) -> R,
     {
         if let Some(image_cache) = image_cache {
-            self.image_cache_stack.push(image_cache);
+            self.frame_builder.image_cache_stack.push(image_cache);
             let result = f(self);
-            self.image_cache_stack.pop();
+            self.frame_builder.image_cache_stack.pop();
             result
         } else {
             f(self)
