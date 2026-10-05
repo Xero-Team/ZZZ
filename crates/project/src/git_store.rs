@@ -15,6 +15,7 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use askpass::{AskPassDelegate, EncryptedPassword, IKnowWhatIAmDoingAndIHaveReadTheDocs};
+use async_lock::Semaphore;
 use buffer_diff::{BufferDiff, BufferDiffEvent};
 use client::ProjectId;
 use collections::HashMap;
@@ -109,8 +110,11 @@ pub struct GitStore {
         HashMap<(BufferId, DiffKind), Shared<Task<Result<Entity<BufferDiff>, Arc<anyhow::Error>>>>>,
     diffs: HashMap<BufferId, Entity<BufferGitState>>,
     shared_diffs: HashMap<proto::PeerId, HashMap<BufferId, SharedDiffs>>,
+    blob_read_limiter: Arc<Semaphore>,
     _subscriptions: Vec<Subscription>,
 }
+
+pub const MAX_CONCURRENT_BLOB_READS: usize = 16;
 
 #[derive(Default)]
 struct SharedDiffs {
@@ -379,6 +383,7 @@ pub struct Repository {
     snapshot: RepositorySnapshot,
     commit_message_buffer: Option<Entity<Buffer>>,
     git_store: WeakEntity<GitStore>,
+    blob_read_limiter: Arc<Semaphore>,
     // For a local repository, holds paths that have had worktree events since the last status scan completed,
     // and that should be examined during the next status scan.
     paths_needing_status_update: Vec<Vec<RepoPath>>,
@@ -717,6 +722,7 @@ impl GitStore {
             loading_diffs: HashMap::default(),
             shared_diffs: HashMap::default(),
             diffs: HashMap::default(),
+            blob_read_limiter: Arc::new(Semaphore::new(MAX_CONCURRENT_BLOB_READS)),
         }
     }
 
@@ -1816,6 +1822,7 @@ impl GitStore {
             {
                 let id = RepositoryId(next_repository_id.fetch_add(1, atomic::Ordering::Release));
                 let git_store = cx.weak_entity();
+                let blob_read_limiter = self.blob_read_limiter.clone();
                 let repo = cx.new(|cx| {
                     let mut repo = Repository::local(
                         id,
@@ -1827,6 +1834,7 @@ impl GitStore {
                         fs.clone(),
                         is_trusted,
                         git_store,
+                        blob_read_limiter,
                         cx,
                     );
                     if let Some(updates_tx) = updates_tx.as_ref() {
@@ -2237,6 +2245,7 @@ impl GitStore {
                 .map(|p| Path::new(p).into());
 
             let mut repo_subscription = None;
+            let blob_read_limiter = this.blob_read_limiter.clone();
             let repo = this.repositories.entry(id).or_insert_with(|| {
                 let git_store = cx.weak_entity();
                 let repo = cx.new(|cx| {
@@ -2249,6 +2258,7 @@ impl GitStore {
                         ProjectId(update.project_id),
                         client,
                         git_store,
+                        blob_read_limiter,
                         cx,
                     )
                 });
@@ -4753,6 +4763,7 @@ impl Repository {
         fs: Arc<dyn Fs>,
         is_trusted: bool,
         git_store: WeakEntity<GitStore>,
+        blob_read_limiter: Arc<Semaphore>,
         cx: &mut Context<Self>,
     ) -> Self {
         let snapshot = RepositorySnapshot::empty(
@@ -4767,6 +4778,7 @@ impl Repository {
         let mut repo = Repository {
             this: cx.weak_entity(),
             git_store,
+            blob_read_limiter,
             snapshot,
             pending_ops: Default::default(),
             repository_state: Task::ready(Err("not yet initialized".into())).shared(),
@@ -4797,6 +4809,7 @@ impl Repository {
         project_id: ProjectId,
         client: AnyProtoClient,
         git_store: WeakEntity<GitStore>,
+        blob_read_limiter: Arc<Semaphore>,
         cx: &mut Context<Self>,
     ) -> Self {
         let snapshot = RepositorySnapshot::empty(
@@ -4818,6 +4831,7 @@ impl Repository {
             snapshot,
             commit_message_buffer: None,
             git_store,
+            blob_read_limiter,
             pending_ops: Default::default(),
             paths_needing_status_update: Default::default(),
             job_sender,
@@ -8297,10 +8311,16 @@ impl Repository {
         )
     }
 
-    fn load_blob_content(&mut self, oid: Oid, cx: &App) -> Task<Result<String>> {
+    /// Blob reads do not depend on the repository status snapshot. Bypass the
+    /// serial Git job queue, but keep a bounded number of reads in flight so a
+    /// large diff cannot fan out unboundedly on the local or remote host.
+    fn load_blob_content(&self, oid: Oid, cx: &App) -> Task<Result<String>> {
         let repository_id = self.snapshot.id;
-        let rx = self.send_job("load_blob_content", None, move |state, _| async move {
-            match state {
+        let repository_state = self.repository_state.clone();
+        let blob_read_limiter = self.blob_read_limiter.clone();
+        cx.background_spawn(async move {
+            let _permit = blob_read_limiter.acquire_arc().await;
+            match repository_state.await.map_err(|error| anyhow!(error))? {
                 RepositoryState::Local(LocalRepositoryState { backend, .. }) => {
                     backend.load_blob_content(oid).await
                 }
@@ -8315,8 +8335,7 @@ impl Repository {
                     Ok(response.content)
                 }
             }
-        });
-        cx.spawn(|_: &mut AsyncApp| async move { rx.await? })
+        })
     }
 
     fn paths_changed(

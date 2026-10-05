@@ -1763,6 +1763,10 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.focus_changes(window, cx);
+    }
+
+    pub(crate) fn focus_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus_handle.focus(window, cx);
         self.select_first_entry_if_none(window, cx);
     }
@@ -8295,7 +8299,7 @@ mod tests {
     };
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext, px};
     use project::FakeFs;
-    use serde_json::json;
+    use serde_json::{Map, json};
     use settings::SettingsStore;
     use theme::LoadThemes;
     use util::path;
@@ -10043,6 +10047,49 @@ mod tests {
                 .expect("active_path should exist");
 
             assert_eq!(active_path.path, rel_path("untracked").into_arc());
+        });
+    }
+
+    #[gpui::test]
+    async fn test_large_project_diff_opens_selected_file_diff(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        let mut tree = Map::new();
+        tree.insert(".git".to_owned(), json!({}));
+        for index in 0..=crate::project_diff::MAX_PROJECT_DIFF_FILES {
+            tree.insert(format!("file-{index:04}.txt"), json!("changed\n"));
+        }
+        fs.insert_tree(path!("/project"), serde_json::Value::Object(tree))
+            .await;
+
+        let project = Project::test(fs.clone(), [Path::new(path!("/project"))], cx).await;
+        let window_handle =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = window_handle
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .unwrap();
+        let cx = &mut VisualTestContext::from_window(window_handle.into(), cx);
+        let panel = workspace.update_in(cx, GitPanel::new);
+        await_git_panel_entries(&panel, cx).await;
+
+        let selected_entry = panel.read_with(cx, |panel, _| {
+            panel
+                .entries
+                .iter()
+                .find_map(GitListEntry::status_entry)
+                .cloned()
+                .expect("large diff should have a selected file")
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.selected_entry = entry_index_for_repo_path(panel, &selected_entry.repo_path);
+            panel.open_diff(&menu::Confirm, window, cx);
+        });
+        cx.run_until_parked();
+
+        workspace.read_with(cx, |workspace, cx| {
+            assert!(workspace.item_of_type::<SoloDiffView>(cx).is_some());
+            assert!(workspace.item_of_type::<ProjectDiff>(cx).is_none());
         });
     }
 
