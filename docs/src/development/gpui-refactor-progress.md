@@ -18,9 +18,10 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 计划基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 执行基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 2026-10-04 续作基线        | `101f0985632b6134ee096308ed02cc7bdaea5175` |
+| 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 6/7：platform 与 UI 边界              |
+| 当前阶段                   | 阶段 2–8 收敛与 invalidation 决策          |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -54,6 +55,21 @@ owner 边界。两项直接兼容修复分别恢复
 
 续作下一步：继续收敛阶段 1/2/3/5/6/7 的开放验证项；在 EXP-001/002 正式 workload
 完成前不进入 scoped invalidation 产品实现。
+
+### 2026-10-05 续作基线复核
+
+续作开始时工作树 clean，但 checkout 再次位于 `main@c7a5c71f47`。现有专用分支
+`refactor/gpui-architecture` 停在 `c4fc7df24a`，且 `main` 已在 `139fb6be52`
+合入该分支后继续加入协作设置和构建升级。为避免把与本 Goal 无关的协作表面带回
+重构历史，在修改代码前切回现有专用分支；没有 reset、clean、覆盖、rebase 或合并
+`main`。
+
+基线复跑发现全 feature 的 235-test GPUI 并行套件仍可让不同 `TestAppContext` 复用
+相同 `WindowId`，使全局 frame journal 的 skipped-submission 事件串入另一个测试。
+`dfcff1a2cd` 为每个 window invalidator 增加 feature-gated journal source ID，并让
+`FrameTimingCollector::for_window` 按 window instance 隔离；默认构建不增加字段或开销。
+修复后同一套件连续运行 20 次，4,700 tests 全部通过。原始日志：
+`.tmp/gpui-refactor/continuation-2026-10-05/gpui-lib-test-20x-source-filter.log`。
 
 ## 环境基线
 
@@ -156,7 +172,7 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 
 ### 阶段 1：frame diagnostics 与预算
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 本阶段已完成的结构改动：
 
@@ -181,11 +197,10 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 - printable-key 的 text-input dispatch 现在与原始 keyboard event 使用同一 provenance；
   新 regression test 和真实 Editor runner 都验证 1,000/1,000 presented frames 带有
   input-to-present 样本。
-
-当前仍待完成：
-
-- EXP-002 的 command palette、workspace tabs 和 settings product-view 对比；Editor
-  cached/dirty/scroll/resize 部分已完成。
+- per-window collector 现在使用全局唯一的 feature-gated source ID，而不是只按可跨
+  test context 重复的 `WindowId` 过滤。
+- command palette、workspace tabs 和真实 Settings UI 都有固定 workload，输出
+  per-frame p95、phase operation 和 cache replay counts。
 
 阶段 1 验证：
 
@@ -199,14 +214,16 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 | `git diff --check`                                                                                                 | `PASS`                      | `.tmp/gpui-refactor/phase-1/diff-check.log`                                                                                                                                                                                                                                     |
 | `cargo test --locked -p gpui --features frame-diagnostics frame_diagnostics_runner -- --nocapture`                 | `PASS`                      | 100 root-dirty + 100 cached-panel + 100 input frames；draw p50/p95/p99 = 72,307/92,273/99,438 ns；input-to-present = 105,760/118,914/125,356 ns；100 prepaint + 100 paint cache replays；0 dropped events；raw log in `.tmp/gpui-refactor/phase-1/frame-diagnostics-runner.log` |
 | `cargo fmt --all -- --check`                                                                                       | `FAIL (baseline)`           | 仅剩 `crates/grammars/vendor/tree-sitter-typst/benches/bench_main.rs` 的既有排序漂移；本阶段文件已单独格式化                                                                                                                                                                    |
-| EXP-001                                                                                                            | `PARTIAL`                   | deterministic input-to-present runner now samples p50/p95/p99; platform frame skip and 10-second editor scroll workload remain                                                                                                                                                  |
-| EXP-002                                                                                                            | `PARTIAL`                   | runner emits layout/prepaint/paint totals and 100 cached prepaint/paint replays; editor/product corpus and p95 comparison remain                                                                                                                                                |
-| EXP-011                                                                                                            | `PARTIAL`                   | allocation probe matches off/on after warm-up: 12/25 allocations and 6,504/13,104 bytes per cached/dirty frame; synthetic timing overhead is ~10.5% cached and ~3.9% dirty, so the <=2% production-workload gate remains open                                                   |
+| EXP-001                                                                                                            | `PASS`                      | production Editor workload overhead ≤1.902%；candidate/baseline p95/p99 均低于 1.05×；0 skipped/dropped                                                                                                                                                                         |
+| EXP-002                                                                                                            | `PASS`                      | Editor ratios ≤1.0064；tabs cached/dirty 1.000898/1.001593；Settings cached/dirty 1.017539/0.990516；command palette 1.024921；operation/cache counts 全部相同                                                                                                                  |
+| EXP-011                                                                                                            | `PASS`                      | feature-off allocation 不高于 baseline；diagnostics 增量 ≤0.003 alloc/frame、≤0.203% bytes/frame；peak RSS ≤1.011×                                                                                                                                                              |
 | `frame_allocations` off/on probe                                                                                   | `PASS (allocation portion)` | `cargo test --features test-support[,frame-diagnostics] --test frame_allocations`；raw logs `.tmp/gpui-refactor/phase-1/frame-allocations-{disabled,enabled}.log`；warm-up 后两种模式的分配数/字节相同                                                                          |
 | production Editor runner，feature off/on，各 7 个 CPU-pinned process                                               | `PASS`                      | median overhead：cached 0.31%、typing 0.49%、scroll 0.62%、resize 1.90%；`.tmp/gpui-refactor/phase-1/editor-workload-summary.txt`                                                                                                                                               |
 | production Editor candidate vs `567ff2f4`，feature on/off                                                          | `PASS`                      | p95/p99 全部低于 1.05×；exact input-to-present p50/p95/p99 为 2.913/3.057/3.299 ms，0 skipped/dropped                                                                                                                                                                           |
 | production Editor allocation/RSS                                                                                   | `PASS`                      | feature-off allocation 与 baseline 相同或更低；diagnostics 增量 ≤0.003 alloc/frame、≤0.203% bytes/frame；peak RSS 1.011×                                                                                                                                                        |
 | `cargo test --locked -p gpui --lib --features frame-diagnostics printable_text_input_is_linked_to_presented_frame` | `PASS`                      | printable text input provenance reaches the presented frame                                                                                                                                                                                                                     |
+| GPUI 235-test suite，`frame-diagnostics,accessibility`，连续 20 次                                                 | `PASS`                      | 4,700 tests，0 failed；source-scoped collector 无跨 context 串扰                                                                                                                                                                                                                |
+| workspace tabs / Settings / command palette，各 7 个 CPU-pinned baseline/candidate process                         | `PASS`                      | 所有 median per-frame p95 ratio <1.05；operation/cache replay counts 完全相同；`.tmp/gpui-refactor/phase-1/exp002-product-summary.txt`                                                                                                                                          |
 
 上游 A/B/C 审查（均基于 `decbf641b18f1982b3475c037e7c5c554471574f` 之后的
 live `FETCH_HEAD=a84689073d296dfd39987bc7dd478e43ef76d83a`；未 cherry-pick）：
@@ -232,11 +249,13 @@ commit was created for this stage.
 `766b7cb85cd58c35a56b3182208f5e6c2bd6cf40`；batched journal/allocation probe
 `567ff2f4c39edb84a60e99dfebbd6033c50ce6e3`；submission outcome/skip coverage
 `1520da4179`、`147871401a`；production Editor runner `602836a9f5`、`3e5b9e6c1f`、
-`7b420641d5`；printable input provenance `9ec0114958`。
+`7b420641d5`；printable input provenance `9ec0114958`；window-instance collector
+`dfcff1a2cd`；product workload `19f075920a`。
 
-EXP-001 与 EXP-011 已完成并通过。EXP-002 的 command-palette smoke 现在已记录
-`presented=5` 与 replay phase samples；tabs/settings product-view comparison 仍待补齐，
-因此暂不启动 EXP-007。默认产品构建继续不启用 diagnostics feature。
+EXP-001、EXP-002 与 EXP-011 已完成并通过。EXP-002 使用
+`567ff2f4c3` 作为 owner 拆分前的 instrumentation baseline；三个产品 workload 的
+median per-frame p95 ratio 均低于 1.05，且 phase operation/cache replay count 没有
+变化。阶段 8 的数据门现已打开。默认产品构建继续不启用 diagnostics feature。
 
 ### 阶段 2：并发与 accessibility 边界
 
@@ -702,9 +721,10 @@ editor-only 增量构建保持 generic `ui`、`ui_input`、registry 和 preview 
 
 状态：`NOT RUN`
 
-EXP-001/002 的 production-like Editor workload 和正式 phase budget 尚未完成，因此
-没有引入 scoped invalidation API，也没有用未达标数据声称 20% phase-work 下降。
-该阶段保持待运行，后续若 gate 不达标将记录拒绝并永久保留完整 `cx.notify()` 语义。
+EXP-001/002 的 production-like workload 与正式 phase budget 已完成。当前尚未引入
+scoped invalidation API；下一步按合同在 10 个高频组件上运行 EXP-007。若 phase work
+下降不足 20% 或出现任何 pixel/input/focus/IME/accessibility 差异，将记录拒绝并永久
+保留完整 `cx.notify()` 语义。
 
 ### 阶段 9：收敛与最终验证
 
