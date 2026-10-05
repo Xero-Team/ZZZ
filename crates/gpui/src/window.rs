@@ -706,7 +706,7 @@ pub struct Window {
     rem_size_override_stack: SmallVec<[Pixels; 8]>,
     pub(crate) viewport_size: Size<Pixels>,
     pub(crate) root: Option<AnyView>,
-    pub(crate) frame_builder: FrameBuilder,
+    frame_builder: FrameBuilder,
     pub(crate) interaction: InteractionOwner,
     pub(crate) text_input: TextInputOwner,
     pub(crate) frame_scheduler: FrameScheduler,
@@ -1595,7 +1595,7 @@ impl Window {
     /// The current text style. Which is composed of all the style refinements provided to `with_text_style`.
     pub fn text_style(&self) -> TextStyle {
         let mut style = TextStyle::default();
-        for refinement in &self.frame_builder.text_style_stack {
+        for refinement in self.frame_builder.text_styles() {
             style.refine(refinement);
         }
         style
@@ -2212,7 +2212,7 @@ impl Window {
         f: impl FnOnce(&GlobalElementId, &mut Self) -> R,
     ) -> R {
         self.with_id(element_id, |this| {
-            let global_id = GlobalElementId(Arc::from(&*this.frame_builder.element_id_stack));
+            let global_id = GlobalElementId(Arc::from(this.element_id_path()));
 
             f(&global_id, this)
         })
@@ -2225,10 +2225,22 @@ impl Window {
         element_id: impl Into<ElementId>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.frame_builder.element_id_stack.push(element_id.into());
+        self.push_element_id(element_id.into());
         let result = f(self);
-        self.frame_builder.element_id_stack.pop();
+        self.pop_element_id();
         result
+    }
+
+    pub(crate) fn push_element_id(&mut self, element_id: ElementId) {
+        self.frame_builder.push_element_id(element_id);
+    }
+
+    pub(crate) fn pop_element_id(&mut self) {
+        self.frame_builder.pop_element_id();
+    }
+
+    pub(crate) fn element_id_path(&self) -> &[ElementId] {
+        self.frame_builder.element_id_path()
     }
 
     /// Executes the provided function with the specified rem size.
@@ -2417,9 +2429,9 @@ impl Window {
 
         self.invalidate_entities();
         cx.entities.clear_accessed();
-        debug_assert!(self.frame_builder.rendered_entity_stack.is_empty());
+        self.frame_builder.debug_assert_idle();
         self.invalidator.set_dirty(false);
-        self.frame_builder.requested_autoscroll = None;
+        self.frame_builder.reset_autoscroll();
 
         // Restore the previously-used input handler.
         // Place it back into a None slot (left by a previous .take()) so that
@@ -2449,11 +2461,7 @@ impl Window {
             self.platform_window.set_input_handler(input_handler);
         }
 
-        self.frame_builder
-            .layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
-            .clear();
+        self.frame_builder.layout_engine().clear();
         self.text_system().finish_frame();
         self.interaction
             .next_frame
@@ -2507,7 +2515,7 @@ impl Window {
                 .retain(&(), |listener| listener(&event, self, cx));
         }
 
-        debug_assert!(self.frame_builder.rendered_entity_stack.is_empty());
+        self.frame_builder.debug_assert_idle();
         self.record_entities_accessed(cx);
         self.reset_cursor_style(cx);
         self.frame_scheduler.set_refreshing(false);
@@ -2680,9 +2688,7 @@ impl Window {
             request_layout_operations += 1;
         }
         self.frame_builder
-            .layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
+            .layout_engine()
             .stretch_auto_size_to_fill(root_layout_id, root_size, scale_factor);
         root_element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
 
@@ -2705,9 +2711,7 @@ impl Window {
                 request_layout_operations += 1;
             }
             self.frame_builder
-                .layout_engine
-                .as_mut()
-                .expect("value should have the expected type")
+                .layout_engine()
                 .stretch_auto_size_to_fill(prompt_layout_id, root_size, scale_factor);
             element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
             prompt_element = Some(element);
@@ -2863,7 +2867,7 @@ impl Window {
     }
 
     fn prepaint_deferred_draws(&mut self, cx: &mut App) {
-        assert_eq!(self.frame_builder.element_id_stack.len(), 0);
+        assert_eq!(self.frame_builder.element_id_depth(), 0);
 
         // Process deferred draws in multiple rounds to support nesting.
         // Each round processes all current deferred draws, which may push new ones.
@@ -2896,11 +2900,9 @@ impl Window {
                     let deferred_draw =
                         &mut self.interaction.next_frame.deferred_draws[deferred_draw_ix];
                     self.frame_builder
-                        .element_id_stack
-                        .clone_from(&deferred_draw.element_id_stack);
+                        .restore_element_ids(&deferred_draw.element_id_stack);
                     self.frame_builder
-                        .text_style_stack
-                        .clone_from(&deferred_draw.text_style_stack);
+                        .restore_text_styles(&deferred_draw.text_style_stack);
                     (
                         deferred_draw.element.take(),
                         deferred_draw.parent_node,
@@ -2934,14 +2936,14 @@ impl Window {
                     prepaint_start..prepaint_end;
             }
 
-            self.frame_builder.element_id_stack.clear();
-            self.frame_builder.text_style_stack.clear();
+            self.frame_builder.clear_element_ids();
+            self.frame_builder.clear_text_styles();
             round_start = round_end;
         }
     }
 
     fn paint_deferred_draws(&mut self, cx: &mut App) {
-        assert_eq!(self.frame_builder.element_id_stack.len(), 0);
+        assert_eq!(self.frame_builder.element_id_depth(), 0);
 
         // Paint all deferred draws in priority order.
         // Since prepaint has already processed nested deferreds, we just paint them all.
@@ -2954,8 +2956,7 @@ impl Window {
         for deferred_draw_ix in traversal_order {
             let mut deferred_draw = &mut deferred_draws[deferred_draw_ix];
             self.frame_builder
-                .element_id_stack
-                .clone_from(&deferred_draw.element_id_stack);
+                .restore_element_ids(&deferred_draw.element_id_stack);
             self.interaction
                 .next_frame
                 .dispatch_tree
@@ -2978,7 +2979,7 @@ impl Window {
             deferred_draw.paint_range = paint_start..paint_end;
         }
         self.interaction.next_frame.deferred_draws = deferred_draws;
-        self.frame_builder.element_id_stack.clear();
+        self.frame_builder.clear_element_ids();
     }
 
     fn deferred_draw_traversal_order(&mut self) -> SmallVec<[usize; 8]> {
@@ -3147,9 +3148,9 @@ impl Window {
     {
         self.invalidator.debug_assert_paint_or_prepaint();
         if let Some(style) = style {
-            self.frame_builder.text_style_stack.push(style);
+            self.frame_builder.push_text_style(style);
             let result = f(self);
-            self.frame_builder.text_style_stack.pop();
+            self.frame_builder.pop_text_style();
             result
         } else {
             f(self)
@@ -3197,9 +3198,9 @@ impl Window {
         self.invalidator.debug_assert_paint_or_prepaint();
         if let Some(mask) = mask {
             let mask = mask.intersect(&self.content_mask());
-            self.frame_builder.content_mask_stack.push(mask);
+            self.frame_builder.push_content_mask(mask);
             let result = f(self);
-            self.frame_builder.content_mask_stack.pop();
+            self.frame_builder.pop_content_mask();
             result
         } else {
             f(self)
@@ -3232,9 +3233,9 @@ impl Window {
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
         self.invalidator.debug_assert_prepaint();
-        self.frame_builder.element_offset_stack.push(offset);
+        self.frame_builder.push_element_offset(offset);
         let result = f(self);
-        self.frame_builder.element_offset_stack.pop();
+        self.frame_builder.pop_element_offset();
         result
     }
 
@@ -3249,10 +3250,11 @@ impl Window {
             return f(self);
         };
 
-        let previous_opacity = self.frame_builder.element_opacity;
-        self.frame_builder.element_opacity = previous_opacity * opacity;
+        let previous_opacity = self.frame_builder.element_opacity();
+        self.frame_builder
+            .replace_element_opacity(previous_opacity * opacity);
         let result = f(self);
-        self.frame_builder.element_opacity = previous_opacity;
+        self.frame_builder.replace_element_opacity(previous_opacity);
         result
     }
 
@@ -3298,14 +3300,14 @@ impl Window {
     /// called during the prepaint phase of element drawing.
     pub fn request_autoscroll(&mut self, bounds: Bounds<Pixels>) {
         self.invalidator.debug_assert_prepaint();
-        self.frame_builder.requested_autoscroll = Some(bounds);
+        self.frame_builder.request_autoscroll(bounds);
     }
 
     /// This method can be called from a containing element such as [`crate::List`] to support the autoscroll behavior
     /// described in [`Self::request_autoscroll`].
     pub fn take_autoscroll(&mut self) -> Option<Bounds<Pixels>> {
         self.invalidator.debug_assert_prepaint();
-        self.frame_builder.requested_autoscroll.take()
+        self.frame_builder.take_autoscroll()
     }
 
     /// Asynchronously load an asset, if the asset hasn't finished loading this will return None.
@@ -3329,11 +3331,7 @@ impl Window {
     /// prepaint phase of element drawing.
     pub fn element_offset(&self) -> Point<Pixels> {
         self.invalidator.debug_assert_prepaint();
-        self.frame_builder
-            .element_offset_stack
-            .last()
-            .copied()
-            .unwrap_or_default()
+        self.frame_builder.element_offset()
     }
 
     /// Obtain the current element opacity. This method should only be called during the
@@ -3341,16 +3339,14 @@ impl Window {
     #[inline]
     pub(crate) fn element_opacity(&self) -> f32 {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.frame_builder.element_opacity
+        self.frame_builder.element_opacity()
     }
 
     /// Obtain the current content mask. This method should only be called during element drawing.
     pub fn content_mask(&self) -> ContentMask<Pixels> {
         self.invalidator.debug_assert_paint_or_prepaint();
         self.frame_builder
-            .content_mask_stack
-            .last()
-            .cloned()
+            .content_mask()
             .unwrap_or_else(|| ContentMask {
                 bounds: Bounds {
                     origin: Point::default(),
@@ -3366,9 +3362,9 @@ impl Window {
         element_id: impl Into<ElementId>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.frame_builder.element_id_stack.push(element_id.into());
+        self.frame_builder.push_element_id(element_id.into());
         let result = f(self);
-        self.frame_builder.element_id_stack.pop();
+        self.frame_builder.pop_element_id();
         result
     }
 
@@ -3571,8 +3567,8 @@ impl Window {
             .push(DeferredDraw {
                 current_view: self.current_view(),
                 parent_node,
-                element_id_stack: self.frame_builder.element_id_stack.clone(),
-                text_style_stack: self.frame_builder.text_style_stack.clone(),
+                element_id_stack: self.frame_builder.clone_element_ids(),
+                text_style_stack: self.frame_builder.clone_text_styles(),
                 content_mask,
                 rem_size: self.rem_size(),
                 priority,
@@ -4235,11 +4231,12 @@ impl Window {
         let rem_size = self.rem_size();
         let scale_factor = self.scale_factor();
 
-        self.frame_builder
-            .layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
-            .request_layout(style, rem_size, scale_factor, &cx.layout_id_buffer)
+        self.frame_builder.layout_engine().request_layout(
+            style,
+            rem_size,
+            scale_factor,
+            &cx.layout_id_buffer,
+        )
     }
 
     /// Add a node to the layout tree for the current frame. Instead of taking a `Style` and children,
@@ -4259,11 +4256,12 @@ impl Window {
 
         let rem_size = self.rem_size();
         let scale_factor = self.scale_factor();
-        self.frame_builder
-            .layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
-            .request_measured_layout(style, rem_size, scale_factor, measure)
+        self.frame_builder.layout_engine().request_measured_layout(
+            style,
+            rem_size,
+            scale_factor,
+            measure,
+        )
     }
 
     /// Compute the layout for the given id within the given available space.
@@ -4279,13 +4277,9 @@ impl Window {
     ) {
         self.invalidator.debug_assert_prepaint();
 
-        let mut layout_engine = self
-            .frame_builder
-            .layout_engine
-            .take()
-            .expect("entry should be present");
+        let mut layout_engine = self.frame_builder.take_layout_engine();
         layout_engine.compute_layout(layout_id, available_space, self, cx);
-        self.frame_builder.layout_engine = Some(layout_engine);
+        self.frame_builder.restore_layout_engine(layout_engine);
     }
 
     /// Obtain the bounds computed for the given LayoutId relative to the window. This method will usually be invoked by
@@ -4298,9 +4292,7 @@ impl Window {
         let scale_factor = self.scale_factor();
         let mut bounds = self
             .frame_builder
-            .layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
+            .layout_engine()
             .layout_bounds(layout_id, scale_factor)
             .map(Into::into);
         let snapped_offset = self.pixel_snap_point(self.element_offset());
@@ -4376,9 +4368,7 @@ impl Window {
     pub fn current_view(&self) -> EntityId {
         self.invalidator.debug_assert_paint_or_prepaint();
         self.frame_builder
-            .rendered_entity_stack
-            .last()
-            .copied()
+            .current_view()
             .expect("copied should be present")
     }
 
@@ -4388,9 +4378,9 @@ impl Window {
         id: EntityId,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.frame_builder.rendered_entity_stack.push(id);
+        self.frame_builder.push_rendered_view(id);
         let result = f(self);
-        self.frame_builder.rendered_entity_stack.pop();
+        self.frame_builder.pop_rendered_view();
         result
     }
 
@@ -4400,13 +4390,17 @@ impl Window {
         F: FnOnce(&mut Self) -> R,
     {
         if let Some(image_cache) = image_cache {
-            self.frame_builder.image_cache_stack.push(image_cache);
+            self.frame_builder.push_image_cache(image_cache);
             let result = f(self);
-            self.frame_builder.image_cache_stack.pop();
+            self.frame_builder.pop_image_cache();
             result
         } else {
             f(self)
         }
+    }
+
+    pub(crate) fn current_image_cache(&self) -> Option<AnyImageCache> {
+        self.frame_builder.current_image_cache()
     }
 
     /// Sets an input handler, such as [`ElementInputHandler`][element_input_handler], which interfaces with the

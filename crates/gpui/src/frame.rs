@@ -40,15 +40,15 @@ pub(crate) enum DrawPhase {
 
 /// Mutable state used only while constructing a frame.
 pub(crate) struct FrameBuilder {
-    pub(crate) layout_engine: Option<TaffyLayoutEngine>,
-    pub(crate) element_id_stack: SmallVec<[ElementId; 32]>,
-    pub(crate) text_style_stack: Vec<TextStyleRefinement>,
-    pub(crate) rendered_entity_stack: Vec<EntityId>,
-    pub(crate) element_offset_stack: Vec<Point<Pixels>>,
-    pub(crate) element_opacity: f32,
-    pub(crate) content_mask_stack: Vec<ContentMask<Pixels>>,
-    pub(crate) requested_autoscroll: Option<Bounds<Pixels>>,
-    pub(crate) image_cache_stack: Vec<AnyImageCache>,
+    layout_engine: Option<TaffyLayoutEngine>,
+    element_id_stack: SmallVec<[ElementId; 32]>,
+    text_style_stack: Vec<TextStyleRefinement>,
+    rendered_entity_stack: Vec<EntityId>,
+    element_offset_stack: Vec<Point<Pixels>>,
+    element_opacity: f32,
+    content_mask_stack: Vec<ContentMask<Pixels>>,
+    requested_autoscroll: Option<Bounds<Pixels>>,
+    image_cache_stack: Vec<AnyImageCache>,
 }
 
 impl FrameBuilder {
@@ -64,6 +64,158 @@ impl FrameBuilder {
             requested_autoscroll: None,
             image_cache_stack: Vec::new(),
         }
+    }
+
+    pub(crate) fn debug_assert_idle(&self) {
+        debug_assert!(self.layout_engine.is_some());
+        debug_assert!(self.element_id_stack.is_empty());
+        debug_assert!(self.text_style_stack.is_empty());
+        debug_assert!(self.rendered_entity_stack.is_empty());
+        debug_assert!(self.element_offset_stack.is_empty());
+        debug_assert_eq!(self.element_opacity, 1.0);
+        debug_assert!(self.content_mask_stack.is_empty());
+        debug_assert!(self.image_cache_stack.is_empty());
+    }
+
+    pub(crate) fn layout_engine(&mut self) -> &mut TaffyLayoutEngine {
+        self.layout_engine
+            .as_mut()
+            .expect("layout engine should be present outside layout computation")
+    }
+
+    pub(crate) fn take_layout_engine(&mut self) -> TaffyLayoutEngine {
+        self.layout_engine
+            .take()
+            .expect("layout engine should be present outside layout computation")
+    }
+
+    pub(crate) fn restore_layout_engine(&mut self, layout_engine: TaffyLayoutEngine) {
+        debug_assert!(self.layout_engine.is_none());
+        self.layout_engine = Some(layout_engine);
+    }
+
+    pub(crate) fn push_element_id(&mut self, element_id: ElementId) {
+        self.element_id_stack.push(element_id);
+    }
+
+    pub(crate) fn pop_element_id(&mut self) {
+        self.element_id_stack.pop();
+    }
+
+    pub(crate) fn element_id_path(&self) -> &[ElementId] {
+        &self.element_id_stack
+    }
+
+    pub(crate) fn element_id_depth(&self) -> usize {
+        self.element_id_stack.len()
+    }
+
+    pub(crate) fn clone_element_ids(&self) -> SmallVec<[ElementId; 32]> {
+        self.element_id_stack.clone()
+    }
+
+    pub(crate) fn restore_element_ids(&mut self, element_ids: &SmallVec<[ElementId; 32]>) {
+        self.element_id_stack.clone_from(element_ids);
+    }
+
+    pub(crate) fn clear_element_ids(&mut self) {
+        self.element_id_stack.clear();
+    }
+
+    pub(crate) fn text_styles(&self) -> &[TextStyleRefinement] {
+        &self.text_style_stack
+    }
+
+    pub(crate) fn push_text_style(&mut self, style: TextStyleRefinement) {
+        self.text_style_stack.push(style);
+    }
+
+    pub(crate) fn pop_text_style(&mut self) {
+        self.text_style_stack.pop();
+    }
+
+    pub(crate) fn clone_text_styles(&self) -> Vec<TextStyleRefinement> {
+        self.text_style_stack.clone()
+    }
+
+    pub(crate) fn restore_text_styles(&mut self, styles: &[TextStyleRefinement]) {
+        self.text_style_stack.clear();
+        self.text_style_stack.extend_from_slice(styles);
+    }
+
+    pub(crate) fn clear_text_styles(&mut self) {
+        self.text_style_stack.clear();
+    }
+
+    pub(crate) fn current_view(&self) -> Option<EntityId> {
+        self.rendered_entity_stack.last().copied()
+    }
+
+    pub(crate) fn push_rendered_view(&mut self, id: EntityId) {
+        self.rendered_entity_stack.push(id);
+    }
+
+    pub(crate) fn pop_rendered_view(&mut self) {
+        self.rendered_entity_stack.pop();
+    }
+
+    pub(crate) fn push_element_offset(&mut self, offset: Point<Pixels>) {
+        self.element_offset_stack.push(offset);
+    }
+
+    pub(crate) fn pop_element_offset(&mut self) {
+        self.element_offset_stack.pop();
+    }
+
+    pub(crate) fn element_offset(&self) -> Point<Pixels> {
+        self.element_offset_stack
+            .last()
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn element_opacity(&self) -> f32 {
+        self.element_opacity
+    }
+
+    pub(crate) fn replace_element_opacity(&mut self, opacity: f32) -> f32 {
+        mem::replace(&mut self.element_opacity, opacity)
+    }
+
+    pub(crate) fn push_content_mask(&mut self, mask: ContentMask<Pixels>) {
+        self.content_mask_stack.push(mask);
+    }
+
+    pub(crate) fn pop_content_mask(&mut self) {
+        self.content_mask_stack.pop();
+    }
+
+    pub(crate) fn content_mask(&self) -> Option<ContentMask<Pixels>> {
+        self.content_mask_stack.last().cloned()
+    }
+
+    pub(crate) fn request_autoscroll(&mut self, bounds: Bounds<Pixels>) {
+        self.requested_autoscroll = Some(bounds);
+    }
+
+    pub(crate) fn take_autoscroll(&mut self) -> Option<Bounds<Pixels>> {
+        self.requested_autoscroll.take()
+    }
+
+    pub(crate) fn reset_autoscroll(&mut self) {
+        self.requested_autoscroll = None;
+    }
+
+    pub(crate) fn push_image_cache(&mut self, image_cache: AnyImageCache) {
+        self.image_cache_stack.push(image_cache);
+    }
+
+    pub(crate) fn pop_image_cache(&mut self) {
+        self.image_cache_stack.pop();
+    }
+
+    pub(crate) fn current_image_cache(&self) -> Option<AnyImageCache> {
+        self.image_cache_stack.last().cloned()
     }
 }
 
