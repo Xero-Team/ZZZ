@@ -125,6 +125,8 @@
   },
   // Markdown preview settings
   "markdown_preview": {
+    // The font weight for headings in the markdown preview, in CSS units from 100 to 900.
+    "heading_font_weight": 600,
     // Whether to limit the width of the rendered markdown content. When
     // enabled, content is constrained to `max_width` and centered
     // horizontally within the preview pane.

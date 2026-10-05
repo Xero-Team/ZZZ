@@ -352,13 +352,22 @@ impl MarkdownStyle {
         };
 
         if is_preview {
-            style.with_preview_overrides(ui_font_size, colors)
+            style.with_preview_overrides(
+                ui_font_size,
+                colors,
+                theme_settings.markdown_preview_heading_font_weight(),
+            )
         } else {
             style
         }
     }
 
-    fn with_preview_overrides(mut self, ui_font_size: Pixels, colors: &theme::ThemeColors) -> Self {
+    fn with_preview_overrides(
+        mut self,
+        ui_font_size: Pixels,
+        colors: &theme::ThemeColors,
+        heading_font_weight: FontWeight,
+    ) -> Self {
         let body_font_size = ui_font_size * 0.92;
         self.base_text_style.font_size = body_font_size.into();
         self.container_style.text.font_size = Some(body_font_size.into());
@@ -378,33 +387,33 @@ impl MarkdownStyle {
         self.heading_level_styles = Some(HeadingLevelStyles {
             h1: Some(TextStyleRefinement {
                 font_size: Some(rems(1.75).into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(heading_font_weight),
                 ..Default::default()
             }),
             h2: Some(TextStyleRefinement {
                 font_size: Some(rems(1.4).into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(heading_font_weight),
                 ..Default::default()
             }),
             h3: Some(TextStyleRefinement {
                 font_size: Some(rems(1.2).into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(heading_font_weight),
                 ..Default::default()
             }),
             h4: Some(TextStyleRefinement {
                 font_size: Some(rems(1.0).into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(heading_font_weight),
                 ..Default::default()
             }),
             h5: Some(TextStyleRefinement {
                 font_size: Some(rems(0.875).into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(heading_font_weight),
                 ..Default::default()
             }),
             h6: Some(TextStyleRefinement {
                 color: Some(colors.text_muted),
                 font_size: Some(rems(0.85).into()),
-                font_weight: Some(FontWeight::SEMIBOLD),
+                font_weight: Some(heading_font_weight),
                 ..Default::default()
             }),
         });
@@ -6591,6 +6600,75 @@ mod tests {
             "H3 line height ({h3_line_height:?}) should be greater than body text ({body_line_height:?})"
         );
     }
+
+    fn preview_heading_weights(cx: &mut TestAppContext, font: MarkdownFont) -> [FontWeight; 6] {
+        let (_, cx) = cx.add_window_view(|_, _| TestWindow);
+        cx.update(|window, cx| {
+            let style = MarkdownStyle::themed(font, window, cx);
+            let levels = style
+                .heading_level_styles
+                .expect("preview markdown should define per-level heading styles");
+            [
+                levels.h1, levels.h2, levels.h3, levels.h4, levels.h5, levels.h6,
+            ]
+            .map(|level| {
+                level
+                    .and_then(|level| level.font_weight)
+                    .expect("every preview heading level should set a font weight")
+            })
+        })
+    }
+
+    #[gpui::test]
+    fn test_markdown_preview_heading_font_weight_defaults_to_semibold(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+
+        assert_eq!(
+            preview_heading_weights(cx, MarkdownFont::Preview),
+            [FontWeight::SEMIBOLD; 6]
+        );
+    }
+
+    #[gpui::test]
+    fn test_markdown_preview_heading_font_weight_follows_setting(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings
+                        .markdown_preview
+                        .get_or_insert_default()
+                        .heading_font_weight = Some(400.0.into());
+                });
+            });
+        });
+        cx.run_until_parked();
+
+        assert_eq!(
+            preview_heading_weights(cx, MarkdownFont::Preview),
+            [FontWeight::NORMAL; 6]
+        );
+
+        let (_, cx) = cx.add_window_view(|_, _| TestWindow);
+        cx.update(|window, cx| {
+            let editor_style = MarkdownStyle::themed(MarkdownFont::Editor, window, cx);
+            assert!(
+                editor_style.heading_level_styles.is_none(),
+                "the preview heading weight must not leak into editor markdown"
+            );
+            let agent_style = MarkdownStyle::themed(MarkdownFont::Agent, window, cx);
+            let agent_h1 = agent_style
+                .heading_level_styles
+                .and_then(|levels| levels.h1)
+                .expect("agent markdown defines an h1 style");
+            assert_eq!(
+                agent_h1.font_weight, None,
+                "the preview heading weight must not leak into agent markdown"
+            );
+        });
+    }
+
     #[gpui::test]
     fn test_ui_zoom_does_not_affect_markdown_preview(cx: &mut TestAppContext) {
         ensure_theme_initialized(cx);

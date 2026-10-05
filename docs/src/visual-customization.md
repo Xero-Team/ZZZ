@@ -79,6 +79,17 @@ If you would like to use distinct themes for light mode/dark mode that can be se
   "agent_buffer_font_size": 12
 ```
 
+Markdown preview headings use a semibold weight by default. To change all
+preview heading levels, add:
+
+```json [settings]
+{
+  "markdown_preview": {
+    "heading_font_weight": 500
+  }
+}
+```
+
 ### Font ligatures
 
 By default ZZZ enable font ligatures which will visually combines certain adjacent characters.
