@@ -4236,6 +4236,14 @@ impl GitPanel {
         }
     }
 
+    fn section_file_count(&self, section: Section) -> usize {
+        match section {
+            Section::Conflict => self.conflicted_count,
+            Section::Tracked => self.tracked_count,
+            Section::New => self.new_count,
+        }
+    }
+
     fn update_counts(&mut self, repo: &Repository) {
         self.show_placeholders = false;
         self.conflicted_count = 0;
@@ -6412,6 +6420,7 @@ impl GitPanel {
         let group_name: SharedString = format!("header_{}", ix).into();
         let toggle_state = self.header_state(header.header);
         let section = header.header;
+        let file_count = self.section_file_count(section);
         let weak = cx.weak_entity();
         let checkbox_weak = weak.clone();
         let is_collapsed = self.collapsed_sections.contains(&section);
@@ -6431,6 +6440,7 @@ impl GitPanel {
             .border_r_2()
             .child(
                 h_flex()
+                    .flex_1()
                     .gap_1()
                     .child(
                         Icon::new(if is_collapsed {
@@ -6447,6 +6457,9 @@ impl GitPanel {
                             .size(LabelSize::Small),
                     ),
             )
+            .when(file_count > 0, |this| {
+                this.child(Chip::new(file_count.to_string()).label_color(Color::Muted))
+            })
             .child(
                 Checkbox::new(checkbox_id, toggle_state)
                     .disabled(!has_write_access)
