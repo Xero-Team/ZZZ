@@ -347,6 +347,10 @@ actions!(
 pub struct AuthorizeToolCall {
     /// The tool call ID to authorize.
     pub tool_call_id: String,
+    #[serde(default)]
+    pub request_id: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
     /// The permission option ID to use.
     pub option_id: String,
     /// The kind of permission option (serialized as string).
@@ -361,6 +365,10 @@ pub struct AuthorizeToolCall {
 pub struct SelectPermissionGranularity {
     /// The tool call ID for which to select the granularity.
     pub tool_call_id: String,
+    #[serde(default)]
+    pub request_id: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
     /// The index of the selected granularity option.
     pub index: usize,
 }
@@ -372,6 +380,10 @@ pub struct SelectPermissionGranularity {
 pub struct ToggleCommandPattern {
     /// The tool call ID for which to toggle the pattern.
     pub tool_call_id: String,
+    #[serde(default)]
+    pub request_id: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
     /// The index of the command pattern to toggle.
     pub pattern_index: usize,
 }

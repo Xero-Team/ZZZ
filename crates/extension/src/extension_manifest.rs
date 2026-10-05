@@ -206,25 +206,6 @@ pub struct LibManifestEntry {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct TargetConfig {
-    /// URL to download the archive from (e.g., "https://github.com/owner/repo/releases/download/v1.0.0/myagent-darwin-arm64.zip")
-    pub archive: String,
-    /// Command to run (e.g., "./myagent" or "./myagent.exe")
-    pub cmd: String,
-    /// Command-line arguments to pass to the agent server.
-    #[serde(default)]
-    pub args: Vec<String>,
-    /// Optional SHA-256 hash of the archive for verification.
-    /// If not provided and the URL is a GitHub release, we'll attempt to fetch it from GitHub.
-    #[serde(default)]
-    pub sha256: Option<String>,
-    /// Environment variables to set when launching the agent server.
-    /// These target-specific env vars will override any env vars set at the agent level.
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub enum ExtensionLibraryKind {
     Rust,
 }
@@ -250,6 +231,10 @@ pub struct LanguageServerManifestEntry {
     pub language_ids: HashMap<LanguageName, String>,
     #[serde(default)]
     pub code_action_kinds: Option<Vec<lsp::CodeActionKind>>,
+    /// Languages for which this server only starts when the user explicitly
+    /// lists it in the `language_servers` setting.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    opt_in_languages: BTreeSet<LanguageName>,
 }
 
 impl LanguageServerManifestEntry {
@@ -267,6 +252,14 @@ impl LanguageServerManifestEntry {
             None
         };
         self.languages.iter().cloned().chain(language)
+    }
+
+    pub fn opt_in_languages(&self) -> &BTreeSet<LanguageName> {
+        &self.opt_in_languages
+    }
+
+    pub fn is_opt_in_for(&self, language: &LanguageName) -> bool {
+        self.opt_in_languages.contains(language)
     }
 }
 
@@ -498,6 +491,41 @@ mod tests {
                 .is_ok()
         );
         assert!(manifest.allow_exec("docker", &["ps"]).is_err()); // wrong first arg
+    }
+
+    #[test]
+    fn test_deserialize_opt_in_languages() {
+        let manifest: ExtensionManifest = toml::from_str(indoc::indoc! {r#"
+            id = "test-manifest"
+            name = "Test Manifest"
+            version = "0.0.1"
+            schema_version = 1
+
+            [language_servers.default-server]
+            languages = ["Julia"]
+
+            [language_servers.opt-in-server]
+            languages = ["Julia", "Markdown"]
+            opt_in_languages = ["Julia"]
+        "#})
+        .expect("manifest should parse");
+
+        let julia = LanguageName::new("Julia");
+        let markdown = LanguageName::new("Markdown");
+
+        let default_server =
+            &manifest.language_servers[&LanguageServerName::new_static("default-server")];
+        assert!(default_server.opt_in_languages().is_empty());
+        assert!(!default_server.is_opt_in_for(&julia));
+
+        let opt_in_server =
+            &manifest.language_servers[&LanguageServerName::new_static("opt-in-server")];
+        assert_eq!(
+            opt_in_server.languages().into_iter().collect::<Vec<_>>(),
+            vec![julia.clone(), markdown.clone()]
+        );
+        assert!(opt_in_server.is_opt_in_for(&julia));
+        assert!(!opt_in_server.is_opt_in_for(&markdown));
     }
 
     #[test]

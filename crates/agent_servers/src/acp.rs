@@ -3930,20 +3930,24 @@ fn handle_request_permission(
         Err(e) => return respond_err(responder, e),
     };
 
+    let cancellation = responder.cancellation();
     cx.spawn(async move |cx| {
-        let result: Result<_, acp::Error> = async {
-            let task = thread
-                .update(cx, |thread, cx| {
-                    thread.request_tool_call_authorization(
-                        args.tool_call,
-                        acp_thread::PermissionOptions::Flat(args.options),
-                        cx,
-                    )
-                })
-                .flatten_acp()?;
-            Ok(task.await)
-        }
-        .await;
+        let (request_id, task) = match thread
+            .update(cx, |thread, cx| {
+                thread.request_tool_call_authorization_with_id(
+                    args.tool_call,
+                    acp_thread::PermissionOptions::Flat(args.options),
+                    cx,
+                )
+            })
+            .flatten_acp()
+        {
+            Ok(request) => request,
+            Err(error) => return respond_err(responder, error),
+        };
+        let result = cancellation
+            .run_until_cancelled(async { Ok(task.await) })
+            .await;
 
         match result {
             Ok(outcome) => {
@@ -3951,7 +3955,16 @@ fn handle_request_permission(
                     .respond(acp::RequestPermissionResponse::new(outcome.into()))
                     .log_err();
             }
-            Err(e) => respond_err(responder, e),
+            Err(e) => {
+                if e.code == ErrorCode::RequestCancelled {
+                    thread
+                        .update(cx, |thread, cx| {
+                            thread.cancel_permission_request(request_id, cx)
+                        })
+                        .log_err();
+                }
+                respond_err(responder, e)
+            }
         }
     })
     .detach();

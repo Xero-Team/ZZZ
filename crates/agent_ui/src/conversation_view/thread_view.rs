@@ -8,7 +8,8 @@ use std::cell::RefCell;
 
 use crate::message_editor::SharedSessionCapabilities;
 use acp_thread::{
-    Elicitation, ElicitationEntryId, ElicitationStatus, PlanEntry, SandboxAuthorizationDetails,
+    Elicitation, ElicitationEntryId, ElicitationStatus, PermissionRequestId, PlanEntry,
+    SandboxAuthorizationDetails,
 };
 use editor::actions::OpenExcerpts;
 
@@ -512,7 +513,7 @@ impl PermissionSelection {
         }
     }
 
-    fn toggle_pattern(&mut self, index: usize) {
+    pub(super) fn toggle_pattern(&mut self, index: usize) {
         if let Self::SelectedPatterns(checked) = self {
             if let Some(pos) = checked.iter().position(|&i| i == index) {
                 checked.swap_remove(pos);
@@ -572,7 +573,6 @@ pub struct ThreadView {
     pub is_loading_contents: bool,
     pub new_server_version_available: Option<SharedString>,
     pub resumed_without_history: bool,
-    pub(crate) permission_selections: HashMap<acp::ToolCallId, PermissionSelection>,
     elicitation_form_states: HashMap<ElicitationEntryId, ElicitationFormState>,
     #[allow(
         clippy::pub_underscore_fields,
@@ -840,7 +840,6 @@ impl ThreadView {
             discarded_partial_edits: HashSet::default(),
             is_loading_contents: false,
             new_server_version_available: None,
-            permission_selections: HashMap::default(),
             elicitation_form_states: HashMap::default(),
             _cancel_task: None,
             _save_task: None,
@@ -1806,16 +1805,16 @@ impl ThreadView {
         cx.notify();
     }
 
-    pub fn authorize_tool_call(
+    pub fn authorize_permission_request(
         &mut self,
         session_id: acp::SessionId,
-        tool_call_id: acp::ToolCallId,
+        request_id: PermissionRequestId,
         outcome: SelectedPermissionOutcome,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.conversation.update(cx, |conversation, cx| {
-            conversation.authorize_tool_call(session_id, tool_call_id, outcome, cx);
+            conversation.authorize_permission_request(session_id, request_id, outcome, cx);
         });
         if self.should_be_following {
             self.workspace
@@ -2155,7 +2154,17 @@ impl ThreadView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tool_call_id = acp::ToolCallId::new(action.tool_call_id.clone());
+        let Some((session_id, request_id)) = self.permission_action_target(
+            action.session_id.as_deref(),
+            action
+                .request_id
+                .as_deref()
+                .and_then(PermissionRequestId::parse),
+            &action.tool_call_id,
+            cx,
+        ) else {
+            return;
+        };
         let option_id = acp::PermissionOptionId::new(action.option_id.clone());
         let option_kind = match action.option_kind.as_str() {
             "AllowOnce" => acp::PermissionOptionKind::AllowOnce,
@@ -2165,14 +2174,41 @@ impl ThreadView {
             _ => acp::PermissionOptionKind::AllowOnce,
         };
 
-        let session_id = self.thread.read(cx).session_id().clone();
-        self.authorize_tool_call(
+        self.authorize_permission_request(
             session_id,
-            tool_call_id,
+            request_id,
             SelectedPermissionOutcome::new(option_id, option_kind),
             window,
             cx,
         );
+    }
+
+    fn permission_action_target(
+        &self,
+        session_id: Option<&str>,
+        request_id: Option<PermissionRequestId>,
+        tool_call_id: &str,
+        cx: &App,
+    ) -> Option<(acp::SessionId, PermissionRequestId)> {
+        let session_id = session_id
+            .map(acp::SessionId::new)
+            .unwrap_or_else(|| self.thread.read(cx).session_id().clone());
+        let conversation = self.conversation.read(cx);
+        let request_id = if let Some(request_id) = request_id {
+            conversation
+                .permission_requests
+                .values()
+                .any(|requests| requests.contains(&request_id))
+                .then_some(request_id)?
+        } else {
+            conversation
+                .threads
+                .get(&session_id)?
+                .read(cx)
+                .permission_request_for_tool(&acp::ToolCallId::new(tool_call_id))?
+                .id
+        };
+        Some((session_id, request_id))
     }
 
     pub fn handle_select_permission_granularity(
@@ -2181,11 +2217,20 @@ impl ThreadView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tool_call_id = acp::ToolCallId::new(action.tool_call_id.clone());
-        self.permission_selections
-            .insert(tool_call_id, PermissionSelection::Choice(action.index));
-
-        cx.notify();
+        let Some((session_id, request_id)) = self.permission_action_target(
+            action.session_id.as_deref(),
+            action
+                .request_id
+                .as_deref()
+                .and_then(PermissionRequestId::parse),
+            &action.tool_call_id,
+            cx,
+        ) else {
+            return;
+        };
+        self.conversation.update(cx, |conversation, cx| {
+            conversation.set_permission_choice(&session_id, request_id, action.index, cx);
+        });
     }
 
     pub fn handle_toggle_command_pattern(
@@ -2194,47 +2239,25 @@ impl ThreadView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tool_call_id = acp::ToolCallId::new(action.tool_call_id.clone());
-
-        if let Some(PermissionSelection::SelectedPatterns(checked)) =
-            self.permission_selections.get_mut(&tool_call_id)
-        {
-            // Already in pattern mode — toggle the individual pattern.
-            if let Some(pos) = checked.iter().position(|&i| i == action.pattern_index) {
-                checked.swap_remove(pos);
-            } else {
-                checked.push(action.pattern_index);
-            }
-        } else {
-            // First click: activate "Select options" with all patterns checked.
-            let thread = self.thread.read(cx);
-            let pattern_count = thread
-                .entries()
-                .iter()
-                .find_map(|entry| {
-                    if let AgentThreadEntry::ToolCall(call) = entry {
-                        if call.id == tool_call_id {
-                            if let ToolCallStatus::WaitingForConfirmation { options, .. } =
-                                &call.status
-                            {
-                                if let PermissionOptions::DropdownWithPatterns {
-                                    patterns, ..
-                                } = options
-                                {
-                                    return Some(patterns.len());
-                                }
-                            }
-                        }
-                    }
-                    None
-                })
-                .unwrap_or(0);
-            self.permission_selections.insert(
-                tool_call_id,
-                PermissionSelection::SelectedPatterns((0..pattern_count).collect()),
+        let Some((session_id, request_id)) = self.permission_action_target(
+            action.session_id.as_deref(),
+            action
+                .request_id
+                .as_deref()
+                .and_then(PermissionRequestId::parse),
+            &action.tool_call_id,
+            cx,
+        ) else {
+            return;
+        };
+        self.conversation.update(cx, |conversation, cx| {
+            conversation.toggle_permission_pattern(
+                &session_id,
+                request_id,
+                action.pattern_index,
+                cx,
             );
-        }
-        cx.notify();
+        });
     }
 
     fn authorize_pending_with_granularity(
@@ -2244,30 +2267,23 @@ impl ThreadView {
         cx: &mut Context<Self>,
     ) -> Option<()> {
         let session_id = self.thread.read(cx).session_id().clone();
-        let (returned_session_id, tool_call_id, _) = self
+        let (returned_session_id, request) = self
             .conversation
             .read(cx)
-            .pending_tool_call(&session_id, cx)?;
-        self.authorize_with_granularity(returned_session_id, tool_call_id, is_allow, window, cx)
+            .pending_permission_request(&session_id, cx)?;
+        self.authorize_with_granularity(returned_session_id, request.id, is_allow, window, cx)
     }
 
     fn authorize_with_granularity(
         &mut self,
         session_id: acp::SessionId,
-        tool_call_id: acp::ToolCallId,
+        request_id: PermissionRequestId,
         is_allow: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<()> {
-        let selection = self.permission_selections.get(&tool_call_id).cloned();
         let result = self.conversation.update(cx, |conversation, cx| {
-            conversation.authorize_with_granularity(
-                session_id,
-                tool_call_id,
-                selection.as_ref(),
-                is_allow,
-                cx,
-            )
+            conversation.authorize_with_granularity(session_id, request_id, is_allow, cx)
         });
         if self.should_be_following {
             self.workspace
@@ -5699,7 +5715,8 @@ impl ThreadView {
                                 "Awaiting Confirmation",
                             ))
                             .size(LabelSize::Small)
-                            .color(Color::Muted),
+                            .color(Color::Muted)
+                            .single_line(),
                         ),
                     )
                 } else if is_blocked_on_terminal_command {
@@ -6342,7 +6359,11 @@ impl ThreadView {
         );
 
         let confirmation_options = match &tool_call.status {
-            ToolCallStatus::WaitingForConfirmation { options, .. } => Some(options),
+            ToolCallStatus::WaitingForConfirmation {
+                request_id,
+                options,
+                ..
+            } => Some((*request_id, options)),
             _ => None,
         };
         let needs_confirmation = confirmation_options.is_some();
@@ -6628,14 +6649,14 @@ impl ThreadView {
                     ))
                 },
             )
-            .when_some(confirmation_options, |this, options| {
+            .when_some(confirmation_options, |this, (request_id, options)| {
                 let is_first = self.is_first_tool_call(active_session_id, &tool_call.id, cx);
                 this.child(self.render_permission_buttons(
                     self.thread.read(cx).session_id().clone(),
                     is_first,
+                    request_id,
                     options,
                     entry_ix,
-                    tool_call.id.clone(),
                     focus_handle,
                     cx,
                 ))
@@ -6780,7 +6801,11 @@ impl ThreadView {
 
         let tool_output_display = if is_open {
             match &tool_call.status {
-                ToolCallStatus::WaitingForConfirmation { options, .. } => v_flex()
+                ToolCallStatus::WaitingForConfirmation {
+                    request_id,
+                    options,
+                    ..
+                } => v_flex()
                     .w_full()
                     .children(
                         tool_call
@@ -6872,9 +6897,9 @@ impl ThreadView {
                     .child(self.render_permission_buttons(
                         self.thread.read(cx).session_id().clone(),
                         self.is_first_tool_call(active_session_id, &tool_call.id, cx),
+                        *request_id,
                         options,
                         entry_ix,
-                        tool_call.id.clone(),
                         focus_handle,
                         cx,
                     ))
@@ -7260,9 +7285,9 @@ impl ThreadView {
         &self,
         session_id: acp::SessionId,
         is_first: bool,
+        request_id: PermissionRequestId,
         options: &PermissionOptions,
         entry_ix: usize,
-        tool_call_id: acp::ToolCallId,
         focus_handle: &FocusHandle,
         cx: &Context<Self>,
     ) -> Div {
@@ -7270,9 +7295,9 @@ impl ThreadView {
             PermissionOptions::Flat(options) => self.render_permission_buttons_flat(
                 session_id,
                 is_first,
+                request_id,
                 options,
                 entry_ix,
-                tool_call_id,
                 focus_handle,
                 cx,
             ),
@@ -7282,7 +7307,7 @@ impl ThreadView {
                 None,
                 entry_ix,
                 session_id,
-                tool_call_id,
+                request_id,
                 focus_handle,
                 cx,
             ),
@@ -7296,7 +7321,7 @@ impl ThreadView {
                 Some((patterns, tool_name)),
                 entry_ix,
                 session_id,
-                tool_call_id,
+                request_id,
                 focus_handle,
                 cx,
             ),
@@ -7310,11 +7335,15 @@ impl ThreadView {
         patterns: Option<(&[PermissionPattern], &str)>,
         entry_ix: usize,
         session_id: acp::SessionId,
-        tool_call_id: acp::ToolCallId,
+        request_id: PermissionRequestId,
         focus_handle: &FocusHandle,
         cx: &Context<Self>,
     ) -> Div {
-        let selection = self.permission_selections.get(&tool_call_id);
+        let selection = self
+            .conversation
+            .read(cx)
+            .permission_selections
+            .get(&request_id);
 
         let selected_index = selection
             .and_then(|s| s.choice_index())
@@ -7344,7 +7373,8 @@ impl ThreadView {
                 tool_name,
                 dropdown_label,
                 entry_ix,
-                tool_call_id.clone(),
+                session_id.clone(),
+                request_id,
                 is_first,
                 cx,
             )
@@ -7353,7 +7383,8 @@ impl ThreadView {
                 choices,
                 dropdown_label,
                 entry_ix,
-                tool_call_id.clone(),
+                session_id.clone(),
+                request_id,
                 selected_index,
                 is_first,
                 cx,
@@ -7395,11 +7426,10 @@ impl ThreadView {
                         })
                         .on_click(cx.listener({
                             let session_id = session_id.clone();
-                            let tool_call_id = tool_call_id.clone();
                             move |this, _, window, cx| {
                                 this.authorize_with_granularity(
                                     session_id.clone(),
-                                    tool_call_id.clone(),
+                                    request_id,
                                     true,
                                     window,
                                     cx,
@@ -7432,7 +7462,7 @@ impl ThreadView {
                             move |this, _, window, cx| {
                                 this.authorize_with_granularity(
                                     session_id.clone(),
-                                    tool_call_id.clone(),
+                                    request_id,
                                     false,
                                     window,
                                     cx,
@@ -7449,7 +7479,8 @@ impl ThreadView {
         choices: &[PermissionOptionChoice],
         current_label: SharedString,
         entry_ix: usize,
-        tool_call_id: acp::ToolCallId,
+        session_id: acp::SessionId,
+        request_id: PermissionRequestId,
         selected_index: usize,
         is_first: bool,
         cx: &Context<Self>,
@@ -7461,6 +7492,7 @@ impl ThreadView {
             .collect();
 
         let permission_dropdown_handle = self.permission_dropdown_handle.clone();
+        let conversation = self.conversation.downgrade();
 
         PopoverMenu::new(("permission-granularity", entry_ix))
             .with_handle(permission_dropdown_handle)
@@ -7485,29 +7517,33 @@ impl ThreadView {
                     }),
             )
             .menu(move |window, cx| {
-                let tool_call_id = tool_call_id.clone();
+                let session_id = session_id.clone();
                 let options = menu_options.clone();
+                let conversation = conversation.clone();
 
                 Some(ContextMenu::build(window, cx, move |mut menu, _, _| {
                     for (index, display_name) in &options {
                         let display_name = display_name.clone();
                         let index = *index;
-                        let tool_call_id_for_entry = tool_call_id.clone();
+                        let session_id = session_id.clone();
+                        let conversation = conversation.clone();
                         let is_selected = index == selected_index;
                         menu = menu.toggleable_entry(
                             display_name,
                             is_selected,
                             IconPosition::End,
                             None,
-                            move |window, cx| {
-                                window.dispatch_action(
-                                    SelectPermissionGranularity {
-                                        tool_call_id: tool_call_id_for_entry.0.to_string(),
-                                        index,
-                                    }
-                                    .boxed_clone(),
-                                    cx,
-                                );
+                            move |_window, cx| {
+                                conversation
+                                    .update(cx, |conversation, cx| {
+                                        conversation.set_permission_choice(
+                                            &session_id,
+                                            request_id,
+                                            index,
+                                            cx,
+                                        );
+                                    })
+                                    .log_err();
                             },
                         );
                     }
@@ -7525,7 +7561,8 @@ impl ThreadView {
         _tool_name: &str,
         current_label: SharedString,
         entry_ix: usize,
-        tool_call_id: acp::ToolCallId,
+        session_id: acp::SessionId,
+        request_id: PermissionRequestId,
         is_first: bool,
         cx: &Context<Self>,
     ) -> AnyElement {
@@ -7553,9 +7590,8 @@ impl ThreadView {
             })
             .collect();
 
-        let pattern_count = patterns.len();
         let permission_dropdown_handle = self.permission_dropdown_handle.clone();
-        let view = cx.entity().downgrade();
+        let conversation = self.conversation.downgrade();
 
         PopoverMenu::new(("permission-granularity", entry_ix))
             .with_handle(permission_dropdown_handle.clone())
@@ -7582,10 +7618,10 @@ impl ThreadView {
                     }),
             )
             .menu(move |window, cx| {
-                let tool_call_id = tool_call_id.clone();
+                let session_id = session_id.clone();
                 let options = menu_options.clone();
                 let patterns = pattern_options.clone();
-                let view = view.clone();
+                let conversation = conversation.clone();
                 let dropdown_handle = permission_dropdown_handle.clone();
 
                 Some(ContextMenu::build_persistent(
@@ -7595,9 +7631,12 @@ impl ThreadView {
                         let mut menu = menu;
 
                         // Read fresh selection state from the view on each rebuild.
-                        let selection: Option<PermissionSelection> = view.upgrade().and_then(|v| {
-                            let view = v.read(cx);
-                            view.permission_selections.get(&tool_call_id).cloned()
+                        let selection = conversation.upgrade().and_then(|conversation| {
+                            conversation
+                                .read(cx)
+                                .permission_selections
+                                .get(&request_id)
+                                .cloned()
                         });
 
                         let is_pattern_mode =
@@ -7607,28 +7646,30 @@ impl ThreadView {
                         for (index, display_name) in &options {
                             let display_name = display_name.clone();
                             let index = *index;
-                            let tool_call_id_for_entry = tool_call_id.clone();
+                            let session_id = session_id.clone();
                             let is_selected = !is_pattern_mode
                                 && selection
                                     .as_ref()
                                     .and_then(|s| s.choice_index())
                                     .map_or(index == default_choice_index, |ci| ci == index);
 
-                            let view = view.clone();
+                            let conversation = conversation.clone();
                             menu = menu.toggleable_entry(
                                 display_name,
                                 is_selected,
                                 IconPosition::End,
                                 None,
                                 move |_window, cx| {
-                                    view.update(cx, |this, cx| {
-                                        this.permission_selections.insert(
-                                            tool_call_id_for_entry.clone(),
-                                            PermissionSelection::Choice(index),
-                                        );
-                                        cx.notify();
-                                    })
-                                    .log_err();
+                                    conversation
+                                        .update(cx, |conversation, cx| {
+                                            conversation.set_permission_choice(
+                                                &session_id,
+                                                request_id,
+                                                index,
+                                                cx,
+                                            );
+                                        })
+                                        .log_err();
                                 },
                             );
                         }
@@ -7642,45 +7683,28 @@ impl ThreadView {
                         for (pattern_index, label) in &patterns {
                             let label = label.clone();
                             let pattern_index = *pattern_index;
-                            let tool_call_id_for_pattern = tool_call_id.clone();
+                            let session_id = session_id.clone();
                             let is_checked = selection
                                 .as_ref()
                                 .is_some_and(|s| s.is_pattern_checked(pattern_index));
 
-                            let view = view.clone();
+                            let conversation = conversation.clone();
                             menu = menu.toggleable_entry(
                                 label,
                                 is_checked,
                                 IconPosition::End,
                                 None,
                                 move |_window, cx| {
-                                    view.update(cx, |this, cx| {
-                                        let selection = this
-                                            .permission_selections
-                                            .get_mut(&tool_call_id_for_pattern);
-
-                                        match selection {
-                                            Some(PermissionSelection::SelectedPatterns(_)) => {
-                                                // Already in pattern mode — toggle.
-                                                this.permission_selections
-                                                    .get_mut(&tool_call_id_for_pattern)
-                                                    .expect("just matched above")
-                                                    .toggle_pattern(pattern_index);
-                                            }
-                                            _ => {
-                                                // First click: activate pattern mode
-                                                // with all patterns checked.
-                                                this.permission_selections.insert(
-                                                    tool_call_id_for_pattern.clone(),
-                                                    PermissionSelection::SelectedPatterns(
-                                                        (0..pattern_count).collect(),
-                                                    ),
-                                                );
-                                            }
-                                        }
-                                        cx.notify();
-                                    })
-                                    .log_err();
+                                    conversation
+                                        .update(cx, |conversation, cx| {
+                                            conversation.toggle_permission_pattern(
+                                                &session_id,
+                                                request_id,
+                                                pattern_index,
+                                                cx,
+                                            );
+                                        })
+                                        .log_err();
                                 },
                             );
                         }
@@ -7721,9 +7745,9 @@ impl ThreadView {
         &self,
         session_id: acp::SessionId,
         is_first: bool,
+        request_id: PermissionRequestId,
         options: &[acp::PermissionOption],
         entry_ix: usize,
-        tool_call_id: acp::ToolCallId,
         focus_handle: &FocusHandle,
         cx: &Context<Self>,
     ) -> Div {
@@ -7797,14 +7821,13 @@ impl ThreadView {
                 })
                 .label_size(LabelSize::Small)
                 .on_click(cx.listener({
-                    let tool_call_id = tool_call_id.clone();
                     let option_id = option.option_id.clone();
                     let option_kind = option.kind;
                     let session_id = session_id.clone();
                     move |this, _, window, cx| {
-                        this.authorize_tool_call(
+                        this.authorize_permission_request(
                             session_id.clone(),
-                            tool_call_id.clone(),
+                            request_id,
                             SelectedPermissionOutcome::new(option_id.clone(), option_kind),
                             window,
                             cx,

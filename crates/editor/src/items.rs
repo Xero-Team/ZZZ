@@ -17,6 +17,7 @@ use gpui::{
     AnyElement, App, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, Font,
     IntoElement, ParentElement, Pixels, SharedString, Styled, Task, WeakEntity, Window, point,
 };
+use i18n::tr;
 use language::{
     Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, PLAIN_TEXT,
     Point, SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
@@ -1184,6 +1185,17 @@ impl Item for Editor {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<(SharedString, Box<dyn gpui::Action>)> {
+        let editor_id = cx.entity_id();
+        // Inactive tabs aren't rendered, so preview actions can't be dispatched to them.
+        let is_active_in_pane = self
+            .workspace()
+            .and_then(|workspace| workspace.read(cx).pane_for_item_id(editor_id))
+            .and_then(|pane| pane.read(cx).active_item())
+            .is_some_and(|item| item.item_id() == editor_id);
+        if !is_active_in_pane {
+            return Vec::new();
+        }
+
         let mut actions = Vec::new();
 
         let is_markdown = self
@@ -1206,14 +1218,24 @@ impl Item for Editor {
 
         if is_markdown {
             actions.push((
-                "Open Markdown Preview".into(),
+                tr(
+                    cx,
+                    "editor.context_menu.open_markdown_preview",
+                    "Open Markdown Preview",
+                )
+                .into(),
                 Box::new(OpenMarkdownPreview) as Box<dyn gpui::Action>,
             ));
         }
 
         if is_svg {
             actions.push((
-                "Open SVG Preview".into(),
+                tr(
+                    cx,
+                    "editor.context_menu.open_svg_preview",
+                    "Open SVG Preview",
+                )
+                .into(),
                 Box::new(OpenSvgPreview) as Box<dyn gpui::Action>,
             ));
         }

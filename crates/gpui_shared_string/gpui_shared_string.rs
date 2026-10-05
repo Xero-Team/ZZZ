@@ -205,8 +205,7 @@ impl<'de> Deserialize<'de> for SharedString {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        Ok(SharedString::new(&s))
+        SmolStr::deserialize(deserializer).map(SharedString)
     }
 }
 

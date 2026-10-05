@@ -18,6 +18,14 @@ Extensions can provide:
 - [Snippets](./snippets.md)
 - [MCP Servers](./mcp-extensions.md)
 
+ZZZ automatically assigns an extension to categories on the Extensions page
+based on the features declared in `extension.toml`. An extension that provides
+multiple features may appear in more than one category.
+
+Published extensions must also meet the
+[extension publishing prerequisites](#extension-publishing-prerequisites),
+including the requirements for the features they provide.
+
 ## Developing an Extension Locally
 
 Before starting to develop an extension for ZZZ, be sure to [install Rust via rustup](https://www.rust-lang.org/tools/install).
