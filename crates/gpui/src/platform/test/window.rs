@@ -235,6 +235,10 @@ impl crate::AccessibilityBridge for TestWindow {
             }
         }
     }
+
+    fn update_accessibility_window_bounds(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl crate::TextInputBridge for TestWindow {

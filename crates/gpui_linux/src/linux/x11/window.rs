@@ -268,6 +268,8 @@ pub struct X11WindowState {
     edge_constraints: Option<EdgeConstraints>,
     pub handle: AnyWindowHandle,
     last_insets: [u32; 4],
+    #[cfg(feature = "accessibility")]
+    accessibility_adapter: Option<accesskit_unix::Adapter>,
 }
 
 impl X11WindowState {
@@ -816,6 +818,8 @@ impl X11WindowState {
                 decorations: WindowDecorations::Server,
                 last_insets: [0, 0, 0, 0],
                 edge_constraints: None,
+                #[cfg(feature = "accessibility")]
+                accessibility_adapter: None,
                 counter_id: sync_request_counter,
                 last_sync_counter: None,
             })
@@ -1303,6 +1307,10 @@ impl X11WindowStatePtr {
             fun(focus);
             self.callbacks.borrow_mut().active_status_change = Some(fun);
         }
+        #[cfg(feature = "accessibility")]
+        if let Some(adapter) = self.state.borrow_mut().accessibility_adapter.as_mut() {
+            adapter.update_window_focus_state(focus);
+        }
     }
 
     pub fn set_hovered(&self, focus: bool) {
@@ -1336,7 +1344,101 @@ impl X11WindowStatePtr {
     }
 }
 
-impl gpui::AccessibilityBridge for X11Window {}
+impl gpui::AccessibilityBridge for X11Window {
+    #[cfg(feature = "accessibility")]
+    fn initialize_accessibility(
+        &mut self,
+        callbacks: gpui::AccessibilityCallbacks,
+    ) -> anyhow::Result<()> {
+        let activation_handler = AccessibilityActivationHandler {
+            callback: callbacks.activation,
+        };
+        let action_handler = AccessibilityActionHandler(callbacks.action);
+        let deactivation_handler = AccessibilityDeactivationHandler {
+            callback: callbacks.deactivation,
+        };
+        let adapter =
+            accesskit_unix::Adapter::new(activation_handler, action_handler, deactivation_handler);
+        self.0.state.borrow_mut().accessibility_adapter = Some(adapter);
+        Ok(())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn update_accessibility(&mut self, update: gpui::AccessibilityUpdate) -> anyhow::Result<()> {
+        let Some(snapshot) = update.into_semantic_snapshot() else {
+            return Ok(());
+        };
+        let mut state = self.0.state.borrow_mut();
+        let Some(adapter) = state.accessibility_adapter.as_mut() else {
+            anyhow::bail!("X11 accessibility adapter was not initialized");
+        };
+        adapter.update_if_active(|| snapshot.update);
+        Ok(())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn update_accessibility_window_bounds(&mut self) -> anyhow::Result<()> {
+        let mut state = self.0.state.borrow_mut();
+        let scale = state.scale_factor;
+        let bounds = state.bounds;
+        let [left, right, top, bottom] = state.last_insets;
+        let x = f32::from(bounds.origin.x);
+        let y = f32::from(bounds.origin.y);
+        let width = f32::from(bounds.size.width);
+        let height = f32::from(bounds.size.height);
+        let outer = accesskit::Rect {
+            x0: (x * scale) as f64,
+            y0: (y * scale) as f64,
+            x1: ((x + width) * scale) as f64,
+            y1: ((y + height) * scale) as f64,
+        };
+        let inner = accesskit::Rect {
+            x0: outer.x0 + left as f64,
+            y0: outer.y0 + top as f64,
+            x1: outer.x1 - right as f64,
+            y1: outer.y1 - bottom as f64,
+        };
+        let Some(adapter) = state.accessibility_adapter.as_mut() else {
+            anyhow::bail!("X11 accessibility adapter was not initialized");
+        };
+        adapter.set_root_window_bounds(outer, inner);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "accessibility")]
+struct AccessibilityActivationHandler {
+    callback: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
+}
+
+#[cfg(feature = "accessibility")]
+impl accesskit::ActivationHandler for AccessibilityActivationHandler {
+    fn request_initial_tree(&mut self) -> Option<accesskit::TreeUpdate> {
+        (self.callback)()
+    }
+}
+
+#[cfg(feature = "accessibility")]
+struct AccessibilityActionHandler(Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>);
+
+#[cfg(feature = "accessibility")]
+impl accesskit::ActionHandler for AccessibilityActionHandler {
+    fn do_action(&mut self, request: accesskit::ActionRequest) {
+        (self.0)(request);
+    }
+}
+
+#[cfg(feature = "accessibility")]
+struct AccessibilityDeactivationHandler {
+    callback: Box<dyn Fn() + Send + 'static>,
+}
+
+#[cfg(feature = "accessibility")]
+impl accesskit::DeactivationHandler for AccessibilityDeactivationHandler {
+    fn deactivate_accessibility(&mut self) {
+        (self.callback)();
+    }
+}
 
 impl gpui::TextInputBridge for X11Window {
     fn set_input_handler(&mut self, input_handler: TextInputClient) {
@@ -1940,7 +2042,7 @@ fn x11_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
         ime_candidate_position: true,
-        accessibility: false,
+        accessibility: cfg!(feature = "accessibility"),
         headless_renderer: false,
         frame_callbacks: true,
         system_bell: true,
@@ -1960,7 +2062,7 @@ mod capability_tests {
         assert!(capabilities.text_input);
         assert!(capabilities.ime_candidate_position);
         assert!(capabilities.frame_callbacks);
-        assert!(!capabilities.accessibility);
+        assert_eq!(capabilities.accessibility, cfg!(feature = "accessibility"));
         assert!(!capabilities.headless_renderer);
         assert!(capabilities.system_bell);
         assert!(!capabilities.native_prompt);

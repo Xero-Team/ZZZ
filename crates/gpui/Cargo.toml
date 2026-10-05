@@ -49,7 +49,7 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-accesskit = { version = "0.24.0", features = ["enumn"], optional = true }
+accesskit = { workspace = true, optional = true }
 async-task = "4.7"
 backtrace = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }

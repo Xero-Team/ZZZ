@@ -1076,6 +1076,7 @@ impl Window {
                     }
                 }),
             })?;
+            platform_window.update_accessibility_window_bounds()?;
 
             let mut async_cx = cx.to_async();
             cx.foreground_executor()
@@ -1920,6 +1921,11 @@ impl Window {
         self.viewport_size = self.platform_window.content_size();
         self.display_id = self.platform_window.display().map(|display| display.id());
         self.interaction.mouse_position = self.platform_window.mouse_position();
+        if self.platform_window.capabilities().accessibility {
+            self.platform_window
+                .update_accessibility_window_bounds()
+                .log_err();
+        }
 
         self.refresh();
 

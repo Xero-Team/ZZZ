@@ -862,6 +862,10 @@ pub trait AccessibilityBridge {
             anyhow::bail!("accessibility adapter is unsupported by this platform window")
         }
     }
+
+    fn update_accessibility_window_bounds(&mut self) -> Result<()> {
+        anyhow::bail!("accessibility window bounds are unsupported by this platform window")
+    }
 }
 
 /// Render target owned by a platform window backend.
