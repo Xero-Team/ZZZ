@@ -589,7 +589,7 @@ surface recovery test 首轮在第三次失败帧发现 swapchain image exhausti
 
 ### 阶段 6：platform capability 与 lifecycle
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 已完成的第一步：
 
@@ -608,6 +608,9 @@ surface recovery test 首轮在第三次失败帧发现 swapchain image exhausti
   操作；Web/headless/Windows 不再接收无效果的 resize/move 请求。
 - 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
+- `WindowServiceCapabilities` 覆盖 decorations、input region、client inset、app ID、
+  document metadata、character palette、simple fullscreen、system tabs 和 titlebar action；
+  公开 façade 在调用 backend 前查询能力，不再依赖对应 trait 的静默 no-op。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
 - Linux X11、Wayland、headless、TestWindow、macOS、Windows 和 Web backend 均显式声明
   capability matrix；桌面 adapter 启用 accessibility，headless/Web 明确 unsupported。
@@ -687,9 +690,10 @@ factory `85fffe8fe5`；platform render target `c3f2d1bb90`；completed window ho
 `3ef63e8c00`；desktop assertion coverage `fd778d5672`；embedded lifecycle test
 `a37079c358`；native prompt capability `ff2ae9aaf3`；clipboard capability
 `7542cae1ec`；Web clipboard errors `2cb4199d55`；interactive move/resize gating
-`13a7611025`；lifecycle capability `93aa67658d`。
-下一步：收敛 platform-specific façade 与 capability error，并覆盖
-frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
+`13a7611025`；lifecycle capability `93aa67658d`；optional window services
+`dc14ed987e`。阶段 6 已覆盖 frame lifecycle、IME、clipboard、window controls、native
+accessibility、`run_embedded` 和外部 event loop；每个 backend matrix 都明确区分
+supported 与 unsupported。
 
 ### 阶段 7：UI 集成边界
 
