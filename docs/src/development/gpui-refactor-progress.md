@@ -21,7 +21,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 2–8 收敛与 invalidation 决策          |
+| 当前阶段                   | 阶段 2/3/5/6/7 收敛                        |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -719,12 +719,39 @@ editor-only 增量构建保持 generic `ui`、`ui_input`、registry 和 preview 
 
 ### 阶段 8：invalidation 实验
 
-状态：`NOT RUN`
+状态：`COMPLETE — REJECTED`
 
-EXP-001/002 的 production-like workload 与正式 phase budget 已完成。当前尚未引入
-scoped invalidation API；下一步按合同在 10 个高频组件上运行 EXP-007。若 phase work
-下降不足 20% 或出现任何 pixel/input/focus/IME/accessibility 差异，将记录拒绝并永久
-保留完整 `cx.notify()` 语义。
+`FrameDirtyReason` 现在记录 invalidation 的最早受影响 phase：`Layout`、`Prepaint`、
+`Paint` 或 `Accessibility`。现有 `cx.notify()` 和 `Window::refresh()` 都明确记录
+`Layout`，但仍执行原完整 invalidation；默认构建不包含这些 diagnostics 字段。
+
+EXP-007 使用临时、未提交的 `notify_with` 原型，在 button、tab、list item、tree item、
+text input、dialog、status、toolbar、scrollbar 和 editor viewport 十类代表性 cached view
+上测试跳过 dirty-view rebuild：
+
+- accessibility 关闭时，component render work 从 10 降到 0，表面下降 100%，但 10/10
+  debug/visual projection 保留旧 state，mouse input 也调用旧 handler；correctness gate
+  立即失败。
+- accessibility 开启时，GPUI 为保证完整 semantic tree 会禁用 cached replay；full 与
+  scoped 两组 component render work 都是 200，下降 0%，未达到 20% 阈值。
+- 因此不存在同时达到 phase-work 阈值且保持 visual/input/accessibility 行为的候选。
+  focus、IME 和 native adapter 无需继续冒险验证，因为 visual/input 已经明确不等价。
+
+临时 `notify_with`、cache-policy 分支和实验 view 已全部删除；产品代码没有 scoped
+invalidation API、双实现或 compatibility path，完整 `cx.notify()` 语义保持不变。
+仅保留 phase dirty diagnostics。
+
+验证：
+
+| 命令或检查                                                                                                     | 结果       | 证据                                                                         |
+| -------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics scoped_invalidation_experiment -- --nocapture` | `REJECTED` | 100% work drop，但 10/10 stale views 且 stale input handlers                 |
+| 同一实验加 `accessibility` feature                                                                             | `REJECTED` | semantic rebuild required；0% work drop                                      |
+| 临时 prototype 删除后 `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`           | `PASS`     | 235 tests passed                                                             |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                         | `PASS`     | all-target/all-feature release clippy 与 philosophy gate                     |
+| 原始实验输出                                                                                                   | `PASS`     | `.tmp/gpui-refactor/phase-8/exp007-scoped-invalidation{,-accessibility}.log` |
+
+提交：phase dirty diagnostics `28203d1737`。EXP-007 最终决策：`REJECTED`。
 
 ### 阶段 9：收敛与最终验证
 
