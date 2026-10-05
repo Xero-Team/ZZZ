@@ -1,0 +1,14 @@
+id	name	url	revision	status	role	checked_at
+zzz	ZZZ	https://github.com/Xero-Team/ZZZ	6500fbdeccd7d523acfc69161d6371b631fdb6ac	direct	target system	2026-10-05T19:15:00Z
+vscode	Visual Studio Code	https://github.com/microsoft/vscode	729f257fa411ea4b1cbdb7f404aa79941182209b	direct	provider and remote proxy reference	2026-10-05T19:15:00Z
+intellij	IntelliJ Community	https://github.com/JetBrains/intellij-community	ca33761b272460354c49a99754bdbf8c8c54c271	direct	persistent VFS and routing reference	2026-10-05T19:15:00Z
+rust_analyzer	rust-analyzer	https://github.com/rust-lang/rust-analyzer	ce37b245369ade4e2a18063ae4d60a17606c6d26	direct	analysis VFS and loader separation	2026-10-05T19:15:00Z
+lapce	Lapce	https://github.com/lapce/lapce	f66ffaa95387794205c35864517de70958b9ea8d	direct	Rust remote proxy reference	2026-10-05T19:15:00Z
+opendal	Apache OpenDAL	https://github.com/apache/opendal	a2e9634235ed01c3af8f9233f1dc1e06d917bdd4	direct	storage provider and capability reference	2026-10-05T19:15:00Z
+rust_vfs	rust-vfs	https://github.com/manuel-woelker/rust-vfs	9189433daabe961d4fa6905f665e923235a812db	direct	Rust VFS library candidate	2026-10-05T19:15:00Z
+remotefs	remotefs-rs	https://github.com/remotefs-rs/remotefs-rs	63064a8408c7ee4a46b49e01a81de17b5cbe258c	direct	remote filesystem library candidate	2026-10-05T19:15:00Z
+typed_path	typed-path	https://github.com/chipsenkbeil/typed-path	0fd79ebb2e455da055aef0c7f08038c87f7d8320	direct	cross-platform lexical path candidate	2026-10-05T19:15:00Z
+cap_std	cap-std	https://github.com/bytecodealliance/cap-std	b7acf8e8807fe3fab991884d2208b7e03d35a409	direct	capability security reference	2026-10-05T19:15:00Z
+wasmer	Wasmer virtual-fs	https://github.com/wasmerio/wasmer	1befae3f829237e18bd790d919a6f9cd06e744e1	direct	mount and overlay reference	2026-10-05T19:15:00Z
+notify	notify	https://github.com/notify-rs/notify	a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf	direct	cross-platform watcher backend and limitations	2026-10-05T19:15:00Z
+async_zip	async_zip	https://github.com/Majored/rs-async-zip	7c3aefe4bacc3b14eab4b445f73148193b34319d	direct	seekable ZIP reader candidate	2026-10-05T19:15:00Z
