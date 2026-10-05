@@ -1058,6 +1058,28 @@ impl From<RequestPermissionOutcome> for acp::RequestPermissionOutcome {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PermissionRequestId(Uuid);
+
+impl PermissionRequestId {
+    pub fn parse(value: &str) -> Option<Self> {
+        Uuid::parse_str(value).ok().map(Self)
+    }
+}
+
+impl Display for PermissionRequestId {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+pub struct PermissionRequest<'a> {
+    pub id: PermissionRequestId,
+    pub tool_call_id: &'a acp::ToolCallId,
+    pub options: &'a PermissionOptions,
+}
+
 #[derive(Debug)]
 pub enum ToolCallStatus {
     /// The tool call hasn't started running yet, but we start showing it to
@@ -1065,6 +1087,7 @@ pub enum ToolCallStatus {
     Pending,
     /// The tool call is waiting for confirmation from the user.
     WaitingForConfirmation {
+        request_id: PermissionRequestId,
         current_status: acp::ToolCallStatus,
         options: PermissionOptions,
         respond_tx: oneshot::Sender<SelectedPermissionOutcome>,
@@ -1109,6 +1132,15 @@ impl ToolCallStatus {
         match ToolCallStatus::from(status) {
             ToolCallStatus::Pending => ToolCallStatus::InProgress,
             status => status,
+        }
+    }
+}
+
+impl ToolCall {
+    pub fn authorization_id(&self) -> Option<PermissionRequestId> {
+        match self.status {
+            ToolCallStatus::WaitingForConfirmation { request_id, .. } => Some(request_id),
+            _ => None,
         }
     }
 }
@@ -1896,8 +1928,8 @@ pub enum AcpThreadEvent {
     TokenUsageUpdated,
     EntryUpdated(usize),
     EntriesRemoved(Range<usize>),
-    ToolAuthorizationRequested(acp::ToolCallId),
-    ToolAuthorizationReceived(acp::ToolCallId),
+    ToolAuthorizationRequested(PermissionRequestId),
+    ToolAuthorizationReceived(PermissionRequestId),
     ElicitationRequested(ElicitationEntryId),
     /// The request left `Pending`; this does not imply delivery to its response waiter.
     ElicitationResponded(ElicitationEntryId),
@@ -3006,7 +3038,18 @@ impl AcpThread {
         options: PermissionOptions,
         cx: &mut Context<Self>,
     ) -> Result<Task<RequestPermissionOutcome>> {
+        self.request_tool_call_authorization_with_id(tool_call, options, cx)
+            .map(|(_, task)| task)
+    }
+
+    pub fn request_tool_call_authorization_with_id(
+        &mut self,
+        tool_call: acp::ToolCallUpdate,
+        options: PermissionOptions,
+        cx: &mut Context<Self>,
+    ) -> Result<(PermissionRequestId, Task<RequestPermissionOutcome>)> {
         let (tx, rx) = oneshot::channel();
+        let request_id = PermissionRequestId(Uuid::new_v4());
 
         let current_status = self
             .tool_call(&tool_call.tool_call_id)
@@ -3014,28 +3057,105 @@ impl AcpThread {
             .or(tool_call.fields.status)
             .unwrap_or(acp::ToolCallStatus::Pending);
         let status = ToolCallStatus::WaitingForConfirmation {
+            request_id,
             current_status,
             options,
             respond_tx: tx,
         };
 
-        let tool_call_id = tool_call.tool_call_id.clone();
         self.upsert_tool_call_inner(tool_call, status, cx)?;
-        cx.emit(AcpThreadEvent::ToolAuthorizationRequested(
-            tool_call_id.clone(),
-        ));
+        cx.emit(AcpThreadEvent::ToolAuthorizationRequested(request_id));
 
-        Ok(cx.spawn(async move |this, cx| {
-            let outcome = match rx.await {
-                Ok(outcome) => RequestPermissionOutcome::Selected(outcome),
-                Err(oneshot::Canceled) => RequestPermissionOutcome::Cancelled,
+        Ok((
+            request_id,
+            cx.spawn(async move |this, cx| {
+                let outcome = match rx.await {
+                    Ok(outcome) => RequestPermissionOutcome::Selected(outcome),
+                    Err(oneshot::Canceled) => RequestPermissionOutcome::Cancelled,
+                };
+                this.update(cx, |_this, cx| {
+                    cx.emit(AcpThreadEvent::ToolAuthorizationReceived(request_id))
+                })
+                .ok();
+                outcome
+            }),
+        ))
+    }
+
+    pub fn permission_request(&self, id: PermissionRequestId) -> Option<PermissionRequest<'_>> {
+        self.entries.iter().find_map(|entry| {
+            let AgentThreadEntry::ToolCall(call) = entry else {
+                return None;
             };
-            this.update(cx, |_this, cx| {
-                cx.emit(AcpThreadEvent::ToolAuthorizationReceived(tool_call_id))
+            let ToolCallStatus::WaitingForConfirmation {
+                request_id,
+                options,
+                ..
+            } = &call.status
+            else {
+                return None;
+            };
+            (*request_id == id).then_some(PermissionRequest {
+                id,
+                tool_call_id: &call.id,
+                options,
             })
-            .ok();
-            outcome
-        }))
+        })
+    }
+
+    pub fn permission_request_for_tool(
+        &self,
+        tool_call_id: &acp::ToolCallId,
+    ) -> Option<PermissionRequest<'_>> {
+        let (_, call) = self.tool_call(tool_call_id)?;
+        self.permission_request(call.authorization_id()?)
+    }
+
+    pub fn pending_permission_requests(&self) -> impl Iterator<Item = PermissionRequest<'_>> {
+        self.entries.iter().filter_map(|entry| {
+            let AgentThreadEntry::ToolCall(call) = entry else {
+                return None;
+            };
+            let ToolCallStatus::WaitingForConfirmation {
+                request_id,
+                options,
+                ..
+            } = &call.status
+            else {
+                return None;
+            };
+            Some(PermissionRequest {
+                id: *request_id,
+                tool_call_id: &call.id,
+                options,
+            })
+        })
+    }
+
+    pub fn cancel_tool_call_authorization(&mut self, id: &acp::ToolCallId, cx: &mut Context<Self>) {
+        let Some(request_id) = self
+            .tool_call(id)
+            .and_then(|(_, call)| call.authorization_id())
+        else {
+            return;
+        };
+        self.cancel_permission_request(request_id, cx);
+    }
+
+    pub fn cancel_permission_request(&mut self, id: PermissionRequestId, cx: &mut Context<Self>) {
+        let Some(index) = self.entries.iter().position(|entry| {
+            matches!(
+                entry,
+                AgentThreadEntry::ToolCall(call) if call.authorization_id() == Some(id)
+            )
+        }) else {
+            return;
+        };
+        let AgentThreadEntry::ToolCall(call) = &mut self.entries[index] else {
+            return;
+        };
+        call.status = ToolCallStatus::Canceled;
+        cx.emit(AcpThreadEvent::EntryUpdated(index));
     }
 
     pub fn authorize_tool_call(
@@ -3044,9 +3164,36 @@ impl AcpThread {
         outcome: SelectedPermissionOutcome,
         cx: &mut Context<Self>,
     ) {
-        let Some((ix, call)) = self.tool_call_mut(&id) else {
+        let Some(request_id) = self
+            .tool_call(&id)
+            .and_then(|(_, call)| call.authorization_id())
+        else {
             return;
         };
+        self.authorize_permission_request(request_id, outcome, cx);
+    }
+
+    pub fn authorize_permission_request(
+        &mut self,
+        id: PermissionRequestId,
+        mut outcome: SelectedPermissionOutcome,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(request) = self.permission_request(id) else {
+            return;
+        };
+        let Some(option) = request.options.option_for_id(&outcome.option_id) else {
+            log::debug!("Permission choice is not an offered option");
+            return;
+        };
+        outcome.option_kind = option.kind;
+        let tool_call_id = request.tool_call_id.clone();
+        let Some((ix, call)) = self.tool_call_mut(&tool_call_id) else {
+            return;
+        };
+        if call.authorization_id() != Some(id) {
+            return;
+        }
 
         let new_status =
             match &call.status {
@@ -3457,14 +3604,14 @@ impl AcpThread {
     }
 
     pub fn cancel(&mut self, cx: &mut Context<Self>) -> Task<()> {
+        Self::flush_streaming_text(&mut self.streaming_text_buffer, cx);
+        self.cancel_outstanding_elicitations(cx);
+        self.mark_pending_tools_as_canceled();
+
         let Some(turn) = self.running_turn.take() else {
             return Task::ready(());
         };
         self.connection.cancel(&self.session_id, cx);
-
-        Self::flush_streaming_text(&mut self.streaming_text_buffer, cx);
-        self.cancel_outstanding_elicitations(cx);
-        self.mark_pending_tools_as_canceled();
 
         // Wait for the send task to complete
         cx.background_spawn(turn.send_task)
@@ -6667,6 +6814,88 @@ mod tests {
             }
             RequestPermissionOutcome::Cancelled => {
                 panic!("permission request should remain open after duplicate update")
+            }
+        }
+    }
+
+    #[gpui::test]
+    async fn test_canceling_superseded_permission_request_keeps_successor(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(project, PathList::new(&[Path::new(path!("/test"))]), cx)
+            })
+            .await
+            .unwrap();
+
+        let tool_call_id = acp::ToolCallId::new("reused-tool-call");
+        let request = |option_id: &str| {
+            (
+                acp::ToolCall::new(tool_call_id.clone(), "Run command")
+                    .kind(acp::ToolKind::Execute)
+                    .status(acp::ToolCallStatus::Pending)
+                    .into(),
+                PermissionOptions::Flat(vec![acp::PermissionOption::new(
+                    option_id.to_owned(),
+                    "Allow once",
+                    acp::PermissionOptionKind::AllowOnce,
+                )]),
+            )
+        };
+
+        let (old_id, old_task) = thread
+            .update(cx, |thread, cx| {
+                let (tool_call, options) = request("allow-old");
+                thread.request_tool_call_authorization_with_id(tool_call, options, cx)
+            })
+            .unwrap();
+        let (successor_id, successor_task) = thread
+            .update(cx, |thread, cx| {
+                let (tool_call, options) = request("allow-successor");
+                thread.request_tool_call_authorization_with_id(tool_call, options, cx)
+            })
+            .unwrap();
+
+        assert!(matches!(
+            old_task.await,
+            RequestPermissionOutcome::Cancelled
+        ));
+
+        thread.update(cx, |thread, cx| {
+            thread.cancel_permission_request(old_id, cx);
+        });
+        thread.read_with(cx, |thread, _| {
+            let request = thread
+                .permission_request_for_tool(&tool_call_id)
+                .expect("successor permission request should remain active");
+            assert_eq!(request.id, successor_id);
+        });
+
+        thread.update(cx, |thread, cx| {
+            thread.authorize_permission_request(
+                successor_id,
+                SelectedPermissionOutcome::new(
+                    acp::PermissionOptionId::new("allow-successor"),
+                    acp::PermissionOptionKind::RejectAlways,
+                ),
+                cx,
+            );
+        });
+
+        match successor_task.await {
+            RequestPermissionOutcome::Selected(outcome) => {
+                assert_eq!(
+                    outcome.option_id,
+                    acp::PermissionOptionId::new("allow-successor")
+                );
+                assert_eq!(outcome.option_kind, acp::PermissionOptionKind::AllowOnce);
+            }
+            RequestPermissionOutcome::Cancelled => {
+                panic!("successor permission request should not be canceled")
             }
         }
     }

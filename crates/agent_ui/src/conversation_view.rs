@@ -5,8 +5,8 @@ use acp_thread::{
     AcpThread, AcpThreadEvent, AgentThreadEntry, AssistantMessage, AssistantMessageChunk,
     AuthRequired, ElicitationEntryId, ElicitationStatus, ElicitationStore, LoadError,
     MaxOutputTokensError, MentionUri, PermissionOptionChoice, PermissionOptions, PermissionPattern,
-    RetryStatus, SelectedPermissionOutcome, ThreadStatus, ToolCall, ToolCallContent,
-    ToolCallStatus, UserMessageId,
+    PermissionRequest, PermissionRequestId, RetryStatus, SelectedPermissionOutcome, ThreadStatus,
+    ToolCall, ToolCallContent, ToolCallStatus, UserMessageId,
 };
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, DiffStats};
@@ -219,7 +219,8 @@ impl From<anyhow::Error> for ThreadError {
 #[derive(Default)]
 pub(crate) struct Conversation {
     threads: HashMap<acp::SessionId, Entity<AcpThread>>,
-    permission_requests: IndexMap<acp::SessionId, Vec<acp::ToolCallId>>,
+    permission_requests: IndexMap<acp::SessionId, Vec<PermissionRequestId>>,
+    permission_selections: HashMap<PermissionRequestId, thread_view::PermissionSelection>,
     subscriptions: Vec<Subscription>,
     updated_at: Option<Instant>,
 }
@@ -230,12 +231,9 @@ impl Conversation {
         let session_id = thread_state.session_id().clone();
         for entry in thread_state.entries() {
             if let AgentThreadEntry::ToolCall(tool_call) = entry
-                && matches!(
-                    tool_call.status,
-                    ToolCallStatus::WaitingForConfirmation { .. }
-                )
+                && let Some(request_id) = tool_call.authorization_id()
             {
-                self.add_permission_request(&session_id, &tool_call.id);
+                self.add_permission_request(&session_id, request_id);
             }
         }
 
@@ -245,15 +243,16 @@ impl Conversation {
                 this.updated_at = Some(Instant::now());
                 match event {
                     AcpThreadEvent::ToolAuthorizationRequested(id) => {
-                        this.add_permission_request(&session_id, id);
+                        this.add_permission_request(&session_id, *id);
                     }
                     AcpThreadEvent::ToolAuthorizationReceived(id) => {
-                        if let Some(tool_calls) = this.permission_requests.get_mut(&session_id) {
-                            tool_calls.retain(|tool_call_id| tool_call_id != id);
-                            if tool_calls.is_empty() {
+                        if let Some(requests) = this.permission_requests.get_mut(&session_id) {
+                            requests.retain(|request_id| request_id != id);
+                            if requests.is_empty() {
                                 this.permission_requests.shift_remove(&session_id);
                             }
                         }
+                        this.permission_selections.remove(id);
                     }
                     AcpThreadEvent::NewEntry
                     | AcpThreadEvent::TitleUpdated
@@ -284,15 +283,57 @@ impl Conversation {
     fn add_permission_request(
         &mut self,
         session_id: &acp::SessionId,
-        tool_call_id: &acp::ToolCallId,
+        request_id: PermissionRequestId,
     ) {
         let requests = self
             .permission_requests
             .entry(session_id.clone())
             .or_default();
-        if !requests.contains(tool_call_id) {
-            requests.push(tool_call_id.clone());
+        if !requests.contains(&request_id) {
+            requests.push(request_id);
         }
+    }
+
+    fn set_permission_choice(
+        &mut self,
+        _session_id: &acp::SessionId,
+        request_id: PermissionRequestId,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        self.permission_selections
+            .insert(request_id, thread_view::PermissionSelection::Choice(index));
+        cx.notify();
+    }
+
+    fn toggle_permission_pattern(
+        &mut self,
+        session_id: &acp::SessionId,
+        request_id: PermissionRequestId,
+        pattern_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(request) = self.permission_request(session_id, request_id, cx) else {
+            return;
+        };
+        let PermissionOptions::DropdownWithPatterns { patterns, .. } = request.options else {
+            return;
+        };
+        let pattern_count = patterns.len();
+        match self.permission_selections.get_mut(&request_id) {
+            Some(selection @ thread_view::PermissionSelection::SelectedPatterns(_)) => {
+                selection.toggle_pattern(pattern_index);
+            }
+            _ => {
+                self.permission_selections.insert(
+                    request_id,
+                    thread_view::PermissionSelection::SelectedPatterns(
+                        (0..pattern_count).collect(),
+                    ),
+                );
+            }
+        }
+        cx.notify();
     }
 
     pub fn respond_to_elicitation(
@@ -309,18 +350,34 @@ impl Conversation {
         Some(())
     }
 
-    pub fn permission_options_for_tool_call<'a>(
+    fn permission_request<'a>(
         &'a self,
         session_id: &acp::SessionId,
-        tool_call_id: acp::ToolCallId,
+        request_id: PermissionRequestId,
         cx: &'a App,
-    ) -> Option<&'a PermissionOptions> {
+    ) -> Option<PermissionRequest<'a>> {
         let thread = self.threads.get(session_id)?;
-        let (_, tool_call) = thread.read(cx).tool_call(&tool_call_id)?;
-        let ToolCallStatus::WaitingForConfirmation { options, .. } = &tool_call.status else {
-            return None;
+        thread.read(cx).permission_request(request_id)
+    }
+
+    fn pending_permission_request<'a>(
+        &'a self,
+        session_id: &acp::SessionId,
+        cx: &'a App,
+    ) -> Option<(acp::SessionId, PermissionRequest<'a>)> {
+        let thread = self.threads.get(session_id)?;
+        let is_subagent = thread.read(cx).parent_session_id().is_some();
+        let (result_session_id, thread, request_id) = if is_subagent {
+            let id = *self.permission_requests.get(session_id)?.first()?;
+            (session_id.clone(), thread, id)
+        } else {
+            let (id, requests) = self.permission_requests.first()?;
+            let thread = self.threads.get(id)?;
+            let request_id = *requests.first()?;
+            (id.clone(), thread, request_id)
         };
-        Some(options)
+        let request = thread.read(cx).permission_request(request_id)?;
+        Some((result_session_id, request))
     }
 
     pub fn pending_tool_call<'a>(
@@ -328,23 +385,12 @@ impl Conversation {
         session_id: &acp::SessionId,
         cx: &'a App,
     ) -> Option<(acp::SessionId, acp::ToolCallId, &'a PermissionOptions)> {
-        let thread = self.threads.get(session_id)?;
-        let is_subagent = thread.read(cx).parent_session_id().is_some();
-        let (result_session_id, thread, tool_id) = if is_subagent {
-            let id = self.permission_requests.get(session_id)?.iter().next()?;
-            (session_id.clone(), thread, id)
-        } else {
-            let (id, tool_calls) = self.permission_requests.first()?;
-            let thread = self.threads.get(id)?;
-            let tool_id = tool_calls.iter().next()?;
-            (id.clone(), thread, tool_id)
-        };
-        let (_, tool_call) = thread.read(cx).tool_call(tool_id)?;
-
-        let ToolCallStatus::WaitingForConfirmation { options, .. } = &tool_call.status else {
-            return None;
-        };
-        Some((result_session_id, tool_id.clone(), options))
+        let (result_session_id, request) = self.pending_permission_request(session_id, cx)?;
+        Some((
+            result_session_id,
+            request.tool_call_id.clone(),
+            request.options,
+        ))
     }
 
     pub fn subagents_awaiting_permission(&self, cx: &App) -> Vec<(acp::SessionId, usize)> {
@@ -367,12 +413,11 @@ impl Conversation {
         kind: acp::PermissionOptionKind,
         cx: &mut Context<Self>,
     ) -> Option<()> {
-        let (authorize_session_id, tool_call_id, options) =
-            self.pending_tool_call(session_id, cx)?;
-        let option = permission_option_for_action(options, kind)?;
-        self.authorize_tool_call(
+        let (authorize_session_id, request) = self.pending_permission_request(session_id, cx)?;
+        let option = permission_option_for_action(request.options, kind)?;
+        self.authorize_permission_request(
             authorize_session_id,
-            tool_call_id,
+            request.id,
             SelectedPermissionOutcome::new(option.option_id.clone(), option.kind),
             cx,
         );
@@ -382,22 +427,21 @@ impl Conversation {
     pub fn authorize_with_granularity(
         &mut self,
         session_id: acp::SessionId,
-        tool_call_id: acp::ToolCallId,
-        selection: Option<&thread_view::PermissionSelection>,
+        request_id: PermissionRequestId,
         is_allow: bool,
         cx: &mut Context<Self>,
     ) -> Option<()> {
-        let options =
-            self.permission_options_for_tool_call(&session_id, tool_call_id.clone(), cx)?;
-        let outcome = resolve_outcome_from_selection(options, selection, is_allow)?;
-        self.authorize_tool_call(session_id, tool_call_id, outcome, cx);
+        let request = self.permission_request(&session_id, request_id, cx)?;
+        let selection = self.permission_selections.get(&request_id);
+        let outcome = resolve_outcome_from_selection(request.options, selection, is_allow)?;
+        self.authorize_permission_request(session_id, request_id, outcome, cx);
         Some(())
     }
 
-    pub fn authorize_tool_call(
+    pub fn authorize_permission_request(
         &mut self,
         session_id: acp::SessionId,
-        tool_call_id: acp::ToolCallId,
+        request_id: PermissionRequestId,
         outcome: SelectedPermissionOutcome,
         cx: &mut Context<Self>,
     ) {
@@ -406,7 +450,7 @@ impl Conversation {
         };
 
         thread.update(cx, |thread, cx| {
-            thread.authorize_tool_call(tool_call_id, outcome, cx);
+            thread.authorize_permission_request(request_id, outcome, cx);
         });
         cx.notify();
     }
@@ -7599,16 +7643,37 @@ pub(crate) mod tests {
                 "Expected a tool call waiting for confirmation"
             );
         });
+        let (session_id, request_id, option_id) =
+            conversation_view.read_with(cx, |conversation_view, cx| {
+                let state = conversation_view.active_thread().unwrap();
+                let state = state.read(cx);
+                let thread = state.thread.read(cx);
+                let request = thread
+                    .permission_request_for_tool(&tool_call_id)
+                    .expect("pending permission request");
+                (
+                    thread.session_id().0.to_string(),
+                    request.id,
+                    request
+                        .options
+                        .allow_once_option_id()
+                        .expect("allow-once option")
+                        .0
+                        .to_string(),
+                )
+            });
 
         // Dispatch the AuthorizeToolCall action (simulating dropdown menu selection)
-        conversation_view.update_in(cx, |_, window, cx| {
-            window.dispatch_action(
-                crate::AuthorizeToolCall {
+        active_thread(&conversation_view, cx).update_in(cx, |view, window, cx| {
+            view.handle_authorize_tool_call(
+                &crate::AuthorizeToolCall {
                     tool_call_id: "action-test-1".to_string(),
-                    option_id: "allow".to_string(),
+                    request_id: Some(request_id.to_string()),
+                    session_id: Some(session_id),
+                    option_id,
                     option_kind: "AllowOnce".to_string(),
-                }
-                .boxed_clone(),
+                },
+                window,
                 cx,
             );
         });
@@ -7678,16 +7743,27 @@ pub(crate) mod tests {
                 .expect("Should have a pattern option for npm command"),
             _ => panic!("Expected dropdown permission options"),
         };
+        let (session_id, request_id) = conversation_view.read_with(cx, |conversation_view, cx| {
+            let state = conversation_view.active_thread().unwrap();
+            let state = state.read(cx);
+            let thread = state.thread.read(cx);
+            let request = thread
+                .permission_request_for_tool(&tool_call_id)
+                .expect("pending permission request");
+            (thread.session_id().0.to_string(), request.id)
+        });
 
         // Dispatch action with the pattern option (simulating "Always allow `npm` commands")
-        conversation_view.update_in(cx, |_, window, cx| {
-            window.dispatch_action(
-                crate::AuthorizeToolCall {
+        active_thread(&conversation_view, cx).update_in(cx, |view, window, cx| {
+            view.handle_authorize_tool_call(
+                &crate::AuthorizeToolCall {
                     tool_call_id: "pattern-action-test-1".to_string(),
+                    request_id: Some(request_id.to_string()),
+                    session_id: Some(session_id),
                     option_id: pattern_option.option_id.0.to_string(),
                     option_kind: "AllowAlways".to_string(),
-                }
-                .boxed_clone(),
+                },
+                window,
                 cx,
             );
         });
@@ -7745,11 +7821,28 @@ pub(crate) mod tests {
         active_thread(&thread_view, cx).update_in(cx, |view, window, cx| view.send(window, cx));
 
         cx.run_until_parked();
+        let (session_id, request_id) = thread_view.read_with(cx, |thread_view, cx| {
+            let state = thread_view.active_thread().unwrap();
+            let state = state.read(cx);
+            let thread = state.thread.read(cx);
+            let request = thread
+                .permission_request_for_tool(&tool_call_id)
+                .expect("pending permission request");
+            (thread.session_id().0.to_string(), request.id)
+        });
 
         // Verify default granularity is the last option (index 2 = "Only this time")
         thread_view.read_with(cx, |thread_view, cx| {
             let state = thread_view.active_thread().unwrap();
-            let selected = state.read(cx).permission_selections.get(&tool_call_id);
+            let state = state.read(cx);
+            let request_id = state
+                .thread
+                .read(cx)
+                .permission_request_for_tool(&tool_call_id)
+                .expect("pending permission request")
+                .id;
+            let conversation = state.conversation.read(cx);
+            let selected = conversation.permission_selections.get(&request_id);
             assert!(
                 selected.is_none(),
                 "Should have no selection initially (defaults to last)"
@@ -7757,13 +7850,15 @@ pub(crate) mod tests {
         });
 
         // Select the first option (index 0 = "Always for terminal")
-        thread_view.update_in(cx, |_, window, cx| {
-            window.dispatch_action(
-                crate::SelectPermissionGranularity {
+        active_thread(&thread_view, cx).update_in(cx, |view, window, cx| {
+            view.handle_select_permission_granularity(
+                &crate::SelectPermissionGranularity {
                     tool_call_id: "granularity-test-1".to_string(),
+                    request_id: Some(request_id.to_string()),
+                    session_id: Some(session_id),
                     index: 0,
-                }
-                .boxed_clone(),
+                },
+                window,
                 cx,
             );
         });
@@ -7773,7 +7868,15 @@ pub(crate) mod tests {
         // Verify the selection was updated
         thread_view.read_with(cx, |thread_view, cx| {
             let state = thread_view.active_thread().unwrap();
-            let selected = state.read(cx).permission_selections.get(&tool_call_id);
+            let state = state.read(cx);
+            let request_id = state
+                .thread
+                .read(cx)
+                .permission_request_for_tool(&tool_call_id)
+                .expect("pending permission request")
+                .id;
+            let conversation = state.conversation.read(cx);
+            let selected = conversation.permission_selections.get(&request_id);
             assert_eq!(
                 selected.and_then(|s| s.choice_index()),
                 Some(0),
@@ -7852,6 +7955,8 @@ pub(crate) mod tests {
             window.dispatch_action(
                 crate::SelectPermissionGranularity {
                     tool_call_id: "allow-granularity-test-1".to_string(),
+                    request_id: None,
+                    session_id: None,
                     index: 1,
                 }
                 .boxed_clone(),
@@ -8352,9 +8457,14 @@ pub(crate) mod tests {
 
         cx.update(|cx| {
             conversation.update(cx, |conversation, cx| {
-                conversation.authorize_tool_call(
+                let request_id = conversation
+                    .pending_permission_request(&session_id, cx)
+                    .expect("tc-1 permission request")
+                    .1
+                    .id;
+                conversation.authorize_permission_request(
                     session_id.clone(),
-                    acp::ToolCallId::new("tc-1"),
+                    request_id,
                     SelectedPermissionOutcome::new(
                         acp::PermissionOptionId::new("allow-1"),
                         acp::PermissionOptionKind::AllowOnce,
@@ -8376,9 +8486,14 @@ pub(crate) mod tests {
 
         cx.update(|cx| {
             conversation.update(cx, |conversation, cx| {
-                conversation.authorize_tool_call(
+                let request_id = conversation
+                    .pending_permission_request(&session_id, cx)
+                    .expect("tc-2 permission request")
+                    .1
+                    .id;
+                conversation.authorize_permission_request(
                     session_id.clone(),
-                    acp::ToolCallId::new("tc-2"),
+                    request_id,
                     SelectedPermissionOutcome::new(
                         acp::PermissionOptionId::new("allow-2"),
                         acp::PermissionOptionKind::AllowOnce,
@@ -8515,9 +8630,14 @@ pub(crate) mod tests {
         // After authorizing thread-a's tool call, thread-b's becomes first
         cx.update(|cx| {
             conversation.update(cx, |conversation, cx| {
-                conversation.authorize_tool_call(
+                let request_id = conversation
+                    .pending_permission_request(&session_id_a, cx)
+                    .expect("thread-a permission request")
+                    .1
+                    .id;
+                conversation.authorize_permission_request(
                     session_id_a.clone(),
-                    acp::ToolCallId::new("tc-a"),
+                    request_id,
                     SelectedPermissionOutcome::new(
                         acp::PermissionOptionId::new("allow-a"),
                         acp::PermissionOptionKind::AllowOnce,
