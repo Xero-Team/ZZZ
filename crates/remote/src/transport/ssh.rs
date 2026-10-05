@@ -627,6 +627,7 @@ async fn find_existing_control_master(
 impl SshRemoteConnection {
     pub(crate) async fn new(
         connection_options: SshConnectionOptions,
+        known_is_windows: Option<bool>,
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
@@ -790,7 +791,10 @@ impl SshRemoteConnection {
             (socket, Some(master_process))
         };
 
-        let is_windows = socket.probe_is_windows().await;
+        let is_windows = match known_is_windows {
+            Some(is_windows) => is_windows,
+            None => socket.probe_is_windows().await,
+        };
         log::info!("Remote is windows: {}", is_windows);
 
         let ssh_shell = socket.shell(is_windows).await;
