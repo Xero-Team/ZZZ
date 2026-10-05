@@ -1079,6 +1079,11 @@
     // Choices: project_diff, file_diff, view_file
     // Default: project_diff
     "entry_primary_click_action": "project_diff",
+    // Whether the commit message editor is shown in the Git panel by default.
+    //
+    // Choices: expanded, collapsed
+    // Default: expanded
+    "commit_editor": "expanded",
   },
   // Configuration for the Telegram panel.
   "telegram_panel": {

@@ -6884,7 +6884,7 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
-    fn git_panel_section() -> [SettingsPageItem; 16] {
+    fn git_panel_section() -> [SettingsPageItem; 17] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.git.panel",
@@ -7157,6 +7157,27 @@ fn panels_page() -> SettingsPage {
                             .git_panel
                             .get_or_insert_default()
                             .entry_primary_click_action = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt("settings_ui.page_data.title.commit.editor", "Commit Editor"),
+                description: lt(
+                    "settings_ui.page_data.description.whether.the.commit.message.editor.is.shown.in.the.git.panel.by.default",
+                    "Whether the commit message editor is shown in the Git panel by default.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("git_panel.commit_editor"),
+                    pick: |settings_content| {
+                        settings_content.git_panel.as_ref()?.commit_editor.as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .git_panel
+                            .get_or_insert_default()
+                            .commit_editor = value;
                     },
                 }),
                 metadata: None,
