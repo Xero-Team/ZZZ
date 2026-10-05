@@ -270,6 +270,12 @@ impl ConfigOptionsView {
         config_options
             .config_options()
             .into_iter()
+            .filter(|option| {
+                matches!(
+                    &option.kind,
+                    acp::SessionConfigKind::Select(_) | acp::SessionConfigKind::Boolean(_)
+                )
+            })
             .map(|option| {
                 let config_options = config_options.clone();
                 let agent_server = agent_server.clone();
@@ -386,6 +392,10 @@ impl ConfigOptionSelector {
     }
 
     fn toggle_picker(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !config_option_is_select(&self.config_options, &self.config_id) {
+            return false;
+        }
+
         if let Some(picker_handle) = &self.picker_handle {
             picker_handle.toggle(window, cx);
             true
@@ -640,6 +650,10 @@ impl Render for ConfigOptionSelector {
                         .label_position(SwitchLabelPosition::Start)
                         .label_size(LabelSize::Small)
                         .on_click(move |state, _window, cx| {
+                            if !config_option_is_boolean(&config_options, &config_id) {
+                                return;
+                            }
+
                             let next_value = matches!(state, ToggleState::Selected);
                             agent_server.set_default_config_option(
                                 config_id.0.as_ref(),
@@ -770,7 +784,9 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
 
     fn can_select(&self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> bool {
         match self.filtered_entries.get(ix) {
-            Some(ConfigOptionPickerEntry::Option(_)) => true,
+            Some(ConfigOptionPickerEntry::Option(option)) => {
+                config_option_has_value(&self.config_options, &self.config_id, &option.value)
+            }
             Some(ConfigOptionPickerEntry::Separator(_)) | None => false,
         }
     }
@@ -826,6 +842,10 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
         if let Some(ConfigOptionPickerEntry::Option(option)) =
             self.filtered_entries.get(self.selected_index)
         {
+            if !config_option_has_value(&self.config_options, &self.config_id, &option.value) {
+                return;
+            }
+
             if window.modifiers().secondary() {
                 let default_value = self
                     .agent_server
@@ -957,6 +977,7 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                                     let value_id = option.value.clone();
                                     let agent_server = self.agent_server.clone();
                                     let fs = self.fs.clone();
+                                    let config_options = self.config_options.clone();
 
                                     IconButton::new(("toggle-favorite-config-option", ix), icon)
                                         .layer(ElevationIndex::ElevatedSurface)
@@ -964,6 +985,14 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                                         .icon_size(IconSize::Small)
                                         .tooltip(Tooltip::text(tooltip))
                                         .on_click(move |_, _, cx| {
+                                            if !config_option_has_value(
+                                                &config_options,
+                                                &config_id,
+                                                &value_id,
+                                            ) {
+                                                return;
+                                            }
+
                                             agent_server.toggle_favorite_config_option_value(
                                                 config_id.clone(),
                                                 value_id.clone(),
@@ -1049,6 +1078,34 @@ fn extract_options(
         },
         _ => Vec::new(),
     }
+}
+
+fn config_option_is_select(
+    config_options: &Rc<dyn AgentSessionConfigOptions>,
+    config_id: &acp::SessionConfigId,
+) -> bool {
+    config_options.config_options().into_iter().any(|option| {
+        &option.id == config_id && matches!(option.kind, acp::SessionConfigKind::Select(_))
+    })
+}
+
+fn config_option_is_boolean(
+    config_options: &Rc<dyn AgentSessionConfigOptions>,
+    config_id: &acp::SessionConfigId,
+) -> bool {
+    config_options.config_options().into_iter().any(|option| {
+        &option.id == config_id && matches!(option.kind, acp::SessionConfigKind::Boolean(_))
+    })
+}
+
+fn config_option_has_value(
+    config_options: &Rc<dyn AgentSessionConfigOptions>,
+    config_id: &acp::SessionConfigId,
+    value_id: &acp::SessionConfigValueId,
+) -> bool {
+    extract_options(config_options, config_id)
+        .iter()
+        .any(|option| &option.value == value_id)
 }
 
 fn get_current_select_value(
@@ -1205,5 +1262,68 @@ fn truncate_button_label(label: &str, max_chars: usize) -> String {
         format!("{truncated}…")
     } else {
         truncated
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use super::*;
+
+    struct TestConfigOptions {
+        options: RefCell<Vec<acp::SessionConfigOption>>,
+    }
+
+    impl AgentSessionConfigOptions for TestConfigOptions {
+        fn config_options(&self) -> Vec<acp::SessionConfigOption> {
+            self.options.borrow().clone()
+        }
+
+        fn set_config_option(
+            &self,
+            _config_id: acp::SessionConfigId,
+            _value: acp::SessionConfigOptionValue,
+            _cx: &mut App,
+        ) -> Task<anyhow::Result<Vec<acp::SessionConfigOption>>> {
+            Task::ready(Ok(self.config_options()))
+        }
+    }
+
+    #[test]
+    fn stale_config_controls_revalidate_current_kind_and_choices() {
+        let options = Rc::new(TestConfigOptions {
+            options: RefCell::new(vec![
+                acp::SessionConfigOption::select(
+                    "mode",
+                    "Mode",
+                    "auto",
+                    vec![
+                        acp::SessionConfigSelectOption::new("auto", "Auto"),
+                        acp::SessionConfigSelectOption::new("manual", "Manual"),
+                    ],
+                ),
+                acp::SessionConfigOption::boolean("enabled", "Enabled", true),
+            ]),
+        });
+        let shared: Rc<dyn AgentSessionConfigOptions> = options.clone();
+        let mode = acp::SessionConfigId::new("mode");
+        let enabled = acp::SessionConfigId::new("enabled");
+        let manual = acp::SessionConfigValueId::new("manual");
+
+        assert!(config_option_is_select(&shared, &mode));
+        assert!(config_option_is_boolean(&shared, &enabled));
+        assert!(config_option_has_value(&shared, &mode, &manual));
+
+        *options.options.borrow_mut() = vec![acp::SessionConfigOption::select(
+            "mode",
+            "Mode",
+            "auto",
+            vec![acp::SessionConfigSelectOption::new("auto", "Auto")],
+        )];
+
+        assert!(config_option_is_select(&shared, &mode));
+        assert!(!config_option_is_boolean(&shared, &enabled));
+        assert!(!config_option_has_value(&shared, &mode, &manual));
     }
 }
