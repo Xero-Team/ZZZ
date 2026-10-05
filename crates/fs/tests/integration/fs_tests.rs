@@ -72,6 +72,90 @@ async fn test_fake_fs(executor: BackgroundExecutor) {
     );
 }
 
+async fn run_legacy_storage_conformance(fs: Arc<dyn Fs>, root: &Path) -> anyhow::Result<()> {
+    let nested_directory = root.join("nested");
+    let source_file = root.join("source.bin");
+    let copied_file = root.join("copied.bin");
+    let renamed_file = root.join("renamed.bin");
+
+    fs.create_dir(root).await?;
+    fs.create_dir(&nested_directory).await?;
+    fs.write(&source_file, b"vfs-conformance").await?;
+    anyhow::ensure!(
+        fs.load_bytes(&source_file).await? == b"vfs-conformance",
+        "whole-file bytes changed during round trip"
+    );
+
+    let Some(metadata) = fs.metadata(&source_file).await? else {
+        anyhow::bail!("metadata disappeared for {}", source_file.display());
+    };
+    anyhow::ensure!(!metadata.is_dir, "file was reported as a directory");
+    anyhow::ensure!(metadata.len == 15, "file length did not match content");
+
+    fs.copy_file(&source_file, &copied_file, CopyOptions::default())
+        .await?;
+    fs.rename(&copied_file, &renamed_file, RenameOptions::default())
+        .await?;
+    anyhow::ensure!(
+        fs.load_bytes(&renamed_file).await? == b"vfs-conformance",
+        "copy/rename changed file content"
+    );
+
+    let mut children = BTreeSet::new();
+    let mut directory_entries = fs.read_dir(root).await?;
+    while let Some(entry) = directory_entries.next().await {
+        children.insert(entry?);
+    }
+    anyhow::ensure!(
+        children
+            == BTreeSet::from([
+                nested_directory.clone(),
+                renamed_file.clone(),
+                source_file.clone(),
+            ]),
+        "directory listing did not match committed state: {children:?}"
+    );
+
+    fs.remove_file(&source_file, RemoveOptions::default())
+        .await?;
+    fs.remove_file(&renamed_file, RemoveOptions::default())
+        .await?;
+    fs.remove_dir(&nested_directory, RemoveOptions::default())
+        .await?;
+    fs.remove_dir(root, RemoveOptions::default()).await?;
+    Ok(())
+}
+
+#[gpui::test]
+async fn test_fake_fs_legacy_storage_conformance(executor: BackgroundExecutor) {
+    let filesystem: Arc<dyn Fs> = FakeFs::new(executor);
+    let result =
+        run_legacy_storage_conformance(filesystem, Path::new(path!("/vfs-conformance"))).await;
+    assert!(
+        result.is_ok(),
+        "fake filesystem conformance failed: {result:?}"
+    );
+}
+
+#[gpui::test]
+async fn test_real_fs_legacy_storage_conformance(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new();
+    let Ok(temporary_directory) = temporary_directory else {
+        panic!("failed to create real filesystem conformance directory: {temporary_directory:?}");
+    };
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let root = temporary_directory.path().join("vfs-conformance");
+    let result = run_legacy_storage_conformance(filesystem, &root).await;
+    assert!(
+        result.is_ok(),
+        "real filesystem conformance failed: {result:?}"
+    );
+}
+
 #[gpui::test]
 async fn test_copy_recursive_with_single_file(executor: BackgroundExecutor) {
     let fs = FakeFs::new(executor.clone());

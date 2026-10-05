@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "seed": 1592614637,
+  "cases": [
+    {
+      "id": "portable-empty",
+      "encoding": "portable_utf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": [],
+      "expected": "valid"
+    },
+    {
+      "id": "portable-ascii",
+      "encoding": "portable_utf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["737263", "6d61696e2e7273"],
+      "expected": "valid"
+    },
+    {
+      "id": "portable-unicode",
+      "encoding": "portable_utf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["e6ba90e7a081", "f09f93a6"],
+      "expected": "valid"
+    },
+    {
+      "id": "unix-non-utf8",
+      "encoding": "unix_bytes",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["666f806f"],
+      "expected": "valid"
+    },
+    {
+      "id": "unix-control-byte",
+      "encoding": "unix_bytes",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["6c696e650a627265616b"],
+      "expected": "valid"
+    },
+    {
+      "id": "windows-drive",
+      "encoding": "windows_wtf8",
+      "form": "native",
+      "root_kind": "windows_drive",
+      "components_hex": ["43", "5573657273", "5a5a5a", "6d61696e2e7273"],
+      "expected": "valid"
+    },
+    {
+      "id": "windows-unc",
+      "encoding": "windows_wtf8",
+      "form": "native",
+      "root_kind": "windows_unc",
+      "components_hex": ["736572766572", "7368617265", "776f726b", "66696c652e747874"],
+      "expected": "valid"
+    },
+    {
+      "id": "windows-verbatim-drive",
+      "encoding": "windows_wtf8",
+      "form": "native",
+      "root_kind": "windows_verbatim_drive",
+      "components_hex": ["43", "766572626174696d", "66696c652e747874"],
+      "expected": "valid"
+    },
+    {
+      "id": "windows-lone-surrogate",
+      "encoding": "windows_wtf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["eda0802e747874"],
+      "expected": "valid"
+    },
+    {
+      "id": "archive-raw-name",
+      "encoding": "unix_bytes",
+      "form": "archive_member",
+      "root_kind": "relative",
+      "components_hex": ["646f6373", "82a02e747874"],
+      "expected": "valid"
+    },
+    {
+      "id": "invalid-dot",
+      "encoding": "portable_utf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["2e"],
+      "expected": "invalid"
+    },
+    {
+      "id": "invalid-dot-dot",
+      "encoding": "portable_utf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["2e2e"],
+      "expected": "invalid"
+    },
+    {
+      "id": "invalid-nul",
+      "encoding": "unix_bytes",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["610062"],
+      "expected": "invalid"
+    },
+    {
+      "id": "invalid-unix-separator",
+      "encoding": "unix_bytes",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["612f62"],
+      "expected": "invalid"
+    },
+    {
+      "id": "invalid-windows-separator",
+      "encoding": "windows_wtf8",
+      "form": "provider_relative",
+      "root_kind": "relative",
+      "components_hex": ["615c62"],
+      "expected": "invalid"
+    },
+    {
+      "id": "invalid-absolute-replacement",
+      "encoding": "windows_wtf8",
+      "form": "provider_relative",
+      "root_kind": "windows_drive",
+      "components_hex": ["43", "746172676574"],
+      "expected": "invalid"
+    }
+  ]
+}

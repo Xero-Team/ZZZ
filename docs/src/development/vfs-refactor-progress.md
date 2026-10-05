@@ -11,65 +11,107 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 
 ## 当前状态 {#current-status}
 
-- Goal status: `NOT STARTED`
+- Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
-- Current HEAD: `NOT RECORDED`
-- Branch/worktree: `NOT RECORDED`
+- Current HEAD: `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` plus uncommitted
+  Phase 0 changes
+- Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 0`
 - Last completed phase: `None`
 - Blocking issue: `None`
-- Next action: 记录当前工作树、HEAD、平台、toolchain 和 Phase 0 baseline。
+- Next action: 完成 Phase 0 touched-diff code-smell review、验证、signed-off commit，随后从
+  Phase 1 exact path/resource types 开始。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit | Validation | Notes |
-| ----- | ---------------------------------- | ----------- | ------ | ---------- | ----- |
-| 0     | Baseline、ADR、实验 harness        | NOT STARTED | -      | -          | -     |
-| 1     | Path/resource types 与 v2 wire     | NOT STARTED | -      | -          | -     |
-| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -      | -          | -     |
-| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -      | -          | -     |
-| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -      | -          | -     |
-| 5     | Consumer 迁移                      | NOT STARTED | -      | -          | -     |
-| 6     | LSP/Git/native execution           | NOT STARTED | -      | -          | -     |
-| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -      | -          | -     |
-| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -      | -          | -     |
-| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -      | -          | -     |
-| 10    | 收敛与最终验证                     | NOT STARTED | -      | -          | -     |
+| Phase | Result                             | Status      | Commit | Validation | Notes                               |
+| ----- | ---------------------------------- | ----------- | ------ | ---------- | ----------------------------------- |
+| 0     | Baseline、ADR、实验 harness        | IN PROGRESS | -      | PARTIAL    | Final diff review and commit remain |
+| 1     | Path/resource types 与 v2 wire     | NOT STARTED | -      | -          | -                                   |
+| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -      | -          | -                                   |
+| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -      | -          | -                                   |
+| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -      | -          | -                                   |
+| 5     | Consumer 迁移                      | NOT STARTED | -      | -          | -                                   |
+| 6     | LSP/Git/native execution           | NOT STARTED | -      | -          | -                                   |
+| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -      | -          | -                                   |
+| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -      | -          | -                                   |
+| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -      | -          | -                                   |
+| 10    | 收敛与最终验证                     | NOT STARTED | -      | -          | -                                   |
 
 ## Baseline {#baseline}
 
-执行 Phase 0 时填写：
+- Git status: initial `## main...origin/main`, no modified or untracked files; implementation
+  branch created before edits.
+- Rust toolchain: `rustc 1.99.0 (b940084d7 2026-09-28)`; Cargo
+  `1.99.0 (5f94df478 2026-08-27)`; host `x86_64-unknown-linux-gnu`.
+- Host OS/architecture: Fedora Linux 46 prerelease, kernel
+  `7.3.0-0.rc4.260925g165768bb7026.42.fc46.x86_64`, x86_64.
+- Filesystem and case behavior: Btrfs, 4,096-byte block, case-sensitive probe at
+  `.tmp/vfs-refactor/case-probe.JObzw6`.
+- Remote targets: installed Rust targets include Linux GNU/musl, Windows GNU, macOS x86_64,
+  wasm32 and WASI. `podman` and `ssh` are available; Docker daemon, WSL, macOS, Windows,
+  network filesystem and an external SSH authority were not used in Phase 0.
+- Workspace size and fixture revisions: 5,220 tracked files and 141,549,315 tracked bytes;
+  source tree excluding `.git`, `target` and `.tmp` is 440 MiB. `Cargo.lock` SHA-256 is
+  `9feb95fb75381758ae2cc4f09932e29cfd776d6111f4c6dbc956e95d12eecadb` at baseline.
+  Cross-platform path corpus schema is `1`, seed `1592614637`.
+- Existing architecture counters from fixed `rg` commands: 300 `Arc<dyn Fs>`/`&dyn Fs`
+  occurrences, 571 legacy `fs.<operation>` call sites, 49 `Worktree::Local/Remote` matches,
+  64 `.is_local()` calls, 298 `RelPath` proto conversion hits and 143 `to_string_lossy()`
+  hits in the scoped crates. These are broad migration counters, not all defects.
+- Scan benchmark: release runtime on the current repository reports 5,221 files, 1,158
+  directories, 72.26 ms scan time and 18,292 KiB maximum process RSS.
+- Existing failures: reproduced and classified in the next section.
+- Raw output directory: `.tmp/vfs-refactor/` (ignored, local only).
 
-- Git status:
-- Rust toolchain:
-- Host OS/architecture:
-- Filesystem and case behavior:
-- Remote targets:
-- Workspace size and fixture revisions:
-- Existing failures:
-- Raw output directory:
+### Phase 0 existing failures {#phase-0-existing-failures}
+
+All entries reproduce on the clean implementation baseline before VFS code changes.
+
+| Crate    | Test                                                                                 | Reproduction        | Classification                                                    |
+| -------- | ------------------------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------- |
+| worktree | `test_load_file_encoding`                                                            | exit 101            | ISO-2022-JP fixture remains undecoded at `worktree_tests.rs:5881` |
+| project  | `context_server_store::test_multi_worktree_context_server_settings`                  | exit 101            | project settings discovery, unrelated to VFS implementation       |
+| project  | `context_server_store::test_multi_worktree_duplicate_context_server_first_wins`      | exit 101            | project settings discovery, unrelated to VFS implementation       |
+| project  | `search::test_multiline_regex_crlf`                                                  | exit 101            | existing CRLF multiline search mismatch at `search.rs:155`        |
+| project  | `lsp_store::test_other_adapters_lsp_configuration_contributions_are_unioned`         | exit 101            | existing LSP settings merge mismatch at `lsp_store.rs:774`        |
+| project  | `lsp_store::test_user_initialization_options_override_adapter_arrays`                | exit 101            | existing LSP settings merge mismatch at `lsp_store.rs:650`        |
+| project  | `test_staging_hunks`                                                                 | exit 101            | existing Git hunk range mismatch at `project_tests.rs:11274`      |
+| project  | `test_git_events_after_project_excludes_dot_git`                                     | exit 101            | libgit2 rejects `other-branch` at `project_tests.rs:12345`        |
+| editor   | `editor_tests::test_auto_formatter_skips_server_without_formatting`                  | exit 101            | existing formatter result mismatch at `editor_tests.rs:16796`     |
+| editor   | `editor_tests::test_document_format_during_save`                                     | exit 101            | existing formatter result mismatch at `editor_tests.rs:16622`     |
+| editor   | `editor_tests::test_format_echoing_received_line_endings_keeps_cursor`               | exit 101            | existing formatter whitespace mismatch                            |
+| editor   | `editor_tests::test_join_lines_rust_block_comments`                                  | exit 101            | existing join-lines mismatch at `editor_tests.rs:7657`            |
+| editor   | `editor_tests::test_multibuffer_format_during_save`                                  | exit 101            | existing multibuffer formatter mismatch                           |
+| editor   | `inlays::inlay_hints::tests::test_no_hint_duplication_when_refresh_races_with_fetch` | exit 101            | existing race reaches `unwrap` at `inlay_hints.rs:1626`           |
+| editor   | `editor_tests::test_race_in_multibuffer_save`                                        | exit 124 after 90 s | deterministic timeout when run alone                              |
+| editor   | `editor_tests::test_range_format_on_save_success`                                    | exit 124 after 90 s | deterministic timeout when run alone                              |
+| editor   | `editor_tests::test_range_format_respects_language_tab_size_override`                | exit 124 after 90 s | deterministic timeout when run alone                              |
 
 ## 设计决策 {#decisions}
 
-| Decision                        | Status | ADR/path | Rationale | Consequence |
-| ------------------------------- | ------ | -------- | --------- | ----------- |
-| Path encoding                   | OPEN   | -        | -         | -           |
-| ResourceId lifetime             | OPEN   | -        | -         | -           |
-| Provider capability model       | OPEN   | -        | -         | -           |
-| Positioned I/O                  | OPEN   | -        | -         | -           |
-| Snapshot freshness and eviction | OPEN   | -        | -         | -           |
-| Watch sequence and overflow     | OPEN   | -        | -         | -           |
-| Remote retry and idempotency    | OPEN   | -        | -         | -           |
-| Symlink and containment         | OPEN   | -        | -         | -           |
-| Atomicity and expected version  | OPEN   | -        | -         | -           |
-| LSP/native mapping              | OPEN   | -        | -         | -           |
-| Archive limits                  | OPEN   | -        | -         | -           |
+| Decision                        | Status   | ADR/path                                                       | Rationale                        | Consequence                                |
+| ------------------------------- | -------- | -------------------------------------------------------------- | -------------------------------- | ------------------------------------------ |
+| Path encoding                   | ACCEPTED | [ADR](./vfs-research/adr.md#exact-path-wire-format)            | Lossless component bytes         | Display is never identity                  |
+| ResourceId lifetime             | ACCEPTED | [ADR](./vfs-research/adr.md#resource-identity-lifetime)        | Session-stable identity          | Persistence re-interns mount/path          |
+| Provider capability model       | ACCEPTED | [ADR](./vfs-research/adr.md#provider-capability-model)         | Structured limits and guarantees | Wrappers recompute capabilities            |
+| Positioned I/O                  | ACCEPTED | [ADR](./vfs-research/adr.md#positioned-io-and-cancellation)    | Avoid shared cursor races        | Cursor remains an adapter                  |
+| Snapshot freshness and eviction | ACCEPTED | [ADR](./vfs-research/adr.md#snapshot-freshness-and-budgets)    | Bounded lazy state               | Fixed Phase 3 budgets                      |
+| Watch sequence and overflow     | ACCEPTED | [ADR](./vfs-research/adr.md#watch-sequence-and-reconciliation) | Events are hints                 | Gaps force scoped rescan                   |
+| Remote retry and idempotency    | ACCEPTED | [ADR](./vfs-research/adr.md#remote-retry-and-idempotency)      | No blind mutation replay         | Result journal required                    |
+| Symlink and containment         | ACCEPTED | [ADR](./vfs-research/adr.md#symlink-and-containment)           | Host validates authority         | Follow is explicit                         |
+| Atomicity and expected version  | ACCEPTED | [ADR](./vfs-research/adr.md#atomicity-and-expected-version)    | Never invent guarantees          | Stale versions are typed errors            |
+| LSP/native mapping              | ACCEPTED | [ADR](./vfs-research/adr.md#lsp-and-native-mapping)            | Native paths stay data-local     | Virtual resources do not impersonate files |
+| Archive limits                  | ACCEPTED | [ADR](./vfs-research/adr.md#archive-limits)                    | Bound hostile archives           | Provider stays read-only                   |
 
 ## Compatibility adapter 清单 {#compatibility-adapters}
 
-| Adapter | Introduced | Callers | Removal phase | Status |
-| ------- | ---------- | ------- | ------------- | ------ |
-| None    | -          | -       | -             | -      |
+| Adapter                                    | Introduced | Callers                                 | Removal phase | Status   |
+| ------------------------------------------ | ---------- | --------------------------------------- | ------------- | -------- |
+| Legacy `Fs` storage façade                 | Existing   | 571 broad operation call sites          | Phase 9       | BASELINE |
+| `RelPath`/`ProjectPath` UTF-8 wire         | Existing   | 298 broad proto conversion hits         | Phase 9       | BASELINE |
+| `Worktree::Local/Remote` behavior branches | Existing   | 49 enum matches and 64 `is_local` calls | Phase 5/9     | BASELINE |
+| Dedicated image/download byte RPC          | Existing   | Project media/download handlers         | Phase 5/9     | BASELINE |
 
 ## 实验结果 {#experiments}
 
@@ -78,28 +120,48 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 实验总状态只记录必做验收结果；`VFS-EXP-012` 的可选 overlay 结论单独写入
 `Decision`，即使 overlay 为 `REJECTED`，必做 composition 验收仍必须为 `PASS`。
 
-| Experiment  | Status  | Command/data | Result | Decision |
-| ----------- | ------- | ------------ | ------ | -------- |
-| VFS-EXP-001 | NOT RUN | -            | -      | -        |
-| VFS-EXP-002 | NOT RUN | -            | -      | -        |
-| VFS-EXP-003 | NOT RUN | -            | -      | -        |
-| VFS-EXP-004 | NOT RUN | -            | -      | -        |
-| VFS-EXP-005 | NOT RUN | -            | -      | -        |
-| VFS-EXP-006 | NOT RUN | -            | -      | -        |
-| VFS-EXP-007 | NOT RUN | -            | -      | -        |
-| VFS-EXP-008 | NOT RUN | -            | -      | -        |
-| VFS-EXP-009 | NOT RUN | -            | -      | -        |
-| VFS-EXP-010 | NOT RUN | -            | -      | -        |
-| VFS-EXP-011 | NOT RUN | -            | -      | -        |
-| VFS-EXP-012 | NOT RUN | -            | -      | -        |
-| VFS-EXP-013 | NOT RUN | -            | -      | -        |
-| VFS-EXP-014 | NOT RUN | -            | -      | -        |
+| Experiment  | Status  | Command/data                                        | Result                                              | Decision                        |
+| ----------- | ------- | --------------------------------------------------- | --------------------------------------------------- | ------------------------------- |
+| VFS-EXP-001 | PASS    | Commands in validation log and `.tmp/vfs-refactor/` | Existing failures reproduced; scan and RSS recorded | Baseline frozen at `a3a0f97340` |
+| VFS-EXP-002 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-003 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-004 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-005 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-006 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-007 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-008 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-009 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-010 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-011 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-012 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-013 | NOT RUN | -                                                   | -                                                   | -                               |
+| VFS-EXP-014 | NOT RUN | -                                                   | -                                                   | -                               |
 
 ## 验证记录 {#validation-log}
 
-| Date | Phase | Command | Exit | Result | Existing failure? |
-| ---- | ----- | ------- | ---- | ------ | ----------------- |
-| -    | -     | -       | -    | -      | -                 |
+| Date       | Phase | Command                                                                                                          | Exit     | Result                                                  | Existing failure?                                                       |
+| ---------- | ----- | ---------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 2026-10-05 | 0     | `cargo check --locked -p fs -p worktree -p project -p workspace -p editor`                                       | 0        | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p fs -p worktree -p project`                                                               | 101      | FAIL                                                    | Yes: 7 project failures; fs 23 passed, 1 ignored                        |
+| 2026-10-05 | 0     | `cargo test --locked -p worktree`                                                                                | 101      | FAIL                                                    | Yes: 88 passed, `test_load_file_encoding` failed                        |
+| 2026-10-05 | 0     | `cargo test --locked -p workspace -p editor`                                                                     | 1        | FAIL/TIMEOUT                                            | Yes: interrupted after six failures and three tests stalled beyond 60 s |
+| 2026-10-05 | 0     | `cargo test --locked -p workspace`                                                                               | 0        | PASS: 235 tests                                         | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p remote`                                                                                  | 0        | PASS: 34 tests                                          | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p rpc`                                                                                     | 0        | PASS: 6 tests                                           | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p image_viewer -p pdf_viewer -p audio_viewer -p video_viewer -p typst_preview`             | 0        | PASS: 54 tests                                          | No                                                                      |
+| 2026-10-05 | 0     | `./script/clippy -p fs -p worktree -p project -p workspace -p editor`                                            | 0        | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | seven individual `cargo test --locked -p project --test integration <name> -- --exact --nocapture` runs          | 101 each | FAIL reproduced                                         | Yes                                                                     |
+| 2026-10-05 | 0     | six individual `cargo test --locked -p editor <name> -- --exact --nocapture --test-threads=1` runs               | 101 each | FAIL reproduced                                         | Yes                                                                     |
+| 2026-10-05 | 0     | three individual `timeout 90s cargo test --locked -p editor <name> -- --exact --nocapture --test-threads=1` runs | 124 each | TIMEOUT reproduced                                      | Yes                                                                     |
+| 2026-10-05 | 0     | `target/release/worktree_benchmarks .` under `/usr/bin/time -v`                                                  | 0        | PASS: 72.26 ms, 18,292 KiB RSS                          | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p vfs`                                                                                     | 0        | PASS: 3 tests                                           | No                                                                      |
+| 2026-10-05 | 0     | FakeFs and RealFs legacy conformance filters                                                                     | 0 each   | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | `cargo fmt --all -- --check`                                                                                     | 0        | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | `cargo check --locked -p vfs -p fs`                                                                              | 0        | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p fs`                                                                                      | 0        | PASS: 25 passed, 1 ignored                              | No                                                                      |
+| 2026-10-05 | 0     | `./script/clippy -p vfs -p fs`                                                                                   | 0        | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | `(cd docs && npx prettier --check src/)`                                                                         | 0        | PASS                                                    | No                                                                      |
+| 2026-10-05 | 0     | touched-diff P0 detectors and manual P0/P1/P2 review                                                             | 0        | PASS: frame-delay semantics fixed; no remaining finding | No                                                                      |
 
 ## 提交记录 {#commit-log}
 
@@ -121,9 +183,10 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 
 ## Remaining work {#remaining-work}
 
-- Phase 0 through Phase 10.
+- Complete Phase 0 review/commit.
+- Phase 1 through Phase 10.
 
 ## Next action {#next-action}
 
-记录当前工作树和执行 baseline，然后开始 Phase 0 的现有行为验证、ADR 与 provider
-conformance harness。
+完成 Phase 0 touched-diff code-smell review、targeted test/check/clippy、docs Prettier 与
+signed-off commit。然后实现 Phase 1 exact path/resource types 与 v2 wire schema。

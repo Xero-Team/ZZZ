@@ -201,6 +201,7 @@
     - [GPUI Refactoring Progress](./development/gpui-refactor-progress.md)
     - [Native IME Validation Runbook](./development/gui-framework-research/ime-validation-runbook.md)
   - [VFS Architecture Research](./development/vfs-research/report.md)
+    - [VFS Architecture Decisions](./development/vfs-research/adr.md)
     - [VFS Refactoring Execution Plan](./development/vfs-research/refactoring-plan.md)
     - [VFS Refactoring Goal](./development/vfs-research/goal.md)
     - [VFS Refactoring Progress](./development/vfs-refactor-progress.md)
