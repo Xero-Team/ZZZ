@@ -5699,7 +5699,8 @@ impl ThreadView {
                                 "Awaiting Confirmation",
                             ))
                             .size(LabelSize::Small)
-                            .color(Color::Muted),
+                            .color(Color::Muted)
+                            .single_line(),
                         ),
                     )
                 } else if is_blocked_on_terminal_command {
