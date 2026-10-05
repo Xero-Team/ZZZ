@@ -196,7 +196,7 @@ impl DirectManipulationEventHandler {
         let scale_factor = self.scale_factor.get();
         unsafe {
             let mut point: POINT = std::mem::zeroed();
-            GetCursorPos(&mut point).ok().log_err();
+            GetCursorPos(&mut point).log_err();
             ScreenToClient(self.window, &mut point).ok().log_err();
             logical_point(point.x as f32, point.y as f32, scale_factor)
         }

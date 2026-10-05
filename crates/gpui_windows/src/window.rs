@@ -713,8 +713,12 @@ impl gpui::WindowHost for WindowsWindow {
                         ShowWindowAsync(hwnd, SW_RESTORE).ok().log_err();
                     }
 
-                    SetActiveWindow(hwnd).ok().log_err();
-                    SetFocus(Some(hwnd)).ok().log_err();
+                    if SetActiveWindow(hwnd).ok().is_none() {
+                        log::error!("SetActiveWindow failed to return a window handle");
+                    }
+                    if SetFocus(Some(hwnd)).ok().is_none() {
+                        log::error!("SetFocus failed to return a window handle");
+                    }
                 }
 
                 // premium ragebait by windows, this is needed because the window
@@ -993,7 +997,7 @@ impl gpui::SystemServices for WindowsWindow {
 
     fn play_system_bell(&self) {
         // MB_OK: The sound specified as the Windows Default Beep sound.
-        unsafe { MessageBeep(MB_OK).ok().log_err() };
+        unsafe { MessageBeep(MB_OK).log_err() };
     }
 }
 
