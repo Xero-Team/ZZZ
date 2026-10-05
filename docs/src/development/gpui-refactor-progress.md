@@ -21,7 +21,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 2/3/5/6/7 收敛                        |
+| 当前阶段                   | 阶段 4/6/7 收敛                            |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -345,7 +345,7 @@ desktop enablement `bdd5e7ee26`；focus mapping `863014f6a9`；Dialog/Status
 
 ### 阶段 3：真实 headless renderer
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（Windows runtime 为 `NOT RUN`）
 
 已完成：
 
@@ -362,26 +362,34 @@ desktop enablement `bdd5e7ee26`；focus mapping `863014f6a9`；Dialog/Status
 
 EXP-003 当前结果：
 
-| 检查                                                                                | 结果               | 证据                                                                                                                  |
-| ----------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| gpui-ce reference `headless_primitives`                                             | `FAIL (reference)` | 当前 RADV 主机 4 tests 中 3 passed；`smoothed_primitives_share_one_contour` pixel assertion failed；未放宽阈值        |
-| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer` | `PASS`             | hardware + fallback each 100 runs；`.tmp/gpui-refactor/phase-3/headless-renderer.log`                                 |
-| Hardware/fallback pixel comparison                                                  | `PASS`             | 54/20,000 differing pixels = 0.27%；max channel delta 1；≤0.5% threshold                                              |
-| Hardware pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/hardware.png`, SHA-256 `a153441213a6a9626d05669c516ec876a269b29d58af3d92bd0daeaf8362a658` |
-| Fallback pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/fallback.png`, SHA-256 `07be370bfc32685d553602de7e6d7a3394aa17d8a272b94e12912dad18cf1ab8` |
-| 1x/2x per-adapter pre/post-refactor golden                                          | `PASS`             | RADV 与 llvmpipe 各自 1x/2x hash 全部相同；artifacts in `.tmp/gpui-refactor/phase-3/{baseline,current}-1x-2x/`        |
-| `cargo test --locked -p gpui_wgpu --features test-support`                          | `PASS`             | 15 unit + 2 headless integration tests                                                                                |
-| `./script/clippy -p gpui_wgpu --features test-support`                              | `PASS`             | release/all-target checks + philosophy                                                                                |
-| `cargo test --locked -p gpui_platform --features test-support`                      | `PASS`             | platform factory returns real renderer on Linux                                                                       |
-| Windows hardware/software adapter runtime                                           | `NOT RUN`          | 当前主机无法执行；保留同一 test command 给 Windows QA                                                                 |
+| 检查                                                                                                       | 结果               | 证据                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| gpui-ce reference `headless_primitives`                                                                    | `FAIL (reference)` | 当前 RADV 主机 4 tests 中 3 passed；`smoothed_primitives_share_one_contour` pixel assertion failed；未放宽阈值        |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                        | `PASS`             | hardware + fallback each 100 runs；`.tmp/gpui-refactor/phase-3/headless-renderer.log`                                 |
+| Hardware/fallback pixel comparison                                                                         | `PASS`             | 54/20,000 differing pixels = 0.27%；max channel delta 1；≤0.5% threshold                                              |
+| Hardware pixel artifact                                                                                    | `PASS`             | `.tmp/gpui-refactor/phase-3/hardware.png`, SHA-256 `a153441213a6a9626d05669c516ec876a269b29d58af3d92bd0daeaf8362a658` |
+| Fallback pixel artifact                                                                                    | `PASS`             | `.tmp/gpui-refactor/phase-3/fallback.png`, SHA-256 `07be370bfc32685d553602de7e6d7a3394aa17d8a272b94e12912dad18cf1ab8` |
+| 1x/2x per-adapter pre/post-refactor golden                                                                 | `PASS`             | RADV 与 llvmpipe 各自 1x/2x hash 全部相同；artifacts in `.tmp/gpui-refactor/phase-3/{baseline,current}-1x-2x/`        |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                                 | `PASS`             | 15 unit + 2 headless integration tests                                                                                |
+| `./script/clippy -p gpui_wgpu --features test-support`                                                     | `PASS`             | release/all-target checks + philosophy                                                                                |
+| `cargo test --locked -p gpui_platform --features test-support`                                             | `PASS`             | platform factory returns real renderer on Linux                                                                       |
+| Windows `cargo check --locked -p gpui_wgpu --tests --target x86_64-pc-windows-gnu --features test-support` | `PASS`             | 同一 headless runner cross-compiles                                                                                   |
+| Windows hardware/software adapter runtime                                                                  | `NOT RUN`          | 当前主机无法执行；保留同一 test command 给 Windows QA                                                                 |
 
 一次 hardware-vs-llvmpipe 2x 比较得到 1.1375% 像素差异；该比较混合两个 adapter，
 不符合 EXP-003 的 per-platform baseline 定义，记录在
 `.tmp/gpui-refactor/phase-3/headless-1x-2x-comparison-repeats.log` 作为 `INVALID SAMPLE`，
 没有放宽 0.5% 阈值。正确的同 adapter、同 scale、pre/post-refactor 比较为 0 差异。
 
-当前仍待完成：Windows 同 corpus runtime 和 exact runbook。因此 EXP-003 在当前 Linux
-主机达标，阶段 3 保持 `IN PROGRESS`，不声称跨平台完成。
+EXP-003 在当前 Linux 主机达标。Windows runtime 需要目标主机，在 Windows PowerShell
+运行以下命令；测试会分别选择普通 adapter 与 `force_fallback_adapter`，各循环 100 次：
+
+```powershell
+cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer -- --nocapture
+```
+
+预期两个 tests 均通过，无 hang，并把同 adapter、同 scale 的输出与批准 baseline 比较。
+该 runtime 项标记 `NOT RUN`，不阻塞当前主机完成阶段 3。
 
 提交：renderer core `0347f6196e`；platform factory `b28b235a09`；1x/2x golden gate
 `aae393b8c4`。
@@ -519,7 +527,7 @@ completed-frame payload `8897cb326c`。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（Windows hardware runtime 为 `NOT RUN`）
 
 已完成的第一步：
 
@@ -555,6 +563,8 @@ completed-frame payload `8897cb326c`。
 | EXP-005 `release-fast` binary size                                                                                                  | `PASS` | file 5,339,438,400 vs 5,339,134,088 bytes（1.000057×）；ELF total 271,792,740 vs 271,657,972 bytes（1.000496×） |
 | `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`                                                      | `PASS` | 231 tests passed，含 submission-result contract 与 completed-frame diagnostics                                  |
 | `cargo test --locked -p gpui_wgpu --features test-support`                                                                          | `PASS` | 15 unit + hardware/fallback 各 100-run headless integration tests                                               |
+| Wayland/Vulkan `failed_frames_release_surface_images --ignored`                                                                     | `PASS` | 连续 8 次 acquire 后失败均释放 swapchain image，随后健康帧成功 present                                          |
+| Windows `cargo check --locked -p gpui_wgpu --tests --target x86_64-pc-windows-gnu --features test-support`                          | `PASS` | renderer/headless tests cross-compile                                                                           |
 | `./script/clippy -p gpui_wgpu --features test-support`                                                                              | `PASS` | WGPU all-target release clippy 与 philosophy gate 通过                                                          |
 | `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过                                                               |
 | `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error                                                                   |
@@ -571,8 +581,11 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 `.tmp/gpui-refactor/phase-5/exp004-recheck-{baseline,candidate}-{1,2,3}.log` 和
 `.tmp/gpui-refactor/phase-5/exp005-current-release-fast.log`。
 
-下一步：补齐 surface loss/recovery 的可执行验证；Windows hardware runtime 保留到外部
-平台 runbook。完成这两项前阶段 5 保持 `IN PROGRESS`。
+surface recovery test 首轮在第三次失败帧发现 swapchain image exhaustion；修复后失败路径
+会 drop acquired view/frame 并 reconfigure surface，8 次连续失败后健康帧成功 present。
+来源：gpui-ce `c6b17e616a35271183ab49f0da1890ee81953a99` 的
+`crates/gpui_wgpu/src/wgpu_renderer/surface_tests.rs`，Apache-2.0，按当前 renderer API
+改造。提交：`2d31da2bbd`。Windows hardware runtime 按阶段 3 runbook 标记 `NOT RUN`。
 
 ### 阶段 6：platform capability 与 lifecycle
 
@@ -597,7 +610,7 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
 - Linux X11、Wayland、headless、TestWindow、macOS、Windows 和 Web backend 均显式声明
-  capability matrix；未接 native AccessKit adapter 的平台统一声明 accessibility false。
+  capability matrix；桌面 adapter 启用 accessibility，headless/Web 明确 unsupported。
 - 新增 `TextInputBridge` supertrait，将 input handler ownership 与 IME candidate position
   从宽 `PlatformWindow` trait 抽离；所有 backend 已迁移，`PlatformWindow` 继续作为
   composite façade，因此现有调用语义和公开 surface 不变。
@@ -634,37 +647,37 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 
 | Backend               | Text input | IME position | Native prompt | Clipboard | Accessibility | System bell | Offscreen/headless window render | Frame callbacks | Window controls                                  |
 | --------------------- | ---------- | ------------ | ------------- | --------- | ------------- | ----------- | -------------------------------- | --------------- | ------------------------------------------------ |
-| TestWindow            | yes        | no           | yes           | R/W       | no            | no          | runtime renderer dependent       | yes             | fullscreen + move                                |
-| Linux X11             | yes        | yes          | rendered      | R/W       | no            | yes         | no                               | yes             | full desktop set                                 |
-| Linux Wayland         | yes        | yes          | rendered      | R/W       | no            | runtime     | no                               | yes             | compositor dependent + move/resize; no attention |
+| TestWindow            | yes        | no           | yes           | R/W       | feature       | no          | runtime renderer dependent       | yes             | fullscreen + move                                |
+| Linux X11             | yes        | yes          | rendered      | R/W       | yes           | yes         | no                               | yes             | full desktop set                                 |
+| Linux Wayland         | yes        | yes          | rendered      | R/W       | yes           | runtime     | no                               | yes             | compositor dependent + move/resize; no attention |
 | Linux headless window | no         | no           | rendered      | none      | no            | no          | no; scene is discarded           | no              | fullscreen state only                            |
-| macOS                 | yes        | yes          | native        | R/W       | no            | yes         | test-support only                | yes             | desktop set + move; no interactive resize        |
-| Windows               | yes        | yes          | native        | R/W       | no            | yes         | test-support only                | yes             | desktop set; no interactive move/resize          |
+| macOS                 | yes        | yes          | native        | R/W       | yes           | yes         | test-support only                | yes             | desktop set + move; no interactive resize        |
+| Windows               | yes        | yes          | native        | R/W       | yes           | yes         | test-support only                | yes             | desktop set; no interactive move/resize          |
 | Web                   | no         | no           | rendered      | write     | no            | no          | no                               | yes             | fullscreen only                                  |
 
 验证：
 
-| 命令或检查                                                                                   | 结果                        | 证据                                                        |
-| -------------------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------- |
-| `cargo check --locked -p gpui`                                                               | `PASS`                      | capability façade 编译通过                                  |
-| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                              |
-| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                         |
-| `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                     |
-| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 225 tests，含 `run_embedded` ownership                      |
-| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                    | `PASS`                      | macOS capability tests cross-compile                        |
-| `cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu`                | `BLOCKED`                   | 缺少 `x86_64-w64-mingw32-windres`；未进入 Rust test compile |
-| `RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown` | `PASS`                      | workaround for `wasm_thread` nightly-only feature           |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`               | `PASS`                      | 231 tests passed after render/capability changes            |
-| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 223 tests passed after platform splits                      |
-| `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                        |
-| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                    |
-| `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                      |
-| `cargo test --locked -p gpui_platform --features test-support`                               | `PASS`                      | renderer factory returns real Linux renderer                |
-| `./script/clippy -p gpui_platform --features test-support`                                   | `PASS`                      | renderer factory contract passes release clippy             |
-| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux                |
-| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过           |
-| `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过     |
-| `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error              |
+| 命令或检查                                                                                                                   | 结果                        | 证据                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                                                               | `PASS`                      | capability façade 编译通过                                |
+| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported`                                 | `PASS`                      | capability default test passed                            |
+| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                                                          | `PASS`                      | TestWindow capability matrix passed                       |
+| `cargo test --locked -p gpui_linux --lib capability_matrix`                                                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                   |
+| `cargo test --locked -p gpui --lib`                                                                                          | `PASS`                      | 225 tests，含 `run_embedded` ownership                    |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                                                    | `PASS`                      | macOS capability tests cross-compile                      |
+| `cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu --no-default-features --features accessibility` | `PASS`                      | capability/adapter tests cross-compile；runtime `NOT RUN` |
+| `RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown`                                 | `PASS`                      | workaround for `wasm_thread` nightly-only feature         |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`                                               | `PASS`                      | 231 tests passed after render/capability changes          |
+| `cargo test --locked -p gpui --lib`                                                                                          | `PASS`                      | 223 tests passed after platform splits                    |
+| `cargo test --locked -p gpui --lib input`                                                                                    | `PASS`                      | 2 pending-input/handler tests passed                      |
+| `cargo test --locked -p gpui --lib interactive`                                                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                  |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility`                                                   | `PASS`                      | semantic/action/bridge tests, 4 passed                    |
+| `cargo test --locked -p gpui_platform --features test-support`                                                               | `PASS`                      | renderer factory returns real Linux renderer              |
+| `./script/clippy -p gpui_platform --features test-support`                                                                   | `PASS`                      | renderer factory contract passes release clippy           |
+| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                                                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux              |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过         |
+| `./script/clippy -p gpui_linux`                                                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过   |
+| `git diff --check`                                                                                                           | `PASS`                      | platform capability change 无 whitespace error            |
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
