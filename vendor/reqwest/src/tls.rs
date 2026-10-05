@@ -53,6 +53,8 @@ use rustls::{
 };
 #[cfg(feature = "__rustls")]
 use rustls_pki_types::{ServerName, UnixTime};
+#[cfg(feature = "__tls")]
+use rustls_pki_types::pem::PemObject;
 use std::{
     fmt,
     io::{BufRead, BufReader},
@@ -228,7 +230,7 @@ impl Certificate {
     }
 
     fn read_pem_certs(reader: &mut impl BufRead) -> crate::Result<Vec<Vec<u8>>> {
-        rustls_pemfile::certs(reader)
+        rustls_pki_types::CertificateDer::pem_reader_iter(reader)
             .map(|result| match result {
                 Ok(cert) => Ok(cert.as_ref().to_vec()),
                 Err(_) => Err(crate::error::builder("invalid certificate encoding")),
@@ -339,7 +341,7 @@ impl Identity {
     /// This requires the `rustls-tls(-...)` Cargo feature enabled.
     #[cfg(feature = "__rustls")]
     pub fn from_pem(buf: &[u8]) -> crate::Result<Identity> {
-        use rustls_pemfile::Item;
+        use rustls_pki_types::{PrivateKeyDer, pem::SectionKind};
         use std::io::Cursor;
 
         let (key, certs) = {
@@ -347,20 +349,21 @@ impl Identity {
             let mut sk = Vec::<rustls_pki_types::PrivateKeyDer>::new();
             let mut certs = Vec::<rustls_pki_types::CertificateDer>::new();
 
-            for result in rustls_pemfile::read_all(&mut pem) {
-                match result {
-                    Ok(Item::X509Certificate(cert)) => certs.push(cert),
-                    Ok(Item::Pkcs1Key(key)) => sk.push(key.into()),
-                    Ok(Item::Pkcs8Key(key)) => sk.push(key.into()),
-                    Ok(Item::Sec1Key(key)) => sk.push(key.into()),
-                    Ok(_) => {
+            while let Some((kind, data)) =
+                rustls_pki_types::pem::from_buf(&mut pem).map_err(|_| {
+                    crate::error::builder(TLSError::General(String::from(
+                        "Invalid identity PEM file",
+                    )))
+                })?
+            {
+                match kind {
+                    SectionKind::Certificate => certs.push(data.into()),
+                    SectionKind::PrivateKey => sk.push(PrivateKeyDer::Pkcs8(data.into())),
+                    SectionKind::RsaPrivateKey => sk.push(PrivateKeyDer::Pkcs1(data.into())),
+                    SectionKind::EcPrivateKey => sk.push(PrivateKeyDer::Sec1(data.into())),
+                    _ => {
                         return Err(crate::error::builder(TLSError::General(String::from(
                             "No valid certificate was found",
-                        ))))
-                    }
-                    Err(_) => {
-                        return Err(crate::error::builder(TLSError::General(String::from(
-                            "Invalid identity PEM file",
                         ))))
                     }
                 }
@@ -442,7 +445,8 @@ impl CertificateRevocationList {
     pub fn from_pem(pem: &[u8]) -> crate::Result<CertificateRevocationList> {
         Ok(CertificateRevocationList {
             #[cfg(feature = "__rustls")]
-            inner: rustls_pki_types::CertificateRevocationListDer::from(pem.to_vec()),
+            inner: rustls_pki_types::CertificateRevocationListDer::from_pem_slice(pem)
+                .map_err(|_| crate::error::builder("invalid crl encoding"))?,
         })
     }
 
@@ -469,9 +473,7 @@ impl CertificateRevocationList {
     /// This requires the `rustls-tls(-...)` Cargo feature enabled.
     #[cfg(feature = "__rustls")]
     pub fn from_pem_bundle(pem_bundle: &[u8]) -> crate::Result<Vec<CertificateRevocationList>> {
-        let mut reader = BufReader::new(pem_bundle);
-
-        rustls_pemfile::crls(&mut reader)
+        rustls_pki_types::CertificateRevocationListDer::pem_slice_iter(pem_bundle)
             .map(|result| match result {
                 Ok(crl) => Ok(CertificateRevocationList { inner: crl }),
                 Err(_) => Err(crate::error::builder("invalid crl encoding")),

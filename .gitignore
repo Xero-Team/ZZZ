@@ -18,6 +18,7 @@
 .idea
 .netrc
 *.pyc
+*.cdx.json
 .pytest_cache
 .swiftpm
 .swiftpm/config/registries.json

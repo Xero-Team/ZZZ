@@ -18,7 +18,7 @@ test-support = []
 [dependencies]
 anyhow.workspace = true
 gpui.workspace = true
-merman = { version = "=0.8.0-alpha.7", default-features = false, features = [
+merman = { version = "=0.8.0", default-features = false, features = [
     "all-diagrams",
     "layout-cytoscape",
     "svg",

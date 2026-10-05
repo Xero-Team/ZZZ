@@ -713,7 +713,6 @@ reqwest = { path = "vendor/reqwest", default-features = false, features = [
     "socks",
     "stream",
 ], package = "zed-reqwest" }
-rsa = { version = "0.9.10", features = ["sha2"] }
 runtimelib = { version = "3.0.0", default-features = false, features = [
     "async-dispatcher-runtime", "aws-lc-rs"
 ] }
@@ -725,6 +724,7 @@ rustls-platform-verifier = "0.7.1"
 # Vendored from https://github.com/zed-industries/scap @ 4afea48c3b002197176fb19cd0f9b180dd36eaac
 scap = { path = "vendor/scap", default-features = false, package = "zed-scap" }
 schemars = { version = "1.2", features = ["indexmap2"] }
+skrifa = { version = "0.48", default-features = false, features = ["std"] }
 semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
 serde_json = { version = "1.0.151", features = ["preserve_order", "raw_value"] }
@@ -937,6 +937,10 @@ features = [
 
 [patch.crates-io]
 async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd71e4e94fbda54ce6302444de14f4d190e" }
+# citationberg 0.7.0 was published with quick-xml 0.38, which is affected by
+# RUSTSEC-2026-0194 and RUSTSEC-2026-0195. This upstream commit keeps the same
+# citationberg API and raises quick-xml to the patched 0.41 series.
+citationberg = { git = "https://github.com/typst/citationberg", rev = "8966cf7c178b38b621d297c9eb6d0bb81e14be5e" }
 # Vendored from https://github.com/zed-industries/notify @ ce58c24cad542c28e04ced02e20325a4ec28a31d
 notify = { path = "vendor/notify/notify" }
 notify-types = { path = "vendor/notify/notify-types" }

@@ -38,4 +38,3 @@ which.workspace = true
 tempfile.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-async-std = { version = "1.13.2", features = ["unstable"] }
