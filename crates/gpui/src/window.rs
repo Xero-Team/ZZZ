@@ -6355,6 +6355,65 @@ mod tests {
         )));
     }
 
+    #[gpui::test]
+    fn built_frame_projects_only_completed_read_only_state(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+
+            let expected_scene = &window.interaction.rendered_frame.scene;
+            let expected_hitbox_count = window.interaction.rendered_frame.hitboxes.len();
+            let expected_dispatch_node_count =
+                window.interaction.rendered_frame.dispatch_tree.len();
+            let expected_mouse_hitbox_count = window.interaction.mouse_hit_test.ids.len();
+            let expected_captured_hitbox = window.interaction.captured_hitbox;
+            let expected_focus = window.interaction.focus;
+            let expected_window_active = window.interaction.rendered_frame.window_active;
+            let expected_handler_count = window.text_input.rendered_handlers.len();
+            let expected_active_handler = window
+                .text_input
+                .rendered_handlers
+                .iter()
+                .rposition(Option::is_some);
+
+            let built_frame = window.interaction.built_frame(&window.text_input);
+            assert!(std::ptr::eq(built_frame.scene, expected_scene));
+            assert_eq!(
+                built_frame.interaction.hitboxes.len(),
+                expected_hitbox_count
+            );
+            assert_eq!(
+                built_frame.interaction.dispatch_tree.len(),
+                expected_dispatch_node_count
+            );
+            assert_eq!(
+                built_frame.interaction.mouse_hit_test.ids.len(),
+                expected_mouse_hitbox_count
+            );
+            assert_eq!(
+                built_frame.interaction.captured_hitbox,
+                expected_captured_hitbox
+            );
+            assert_eq!(built_frame.interaction.focus, expected_focus);
+            assert_eq!(
+                built_frame.interaction.window_active,
+                expected_window_active
+            );
+            assert_eq!(
+                built_frame.text_input.handler_slot_count,
+                expected_handler_count
+            );
+            assert_eq!(
+                built_frame.text_input.active_handler_index,
+                expected_active_handler
+            );
+        })
+        .expect("built-frame window should remain open");
+    }
+
     #[cfg(feature = "accessibility")]
     #[gpui::test]
     fn built_frame_carries_accessibility_update(cx: &mut TestAppContext) {

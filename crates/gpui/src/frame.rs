@@ -712,7 +712,12 @@ pub(crate) struct PaintIndex {
     pub(crate) line_layout_index: LineLayoutIndex,
 }
 
-/// Immutable view of the completed frame consumed by platform/rendering code.
+/// Immutable view of the completed frame consumed synchronously by platform/rendering code.
+///
+/// The scene and interaction collections are borrowed from the rendered frame instead of cloned.
+/// Holding this projection therefore prevents the owner from mutating or replaying that frame for
+/// the duration of submission. Owned payloads are copied out only where the platform may retain
+/// them, such as accessibility updates and diagnostics metadata.
 #[allow(
     dead_code,
     reason = "completed-frame projections are consumed incrementally by owners"
@@ -731,10 +736,12 @@ pub(crate) struct BuiltFrame<'a> {
     reason = "completed-frame projections are consumed incrementally by owners"
 )]
 pub(crate) struct InteractionSnapshot<'a> {
-    pub(crate) frame: &'a Frame,
+    pub(crate) hitboxes: &'a [Hitbox],
+    pub(crate) dispatch_tree: &'a DispatchTree,
     pub(crate) mouse_hit_test: &'a HitTest,
     pub(crate) captured_hitbox: Option<HitboxId>,
     pub(crate) focus: Option<FocusId>,
+    pub(crate) window_active: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -743,8 +750,8 @@ pub(crate) struct InteractionSnapshot<'a> {
     reason = "completed-frame projections are consumed incrementally by owners"
 )]
 pub(crate) struct TextInputSnapshot {
-    pub(crate) rendered_handler_count: usize,
-    pub(crate) next_handler_count: usize,
+    pub(crate) handler_slot_count: usize,
+    pub(crate) active_handler_index: Option<usize>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -784,14 +791,19 @@ impl<'a> BuiltFrame<'a> {
         Self {
             scene: &frame.scene,
             interaction: InteractionSnapshot {
-                frame,
+                hitboxes: &frame.hitboxes,
+                dispatch_tree: &frame.dispatch_tree,
                 mouse_hit_test,
                 captured_hitbox,
                 focus,
+                window_active: frame.window_active,
             },
             text_input: TextInputSnapshot {
-                rendered_handler_count: text_input.rendered_handlers.len(),
-                next_handler_count: text_input.next_handlers.len(),
+                handler_slot_count: text_input.rendered_handlers.len(),
+                active_handler_index: text_input
+                    .rendered_handlers
+                    .iter()
+                    .rposition(Option::is_some),
             },
             accessibility: frame.accessibility.clone(),
             diagnostics: frame.diagnostics,
