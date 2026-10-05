@@ -62,7 +62,8 @@ export ZZZ_BUNDLE=true
 
 cargo_bundle_version=$(cargo -q bundle --help 2>&1 | head -n 1 || echo "")
 if [ "$cargo_bundle_version" != "cargo-bundle v0.6.1-zed" ]; then
-    cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
+    echo "Error: cargo-bundle v0.6.1-zed is required; install the pinned tool in the development environment." >&2
+    exit 1
 fi
 
 # Deal with versions of macOS that don't include libstdc++ headers
@@ -117,8 +118,8 @@ if [[ "$target_dir" != "debug" || "${ZZZ_EMBED_REMOTE_SERVERS:-}" == "1" ]]; the
         exit 1
     fi
     if ! command -v cargo-zigbuild >/dev/null 2>&1; then
-        echo "Installing cargo-zigbuild for Linux remote_server cross-compilation"
-        cargo install --locked cargo-zigbuild
+        echo "Error: cargo-zigbuild is required; install the pinned tool in the development environment." >&2
+        exit 1
     fi
 
     export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
@@ -234,11 +235,14 @@ fi
 
 GIT_VERSION="v2.43.3"
 GIT_VERSION_SHA="fa29823"
+GIT_ARM64_SHA256="f014b290f36d121bbc47b29b556044c4f6a2f6494cf78ed2eacfa501b77363b6"
+GIT_X64_SHA256="02fb29a47a07e9a7f841888661f32ebc80a56930864dd19b674d80ffc429c96d"
 
 function download_and_unpack() {
     local url=$1
     local path_to_unpack=$2
     local target_path=$3
+    local expected_sha256=$4
 
     temp_dir=$(mktemp -d)
 
@@ -247,7 +251,19 @@ function download_and_unpack() {
         exit 1
     fi
 
-    curl --silent --fail --location "$url" | tar -xvz -C "$temp_dir" -f - $path_to_unpack
+    archive_path="$temp_dir/archive.tar.gz"
+    curl --silent --fail --location --retry 3 --retry-all-errors -o "$archive_path" "$url"
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual_sha256="$(sha256sum "$archive_path" | cut -d ' ' -f 1)"
+    else
+        actual_sha256="$(shasum -a 256 "$archive_path" | cut -d ' ' -f 1)"
+    fi
+    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+        echo "Downloaded archive checksum mismatch: expected $expected_sha256, got $actual_sha256" >&2
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+    tar -xzf "$archive_path" -C "$temp_dir" "$path_to_unpack"
 
     mv "$temp_dir/$path_to_unpack" "$target_path"
 
@@ -263,10 +279,10 @@ function download_git() {
 
     case "$architecture" in
         aarch64-apple-darwin)
-            download_and_unpack "https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-arm64.tar.gz" bin/git ./git
+            download_and_unpack "https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-arm64.tar.gz" bin/git ./git "$GIT_ARM64_SHA256"
             ;;
         x86_64-apple-darwin)
-            download_and_unpack "https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-x64.tar.gz" bin/git ./git
+            download_and_unpack "https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-x64.tar.gz" bin/git ./git "$GIT_X64_SHA256"
             ;;
         *)
             echo "Unsupported architecture: $architecture"
@@ -359,7 +375,10 @@ function sign_app_binaries() {
         rm ${dmg_source_directory}/Applications
 
         echo "Adding license agreement to DMG"
-        npm install --global dmg-license minimist
+        if ! command -v dmg-license >/dev/null 2>&1; then
+            echo "Error: dmg-license is required; install the pinned packaging tools in the development environment." >&2
+            exit 1
+        fi
         dmg-license script/terms/terms.json "${dmg_file_path}"
 
         if [[ $can_code_sign = true ]]; then

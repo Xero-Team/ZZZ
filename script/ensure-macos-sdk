@@ -22,6 +22,7 @@ fi
 tmp="${TMPDIR:-/tmp}"
 sdk_root="$tmp/zzz-macos-sdk"
 sdk_path="$sdk_root/MacOSX11.3.sdk"
+sdk_sha256="cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4"
 if sdk_ok "$sdk_path"; then
   printf '%s\n' "$sdk_path"
   exit 0
@@ -31,6 +32,16 @@ mkdir -p "$sdk_root"
 tarball="$tmp/zzz-MacOSX11.3.sdk.tar.xz.$$"
 curl -fL --retry 3 -o "$tarball" \
   "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz"
+if command -v shasum >/dev/null 2>&1; then
+  actual_sha256="$(shasum -a 256 "$tarball" | cut -d ' ' -f 1)"
+else
+  actual_sha256="$(sha256sum "$tarball" | cut -d ' ' -f 1)"
+fi
+if [[ "$actual_sha256" != "$sdk_sha256" ]]; then
+  echo "MacOSX11.3 SDK checksum mismatch: expected $sdk_sha256, got $actual_sha256" >&2
+  rm -f "$tarball"
+  exit 1
+fi
 tar -xJf "$tarball" -C "$sdk_root"
 rm -f "$tarball"
 sdk_ok "$sdk_path"

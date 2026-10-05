@@ -446,8 +446,15 @@ function DownloadAMDGpuServices {
     # If you update the AGS SDK version, please also update the version in `crates/gpui/src/platform/windows/directx_renderer.rs`
     $url = "https://codeload.github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/zip/refs/tags/v6.3.0"
     $zipPath = ".\AGS_SDK_v6.3.0.zip"
-    # Download the AGS SDK zip file
-    Invoke-WebRequest -Uri $url -OutFile $zipPath
+    $partialPath = "$zipPath.part"
+    Invoke-WebRequest -Uri $url -OutFile $partialPath
+    $expectedHash = '292c5ce0c7f51d44a1e56f2a73d82f1e7304bb14d2b8e39a05708877210de884'
+    $actualHash = (Get-FileHash -Path $partialPath -Algorithm SHA256).Hash
+    if ($actualHash -ne $expectedHash.ToUpperInvariant()) {
+        Remove-Item -Path $partialPath -Force -ErrorAction SilentlyContinue
+        throw "AGS SDK checksum mismatch: expected $expectedHash, got $actualHash"
+    }
+    Move-Item -Path $partialPath -Destination $zipPath -Force
     # Extract the AGS SDK zip file
     Expand-Archive -Path $zipPath -DestinationPath "." -Force
 }
@@ -456,7 +463,15 @@ function DownloadConpty {
     # TODO: Switch back to the stable channel once Microsoft finally decides to publish v1.26
     $url = "https://github.com/microsoft/terminal/releases/download/v1.25.1912.0/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg"
     $zipPath = ".\Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg"
-    Invoke-WebRequest -Uri $url -OutFile $zipPath
+    $partialPath = "$zipPath.part"
+    Invoke-WebRequest -Uri $url -OutFile $partialPath
+    $expectedHash = '05fe9b571ea4fb198f5012405cb39a132cf23eee50feaa496524c149b2502692'
+    $actualHash = (Get-FileHash -Path $partialPath -Algorithm SHA256).Hash
+    if ($actualHash -ne $expectedHash.ToUpperInvariant()) {
+        Remove-Item -Path $partialPath -Force -ErrorAction SilentlyContinue
+        throw "ConPTY checksum mismatch: expected $expectedHash, got $actualHash"
+    }
+    Move-Item -Path $partialPath -Destination $zipPath -Force
     Expand-Archive -Path $zipPath -DestinationPath ".\conpty" -Force
 }
 

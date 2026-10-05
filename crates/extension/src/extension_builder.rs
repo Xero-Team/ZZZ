@@ -4,11 +4,12 @@ use crate::{
 };
 use ::fs::Fs;
 use anyhow::{Context as _, Result, bail};
-use futures::{StreamExt, io};
+use futures::{AsyncReadExt as _, AsyncWriteExt as _, StreamExt, io};
 use heck::ToSnakeCase;
 use http_client::{self, AsyncBody, HttpClient};
 use language::LanguageConfig;
 use serde::Deserialize;
+use sha2::{Digest as _, Sha256};
 use std::{
     env, fs, mem,
     path::{Path, PathBuf},
@@ -37,6 +38,20 @@ const WASI_SDK_PLATFORM: Option<&str> = cfg_select! {
     all(target_os = "windows", target_arch = "aarch64") => Some("arm64-windows"),
     _ => None
 };
+
+fn wasi_sdk_sha256(platform: &str) -> Option<&'static str> {
+    match platform {
+        "x86_64-linux" => Some("b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4"),
+        "arm64-linux" => Some("f7e243dff54d60bcc576e94d6166b69f410f2500ae4a9ceef34315be10e77971"),
+        "x86_64-macos" => Some("87d27fa8adc68dee59bfbf2e22a6d34ef717c34d6bf1d8af2a56fc929d9ce0eb"),
+        "arm64-macos" => Some("9c59398106b417f8f14913380fdf0097a8cc0ff4af9eb3ce0065a859e88d49e9"),
+        "x86_64-windows" => {
+            Some("cccb5c323a9b34f0349a9b09e8804a0a7632c68c3310f4b5f437ed57d7e71d8f")
+        }
+        "arm64-windows" => Some("45e1c71f3e965621e7b98ebe1d37b0e4b1f77f3e8072113ffb4534e67b1a4b7c"),
+        _ => None,
+    }
+}
 
 pub struct ExtensionBuilder {
     cache_dir: PathBuf,
@@ -413,7 +428,18 @@ impl ExtensionBuilder {
         {
             Ok(()) => Ok(clang_path),
             Err(error) => {
-                if fs::metadata(&clang_path).is_ok_and(|metadata| metadata.is_file()) {
+                let cache_hash_matches =
+                    WASI_SDK_PLATFORM
+                        .and_then(wasi_sdk_sha256)
+                        .is_some_and(|expected| {
+                            fs::read_to_string(wasi_sdk_dir.join(".zzz-wasi-sdk.sha256"))
+                                .is_ok_and(|actual| actual.trim() == expected)
+                        });
+                if cache_hash_matches
+                    && installed_wasi_sdk_version(&wasi_sdk_dir)
+                        == Some(format!("{WASI_SDK_VERSION}.0"))
+                    && fs::metadata(&clang_path).is_ok_and(|metadata| metadata.is_file())
+                {
                     let installed_version = installed_wasi_sdk_version(&wasi_sdk_dir)
                         .unwrap_or_else(|| "unknown".to_string());
                     log::warn!(
@@ -433,15 +459,20 @@ impl ExtensionBuilder {
         wasi_sdk_dir: &Path,
         clang_path: &Path,
     ) -> Result<()> {
+        let platform = WASI_SDK_PLATFORM.with_context(|| {
+            format!("wasi-sdk is not available for platform {}", env::consts::OS)
+        })?;
+        let expected_sha256 = wasi_sdk_sha256(platform)
+            .with_context(|| format!("missing checksum for wasi-sdk platform {platform}"))?;
+        let cache_hash_matches = fs::read_to_string(wasi_sdk_dir.join(".zzz-wasi-sdk.sha256"))
+            .is_ok_and(|actual| actual.trim() == expected_sha256);
         if installed_wasi_sdk_version(wasi_sdk_dir) == Some(format!("{WASI_SDK_VERSION}.0"))
+            && cache_hash_matches
             && fs::metadata(clang_path).is_ok_and(|metadata| metadata.is_file())
         {
             return Ok(());
         }
 
-        let platform = WASI_SDK_PLATFORM.with_context(|| {
-            format!("wasi-sdk is not available for platform {}", env::consts::OS)
-        })?;
         let url = format!(
             "{WASI_SDK_URL}wasi-sdk-{WASI_SDK_VERSION}/wasi-sdk-{WASI_SDK_VERSION}.0-{platform}.tar.gz"
         );
@@ -469,10 +500,29 @@ impl ExtensionBuilder {
         let response_body = response.body_mut();
 
         let mut async_file = io::AllowStdIo::new(tar_gz_file);
-        io::copy(response_body, &mut async_file)
-            .await
-            .context("failed to stream response to file")?;
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0_u8; 64 * 1024];
+        loop {
+            let bytes_read = response_body
+                .read(&mut buffer)
+                .await
+                .context("failed to read wasi-sdk response")?;
+            if bytes_read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..bytes_read]);
+            async_file
+                .write_all(&buffer[..bytes_read])
+                .await
+                .context("failed to write wasi-sdk archive")?;
+        }
         drop(async_file);
+
+        let actual_sha256 = hex::encode(hasher.finalize());
+        if actual_sha256 != expected_sha256 {
+            let _ = fs::remove_file(&tar_gz_path);
+            bail!("wasi-sdk checksum mismatch: expected {expected_sha256}, got {actual_sha256}");
+        }
 
         log::info!("un-tarring wasi-sdk to {}", tar_out_dir.display());
 
@@ -516,6 +566,8 @@ impl ExtensionBuilder {
             Err(error) => return Err(error).context("failed to remove outdated wasi-sdk"),
         }
         fs::rename(&inner_dir, wasi_sdk_dir).context("failed to move extracted wasi dir")?;
+        fs::write(wasi_sdk_dir.join(".zzz-wasi-sdk.sha256"), expected_sha256)
+            .context("failed to write wasi-sdk checksum marker")?;
         if let Err(error) = fs::remove_dir_all(&tar_out_dir)
             && error.kind() != std::io::ErrorKind::NotFound
         {

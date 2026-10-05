@@ -16,6 +16,8 @@ Options:
   -h, --help     Display this help and exit.
   --flatpak      Set ZZZ_BUNDLE_TYPE=flatpak so that this can be included in system info
   --native       Build the local app with the linux-native profile and target-cpu=native
+  --deb          Also generate a Debian package with cargo-deb
+  --rpm          Also generate an RPM package with cargo-generate-rpm
 
 Environment:
   ZZZ_PGO_GENERATE_DIR=/abs/dir   Build host binaries with PGO instrumentation into this directory
@@ -24,11 +26,17 @@ Environment:
   ZZZ_BOLT_INSTRUMENT_FILE=/abs/file  Build an instrumented host binary that writes BOLT .fdata here
   ZZZ_BOLT_PERF=/abs/file         Build host binary, then optimize it with BOLT using this perf.data
   ZZZ_BOLT_FDATA=/abs/file        Build host binary, then optimize it with BOLT using this .fdata
+  ZZZ_BUILD_JOBS=<n>              Number of parallel Cargo jobs (defaults to host CPU count)
+  ZZZ_CROSS_BUILD_JOBS=<n>        Jobs per optional cross-target build (defaults to half)
+  ZZZ_CARGO_DEB_VERSION=3.8.0     Required cargo-deb version when --deb is used
+  ZZZ_CARGO_GENERATE_RPM_VERSION=0.21.0  Required cargo-generate-rpm version when --rpm is used
   "
 }
 
 host_build_profile=release
 host_build_native=false
+package_deb=false
+package_rpm=false
 
 # Parse all arguments manually
 while [[ $# -gt 0 ]]; do
@@ -44,6 +52,14 @@ while [[ $# -gt 0 ]]; do
         --native)
             host_build_profile=linux-native
             host_build_native=true
+            shift
+            ;;
+        --deb)
+            package_deb=true
+            shift
+            ;;
+        --rpm)
+            package_rpm=true
             shift
             ;;
         --)
@@ -63,8 +79,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-cargo xtask grammars generate
-
 export ZZZ_BUNDLE=true
 
 channel=$(<crates/zzz/RELEASE_CHANNEL)
@@ -79,11 +93,50 @@ bolt_instrument_file="${ZZZ_BOLT_INSTRUMENT_FILE:-}"
 bolt_perf="${ZZZ_BOLT_PERF:-}"
 bolt_fdata="${ZZZ_BOLT_FDATA:-}"
 
+if [[ -z "${CARGO_BUILD_JOBS:-}" ]]; then
+    if command -v getconf >/dev/null 2>&1; then
+        CARGO_BUILD_JOBS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+    elif command -v nproc >/dev/null 2>&1; then
+        CARGO_BUILD_JOBS="$(nproc)"
+    fi
+    CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
+    export CARGO_BUILD_JOBS
+fi
+cross_build_jobs="${ZZZ_CROSS_BUILD_JOBS:-$(( (CARGO_BUILD_JOBS + 1) / 2 ))}"
+
+case "$channel" in
+    stable|preview|nightly|dev) package_variant="$channel" ;;
+    *) package_variant=dev ;;
+esac
+
+if [[ "$package_deb" == true ]] && ! command -v cargo-deb >/dev/null 2>&1; then
+    echo "Error: --deb requires cargo-deb on PATH; install it before running bundle-linux." >&2
+    exit 1
+fi
+if [[ "$package_deb" == true ]]; then
+    cargo_deb_version="${ZZZ_CARGO_DEB_VERSION:-3.8.0}"
+    if [[ "$(cargo-deb --version | awk '{print $2}')" != "$cargo_deb_version" ]]; then
+        echo "Error: cargo-deb ${cargo_deb_version} is required." >&2
+        exit 1
+    fi
+fi
+if [[ "$package_rpm" == true ]] && ! command -v cargo-generate-rpm >/dev/null 2>&1; then
+    echo "Error: --rpm requires cargo-generate-rpm on PATH; install it before running bundle-linux." >&2
+    exit 1
+fi
+if [[ "$package_rpm" == true ]]; then
+    cargo_generate_rpm_version="${ZZZ_CARGO_GENERATE_RPM_VERSION:-0.21.0}"
+    if [[ "$(cargo-generate-rpm --version | awk '{print $2}')" != "$cargo_generate_rpm_version" ]]; then
+        echo "Error: cargo-generate-rpm ${cargo_generate_rpm_version} is required." >&2
+        exit 1
+    fi
+fi
+
+cargo xtask grammars generate
+
 version="$(script/get-crate-version zzz)"
 # Set RELEASE_VERSION so it's compiled into GPUI and it knows about the version.
 export RELEASE_VERSION="${version}"
-
-commit=$(git rev-parse HEAD | cut -c 1-7)
 
 version_info=$(rustc --version --verbose)
 host_line=$(echo "$version_info" | grep host)
@@ -94,6 +147,17 @@ rustup_installed=false
 if command -v rustup >/dev/null 2>&1; then
     rustup_installed=true
 fi
+
+rust_target_is_installed() {
+    if [[ "$rustup_installed" == true ]]; then
+        rustup target list --installed | grep -qx "$1"
+    else
+        # Non-rustup toolchains may provide targets through their own
+        # installation mechanism. Cargo will report a useful linker error if
+        # the target is unavailable.
+        return 0
+    fi
+}
 
 if [[ -n "${pgo_generate_dir}" && -n "${pgo_profile}" ]]; then
     echo "Error: ZZZ_PGO_GENERATE_DIR and ZZZ_PGO_PROFILE are mutually exclusive" >&2
@@ -184,8 +248,9 @@ fi
 # Generate the licenses first, so they can be baked into the binaries
 script/generate-licenses
 
-if "$rustup_installed"; then
-    rustup target add "$remote_server_triple"
+if ! rust_target_is_installed "$remote_server_triple"; then
+    echo "Error: Rust target ${remote_server_triple} is not installed; install it before building." >&2
+    exit 1
 fi
 
 export CC=${CC:-$(which clang)}
@@ -224,6 +289,20 @@ fi
 
 # Build remote_server archives before the editor so they can be embedded.
 mkdir -p "${target_dir}"
+optional_remote_pids=()
+
+wait_for_optional_remote_builds() {
+    local status=0
+    local pid
+    for pid in "${optional_remote_pids[@]}"; do
+        if ! wait "$pid"; then
+            status=1
+        fi
+    done
+    optional_remote_pids=()
+    return "$status"
+}
+
 remote_rustflags="${base_rustflags}"
 if [[ "$remote_server_triple" == "$musl_triple" ]]; then
     remote_rustflags="${remote_rustflags} -C target-feature=+crt-static"
@@ -253,40 +332,48 @@ gzip -f --stdout --best "${remote_artifact_dir}/remote_server" \
 if [[ "$remote_server_triple" != "aarch64-unknown-linux-musl" ]] \
     && command -v zig >/dev/null 2>&1 \
     && command -v cargo-zigbuild >/dev/null 2>&1; then
-    if "$rustup_installed"; then
-        rustup target add aarch64-unknown-linux-musl || true
-    fi
-    export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
-    export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
-    mkdir -p "${ZIG_LOCAL_CACHE_DIR}"
-    rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/build"/aws-lc-sys-*
-    rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/.fingerprint"/aws-lc-sys-*
-    rm -f "${target_dir}/aarch64-unknown-linux-musl/release/deps"/libaws_lc*
-    # rustc passes `-O1` to the linker on optimized builds; Zig's cc wrapper
-    # reports it as a deprecated setting (rust-lang/rust#158192), so allow the
-    # resulting false-positive linker message.
-    if RUSTFLAGS="${RUSTFLAGS} -A linker_messages" cargo zigbuild --release --target aarch64-unknown-linux-musl --package remote_server; then
-        gzip -f --stdout --best "${target_dir}/aarch64-unknown-linux-musl/release/remote_server" \
-            > "${target_dir}/zzz-remote-server-linux-aarch64.gz"
+    if ! rust_target_is_installed aarch64-unknown-linux-musl; then
+        echo "Info: skipped aarch64 remote_server embed; Rust target is not installed."
     else
-        echo "Info: skipped aarch64 remote_server embed; zigbuild failed."
+        export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+        aarch64_zig_local_cache_dir="${ZIG_GLOBAL_CACHE_DIR}/aarch64-unknown-linux-musl"
+        mkdir -p "$aarch64_zig_local_cache_dir"
+        rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/build"/aws-lc-sys-*
+        rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/.fingerprint"/aws-lc-sys-*
+        rm -f "${target_dir}/aarch64-unknown-linux-musl/release/deps"/libaws_lc*
+        # rustc passes `-O1` to the linker on optimized builds; Zig's cc wrapper
+        # reports it as a deprecated setting (rust-lang/rust#158192), so allow the
+        # resulting false-positive linker message.
+        (
+            if ZIG_LOCAL_CACHE_DIR="$aarch64_zig_local_cache_dir" \
+                CARGO_BUILD_JOBS="$cross_build_jobs" \
+                RUSTFLAGS="${RUSTFLAGS} -A linker_messages" \
+                cargo zigbuild --release --target aarch64-unknown-linux-musl --package remote_server; then
+                gzip -f --stdout --best "${target_dir}/aarch64-unknown-linux-musl/release/remote_server" \
+                    > "${target_dir}/zzz-remote-server-linux-aarch64.gz"
+            else
+                echo "Info: skipped aarch64 remote_server embed; zigbuild failed."
+            fi
+        ) &
+        optional_remote_pids+=("$!")
     fi
 fi
 
 build_macos_remote_server() {
     local macos_triple="$1"
     local macos_arch="$2"
-    if "$rustup_installed"; then
-        if ! rustup target add "$macos_triple"; then
-            echo "Info: skipped ${macos_triple} remote_server embed; rustup target installation failed."
-            return 0
-        fi
+    if ! rust_target_is_installed "$macos_triple"; then
+        echo "Info: skipped ${macos_triple} remote_server embed; Rust target is not installed."
+        return 0
     fi
     rm -rf "${target_dir}/${macos_triple}/release/build"/aws-lc-sys-*
     rm -rf "${target_dir}/${macos_triple}/release/.fingerprint"/aws-lc-sys-*
     rm -f "${target_dir}/${macos_triple}/release/deps"/libaws_lc*
     echo "Compiling remote_server for ${macos_triple}"
-    if cargo zigbuild --release --package remote_server \
+    local zig_local_cache_dir="${ZIG_GLOBAL_CACHE_DIR}/${macos_triple}"
+    mkdir -p "$zig_local_cache_dir"
+    if ZIG_LOCAL_CACHE_DIR="$zig_local_cache_dir" CARGO_BUILD_JOBS="$cross_build_jobs" \
+        cargo zigbuild --release --package remote_server \
         --target-dir "${target_dir}" --target "$macos_triple"; then
         gzip -f --stdout --best "${target_dir}/${macos_triple}/release/remote_server" \
             > "${target_dir}/zzz-remote-server-macos-${macos_arch}.gz"
@@ -297,8 +384,7 @@ build_macos_remote_server() {
 
 if command -v zig >/dev/null 2>&1 && command -v cargo-zigbuild >/dev/null 2>&1; then
     export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
-    export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
-    mkdir -p "${ZIG_LOCAL_CACHE_DIR}"
+    mkdir -p "${ZIG_GLOBAL_CACHE_DIR}"
 
     saved_cxxflags="${CXXFLAGS:-}"
     saved_sdkroot="${SDKROOT:-}"
@@ -307,8 +393,10 @@ if command -v zig >/dev/null 2>&1 && command -v cargo-zigbuild >/dev/null 2>&1; 
     if macos_sdkroot="$(script/ensure-macos-sdk)"; then
         export SDKROOT="${macos_sdkroot}"
         export RUSTFLAGS="${base_rustflags} -A linker_messages"
-        build_macos_remote_server x86_64-apple-darwin x86_64
-        build_macos_remote_server aarch64-apple-darwin aarch64
+        build_macos_remote_server x86_64-apple-darwin x86_64 &
+        optional_remote_pids+=("$!")
+        build_macos_remote_server aarch64-apple-darwin aarch64 &
+        optional_remote_pids+=("$!")
     else
         echo "Info: skipped macOS remote_server embeds; macOS SDK preparation failed."
     fi
@@ -328,9 +416,11 @@ if command -v zig >/dev/null 2>&1 && command -v cargo-zigbuild >/dev/null 2>&1; 
         unset RUSTFLAGS
     fi
 fi
+wait_for_optional_remote_builds
 unset ZZZ_BUILDING_REMOTE_SERVER
 
-export ZZZ_EMBED_REMOTE_SERVER_DIR="$(cd "${target_dir}" && pwd)"
+zzz_embed_remote_server_dir="$(cd "${target_dir}" && pwd)"
+export ZZZ_EMBED_REMOTE_SERVER_DIR="$zzz_embed_remote_server_dir"
 export RUSTFLAGS="${host_rustflags}"
 # Force libz-sys to build its vendored zlib for the bundled host app. Its build
 # script tracks this variable, so Cargo rebuilds it when the link mode changes.
@@ -490,9 +580,39 @@ cp "assets/licenses.md" "${zzz_dir}/licenses.md"
 arch=$(uname -m)
 archive="zzz-linux-${arch}.tar.gz"
 
-rm -rf "${archive}"
-remove_match="zzz(-[a-zA-Z0-9]+)?-linux-$(uname -m)\.tar\.gz"
-ls "${bundle_artifact_dir}" | grep -E ${remove_match} | xargs -d "\n" -I {} rm -f "${bundle_artifact_dir}/{}" || true
-tar -czvf "${bundle_artifact_dir}/$archive" -C ${temp_dir} "zzz$suffix.app"
+shopt -s nullglob
+old_archives=("${bundle_artifact_dir}"/zzz*-linux-"${arch}".tar.gz)
+shopt -u nullglob
+if [[ "${#old_archives[@]}" -gt 0 ]]; then
+    rm -f -- "${old_archives[@]}"
+fi
+tar -czvf "${bundle_artifact_dir}/$archive" -C "${temp_dir}" "zzz$suffix.app"
 
 gzip -f --stdout --best "${remote_artifact_dir}/remote_server" > "${target_dir}/zzz-remote-server-linux-${arch}.gz"
+
+if [[ "$package_deb" == true || "$package_rpm" == true ]]; then
+    package_assets_dir="${bundle_artifact_dir}/package-assets"
+    rm -rf "$package_assets_dir"
+    mkdir -p "$package_assets_dir"
+
+    # Cargo-deb and cargo-generate-rpm treat target/release as a logical path
+    # and rewrite it for custom profiles and target directories. Keep the
+    # metadata stable while staging channel-specific generated assets here.
+    cp "${zzz_dir}/share/applications/${APP_ID}.desktop" "$package_assets_dir/zzz.desktop"
+    cp "${zzz_dir}/share/icons/hicolor/512x512/apps/zzz.png" "$package_assets_dir/zzz.png"
+    cp "${zzz_dir}/share/icons/hicolor/1024x1024@2x/apps/zzz.png" "$package_assets_dir/zzz@2x.png"
+    cp "assets/licenses.md" "$package_assets_dir/licenses.md"
+    cp "${zzz_dir}/FFmpeg-LICENSE.txt" "$package_assets_dir/FFmpeg-LICENSE.txt"
+
+    if [[ "$package_deb" == true ]]; then
+        cargo deb --locked --no-build --package zzz --profile "$host_build_profile" \
+            --variant "$package_variant" \
+            --output "${bundle_artifact_dir}/zzz-${package_variant}-linux-${arch}.deb"
+    fi
+
+    if [[ "$package_rpm" == true ]]; then
+        cargo generate-rpm --package crates/zzz --profile "$host_build_profile" \
+            --variant "$package_variant" \
+            --output "${bundle_artifact_dir}/zzz-${package_variant}-linux-${arch}.rpm"
+    fi
+fi

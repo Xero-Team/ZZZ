@@ -38,9 +38,17 @@ install_sccache() {
         esac
 
         basename="${archive%.tar.gz}"
-        curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}" | tar xz
+        archive_path="${SCCACHE_DIR}/${archive}"
+        checksum_path="${archive_path}.sha256"
+        curl --fail --location --retry 3 --retry-all-errors -o "${archive_path}" \
+            "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}"
+        curl --fail --location --retry 3 --retry-all-errors -o "${checksum_path}" \
+            "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}.sha256"
+        (cd "${SCCACHE_DIR}" && sha256sum -c "${archive}.sha256")
+        tar -xzf "${archive_path}" -C "${SCCACHE_DIR}"
         mv "${basename}/sccache" "${SCCACHE_DIR}/"
         rm -rf "${basename}"
+        rm -f "${archive_path}" "${checksum_path}"
         echo "Installed sccache: $("${SCCACHE_DIR}/sccache" --version)"
     fi
 

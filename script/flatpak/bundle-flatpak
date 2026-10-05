@@ -4,7 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 shopt -s extglob
 
-script/bundle-linux --flatpak
+if [[ "${ZZZ_SKIP_BUNDLE:-}" != "1" ]]; then
+    script/bundle-linux --flatpak
+fi
 archive_match="zzz(-[a-zA-Z0-9]+)?-linux-$(uname -m)\.tar\.gz"
 archive=$(ls "target/release" | grep -E ${archive_match})
 channel=$(<crates/zzz/RELEASE_CHANNEL)

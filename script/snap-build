@@ -7,6 +7,18 @@ if [ "$#" -ne 1 ]; then
   exit 1
 fi
 
+workspace_root="$(pwd)"
+if [[ -z "${ZZZ_SNAP_ARCHIVE:-}" ]]; then
+  script/bundle-linux
+  snap_arch="$(uname -m)"
+  ZZZ_SNAP_ARCHIVE="${workspace_root}/target/release/zzz-linux-${snap_arch}.tar.gz"
+fi
+if [[ ! -f "$ZZZ_SNAP_ARCHIVE" ]]; then
+  echo "Snap source archive not found: $ZZZ_SNAP_ARCHIVE" >&2
+  echo "Build one with script/bundle-linux or set ZZZ_SNAP_ARCHIVE." >&2
+  exit 1
+fi
+
 mkdir -p snap/gui
 
 export DO_STARTUP_NOTIFY="true"
@@ -17,7 +29,7 @@ export APP_ARGS="%U"
 envsubst < "crates/zzz/resources/zzz.desktop.in" > "snap/gui/zzz.desktop"
 cp "crates/zzz/resources/app-icon.png" "snap/gui/zzz.png"
 
-RELEASE_VERSION="$1" envsubst < crates/zzz/resources/snap/snapcraft.yaml.in > snap/snapcraft.yaml
+RELEASE_VERSION="$1" SNAP_ARCHIVE="$ZZZ_SNAP_ARCHIVE" envsubst < crates/zzz/resources/snap/snapcraft.yaml.in > snap/snapcraft.yaml
 
 # Clean seems to be needed to actually check that the snapcraft.yaml
 # works.  For example, when a `stage-package` is removed, it will

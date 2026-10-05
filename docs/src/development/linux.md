@@ -53,6 +53,21 @@ You can install a local build on your machine with:
 
 This builds `~/.local/bin/zzz` and the `cli` in release mode, installs the binary at `~/.local/bin/zzz`, and installs `.desktop` files to `~/.local/share`.
 
+To create distribution packages from the same build, install the packaging
+tools first and pass one or both options to the bundle script:
+
+```sh
+cargo install cargo-deb --version 3.8.0 --locked
+cargo install cargo-generate-rpm --version 0.21.0 --locked
+script/bundle-linux --deb --rpm
+```
+
+The generated packages are written to `target/release/` (or the selected
+profile directory). `--deb` uses `cargo-deb` and `--rpm` uses
+`cargo-generate-rpm`; neither option rebuilds the Rust binaries. Set
+`ZZZ_BUILD_JOBS` to override the number of parallel Cargo jobs, or
+`ZZZ_CROSS_BUILD_JOBS` to limit each optional cross-target build.
+
 The release bundle downloads a pinned LGPL FFmpeg package into
 `.deps/ffmpeg/<target-triple>` and includes its runtime libraries. Set
 `FFMPEG_DIR` to use another development package, or `ZZZ_FFMPEG_ROOT` to move
@@ -104,8 +119,23 @@ To build & install the Flatpak package locally follow the steps below:
 
 1. Install Flatpak for your distribution as outlined [here](https://flathub.org/setup).
 2. Run the `script/flatpak/deps` script to install the required dependencies.
-3. Run `script/flatpak/bundle-flatpak`.
+3. Run `ZZZ_SKIP_BUNDLE=1 script/flatpak/bundle-flatpak` after `script/bundle-linux` if you want to reuse the existing tarball.
 4. Now the package has been installed and has a bundle available at `target/release/{app-id}.flatpak`.
+
+## Snap
+
+Snap packaging also consumes the local Linux tarball; it does not download a
+hosted release during `snapcraft`:
+
+```sh
+script/bundle-linux
+script/snap-build "$(script/get-crate-version zzz)"
+```
+
+The resulting `.snap` is produced by Snapcraft in the repository root. Set
+`ZZZ_SNAP_ARCHIVE=/absolute/path/to/zzz-linux-x86_64.tar.gz` to reuse an
+existing bundle. Snapcraft must be installed separately, and the current snap
+uses classic confinement.
 
 ## Memory profiling
 

@@ -25,7 +25,14 @@ function Install-Sccache {
 
         try {
             $archivePath = Join-Path $tempDir $archive
+            $checksumPath = "$archivePath.sha256"
             Invoke-WebRequest -Uri $url -OutFile $archivePath
+            Invoke-WebRequest -Uri "$url.sha256" -OutFile $checksumPath
+            $expectedHash = (Get-Content $checksumPath -Raw) -replace '^\s*([0-9a-fA-F]{64}).*$', '$1'
+            $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash.ToUpperInvariant()) {
+                throw "sccache checksum mismatch: expected $expectedHash, got $actualHash"
+            }
             Expand-Archive -Path $archivePath -DestinationPath $tempDir
 
             $extractedPath = Join-Path $tempDir $basename "sccache.exe"

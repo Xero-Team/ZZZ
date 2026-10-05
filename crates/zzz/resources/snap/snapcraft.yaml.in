@@ -17,7 +17,9 @@ contact: https://github.com/Xero-Team/ZZZ/issues
 parts:
   zzz:
     plugin: dump
-    source: "https://github.com/zed-industries/zed/releases/download/v$RELEASE_VERSION/zzz-linux-x86_64.tar.gz"
+    # The archive is produced locally by script/bundle-linux. Keeping the
+    # source local makes Snap packaging independent of hosted release URLs.
+    source: "$SNAP_ARCHIVE"
 
     organize:
       # These renames seem to not be necessary, but it's tidier.

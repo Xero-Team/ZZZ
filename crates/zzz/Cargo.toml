@@ -318,5 +318,119 @@ osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zzz"]
 
+# Linux distribution package metadata. The bundle script stages generated
+# channel-specific desktop assets in target/release/package-assets and invokes
+# both packagers with --no-build after compiling the binaries once.
+[package.metadata.deb]
+name = "zzz"
+maintainer = "Xero Team"
+copyright = "2026 Xero Team"
+license-file = ["LICENSE-AGPL", "0"]
+depends = "$auto"
+section = "editors"
+priority = "optional"
+assets = [
+    ["target/release/zzz", "usr/lib/zzz/zzz-editor", "755"],
+    ["target/release/cli", "usr/bin/zzz", "755"],
+    ["target/release/package-assets/zzz.desktop", "usr/share/applications/dev.zzz.ZZZ.desktop", "644"],
+    ["target/release/package-assets/zzz.png", "usr/share/icons/hicolor/512x512/apps/zzz.png", "644"],
+    ["target/release/package-assets/zzz@2x.png", "usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", "644"],
+    ["target/release/package-assets/licenses.md", "usr/share/doc/zzz/licenses.md", "644"],
+    ["target/release/package-assets/FFmpeg-LICENSE.txt", "usr/share/doc/zzz/FFmpeg-LICENSE.txt", "644"],
+]
+
+[package.metadata.deb.variants.dev]
+name = "zzz-dev"
+assets = [
+    ["target/release/zzz", "usr/lib/zzz/zzz-editor", "755"],
+    ["target/release/cli", "usr/bin/zzz", "755"],
+    ["target/release/package-assets/zzz.desktop", "usr/share/applications/dev.zzz.ZZZ-Dev.desktop", "644"],
+    ["target/release/package-assets/zzz.png", "usr/share/icons/hicolor/512x512/apps/zzz.png", "644"],
+    ["target/release/package-assets/zzz@2x.png", "usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", "644"],
+    ["target/release/package-assets/licenses.md", "usr/share/doc/zzz-dev/licenses.md", "644"],
+    ["target/release/package-assets/FFmpeg-LICENSE.txt", "usr/share/doc/zzz-dev/FFmpeg-LICENSE.txt", "644"],
+]
+
+[package.metadata.deb.variants.nightly]
+name = "zzz-nightly"
+assets = [
+    ["target/release/zzz", "usr/lib/zzz/zzz-editor", "755"],
+    ["target/release/cli", "usr/bin/zzz", "755"],
+    ["target/release/package-assets/zzz.desktop", "usr/share/applications/dev.zzz.ZZZ-Nightly.desktop", "644"],
+    ["target/release/package-assets/zzz.png", "usr/share/icons/hicolor/512x512/apps/zzz.png", "644"],
+    ["target/release/package-assets/zzz@2x.png", "usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", "644"],
+    ["target/release/package-assets/licenses.md", "usr/share/doc/zzz-nightly/licenses.md", "644"],
+    ["target/release/package-assets/FFmpeg-LICENSE.txt", "usr/share/doc/zzz-nightly/FFmpeg-LICENSE.txt", "644"],
+]
+
+[package.metadata.deb.variants.preview]
+name = "zzz-preview"
+assets = [
+    ["target/release/zzz", "usr/lib/zzz/zzz-editor", "755"],
+    ["target/release/cli", "usr/bin/zzz", "755"],
+    ["target/release/package-assets/zzz.desktop", "usr/share/applications/dev.zzz.ZZZ-Preview.desktop", "644"],
+    ["target/release/package-assets/zzz.png", "usr/share/icons/hicolor/512x512/apps/zzz.png", "644"],
+    ["target/release/package-assets/zzz@2x.png", "usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", "644"],
+    ["target/release/package-assets/licenses.md", "usr/share/doc/zzz-preview/licenses.md", "644"],
+    ["target/release/package-assets/FFmpeg-LICENSE.txt", "usr/share/doc/zzz-preview/FFmpeg-LICENSE.txt", "644"],
+]
+
+[package.metadata.deb.variants.stable]
+name = "zzz"
+
+[package.metadata.generate-rpm]
+name = "zzz"
+license = "AGPL-3.0-or-later"
+summary = "A local-first, open-source code editor"
+vendor = "Xero Team"
+assets = [
+    { source = "target/release/zzz", dest = "/usr/lib/zzz/zzz-editor", mode = "755" },
+    { source = "target/release/cli", dest = "/usr/bin/zzz", mode = "755" },
+    { source = "target/release/package-assets/zzz.desktop", dest = "/usr/share/applications/dev.zzz.ZZZ.desktop", mode = "644" },
+    { source = "target/release/package-assets/zzz.png", dest = "/usr/share/icons/hicolor/512x512/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/zzz@2x.png", dest = "/usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/licenses.md", dest = "/usr/share/doc/zzz/licenses.md", mode = "644", doc = true },
+    { source = "target/release/package-assets/FFmpeg-LICENSE.txt", dest = "/usr/share/doc/zzz/FFmpeg-LICENSE.txt", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.variants.dev]
+name = "zzz-dev"
+assets = [
+    { source = "target/release/zzz", dest = "/usr/lib/zzz/zzz-editor", mode = "755" },
+    { source = "target/release/cli", dest = "/usr/bin/zzz", mode = "755" },
+    { source = "target/release/package-assets/zzz.desktop", dest = "/usr/share/applications/dev.zzz.ZZZ-Dev.desktop", mode = "644" },
+    { source = "target/release/package-assets/zzz.png", dest = "/usr/share/icons/hicolor/512x512/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/zzz@2x.png", dest = "/usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/licenses.md", dest = "/usr/share/doc/zzz-dev/licenses.md", mode = "644", doc = true },
+    { source = "target/release/package-assets/FFmpeg-LICENSE.txt", dest = "/usr/share/doc/zzz-dev/FFmpeg-LICENSE.txt", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.variants.nightly]
+name = "zzz-nightly"
+assets = [
+    { source = "target/release/zzz", dest = "/usr/lib/zzz/zzz-editor", mode = "755" },
+    { source = "target/release/cli", dest = "/usr/bin/zzz", mode = "755" },
+    { source = "target/release/package-assets/zzz.desktop", dest = "/usr/share/applications/dev.zzz.ZZZ-Nightly.desktop", mode = "644" },
+    { source = "target/release/package-assets/zzz.png", dest = "/usr/share/icons/hicolor/512x512/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/zzz@2x.png", dest = "/usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/licenses.md", dest = "/usr/share/doc/zzz-nightly/licenses.md", mode = "644", doc = true },
+    { source = "target/release/package-assets/FFmpeg-LICENSE.txt", dest = "/usr/share/doc/zzz-nightly/FFmpeg-LICENSE.txt", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.variants.preview]
+name = "zzz-preview"
+assets = [
+    { source = "target/release/zzz", dest = "/usr/lib/zzz/zzz-editor", mode = "755" },
+    { source = "target/release/cli", dest = "/usr/bin/zzz", mode = "755" },
+    { source = "target/release/package-assets/zzz.desktop", dest = "/usr/share/applications/dev.zzz.ZZZ-Preview.desktop", mode = "644" },
+    { source = "target/release/package-assets/zzz.png", dest = "/usr/share/icons/hicolor/512x512/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/zzz@2x.png", dest = "/usr/share/icons/hicolor/1024x1024@2x/apps/zzz.png", mode = "644" },
+    { source = "target/release/package-assets/licenses.md", dest = "/usr/share/doc/zzz-preview/licenses.md", mode = "644", doc = true },
+    { source = "target/release/package-assets/FFmpeg-LICENSE.txt", dest = "/usr/share/doc/zzz-preview/FFmpeg-LICENSE.txt", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.variants.stable]
+name = "zzz"
+
 [package.metadata.cargo-machete]
 ignored = ["profiling", "zstd", "tracing"]
