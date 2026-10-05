@@ -32,9 +32,9 @@ matching_commits=100
 ```
 
 脚本同时要求 Fcitx5 candidate window 与 ZZZ editor window 相交。当前 Fedora/X11 主机
-结果为 100/100 commits，candidate window `(168, 1928, 560, 152)` 位于 editor window
-`(168, 56, 3672, 2104)` 内；证据目录由脚本输出，当前批准结果为
-`.tmp/gpui-refactor/phase-7/linux-x11-ime-niz4rous/`。
+用 final native-code binary 得到 100/100 commits；candidate window
+`(168, 1928, 560, 152)` 与 editor window `(468, 36, 3072, 2144)` 相交。证据目录由脚本
+输出，当前批准结果为 `.tmp/gpui-refactor/phase-7/linux-x11-ime-pwjzkxhc/`。
 
 补充行为检查：
 
@@ -124,7 +124,7 @@ Web backend 明确声明 `ime_candidate_position = false`，因此 candidate pop
 静默成功处理。运行：
 
 ```sh
-cargo check --locked -p gpui_web --target wasm32-unknown-unknown
+RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown
 ```
 
 在 browser harness 中验证 compositionstart/update/end 的 committed text、marked range

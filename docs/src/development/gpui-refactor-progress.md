@@ -21,8 +21,8 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 9 收敛                                |
-| Goal 状态                  | `ACTIVE`                                   |
+| 当前阶段                   | 阶段 9 完成                                |
+| Goal 状态                  | `COMPLETE`                                 |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
 `.tmp/ui_ref/` 参考仓库。这些内容原样保留；重构提交只显式暂存本账本和本 Goal
@@ -730,7 +730,7 @@ supported 与 unsupported。
   `/dev/uinput` keyboard/pointer 把真实 kernel input 送入 Fcitx5/Rime/XIM，再验证磁盘
   文件精确得到 100/100 行 `你好`；同时确认 candidate popup 与 editor window 相交。
 - Linux Fedora/X11 native run 为 `PASS`：0 lost/duplicated commits，candidate window
-  `(168, 1928, 560, 152)`，editor window `(168, 56, 3672, 2104)`，58.580 s。macOS、
+  `(168, 1928, 560, 152)`，editor window `(468, 36, 3072, 2144)`，59.796 s。macOS、
   Windows 和 Web 的 exact steps 与预期结果记录在
   [原生 IME 验证 runbook](./gui-framework-research/ime-validation-runbook.md)。
 
@@ -749,7 +749,7 @@ supported 与 unsupported。
 | `cargo test --locked -p editor focus`                                                                                   | `PASS`                    | 2 focus tests passed                                                                                                                                                                                |
 | `cargo test --locked -p editor input`                                                                                   | `PASS`                    | 8 UTF-16/multi-cursor input tests passed                                                                                                                                                            |
 | `python3 -m py_compile script/gpui-ime-smoke`                                                                           | `PASS`                    | Linux native harness syntax/import check 通过                                                                                                                                                       |
-| `script/gpui-ime-smoke --repetitions 100`                                                                               | `PASS`                    | Fcitx5/Rime XIM 100/100 commits；candidate popup 与 editor window 相交；`.tmp/gpui-refactor/phase-7/linux-x11-ime-niz4rous/summary.txt`                                                             |
+| `script/gpui-ime-smoke --binary target/debug/zzz --repetitions 100`                                                     | `PASS`                    | final native-code Fcitx5/Rime XIM 100/100 commits；candidate popup 与 editor window 相交；`.tmp/gpui-refactor/phase-7/linux-x11-ime-pwjzkxhc/summary.txt`                                           |
 | `cargo check --locked -p ui_component_registry -p ui_macros -p ui -p ui_input -p component_preview -p workspace -p zzz` | `PASS`                    | registry rename 的 13 个直接 workspace consumer 全部编译通过                                                                                                                                        |
 | `cargo test --locked -p ui_component_registry -p ui_macros -p component_preview --lib`                                  | `PASS`                    | 4 tests passed，0 failed                                                                                                                                                                            |
 | `./script/clippy -p ui_component_registry -p ui_macros -p component_preview`                                            | `PASS`                    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                       |
@@ -809,13 +809,57 @@ invalidation API、双实现或 compatibility path，完整 `cx.notify()` 语义
 
 ### 阶段 9：收敛与最终验证
 
-状态：`NOT STARTED`
+状态：`COMPLETE`
 
-最新 workspace validation：`cargo test --workspace --locked --no-fail-fast` 完成 workspace
-编译，但测试阶段包含已在计划 baseline 复现的 agent_ui action/focus failures，并有多个
-editor formatter/inlay tests 长时间运行；为避免无界 session 已中断。精确记录见
-`.tmp/gpui-refactor/phase-9/workspace-test-summary.txt`。最终阶段仍需在收敛后重新运行
-并区分 baseline failure、environment hang 和真实回归。
+收敛清理：
+
+- `render_api::submit_compat`/`CompatibilityRenderer` 已改为最终
+  `submit_platform_frame`/`PlatformRenderer` 边界，并明确记录 EXP-004/005 选择内部 module
+  seam、保留稳定 `PlatformWindow` façade 的原因；不再留下“backend 尚在迁移”的临时路径。
+- `gpui_wgpu` 的 native-only `Rc` import 改为 target gate；device recovery dead-code allow
+  只在 Web target 生效并带原因。Web cross-check 不再产生 ZZZ-owned unused import warning。
+- `PlatformInputHandler` 只剩一个 deprecated public alias，in-tree call site 为 0；删除条件为
+  下一次 breaking GPUI release。`ERASED_EDITOR_FACTORY`、scoped invalidation prototype 和
+  旧 render compatibility 名称均不存在。
+- 最终 owner/module graph、completed-frame immutability、capability gating 和 compatibility
+  状态已写入 [GPUI ownership 文档](./ownership-and-data-flow.md)；native IME 平台步骤写入
+  [runbook](./gui-framework-research/ime-validation-runbook.md)。
+
+最终实验结论：
+
+| 实验            | 状态               | 最终结论                                                                 |
+| --------------- | ------------------ | ------------------------------------------------------------------------ |
+| EXP-001/002/011 | `PASS`             | latency、phase work、allocation/RSS 均在预算内                           |
+| EXP-003         | `partial-platform` | Linux RADV/llvmpipe 通过；Windows hardware runtime `NOT RUN`             |
+| EXP-004/005     | `PASS`             | 无 cycle/consumer edit，build 与 binary 预算通过；保留 internal seam     |
+| EXP-006         | `partial-platform` | Linux AT-SPI/Orca 通过；VoiceOver/Narrator runtime `NOT RUN`             |
+| EXP-007         | `REJECTED`         | 10/10 stale visual/input 或 0% work reduction；prototype 已删除          |
+| EXP-008         | `PASS`             | 100 seeds，0 hang/panic/leak，warm CV 2.134%                             |
+| EXP-009         | `partial-platform` | Linux XIM 100/100；macOS/Windows runtime `NOT RUN`，Web 显式 unsupported |
+| EXP-010         | `PASS`             | app-scoped factory、非 panic startup、editor-only generic UI fresh       |
+| EXP-012         | `planned-not-run`  | optional RSX spike，不是本 Goal 完成条件                                 |
+
+最终验证：
+
+| 命令或检查                                                                            | 结果                   | 证据                                                                                     |
+| ------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
+| `cargo fmt --all -- --check`                                                          | `PASS`                 | workspace Rust formatting                                                                |
+| `cargo test --workspace`                                                              | `FAIL (baseline only)` | rerun 到 `agent_ui`：293 passed、6 action/focus failures；与 clean baseline 记录完全相同 |
+| isolated `acp_thread::tests::test_terminal_kill_allows_wait_for_exit_to_complete` ×10 | `PASS`                 | 首轮 workspace timeout 为 transient timing；立即 10/10 通过                              |
+| `./script/clippy`                                                                     | `PASS`                 | workspace all-target/all-feature、manifest lint 与 curated `future_not_send` 全部通过    |
+| `./script/check-philosophy`                                                           | `PASS`                 | 未引入商业、账号、遥测、默认网络或 hosted-docs surface                                   |
+| `./script/check-upstream-ledger`                                                      | `PASS`                 | 485 rejection rows                                                                       |
+| `cd docs && npx prettier --check src/`                                                | `PASS`                 | final docs format                                                                        |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`   | `PASS`                 | RADV hardware 与 llvmpipe fallback                                                       |
+| Wayland/Vulkan `failed_frames_release_surface_images --ignored`                       | `PASS`                 | 8 次 post-acquire failure 后健康 present                                                 |
+| final native-code Linux X11/Fcitx5 native IME                                         | `PASS`                 | 100/100 commits；`.tmp/gpui-refactor/phase-7/linux-x11-ime-pwjzkxhc/summary.txt`         |
+| final native-code Linux AT-SPI/Orca                                                   | `PASS`                 | 32 nodes；Orca 列出 `target/debug/zzz`；`.tmp/gpui-refactor/phase-9/atspi-final-L2jpiu/` |
+| macOS/Windows/Web cross-checks                                                        | `PASS`                 | macOS accessibility；Windows accessibility/WGPU tests；Web wasm tests 均编译通过         |
+
+完整命令、环境修正和 baseline 分类记录在
+`.tmp/gpui-refactor/phase-9/final-validation-summary.txt`。阶段 0–7 均完成，阶段 8 已明确拒绝，
+阶段 9 的核心代码、文档和当前主机验证均完成；剩余风险仅为 runbook 中列明的外部平台 runtime
+QA。Goal 标记 `COMPLETE`。
 
 ## Upstream A/B/C 记录
 
@@ -826,12 +870,12 @@ Linux/macOS/Windows adapter 已按 `1d029c5f` 分开移植。`0eda7703` 在 macO
 
 ## 外部平台 QA
 
-| 平台/检查                | 当前状态  | 说明                                                 |
-| ------------------------ | --------- | ---------------------------------------------------- |
-| Linux runtime/headless   | `PASS`    | isolated XDG app startup、RADV 与 AT-SPI tree/action |
-| macOS runtime/VoiceOver  | `NOT RUN` | 最终提供 exact runbook                               |
-| Windows runtime/Narrator | `NOT RUN` | 最终提供 exact runbook                               |
-| Linux Orca               | `PASS`    | `orca --list-apps` 识别 `zzz`；pyatspi action 可执行 |
+| 平台/检查                | 当前状态  | 说明                                                                   |
+| ------------------------ | --------- | ---------------------------------------------------------------------- |
+| Linux runtime/headless   | `PASS`    | final native-code XDG startup、XIM 100/100、RADV/llvmpipe、AT-SPI/Orca |
+| macOS runtime/VoiceOver  | `NOT RUN` | exact runbook 已记录                                                   |
+| Windows runtime/Narrator | `NOT RUN` | exact runbook 已记录                                                   |
+| Linux Orca               | `PASS`    | `orca --list-apps` 识别 `zzz`；pyatspi action 可执行                   |
 
 ### Native accessibility runbook
 
