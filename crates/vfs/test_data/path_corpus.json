@@ -47,7 +47,7 @@
       "encoding": "windows_wtf8",
       "form": "native",
       "root_kind": "windows_drive",
-      "components_hex": ["43", "5573657273", "5a5a5a", "6d61696e2e7273"],
+      "components_hex": ["63", "5573657273", "5a5a5a", "6d61696e2e7273"],
       "expected": "valid"
     },
     {

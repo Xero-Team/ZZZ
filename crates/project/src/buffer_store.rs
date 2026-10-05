@@ -931,9 +931,10 @@ impl BufferStore {
         let old_file = buffer.read(cx).file().cloned();
         let task = match &self.state {
             BufferStoreState::Local(this) => this.save_buffer_as(buffer.clone(), path, cx),
-            BufferStoreState::Remote(this) => {
-                this.save_remote_buffer(buffer.clone(), Some(path.to_proto()), cx)
-            }
+            BufferStoreState::Remote(this) => match path.to_proto() {
+                Ok(path) => this.save_remote_buffer(buffer.clone(), Some(path), cx),
+                Err(error) => Task::ready(Err(error)),
+            },
         };
         cx.spawn(async move |this, cx| {
             task.await?;
@@ -1402,9 +1403,8 @@ impl BufferStore {
             .await?;
         let buffer_id = buffer.read_with(&cx, |buffer, _| buffer.remote_id());
 
-        if let Some(new_path) = envelope.payload.new_path
-            && let Some(new_path) = ProjectPath::from_proto(new_path)
-        {
+        if let Some(new_path) = envelope.payload.new_path {
+            let new_path = ProjectPath::from_proto(new_path)?;
             this.update(&mut cx, |this, cx| {
                 this.save_buffer_as(buffer.clone(), new_path, cx)
             })

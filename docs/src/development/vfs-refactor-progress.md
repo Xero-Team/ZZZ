@@ -13,30 +13,30 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
-- Current HEAD: tracked by the commit log; latest implementation boundary
-  `4c350914704df52cf4733b57a074c91db25afab2`
+- Current HEAD: `92f5ce0611c37783e9d89c80c4e9544135474f93` plus uncommitted
+  Phase 1 changes
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 1`
 - Last completed phase: `Phase 0`
 - Blocking issue: `None`
-- Next action: 实现 Phase 1 exact component/path/resource types、无损 native codec、safe
-  lexical operations 与 v2 protobuf schema。
+- Next action: 完成 Phase 1 touched-diff code-smell review、docs/proto validation 和
+  signed-off commit，随后进入 Phase 2 provider contract。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit       | Validation | Notes            |
-| ----- | ---------------------------------- | ----------- | ------------ | ---------- | ---------------- |
-| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470` | PASS       | VFS-EXP-001 PASS |
-| 1     | Path/resource types 与 v2 wire     | NOT STARTED | -            | -          | -                |
-| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -            | -          | -                |
-| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -            | -          | -                |
-| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -            | -          | -                |
-| 5     | Consumer 迁移                      | NOT STARTED | -            | -          | -                |
-| 6     | LSP/Git/native execution           | NOT STARTED | -            | -          | -                |
-| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -            | -          | -                |
-| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -            | -          | -                |
-| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -            | -          | -                |
-| 10    | 收敛与最终验证                     | NOT STARTED | -            | -          | -                |
+| Phase | Result                             | Status      | Commit       | Validation | Notes                          |
+| ----- | ---------------------------------- | ----------- | ------------ | ---------- | ------------------------------ |
+| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470` | PASS       | VFS-EXP-001 PASS               |
+| 1     | Path/resource types 与 v2 wire     | IN PROGRESS | -            | PASS       | Final review and commit remain |
+| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -            | -          | -                              |
+| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -            | -          | -                              |
+| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -            | -          | -                              |
+| 5     | Consumer 迁移                      | NOT STARTED | -            | -          | -                              |
+| 6     | LSP/Git/native execution           | NOT STARTED | -            | -          | -                              |
+| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -            | -          | -                              |
+| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -            | -          | -                              |
+| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -            | -          | -                              |
+| 10    | 收敛与最终验证                     | NOT STARTED | -            | -          | -                              |
 
 ## Baseline {#baseline}
 
@@ -106,12 +106,14 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Compatibility adapter 清单 {#compatibility-adapters}
 
-| Adapter                                    | Introduced | Callers                                 | Removal phase | Status   |
-| ------------------------------------------ | ---------- | --------------------------------------- | ------------- | -------- |
-| Legacy `Fs` storage façade                 | Existing   | 571 broad operation call sites          | Phase 9       | BASELINE |
-| `RelPath`/`ProjectPath` UTF-8 wire         | Existing   | 298 broad proto conversion hits         | Phase 9       | BASELINE |
-| `Worktree::Local/Remote` behavior branches | Existing   | 49 enum matches and 64 `is_local` calls | Phase 5/9     | BASELINE |
-| Dedicated image/download byte RPC          | Existing   | Project media/download handlers         | Phase 5/9     | BASELINE |
+| Adapter                                    | Introduced | Callers                                                                              | Removal phase | Status    |
+| ------------------------------------------ | ---------- | ------------------------------------------------------------------------------------ | ------------- | --------- |
+| Legacy `Fs` storage façade                 | Existing   | 571 broad operation call sites                                                       | Phase 9       | BASELINE  |
+| Generic UTF-8 `ProviderPath` bridge        | Phase 1    | `ProjectPath` dual-read/write; [inventory](./vfs-research/path-adapter-inventory.md) | Phase 9       | ACTIVE    |
+| `WorktreeId` to temporary `MountId`        | Phase 1    | `ProjectPath` v2 adapter                                                             | Phase 3       | ACTIVE    |
+| `RelPath`/`ProjectPath` UTF-8 wire         | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)               | Phase 9       | MIGRATING |
+| `Worktree::Local/Remote` behavior branches | Existing   | 49 enum matches and 64 `is_local` calls                                              | Phase 5/9     | BASELINE  |
+| Dedicated image/download byte RPC          | Existing   | Project media/download handlers                                                      | Phase 5/9     | BASELINE  |
 
 ## 实验结果 {#experiments}
 
@@ -120,48 +122,59 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 实验总状态只记录必做验收结果；`VFS-EXP-012` 的可选 overlay 结论单独写入
 `Decision`，即使 overlay 为 `REJECTED`，必做 composition 验收仍必须为 `PASS`。
 
-| Experiment  | Status  | Command/data                                        | Result                                              | Decision                        |
-| ----------- | ------- | --------------------------------------------------- | --------------------------------------------------- | ------------------------------- |
-| VFS-EXP-001 | PASS    | Commands in validation log and `.tmp/vfs-refactor/` | Existing failures reproduced; scan and RSS recorded | Baseline frozen at `a3a0f97340` |
-| VFS-EXP-002 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-003 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-004 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-005 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-006 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-007 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-008 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-009 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-010 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-011 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-012 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-013 | NOT RUN | -                                                   | -                                                   | -                               |
-| VFS-EXP-014 | NOT RUN | -                                                   | -                                                   | -                               |
+| Experiment  | Status  | Command/data                                                  | Result                                                  | Decision                                          |
+| ----------- | ------- | ------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| VFS-EXP-001 | PASS    | Commands in validation log and `.tmp/vfs-refactor/`           | Existing failures reproduced; scan and RSS recorded     | Baseline frozen at `a3a0f97340`                   |
+| VFS-EXP-002 | PASS    | `cargo test --locked -p vfs -p proto` and cross-target checks | 10 valid fixtures round-trip; 6 invalid fixtures reject | Adopt component bytes plus explicit encoding/root |
+| VFS-EXP-003 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-004 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-005 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-006 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-007 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-008 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-009 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-010 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-011 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-012 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-013 | NOT RUN | -                                                             | -                                                       | -                                                 |
+| VFS-EXP-014 | NOT RUN | -                                                             | -                                                       | -                                                 |
 
 ## 验证记录 {#validation-log}
 
-| Date       | Phase | Command                                                                                                          | Exit     | Result                                                  | Existing failure?                                                       |
-| ---------- | ----- | ---------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 2026-10-05 | 0     | `cargo check --locked -p fs -p worktree -p project -p workspace -p editor`                                       | 0        | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | `cargo test --locked -p fs -p worktree -p project`                                                               | 101      | FAIL                                                    | Yes: 7 project failures; fs 23 passed, 1 ignored                        |
-| 2026-10-05 | 0     | `cargo test --locked -p worktree`                                                                                | 101      | FAIL                                                    | Yes: 88 passed, `test_load_file_encoding` failed                        |
-| 2026-10-05 | 0     | `cargo test --locked -p workspace -p editor`                                                                     | 1        | FAIL/TIMEOUT                                            | Yes: interrupted after six failures and three tests stalled beyond 60 s |
-| 2026-10-05 | 0     | `cargo test --locked -p workspace`                                                                               | 0        | PASS: 235 tests                                         | No                                                                      |
-| 2026-10-05 | 0     | `cargo test --locked -p remote`                                                                                  | 0        | PASS: 34 tests                                          | No                                                                      |
-| 2026-10-05 | 0     | `cargo test --locked -p rpc`                                                                                     | 0        | PASS: 6 tests                                           | No                                                                      |
-| 2026-10-05 | 0     | `cargo test --locked -p image_viewer -p pdf_viewer -p audio_viewer -p video_viewer -p typst_preview`             | 0        | PASS: 54 tests                                          | No                                                                      |
-| 2026-10-05 | 0     | `./script/clippy -p fs -p worktree -p project -p workspace -p editor`                                            | 0        | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | seven individual `cargo test --locked -p project --test integration <name> -- --exact --nocapture` runs          | 101 each | FAIL reproduced                                         | Yes                                                                     |
-| 2026-10-05 | 0     | six individual `cargo test --locked -p editor <name> -- --exact --nocapture --test-threads=1` runs               | 101 each | FAIL reproduced                                         | Yes                                                                     |
-| 2026-10-05 | 0     | three individual `timeout 90s cargo test --locked -p editor <name> -- --exact --nocapture --test-threads=1` runs | 124 each | TIMEOUT reproduced                                      | Yes                                                                     |
-| 2026-10-05 | 0     | `target/release/worktree_benchmarks .` under `/usr/bin/time -v`                                                  | 0        | PASS: 72.26 ms, 18,292 KiB RSS                          | No                                                                      |
-| 2026-10-05 | 0     | `cargo test --locked -p vfs`                                                                                     | 0        | PASS: 3 tests                                           | No                                                                      |
-| 2026-10-05 | 0     | FakeFs and RealFs legacy conformance filters                                                                     | 0 each   | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | `cargo fmt --all -- --check`                                                                                     | 0        | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | `cargo check --locked -p vfs -p fs`                                                                              | 0        | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | `cargo test --locked -p fs`                                                                                      | 0        | PASS: 25 passed, 1 ignored                              | No                                                                      |
-| 2026-10-05 | 0     | `./script/clippy -p vfs -p fs`                                                                                   | 0        | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | `(cd docs && npx prettier --check src/)`                                                                         | 0        | PASS                                                    | No                                                                      |
-| 2026-10-05 | 0     | touched-diff P0 detectors and manual P0/P1/P2 review                                                             | 0        | PASS: frame-delay semantics fixed; no remaining finding | No                                                                      |
+| Date       | Phase | Command                                                                                                                    | Exit     | Result                                                                                             | Existing failure?                                                       |
+| ---------- | ----- | -------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 2026-10-05 | 0     | `cargo check --locked -p fs -p worktree -p project -p workspace -p editor`                                                 | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p fs -p worktree -p project`                                                                         | 101      | FAIL                                                                                               | Yes: 7 project failures; fs 23 passed, 1 ignored                        |
+| 2026-10-05 | 0     | `cargo test --locked -p worktree`                                                                                          | 101      | FAIL                                                                                               | Yes: 88 passed, `test_load_file_encoding` failed                        |
+| 2026-10-05 | 0     | `cargo test --locked -p workspace -p editor`                                                                               | 1        | FAIL/TIMEOUT                                                                                       | Yes: interrupted after six failures and three tests stalled beyond 60 s |
+| 2026-10-05 | 0     | `cargo test --locked -p workspace`                                                                                         | 0        | PASS: 235 tests                                                                                    | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p remote`                                                                                            | 0        | PASS: 34 tests                                                                                     | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p rpc`                                                                                               | 0        | PASS: 6 tests                                                                                      | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p image_viewer -p pdf_viewer -p audio_viewer -p video_viewer -p typst_preview`                       | 0        | PASS: 54 tests                                                                                     | No                                                                      |
+| 2026-10-05 | 0     | `./script/clippy -p fs -p worktree -p project -p workspace -p editor`                                                      | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | seven individual `cargo test --locked -p project --test integration <name> -- --exact --nocapture` runs                    | 101 each | FAIL reproduced                                                                                    | Yes                                                                     |
+| 2026-10-05 | 0     | six individual `cargo test --locked -p editor <name> -- --exact --nocapture --test-threads=1` runs                         | 101 each | FAIL reproduced                                                                                    | Yes                                                                     |
+| 2026-10-05 | 0     | three individual `timeout 90s cargo test --locked -p editor <name> -- --exact --nocapture --test-threads=1` runs           | 124 each | TIMEOUT reproduced                                                                                 | Yes                                                                     |
+| 2026-10-05 | 0     | `target/release/worktree_benchmarks .` under `/usr/bin/time -v`                                                            | 0        | PASS: 72.26 ms, 18,292 KiB RSS                                                                     | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p vfs`                                                                                               | 0        | PASS: 3 tests                                                                                      | No                                                                      |
+| 2026-10-05 | 0     | FakeFs and RealFs legacy conformance filters                                                                               | 0 each   | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | `cargo fmt --all -- --check`                                                                                               | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | `cargo check --locked -p vfs -p fs`                                                                                        | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | `cargo test --locked -p fs`                                                                                                | 0        | PASS: 25 passed, 1 ignored                                                                         | No                                                                      |
+| 2026-10-05 | 0     | `./script/clippy -p vfs -p fs`                                                                                             | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | `(cd docs && npx prettier --check src/)`                                                                                   | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 0     | touched-diff P0 detectors and manual P0/P1/P2 review                                                                       | 0        | PASS: frame-delay semantics fixed; no remaining finding                                            | No                                                                      |
+| 2026-10-05 | 1     | `cargo fmt --all -- --check`                                                                                               | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 1     | `cargo check --locked -p vfs -p proto -p project`                                                                          | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 1     | `cargo test --locked -p vfs -p proto`                                                                                      | 0        | PASS: 17 tests                                                                                     | No                                                                      |
+| 2026-10-05 | 1     | `cargo test --locked -p project --test integration test_project_path_v2_wire_round_trip_and_mismatch_rejection -- --exact` | 0        | PASS: 1 test                                                                                       | No                                                                      |
+| 2026-10-05 | 1     | `cargo check --locked -p vfs --target x86_64-pc-windows-gnu`                                                               | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 1     | `cargo check --locked -p vfs --target x86_64-apple-darwin`                                                                 | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 1     | `cargo test --locked -p project`                                                                                           | 101      | FAIL: 286 passed, 7 failed, 3 ignored                                                              | Yes: exact Phase 0 project failure set; new v2 test passed              |
+| 2026-10-05 | 1     | `./script/clippy -p vfs -p proto -p project`                                                                               | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 1     | `buf lint crates/proto/proto` and `buf format --diff --exit-code crates/proto/proto`                                       | -        | NOT RUN: `buf` unavailable                                                                         | Tool unavailable; prost build and proto tests PASS                      |
+| 2026-10-05 | 1     | `(cd docs && npx prettier --check src/)`                                                                                   | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-05 | 1     | touched-diff P0 detectors and manual P0/P1/P2 review                                                                       | 0        | PASS: fixed drive-case loss, boolean state model and intermediate collection; no remaining finding | No                                                                      |
 
 ## 提交记录 {#commit-log}
 
@@ -171,23 +184,23 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## 平台 QA {#platform-qa}
 
-| Platform           | Status  | Runbook/result | Remaining risk |
-| ------------------ | ------- | -------------- | -------------- |
-| Linux              | NOT RUN | -              | -              |
-| macOS              | NOT RUN | -              | -              |
-| Windows            | NOT RUN | -              | -              |
-| WSL                | NOT RUN | -              | -              |
-| Docker remote      | NOT RUN | -              | -              |
-| SSH remote         | NOT RUN | -              | -              |
-| Network filesystem | NOT RUN | -              | -              |
+| Platform           | Status  | Runbook/result                                    | Remaining risk                            |
+| ------------------ | ------- | ------------------------------------------------- | ----------------------------------------- |
+| Linux              | NOT RUN | Phase 1 codec/protobuf tests PASS                 | Full provider/consumer QA remains         |
+| macOS              | NOT RUN | Phase 1 cross-target check PASS                   | Native filesystem behavior not executed   |
+| Windows            | NOT RUN | Phase 1 cross-target check and WTF-16 corpus PASS | Native `OsString` generation not executed |
+| WSL                | NOT RUN | -                                                 | -                                         |
+| Docker remote      | NOT RUN | -                                                 | -                                         |
+| SSH remote         | NOT RUN | -                                                 | -                                         |
+| Network filesystem | NOT RUN | -                                                 | -                                         |
 
 ## Remaining work {#remaining-work}
 
-- Phase 1 through Phase 10.
+- Complete Phase 1 review/commit.
+- Phase 2 through Phase 10.
 
 ## Next action {#next-action}
 
-实现 Phase 1 `MountId`、`ResourceId`、`VfsPath`、`ProviderPath`、`NativePath`、
-`PathEncoding`、exact/display/lookup component、safe join/parent/strip-prefix/comparison 与
-v2 protobuf schema。使用固定 corpus 完成 `VFS-EXP-002`，并建立所有旧 path adapter 的
-caller/removal 清单。
+完成 Phase 1 touched-diff code-smell review、docs Prettier 和 proto 可用验证，创建
+signed-off commit。然后实现 Phase 2 `VfsProvider`/`VfsFile`、typed error/capability、
+Memory/Legacy/Local provider 与 positioned I/O。

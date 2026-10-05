@@ -3,6 +3,7 @@
 pub mod error;
 mod macros;
 mod typed_envelope;
+mod vfs_conversion;
 
 pub use error::*;
 pub use prost::{DecodeError, Message};
@@ -13,6 +14,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 pub use typed_envelope::*;
+pub use vfs_conversion::*;
 
 include!(concat!(env!("OUT_DIR"), "/zzz.messages.rs"));
 

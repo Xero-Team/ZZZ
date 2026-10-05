@@ -99,6 +99,28 @@ use util::{
 };
 use worktree::WorktreeModelHandle as _;
 
+#[test]
+fn test_project_path_v2_wire_round_trip_and_mismatch_rejection() {
+    let original = ProjectPath {
+        worktree_id: WorktreeId::from_proto(9),
+        path: rel_path("src/main.rs").into(),
+    };
+    let serialized = original.to_proto();
+    let Ok(serialized) = serialized else {
+        panic!("project path must serialize: {serialized:?}");
+    };
+    assert!(serialized.vfs_path.is_some());
+    let round_tripped = ProjectPath::from_proto(serialized.clone());
+    let Ok(round_tripped) = round_tripped else {
+        panic!("project path must deserialize: {round_tripped:?}");
+    };
+    assert_eq!(round_tripped, original);
+
+    let mut mismatched = serialized;
+    mismatched.path = String::from("different.rs");
+    assert!(ProjectPath::from_proto(mismatched).is_err());
+}
+
 #[gpui::test]
 async fn test_block_via_channel(cx: &mut gpui::TestAppContext) {
     cx.executor().allow_parking();

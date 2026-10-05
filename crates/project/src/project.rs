@@ -137,6 +137,10 @@ use util::{
     paths::{PathStyle, SanitizedPath, is_absolute},
     rel_path::RelPath,
 };
+use vfs::{
+    MountId, PathEncoding, VfsPath as CoreVfsPath, provider_path_from_legacy_utf8,
+    provider_path_to_legacy_utf8,
+};
 use worktree::{CreatedEntry, Snapshot, Traversal};
 pub use worktree::{
     Entry, EntryKind, FS_WATCH_LATENCY, File, LocalWorktree, PathChange, ProjectEntryId,
@@ -419,18 +423,39 @@ impl ProjectPath {
         }
     }
 
-    pub fn from_proto(p: proto::ProjectPath) -> Option<Self> {
-        Some(Self {
-            worktree_id: WorktreeId::from_proto(p.worktree_id),
-            path: RelPath::from_proto(&p.path).log_err()?,
+    pub fn from_proto(path: proto::ProjectPath) -> Result<Self> {
+        let worktree_id = WorktreeId::from_proto(path.worktree_id);
+        let relative_path = if let Some(vfs_path) = path.vfs_path {
+            let vfs_path = vfs_path.to_vfs_path()?;
+            anyhow::ensure!(
+                vfs_path.mount_id().get() == path.worktree_id,
+                "VFS mount ID does not match legacy worktree ID"
+            );
+            let relative_path = provider_path_to_legacy_utf8(vfs_path.provider_path())?;
+            anyhow::ensure!(
+                relative_path == path.path,
+                "VFS path does not match legacy project path"
+            );
+            RelPath::from_proto(&relative_path)?
+        } else {
+            RelPath::from_proto(&path.path)?
+        };
+        Ok(Self {
+            worktree_id,
+            path: relative_path,
         })
     }
 
-    pub fn to_proto(&self) -> proto::ProjectPath {
-        proto::ProjectPath {
-            worktree_id: self.worktree_id.to_proto(),
-            path: self.path.as_ref().to_proto(),
-        }
+    pub fn to_proto(&self) -> Result<proto::ProjectPath> {
+        let worktree_id = self.worktree_id.to_proto();
+        let path = self.path.as_ref().to_proto();
+        let provider_path = provider_path_from_legacy_utf8(&path, PathEncoding::PortableUtf8)?;
+        let vfs_path = CoreVfsPath::new(MountId::new(worktree_id), provider_path);
+        Ok(proto::ProjectPath {
+            worktree_id,
+            path,
+            vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
+        })
     }
 
     pub fn root_path(worktree_id: WorktreeId) -> Self {

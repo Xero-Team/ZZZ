@@ -12805,6 +12805,7 @@ dependencies = [
  "unindent",
  "url",
  "util",
+ "vfs",
  "watch",
  "wax",
  "which",
@@ -13037,6 +13038,9 @@ dependencies = [
  "prost-build",
  "protoc-bin-vendored",
  "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "vfs",
 ]
 
 [[package]]
@@ -18928,6 +18932,8 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
+ "typed-path",
 ]
 
 [[package]]

@@ -1,0 +1,66 @@
+syntax = "proto3";
+package zzz.messages;
+
+enum PathEncodingV2 {
+  PATH_ENCODING_V2_UNSPECIFIED = 0;
+  PATH_ENCODING_V2_UNIX_BYTES = 1;
+  PATH_ENCODING_V2_WINDOWS_WTF8 = 2;
+  PATH_ENCODING_V2_PORTABLE_UTF8 = 3;
+}
+
+enum NativePathRootKindV2 {
+  NATIVE_PATH_ROOT_KIND_V2_UNSPECIFIED = 0;
+  NATIVE_PATH_ROOT_KIND_V2_RELATIVE = 1;
+  NATIVE_PATH_ROOT_KIND_V2_POSIX = 2;
+  NATIVE_PATH_ROOT_KIND_V2_WINDOWS_ROOT_RELATIVE = 3;
+  NATIVE_PATH_ROOT_KIND_V2_WINDOWS_DRIVE = 4;
+  NATIVE_PATH_ROOT_KIND_V2_WINDOWS_UNC = 5;
+  NATIVE_PATH_ROOT_KIND_V2_WINDOWS_DEVICE = 6;
+  NATIVE_PATH_ROOT_KIND_V2_WINDOWS_VERBATIM = 7;
+}
+
+message NativePathRootV2 {
+  NativePathRootKindV2 kind = 1;
+  bytes drive = 2;
+  bytes server = 3;
+  bytes share = 4;
+  bytes namespace = 5;
+  bool absolute = 6;
+  bool verbatim = 7;
+}
+
+message ExactPathV2 {
+  PathEncodingV2 encoding = 1;
+  NativePathRootV2 root = 2;
+  repeated bytes components = 3;
+}
+
+message MountIdV2 {
+  fixed64 value = 1;
+}
+
+message ResourceIdV2 {
+  MountIdV2 mount_id = 1;
+  fixed64 node_id = 2;
+  uint32 generation = 3;
+}
+
+message ProviderPathV2 {
+  ExactPathV2 path = 1;
+}
+
+message VfsPathV2 {
+  MountIdV2 mount_id = 1;
+  ExactPathV2 relative_path = 2;
+}
+
+message NativePathV2 {
+  ExactPathV2 path = 1;
+}
+
+message VfsPathComponentV2 {
+  PathEncodingV2 encoding = 1;
+  bytes exact = 2;
+  string display = 3;
+  bytes lookup_key = 4;
+}

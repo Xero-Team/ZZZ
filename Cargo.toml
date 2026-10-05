@@ -763,6 +763,7 @@ time = { version = "0.3", features = [
     "formatting",
     "local-offset",
 ] }
+typed-path = "0.12.3"
 tiny_http = "0.12"
 tokio = { version = "1" }
 tokio-socks = { version = "0.5.3", default-features = false, features = [

@@ -20,9 +20,12 @@ doctest = false
 anyhow.workspace = true
 prost.workspace = true
 serde.workspace = true
+thiserror.workspace = true
+vfs.workspace = true
 
 [build-dependencies]
 prost-build.workspace = true
 protoc-bin-vendored = "3"
 
 [dev-dependencies]
+serde_json.workspace = true

@@ -1,6 +1,8 @@
 syntax = "proto3";
 package zzz.messages;
 
+import "vfs.proto";
+
 message Timestamp {
   uint64 seconds = 1;
   uint32 nanos = 2;
@@ -72,6 +74,7 @@ message WorktreeMetadata {
 message ProjectPath {
   uint64 worktree_id = 1;
   string path = 2;
+  VfsPathV2 vfs_path = 3;
 }
 
 message ListRemoteDirectoryConfig {
