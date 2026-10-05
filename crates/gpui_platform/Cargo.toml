@@ -13,6 +13,12 @@ path = "src/gpui_platform.rs"
 
 [features]
 default = []
+accessibility = [
+    "gpui/accessibility",
+    "gpui_linux/accessibility",
+    "gpui_macos/accessibility",
+    "gpui_windows/accessibility",
+]
 font-kit = ["gpui_macos/font-kit"]
 test-support = [
     "gpui/test-support",

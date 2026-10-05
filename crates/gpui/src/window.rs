@@ -5,16 +5,16 @@ use crate::{
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
     Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
     DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
-    FileDropEvent, FontId, Frame, FrameScheduler, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla,
-    InputHandler, InputModality, InputPreference, InteractionOwner, IsZero, KeyBinding, KeyContext,
-    KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent,
-    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path,
-    Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow,
-    Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render,
-    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, ResizeEdge,
-    SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow,
-    SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription,
-    SystemWindowTab, SystemWindowTabController, TaffyLayoutEngine, Task, TextInputClient,
+    FileDropEvent, FontId, Frame, FrameBuilder, FrameScheduler, Global, GlobalElementId, GlyphId,
+    GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner, IsZero,
+    KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers,
+    ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent,
+    PaintIndex, Path, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
+    PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton,
+    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
+    ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels,
+    Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet,
+    Subscription, SystemWindowTab, SystemWindowTabController, Task, TextInputClient,
     TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
     TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
@@ -27,6 +27,8 @@ use collections::FxHashMap;
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
 use futures::channel::oneshot;
+#[cfg(feature = "accessibility")]
+use futures::{StreamExt as _, channel::mpsc};
 use gpui_util::post_inc;
 use gpui_util::{ResultExt, measure};
 #[cfg(feature = "input-latency-histogram")]
@@ -703,16 +705,8 @@ pub struct Window {
     /// a given rem size.
     rem_size_override_stack: SmallVec<[Pixels; 8]>,
     pub(crate) viewport_size: Size<Pixels>,
-    layout_engine: Option<TaffyLayoutEngine>,
     pub(crate) root: Option<AnyView>,
-    pub(crate) element_id_stack: SmallVec<[ElementId; 32]>,
-    pub(crate) text_style_stack: Vec<TextStyleRefinement>,
-    pub(crate) rendered_entity_stack: Vec<EntityId>,
-    pub(crate) element_offset_stack: Vec<Point<Pixels>>,
-    pub(crate) element_opacity: f32,
-    pub(crate) content_mask_stack: Vec<ContentMask<Pixels>>,
-    pub(crate) requested_autoscroll: Option<Bounds<Pixels>>,
-    pub(crate) image_cache_stack: Vec<AnyImageCache>,
+    frame_builder: FrameBuilder,
     pub(crate) interaction: InteractionOwner,
     pub(crate) text_input: TextInputOwner,
     pub(crate) frame_scheduler: FrameScheduler,
@@ -1025,14 +1019,81 @@ impl Window {
         let input_rate_tracker = Rc::new(RefCell::new(InputRateTracker::default()));
         let last_frame_time = Rc::new(Cell::new(None));
 
-        platform_window
-            .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
+        if platform_window.capabilities().window_services.decorations {
+            platform_window
+                .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
+        }
         platform_window.set_background_appearance(window_background);
 
         match window_bounds {
             WindowBounds::Fullscreen(_) => platform_window.toggle_fullscreen(),
             WindowBounds::Maximized(_) => platform_window.zoom(),
             WindowBounds::Windowed(_) => {}
+        }
+
+        #[cfg(feature = "accessibility")]
+        if platform_window.capabilities().accessibility {
+            enum AccessibilityEvent {
+                Activated,
+                Deactivated,
+                Action(accesskit::ActionRequest),
+            }
+
+            let initial_tree = crate::SemanticTreeBuilder::new().snapshot().update;
+            let (event_sender, mut event_receiver) = mpsc::unbounded();
+            platform_window.initialize_accessibility(crate::AccessibilityCallbacks {
+                activation: {
+                    let event_sender = event_sender.clone();
+                    Box::new(move || {
+                        if let Err(error) =
+                            event_sender.unbounded_send(AccessibilityEvent::Activated)
+                        {
+                            log::error!("failed to report accessibility activation: {error}");
+                        }
+                        Some(initial_tree.clone())
+                    })
+                },
+                action: {
+                    let event_sender = event_sender.clone();
+                    Box::new(move |request| {
+                        if let Err(error) =
+                            event_sender.unbounded_send(AccessibilityEvent::Action(request))
+                        {
+                            log::error!("failed to route accessibility action: {error}");
+                        }
+                    })
+                },
+                deactivation: Box::new(move || {
+                    if let Err(error) = event_sender.unbounded_send(AccessibilityEvent::Deactivated)
+                    {
+                        log::error!("failed to report accessibility deactivation: {error}");
+                    }
+                }),
+            })?;
+            platform_window.update_accessibility_window_bounds()?;
+
+            let mut async_cx = cx.to_async();
+            cx.foreground_executor()
+                .spawn(async move {
+                    while let Some(event) = event_receiver.next().await {
+                        handle
+                            .update(&mut async_cx, |_, window, cx| match event {
+                                AccessibilityEvent::Activated | AccessibilityEvent::Deactivated => {
+                                    window.refresh()
+                                }
+                                AccessibilityEvent::Action(request) => {
+                                    window.dispatch_accessibility_action(
+                                        request.target_node,
+                                        request.action,
+                                        request.data.as_ref(),
+                                        cx,
+                                    );
+                                }
+                            })
+                            .log_err();
+                    }
+                })
+                .detach();
         }
 
         platform_window.on_close(Box::new({
@@ -1295,7 +1356,9 @@ impl Window {
             })
         });
 
-        if let Some(app_id) = app_id {
+        if let Some(app_id) = app_id
+            && platform_window.capabilities().window_services.app_id
+        {
             platform_window.set_app_id(&app_id);
         }
 
@@ -1317,15 +1380,8 @@ impl Window {
             rem_size: px(16.),
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
-            layout_engine: Some(TaffyLayoutEngine::new()),
             root: None,
-            element_id_stack: SmallVec::default(),
-            text_style_stack: Vec::new(),
-            rendered_entity_stack: Vec::new(),
-            element_offset_stack: Vec::new(),
-            content_mask_stack: Vec::new(),
-            element_opacity: 1.0,
-            requested_autoscroll: None,
+            frame_builder: FrameBuilder::new(),
             interaction: InteractionOwner::new(
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
                 Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
@@ -1349,7 +1405,6 @@ impl Window {
             activation_observers: SubscriberSet::new(),
             prompt: None,
             client_inset: None,
-            image_cache_stack: Vec::new(),
             #[cfg(any(feature = "inspector", debug_assertions))]
             inspector: None,
         })
@@ -1540,7 +1595,7 @@ impl Window {
     /// The current text style. Which is composed of all the style refinements provided to `with_text_style`.
     pub fn text_style(&self) -> TextStyle {
         let mut style = TextStyle::default();
-        for refinement in &self.text_style_stack {
+        for refinement in self.frame_builder.text_styles() {
             style.refine(refinement);
         }
         style
@@ -1555,7 +1610,14 @@ impl Window {
 
     /// request a certain window decoration (Wayland)
     pub fn request_decorations(&self, decorations: WindowDecorations) {
-        self.platform_window.request_decorations(decorations);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .decorations
+        {
+            self.platform_window.request_decorations(decorations);
+        }
     }
 
     /// Start a window resize operation if this window is resizable.
@@ -1578,7 +1640,14 @@ impl Window {
     /// - `Some(&[])` is an empty region, so the window receives no pointer or touch input.
     /// - `None` resets the region to the default, so the whole window receives input again.
     pub fn set_input_region(&self, region: Option<&[Bounds<Pixels>]>) {
-        self.platform_window.set_input_region(region);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .input_region
+        {
+            self.platform_window.set_input_region(region);
+        }
     }
 
     /// Return the `WindowBounds` to indicate that how a window should be opened
@@ -1605,6 +1674,32 @@ impl Window {
         let handled = actions.dispatch(node_id, action, data, self, cx);
         self.interaction.rendered_frame.accessibility_actions = actions;
         handled
+    }
+
+    /// Connects a semantic node to GPUI keyboard focus.
+    #[cfg(feature = "accessibility")]
+    #[doc(hidden)]
+    pub fn register_accessibility_focus(
+        &mut self,
+        node_id: accesskit::NodeId,
+        focus_handle: FocusHandle,
+    ) {
+        if focus_handle.is_focused(self)
+            && let Err(error) = self
+                .interaction
+                .next_frame
+                .accessibility_builder
+                .set_focus(node_id)
+        {
+            log::error!("failed to map semantic focus: {error:?}");
+        }
+        self.interaction.next_frame.accessibility_actions.register(
+            node_id,
+            accesskit::Action::Focus,
+            move |_, window, cx| {
+                focus_handle.focus(window, cx);
+            },
+        );
     }
 
     /// Returns the completed semantic snapshot for integration tests.
@@ -1854,6 +1949,11 @@ impl Window {
         self.viewport_size = self.platform_window.content_size();
         self.display_id = self.platform_window.display().map(|display| display.id());
         self.interaction.mouse_position = self.platform_window.mouse_position();
+        if self.platform_window.capabilities().accessibility {
+            self.platform_window
+                .update_accessibility_window_bounds()
+                .log_err();
+        }
 
         self.refresh();
 
@@ -1890,7 +1990,11 @@ impl Window {
     /// where it covers the entire screen including the menu bar and notch area.
     /// Always `false` on platforms other than macOS.
     pub fn is_simple_fullscreen(&self) -> bool {
-        self.platform_window.is_simple_fullscreen()
+        self.platform_window
+            .capabilities()
+            .window_services
+            .simple_fullscreen
+            && self.platform_window.is_simple_fullscreen()
     }
 
     pub(crate) fn appearance_changed(&mut self, cx: &mut App) {
@@ -1974,7 +2078,14 @@ impl Window {
     /// When using client side decorations, set this to the width of the invisible decorations (Wayland and X11)
     pub fn set_client_inset(&mut self, inset: Pixels) {
         self.client_inset = Some(inset);
-        self.platform_window.set_client_inset(inset);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .client_inset
+        {
+            self.platform_window.set_client_inset(inset);
+        }
     }
 
     /// Returns the client_inset value by [`Self::set_client_inset`].
@@ -2015,7 +2126,9 @@ impl Window {
 
     /// Sets the application identifier.
     pub fn set_app_id(&mut self, app_id: &str) {
-        self.platform_window.set_app_id(app_id);
+        if self.platform_window.capabilities().window_services.app_id {
+            self.platform_window.set_app_id(app_id);
+        }
     }
 
     /// Sets the window background appearance.
@@ -2026,13 +2139,27 @@ impl Window {
 
     /// Mark the window as dirty at the platform level.
     pub fn set_window_edited(&mut self, edited: bool) {
-        self.platform_window.set_edited(edited);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .document_metadata
+        {
+            self.platform_window.set_edited(edited);
+        }
     }
 
     /// Set the path of the file this window represents.
     /// On macOS, this sets the window's accessibility document property (AXDocument).
     pub fn set_document_path(&self, path: Option<&std::path::Path>) {
-        self.platform_window.set_document_path(path);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .document_metadata
+        {
+            self.platform_window.set_document_path(path);
+        }
     }
 
     /// Determine the display on which the window is visible.
@@ -2045,7 +2172,14 @@ impl Window {
 
     /// Show the platform character palette.
     pub fn show_character_palette(&self) {
-        self.platform_window.show_character_palette();
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .character_palette
+        {
+            self.platform_window.show_character_palette();
+        }
     }
 
     /// The scale factor of the display associated with the window. For example, it could
@@ -2078,7 +2212,7 @@ impl Window {
         f: impl FnOnce(&GlobalElementId, &mut Self) -> R,
     ) -> R {
         self.with_id(element_id, |this| {
-            let global_id = GlobalElementId(Arc::from(&*this.element_id_stack));
+            let global_id = GlobalElementId(Arc::from(this.element_id_path()));
 
             f(&global_id, this)
         })
@@ -2091,10 +2225,22 @@ impl Window {
         element_id: impl Into<ElementId>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.element_id_stack.push(element_id.into());
+        self.push_element_id(element_id.into());
         let result = f(self);
-        self.element_id_stack.pop();
+        self.pop_element_id();
         result
+    }
+
+    pub(crate) fn push_element_id(&mut self, element_id: ElementId) {
+        self.frame_builder.push_element_id(element_id);
+    }
+
+    pub(crate) fn pop_element_id(&mut self) {
+        self.frame_builder.pop_element_id();
+    }
+
+    pub(crate) fn element_id_path(&self) -> &[ElementId] {
+        self.frame_builder.element_id_path()
     }
 
     /// Executes the provided function with the specified rem size.
@@ -2283,9 +2429,9 @@ impl Window {
 
         self.invalidate_entities();
         cx.entities.clear_accessed();
-        debug_assert!(self.rendered_entity_stack.is_empty());
+        self.frame_builder.debug_assert_idle();
         self.invalidator.set_dirty(false);
-        self.requested_autoscroll = None;
+        self.frame_builder.reset_autoscroll();
 
         // Restore the previously-used input handler.
         // Place it back into a None slot (left by a previous .take()) so that
@@ -2315,10 +2461,7 @@ impl Window {
             self.platform_window.set_input_handler(input_handler);
         }
 
-        self.layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
-            .clear();
+        self.frame_builder.layout_engine().clear();
         self.text_system().finish_frame();
         self.interaction
             .next_frame
@@ -2372,7 +2515,7 @@ impl Window {
                 .retain(&(), |listener| listener(&event, self, cx));
         }
 
-        debug_assert!(self.rendered_entity_stack.is_empty());
+        self.frame_builder.debug_assert_idle();
         self.record_entities_accessed(cx);
         self.reset_cursor_style(cx);
         self.frame_scheduler.set_refreshing(false);
@@ -2439,7 +2582,7 @@ impl Window {
                 .update_accessibility(built_frame.accessibility.clone())
                 .log_err();
         }
-        let submission = crate::render_api::submit_compat(
+        let submission = crate::render_api::submit_platform_frame(
             self.platform_window.as_mut(),
             crate::render_api::RenderScene::new(built_frame.scene),
         );
@@ -2544,9 +2687,8 @@ impl Window {
             request_layout_duration += request_layout_started_at.elapsed();
             request_layout_operations += 1;
         }
-        self.layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
+        self.frame_builder
+            .layout_engine()
             .stretch_auto_size_to_fill(root_layout_id, root_size, scale_factor);
         root_element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
 
@@ -2568,9 +2710,8 @@ impl Window {
                 request_layout_duration += request_layout_started_at.elapsed();
                 request_layout_operations += 1;
             }
-            self.layout_engine
-                .as_mut()
-                .expect("value should have the expected type")
+            self.frame_builder
+                .layout_engine()
                 .stretch_auto_size_to_fill(prompt_layout_id, root_size, scale_factor);
             element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
             prompt_element = Some(element);
@@ -2726,7 +2867,7 @@ impl Window {
     }
 
     fn prepaint_deferred_draws(&mut self, cx: &mut App) {
-        assert_eq!(self.element_id_stack.len(), 0);
+        assert_eq!(self.frame_builder.element_id_depth(), 0);
 
         // Process deferred draws in multiple rounds to support nesting.
         // Each round processes all current deferred draws, which may push new ones.
@@ -2758,10 +2899,10 @@ impl Window {
                 let (element, parent_node, current_view, rem_size, absolute_offset, prepaint_range) = {
                     let deferred_draw =
                         &mut self.interaction.next_frame.deferred_draws[deferred_draw_ix];
-                    self.element_id_stack
-                        .clone_from(&deferred_draw.element_id_stack);
-                    self.text_style_stack
-                        .clone_from(&deferred_draw.text_style_stack);
+                    self.frame_builder
+                        .restore_element_ids(&deferred_draw.element_id_stack);
+                    self.frame_builder
+                        .restore_text_styles(&deferred_draw.text_style_stack);
                     (
                         deferred_draw.element.take(),
                         deferred_draw.parent_node,
@@ -2795,14 +2936,14 @@ impl Window {
                     prepaint_start..prepaint_end;
             }
 
-            self.element_id_stack.clear();
-            self.text_style_stack.clear();
+            self.frame_builder.clear_element_ids();
+            self.frame_builder.clear_text_styles();
             round_start = round_end;
         }
     }
 
     fn paint_deferred_draws(&mut self, cx: &mut App) {
-        assert_eq!(self.element_id_stack.len(), 0);
+        assert_eq!(self.frame_builder.element_id_depth(), 0);
 
         // Paint all deferred draws in priority order.
         // Since prepaint has already processed nested deferreds, we just paint them all.
@@ -2814,8 +2955,8 @@ impl Window {
         let mut deferred_draws = mem::take(&mut self.interaction.next_frame.deferred_draws);
         for deferred_draw_ix in traversal_order {
             let mut deferred_draw = &mut deferred_draws[deferred_draw_ix];
-            self.element_id_stack
-                .clone_from(&deferred_draw.element_id_stack);
+            self.frame_builder
+                .restore_element_ids(&deferred_draw.element_id_stack);
             self.interaction
                 .next_frame
                 .dispatch_tree
@@ -2838,7 +2979,7 @@ impl Window {
             deferred_draw.paint_range = paint_start..paint_end;
         }
         self.interaction.next_frame.deferred_draws = deferred_draws;
-        self.element_id_stack.clear();
+        self.frame_builder.clear_element_ids();
     }
 
     fn deferred_draw_traversal_order(&mut self) -> SmallVec<[usize; 8]> {
@@ -3007,9 +3148,9 @@ impl Window {
     {
         self.invalidator.debug_assert_paint_or_prepaint();
         if let Some(style) = style {
-            self.text_style_stack.push(style);
+            self.frame_builder.push_text_style(style);
             let result = f(self);
-            self.text_style_stack.pop();
+            self.frame_builder.pop_text_style();
             result
         } else {
             f(self)
@@ -3057,9 +3198,9 @@ impl Window {
         self.invalidator.debug_assert_paint_or_prepaint();
         if let Some(mask) = mask {
             let mask = mask.intersect(&self.content_mask());
-            self.content_mask_stack.push(mask);
+            self.frame_builder.push_content_mask(mask);
             let result = f(self);
-            self.content_mask_stack.pop();
+            self.frame_builder.pop_content_mask();
             result
         } else {
             f(self)
@@ -3092,9 +3233,9 @@ impl Window {
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
         self.invalidator.debug_assert_prepaint();
-        self.element_offset_stack.push(offset);
+        self.frame_builder.push_element_offset(offset);
         let result = f(self);
-        self.element_offset_stack.pop();
+        self.frame_builder.pop_element_offset();
         result
     }
 
@@ -3109,10 +3250,11 @@ impl Window {
             return f(self);
         };
 
-        let previous_opacity = self.element_opacity;
-        self.element_opacity = previous_opacity * opacity;
+        let previous_opacity = self.frame_builder.element_opacity();
+        self.frame_builder
+            .replace_element_opacity(previous_opacity * opacity);
         let result = f(self);
-        self.element_opacity = previous_opacity;
+        self.frame_builder.replace_element_opacity(previous_opacity);
         result
     }
 
@@ -3158,14 +3300,14 @@ impl Window {
     /// called during the prepaint phase of element drawing.
     pub fn request_autoscroll(&mut self, bounds: Bounds<Pixels>) {
         self.invalidator.debug_assert_prepaint();
-        self.requested_autoscroll = Some(bounds);
+        self.frame_builder.request_autoscroll(bounds);
     }
 
     /// This method can be called from a containing element such as [`crate::List`] to support the autoscroll behavior
     /// described in [`Self::request_autoscroll`].
     pub fn take_autoscroll(&mut self) -> Option<Bounds<Pixels>> {
         self.invalidator.debug_assert_prepaint();
-        self.requested_autoscroll.take()
+        self.frame_builder.take_autoscroll()
     }
 
     /// Asynchronously load an asset, if the asset hasn't finished loading this will return None.
@@ -3189,10 +3331,7 @@ impl Window {
     /// prepaint phase of element drawing.
     pub fn element_offset(&self) -> Point<Pixels> {
         self.invalidator.debug_assert_prepaint();
-        self.element_offset_stack
-            .last()
-            .copied()
-            .unwrap_or_default()
+        self.frame_builder.element_offset()
     }
 
     /// Obtain the current element opacity. This method should only be called during the
@@ -3200,15 +3339,14 @@ impl Window {
     #[inline]
     pub(crate) fn element_opacity(&self) -> f32 {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.element_opacity
+        self.frame_builder.element_opacity()
     }
 
     /// Obtain the current content mask. This method should only be called during element drawing.
     pub fn content_mask(&self) -> ContentMask<Pixels> {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.content_mask_stack
-            .last()
-            .cloned()
+        self.frame_builder
+            .content_mask()
             .unwrap_or_else(|| ContentMask {
                 bounds: Bounds {
                     origin: Point::default(),
@@ -3224,9 +3362,9 @@ impl Window {
         element_id: impl Into<ElementId>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.element_id_stack.push(element_id.into());
+        self.frame_builder.push_element_id(element_id.into());
         let result = f(self);
-        self.element_id_stack.pop();
+        self.frame_builder.pop_element_id();
         result
     }
 
@@ -3429,8 +3567,8 @@ impl Window {
             .push(DeferredDraw {
                 current_view: self.current_view(),
                 parent_node,
-                element_id_stack: self.element_id_stack.clone(),
-                text_style_stack: self.text_style_stack.clone(),
+                element_id_stack: self.frame_builder.clone_element_ids(),
+                text_style_stack: self.frame_builder.clone_text_styles(),
                 content_mask,
                 rem_size: self.rem_size(),
                 priority,
@@ -4093,10 +4231,12 @@ impl Window {
         let rem_size = self.rem_size();
         let scale_factor = self.scale_factor();
 
-        self.layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
-            .request_layout(style, rem_size, scale_factor, &cx.layout_id_buffer)
+        self.frame_builder.layout_engine().request_layout(
+            style,
+            rem_size,
+            scale_factor,
+            &cx.layout_id_buffer,
+        )
     }
 
     /// Add a node to the layout tree for the current frame. Instead of taking a `Style` and children,
@@ -4116,10 +4256,12 @@ impl Window {
 
         let rem_size = self.rem_size();
         let scale_factor = self.scale_factor();
-        self.layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
-            .request_measured_layout(style, rem_size, scale_factor, measure)
+        self.frame_builder.layout_engine().request_measured_layout(
+            style,
+            rem_size,
+            scale_factor,
+            measure,
+        )
     }
 
     /// Compute the layout for the given id within the given available space.
@@ -4135,9 +4277,9 @@ impl Window {
     ) {
         self.invalidator.debug_assert_prepaint();
 
-        let mut layout_engine = self.layout_engine.take().expect("entry should be present");
+        let mut layout_engine = self.frame_builder.take_layout_engine();
         layout_engine.compute_layout(layout_id, available_space, self, cx);
-        self.layout_engine = Some(layout_engine);
+        self.frame_builder.restore_layout_engine(layout_engine);
     }
 
     /// Obtain the bounds computed for the given LayoutId relative to the window. This method will usually be invoked by
@@ -4149,9 +4291,8 @@ impl Window {
 
         let scale_factor = self.scale_factor();
         let mut bounds = self
-            .layout_engine
-            .as_mut()
-            .expect("value should have the expected type")
+            .frame_builder
+            .layout_engine()
             .layout_bounds(layout_id, scale_factor)
             .map(Into::into);
         let snapped_offset = self.pixel_snap_point(self.element_offset());
@@ -4226,9 +4367,8 @@ impl Window {
     /// Get the entity ID for the currently rendering view
     pub fn current_view(&self) -> EntityId {
         self.invalidator.debug_assert_paint_or_prepaint();
-        self.rendered_entity_stack
-            .last()
-            .copied()
+        self.frame_builder
+            .current_view()
             .expect("copied should be present")
     }
 
@@ -4238,9 +4378,9 @@ impl Window {
         id: EntityId,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.rendered_entity_stack.push(id);
+        self.frame_builder.push_rendered_view(id);
         let result = f(self);
-        self.rendered_entity_stack.pop();
+        self.frame_builder.pop_rendered_view();
         result
     }
 
@@ -4250,13 +4390,17 @@ impl Window {
         F: FnOnce(&mut Self) -> R,
     {
         if let Some(image_cache) = image_cache {
-            self.image_cache_stack.push(image_cache);
+            self.frame_builder.push_image_cache(image_cache);
             let result = f(self);
-            self.image_cache_stack.pop();
+            self.frame_builder.pop_image_cache();
             result
         } else {
             f(self)
         }
+    }
+
+    pub(crate) fn current_image_cache(&self) -> Option<AnyImageCache> {
+        self.frame_builder.current_image_cache()
     }
 
     /// Sets an input handler, such as [`ElementInputHandler`][element_input_handler], which interfaces with the
@@ -4764,7 +4908,14 @@ impl Window {
     /// notch. Unlike [`Window::toggle_fullscreen`], this does not move the window
     /// into its own Mission Control space. Only has an effect on macOS.
     pub fn toggle_simple_fullscreen(&self) {
-        self.platform_window.toggle_simple_fullscreen();
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .simple_fullscreen
+        {
+            self.platform_window.toggle_simple_fullscreen();
+        }
     }
 
     /// Updates the IME panel position suggestions for languages like japanese, chinese.
@@ -5063,7 +5214,14 @@ impl Window {
     /// Perform titlebar double-click action.
     /// This is macOS specific.
     pub fn titlebar_double_click(&self) {
-        self.platform_window.titlebar_double_click();
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .titlebar_actions
+        {
+            self.platform_window.titlebar_double_click();
+        }
     }
 
     /// Gets the window's title at the platform level.
@@ -5087,26 +5245,54 @@ impl Window {
     /// Merges all open windows into a single tabbed window.
     /// This is macOS specific.
     pub fn merge_all_windows(&self) {
-        self.platform_window.merge_all_windows()
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window.merge_all_windows()
+        }
     }
 
     /// Moves the tab to a new containing window.
     /// This is macOS specific.
     pub fn move_tab_to_new_window(&self) {
-        self.platform_window.move_tab_to_new_window()
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window.move_tab_to_new_window()
+        }
     }
 
     /// Shows or hides the window tab overview.
     /// This is macOS specific.
     pub fn toggle_window_tab_overview(&self) {
-        self.platform_window.toggle_window_tab_overview()
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window.toggle_window_tab_overview()
+        }
     }
 
     /// Sets the tabbing identifier for the window.
     /// This is macOS specific.
     pub fn set_tabbing_identifier(&self, tabbing_identifier: Option<String>) {
-        self.platform_window
-            .set_tabbing_identifier(tabbing_identifier)
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window
+                .set_tabbing_identifier(tabbing_identifier)
+        }
     }
 
     /// Request the OS to play an alert sound. On some platforms this is associated
@@ -5840,12 +6026,14 @@ pub fn outline(
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "accessibility")]
+    use crate::AccessibilityUpdate;
+    #[cfg(feature = "accessibility")]
     use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
-        AnyView, App, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
-        InputHandler, KeyDownEvent, Keystroke, PlatformInput, Point, StyleRefinement,
-        TextInputClient, UTF16Selection,
+        AnyView, App, Entity, FrameDirtyReason, FrameEvent, FrameInputProvenance,
+        FrameInvalidationPhase, FramePhase, FrameTimingCollector, InputHandler, KeyDownEvent,
+        Keystroke, PlatformInput, Point, StyleRefinement, TextInputClient, UTF16Selection,
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
@@ -6092,7 +6280,7 @@ mod tests {
                 assert!(!capabilities.ime_candidate_position);
                 assert!(capabilities.frame_callbacks);
                 assert!(capabilities.native_prompt);
-                assert!(!capabilities.accessibility);
+                assert_eq!(capabilities.accessibility, cfg!(feature = "accessibility"));
                 assert_eq!(
                     capabilities.clipboard,
                     crate::ClipboardCapabilities::READ_WRITE
@@ -6103,6 +6291,13 @@ mod tests {
                 assert!(!capabilities.window_controls.maximize);
                 assert!(!capabilities.window_controls.minimize);
                 assert!(!capabilities.window_controls.window_menu);
+                assert_eq!(
+                    capabilities.window_services,
+                    crate::WindowServiceCapabilities {
+                        document_metadata: true,
+                        ..Default::default()
+                    }
+                );
             })
             .expect("test window should remain open");
     }
@@ -6143,7 +6338,11 @@ mod tests {
         })
         .expect("diagnostics window should remain open");
 
-        let mut collector = FrameTimingCollector::new();
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
         cx.dispatch_keystroke(handle, Keystroke::parse("a").expect("valid keystroke"));
         cx.update_window(handle, |_, window, _| window.present_for_test())
             .expect("diagnostics window should remain open");
@@ -6154,6 +6353,65 @@ mod tests {
                 if timing.input == Some(FrameInputProvenance::Keyboard)
                     && timing.input_to_present.is_some()
         )));
+    }
+
+    #[gpui::test]
+    fn built_frame_projects_only_completed_read_only_state(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        let handle: AnyWindowHandle = window.into();
+
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+
+            let expected_scene = &window.interaction.rendered_frame.scene;
+            let expected_hitbox_count = window.interaction.rendered_frame.hitboxes.len();
+            let expected_dispatch_node_count =
+                window.interaction.rendered_frame.dispatch_tree.len();
+            let expected_mouse_hitbox_count = window.interaction.mouse_hit_test.ids.len();
+            let expected_captured_hitbox = window.interaction.captured_hitbox;
+            let expected_focus = window.interaction.focus;
+            let expected_window_active = window.interaction.rendered_frame.window_active;
+            let expected_handler_count = window.text_input.rendered_handlers.len();
+            let expected_active_handler = window
+                .text_input
+                .rendered_handlers
+                .iter()
+                .rposition(Option::is_some);
+
+            let built_frame = window.interaction.built_frame(&window.text_input);
+            assert!(std::ptr::eq(built_frame.scene, expected_scene));
+            assert_eq!(
+                built_frame.interaction.hitboxes.len(),
+                expected_hitbox_count
+            );
+            assert_eq!(
+                built_frame.interaction.dispatch_tree.len(),
+                expected_dispatch_node_count
+            );
+            assert_eq!(
+                built_frame.interaction.mouse_hit_test.ids.len(),
+                expected_mouse_hitbox_count
+            );
+            assert_eq!(
+                built_frame.interaction.captured_hitbox,
+                expected_captured_hitbox
+            );
+            assert_eq!(built_frame.interaction.focus, expected_focus);
+            assert_eq!(
+                built_frame.interaction.window_active,
+                expected_window_active
+            );
+            assert_eq!(
+                built_frame.text_input.handler_slot_count,
+                expected_handler_count
+            );
+            assert_eq!(
+                built_frame.text_input.active_handler_index,
+                expected_active_handler
+            );
+        })
+        .expect("built-frame window should remain open");
     }
 
     #[cfg(feature = "accessibility")]
@@ -6230,14 +6488,59 @@ mod tests {
         .expect("accessibility window should remain open");
     }
 
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn platform_accessibility_callbacks_route_one_action(cx: &mut TestAppContext) {
+        let action_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let action_count = action_count.clone();
+            move |_, _| AccessibilityView { action_count }
+        });
+        let handle: AnyWindowHandle = window.into();
+        let test_window = cx.test_window(handle);
+
+        let initial_tree = test_window
+            .simulate_accessibility_activation()
+            .expect("test adapter should provide an initial tree");
+        assert_eq!(initial_tree.nodes.len(), 1);
+        cx.run_until_parked();
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+
+        let update = test_window
+            .accessibility_update()
+            .and_then(AccessibilityUpdate::into_semantic_snapshot)
+            .expect("completed frame should reach the platform bridge");
+        let button_id = update
+            .update
+            .nodes
+            .iter()
+            .find_map(|(node_id, node)| {
+                (node.role() == accesskit::Role::Button).then_some(*node_id)
+            })
+            .expect("semantic button should be present");
+
+        test_window.simulate_accessibility_action(accesskit::ActionRequest {
+            action: accesskit::Action::Click,
+            target_tree: accesskit::TreeId::ROOT,
+            target_node: button_id,
+            data: None,
+        });
+        cx.run_until_parked();
+        assert_eq!(action_count.get(), 1);
+    }
+
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
     fn test_frame_diagnostics_follow_build_through_present(cx: &mut TestAppContext) {
-        let mut collector = FrameTimingCollector::new();
         let window = cx.add_window(|_, _| EmptyView);
         let handle: AnyWindowHandle = window.into();
         let window_id = handle.window_id();
         let test_window = cx.test_window(handle);
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
 
         test_window.simulate_frame_request(RequestFrameOptions::default());
         let initial = collector.snapshot();
@@ -6265,6 +6568,12 @@ mod tests {
                 _ => None,
             })
             .expect("initial frame should be presented");
+        assert!(initial.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if invalidation.window_id == window_id
+                    && invalidation.reason.earliest_phase() == FrameInvalidationPhase::Layout
+        )));
         assert!(initial.events.iter().any(|event| matches!(
             event,
             FrameEvent::Invalidated(invalidation)
@@ -6307,6 +6616,16 @@ mod tests {
             FrameEvent::Invalidated(invalidation)
                 if invalidation.window_id == window_id && invalidation.coalesced
         )));
+        assert!(coalesced.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if matches!(
+                    invalidation.reason,
+                    FrameDirtyReason::WindowRefresh {
+                        earliest_phase: FrameInvalidationPhase::Layout
+                    }
+                )
+        )));
 
         cx.update_window(handle, |_, window, cx| {
             window.dispatch_event(
@@ -6339,11 +6658,15 @@ mod tests {
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
     fn frame_diagnostics_record_skipped_submission(cx: &mut TestAppContext) {
-        let mut collector = FrameTimingCollector::new();
         let window = cx.add_window(|_, _| EmptyView);
         let handle: AnyWindowHandle = window.into();
         let window_id = handle.window_id();
         let test_window = cx.test_window(handle);
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
         collector.snapshot();
 
         test_window.set_draw_result(false);
@@ -6374,7 +6697,6 @@ mod tests {
     #[gpui::test]
     fn frame_diagnostics_runner(cx: &mut TestAppContext) {
         const ITERATIONS: usize = 100;
-        let mut collector = FrameTimingCollector::new();
         let panel = cx.new(|_| DiagnosticsPanel);
         let window = cx.add_window({
             let panel = panel.clone();
@@ -6385,6 +6707,11 @@ mod tests {
         });
         let handle: AnyWindowHandle = window.into();
         let test_window = cx.test_window(handle);
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
 
         window
             .update(cx, |view, window, cx| view.focus.focus(window, cx))

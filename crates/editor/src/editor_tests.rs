@@ -523,6 +523,35 @@ fn test_accessibility_keyboard_word_completion(cx: &mut TestAppContext) {
     });
 }
 
+#[cfg(feature = "accessibility")]
+#[gpui::test]
+fn test_editor_accessibility_semantics(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+    let editor = cx.add_window(|window, cx| {
+        let editor = build_editor(MultiBuffer::build_simple("hello", cx), window, cx);
+        window.focus(&editor.focus_handle(cx), cx);
+        editor
+    });
+    let handle: gpui::AnyWindowHandle = editor.into();
+    let snapshot = cx
+        .update_window(handle, |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("editor semantic snapshot should exist")
+        })
+        .expect("editor window should remain open");
+    let (node_id, node) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::MultilineTextInput)
+        .expect("multiline editor semantic node should exist");
+    assert!(node.label().is_some_and(|label| !label.is_empty()));
+    assert_eq!(snapshot.focused_node, *node_id);
+}
+
 #[gpui::test]
 fn test_ime_composition(cx: &mut TestAppContext) {
     init_test(cx, |_| {});

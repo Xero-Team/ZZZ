@@ -930,7 +930,7 @@ mod tests {
             cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
         let workspace =
             multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
-        let mut collector = FrameTimingCollector::new();
+        let mut collector = cx.update(|window, _| FrameTimingCollector::for_window(window));
 
         cx.simulate_keystrokes("cmd-shift-p");
         for query in ["", "b", "ba", "bck", "bcksp"] {
@@ -950,6 +950,9 @@ mod tests {
         }
 
         let mut phases = [0u128; 5];
+        let mut operations = [0u64; 5];
+        let mut cache_hits = [0u64; 5];
+        let mut frame_durations = std::collections::HashMap::new();
         let mut presented = 0usize;
         for event in collector.snapshot().events {
             match event {
@@ -962,6 +965,10 @@ mod tests {
                         FramePhase::PaintCacheReplay => 4,
                     };
                     phases[index] += timing.duration.as_nanos();
+                    operations[index] += timing.operations;
+                    cache_hits[index] += timing.cache_hits;
+                    *frame_durations.entry(timing.build_id).or_insert(0) +=
+                        timing.duration.as_nanos();
                 }
                 FrameEvent::Presented(_) => presented += 1,
                 FrameEvent::Invalidated(_)
@@ -971,9 +978,16 @@ mod tests {
             }
         }
         assert!(presented > 0);
+        let mut frame_durations = frame_durations.into_values().collect::<Vec<_>>();
+        frame_durations.sort_unstable();
+        let p95_index = frame_durations
+            .len()
+            .saturating_mul(95)
+            .div_ceil(100)
+            .saturating_sub(1);
+        let p95_total = frame_durations.get(p95_index).copied().unwrap_or_default();
         println!(
-            "COMMAND_PALETTE_FRAME_DIAGNOSTICS presented={presented} request_layout_ns={} prepaint_ns={} paint_ns={} prepaint_replay_ns={} paint_replay_ns={}",
-            phases[0], phases[1], phases[2], phases[3], phases[4]
+            "COMMAND_PALETTE_FRAME_DIAGNOSTICS presented={presented} duration_ns={phases:?} operations={operations:?} cache_hits={cache_hits:?} p95_total_ns={p95_total}"
         );
     }
 

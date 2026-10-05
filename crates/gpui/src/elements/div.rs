@@ -1592,6 +1592,9 @@ impl Element for Div {
         if let Some(value) = &self.interactivity.accessibility_value {
             node.set_value(value.to_string());
         }
+        if self.interactivity.tracked_focus_handle.is_some() {
+            node.add_action(accesskit::Action::Focus);
+        }
         for (action, _) in &self.interactivity.accessibility_action_listeners {
             node.add_action(*action);
         }
@@ -1599,6 +1602,25 @@ impl Element for Div {
 
     #[cfg(feature = "accessibility")]
     fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
+        if let Some(focus_handle) = self.interactivity.tracked_focus_handle.clone() {
+            if focus_handle.is_focused(window) {
+                if let Err(error) = window
+                    .interaction
+                    .next_frame
+                    .accessibility_builder
+                    .set_focus(node_id)
+                {
+                    log::error!("failed to map semantic focus: {error:?}");
+                }
+            }
+            window
+                .interaction
+                .next_frame
+                .accessibility_actions
+                .register(node_id, accesskit::Action::Focus, move |_, window, cx| {
+                    focus_handle.focus(window, cx);
+                });
+        }
         for (action, listener) in self.interactivity.accessibility_action_listeners.drain(..) {
             window
                 .interaction

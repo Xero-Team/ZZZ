@@ -13,6 +13,7 @@ path = "src/gpui_linux.rs"
 
 [features]
 default = ["wayland", "x11"]
+accessibility = ["gpui/accessibility", "dep:accesskit", "dep:accesskit_unix"]
 test-support = ["gpui/test-support"]
 wayland = [
     "bitflags",
@@ -51,6 +52,8 @@ screen-capture = [
 
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+accesskit = { workspace = true, optional = true }
+accesskit_unix = { workspace = true, optional = true }
 anyhow.workspace = true
 bytemuck = "1"
 collections.workspace = true

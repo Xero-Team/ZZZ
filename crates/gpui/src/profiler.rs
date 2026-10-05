@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::SharedString;
 #[cfg(feature = "frame-diagnostics")]
-use crate::{EntityId, WindowId};
+use crate::{EntityId, Window, WindowId};
 
 #[doc(hidden)]
 #[derive(Debug, Copy, Clone)]
@@ -425,6 +425,18 @@ pub(crate) fn next_frame_build_id() -> FrameBuildId {
     FrameBuildId(NEXT_FRAME_BUILD_ID.fetch_add(1, Ordering::Relaxed))
 }
 
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FrameDiagnosticsSourceId(u64);
+
+#[cfg(feature = "frame-diagnostics")]
+static NEXT_FRAME_DIAGNOSTICS_SOURCE_ID: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(feature = "frame-diagnostics")]
+pub(crate) fn next_frame_diagnostics_source_id() -> FrameDiagnosticsSourceId {
+    FrameDiagnosticsSourceId(NEXT_FRAME_DIAGNOSTICS_SOURCE_ID.fetch_add(1, Ordering::Relaxed))
+}
+
 /// Describes why a window became dirty.
 #[cfg(feature = "frame-diagnostics")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -432,9 +444,42 @@ pub enum FrameDirtyReason {
     /// The initial frame required when a window opens.
     Initial,
     /// An entity observed by the window emitted a notification.
-    EntityNotify,
+    EntityNotify {
+        /// The earliest frame phase that must be rebuilt.
+        earliest_phase: FrameInvalidationPhase,
+    },
     /// The window requested a complete refresh.
-    WindowRefresh,
+    WindowRefresh {
+        /// The earliest frame phase that must be rebuilt.
+        earliest_phase: FrameInvalidationPhase,
+    },
+}
+
+/// The earliest frame phase affected by an invalidation.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameInvalidationPhase {
+    /// Layout and every later phase must be rebuilt.
+    Layout,
+    /// Prepaint, paint, and accessibility output must be rebuilt.
+    Prepaint,
+    /// Paint output must be rebuilt.
+    Paint,
+    /// Only accessibility output must be rebuilt.
+    Accessibility,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+impl FrameDirtyReason {
+    /// Returns the earliest phase affected by this invalidation.
+    pub fn earliest_phase(self) -> FrameInvalidationPhase {
+        match self {
+            Self::Initial => FrameInvalidationPhase::Layout,
+            Self::EntityNotify { earliest_phase } | Self::WindowRefresh { earliest_phase } => {
+                earliest_phase
+            }
+        }
+    }
 }
 
 /// Classifies the input event that caused an invalidation.
@@ -584,15 +629,22 @@ pub enum FrameEvent {
 }
 
 #[cfg(feature = "frame-diagnostics")]
-const MAX_FRAME_EVENTS: usize = (16 * 1024 * 1024) / core::mem::size_of::<FrameEvent>();
+const MAX_FRAME_EVENTS: usize = (16 * 1024 * 1024) / core::mem::size_of::<RecordedFrameEvent>();
 
 #[cfg(feature = "frame-diagnostics")]
 const INITIAL_FRAME_EVENTS_CAPACITY: usize = 4096;
 
 #[cfg(feature = "frame-diagnostics")]
 struct FrameEvents {
-    events: VecDeque<FrameEvent>,
+    events: VecDeque<RecordedFrameEvent>,
     total_pushed: u64,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy)]
+struct RecordedFrameEvent {
+    source_id: FrameDiagnosticsSourceId,
+    event: FrameEvent,
 }
 
 #[cfg(feature = "frame-diagnostics")]
@@ -602,7 +654,7 @@ static FRAME_EVENTS: spin::Mutex<FrameEvents> = spin::Mutex::new(FrameEvents {
 });
 
 #[cfg(feature = "frame-diagnostics")]
-pub(crate) fn record_frame_events(events: &[FrameEvent]) {
+pub(crate) fn record_frame_events(source_id: FrameDiagnosticsSourceId, events: &[FrameEvent]) {
     if events.is_empty() {
         return;
     }
@@ -616,7 +668,10 @@ pub(crate) fn record_frame_events(events: &[FrameEvent]) {
         if frame_events.events.len() >= MAX_FRAME_EVENTS {
             frame_events.events.pop_front();
         }
-        frame_events.events.push_back(*event);
+        frame_events.events.push_back(RecordedFrameEvent {
+            source_id,
+            event: *event,
+        });
         frame_events.total_pushed += 1;
     }
 }
@@ -635,6 +690,7 @@ pub struct FrameDiagnosticsSnapshot {
 #[cfg(feature = "frame-diagnostics")]
 pub struct FrameTimingCollector {
     cursor: u64,
+    source_id: Option<FrameDiagnosticsSourceId>,
 }
 
 #[cfg(feature = "frame-diagnostics")]
@@ -650,6 +706,15 @@ impl FrameTimingCollector {
     pub fn new() -> Self {
         Self {
             cursor: FRAME_EVENTS.lock().total_pushed,
+            source_id: None,
+        }
+    }
+
+    /// Starts observing events recorded by one window after this call.
+    pub fn for_window(window: &Window) -> Self {
+        Self {
+            cursor: FRAME_EVENTS.lock().total_pushed,
+            source_id: Some(window.invalidator.frame_diagnostics_source_id()),
         }
     }
 
@@ -664,7 +729,11 @@ impl FrameTimingCollector {
             .events
             .iter()
             .skip(skip.min(frame_events.events.len()))
-            .copied()
+            .filter(|record| {
+                self.source_id
+                    .is_none_or(|source_id| source_id == record.source_id)
+            })
+            .map(|record| record.event)
             .collect();
         self.cursor = frame_events.total_pushed;
         FrameDiagnosticsSnapshot {

@@ -615,6 +615,8 @@ struct MacWindowState {
     toggle_tab_bar_callback: Option<Box<dyn FnMut()>>,
     activated_least_once: bool,
     closed: Arc<AtomicBool>,
+    #[cfg(feature = "accessibility")]
+    accessibility_adapter: Option<accesskit_macos::SubclassingAdapter>,
     // The parent window if this window is a sheet (Dialog kind)
     sheet_parent: Option<id>,
 }
@@ -1049,6 +1051,8 @@ impl MacWindow {
                 toggle_tab_bar_callback: None,
                 activated_least_once: false,
                 closed: Arc::new(AtomicBool::new(false)),
+                #[cfg(feature = "accessibility")]
+                accessibility_adapter: None,
                 sheet_parent: None,
             })));
 
@@ -1290,6 +1294,8 @@ impl MacWindow {
 impl Drop for MacWindow {
     fn drop(&mut self) {
         let mut this = self.0.lock();
+        #[cfg(feature = "accessibility")]
+        drop(this.accessibility_adapter.take());
         this.renderer.destroy();
         let window = this.native_window;
         let sheet_parent = this.sheet_parent.take();
@@ -1323,7 +1329,74 @@ fn if_window_not_closed(closed: Arc<AtomicBool>, f: impl FnOnce()) {
     }
 }
 
-impl gpui::AccessibilityBridge for MacWindow {}
+impl gpui::AccessibilityBridge for MacWindow {
+    #[cfg(feature = "accessibility")]
+    fn initialize_accessibility(
+        &mut self,
+        callbacks: gpui::AccessibilityCallbacks,
+    ) -> anyhow::Result<()> {
+        let mut state = self.0.lock();
+        let activation_handler = AccessibilityActivationHandler {
+            callback: callbacks.activation,
+        };
+        let action_handler = AccessibilityActionHandler(callbacks.action);
+        let adapter = unsafe {
+            accesskit_macos::SubclassingAdapter::for_window(
+                state.native_window.cast(),
+                activation_handler,
+                action_handler,
+            )
+        };
+        state.accessibility_adapter = Some(adapter);
+        Ok(())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn update_accessibility(&mut self, update: gpui::AccessibilityUpdate) -> anyhow::Result<()> {
+        let Some(snapshot) = update.into_semantic_snapshot() else {
+            return Ok(());
+        };
+        let events = {
+            let mut state = self.0.lock();
+            let Some(adapter) = state.accessibility_adapter.as_mut() else {
+                anyhow::bail!("macOS accessibility adapter was not initialized");
+            };
+            adapter.update_if_active(|| snapshot.update)
+        };
+        if let Some(events) = events {
+            events.raise();
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn update_accessibility_window_bounds(&mut self) -> anyhow::Result<()> {
+        // AppKit tracks the window bounds for NSAccessibility.
+        Ok(())
+    }
+}
+
+#[cfg(feature = "accessibility")]
+struct AccessibilityActivationHandler {
+    callback: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
+}
+
+#[cfg(feature = "accessibility")]
+impl accesskit::ActivationHandler for AccessibilityActivationHandler {
+    fn request_initial_tree(&mut self) -> Option<accesskit::TreeUpdate> {
+        (self.callback)()
+    }
+}
+
+#[cfg(feature = "accessibility")]
+struct AccessibilityActionHandler(Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>);
+
+#[cfg(feature = "accessibility")]
+impl accesskit::ActionHandler for AccessibilityActionHandler {
+    fn do_action(&mut self, request: accesskit::ActionRequest) {
+        (self.0)(request);
+    }
+}
 
 impl gpui::TextInputBridge for MacWindow {
     fn set_input_handler(&mut self, input_handler: TextInputClient) {
@@ -2031,7 +2104,7 @@ fn macos_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
         ime_candidate_position: true,
-        accessibility: false,
+        accessibility: cfg!(feature = "accessibility"),
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
         system_bell: true,
@@ -2040,6 +2113,14 @@ fn macos_capabilities() -> gpui::PlatformCapabilities {
         window_controls: gpui::WindowControls {
             resize_window: false,
             ..gpui::WindowControls::default()
+        },
+        window_services: gpui::WindowServiceCapabilities {
+            document_metadata: true,
+            character_palette: true,
+            simple_fullscreen: true,
+            system_tabs: true,
+            titlebar_actions: true,
+            ..Default::default()
         },
     }
 }
@@ -2698,6 +2779,19 @@ extern "C" fn window_did_change_key_status(this: &Object, selector: Sel, _: id) 
 
     let executor = lock.foreground_executor.clone();
     drop(lock);
+
+    #[cfg(feature = "accessibility")]
+    let accessibility_events = {
+        let mut state = window_state.lock();
+        state
+            .accessibility_adapter
+            .as_mut()
+            .and_then(|adapter| adapter.update_view_focus_state(is_active))
+    };
+    #[cfg(feature = "accessibility")]
+    if let Some(events) = accessibility_events {
+        events.raise();
+    }
 
     // When a window becomes active, trigger an immediate synchronous frame request to prevent
     // tab flicker when switching between windows in native tabs mode.
@@ -3412,7 +3506,7 @@ mod tests {
             capabilities.clipboard,
             gpui::ClipboardCapabilities::READ_WRITE
         );
-        assert!(!capabilities.accessibility);
+        assert_eq!(capabilities.accessibility, cfg!(feature = "accessibility"));
         assert!(capabilities.window_controls.attention);
         assert!(capabilities.window_controls.move_window);
         assert!(!capabilities.window_controls.resize_window);
@@ -3420,6 +3514,17 @@ mod tests {
         assert!(capabilities.window_controls.maximize);
         assert!(capabilities.window_controls.minimize);
         assert!(capabilities.window_controls.window_menu);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities {
+                document_metadata: true,
+                character_palette: true,
+                simple_fullscreen: true,
+                system_tabs: true,
+                titlebar_actions: true,
+                ..Default::default()
+            }
+        );
     }
 
     #[test]

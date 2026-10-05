@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+"""Run the Linux X11/Fcitx5 native IME repetition smoke test."""
+
+from __future__ import annotations
+
+import argparse
+import ctypes
+import ctypes.util
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+try:
+    from evdev import UInput, ecodes
+    from Xlib import X, display, error as x_error
+except ImportError as error:
+    raise SystemExit(
+        "gpui-ime-smoke requires the Python evdev and Xlib packages"
+    ) from error
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Type 你好 through Fcitx5/Rime into an isolated X11 ZZZ editor "
+            "and verify every committed repetition on disk."
+        )
+    )
+    parser.add_argument(
+        "--binary",
+        type=Path,
+        default=Path("target/debug/zzz"),
+        help="ZZZ binary to launch (default: target/debug/zzz)",
+    )
+    parser.add_argument(
+        "--repetitions",
+        type=int,
+        default=100,
+        help="number of nihao/你好 commits to verify (default: 100)",
+    )
+    return parser.parse_args()
+
+
+def require_environment(binary: Path) -> None:
+    if sys.platform != "linux":
+        raise SystemExit("gpui-ime-smoke is Linux-only")
+    if not os.environ.get("DISPLAY"):
+        raise SystemExit("gpui-ime-smoke requires an X11 DISPLAY")
+    if not binary.is_file():
+        raise SystemExit(f"ZZZ binary does not exist: {binary}")
+    if shutil.which("fcitx5-remote") is None:
+        raise SystemExit("gpui-ime-smoke requires fcitx5-remote")
+    if not os.access("/dev/uinput", os.W_OK):
+        raise SystemExit("gpui-ime-smoke requires write access to /dev/uinput")
+
+
+def find_window(
+    process_id: int,
+) -> tuple[int, int, tuple[int, int, int, int], str | None]:
+    query = display.Display()
+    root = query.screen().root
+    process_id_atom = query.intern_atom("_NET_WM_PID")
+    name_atom = query.intern_atom("_NET_WM_NAME")
+    utf8_atom = query.intern_atom("UTF8_STRING")
+
+    window = None
+    for _ in range(300):
+        for candidate in root.query_tree().children:
+            property_value = candidate.get_full_property(process_id_atom, X.AnyPropertyType)
+            if (
+                property_value is not None
+                and len(property_value.value)
+                and int(property_value.value[0]) == process_id
+                and candidate.get_attributes().map_state == X.IsViewable
+            ):
+                window = candidate
+                break
+        if window is not None:
+            break
+        time.sleep(0.1)
+
+    if window is None:
+        query.close()
+        raise RuntimeError(f"viewable X11 window not found for process {process_id}")
+
+    geometry = window.get_geometry()
+    name = window.get_full_property(name_atom, utf8_atom)
+    title = (
+        name.value.decode("utf-8", "replace")
+        if name is not None and isinstance(name.value, bytes)
+        else window.get_wm_name()
+    )
+    result = (
+        window.id,
+        root.id,
+        (geometry.x, geometry.y, geometry.width, geometry.height),
+        title,
+    )
+    query.close()
+    return result
+
+
+def focus_editor(window_id: int, root_id: int, geometry: tuple[int, int, int, int]) -> None:
+    x11_library = ctypes.util.find_library("X11")
+    if x11_library is None:
+        raise RuntimeError("libX11 was not found")
+    x11 = ctypes.cdll.LoadLibrary(x11_library)
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XSetInputFocus.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_ulong,
+        ctypes.c_int,
+        ctypes.c_ulong,
+    ]
+    x11.XWarpPointer.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_uint,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+
+    x_display = x11.XOpenDisplay(None)
+    if not x_display:
+        raise RuntimeError("XOpenDisplay failed")
+
+    window_x, window_y, window_width, window_height = geometry
+    editor_x = window_x + window_width * 2 // 5
+    editor_y = window_y + window_height * 3 // 10
+    x11.XSetInputFocus(x_display, window_id, 2, 0)
+    x11.XWarpPointer(
+        x_display,
+        0,
+        root_id,
+        0,
+        0,
+        0,
+        0,
+        editor_x,
+        editor_y,
+    )
+    x11.XFlush(x_display)
+    x11.XCloseDisplay(x_display)
+
+
+def candidate_window_geometry() -> tuple[int, int, int, int] | None:
+    query = display.Display()
+    root = query.screen().root
+    result = None
+    for candidate in root.query_tree().children:
+        try:
+            if (
+                candidate.get_wm_name() == "Fcitx5 Input Window"
+                and candidate.get_attributes().map_state == X.IsViewable
+            ):
+                geometry = candidate.get_geometry()
+                result = (geometry.x, geometry.y, geometry.width, geometry.height)
+                break
+        except (x_error.XError, x_error.ConnectionClosedError):
+            continue
+    query.close()
+    return result
+
+
+def candidate_overlaps_window(
+    candidate: tuple[int, int, int, int],
+    window: tuple[int, int, int, int],
+) -> bool:
+    candidate_x, candidate_y, candidate_width, candidate_height = candidate
+    window_x, window_y, window_width, window_height = window
+    return not (
+        candidate_x + candidate_width <= window_x
+        or candidate_y + candidate_height <= window_y
+        or candidate_x >= window_x + window_width
+        or candidate_y >= window_y + window_height
+    )
+
+
+def run_input(
+    repetitions: int,
+    geometry: tuple[int, int, int, int],
+) -> tuple[str, tuple[int, int, int, int], float]:
+    keyboard_capabilities = {
+        ecodes.EV_KEY: [
+            ecodes.KEY_END,
+            ecodes.KEY_ENTER,
+            ecodes.KEY_N,
+            ecodes.KEY_I,
+            ecodes.KEY_H,
+            ecodes.KEY_A,
+            ecodes.KEY_O,
+            ecodes.KEY_SPACE,
+            ecodes.KEY_ESC,
+            ecodes.KEY_LEFTCTRL,
+            ecodes.KEY_S,
+        ]
+    }
+    pointer_capabilities = {
+        ecodes.EV_KEY: [ecodes.BTN_LEFT],
+        ecodes.EV_REL: [ecodes.REL_X, ecodes.REL_Y],
+    }
+
+    with (
+        UInput(
+            keyboard_capabilities,
+            name="zzz-exp009-keyboard",
+            version=1,
+        ) as keyboard,
+        UInput(
+            pointer_capabilities,
+            name="zzz-exp009-pointer",
+            version=1,
+        ) as pointer,
+    ):
+        time.sleep(1.5)
+        pointer.write(ecodes.EV_KEY, ecodes.BTN_LEFT, 1)
+        pointer.syn()
+        time.sleep(0.05)
+        pointer.write(ecodes.EV_KEY, ecodes.BTN_LEFT, 0)
+        pointer.syn()
+        time.sleep(0.8)
+
+        subprocess.run(["fcitx5-remote", "-o"], check=True)
+        time.sleep(1)
+        engine = subprocess.check_output(
+            ["fcitx5-remote", "-n"], text=True
+        ).strip()
+        if engine != "rime":
+            raise RuntimeError(f"expected the Rime input method, found {engine!r}")
+
+        def tap(
+            code: int,
+            modifiers: tuple[int, ...] = (),
+            pause: float = 0.03,
+        ) -> None:
+            for modifier in modifiers:
+                keyboard.write(ecodes.EV_KEY, modifier, 1)
+            keyboard.write(ecodes.EV_KEY, code, 1)
+            keyboard.syn()
+            time.sleep(0.02)
+            keyboard.write(ecodes.EV_KEY, code, 0)
+            for modifier in reversed(modifiers):
+                keyboard.write(ecodes.EV_KEY, modifier, 0)
+            keyboard.syn()
+            time.sleep(pause)
+
+        tap(ecodes.KEY_END)
+        tap(ecodes.KEY_ENTER)
+        sequence = [
+            ecodes.KEY_N,
+            ecodes.KEY_I,
+            ecodes.KEY_H,
+            ecodes.KEY_A,
+            ecodes.KEY_O,
+        ]
+        candidate = None
+        started_at = time.monotonic()
+        checkpoint_interval = max(1, min(25, repetitions))
+
+        for index in range(repetitions):
+            for code in sequence:
+                tap(code)
+            if index == 0:
+                time.sleep(0.5)
+                candidate = candidate_window_geometry()
+                tap(ecodes.KEY_SPACE, pause=0.3)
+                tap(ecodes.KEY_ENTER, pause=0.3)
+            else:
+                tap(ecodes.KEY_SPACE, pause=0.05)
+                tap(ecodes.KEY_ENTER)
+            if (index + 1) % checkpoint_interval == 0:
+                time.sleep(1.5)
+                tap(ecodes.KEY_S, (ecodes.KEY_LEFTCTRL,), pause=0.2)
+                time.sleep(1.5)
+                print(f"checkpoint_saved={index + 1}")
+
+        tap(ecodes.KEY_N, pause=0.2)
+        tap(ecodes.KEY_ESC, pause=0.2)
+        time.sleep(3)
+        tap(ecodes.KEY_S, (ecodes.KEY_LEFTCTRL,), pause=0.2)
+        time.sleep(5)
+
+    if candidate is None:
+        raise RuntimeError("Fcitx5 candidate window was not visible during preedit")
+    if not candidate_overlaps_window(candidate, geometry):
+        raise RuntimeError(
+            f"candidate window {candidate} did not overlap the editor window {geometry}"
+        )
+    return engine, candidate, time.monotonic() - started_at
+
+
+def main() -> None:
+    args = parse_args()
+    if args.repetitions < 3:
+        raise SystemExit("--repetitions must be at least 3; the EXP-009 gate uses 100")
+
+    repository_root = Path(__file__).resolve().parent.parent
+    binary = args.binary
+    if not binary.is_absolute():
+        binary = repository_root / binary
+    require_environment(binary)
+
+    artifact_parent = repository_root / ".tmp/gpui-refactor/phase-7"
+    artifact_parent.mkdir(parents=True, exist_ok=True)
+    artifact_dir = Path(
+        tempfile.mkdtemp(prefix="linux-x11-ime-", dir=artifact_parent)
+    )
+    input_file = artifact_dir / "ime-input.txt"
+    input_file.write_text("baseline\n")
+    config_dir = artifact_dir / "config"
+    data_dir = artifact_dir / "data"
+    cache_dir = artifact_dir / "cache"
+    config_dir.mkdir()
+    data_dir.mkdir()
+    cache_dir.mkdir()
+
+    environment = os.environ.copy()
+    environment.pop("WAYLAND_DISPLAY", None)
+    environment.update(
+        {
+            "ZZZ_FORCE_CLI_MODE": "1",
+            "XMODIFIERS": "@im=fcitx",
+            "XDG_CONFIG_HOME": str(config_dir),
+            "XDG_DATA_HOME": str(data_dir),
+            "XDG_CACHE_HOME": str(cache_dir),
+            "RUST_LOG": "info",
+        }
+    )
+
+    process = subprocess.Popen(
+        [
+            str(binary),
+            "--user-data-dir",
+            str(data_dir / "zzz"),
+            str(input_file),
+        ],
+        cwd=repository_root,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+
+    try:
+        window_id, root_id, geometry, title = find_window(process.pid)
+        print(
+            f"window_id={window_id:#x} geometry={geometry} title={title!r} "
+            f"process_id={process.pid}"
+        )
+        focus_editor(window_id, root_id, geometry)
+        engine, candidate, elapsed = run_input(args.repetitions, geometry)
+
+        text = input_file.read_text()
+        lines = text.splitlines()
+        payload = lines[1:]
+        matching = sum(line == "你好" for line in payload)
+        if lines[:1] != ["baseline"]:
+            raise RuntimeError("baseline line changed")
+        if len(payload) != args.repetitions or matching != args.repetitions:
+            raise RuntimeError(
+                f"expected {args.repetitions} commits, found {len(payload)} "
+                f"lines with {matching} matching 你好"
+            )
+
+        summary = (
+            f"status=PASS\n"
+            f"engine={engine}\n"
+            f"repetitions={args.repetitions}\n"
+            f"matching_commits={matching}\n"
+            f"candidate_window={candidate}\n"
+            f"editor_window={geometry}\n"
+            f"elapsed_seconds={elapsed:.3f}\n"
+            f"input_file={input_file}\n"
+        )
+        (artifact_dir / "summary.txt").write_text(summary)
+        print(summary, end="")
+        print(f"artifact_dir={artifact_dir}")
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+
+if __name__ == "__main__":
+    main()

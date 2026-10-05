@@ -1,12 +1,17 @@
 use gpui::{
-    AnyWindowHandle, AppContext as _, Context, IntoElement, ParentElement as _, Render,
-    TestAppContext, Window, div,
+    AnyWindowHandle, AppContext as _, Context, FocusHandle, IntoElement, ParentElement as _,
+    Render, TestAppContext, Window, div,
 };
 use std::{cell::Cell, rc::Rc};
-use ui::{Button, Clickable as _, Disableable as _, ListItem, Tab, Toggleable as _, TreeViewItem};
+use ui::{
+    AnnouncementToast, Button, ButtonCommon as _, Clickable as _, Disableable as _, ListItem,
+    Modal, ModalHeader, Tab, Toggleable as _, TreeViewItem,
+};
 
 struct SemanticComponents {
     action_count: Rc<Cell<usize>>,
+    focused_button: FocusHandle,
+    target_button: FocusHandle,
 }
 
 impl Render for SemanticComponents {
@@ -15,12 +20,17 @@ impl Render for SemanticComponents {
             .child(
                 Button::new("save", "Save")
                     .disabled(true)
-                    .toggle_state(true),
+                    .toggle_state(true)
+                    .track_focus(&self.focused_button),
             )
-            .child(Button::new("action", "Action").on_click({
-                let action_count = self.action_count.clone();
-                move |_, _, _| action_count.set(action_count.get() + 1)
-            }))
+            .child(
+                Button::new("action", "Action")
+                    .track_focus(&self.target_button)
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
             .child(Tab::new("editor-tab").toggle_state(true).child("Editor"))
             .child(
                 TreeViewItem::new("workspace-tree", "Workspace")
@@ -33,6 +43,10 @@ impl Render for SemanticComponents {
                     .toggle(true)
                     .toggle_state(true),
             )
+            .child(
+                Modal::new("preferences", None).header(ModalHeader::new().headline("Preferences")),
+            )
+            .child(AnnouncementToast::new().heading("Update available"))
     }
 }
 
@@ -45,9 +59,18 @@ fn components_emit_roles_labels_and_state() {
         theme_settings::init(theme::LoadThemes::JustBase, cx);
     });
     let action_count = Rc::new(Cell::new(0));
+    let (focused_button, target_button) = cx.update(|cx| (cx.focus_handle(), cx.focus_handle()));
     let window = cx.add_window({
         let action_count = action_count.clone();
-        move |_, _| SemanticComponents { action_count }
+        let target_button = target_button.clone();
+        move |window, cx| {
+            focused_button.focus(window, cx);
+            SemanticComponents {
+                action_count,
+                focused_button,
+                target_button,
+            }
+        }
     });
     cx.run_until_parked();
     let handle: AnyWindowHandle = window.into();
@@ -73,6 +96,14 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(button.label(), Some("Save"));
     assert!(button.is_disabled());
     assert_eq!(button.toggled(), Some(gpui::accesskit::Toggled::True));
+    let focused_button_id = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("Save"))
+        .map(|(node_id, _)| *node_id)
+        .expect("focused button semantic node should exist");
+    assert_eq!(snapshot.focused_node, focused_button_id);
 
     let action_button_id = snapshot
         .update
@@ -91,6 +122,17 @@ fn components_emit_roles_labels_and_state() {
     })
     .expect("semantic test window should remain open");
     assert_eq!(action_count.get(), 1);
+
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            action_button_id,
+            gpui::accesskit::Action::Focus,
+            None,
+            cx,
+        ));
+        assert!(target_button.is_focused(window));
+    })
+    .expect("semantic test window should remain open");
 
     let tab = snapshot
         .update
@@ -122,4 +164,22 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(list_item.label(), Some("Item"));
     assert_eq!(list_item.is_expanded(), Some(true));
     assert_eq!(list_item.is_selected(), Some(true));
+
+    let dialog = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::Dialog)
+        .map(|(_, node)| node)
+        .expect("dialog semantic node should exist");
+    assert_eq!(dialog.label(), Some("Preferences"));
+
+    let status = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::Status)
+        .map(|(_, node)| node)
+        .expect("status semantic node should exist");
+    assert_eq!(status.label(), Some("Update available"));
 }

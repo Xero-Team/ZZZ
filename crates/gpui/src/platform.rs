@@ -486,6 +486,29 @@ pub struct WindowControls {
     pub window_menu: bool,
 }
 
+/// Optional window-host services that are not universal across backends.
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
+pub struct WindowServiceCapabilities {
+    /// Whether client/server decoration mode can be requested.
+    pub decorations: bool,
+    /// Whether the native pointer/touch input region can be changed.
+    pub input_region: bool,
+    /// Whether a client-side decoration inset can be submitted.
+    pub client_inset: bool,
+    /// Whether the native application/window identifier can be changed.
+    pub app_id: bool,
+    /// Whether edited state and represented-document paths are supported.
+    pub document_metadata: bool,
+    /// Whether the operating system character palette can be shown.
+    pub character_palette: bool,
+    /// Whether borderless simple fullscreen is supported.
+    pub simple_fullscreen: bool,
+    /// Whether native multi-window tab operations are supported.
+    pub system_tabs: bool,
+    /// Whether the platform owns titlebar double-click behavior.
+    pub titlebar_actions: bool,
+}
+
 /// Capabilities exposed by a platform window implementation.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct PlatformCapabilities {
@@ -507,6 +530,8 @@ pub struct PlatformCapabilities {
     pub clipboard: ClipboardCapabilities,
     /// Window control operations supported by the backend.
     pub window_controls: WindowControls,
+    /// Optional window-host services supported by the backend.
+    pub window_services: WindowServiceCapabilities,
 }
 
 impl Default for PlatformCapabilities {
@@ -529,6 +554,7 @@ impl Default for PlatformCapabilities {
                 minimize: false,
                 window_menu: false,
             },
+            window_services: WindowServiceCapabilities::default(),
         }
     }
 }
@@ -567,6 +593,23 @@ impl AccessibilityUpdate {
     pub fn semantic_snapshot(&self) -> Option<&crate::accessibility::SemanticSnapshot> {
         self.semantic_snapshot.as_ref()
     }
+
+    /// Consumes the update and returns its complete semantic snapshot.
+    #[cfg(feature = "accessibility")]
+    pub fn into_semantic_snapshot(self) -> Option<crate::accessibility::SemanticSnapshot> {
+        self.semantic_snapshot
+    }
+}
+
+/// Callbacks used by a native accessibility adapter.
+#[cfg(feature = "accessibility")]
+pub struct AccessibilityCallbacks {
+    /// Requests an initial complete tree when assistive technology activates.
+    pub activation: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
+    /// Routes a native accessibility action back to the foreground window.
+    pub action: Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>,
+    /// Notifies GPUI when assistive technology deactivates.
+    pub deactivation: Box<dyn Fn() + Send + 'static>,
 }
 
 impl Default for WindowControls {
@@ -833,12 +876,21 @@ pub trait SystemServices {
 /// Native accessibility adapter for completed semantic frame updates.
 #[expect(missing_docs)]
 pub trait AccessibilityBridge {
+    #[cfg(feature = "accessibility")]
+    fn initialize_accessibility(&mut self, _callbacks: AccessibilityCallbacks) -> Result<()> {
+        anyhow::bail!("accessibility adapter is unsupported by this platform window")
+    }
+
     fn update_accessibility(&mut self, update: AccessibilityUpdate) -> Result<()> {
         if update.is_empty() {
             Ok(())
         } else {
             anyhow::bail!("accessibility adapter is unsupported by this platform window")
         }
+    }
+
+    fn update_accessibility_window_bounds(&mut self) -> Result<()> {
+        anyhow::bail!("accessibility window bounds are unsupported by this platform window")
     }
 }
 
@@ -2939,6 +2991,10 @@ mod tests {
                 minimize: false,
                 window_menu: false,
             }
+        );
+        assert_eq!(
+            capabilities.window_services,
+            WindowServiceCapabilities::default()
         );
     }
 

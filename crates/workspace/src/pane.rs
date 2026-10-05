@@ -5147,6 +5147,8 @@ mod tests {
         Member,
         item::test::{TestItem, TestProjectItem},
     };
+    #[cfg(feature = "frame-diagnostics")]
+    use gpui::profiler::{FrameDiagnosticsSnapshot, FrameEvent, FramePhase, FrameTimingCollector};
     use gpui::{
         AppContext, Axis, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
         TestAppContext, VisualTestContext, size,
@@ -5213,6 +5215,96 @@ mod tests {
             }
             is_dragged_tab
         }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn summarize_frame_diagnostics(
+        snapshot: FrameDiagnosticsSnapshot,
+    ) -> (usize, [u128; 5], [u64; 5], [u64; 5], u128) {
+        let mut frame_durations = std::collections::HashMap::new();
+        let mut presented = 0;
+        let mut durations = [0; 5];
+        let mut operations = [0; 5];
+        let mut cache_hits = [0; 5];
+        for event in snapshot.events {
+            match event {
+                FrameEvent::Presented(_) => presented += 1,
+                FrameEvent::Phase(timing) => {
+                    let index = match timing.phase {
+                        FramePhase::RequestLayout => 0,
+                        FramePhase::Prepaint => 1,
+                        FramePhase::Paint => 2,
+                        FramePhase::PrepaintCacheReplay => 3,
+                        FramePhase::PaintCacheReplay => 4,
+                    };
+                    durations[index] += timing.duration.as_nanos();
+                    operations[index] += timing.operations;
+                    cache_hits[index] += timing.cache_hits;
+                    *frame_durations.entry(timing.build_id).or_insert(0) +=
+                        timing.duration.as_nanos();
+                }
+                FrameEvent::Invalidated(_)
+                | FrameEvent::DrawStarted { .. }
+                | FrameEvent::DrawFinished(_)
+                | FrameEvent::SubmissionSkipped { .. } => {}
+            }
+        }
+        let mut frame_durations = frame_durations.into_values().collect::<Vec<_>>();
+        frame_durations.sort_unstable();
+        let p95_index = frame_durations
+            .len()
+            .saturating_mul(95)
+            .div_ceil(100)
+            .saturating_sub(1);
+        let p95_total = frame_durations.get(p95_index).copied().unwrap_or_default();
+        (presented, durations, operations, cache_hits, p95_total)
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    async fn test_workspace_tabs_frame_diagnostics(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        let project = Project::test(fs, None, cx).await;
+        let (workspace, cx) =
+            cx.add_window_view(|window, cx| Workspace::test_new(project, window, cx));
+        let pane = workspace.read_with(cx, |workspace, _| workspace.active_pane().clone());
+
+        for index in 0..10 {
+            add_labeled_item(&pane, &format!("tab-{index}"), false, cx);
+        }
+        cx.update(|window, app| window.draw_and_present_for_test(app));
+
+        let mut collector = cx.update(|window, _| FrameTimingCollector::for_window(window));
+        for _ in 0..5 {
+            cx.update(|window, app| window.draw_and_present_for_test(app));
+        }
+        let cached = summarize_frame_diagnostics(collector.snapshot());
+
+        for index in 0..10 {
+            pane.update_in(cx, |pane, window, cx| {
+                pane.activate_item(index, false, false, window, cx);
+            });
+            cx.run_until_parked();
+            cx.update(|window, app| window.draw_and_present_for_test(app));
+        }
+        let dirty = summarize_frame_diagnostics(collector.snapshot());
+
+        assert_eq!(cached.0, 5);
+        assert_eq!(dirty.0, 10);
+        println!(
+            "WORKSPACE_TABS_FRAME_DIAGNOSTICS cached_presented={} cached_duration_ns={:?} cached_operations={:?} cached_hits={:?} cached_p95_total_ns={} dirty_presented={} dirty_duration_ns={:?} dirty_operations={:?} dirty_hits={:?} dirty_p95_total_ns={}",
+            cached.0,
+            cached.1,
+            cached.2,
+            cached.3,
+            cached.4,
+            dirty.0,
+            dirty.1,
+            dirty.2,
+            dirty.3,
+            dirty.4
+        );
     }
 
     #[gpui::test]

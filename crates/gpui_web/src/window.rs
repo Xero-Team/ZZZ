@@ -868,6 +868,7 @@ fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabiliti
         native_prompt: false,
         clipboard: gpui::ClipboardCapabilities::WRITE_ONLY,
         window_controls,
+        window_services: gpui::WindowServiceCapabilities::default(),
     }
 }
 
@@ -899,5 +900,9 @@ mod tests {
         );
         assert!(capabilities.frame_callbacks);
         assert_eq!(capabilities.window_controls, window_controls);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities::default()
+        );
     }
 }

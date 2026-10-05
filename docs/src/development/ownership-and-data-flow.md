@@ -170,6 +170,70 @@ drop.
 Prefer events when the payload matters, and observations when it does not.
 Both are preferable to polling state from a render method.
 
+## Window runtime ownership
+
+`Window` remains GPUI's stable public façade, but it no longer owns every frame, input, text,
+accessibility, and renderer algorithm directly. The internal owners divide mutable build-time state
+from the completed frame consumed by platform code.
+
+```mermaid
+flowchart LR
+    Input[Platform input] --> Window[Window façade]
+    Window --> Interaction[InteractionOwner]
+    Window --> TextInput[TextInputOwner / TextInputClient]
+    Window --> Invalidation[WindowInvalidator / FrameScheduler]
+    Invalidation --> Builder[FrameBuilder + next Frame]
+    Interaction --> Builder
+    TextInput --> Builder
+    Builder --> Completed[BuiltFrame read-only projection]
+    Completed --> Render[render_api Renderer / RenderTarget]
+    Render --> Backend[PlatformRenderTarget]
+    Completed --> Accessibility[AccessibilityBridge]
+    Completed --> Diagnostics[Frame journal]
+```
+
+The main boundaries are:
+
+| Module or owner    | Responsibility                                                                 |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `frame.rs`         | invalidation, scheduling, build stacks, frame cache ranges, completed payloads |
+| `interaction.rs`   | hit testing, dispatch, focus/tab, key/action routing, pointer capture          |
+| `text_input.rs`    | rendered/next text-input client ownership and candidate geometry               |
+| `accessibility.rs` | semantic tree snapshots, stable IDs, advertised actions and action routing     |
+| `render_api.rs`    | backend-neutral scene submission and submission outcome                        |
+| `platform.rs`      | lifecycle/window/service traits and explicit capability matrices               |
+| `window.rs`        | public façade plus draw, present, and lifecycle coordination                   |
+
+During drawing, `FrameBuilder` and the owners mutate only the next frame. At the frame boundary,
+GPUI swaps it into the rendered slot and exposes a `BuiltFrame`. `BuiltFrame` borrows the completed
+scene and interaction collections, so Rust's shared borrow prevents mutation during synchronous
+platform submission without cloning the scene. Accessibility and diagnostics payloads are copied
+only where a platform may retain them. Cache replay is internal to the following build and runs
+after the completed-frame projection has been released.
+
+Platform operations are capability-gated. Unsupported prompts, clipboard directions, IME
+candidate positioning, window controls, lifecycle operations, accessibility, and offscreen
+rendering return an explicit unsupported result or are excluded by the façade; they are not silent
+no-ops.
+
+## Compatibility boundaries
+
+The refactor retained only compatibility paths with a defined purpose:
+
+- `Window`, `Entity`, `Context`, and the three-stage `Element` API remain source-compatible.
+- `PlatformInputHandler` is a deprecated alias for `TextInputClient`. There are zero in-tree
+  call sites; the alias is reserved for external platform integrations and is removed at the next
+  breaking GPUI release.
+- `render_api::submit_platform_frame` is the intentional internal adapter between the
+  backend-neutral render contract and the stable `PlatformWindow` façade. EXP-004/005 rejected a
+  separate `gpui_render` crate because it would not reduce the dependency graph.
+- Full `cx.notify()` invalidation remains authoritative. The scoped-invalidation prototype was
+  removed after it produced stale visual/input state or no measurable work reduction.
+
+The execution evidence, experiment budgets, capability matrix, and remaining platform QA are in
+the [GPUI refactor progress ledger](./gpui-refactor-progress.md). Native IME repetition steps are in
+the [IME validation runbook](./gui-framework-research/ime-validation-runbook.md).
+
 ## Where to go next
 
 - [Glossary](./glossary.md) defines the rest of the GPUI vocabulary.

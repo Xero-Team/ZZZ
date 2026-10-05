@@ -16,6 +16,11 @@ description: Selective Zed upstream sync audit.
 - Query time: `2026-09-24T23:42:36+02:00`
 - Requested range starts after `b961b4950febbc050081554bafe976b5d1b93f39`
 
+Correction 2026-10-05: `0eda7703` is reclassified from C to B at local
+`db6cb81aeb`. The missing `SubclassingAdapter` prerequisite arrived during the
+staged GPUI refactor, and the retained teardown now drops that adapter before the
+renderer to break the native view ownership cycle.
+
 This run reviews the first twenty commits of the range
 `b961b495..2c4bc2d7`, ending at `63b29c2edd`. `A` is a complete safe
 absorption or an already-equivalent local change. `B` needs a local
@@ -30,7 +35,7 @@ ACP-only boundary. The reviewed baseline advances to
 | -------- | ----- | ------------ | ------------------------------------------------------------------------------------- |
 | 916fc2b8 | B     | 0e0a770a     | `hidden_files` uses `SplicingVec`; settings-UI path rename omitted.                   |
 | 526c95d4 | C     | --           | Documentation link pass for removed account and native agent pages is not isolatable. |
-| 0eda7703 | C     | --           | Accesskit adapter to drop is absent from ZZZ's `gpui_macos`.                          |
+| 0eda7703 | B     | db6cb81aeb   | Adapter-first teardown now applies to ZZZ's native macOS AccessKit adapter.           |
 | 887149bb | B     | 0dd5047a     | Lenient glob parsing ported; absent `scan_symlinks`/`file_scan_depth` omitted.        |
 | 8d085f19 | B     | 9407f17b     | VS Code `files.exclude` import ported; absent `file_scan_depth` omitted.              |
 | 395def7a | C     | --           | Upstream merge-queue CI plumbing; workflow files are absent locally.                  |
@@ -49,7 +54,7 @@ ACP-only boundary. The reviewed baseline advances to
 | dc0bbb2b | A     | 5975d9fb     | Test-only completions speedup; cherry-picked with `-x -s`.                            |
 | 63b29c2e | B     | 967054c1     | `terminal.path_hyperlink_regexes` uses `PathHyperlinkRegexes` with splice semantics.  |
 
-Totals: four `A`, eight `B`, eight `C`.
+Totals: four `A`, nine `B`, seven `C`.
 
 ## Applied work
 
@@ -98,6 +103,10 @@ of 60-plus link edits, so the commit is not isolatable as a single change.
 The fix drops `MacWindowState::accesskit_adapter` before renderer teardown.
 ZZZ's `gpui_macos` has no accesskit adapter or `SubclassingAdapter` wiring,
 so there is no local equivalent to fix.
+
+Superseded 2026-10-05: the staged GPUI refactor added the native macOS adapter,
+so this decision is now B at `db6cb81aeb`. The original absence finding remains
+the historical reason the commit was not portable in the 2026-09-24 run.
 
 ### 887149bb — B, `0dd5047a`
 

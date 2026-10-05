@@ -99,8 +99,10 @@ impl RenderOnce for AnnouncementToast {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let has_illustration = self.illustration.is_some();
         let illustration = self.illustration;
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self.heading.clone().or_else(|| self.description.clone());
 
-        v_flex()
+        let toast = v_flex()
             .id("announcement-toast")
             .occlude()
             .relative()
@@ -151,7 +153,12 @@ impl RenderOnce for AnnouncementToast {
                         .icon_size(IconSize::Small)
                         .on_click(self.dismiss_on_click),
                 ),
-            )
+            );
+        #[cfg(feature = "accessibility")]
+        let toast = toast
+            .role(gpui::accesskit::Role::Status)
+            .when_some(accessibility_label, |toast, label| toast.aria_label(label));
+        toast
     }
 }
 

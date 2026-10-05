@@ -18,10 +18,11 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 计划基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 执行基线                   | `152a5eb983a883c69a6cc4eae082312ba75aa9f9` |
 | 2026-10-04 续作基线        | `101f0985632b6134ee096308ed02cc7bdaea5175` |
+| 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 6/7：platform 与 UI 边界              |
-| Goal 状态                  | `ACTIVE`                                   |
+| 当前阶段                   | 阶段 9 完成                                |
+| Goal 状态                  | `COMPLETE`                                 |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
 `.tmp/ui_ref/` 参考仓库。这些内容原样保留；重构提交只显式暂存本账本和本 Goal
@@ -54,6 +55,21 @@ owner 边界。两项直接兼容修复分别恢复
 
 续作下一步：继续收敛阶段 1/2/3/5/6/7 的开放验证项；在 EXP-001/002 正式 workload
 完成前不进入 scoped invalidation 产品实现。
+
+### 2026-10-05 续作基线复核
+
+续作开始时工作树 clean，但 checkout 再次位于 `main@c7a5c71f47`。现有专用分支
+`refactor/gpui-architecture` 停在 `c4fc7df24a`，且 `main` 已在 `139fb6be52`
+合入该分支后继续加入协作设置和构建升级。为避免把与本 Goal 无关的协作表面带回
+重构历史，在修改代码前切回现有专用分支；没有 reset、clean、覆盖、rebase 或合并
+`main`。
+
+基线复跑发现全 feature 的 235-test GPUI 并行套件仍可让不同 `TestAppContext` 复用
+相同 `WindowId`，使全局 frame journal 的 skipped-submission 事件串入另一个测试。
+`dfcff1a2cd` 为每个 window invalidator 增加 feature-gated journal source ID，并让
+`FrameTimingCollector::for_window` 按 window instance 隔离；默认构建不增加字段或开销。
+修复后同一套件连续运行 20 次，4,700 tests 全部通过。原始日志：
+`.tmp/gpui-refactor/continuation-2026-10-05/gpui-lib-test-20x-source-filter.log`。
 
 ## 环境基线
 
@@ -156,7 +172,7 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 
 ### 阶段 1：frame diagnostics 与预算
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 本阶段已完成的结构改动：
 
@@ -181,11 +197,10 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 - printable-key 的 text-input dispatch 现在与原始 keyboard event 使用同一 provenance；
   新 regression test 和真实 Editor runner 都验证 1,000/1,000 presented frames 带有
   input-to-present 样本。
-
-当前仍待完成：
-
-- EXP-002 的 command palette、workspace tabs 和 settings product-view 对比；Editor
-  cached/dirty/scroll/resize 部分已完成。
+- per-window collector 现在使用全局唯一的 feature-gated source ID，而不是只按可跨
+  test context 重复的 `WindowId` 过滤。
+- command palette、workspace tabs 和真实 Settings UI 都有固定 workload，输出
+  per-frame p95、phase operation 和 cache replay counts。
 
 阶段 1 验证：
 
@@ -199,14 +214,16 @@ API 和 EXP-001/002/011 runner，并测量 disabled/enabled overhead。
 | `git diff --check`                                                                                                 | `PASS`                      | `.tmp/gpui-refactor/phase-1/diff-check.log`                                                                                                                                                                                                                                     |
 | `cargo test --locked -p gpui --features frame-diagnostics frame_diagnostics_runner -- --nocapture`                 | `PASS`                      | 100 root-dirty + 100 cached-panel + 100 input frames；draw p50/p95/p99 = 72,307/92,273/99,438 ns；input-to-present = 105,760/118,914/125,356 ns；100 prepaint + 100 paint cache replays；0 dropped events；raw log in `.tmp/gpui-refactor/phase-1/frame-diagnostics-runner.log` |
 | `cargo fmt --all -- --check`                                                                                       | `FAIL (baseline)`           | 仅剩 `crates/grammars/vendor/tree-sitter-typst/benches/bench_main.rs` 的既有排序漂移；本阶段文件已单独格式化                                                                                                                                                                    |
-| EXP-001                                                                                                            | `PARTIAL`                   | deterministic input-to-present runner now samples p50/p95/p99; platform frame skip and 10-second editor scroll workload remain                                                                                                                                                  |
-| EXP-002                                                                                                            | `PARTIAL`                   | runner emits layout/prepaint/paint totals and 100 cached prepaint/paint replays; editor/product corpus and p95 comparison remain                                                                                                                                                |
-| EXP-011                                                                                                            | `PARTIAL`                   | allocation probe matches off/on after warm-up: 12/25 allocations and 6,504/13,104 bytes per cached/dirty frame; synthetic timing overhead is ~10.5% cached and ~3.9% dirty, so the <=2% production-workload gate remains open                                                   |
+| EXP-001                                                                                                            | `PASS`                      | production Editor workload overhead ≤1.902%；candidate/baseline p95/p99 均低于 1.05×；0 skipped/dropped                                                                                                                                                                         |
+| EXP-002                                                                                                            | `PASS`                      | Editor ratios ≤1.0064；tabs cached/dirty 1.000898/1.001593；Settings cached/dirty 1.017539/0.990516；command palette 1.024921；operation/cache counts 全部相同                                                                                                                  |
+| EXP-011                                                                                                            | `PASS`                      | feature-off allocation 不高于 baseline；diagnostics 增量 ≤0.003 alloc/frame、≤0.203% bytes/frame；peak RSS ≤1.011×                                                                                                                                                              |
 | `frame_allocations` off/on probe                                                                                   | `PASS (allocation portion)` | `cargo test --features test-support[,frame-diagnostics] --test frame_allocations`；raw logs `.tmp/gpui-refactor/phase-1/frame-allocations-{disabled,enabled}.log`；warm-up 后两种模式的分配数/字节相同                                                                          |
 | production Editor runner，feature off/on，各 7 个 CPU-pinned process                                               | `PASS`                      | median overhead：cached 0.31%、typing 0.49%、scroll 0.62%、resize 1.90%；`.tmp/gpui-refactor/phase-1/editor-workload-summary.txt`                                                                                                                                               |
 | production Editor candidate vs `567ff2f4`，feature on/off                                                          | `PASS`                      | p95/p99 全部低于 1.05×；exact input-to-present p50/p95/p99 为 2.913/3.057/3.299 ms，0 skipped/dropped                                                                                                                                                                           |
 | production Editor allocation/RSS                                                                                   | `PASS`                      | feature-off allocation 与 baseline 相同或更低；diagnostics 增量 ≤0.003 alloc/frame、≤0.203% bytes/frame；peak RSS 1.011×                                                                                                                                                        |
 | `cargo test --locked -p gpui --lib --features frame-diagnostics printable_text_input_is_linked_to_presented_frame` | `PASS`                      | printable text input provenance reaches the presented frame                                                                                                                                                                                                                     |
+| GPUI 235-test suite，`frame-diagnostics,accessibility`，连续 20 次                                                 | `PASS`                      | 4,700 tests，0 failed；source-scoped collector 无跨 context 串扰                                                                                                                                                                                                                |
+| workspace tabs / Settings / command palette，各 7 个 CPU-pinned baseline/candidate process                         | `PASS`                      | 所有 median per-frame p95 ratio <1.05；operation/cache replay counts 完全相同；`.tmp/gpui-refactor/phase-1/exp002-product-summary.txt`                                                                                                                                          |
 
 上游 A/B/C 审查（均基于 `decbf641b18f1982b3475c037e7c5c554471574f` 之后的
 live `FETCH_HEAD=a84689073d296dfd39987bc7dd478e43ef76d83a`；未 cherry-pick）：
@@ -232,15 +249,17 @@ commit was created for this stage.
 `766b7cb85cd58c35a56b3182208f5e6c2bd6cf40`；batched journal/allocation probe
 `567ff2f4c39edb84a60e99dfebbd6033c50ce6e3`；submission outcome/skip coverage
 `1520da4179`、`147871401a`；production Editor runner `602836a9f5`、`3e5b9e6c1f`、
-`7b420641d5`；printable input provenance `9ec0114958`。
+`7b420641d5`；printable input provenance `9ec0114958`；window-instance collector
+`dfcff1a2cd`；product workload `19f075920a`。
 
-EXP-001 与 EXP-011 已完成并通过。EXP-002 的 command-palette smoke 现在已记录
-`presented=5` 与 replay phase samples；tabs/settings product-view comparison 仍待补齐，
-因此暂不启动 EXP-007。默认产品构建继续不启用 diagnostics feature。
+EXP-001、EXP-002 与 EXP-011 已完成并通过。EXP-002 使用
+`567ff2f4c3` 作为 owner 拆分前的 instrumentation baseline；三个产品 workload 的
+median per-frame p95 ratio 均低于 1.05，且 phase operation/cache replay count 没有
+变化。阶段 8 的数据门现已打开。默认产品构建继续不启用 diagnostics feature。
 
 ### 阶段 2：并发与 accessibility 边界
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（macOS/Windows native runtime 为 `NOT RUN`）
 
 已完成：
 
@@ -254,11 +273,11 @@ EXP-001 与 EXP-011 已完成并通过。EXP-002 的 command-palette smoke 现�
 - `BenchAppContext::threaded` 可显式选择 production-like dispatcher；默认构造仍使用
   deterministic virtual-clock `TestDispatcher`。
 - 增加可选 `accessibility` feature 的 AccessKit core seam：稳定 node ID、完整
-  `TreeUpdate` snapshot、focus 映射和一次性 action router；不连接平台 writer。
+  `TreeUpdate` snapshot、focus 映射和一次性 action router；不导入上游 writer state。
 - 按 `1d029c5ff5654fb1b1e8caf4462993c8ee13a133` 的 B 类安全子集，把
   element-derived stable ID、physical bounds、nested semantic tree 接入实际
-  `Element::prepaint` 和 completed `BuiltFrame`。未复制 native adapter、activation/
-  writer state、synthetic children 或产品级批量 annotation。
+  `Element::prepaint` 和 completed `BuiltFrame`，并分别接入 Linux、macOS 和 Windows
+  native adapter。没有复制 writer state 或 synthetic children。
 - `Div` 提供 feature-gated role、label 与 action listener；action map 属于 completed
   frame，`Window::dispatch_accessibility_action` 每次只调用一个 `(node, action)` handler。
   accessibility feature 开启时完整重建 semantic tree，避免 cached view 产生不完整树；
@@ -270,49 +289,63 @@ EXP-001 与 EXP-011 已完成并通过。EXP-002 的 command-palette smoke 现�
   ListItem and TreeViewItem emit semantic roles and state; Button accessibility Click is
   routed through the same callback as mouse activation. A real `ui` integration snapshot
   covers roles, labels, state and one-shot action dispatch.
+- `AccessibilityBridge` 通过 thread-safe activation/action/deactivation callbacks 连接
+  native adapter，所有 action 回到 foreground `Window` 后只派发一次，不让平台线程
+  直接重入 entity update。
+- X11/Wayland 使用 `accesskit_unix`，macOS 使用 `SubclassingAdapter`，Windows 处理
+  `WM_GETOBJECT` 与 UI Automation focus event；macOS teardown 在 renderer 前释放 adapter，
+  避免 native view ownership cycle。
+- 桌面 `zzz` 按 target 启用 accessibility；Web 仍保持 unsupported 且不会启用该 feature。
+- Button、InputField、Editor、List/Tree、Tabs、Modal/Dialog 和 status notification 均有
+  role/name/state snapshot；`track_focus` 与 AccessKit Focus action 共享同一 `FocusHandle`。
 
 阶段 2 上游 A/B/C 决策：
 
 | Upstream                                   | Class | Disposition                                                                                                                                                                                       |
 | ------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `8886dcb0d4ea0e145e4512d415d3260602eca99`  | B     | Ported the isolated threaded worker/timer/main-handoff behavior to ZZZ names and queue APIs; omitted upstream BenchDispatcher rename, benchmark feature graph, and unrelated benchmark reporting. |
+| `1d029c5ff5654fb1b1e8caf4462993c8ee13a133` | B     | Ported core semantics, callback/action routing, and Linux/macOS/Windows adapters onto the local completed-frame and platform-capability seams; omitted writer state and synthetic children.       |
 | `cc053a4a6fa2fd0e8793201ed9099466af1be0b1` | C     | AccessKit writer/semantic tree is absent from ZZZ; the one-line author-id builder cannot be isolated from the missing accessibility chain.                                                        |
-| `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | C     | ZZZ has no macOS AccessKit adapter or SubclassingAdapter ownership to release.                                                                                                                    |
+| `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | B     | Reclassified after the macOS adapter arrived; retained only adapter-first teardown to break the native view ownership cycle.                                                                      |
 
-当前仍待完成：Button/Input/Editor/List/Tree/Tabs/Dialog/Status 的全量产品 annotation、
-Linux/Windows/macOS adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher
-EXP-008 已达标；AccessKit EXP-006 仍为 core/UI snapshot partial，native QA 未运行。
-
-后续边界进展：`AccessibilityBridge` 现在接收 backend-neutral `AccessibilityUpdate`；
-空更新在所有 backend 可通过，非空 semantic update 在未接 native adapter 时返回明确
-unsupported error。没有导入缺失的 AccessKit writer/adapter 路径。
+EXP-008 已达标。EXP-006 的 core、action、focus、named controls、Linux native adapter 和
+AT-SPI/Orca enumeration 已通过；macOS VoiceOver 与 Windows Narrator runtime 只能在对应
+主机执行，按完成合同保留为 `NOT RUN`，不是未完成的核心代码迁移。
 
 阶段 2 验证：
 
-| 命令或检查                                                                     | 结果      | 原始数据/说明                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo check --locked -p gpui --features test-support`                         | `PASS`    | ThreadedDispatcher port                                                                                                                                                                        |
-| `cargo test --locked -p gpui --features test-support threaded_dispatcher`      | `PASS`    | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
-| `./script/clippy -p gpui --features test-support`                              | `PASS`    | all-target release clippy + philosophy                                                                                                                                                         |
-| `cargo check --locked -p gpui --features accessibility`                        | `PASS`    | AccessKit 0.24.1 core seam                                                                                                                                                                     |
-| `cargo test --locked -p gpui --features accessibility accessibility`           | `PASS`    | 3 semantic snapshot/action tests                                                                                                                                                               |
-| `cargo test --locked -p gpui --lib --features accessibility,frame-diagnostics` | `PASS`    | 232 tests passed，含 nested element prepaint tree、action dispatch 与完整 cached-frame rebuild                                                                                                 |
-| `./script/clippy -p gpui --features accessibility`                             | `PASS`    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                  |
-| `cargo test --locked -p ui --features accessibility --test accessibility`      | `PASS`    | Button/Tab/TreeViewItem roles, labels, disabled/selected/expanded/toggled state snapshot                                                                                                       |
-| `./script/clippy -p ui --features accessibility`                               | `PASS`    | UI accessibility feature all-target release clippy + philosophy gate                                                                                                                           |
-| EXP-006 native adapter/screen-reader QA                                        | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                                                                                                                          |
-| EXP-008 100-seed parity/hang/leak gate                                         | `PASS`    | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
+| 命令或检查                                                                                                 | 结果   | 原始数据/说明                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo check --locked -p gpui --features test-support`                                                     | `PASS` | ThreadedDispatcher port                                                                                                                                                                        |
+| `cargo test --locked -p gpui --features test-support threaded_dispatcher`                                  | `PASS` | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
+| `./script/clippy -p gpui --features test-support`                                                          | `PASS` | all-target release clippy + philosophy                                                                                                                                                         |
+| `cargo check --locked -p gpui --features accessibility`                                                    | `PASS` | AccessKit 0.24.1 core seam                                                                                                                                                                     |
+| `cargo test --locked -p gpui --features accessibility accessibility`                                       | `PASS` | 3 semantic snapshot/action tests                                                                                                                                                               |
+| `cargo test --locked -p gpui --lib --features accessibility,frame-diagnostics`                             | `PASS` | 232 tests passed，含 nested element prepaint tree、action dispatch 与完整 cached-frame rebuild                                                                                                 |
+| `./script/clippy -p gpui --features accessibility`                                                         | `PASS` | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                  |
+| `cargo test --locked -p ui --features accessibility --test accessibility`                                  | `PASS` | Button/Tab/List/Tree/Dialog/Status roles, labels, state, Click 与 Focus action                                                                                                                 |
+| `./script/clippy -p ui --features accessibility`                                                           | `PASS` | UI accessibility feature all-target release clippy + philosophy gate                                                                                                                           |
+| `cargo test --locked -p ui_input --features accessibility input_field_emits_text_input_semantics`          | `PASS` | TextInput role/name/focus snapshot                                                                                                                                                             |
+| `cargo test --locked -p editor --features accessibility test_editor_accessibility_semantics`               | `PASS` | MultilineTextInput role/name/focus；原 IME/focus suites 继续通过                                                                                                                               |
+| `cargo test --locked -p gpui_linux --features accessibility`                                               | `PASS` | 26 tests；X11/Wayland capability matrices declare native adapter                                                                                                                               |
+| macOS `cargo check --locked ... --target x86_64-apple-darwin --features accessibility`                     | `PASS` | adapter 与 teardown cross-compile；runtime `NOT RUN`                                                                                                                                           |
+| Windows tests cross-check，`--target x86_64-pc-windows-gnu --no-default-features --features accessibility` | `PASS` | `WM_GETOBJECT` adapter/test code cross-compiles；runtime `NOT RUN`                                                                                                                             |
+| Linux isolated app + pyatspi tree/action + `orca --list-apps`                                              | `PASS` | `zzz` registered as AT-SPI application；35 nodes；native click action returned true；`.tmp/gpui-refactor/phase-2/linux-{atspi-smoke,orca-list-apps}.log`                                       |
+| EXP-008 100-seed parity/hang/leak gate                                                                     | `PASS` | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
 
 提交：ThreadedDispatcher core `49b351afb1edab173ca46dd073c663b44aabbf14`；
 AccessKit semantic core `a7745abdefe9d3e2cebb33482aac35d5e6a0289f`；EXP-008
 BenchAppContext/panic follow-up `41f6fccba156b795d49b8564bbe357712f9b2aa5`；element
 prepaint semantics `83fe764989`；completed tree/action routing `03342d511d`；action
 advertisement `d530264622`；semantic state properties `e662afa392`；UI component
-semantics `e7f4ccb52a`、`57b1caf569`。
+semantics `e7f4ccb52a`、`57b1caf569`；callback seam `cbdad449a5`；Linux adapter
+`dd9a27221d`；macOS adapter/teardown `db6cb81aeb`；Windows adapter `4c00dbf000`；
+desktop enablement `bdd5e7ee26`；focus mapping `863014f6a9`；Dialog/Status
+`3b894eb92b`；InputField `2e01ae3f69`；Editor `5bf1569ff1`。
 
 ### 阶段 3：真实 headless renderer
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（Windows runtime 为 `NOT RUN`）
 
 已完成：
 
@@ -329,33 +362,41 @@ semantics `e7f4ccb52a`、`57b1caf569`。
 
 EXP-003 当前结果：
 
-| 检查                                                                                | 结果               | 证据                                                                                                                  |
-| ----------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| gpui-ce reference `headless_primitives`                                             | `FAIL (reference)` | 当前 RADV 主机 4 tests 中 3 passed；`smoothed_primitives_share_one_contour` pixel assertion failed；未放宽阈值        |
-| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer` | `PASS`             | hardware + fallback each 100 runs；`.tmp/gpui-refactor/phase-3/headless-renderer.log`                                 |
-| Hardware/fallback pixel comparison                                                  | `PASS`             | 54/20,000 differing pixels = 0.27%；max channel delta 1；≤0.5% threshold                                              |
-| Hardware pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/hardware.png`, SHA-256 `a153441213a6a9626d05669c516ec876a269b29d58af3d92bd0daeaf8362a658` |
-| Fallback pixel artifact                                                             | `PASS`             | `.tmp/gpui-refactor/phase-3/fallback.png`, SHA-256 `07be370bfc32685d553602de7e6d7a3394aa17d8a272b94e12912dad18cf1ab8` |
-| 1x/2x per-adapter pre/post-refactor golden                                          | `PASS`             | RADV 与 llvmpipe 各自 1x/2x hash 全部相同；artifacts in `.tmp/gpui-refactor/phase-3/{baseline,current}-1x-2x/`        |
-| `cargo test --locked -p gpui_wgpu --features test-support`                          | `PASS`             | 15 unit + 2 headless integration tests                                                                                |
-| `./script/clippy -p gpui_wgpu --features test-support`                              | `PASS`             | release/all-target checks + philosophy                                                                                |
-| `cargo test --locked -p gpui_platform --features test-support`                      | `PASS`             | platform factory returns real renderer on Linux                                                                       |
-| Windows hardware/software adapter runtime                                           | `NOT RUN`          | 当前主机无法执行；保留同一 test command 给 Windows QA                                                                 |
+| 检查                                                                                                       | 结果               | 证据                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| gpui-ce reference `headless_primitives`                                                                    | `FAIL (reference)` | 当前 RADV 主机 4 tests 中 3 passed；`smoothed_primitives_share_one_contour` pixel assertion failed；未放宽阈值        |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                        | `PASS`             | hardware + fallback each 100 runs；`.tmp/gpui-refactor/phase-3/headless-renderer.log`                                 |
+| Hardware/fallback pixel comparison                                                                         | `PASS`             | 54/20,000 differing pixels = 0.27%；max channel delta 1；≤0.5% threshold                                              |
+| Hardware pixel artifact                                                                                    | `PASS`             | `.tmp/gpui-refactor/phase-3/hardware.png`, SHA-256 `a153441213a6a9626d05669c516ec876a269b29d58af3d92bd0daeaf8362a658` |
+| Fallback pixel artifact                                                                                    | `PASS`             | `.tmp/gpui-refactor/phase-3/fallback.png`, SHA-256 `07be370bfc32685d553602de7e6d7a3394aa17d8a272b94e12912dad18cf1ab8` |
+| 1x/2x per-adapter pre/post-refactor golden                                                                 | `PASS`             | RADV 与 llvmpipe 各自 1x/2x hash 全部相同；artifacts in `.tmp/gpui-refactor/phase-3/{baseline,current}-1x-2x/`        |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                                 | `PASS`             | 15 unit + 2 headless integration tests                                                                                |
+| `./script/clippy -p gpui_wgpu --features test-support`                                                     | `PASS`             | release/all-target checks + philosophy                                                                                |
+| `cargo test --locked -p gpui_platform --features test-support`                                             | `PASS`             | platform factory returns real renderer on Linux                                                                       |
+| Windows `cargo check --locked -p gpui_wgpu --tests --target x86_64-pc-windows-gnu --features test-support` | `PASS`             | 同一 headless runner cross-compiles                                                                                   |
+| Windows hardware/software adapter runtime                                                                  | `NOT RUN`          | 当前主机无法执行；保留同一 test command 给 Windows QA                                                                 |
 
 一次 hardware-vs-llvmpipe 2x 比较得到 1.1375% 像素差异；该比较混合两个 adapter，
 不符合 EXP-003 的 per-platform baseline 定义，记录在
 `.tmp/gpui-refactor/phase-3/headless-1x-2x-comparison-repeats.log` 作为 `INVALID SAMPLE`，
 没有放宽 0.5% 阈值。正确的同 adapter、同 scale、pre/post-refactor 比较为 0 差异。
 
-当前仍待完成：Windows 同 corpus runtime 和 exact runbook。因此 EXP-003 在当前 Linux
-主机达标，阶段 3 保持 `IN PROGRESS`，不声称跨平台完成。
+EXP-003 在当前 Linux 主机达标。Windows runtime 需要目标主机，在 Windows PowerShell
+运行以下命令；测试会分别选择普通 adapter 与 `force_fallback_adapter`，各循环 100 次：
+
+```powershell
+cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer -- --nocapture
+```
+
+预期两个 tests 均通过，无 hang，并把同 adapter、同 scale 的输出与批准 baseline 比较。
+该 runtime 项标记 `NOT RUN`，不阻塞当前主机完成阶段 3。
 
 提交：renderer core `0347f6196e`；platform factory `b28b235a09`；1x/2x golden gate
 `aae393b8c4`。
 
 ### 阶段 4：拆分 `Window`
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 4A frame owner 当前进度：
 
@@ -366,7 +407,10 @@ EXP-003 当前结果：
   `frame.rs`；`Window` 只保留绘制 orchestration 和必要的 `pub(crate)` owner 边界。
 - 新增 `FrameScheduler`，集中持有 next-frame callbacks、expanded dirty views、present
   demand 和 full-refresh state；`Window` 与 `App` 只通过 owner 方法协调这些状态。
-- 第一、第二提交都只移动状态和私有算法，不改变行为；不可变 `BuiltFrame` 尚未迁移。
+- `FrameBuilder` 最终集中持有 layout engine、element/text-style/entity/offset/mask/image-cache
+  stacks、opacity 和 autoscroll request；字段保持私有，`Window` 只通过窄 owner 方法协调。
+- builder 在 frame 边界检查 layout engine 与所有临时 stack/opacity invariant，避免 build
+  state 泄漏到下一帧；本轮只改变所有权和访问路径，不改变布局或绘制算法。
 
 验证：
 
@@ -379,9 +423,8 @@ EXP-003 当前结果：
 | `git diff --check`                                               | `PASS` | frame/window 迁移无 whitespace error                    |
 
 提交：invalidation owner `1946811f30`；completed frame state owner `ccd2a038df`；frame
-scheduler state `9317625c82`。
-下一步：继续 4B，先抽出 hitbox、dispatch tree、focus/tab、pointer capture 和 key/action
-routing owner，并固定 routing order 回归测试。
+scheduler state `9317625c82`；frame construction owner `1a311a8d03`；owner encapsulation
+`3ec68ed823`。
 
 4B interaction owner 当前进度：
 
@@ -419,8 +462,8 @@ order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
 pointer/action routing owner `d52a99235d`。
 key routing owner `8a2ce07544`；focus/pending-input owner `0ea05bb762`。
 pointer position `3cb415ee42`；tooltip state `be55f5df44`。
-下一步：收敛 4D completed-frame accessibility/diagnostics payload，并继续检查
-`window.rs` 中仍可归属 owner 的平行状态。
+frame、interaction、focus、pointer、tooltip 和 routing state 已归属 owner；`window.rs`
+保留公开 façade、platform/lifecycle 组合和 draw/present 协调。
 
 4C text input owner 当前进度：
 
@@ -450,43 +493,52 @@ pointer position `3cb415ee42`；tooltip state `be55f5df44`。
 
 提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`；cache-slot swap
 fix `ff126abc7a`；platform client boundary `ad83ac2e12`。
-下一步：完成 native platform IME repetition runbook；当前 Linux 单元层的 Editor IME、
-UTF-16、多 cursor 和 candidate geometry checks 已通过。
+native platform IME repetition runbook 归阶段 7 的平台验证债务；不再阻塞阶段 4 的
+text-input ownership 边界。
 
 4D built frame 当前进度：
 
-- 增加只读 `BuiltFrame` projection，包含 `Scene`、interaction snapshot、text-input
-  snapshot、accessibility update placeholder 和 diagnostics snapshot。
+- 增加只读 `BuiltFrame` projection，包含 `Scene`、窄 interaction snapshot、text-input
+  snapshot、accessibility update 和 diagnostics snapshot。
 - platform `draw` 与 test-support `render_to_image` 现在只接收 completed frame 的不可变
   scene view；frame owner 继续负责构建、交换和 cache replay。
-- 这是 4D 的第一步，snapshot 的 accessibility/diagnostics 数据接线和 renderer contract
-  仍待阶段 5；当前不宣称 immutable ownership 已完全收敛。
+- `BuiltFrame` 有意借用 completed frame 的 scene、hitboxes 和 dispatch tree，而不复制
+  `Scene`；Rust shared borrow 在 synchronous submission 生命周期内禁止 owner mutation。
+  interaction projection 不再暴露整个 `Frame`，platform/render consumer 无法取得 mutable
+  completed-frame state。
+- cache replay 仍是下一帧 build 内部算法，只在 `BuiltFrame` projection 已释放后从上一
+  completed frame 读取/转移 cache payload；它不穿过 platform/render contract。
 - `AccessibilityUpdate` 与 diagnostics snapshot 现在由 completed `Frame` 持有，随 frame
   swap 进入 `BuiltFrame`；frame clear 会清空旧 payload，避免复用上一帧数据。
 - `Window.pending_frame_timing` 平行状态已删除；`present` 从 `BuiltFrame.diagnostics` 读取
   当前 build timing，accessibility bridge 从同一 completed frame 读取 semantic update。
 - accessibility semantic core 的非空 update 已通过 frame build/swap 测试；native adapter
-  仍未接入，本提交没有复制 Zed writer 或平台 adapter 代码。
+  随后在阶段 2 平台验证中接入并通过 Linux runtime，macOS/Windows 保留明确 runbook。
+- `built_frame_projects_only_completed_read_only_state` 固定 scene identity、interaction
+  collections/state 与 active text-input slot projection，防止重新暴露 mutable frame owner。
 
 验证：
 
-| 命令或检查                                                                 | 结果   | 证据                                                |
-| -------------------------------------------------------------------------- | ------ | --------------------------------------------------- |
-| `cargo check --locked -p gpui`                                             | `PASS` | built frame projection 编译通过                     |
-| `cargo test --locked -p gpui --lib`                                        | `PASS` | 223 tests passed                                    |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics`           | `PASS` | 225 tests passed                                    |
-| `cargo test --locked -p gpui --lib --features accessibility accessibility` | `PASS` | 5 tests passed，含 completed-frame semantic payload |
-| `./script/clippy -p gpui --features frame-diagnostics`                     | `PASS` | all-target release clippy 与 philosophy gate 通过   |
-| `git diff --check`                                                         | `PASS` | built frame migration 无 whitespace error           |
+| 命令或检查                                                                     | 结果   | 证据                                                               |
+| ------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------ |
+| `cargo check --locked -p gpui`                                                 | `PASS` | final owner/projection 默认配置编译通过                            |
+| `cargo check --locked -p gpui --features frame-diagnostics,accessibility`      | `PASS` | diagnostics/accessibility owner 组合编译通过                       |
+| `cargo test --locked -p gpui --lib`                                            | `PASS` | 226 tests passed，含 read-only completed-frame projection          |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility` | `PASS` | 237 tests passed，含 semantic、diagnostics、routing 与 owner tests |
+| `./script/clippy -p gpui --features frame-diagnostics,accessibility`           | `PASS` | all-target release clippy 与 philosophy gate 通过                  |
+| `git diff --check`                                                             | `PASS` | final frame owner/built-frame migration 无 whitespace error        |
 
 提交：BuiltFrame projection `e321e6fa0b`；render contract adapter `32d3b403a8`；
-completed-frame payload `8897cb326c`。
-下一步：审查并收敛剩余 completed-frame/read-only renderer contract，再按 EXP-004/005
-决定是否抽出 `gpui_render` crate。
+completed-frame payload `8897cb326c`；narrow read-only projection `98f2e0e21c`。
+
+阶段 4 退出结论：公开 consumer 无需迁移；frame、interaction、text-input 与 completed-frame
+边界均已有 owner，`Window` 不再保存可归属这些 owner 的平行集合。scene、semantic、input、
+focus、IME 单元层/routing 与 visual/headless gates 保持通过；EXP-001、EXP-002、EXP-011 均为
+`PASS` 且未超过既定预算。阶段 4 标记 `COMPLETE`。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（Windows hardware runtime 为 `NOT RUN`）
 
 已完成的第一步：
 
@@ -522,6 +574,8 @@ completed-frame payload `8897cb326c`。
 | EXP-005 `release-fast` binary size                                                                                                  | `PASS` | file 5,339,438,400 vs 5,339,134,088 bytes（1.000057×）；ELF total 271,792,740 vs 271,657,972 bytes（1.000496×） |
 | `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`                                                      | `PASS` | 231 tests passed，含 submission-result contract 与 completed-frame diagnostics                                  |
 | `cargo test --locked -p gpui_wgpu --features test-support`                                                                          | `PASS` | 15 unit + hardware/fallback 各 100-run headless integration tests                                               |
+| Wayland/Vulkan `failed_frames_release_surface_images --ignored`                                                                     | `PASS` | 连续 8 次 acquire 后失败均释放 swapchain image，随后健康帧成功 present                                          |
+| Windows `cargo check --locked -p gpui_wgpu --tests --target x86_64-pc-windows-gnu --features test-support`                          | `PASS` | renderer/headless tests cross-compile                                                                           |
 | `./script/clippy -p gpui_wgpu --features test-support`                                                                              | `PASS` | WGPU all-target release clippy 与 philosophy gate 通过                                                          |
 | `./script/clippy -p gpui --features frame-diagnostics`                                                                              | `PASS` | all-target release clippy 与 philosophy gate 通过                                                               |
 | `git diff --check`                                                                                                                  | `PASS` | render contract migration 无 whitespace error                                                                   |
@@ -538,12 +592,15 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 `.tmp/gpui-refactor/phase-5/exp004-recheck-{baseline,candidate}-{1,2,3}.log` 和
 `.tmp/gpui-refactor/phase-5/exp005-current-release-fast.log`。
 
-下一步：补齐 surface loss/recovery 的可执行验证；Windows hardware runtime 保留到外部
-平台 runbook。完成这两项前阶段 5 保持 `IN PROGRESS`。
+surface recovery test 首轮在第三次失败帧发现 swapchain image exhaustion；修复后失败路径
+会 drop acquired view/frame 并 reconfigure surface，8 次连续失败后健康帧成功 present。
+来源：gpui-ce `c6b17e616a35271183ab49f0da1890ee81953a99` 的
+`crates/gpui_wgpu/src/wgpu_renderer/surface_tests.rs`，Apache-2.0，按当前 renderer API
+改造。提交：`2d31da2bbd`。Windows hardware runtime 按阶段 3 runbook 标记 `NOT RUN`。
 
 ### 阶段 6：platform capability 与 lifecycle
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 已完成的第一步：
 
@@ -562,9 +619,12 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
   操作；Web/headless/Windows 不再接收无效果的 resize/move 请求。
 - 默认 capability 明确为 unsupported，避免 backend 未实现时静默声称支持；公开
   `Window::platform_capabilities` façade 保持 additive、无 consumer 修改。
+- `WindowServiceCapabilities` 覆盖 decorations、input region、client inset、app ID、
+  document metadata、character palette、simple fullscreen、system tabs 和 titlebar action；
+  公开 façade 在调用 backend 前查询能力，不再依赖对应 trait 的静默 no-op。
 - 增加 Linux 测试锁定默认 capability matrix 的显式 unsupported 语义。
 - Linux X11、Wayland、headless、TestWindow、macOS、Windows 和 Web backend 均显式声明
-  capability matrix；未接 native AccessKit adapter 的平台统一声明 accessibility false。
+  capability matrix；桌面 adapter 启用 accessibility，headless/Web 明确 unsupported。
 - 新增 `TextInputBridge` supertrait，将 input handler ownership 与 IME candidate position
   从宽 `PlatformWindow` trait 抽离；所有 backend 已迁移，`PlatformWindow` 继续作为
   composite façade，因此现有调用语义和公开 surface 不变。
@@ -601,37 +661,37 @@ cycle；clean build、binary size 和 golden pixel 均在预算内。尽管实�
 
 | Backend               | Text input | IME position | Native prompt | Clipboard | Accessibility | System bell | Offscreen/headless window render | Frame callbacks | Window controls                                  |
 | --------------------- | ---------- | ------------ | ------------- | --------- | ------------- | ----------- | -------------------------------- | --------------- | ------------------------------------------------ |
-| TestWindow            | yes        | no           | yes           | R/W       | no            | no          | runtime renderer dependent       | yes             | fullscreen + move                                |
-| Linux X11             | yes        | yes          | rendered      | R/W       | no            | yes         | no                               | yes             | full desktop set                                 |
-| Linux Wayland         | yes        | yes          | rendered      | R/W       | no            | runtime     | no                               | yes             | compositor dependent + move/resize; no attention |
+| TestWindow            | yes        | no           | yes           | R/W       | feature       | no          | runtime renderer dependent       | yes             | fullscreen + move                                |
+| Linux X11             | yes        | yes          | rendered      | R/W       | yes           | yes         | no                               | yes             | full desktop set                                 |
+| Linux Wayland         | yes        | yes          | rendered      | R/W       | yes           | runtime     | no                               | yes             | compositor dependent + move/resize; no attention |
 | Linux headless window | no         | no           | rendered      | none      | no            | no          | no; scene is discarded           | no              | fullscreen state only                            |
-| macOS                 | yes        | yes          | native        | R/W       | no            | yes         | test-support only                | yes             | desktop set + move; no interactive resize        |
-| Windows               | yes        | yes          | native        | R/W       | no            | yes         | test-support only                | yes             | desktop set; no interactive move/resize          |
+| macOS                 | yes        | yes          | native        | R/W       | yes           | yes         | test-support only                | yes             | desktop set + move; no interactive resize        |
+| Windows               | yes        | yes          | native        | R/W       | yes           | yes         | test-support only                | yes             | desktop set; no interactive move/resize          |
 | Web                   | no         | no           | rendered      | write     | no            | no          | no                               | yes             | fullscreen only                                  |
 
 验证：
 
-| 命令或检查                                                                                   | 结果                        | 证据                                                        |
-| -------------------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------- |
-| `cargo check --locked -p gpui`                                                               | `PASS`                      | capability façade 编译通过                                  |
-| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported` | `PASS`                      | capability default test passed                              |
-| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                          | `PASS`                      | TestWindow capability matrix passed                         |
-| `cargo test --locked -p gpui_linux --lib capability_matrix`                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                     |
-| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 225 tests，含 `run_embedded` ownership                      |
-| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                    | `PASS`                      | macOS capability tests cross-compile                        |
-| `cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu`                | `BLOCKED`                   | 缺少 `x86_64-w64-mingw32-windres`；未进入 Rust test compile |
-| `RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown` | `PASS`                      | workaround for `wasm_thread` nightly-only feature           |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`               | `PASS`                      | 231 tests passed after render/capability changes            |
-| `cargo test --locked -p gpui --lib`                                                          | `PASS`                      | 223 tests passed after platform splits                      |
-| `cargo test --locked -p gpui --lib input`                                                    | `PASS`                      | 2 pending-input/handler tests passed                        |
-| `cargo test --locked -p gpui --lib interactive`                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                    |
-| `cargo test --locked -p gpui --lib --features accessibility accessibility`                   | `PASS`                      | semantic/action/bridge tests, 4 passed                      |
-| `cargo test --locked -p gpui_platform --features test-support`                               | `PASS`                      | renderer factory returns real Linux renderer                |
-| `./script/clippy -p gpui_platform --features test-support`                                   | `PASS`                      | renderer factory contract passes release clippy             |
-| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux                |
-| `./script/clippy -p gpui --features frame-diagnostics`                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过           |
-| `./script/clippy -p gpui_linux`                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过     |
-| `git diff --check`                                                                           | `PASS`                      | platform capability change 无 whitespace error              |
+| 命令或检查                                                                                                                   | 结果                        | 证据                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| `cargo check --locked -p gpui`                                                                                               | `PASS`                      | capability façade 编译通过                                |
+| `cargo test --locked -p gpui --lib default_platform_capabilities_are_explicitly_unsupported`                                 | `PASS`                      | capability default test passed                            |
+| `cargo test --locked -p gpui --lib test_platform_capability_matrix`                                                          | `PASS`                      | TestWindow capability matrix passed                       |
+| `cargo test --locked -p gpui_linux --lib capability_matrix`                                                                  | `PASS`                      | X11/Wayland/headless matrices, 3 passed                   |
+| `cargo test --locked -p gpui --lib`                                                                                          | `PASS`                      | 225 tests，含 `run_embedded` ownership                    |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                                                    | `PASS`                      | macOS capability tests cross-compile                      |
+| `cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu --no-default-features --features accessibility` | `PASS`                      | capability/adapter tests cross-compile；runtime `NOT RUN` |
+| `RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown`                                 | `PASS`                      | workaround for `wasm_thread` nightly-only feature         |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`                                               | `PASS`                      | 231 tests passed after render/capability changes          |
+| `cargo test --locked -p gpui --lib`                                                                                          | `PASS`                      | 223 tests passed after platform splits                    |
+| `cargo test --locked -p gpui --lib input`                                                                                    | `PASS`                      | 2 pending-input/handler tests passed                      |
+| `cargo test --locked -p gpui --lib interactive`                                                                              | `PASS`                      | key/action/mouse routing tests, 5 passed                  |
+| `cargo test --locked -p gpui --lib --features accessibility accessibility`                                                   | `PASS`                      | semantic/action/bridge tests, 4 passed                    |
+| `cargo test --locked -p gpui_platform --features test-support`                                                               | `PASS`                      | renderer factory returns real Linux renderer              |
+| `./script/clippy -p gpui_platform --features test-support`                                                                   | `PASS`                      | renderer factory contract passes release clippy           |
+| `cargo check --locked -p gpui_windows -p gpui_macos -p gpui_web`                                                             | `PASS (host package check)` | target runtime/tests cannot execute on Linux              |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                                       | `PASS`                      | all-target release clippy 与 philosophy gate 通过         |
+| `./script/clippy -p gpui_linux`                                                                                              | `PASS`                      | Linux all-target release clippy 与 philosophy gate 通过   |
+| `git diff --check`                                                                                                           | `PASS`                      | platform capability change 无 whitespace error            |
 
 提交：capability façade `982cb1642a`；backend matrices `5d77a17d79`；text input bridge
 `efd05dd0cb`；input source `7c1e5e0de2`；window host `07b4298de0`；system services
@@ -641,13 +701,14 @@ factory `85fffe8fe5`；platform render target `c3f2d1bb90`；completed window ho
 `3ef63e8c00`；desktop assertion coverage `fd778d5672`；embedded lifecycle test
 `a37079c358`；native prompt capability `ff2ae9aaf3`；clipboard capability
 `7542cae1ec`；Web clipboard errors `2cb4199d55`；interactive move/resize gating
-`13a7611025`；lifecycle capability `93aa67658d`。
-下一步：收敛 platform-specific façade 与 capability error，并覆盖
-frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 event loop。
+`13a7611025`；lifecycle capability `93aa67658d`；optional window services
+`dc14ed987e`。阶段 6 已覆盖 frame lifecycle、IME、clipboard、window controls、native
+accessibility、`run_embedded` 和外部 event loop；每个 backend matrix 都明确区分
+supported 与 unsupported。
 
 ### 阶段 7：UI 集成边界
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（macOS/Windows native IME runtime 为 `NOT RUN`）
 
 已完成的第一步：
 
@@ -665,6 +726,13 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
   metadata、registry 和 example layout；`component_preview` 继续承载产品级 workspace
   preview UI。源码目录暂留 `crates/component` 以避免无行为收益的文件搬迁，但 workspace
   dependency 和 Rust crate path 已不存在含糊的 `component` 名称。
+- 新增 `script/gpui-ime-smoke`：在隔离 XDG/data directory 中启动 X11 ZZZ，通过临时
+  `/dev/uinput` keyboard/pointer 把真实 kernel input 送入 Fcitx5/Rime/XIM，再验证磁盘
+  文件精确得到 100/100 行 `你好`；同时确认 candidate popup 与 editor window 相交。
+- Linux Fedora/X11 native run 为 `PASS`：0 lost/duplicated commits，candidate window
+  `(168, 1928, 560, 152)`，editor window `(468, 36, 3072, 2144)`，59.796 s。macOS、
+  Windows 和 Web 的 exact steps 与预期结果记录在
+  [原生 IME 验证 runbook](./gui-framework-research/ime-validation-runbook.md)。
 
 验证：
 
@@ -680,6 +748,8 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 | `cargo test --locked -p editor ime`                                                                                     | `PASS`                    | 6 IME/composition tests passed                                                                                                                                                                      |
 | `cargo test --locked -p editor focus`                                                                                   | `PASS`                    | 2 focus tests passed                                                                                                                                                                                |
 | `cargo test --locked -p editor input`                                                                                   | `PASS`                    | 8 UTF-16/multi-cursor input tests passed                                                                                                                                                            |
+| `python3 -m py_compile script/gpui-ime-smoke`                                                                           | `PASS`                    | Linux native harness syntax/import check 通过                                                                                                                                                       |
+| `script/gpui-ime-smoke --binary target/debug/zzz --repetitions 100`                                                     | `PASS`                    | final native-code Fcitx5/Rime XIM 100/100 commits；candidate popup 与 editor window 相交；`.tmp/gpui-refactor/phase-7/linux-x11-ime-pwjzkxhc/summary.txt`                                           |
 | `cargo check --locked -p ui_component_registry -p ui_macros -p ui -p ui_input -p component_preview -p workspace -p zzz` | `PASS`                    | registry rename 的 13 个直接 workspace consumer 全部编译通过                                                                                                                                        |
 | `cargo test --locked -p ui_component_registry -p ui_macros -p component_preview --lib`                                  | `PASS`                    | 4 tests passed，0 failed                                                                                                                                                                            |
 | `./script/clippy -p ui_component_registry -p ui_macros -p component_preview`                                            | `PASS`                    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                       |
@@ -689,45 +759,153 @@ frame lifecycle、IME、clipboard、window controls 和 `run_embedded`/外部 ev
 
 提交：app-scoped editor adapter `f4f22a68fc`；prompt policy/renderer split `d90153f6cc`；
 non-panicking factory boundary `d296469604`；all-consumer factory fallback `ca93ff5625`；
-preview registry rename `7cb589a3ba`。
+preview registry rename `7cb589a3ba`；Linux native IME harness `5012063343`。
 
 EXP-010 当前状态：`PASS`。process-global factory 已删除；3 个 factory consumer 通过统一
 构造入口且 startup-order fallback test 通过；prompt product policy 已迁出 generic crate；
 editor-only 增量构建保持 generic `ui`、`ui_input`、registry 和 preview crate 为 fresh。
 
-下一步：完成 EXP-009 的平台 IME 重复运行与 native runbook，并在最终 Linux app smoke
-中覆盖实际 UI startup。
+EXP-009 当前状态：`partial-platform`。当前 Linux 主机达到 native threshold：真实 XIM
+preedit/candidate/commit path 完成 100 repetitions，Editor UTF-16、marked range、undo、
+multi-cursor、focus/input 与 Vim native-key bypass tests 全部通过。macOS/Windows runtime
+在当前主机标记 `NOT RUN`，均有可执行 runbook；Web candidate positioning 保持显式
+unsupported。按完成定义的平台欠账规则，阶段 7 标记 `COMPLETE`，下一步进入阶段 9。
 
 ### 阶段 8：invalidation 实验
 
-状态：`NOT RUN`
+状态：`COMPLETE — REJECTED`
 
-EXP-001/002 的 production-like Editor workload 和正式 phase budget 尚未完成，因此
-没有引入 scoped invalidation API，也没有用未达标数据声称 20% phase-work 下降。
-该阶段保持待运行，后续若 gate 不达标将记录拒绝并永久保留完整 `cx.notify()` 语义。
+`FrameDirtyReason` 现在记录 invalidation 的最早受影响 phase：`Layout`、`Prepaint`、
+`Paint` 或 `Accessibility`。现有 `cx.notify()` 和 `Window::refresh()` 都明确记录
+`Layout`，但仍执行原完整 invalidation；默认构建不包含这些 diagnostics 字段。
+
+EXP-007 使用临时、未提交的 `notify_with` 原型，在 button、tab、list item、tree item、
+text input、dialog、status、toolbar、scrollbar 和 editor viewport 十类代表性 cached view
+上测试跳过 dirty-view rebuild：
+
+- accessibility 关闭时，component render work 从 10 降到 0，表面下降 100%，但 10/10
+  debug/visual projection 保留旧 state，mouse input 也调用旧 handler；correctness gate
+  立即失败。
+- accessibility 开启时，GPUI 为保证完整 semantic tree 会禁用 cached replay；full 与
+  scoped 两组 component render work 都是 200，下降 0%，未达到 20% 阈值。
+- 因此不存在同时达到 phase-work 阈值且保持 visual/input/accessibility 行为的候选。
+  focus、IME 和 native adapter 无需继续冒险验证，因为 visual/input 已经明确不等价。
+
+临时 `notify_with`、cache-policy 分支和实验 view 已全部删除；产品代码没有 scoped
+invalidation API、双实现或 compatibility path，完整 `cx.notify()` 语义保持不变。
+仅保留 phase dirty diagnostics。
+
+验证：
+
+| 命令或检查                                                                                                     | 结果       | 证据                                                                         |
+| -------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics scoped_invalidation_experiment -- --nocapture` | `REJECTED` | 100% work drop，但 10/10 stale views 且 stale input handlers                 |
+| 同一实验加 `accessibility` feature                                                                             | `REJECTED` | semantic rebuild required；0% work drop                                      |
+| 临时 prototype 删除后 `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility`           | `PASS`     | 235 tests passed                                                             |
+| `./script/clippy -p gpui --features frame-diagnostics`                                                         | `PASS`     | all-target/all-feature release clippy 与 philosophy gate                     |
+| 原始实验输出                                                                                                   | `PASS`     | `.tmp/gpui-refactor/phase-8/exp007-scoped-invalidation{,-accessibility}.log` |
+
+提交：phase dirty diagnostics `28203d1737`。EXP-007 最终决策：`REJECTED`。
 
 ### 阶段 9：收敛与最终验证
 
-状态：`NOT STARTED`
+状态：`COMPLETE`
 
-最新 workspace validation：`cargo test --workspace --locked --no-fail-fast` 完成 workspace
-编译，但测试阶段包含已在计划 baseline 复现的 agent_ui action/focus failures，并有多个
-editor formatter/inlay tests 长时间运行；为避免无界 session 已中断。精确记录见
-`.tmp/gpui-refactor/phase-9/workspace-test-summary.txt`。最终阶段仍需在收敛后重新运行
-并区分 baseline failure、environment hang 和真实回归。
+收敛清理：
+
+- `render_api::submit_compat`/`CompatibilityRenderer` 已改为最终
+  `submit_platform_frame`/`PlatformRenderer` 边界，并明确记录 EXP-004/005 选择内部 module
+  seam、保留稳定 `PlatformWindow` façade 的原因；不再留下“backend 尚在迁移”的临时路径。
+- `gpui_wgpu` 的 native-only `Rc` import 改为 target gate；device recovery dead-code allow
+  只在 Web target 生效并带原因。Web cross-check 不再产生 ZZZ-owned unused import warning。
+- `PlatformInputHandler` 只剩一个 deprecated public alias，in-tree call site 为 0；删除条件为
+  下一次 breaking GPUI release。`ERASED_EDITOR_FACTORY`、scoped invalidation prototype 和
+  旧 render compatibility 名称均不存在。
+- 最终 owner/module graph、completed-frame immutability、capability gating 和 compatibility
+  状态已写入 [GPUI ownership 文档](./ownership-and-data-flow.md)；native IME 平台步骤写入
+  [runbook](./gui-framework-research/ime-validation-runbook.md)。
+
+最终实验结论：
+
+| 实验            | 状态               | 最终结论                                                                 |
+| --------------- | ------------------ | ------------------------------------------------------------------------ |
+| EXP-001/002/011 | `PASS`             | latency、phase work、allocation/RSS 均在预算内                           |
+| EXP-003         | `partial-platform` | Linux RADV/llvmpipe 通过；Windows hardware runtime `NOT RUN`             |
+| EXP-004/005     | `PASS`             | 无 cycle/consumer edit，build 与 binary 预算通过；保留 internal seam     |
+| EXP-006         | `partial-platform` | Linux AT-SPI/Orca 通过；VoiceOver/Narrator runtime `NOT RUN`             |
+| EXP-007         | `REJECTED`         | 10/10 stale visual/input 或 0% work reduction；prototype 已删除          |
+| EXP-008         | `PASS`             | 100 seeds，0 hang/panic/leak，warm CV 2.134%                             |
+| EXP-009         | `partial-platform` | Linux XIM 100/100；macOS/Windows runtime `NOT RUN`，Web 显式 unsupported |
+| EXP-010         | `PASS`             | app-scoped factory、非 panic startup、editor-only generic UI fresh       |
+| EXP-012         | `planned-not-run`  | optional RSX spike，不是本 Goal 完成条件                                 |
+
+最终验证：
+
+| 命令或检查                                                                            | 结果                   | 证据                                                                                     |
+| ------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
+| `cargo fmt --all -- --check`                                                          | `PASS`                 | workspace Rust formatting                                                                |
+| `cargo test --workspace`                                                              | `FAIL (baseline only)` | rerun 到 `agent_ui`：293 passed、6 action/focus failures；与 clean baseline 记录完全相同 |
+| isolated `acp_thread::tests::test_terminal_kill_allows_wait_for_exit_to_complete` ×10 | `PASS`                 | 首轮 workspace timeout 为 transient timing；立即 10/10 通过                              |
+| `./script/clippy`                                                                     | `PASS`                 | workspace all-target/all-feature、manifest lint 与 curated `future_not_send` 全部通过    |
+| `./script/check-philosophy`                                                           | `PASS`                 | 未引入商业、账号、遥测、默认网络或 hosted-docs surface                                   |
+| `./script/check-upstream-ledger`                                                      | `PASS`                 | 485 rejection rows                                                                       |
+| `cd docs && npx prettier --check src/`                                                | `PASS`                 | final docs format                                                                        |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`   | `PASS`                 | RADV hardware 与 llvmpipe fallback                                                       |
+| Wayland/Vulkan `failed_frames_release_surface_images --ignored`                       | `PASS`                 | 8 次 post-acquire failure 后健康 present                                                 |
+| final native-code Linux X11/Fcitx5 native IME                                         | `PASS`                 | 100/100 commits；`.tmp/gpui-refactor/phase-7/linux-x11-ime-pwjzkxhc/summary.txt`         |
+| final native-code Linux AT-SPI/Orca                                                   | `PASS`                 | 32 nodes；Orca 列出 `target/debug/zzz`；`.tmp/gpui-refactor/phase-9/atspi-final-L2jpiu/` |
+| macOS/Windows/Web cross-checks                                                        | `PASS`                 | macOS accessibility；Windows accessibility/WGPU tests；Web wasm tests 均编译通过         |
+
+完整命令、环境修正和 baseline 分类记录在
+`.tmp/gpui-refactor/phase-9/final-validation-summary.txt`。阶段 0–7 均完成，阶段 8 已明确拒绝，
+阶段 9 的核心代码、文档和当前主机验证均完成；剩余风险仅为 runbook 中列明的外部平台 runtime
+QA。Goal 标记 `COMPLETE`。
 
 ## Upstream A/B/C 记录
 
-`ThreadedDispatcher` 已按 `8886dcb0` 做 B 类移植；AccessKit element semantics 已按
-`1d029c5f` 做 B 类移植。`cc053a4a` 的 writer follow-up 与 `0eda7703` 的 macOS adapter
-cleanup 保持 C；core semantics、action routing 和各 platform adapter 继续分开记录。
+`ThreadedDispatcher` 已按 `8886dcb0` 做 B 类移植；AccessKit core、action routing 与
+Linux/macOS/Windows adapter 已按 `1d029c5f` 分开移植。`0eda7703` 在 macOS adapter
+到位后重分类为 B，仅保留 teardown 修复；`cc053a4a` 的缺失 writer follow-up 保持 C。
 完整决策见 `upstream-sync-2026-10-03-gpui.md`。
 
 ## 外部平台 QA
 
-| 平台/检查                | 当前状态  | 说明                                       |
-| ------------------------ | --------- | ------------------------------------------ |
-| Linux runtime/headless   | `NOT RUN` | 当前主机可执行，随对应阶段运行             |
-| macOS runtime/VoiceOver  | `NOT RUN` | 最终提供 exact runbook                     |
-| Windows runtime/Narrator | `NOT RUN` | 最终提供 exact runbook                     |
-| Linux Orca               | `NOT RUN` | adapter 完成后在当前主机运行或记录环境阻塞 |
+| 平台/检查                | 当前状态  | 说明                                                                   |
+| ------------------------ | --------- | ---------------------------------------------------------------------- |
+| Linux runtime/headless   | `PASS`    | final native-code XDG startup、XIM 100/100、RADV/llvmpipe、AT-SPI/Orca |
+| macOS runtime/VoiceOver  | `NOT RUN` | exact runbook 已记录                                                   |
+| Windows runtime/Narrator | `NOT RUN` | exact runbook 已记录                                                   |
+| Linux Orca               | `PASS`    | `orca --list-apps` 识别 `zzz`；pyatspi action 可执行                   |
+
+### Native accessibility runbook
+
+macOS 14+ / VoiceOver：
+
+```sh
+cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin --features accessibility
+cargo run --locked -p zzz
+open -a VoiceOver
+```
+
+在 VoiceOver rotor 中确认 ZZZ window 下可以找到 Button、Text Input、Editor、List、Tree、
+Tab、Dialog 和 Status；键盘移动 focus 后 VoiceOver focus 跟随；分别对 Button Click 与
+Text Input Focus 执行一次 action，确认只触发一次。结束后运行：
+
+```sh
+osascript -e 'tell application "VoiceOver" to quit'
+```
+
+Windows 11 / Narrator（PowerShell）：
+
+```powershell
+cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-msvc --features accessibility
+cargo run --locked -p zzz
+Start-Process narrator.exe
+```
+
+用 Narrator scan mode 检查同一组 role/name/state，确认键盘 focus 与 Narrator focus 一致，
+Button Click 与 Text Input Focus 各执行一次且没有重复。结束后运行：
+
+```powershell
+Stop-Process -Name Narrator
+```

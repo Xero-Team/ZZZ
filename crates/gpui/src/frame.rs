@@ -1,11 +1,10 @@
-#[cfg(any(test, feature = "test-support"))]
-use crate::Bounds;
+use crate::taffy::TaffyLayoutEngine;
 use crate::window::{CursorStyleRequest, ElementStateBox, HitTest, TooltipRequest};
 use crate::{
-    AccessibilityUpdate, AnyElement, AnyMouseListener, ContentMask, CursorStyle, DispatchNodeId,
-    DispatchTree, ElementId, EntityId, FocusId, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
-    LineLayoutIndex, Pixels, Point, Scene, TabStopMap, TextInputOwner, TextStyleRefinement, Window,
-    WindowControlArea,
+    AccessibilityUpdate, AnyElement, AnyImageCache, AnyMouseListener, Bounds, ContentMask,
+    CursorStyle, DispatchNodeId, DispatchTree, ElementId, EntityId, FocusId, GlobalElementId,
+    Hitbox, HitboxBehavior, HitboxId, LineLayoutIndex, Pixels, Point, Scene, TabStopMap,
+    TextInputOwner, TextStyleRefinement, Window, WindowControlArea,
 };
 use crate::{App, Effect};
 #[cfg(feature = "accessibility")]
@@ -24,8 +23,9 @@ use std::{
 
 #[cfg(feature = "frame-diagnostics")]
 use crate::profiler::{
-    FrameBuildId, FrameDirtyReason, FrameEvent, FrameInputProvenance, FrameInvalidation,
-    FrameTiming, next_frame_build_id, record_frame_events,
+    FrameBuildId, FrameDiagnosticsSourceId, FrameDirtyReason, FrameEvent, FrameInputProvenance,
+    FrameInvalidation, FrameInvalidationPhase, FrameTiming, next_frame_build_id,
+    next_frame_diagnostics_source_id, record_frame_events,
 };
 #[cfg(feature = "frame-diagnostics")]
 use scheduler::Instant;
@@ -36,6 +36,187 @@ pub(crate) enum DrawPhase {
     Prepaint,
     Paint,
     Focus,
+}
+
+/// Mutable state used only while constructing a frame.
+pub(crate) struct FrameBuilder {
+    layout_engine: Option<TaffyLayoutEngine>,
+    element_id_stack: SmallVec<[ElementId; 32]>,
+    text_style_stack: Vec<TextStyleRefinement>,
+    rendered_entity_stack: Vec<EntityId>,
+    element_offset_stack: Vec<Point<Pixels>>,
+    element_opacity: f32,
+    content_mask_stack: Vec<ContentMask<Pixels>>,
+    requested_autoscroll: Option<Bounds<Pixels>>,
+    image_cache_stack: Vec<AnyImageCache>,
+}
+
+impl FrameBuilder {
+    pub(crate) fn new() -> Self {
+        Self {
+            layout_engine: Some(TaffyLayoutEngine::new()),
+            element_id_stack: SmallVec::default(),
+            text_style_stack: Vec::new(),
+            rendered_entity_stack: Vec::new(),
+            element_offset_stack: Vec::new(),
+            element_opacity: 1.0,
+            content_mask_stack: Vec::new(),
+            requested_autoscroll: None,
+            image_cache_stack: Vec::new(),
+        }
+    }
+
+    pub(crate) fn debug_assert_idle(&self) {
+        debug_assert!(self.layout_engine.is_some());
+        debug_assert!(self.element_id_stack.is_empty());
+        debug_assert!(self.text_style_stack.is_empty());
+        debug_assert!(self.rendered_entity_stack.is_empty());
+        debug_assert!(self.element_offset_stack.is_empty());
+        debug_assert_eq!(self.element_opacity, 1.0);
+        debug_assert!(self.content_mask_stack.is_empty());
+        debug_assert!(self.image_cache_stack.is_empty());
+    }
+
+    pub(crate) fn layout_engine(&mut self) -> &mut TaffyLayoutEngine {
+        self.layout_engine
+            .as_mut()
+            .expect("layout engine should be present outside layout computation")
+    }
+
+    pub(crate) fn take_layout_engine(&mut self) -> TaffyLayoutEngine {
+        self.layout_engine
+            .take()
+            .expect("layout engine should be present outside layout computation")
+    }
+
+    pub(crate) fn restore_layout_engine(&mut self, layout_engine: TaffyLayoutEngine) {
+        debug_assert!(self.layout_engine.is_none());
+        self.layout_engine = Some(layout_engine);
+    }
+
+    pub(crate) fn push_element_id(&mut self, element_id: ElementId) {
+        self.element_id_stack.push(element_id);
+    }
+
+    pub(crate) fn pop_element_id(&mut self) {
+        self.element_id_stack.pop();
+    }
+
+    pub(crate) fn element_id_path(&self) -> &[ElementId] {
+        &self.element_id_stack
+    }
+
+    pub(crate) fn element_id_depth(&self) -> usize {
+        self.element_id_stack.len()
+    }
+
+    pub(crate) fn clone_element_ids(&self) -> SmallVec<[ElementId; 32]> {
+        self.element_id_stack.clone()
+    }
+
+    pub(crate) fn restore_element_ids(&mut self, element_ids: &SmallVec<[ElementId; 32]>) {
+        self.element_id_stack.clone_from(element_ids);
+    }
+
+    pub(crate) fn clear_element_ids(&mut self) {
+        self.element_id_stack.clear();
+    }
+
+    pub(crate) fn text_styles(&self) -> &[TextStyleRefinement] {
+        &self.text_style_stack
+    }
+
+    pub(crate) fn push_text_style(&mut self, style: TextStyleRefinement) {
+        self.text_style_stack.push(style);
+    }
+
+    pub(crate) fn pop_text_style(&mut self) {
+        self.text_style_stack.pop();
+    }
+
+    pub(crate) fn clone_text_styles(&self) -> Vec<TextStyleRefinement> {
+        self.text_style_stack.clone()
+    }
+
+    pub(crate) fn restore_text_styles(&mut self, styles: &[TextStyleRefinement]) {
+        self.text_style_stack.clear();
+        self.text_style_stack.extend_from_slice(styles);
+    }
+
+    pub(crate) fn clear_text_styles(&mut self) {
+        self.text_style_stack.clear();
+    }
+
+    pub(crate) fn current_view(&self) -> Option<EntityId> {
+        self.rendered_entity_stack.last().copied()
+    }
+
+    pub(crate) fn push_rendered_view(&mut self, id: EntityId) {
+        self.rendered_entity_stack.push(id);
+    }
+
+    pub(crate) fn pop_rendered_view(&mut self) {
+        self.rendered_entity_stack.pop();
+    }
+
+    pub(crate) fn push_element_offset(&mut self, offset: Point<Pixels>) {
+        self.element_offset_stack.push(offset);
+    }
+
+    pub(crate) fn pop_element_offset(&mut self) {
+        self.element_offset_stack.pop();
+    }
+
+    pub(crate) fn element_offset(&self) -> Point<Pixels> {
+        self.element_offset_stack
+            .last()
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn element_opacity(&self) -> f32 {
+        self.element_opacity
+    }
+
+    pub(crate) fn replace_element_opacity(&mut self, opacity: f32) -> f32 {
+        mem::replace(&mut self.element_opacity, opacity)
+    }
+
+    pub(crate) fn push_content_mask(&mut self, mask: ContentMask<Pixels>) {
+        self.content_mask_stack.push(mask);
+    }
+
+    pub(crate) fn pop_content_mask(&mut self) {
+        self.content_mask_stack.pop();
+    }
+
+    pub(crate) fn content_mask(&self) -> Option<ContentMask<Pixels>> {
+        self.content_mask_stack.last().cloned()
+    }
+
+    pub(crate) fn request_autoscroll(&mut self, bounds: Bounds<Pixels>) {
+        self.requested_autoscroll = Some(bounds);
+    }
+
+    pub(crate) fn take_autoscroll(&mut self) -> Option<Bounds<Pixels>> {
+        self.requested_autoscroll.take()
+    }
+
+    pub(crate) fn reset_autoscroll(&mut self) {
+        self.requested_autoscroll = None;
+    }
+
+    pub(crate) fn push_image_cache(&mut self, image_cache: AnyImageCache) {
+        self.image_cache_stack.push(image_cache);
+    }
+
+    pub(crate) fn pop_image_cache(&mut self) {
+        self.image_cache_stack.pop();
+    }
+
+    pub(crate) fn current_image_cache(&self) -> Option<AnyImageCache> {
+        self.image_cache_stack.last().cloned()
+    }
 }
 
 pub(crate) struct FrameScheduler {
@@ -107,6 +288,8 @@ impl FrameScheduler {
 struct WindowInvalidatorInner {
     #[cfg(feature = "frame-diagnostics")]
     pub window_id: crate::WindowId,
+    #[cfg(feature = "frame-diagnostics")]
+    pub source_id: FrameDiagnosticsSourceId,
     pub dirty: bool,
     pub draw_phase: DrawPhase,
     pub dirty_views: FxHashSet<EntityId>,
@@ -184,6 +367,7 @@ impl WindowInvalidator {
         WindowInvalidator {
             inner: Rc::new(RefCell::new(WindowInvalidatorInner {
                 window_id,
+                source_id: next_frame_diagnostics_source_id(),
                 dirty: true,
                 draw_phase: DrawPhase::None,
                 dirty_views: FxHashSet::default(),
@@ -224,7 +408,13 @@ impl WindowInvalidator {
         inner.update_count += 1;
         inner.dirty_views.insert(entity);
         #[cfg(feature = "frame-diagnostics")]
-        Self::record_invalidation(&mut inner, Some(entity), FrameDirtyReason::EntityNotify);
+        Self::record_invalidation(
+            &mut inner,
+            Some(entity),
+            FrameDirtyReason::EntityNotify {
+                earliest_phase: FrameInvalidationPhase::Layout,
+            },
+        );
         if inner.draw_phase == DrawPhase::None {
             let became_dirty = !inner.dirty;
             inner.dirty = true;
@@ -251,7 +441,13 @@ impl WindowInvalidator {
         if dirty {
             inner.update_count += 1;
             #[cfg(feature = "frame-diagnostics")]
-            Self::record_invalidation(&mut inner, None, FrameDirtyReason::WindowRefresh);
+            Self::record_invalidation(
+                &mut inner,
+                None,
+                FrameDirtyReason::WindowRefresh {
+                    earliest_phase: FrameInvalidationPhase::Layout,
+                },
+            );
         }
         let waker = became_dirty.then(|| inner.platform_waker.clone()).flatten();
         drop(inner);
@@ -382,8 +578,16 @@ impl WindowInvalidator {
 
     #[cfg(feature = "frame-diagnostics")]
     pub(crate) fn flush_events(&self) {
-        let events = mem::take(&mut self.inner.borrow_mut().events);
-        record_frame_events(&events);
+        let (source_id, events) = {
+            let mut inner = self.inner.borrow_mut();
+            (inner.source_id, mem::take(&mut inner.events))
+        };
+        record_frame_events(source_id, &events);
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    pub(crate) fn frame_diagnostics_source_id(&self) -> FrameDiagnosticsSourceId {
+        self.inner.borrow().source_id
     }
 
     pub fn wake_platform(&self) {
@@ -508,7 +712,12 @@ pub(crate) struct PaintIndex {
     pub(crate) line_layout_index: LineLayoutIndex,
 }
 
-/// Immutable view of the completed frame consumed by platform/rendering code.
+/// Immutable view of the completed frame consumed synchronously by platform/rendering code.
+///
+/// The scene and interaction collections are borrowed from the rendered frame instead of cloned.
+/// Holding this projection therefore prevents the owner from mutating or replaying that frame for
+/// the duration of submission. Owned payloads are copied out only where the platform may retain
+/// them, such as accessibility updates and diagnostics metadata.
 #[allow(
     dead_code,
     reason = "completed-frame projections are consumed incrementally by owners"
@@ -527,10 +736,12 @@ pub(crate) struct BuiltFrame<'a> {
     reason = "completed-frame projections are consumed incrementally by owners"
 )]
 pub(crate) struct InteractionSnapshot<'a> {
-    pub(crate) frame: &'a Frame,
+    pub(crate) hitboxes: &'a [Hitbox],
+    pub(crate) dispatch_tree: &'a DispatchTree,
     pub(crate) mouse_hit_test: &'a HitTest,
     pub(crate) captured_hitbox: Option<HitboxId>,
     pub(crate) focus: Option<FocusId>,
+    pub(crate) window_active: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -539,8 +750,8 @@ pub(crate) struct InteractionSnapshot<'a> {
     reason = "completed-frame projections are consumed incrementally by owners"
 )]
 pub(crate) struct TextInputSnapshot {
-    pub(crate) rendered_handler_count: usize,
-    pub(crate) next_handler_count: usize,
+    pub(crate) handler_slot_count: usize,
+    pub(crate) active_handler_index: Option<usize>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -580,14 +791,19 @@ impl<'a> BuiltFrame<'a> {
         Self {
             scene: &frame.scene,
             interaction: InteractionSnapshot {
-                frame,
+                hitboxes: &frame.hitboxes,
+                dispatch_tree: &frame.dispatch_tree,
                 mouse_hit_test,
                 captured_hitbox,
                 focus,
+                window_active: frame.window_active,
             },
             text_input: TextInputSnapshot {
-                rendered_handler_count: text_input.rendered_handlers.len(),
-                next_handler_count: text_input.next_handlers.len(),
+                handler_slot_count: text_input.rendered_handlers.len(),
+                active_handler_index: text_input
+                    .rendered_handlers
+                    .iter()
+                    .rposition(Option::is_some),
             },
             accessibility: frame.accessibility.clone(),
             diagnostics: frame.diagnostics,

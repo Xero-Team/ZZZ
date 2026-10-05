@@ -198,6 +198,8 @@
   - [GUI Framework Architecture Research](./development/gui-framework-research/report.md)
     - [GPUI Refactoring Execution Plan](./development/gui-framework-research/refactoring-plan.md)
     - [GPUI Refactoring Goal](./development/gui-framework-research/goal.md)
+    - [GPUI Refactoring Progress](./development/gpui-refactor-progress.md)
+    - [Native IME Validation Runbook](./development/gui-framework-research/ime-validation-runbook.md)
   - [Telegram Panel](./development/telegram-panel.md)
   - [Telegram Panel Hardening Plan](./development/telegram-panel-hardening.md)
   - [Upstream Sync 2026-07-03](./development/upstream-sync-2026-07-03.md)

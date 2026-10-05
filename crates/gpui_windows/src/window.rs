@@ -83,6 +83,8 @@ pub struct WindowsWindowState {
     fullscreen: Cell<Option<StyleAndBounds>>,
     initial_placement: Cell<Option<WindowOpenStatus>>,
     hwnd: HWND,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility: RefCell<Option<AccessibilityState>>,
 }
 
 pub(crate) struct WindowsWindowInner {
@@ -179,6 +181,8 @@ impl WindowsWindowState {
             hwnd,
             invalidate_devices,
             direct_manipulation,
+            #[cfg(feature = "accessibility")]
+            accessibility: RefCell::new(None),
         })
     }
 
@@ -591,7 +595,81 @@ impl Drop for WindowsWindow {
     }
 }
 
-impl gpui::AccessibilityBridge for WindowsWindow {}
+impl gpui::AccessibilityBridge for WindowsWindow {
+    #[cfg(feature = "accessibility")]
+    fn initialize_accessibility(
+        &mut self,
+        callbacks: gpui::AccessibilityCallbacks,
+    ) -> anyhow::Result<()> {
+        let action_handler = AccessibilityActionHandler(callbacks.action);
+        let is_focused = unsafe { GetForegroundWindow() } == self.0.hwnd;
+        let adapter = accesskit_windows::Adapter::new(
+            accesskit_windows::HWND(self.0.hwnd.0),
+            is_focused,
+            action_handler,
+        );
+        let activation_handler = AccessibilityActivationHandler {
+            callback: callbacks.activation,
+        };
+        *self.state.accessibility.borrow_mut() = Some(AccessibilityState {
+            adapter,
+            activation_handler,
+        });
+        Ok(())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn update_accessibility(&mut self, update: gpui::AccessibilityUpdate) -> anyhow::Result<()> {
+        let Some(snapshot) = update.into_semantic_snapshot() else {
+            return Ok(());
+        };
+        let events = {
+            let mut accessibility = self.state.accessibility.borrow_mut();
+            let Some(accessibility) = accessibility.as_mut() else {
+                anyhow::bail!("Windows accessibility adapter was not initialized");
+            };
+            accessibility.adapter.update_if_active(|| snapshot.update)
+        };
+        if let Some(events) = events {
+            events.raise();
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn update_accessibility_window_bounds(&mut self) -> anyhow::Result<()> {
+        // Windows UI Automation tracks native window bounds.
+        Ok(())
+    }
+}
+
+#[cfg(feature = "accessibility")]
+pub(crate) struct AccessibilityState {
+    pub(crate) adapter: accesskit_windows::Adapter,
+    pub(crate) activation_handler: AccessibilityActivationHandler,
+}
+
+#[cfg(feature = "accessibility")]
+pub(crate) struct AccessibilityActivationHandler {
+    callback: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
+}
+
+#[cfg(feature = "accessibility")]
+impl accesskit::ActivationHandler for AccessibilityActivationHandler {
+    fn request_initial_tree(&mut self) -> Option<accesskit::TreeUpdate> {
+        (self.callback)()
+    }
+}
+
+#[cfg(feature = "accessibility")]
+struct AccessibilityActionHandler(Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>);
+
+#[cfg(feature = "accessibility")]
+impl accesskit::ActionHandler for AccessibilityActionHandler {
+    fn do_action(&mut self, request: accesskit::ActionRequest) {
+        (self.0)(request);
+    }
+}
 
 impl gpui::TextInputBridge for WindowsWindow {
     fn set_input_handler(&mut self, input_handler: TextInputClient) {
@@ -713,8 +791,12 @@ impl gpui::WindowHost for WindowsWindow {
                         ShowWindowAsync(hwnd, SW_RESTORE).ok().log_err();
                     }
 
-                    SetActiveWindow(hwnd).ok().log_err();
-                    SetFocus(Some(hwnd)).ok().log_err();
+                    if SetActiveWindow(hwnd).ok().is_none() {
+                        log::error!("SetActiveWindow failed to return a window handle");
+                    }
+                    if SetFocus(Some(hwnd)).ok().is_none() {
+                        log::error!("SetFocus failed to return a window handle");
+                    }
                 }
 
                 // premium ragebait by windows, this is needed because the window
@@ -993,7 +1075,7 @@ impl gpui::SystemServices for WindowsWindow {
 
     fn play_system_bell(&self) {
         // MB_OK: The sound specified as the Windows Default Beep sound.
-        unsafe { MessageBeep(MB_OK).ok().log_err() };
+        unsafe { MessageBeep(MB_OK).log_err() };
     }
 }
 
@@ -1047,7 +1129,7 @@ fn windows_capabilities() -> gpui::PlatformCapabilities {
     gpui::PlatformCapabilities {
         text_input: true,
         ime_candidate_position: true,
-        accessibility: false,
+        accessibility: cfg!(feature = "accessibility"),
         headless_renderer: cfg!(any(test, feature = "test-support")),
         frame_callbacks: true,
         system_bell: true,
@@ -1058,6 +1140,7 @@ fn windows_capabilities() -> gpui::PlatformCapabilities {
             resize_window: false,
             ..gpui::WindowControls::default()
         },
+        window_services: gpui::WindowServiceCapabilities::default(),
     }
 }
 
@@ -1623,7 +1706,7 @@ mod tests {
             capabilities.clipboard,
             gpui::ClipboardCapabilities::READ_WRITE
         );
-        assert!(!capabilities.accessibility);
+        assert_eq!(capabilities.accessibility, cfg!(feature = "accessibility"));
         assert!(capabilities.window_controls.attention);
         assert!(!capabilities.window_controls.move_window);
         assert!(!capabilities.window_controls.resize_window);
@@ -1631,6 +1714,10 @@ mod tests {
         assert!(capabilities.window_controls.maximize);
         assert!(capabilities.window_controls.minimize);
         assert!(capabilities.window_controls.window_menu);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities::default()
+        );
     }
 
     #[test]

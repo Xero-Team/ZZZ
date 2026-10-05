@@ -8,6 +8,7 @@ use log::warn;
 #[cfg(not(target_family = "wasm"))]
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::num::NonZeroU64;
+#[cfg(not(target_family = "wasm"))]
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -15,6 +16,9 @@ use std::sync::{Arc, Mutex};
 mod headless;
 #[cfg(all(feature = "test-support", not(target_family = "wasm")))]
 pub use headless::WgpuHeadlessRenderer;
+
+#[cfg(all(test, any(target_os = "linux", target_os = "freebsd")))]
+mod surface_tests;
 
 mod drawing;
 mod frame;
@@ -30,10 +34,16 @@ use resources::WgpuResources;
 
 pub struct WgpuRenderer {
     /// Shared GPU context for device recovery coordination (unused on WASM).
-    #[allow(dead_code)]
+    #[cfg_attr(
+        target_family = "wasm",
+        allow(dead_code, reason = "native device recovery is unavailable on Web")
+    )]
     context: Option<GpuContext>,
     /// Compositor GPU hint for adapter selection (unused on WASM).
-    #[allow(dead_code)]
+    #[cfg_attr(
+        target_family = "wasm",
+        allow(dead_code, reason = "Web adapter selection has no compositor GPU hint")
+    )]
     compositor_gpu: Option<CompositorGpuHint>,
     resources: Option<WgpuResources>,
     surface_config: wgpu::SurfaceConfiguration,
@@ -55,6 +65,8 @@ pub struct WgpuRenderer {
     device_lost: std::sync::Arc<std::sync::atomic::AtomicBool>,
     surface_configured: bool,
     needs_redraw: bool,
+    #[cfg(test)]
+    fail_after_surface_acquire: bool,
 }
 
 impl WgpuRenderer {
@@ -442,6 +454,8 @@ impl WgpuRenderer {
             device_lost: context.device_lost_flag(),
             surface_configured: true,
             needs_redraw: false,
+            #[cfg(test)]
+            fail_after_surface_acquire: false,
         })
     }
 
@@ -1015,19 +1029,11 @@ impl WgpuRenderer {
             wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
                 // Textures must be destroyed before the surface can be reconfigured.
                 drop(frame);
-                let surface_config = self.surface_config.clone();
-                let resources = self.resources_mut();
-                if let Some(surface) = &resources.surface {
-                    surface.configure(&resources.device, &surface_config);
-                }
+                self.reconfigure_surface();
                 return false;
             }
             wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-                let surface_config = self.surface_config.clone();
-                let resources = self.resources_mut();
-                if let Some(surface) = &resources.surface {
-                    surface.configure(&resources.device, &surface_config);
-                }
+                self.reconfigure_surface();
                 return false;
             }
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
@@ -1043,9 +1049,31 @@ impl WgpuRenderer {
         let frame_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let _submission = self.render_to_view(scene, &frame_view, None);
-        frame.present();
-        true
+        #[cfg(test)]
+        let injected_failure = std::mem::take(&mut self.fail_after_surface_acquire);
+        #[cfg(not(test))]
+        let injected_failure = false;
+        let rendered = !injected_failure && self.render_to_view(scene, &frame_view, None).is_some();
+        if rendered {
+            frame.present();
+        } else {
+            // Vulkan swapchains do not necessarily release an acquired image when it is only
+            // dropped. Reconfigure after a failed frame so repeated failures cannot exhaust all
+            // presentation images and strand the surface.
+            drop(frame_view);
+            drop(frame);
+            self.reconfigure_surface();
+        }
+        rendered
+    }
+
+    fn reconfigure_surface(&mut self) {
+        let surface_config = self.surface_config.clone();
+        let resources = self.resources_mut();
+        if let Some(surface) = &resources.surface {
+            surface.configure(&resources.device, &surface_config);
+        }
+        self.needs_redraw = true;
     }
 
     fn render_to_view(

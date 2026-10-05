@@ -114,6 +114,8 @@ impl WindowsWindowInner {
             WM_GPUI_FORCE_UPDATE_WINDOW => self.draw_window(handle, true),
             WM_GPUI_GPU_DEVICE_LOST => self.handle_device_lost(lparam),
             DM_POINTERHITTEST => self.handle_dm_pointer_hit_test(wparam),
+            #[cfg(feature = "accessibility")]
+            WM_GETOBJECT => self.handle_wm_getobject(wparam, lparam),
             _ => None,
         };
         if let Some(n) = handled {
@@ -734,6 +736,24 @@ impl WindowsWindowInner {
 
     fn handle_activate_msg(self: &Rc<Self>, wparam: WPARAM) -> Option<isize> {
         let activated = wparam.loword() > 0;
+
+        #[cfg(feature = "accessibility")]
+        let accessibility_events =
+            self.state
+                .accessibility
+                .try_borrow_mut()
+                .ok()
+                .and_then(|mut accessibility| {
+                    accessibility
+                        .as_mut()?
+                        .adapter
+                        .update_window_focus_state(activated)
+                });
+        #[cfg(feature = "accessibility")]
+        if let Some(events) = accessibility_events {
+            events.raise();
+        }
+
         let this = self.clone();
 
         if !activated {
@@ -768,6 +788,21 @@ impl WindowsWindowInner {
             .detach();
 
         None
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn handle_wm_getobject(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+        let result = {
+            let mut accessibility = self.state.accessibility.borrow_mut();
+            let accessibility = accessibility.as_mut()?;
+            accessibility.adapter.handle_wm_getobject(
+                accesskit_windows::WPARAM(wparam.0),
+                accesskit_windows::LPARAM(lparam.0),
+                &mut accessibility.activation_handler,
+            )?
+        };
+        let result: accesskit_windows::LRESULT = result.into();
+        Some(result.0)
     }
 
     fn handle_create_msg(&self, handle: HWND) -> Option<isize> {

@@ -4751,6 +4751,8 @@ fn render_icon_theme_picker(
 pub mod test {
 
     use super::*;
+    #[cfg(feature = "frame-diagnostics")]
+    use gpui::profiler::{FrameDiagnosticsSnapshot, FrameEvent, FramePhase, FrameTimingCollector};
 
     impl SettingsWindow {
         fn navbar_entry(&self) -> usize {
@@ -4823,6 +4825,97 @@ pub mod test {
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         editor::init(cx);
         menu::init();
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    fn summarize_frame_diagnostics(
+        snapshot: FrameDiagnosticsSnapshot,
+    ) -> (usize, [u128; 5], [u64; 5], [u64; 5], u128) {
+        let mut frame_durations = std::collections::HashMap::new();
+        let mut presented = 0;
+        let mut durations = [0; 5];
+        let mut operations = [0; 5];
+        let mut cache_hits = [0; 5];
+        for event in snapshot.events {
+            match event {
+                FrameEvent::Presented(_) => presented += 1,
+                FrameEvent::Phase(timing) => {
+                    let index = match timing.phase {
+                        FramePhase::RequestLayout => 0,
+                        FramePhase::Prepaint => 1,
+                        FramePhase::Paint => 2,
+                        FramePhase::PrepaintCacheReplay => 3,
+                        FramePhase::PaintCacheReplay => 4,
+                    };
+                    durations[index] += timing.duration.as_nanos();
+                    operations[index] += timing.operations;
+                    cache_hits[index] += timing.cache_hits;
+                    *frame_durations.entry(timing.build_id).or_insert(0) +=
+                        timing.duration.as_nanos();
+                }
+                FrameEvent::Invalidated(_)
+                | FrameEvent::DrawStarted { .. }
+                | FrameEvent::DrawFinished(_)
+                | FrameEvent::SubmissionSkipped { .. } => {}
+            }
+        }
+        let mut frame_durations = frame_durations.into_values().collect::<Vec<_>>();
+        frame_durations.sort_unstable();
+        let p95_index = frame_durations
+            .len()
+            .saturating_mul(95)
+            .div_ceil(100)
+            .saturating_sub(1);
+        let p95_total = frame_durations.get(p95_index).copied().unwrap_or_default();
+        (presented, durations, operations, cache_hits, p95_total)
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    async fn test_settings_window_frame_diagnostics(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            register_settings(cx);
+            let app_state = AppState::test(cx);
+            AppState::set_global(app_state, cx);
+        });
+
+        let (settings_window, cx) =
+            cx.add_window_view(|window, cx| SettingsWindow::new(None, window, cx));
+        cx.run_until_parked();
+        cx.update(|window, app| window.draw_and_present_for_test(app));
+
+        let mut collector = cx.update(|window, _| FrameTimingCollector::for_window(window));
+        for _ in 0..5 {
+            cx.update(|window, app| window.draw_and_present_for_test(app));
+        }
+        let cached = summarize_frame_diagnostics(collector.snapshot());
+
+        for query in ["f", "fo", "font", "theme", "terminal"] {
+            settings_window.update_in(cx, |settings_window, window, cx| {
+                settings_window.search_bar.update(cx, |search_bar, cx| {
+                    search_bar.set_text(query, window, cx);
+                });
+            });
+            cx.run_until_parked();
+            cx.update(|window, app| window.draw_and_present_for_test(app));
+        }
+        let dirty = summarize_frame_diagnostics(collector.snapshot());
+
+        assert_eq!(cached.0, 5);
+        assert_eq!(dirty.0, 5);
+        println!(
+            "SETTINGS_FRAME_DIAGNOSTICS cached_presented={} cached_duration_ns={:?} cached_operations={:?} cached_hits={:?} cached_p95_total_ns={} dirty_presented={} dirty_duration_ns={:?} dirty_operations={:?} dirty_hits={:?} dirty_p95_total_ns={}",
+            cached.0,
+            cached.1,
+            cached.2,
+            cached.3,
+            cached.4,
+            dirty.0,
+            dirty.1,
+            dirty.2,
+            dirty.3,
+            dirty.4
+        );
     }
 
     fn parse(input: &'static str, window: &mut Window, cx: &mut App) -> SettingsWindow {

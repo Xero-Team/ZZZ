@@ -24117,7 +24117,18 @@ impl Focusable for Editor {
 
 impl Render for Editor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        EditorElement::new(&cx.entity(), self.create_style(cx))
+        let element = EditorElement::new(&cx.entity(), self.create_style(cx));
+        #[cfg(feature = "accessibility")]
+        let element = element.accessibility(
+            if matches!(&self.mode, EditorMode::SingleLine) {
+                gpui::accesskit::Role::TextInput
+            } else {
+                gpui::accesskit::Role::MultilineTextInput
+            },
+            self.title(cx).into_owned(),
+            self.focus_handle.clone(),
+        );
+        element
     }
 }
 
