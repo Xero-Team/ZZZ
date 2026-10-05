@@ -213,10 +213,9 @@ impl Chunk {
         }
         if PANIC || cfg!(debug_assertions) {
             panic_char_boundary(&self.text, offset);
-        } else {
-            log_err_char_boundary(&self.text, offset);
-            false
         }
+        log_err_char_boundary(&self.text, offset);
+        false
     }
 }
 
@@ -451,10 +450,9 @@ impl<'a> ChunkSlice<'a> {
         }
         if PANIC {
             panic_char_boundary(self.text, offset);
-        } else {
-            log_err_char_boundary(self.text, offset);
-            false
         }
+        log_err_char_boundary(self.text, offset);
+        false
     }
 
     pub fn floor_char_boundary(&self, index: usize) -> usize {

@@ -4295,9 +4295,9 @@ impl Global for ProjectSettingsUpdateQueue {}
 impl ProjectSettingsUpdateQueue {
     fn new(cx: &mut App) -> Self {
         let (tx, mut rx) = mpsc::unbounded();
-        let task = cx.spawn(async move |mut cx| {
+        let task = cx.spawn(async move |cx| {
             while let Some(entry) = rx.next().await {
-                if let Err(err) = Self::process_entry(entry, &mut cx).await {
+                if let Err(err) = Self::process_entry(entry, &mut *cx).await {
                     log::error!("Failed to update project settings: {err:?}");
                 }
             }

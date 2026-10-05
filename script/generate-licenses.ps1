@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $global:PSNativeCommandUseErrorActionPreference = $false
 
-$CARGO_ABOUT_VERSION="0.8.2"
+$CARGO_ABOUT_VERSION="0.9.0"
 $outputFile = if ($args.Count -gt 0 -and $args[0]) {
     $args[0]
 } else {

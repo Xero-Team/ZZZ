@@ -6,7 +6,6 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
-    usize,
 };
 use tasks_ui::{TaskOverrides, TasksModal};
 

@@ -39,7 +39,6 @@ use std::{
         atomic::{self, AtomicBool},
     },
     time::Duration,
-    u32,
 };
 
 use outline_panel_settings::{DockSide, OutlinePanelSettings, ShowIndentGuides};

@@ -5,7 +5,7 @@
 //! core does not import a native accessibility runtime.
 
 use crate::{App, Window};
-use accesskit::{Action, ActionData, Node, NodeId, Role, Tree, TreeId, TreeUpdate};
+use accesskit::{Action, ActionData, Node, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
 use std::{
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
@@ -133,7 +133,7 @@ impl SemanticTreeBuilder {
         SemanticSnapshot {
             update: TreeUpdate {
                 nodes,
-                tree: Some(Tree::new(ROOT_NODE_ID)),
+                tree: Some(TreeInfo::new(ROOT_NODE_ID)),
                 tree_id: TreeId::ROOT,
                 focus: self.focused_node,
             },

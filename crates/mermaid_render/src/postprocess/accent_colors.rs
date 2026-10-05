@@ -124,12 +124,12 @@ pub(crate) fn add_to_event<'a>(ev: &Event<'_>, e: &BytesStart<'_>, cl: &str) -> 
 /// Adds a CSS class to an element, preserving any existing classes.
 pub(crate) fn add_class<'a>(e: &BytesStart<'_>, class_to_add: &str) -> Result<BytesStart<'a>> {
     let name = e.name();
-    let tag = std::str::from_utf8(name.as_ref())?;
+    let tag = name.as_ref();
     let mut new_elem = BytesStart::new(tag.to_owned());
     let mut class_found = false;
     for attr in e.attributes() {
         let attr = attr?;
-        if attr.key.local_name().as_ref() == b"class" {
+        if attr.key.local_name().as_ref() == "class" {
             let existing = attr.normalized_value(XmlVersion::Implicit1_0)?;
             let new_class = format!("{existing} {class_to_add}");
             new_elem.push_attribute(("class", new_class.as_str()));
@@ -185,7 +185,7 @@ pub(crate) fn current_stack_accent(stack: &[AccentStackEntry]) -> Option<usize> 
 // layout nodes though, so accent tracking must not count them as new nodes.
 pub(crate) fn is_foreign_object_fallback_group(e: &BytesStart<'_>) -> Result<bool> {
     Ok(e.try_get_attribute("data-merman-foreignobject")?
-        .is_some_and(|attr| attr.value.as_ref() == b"fallback"))
+        .is_some_and(|attr| attr.value.as_ref() == "fallback"))
 }
 
 pub(crate) fn lookup_position_accent(node_rects: &[NodeRect], e: &BytesStart<'_>) -> Option<usize> {
@@ -270,7 +270,7 @@ struct AccentColors<'theme, I> {
 impl<'a, I: Iterator<Item = Result<Event<'a>>>> AccentColors<'_, I> {
     fn process_chart_colors(&mut self, event: Event<'a>) -> Result<Event<'a>> {
         match &event {
-            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"g" => {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == "g" => {
                 let is_start = matches!(event, Event::Start(_));
                 // Only a real opening tag increases nesting depth. Self-closing `<g/>`
                 // elements have no matching `</g>`, so counting them would leave
@@ -300,7 +300,7 @@ impl<'a, I: Iterator<Item = Result<Event<'a>>>> AccentColors<'_, I> {
                 Ok(event)
             }
 
-            Event::End(e) if e.name().as_ref() == b"g" => {
+            Event::End(e) if e.name().as_ref() == "g" => {
                 if self.in_plot {
                     self.plot_depth = self.plot_depth.saturating_sub(1);
                     if self.plot_depth == 0 {
@@ -310,7 +310,7 @@ impl<'a, I: Iterator<Item = Result<Event<'a>>>> AccentColors<'_, I> {
                 Ok(event)
             }
 
-            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"rect" => {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == "rect" => {
                 if self.in_legend && self.legend_color_idx < 8 {
                     let class = chart_color_class_name(self.legend_color_idx);
                     self.legend_color_idx += 1;
@@ -323,7 +323,7 @@ impl<'a, I: Iterator<Item = Result<Event<'a>>>> AccentColors<'_, I> {
                 }
             }
 
-            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"path" => {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == "path" => {
                 let class_val = e
                     .try_get_attribute("class")?
                     .map(|a| a.normalized_value(XmlVersion::Implicit1_0))
@@ -360,7 +360,7 @@ impl<'a, I: Iterator<Item = Result<Event<'a>>>> Iterator for AccentColors<'_, I>
 
         if matches!(self.handler, Handler::Pending) {
             if let Event::Start(e) | Event::Empty(e) = &event {
-                if e.name().as_ref() == b"svg" {
+                if e.name().as_ref() == "svg" {
                     let diagram_type = detect_diagram_type(e);
                     let count = self.theme.accent_colors.len();
                     self.handler = match diagram_type {

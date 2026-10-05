@@ -764,7 +764,7 @@ fn handle_create_worktree_inner(
 
     workspace.set_active_worktree_creation(Some(display_name), false, cx);
 
-    cx.spawn_in(window, async move |_workspace_entity, mut cx| {
+    cx.spawn_in(window, async move |_workspace_entity, cx| {
         let result = do_create_worktree(
             git_repos,
             non_git_paths,
@@ -776,7 +776,7 @@ fn handle_create_worktree_inner(
             workspace_handle.clone(),
             window_handle,
             remote_connection_options,
-            &mut cx,
+            &mut *cx,
         )
         .await;
 
@@ -846,7 +846,7 @@ pub fn handle_switch_worktree(
 
     let worktree_path = action.path.clone();
 
-    cx.spawn_in(window, async move |_workspace_entity, mut cx| {
+    cx.spawn_in(window, async move |_workspace_entity, cx| {
         let result = do_switch_worktree(
             worktree_path,
             git_repo_work_dirs,
@@ -855,7 +855,7 @@ pub fn handle_switch_worktree(
             workspace_handle.clone(),
             window_handle,
             remote_connection_options,
-            &mut cx,
+            &mut *cx,
         )
         .await;
 

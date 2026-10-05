@@ -29,7 +29,7 @@ impl SequenceDiagramAccents {
         }
 
         match &event {
-            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"rect" => {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == "rect" => {
                 if let Some(idx) = self.check_actor_rect(e)? {
                     add_to_event(&event, e, &accent_class_name(idx))
                 } else {
@@ -37,7 +37,7 @@ impl SequenceDiagramAccents {
                 }
             }
 
-            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"text" => {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == "text" => {
                 if let Some(idx) = self.check_actor_text(e)? {
                     self.current_text_accent = Some(idx);
                     add_to_event(&event, e, &accent_class_name(idx))
@@ -46,7 +46,7 @@ impl SequenceDiagramAccents {
                 }
             }
 
-            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"tspan" => {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == "tspan" => {
                 if let Some(idx) = self.current_text_accent {
                     add_to_event(&event, e, &accent_class_name(idx))
                 } else {
@@ -54,7 +54,7 @@ impl SequenceDiagramAccents {
                 }
             }
 
-            Event::End(e) if e.name().as_ref() == b"text" => {
+            Event::End(e) if e.name().as_ref() == "text" => {
                 self.current_text_accent = None;
                 Ok(event)
             }

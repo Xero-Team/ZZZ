@@ -25,4 +25,4 @@ core-video.workspace = true
 objc.workspace = true
 
 [build-dependencies]
-bindgen = "0.73"
+bindgen = { version = "0.73", default-features = false, features = ["runtime"] }

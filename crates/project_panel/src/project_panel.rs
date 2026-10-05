@@ -3822,7 +3822,7 @@ impl ProjectPanel {
             let item_count = paste_tasks.len();
             let workspace = self.workspace.clone();
 
-            cx.spawn_in(window, async move |project_panel, mut cx| {
+            cx.spawn_in(window, async move |project_panel, cx| {
                 let mut last_succeed = None;
                 let mut changes = Vec::new();
 
@@ -3831,7 +3831,7 @@ impl ProjectPanel {
                         PasteTask::Rename { task, from, to } => {
                             if let Some(CreatedEntry::Included(entry)) = task
                                 .await
-                                .notify_workspace_async_err(workspace.clone(), &mut cx)
+                                .notify_workspace_async_err(workspace.clone(), &mut *cx)
                             {
                                 changes.push(Change::Renamed(from, to));
                                 last_succeed = Some(entry);
@@ -3840,7 +3840,7 @@ impl ProjectPanel {
                         PasteTask::Copy { task, destination } => {
                             if let Some(Some(entry)) = task
                                 .await
-                                .notify_workspace_async_err(workspace.clone(), &mut cx)
+                                .notify_workspace_async_err(workspace.clone(), &mut *cx)
                             {
                                 changes.push(Change::Created(destination));
                                 last_succeed = Some(entry);
@@ -5304,12 +5304,12 @@ impl ProjectPanel {
 
             let workspace = self.workspace.clone();
             if folded_selection_info.is_empty() {
-                cx.spawn_in(window, async move |project_panel, mut cx| {
+                cx.spawn_in(window, async move |project_panel, cx| {
                     let mut changes = Vec::new();
                     for (entry_id, task) in move_tasks {
                         if let Some(CreatedEntry::Included(new_entry)) = task
                             .await
-                            .notify_workspace_async_err(workspace.clone(), &mut cx)
+                            .notify_workspace_async_err(workspace.clone(), &mut *cx)
                         {
                             if let (Some(old_path), Some(worktree_id)) =
                                 (old_paths.get(&entry_id), destination_worktree_id)
@@ -5329,14 +5329,14 @@ impl ProjectPanel {
                 })
                 .detach();
             } else {
-                cx.spawn_in(window, async move |project_panel, mut cx| {
+                cx.spawn_in(window, async move |project_panel, cx| {
                     // Await all move tasks and collect successful results
                     let mut move_results: Vec<(ProjectEntryId, Entry)> = Vec::new();
                     let mut operations = Vec::new();
                     for (entry_id, task) in move_tasks {
                         if let Some(CreatedEntry::Included(new_entry)) = task
                             .await
-                            .notify_workspace_async_err(workspace.clone(), &mut cx)
+                            .notify_workspace_async_err(workspace.clone(), &mut *cx)
                         {
                             if let (Some(old_path), Some(worktree_id)) =
                                 (old_paths.get(&entry_id), destination_worktree_id)

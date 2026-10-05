@@ -38,10 +38,10 @@ where
     ///
     /// Will return `Err` if unable to write to the output writer.
     #[inline]
-    pub fn minify<R: io::Read>(&mut self, mut r: &mut R) -> io::Result<()> {
+    pub fn minify<R: io::Read>(&mut self, r: &mut R) -> io::Result<()> {
         let dom = parse_document(RcDom::default(), ParseOpts::default())
             .from_utf8()
-            .read_from(&mut r)?;
+            .read_from(&mut *r)?;
 
         if !self.options.omit_doctype {
             self.w.write_all(b"<!doctype html>")?;

@@ -78,11 +78,7 @@ fn main() -> Result<()> {
                 .get(1)
                 .context("the supports command requires a renderer argument")?;
             let supported = renderer != "not-supported";
-            if supported {
-                process::exit(0);
-            } else {
-                process::exit(1);
-            }
+            process::exit(i32::from(!supported));
         }
         Some("postprocess") => handle_postprocessing()?,
         _ => handle_preprocessing()?,

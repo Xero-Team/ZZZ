@@ -76,13 +76,13 @@ require_command() {
 
 require_command cargo "rustup/toolchain setup"
 require_command nproc "coreutils"
-require_command tree-sitter "cargo install --locked --version 0.26.11 tree-sitter-cli"
+require_command tree-sitter "cargo install --locked --version 0.27.0 tree-sitter-cli"
 require_command cargo-deb "cargo install cargo-deb --version 3.8.0 --locked"
 require_command cargo-generate-rpm "cargo install cargo-generate-rpm --version 0.21.0 --locked"
 
 if [[ "$(tree-sitter --version | awk '{print $2}')" != "$(sed -n 's/^tree-sitter-cli-version = "\([^"]*\)"/\1/p' crates/grammars/vendor/manifest.toml)" ]]; then
-    echo "Error: tree-sitter 0.26.11 is required; install it with:" >&2
-    echo "cargo install --locked --version 0.26.11 tree-sitter-cli" >&2
+    echo "Error: tree-sitter 0.27.0 is required; install it with:" >&2
+    echo "cargo install --locked --version 0.27.0 tree-sitter-cli" >&2
     exit 1
 fi
 

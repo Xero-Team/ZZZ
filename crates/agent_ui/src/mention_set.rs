@@ -333,8 +333,8 @@ impl MentionSet {
 
         // Notify the user if we failed to load the mentioned context
         let workspace = workspace.downgrade();
-        cx.spawn(async move |this, mut cx| {
-            let result = task.await.notify_workspace_async_err(workspace, &mut cx);
+        cx.spawn(async move |this, cx| {
+            let result = task.await.notify_workspace_async_err(workspace, &mut *cx);
             drop(tx);
             if result.is_none() {
                 let Some(this) = this.upgrade() else {

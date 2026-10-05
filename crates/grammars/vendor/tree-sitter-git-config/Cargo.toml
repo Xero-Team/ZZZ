@@ -28,4 +28,4 @@ tree-sitter-language = "0.1"
 tree-sitter = { workspace = true }
 
 [build-dependencies]
-cc = "1.4"
+cc = "1.6"

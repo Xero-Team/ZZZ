@@ -32,7 +32,7 @@ impl ClassDiagramAccents {
         }
 
         match &event {
-            Event::Start(e) if e.name().as_ref() == b"g" => {
+            Event::Start(e) if e.name().as_ref() == "g" => {
                 if is_foreign_object_fallback_group(e)? {
                     self.accent_g_stack.push(AccentStackEntry::none());
                     return Ok(event);
@@ -68,7 +68,7 @@ impl ClassDiagramAccents {
                 Ok(event)
             }
 
-            Event::End(e) if e.name().as_ref() == b"g" => {
+            Event::End(e) if e.name().as_ref() == "g" => {
                 if let Some(entry) = self.accent_g_stack.pop() {
                     if entry.tracks_node() {
                         self.nodes.maybe_finish_node();
@@ -80,10 +80,10 @@ impl ClassDiagramAccents {
             Event::Start(e) | Event::Empty(e)
                 if matches!(
                     e.name().as_ref(),
-                    b"rect" | b"path" | b"circle" | b"polygon" | b"ellipse"
+                    "rect" | "path" | "circle" | "polygon" | "ellipse"
                 ) =>
             {
-                if e.name().as_ref() == b"path" {
+                if e.name().as_ref() == "path" {
                     self.nodes.update_half_height(e);
                 }
 
@@ -91,10 +91,10 @@ impl ClassDiagramAccents {
             }
 
             Event::Start(e) | Event::Empty(e)
-                if e.name().as_ref() == b"text" || e.name().as_ref() == b"tspan" =>
+                if e.name().as_ref() == "text" || e.name().as_ref() == "tspan" =>
             {
                 let is_start = matches!(event, Event::Start(_));
-                let is_text = e.name().as_ref() == b"text";
+                let is_text = e.name().as_ref() == "text";
 
                 let accent_idx = if is_text {
                     self.nodes
@@ -114,7 +114,7 @@ impl ClassDiagramAccents {
                 Ok(event)
             }
 
-            Event::End(e) if e.name().as_ref() == b"text" => {
+            Event::End(e) if e.name().as_ref() == "text" => {
                 self.current_text_accent = None;
                 Ok(event)
             }

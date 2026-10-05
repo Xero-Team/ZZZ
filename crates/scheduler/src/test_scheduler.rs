@@ -64,7 +64,7 @@ impl TestScheduler {
                 if interactive {
                     eprintln!("Running seed: {seed}");
                 }
-                match panic::catch_unwind(move || Self::with_seed(seed, &mut *unwind_safe_f)) {
+                match panic::catch_unwind(move || Self::with_seed(seed, &mut **unwind_safe_f)) {
                     Ok(result) => result,
                     Err(error) => {
                         eprintln!("\x1b[31mFailing Seed: {seed}\x1b[0m");
@@ -180,12 +180,9 @@ impl TestScheduler {
     pub fn end_test(&self) {
         let mut state = self.state.lock();
         if let Some((message, backtrace)) = &state.non_determinism_error {
-            if cfg!(miri) {
-                // miri cannot debug print backtraces with `miri-disable-isolation` enabled
-                panic!("{}", message)
-            } else {
-                panic!("{}\n{:?}", message, backtrace)
-            }
+            // miri cannot debug print backtraces with `miri-disable-isolation` enabled
+            assert!(!cfg!(miri), "{}", message);
+            panic!("{}\n{:?}", message, backtrace)
         }
         state.finished = true;
     }
@@ -568,11 +565,8 @@ fn assert_correct_thread(expected: &Thread, state: &Arc<Mutex<SchedulerState>>) 
         expected.id(),
     );
     let backtrace = Backtrace::new();
-    if state.finished {
-        panic!("{}", message);
-    } else {
-        state.non_determinism_error = Some((message, backtrace))
-    }
+    assert!(!state.finished, "{}", message);
+    state.non_determinism_error = Some((message, backtrace))
 }
 
 impl Scheduler for TestScheduler {

@@ -181,9 +181,9 @@ fn check_svg_issues(name: &str, svg: &str) -> Vec<String> {
         match reader.read_event() {
             Ok(Event::Eof) => break,
             Ok(Event::Start(e) | Event::Empty(e)) => {
-                let tag = String::from_utf8_lossy(e.name().local_name().as_ref()).to_string();
+                let tag = e.name().local_name().as_ref().to_owned();
                 for attr in e.attributes().flatten() {
-                    let key = String::from_utf8_lossy(attr.key.local_name().as_ref()).to_string();
+                    let key = attr.key.local_name().as_ref().to_owned();
                     let val = attr
                         .normalized_value(XmlVersion::Implicit1_0)
                         .unwrap_or_default();
@@ -293,7 +293,7 @@ fn class_diagram_label_text_uses_accent_classes() {
     loop {
         match reader.read_event() {
             Ok(Event::Eof) => break,
-            Ok(Event::Start(e)) if e.name().as_ref() == b"text" => {
+            Ok(Event::Start(e)) if e.name().as_ref() == "text" => {
                 if let Ok(Some(class_attr)) = e.try_get_attribute("class") {
                     let class = class_attr
                         .normalized_value(XmlVersion::Implicit1_0)
@@ -329,7 +329,7 @@ fn sequence_diagram_tspan_uses_accent_classes() {
     loop {
         match reader.read_event() {
             Ok(Event::Eof) => break,
-            Ok(Event::Start(e)) if e.name().as_ref() == b"tspan" => {
+            Ok(Event::Start(e)) if e.name().as_ref() == "tspan" => {
                 if let Ok(Some(class_attr)) = e.try_get_attribute("class") {
                     let class = class_attr
                         .normalized_value(XmlVersion::Implicit1_0)

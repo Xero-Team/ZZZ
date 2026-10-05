@@ -1247,8 +1247,8 @@ where
         cx: &mut App,
     ) {
         window
-            .spawn(cx, async move |mut cx| {
-                self.await.notify_workspace_async_err(workspace, &mut cx)
+            .spawn(cx, async move |cx| {
+                self.await.notify_workspace_async_err(workspace, &mut *cx)
             })
             .detach();
     }

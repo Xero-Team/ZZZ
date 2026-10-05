@@ -1243,13 +1243,13 @@ impl MessageEditor {
         let entries = clipboard.clone().into_entries().collect::<Vec<_>>();
 
         window
-            .spawn(cx, async move |mut cx| {
+            .spawn(cx, async move |cx| {
                 let (items, added_worktrees) = resolve_pasted_context_items(
                     project,
                     project_is_local,
                     supports_images,
                     entries,
-                    &mut cx,
+                    &mut *cx,
                 )
                 .await;
                 insert_resolved_pasted_context_items(
@@ -1259,7 +1259,7 @@ impl MessageEditor {
                     mention_set,
                     workspace,
                     supports_images,
-                    &mut cx,
+                    &mut *cx,
                 )
                 .await;
                 Ok::<(), anyhow::Error>(())

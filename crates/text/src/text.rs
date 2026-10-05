@@ -2570,12 +2570,11 @@ impl BufferSnapshot {
                 "invalid anchor - snapshot has not observed lamport: {:?}; version: {:?}",
                 anchor, self.version
             );
-        } else {
-            panic!(
-                "invalid anchor {:?}. buffer id: {}, version: {:?}",
-                anchor, self.remote_id, self.version
-            );
         }
+        panic!(
+            "invalid anchor {:?}. buffer id: {}, version: {:?}",
+            anchor, self.remote_id, self.version
+        );
     }
 
     fn fragment_id_for_anchor(&self, anchor: &Anchor) -> &Locator {

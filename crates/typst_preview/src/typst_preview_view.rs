@@ -220,10 +220,10 @@ impl TypstPreviewView {
             .project()
             .update(cx, |project, cx| project.open_buffer(project_path, cx));
 
-        cx.spawn_in(window, async move |workspace, mut cx| {
+        cx.spawn_in(window, async move |workspace, cx| {
             let Some(buffer) = open_buffer
                 .await
-                .notify_workspace_async_err(workspace.clone(), &mut cx)
+                .notify_workspace_async_err(workspace.clone(), &mut *cx)
             else {
                 return;
             };
@@ -565,9 +565,9 @@ impl TypstPreviewView {
         let generation = self.requested_generation;
         let project = self.project.clone();
         let renderer = cx.svg_renderer();
-        self.compile_task = Some(cx.spawn_in(window, async move |view, mut cx| {
+        self.compile_task = Some(cx.spawn_in(window, async move |view, cx| {
             let (compiler, result) =
-                compile_saved_document(compiler, source.clone(), project, renderer, &mut cx).await;
+                compile_saved_document(compiler, source.clone(), project, renderer, &mut *cx).await;
 
             view.update_in(cx, |view, window, cx| {
                 let compiler_is_current = view.source.as_ref() == Some(&source)

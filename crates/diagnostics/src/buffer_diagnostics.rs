@@ -323,7 +323,7 @@ impl BufferDiagnosticsEditor {
             .into_lsp()
             .unwrap_or(lsp::DiagnosticSeverity::WARNING);
 
-        cx.spawn_in(window, async move |buffer_diagnostics_editor, mut cx| {
+        cx.spawn_in(window, async move |buffer_diagnostics_editor, cx| {
             // Fetch the diagnostics for the whole of the buffer
             // (`Point::zero()..buffer_snapshot.max_point()`) so we can confirm
             // if the diagnostics changed, if it didn't, early return as there's
@@ -431,7 +431,7 @@ impl BufferDiagnosticsEditor {
                     diagnostic_block.initial_range.clone(),
                     multibuffer_context,
                     buffer_snapshot.clone(),
-                    &mut cx,
+                    &mut *cx,
                 )
                 .await;
                 let initial_range = buffer_snapshot

@@ -289,10 +289,10 @@ impl MarkdownPreviewView {
             .project()
             .update(cx, |project, cx| project.open_buffer(project_path, cx));
 
-        cx.spawn_in(window, async move |workspace, mut cx| {
+        cx.spawn_in(window, async move |workspace, cx| {
             let Some(buffer) = open_buffer
                 .await
-                .notify_workspace_async_err(workspace.clone(), &mut cx)
+                .notify_workspace_async_err(workspace.clone(), &mut *cx)
             else {
                 return;
             };

@@ -1,4 +1,3 @@
-no-clearly-defined = true
 private = { ignore = true }
 # Licenses allowed in ZZZ's dependencies. ZZZ itself is distributed under
 # AGPL-3.0-or-later, so AGPL dependencies are acceptable. When adding to

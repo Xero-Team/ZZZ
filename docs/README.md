@@ -5,7 +5,7 @@ Welcome to ZZZ's documentation.
 Build the documentation locally with mdBook; ZZZ does not contact a hosted
 documentation service during normal application use.
 
-To preview the docs locally you will need to install [mdBook](https://rust-lang.github.io/mdBook/) (`cargo install mdbook@0.4.40`), generate the action metadata, and then serve:
+To preview the docs locally you will need to install [mdBook](https://rust-lang.github.io/mdBook/) (`cargo install mdbook@0.5.4`), generate the action metadata, and then serve:
 
 ```sh
 script/generate-action-metadata
@@ -14,12 +14,10 @@ mdbook serve docs
 
 The first command dumps an action manifest to `crates/docs_preprocessor/actions.json`. Without it, the preprocessor cannot validate keybinding and action references in the docs and will report errors. You only need to re-run it when actions change.
 
-It's important to note the version number above. For an unknown reason, as of 2025-04-23, running 0.4.48 will cause odd URL behavior that breaks things.
-
 Before committing, verify that the docs are formatted in the way Prettier expects with:
 
 ```
-cd docs && pnpm dlx prettier@3.5.0 . --write && cd ..
+cd docs && pnpm dlx prettier@3.9.9 . --write && cd ..
 ```
 
 ## Preprocessor

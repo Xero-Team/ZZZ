@@ -1019,13 +1019,13 @@ impl PathInclusionMatcher {
             loop {
                 if self.query.files_to_exclude().is_match(&path) {
                     return true;
-                } else if !path.pop() {
+                }
+                if !path.pop() {
                     return false;
                 }
             }
-        } else {
-            false
         }
+        false
     }
 }
 

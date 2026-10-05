@@ -386,7 +386,7 @@ impl MultiBuffer {
 
         let buffer_id = buffer_snapshot.remote_id();
 
-        let mut snapshot = self.snapshot.get_mut();
+        let snapshot = self.snapshot.get_mut();
         let mut cursor = snapshot
             .excerpts
             .cursor::<Dimensions<PathKey, ExcerptOffset>>(());
@@ -594,7 +594,7 @@ impl MultiBuffer {
         }
 
         let edits = Self::sync_diff_transforms(
-            &mut snapshot,
+            &mut *snapshot,
             patch.into_inner(),
             DiffChangeKind::BufferEdited,
         );
@@ -627,7 +627,7 @@ impl MultiBuffer {
         assert_eq!(self.history.transaction_depth(), 0);
         self.sync_mut(cx);
 
-        let mut snapshot = self.snapshot.get_mut();
+        let snapshot = self.snapshot.get_mut();
         let mut cursor = snapshot
             .excerpts
             .cursor::<Dimensions<PathKey, ExcerptOffset>>(());
@@ -680,7 +680,7 @@ impl MultiBuffer {
         snapshot.excerpts = new_excerpts;
 
         let edits =
-            Self::sync_diff_transforms(&mut snapshot, vec![edit], DiffChangeKind::BufferEdited);
+            Self::sync_diff_transforms(&mut *snapshot, vec![edit], DiffChangeKind::BufferEdited);
         if !edits.is_empty() {
             self.subscriptions.publish(edits);
         }

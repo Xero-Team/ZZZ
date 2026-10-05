@@ -4081,10 +4081,10 @@ impl Pane {
                         .path_for_entry(project_entry_id, cx)
                     {
                         let load_path_task = workspace.load_path(project_path.clone(), window, cx);
-                        cx.spawn_in(window, async move |workspace, mut cx| {
+                        cx.spawn_in(window, async move |workspace, cx| {
                             if let Some((project_entry_id, build_item)) = load_path_task
                                 .await
-                                .notify_workspace_async_err(workspace.clone(), &mut cx)
+                                .notify_workspace_async_err(workspace.clone(), &mut *cx)
                             {
                                 let (to_pane, new_item_handle) = workspace
                                     .update_in(cx, |workspace, window, cx| {

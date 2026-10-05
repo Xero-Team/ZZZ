@@ -2386,7 +2386,7 @@ impl MultiBuffer {
             return Vec::new();
         }
         self.sync_mut(cx);
-        let mut snapshot = self.snapshot.get_mut();
+        let snapshot = self.snapshot.get_mut();
         let mut excerpt_edits = Vec::new();
         let mut last_hunk_row = None;
         for (range, end_anchor) in ranges {
@@ -2426,7 +2426,7 @@ impl MultiBuffer {
         }
 
         Self::sync_diff_transforms(
-            &mut snapshot,
+            &mut *snapshot,
             excerpt_edits,
             DiffChangeKind::ExpandOrCollapseHunks { expand },
         )

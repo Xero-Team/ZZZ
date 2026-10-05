@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SCCACHE_VERSION="v0.10.0"
+SCCACHE_VERSION="v0.18.0"
 # Use absolute path to avoid issues with working directory changes between steps
 SCCACHE_DIR="$(pwd)/target/sccache"
 

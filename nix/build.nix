@@ -107,20 +107,19 @@ let
         perl
         pkg-config
         protobuf
-        # Pin cargo-about to 0.8.2. Newer versions don't work with the current license identifiers
-        # See https://github.com/zed-industries/zed/pull/44012
+        # Keep cargo-about aligned with the license config schema used by the release scripts.
         (cargo-about.overrideAttrs (
           new: old: rec {
-            version = "0.8.2";
+            version = "0.9.0";
 
             src = fetchFromGitHub {
               owner = "EmbarkStudios";
               repo = "cargo-about";
               tag = version;
-              sha256 = "sha256-cNKZpDlfqEXeOE5lmu79AcKOawkPpk4PQCsBzNtIEbs=";
+              sha256 = "sha256-0iY/kZmPYoMAQVU+Z/GWom7IgllYwUM34A80dgFYnXs=";
             };
 
-            cargoHash = "sha256-NnocSs6UkuF/mCM3lIdFk+r51Iz2bHuYzMT/gEbT/nk=";
+            cargoHash = "sha256-Hp2PRwPpSUKdExOvF2szb8W5+juPv2HfK7cPBm1rm5Q=";
 
             # NOTE: can drop once upstream uses `finalAttrs` here:
             # https://github.com/NixOS/nixpkgs/blob/10214747f5e6e7cb5b9bdf9e018a3c7b3032f5af/pkgs/build-support/rust/build-rust-package/default.nix#L104

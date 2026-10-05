@@ -5898,8 +5898,8 @@ mod tests {
         let serialized_mw = multi_workspaces.into_iter().next().unwrap();
         let restored_handle: gpui::WindowHandle<MultiWorkspace> = cx
             .update(|_, cx| {
-                cx.spawn(async move |mut cx| {
-                    crate::restore_multiworkspace(serialized_mw, app_state, &mut cx).await
+                cx.spawn(async move |cx| {
+                    crate::restore_multiworkspace(serialized_mw, app_state, &mut *cx).await
                 })
             })
             .await

@@ -55,7 +55,7 @@ fn extract_svg_id(svg: &str) -> String {
         let Ok(Event::Start(e) | Event::Empty(e)) = event else {
             continue;
         };
-        if e.name().as_ref() == b"svg" {
+        if e.name().as_ref() == "svg" {
             return e
                 .try_get_attribute("id")
                 .ok()

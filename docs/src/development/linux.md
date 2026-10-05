@@ -71,7 +71,7 @@ profile directory). `--deb` uses `cargo-deb` and `--rpm` uses
 To build every Linux format through one preflighted entrypoint, use:
 
 ```sh
-cargo install --locked --version 0.26.11 tree-sitter-cli
+cargo install --locked --version 0.27.0 tree-sitter-cli
 script/bundle-all-linux
 ```
 

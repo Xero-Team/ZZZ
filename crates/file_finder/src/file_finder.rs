@@ -1618,10 +1618,10 @@ impl FileFinderDelegate {
         let finder = self.file_finder.clone();
         let workspace = self.workspace.clone();
 
-        cx.spawn_in(window, async move |_, mut cx| {
+        cx.spawn_in(window, async move |_, cx| {
             let item = open_task
                 .await
-                .notify_workspace_async_err(workspace, &mut cx)?;
+                .notify_workspace_async_err(workspace, &mut *cx)?;
             if let Some(active_editor) = item.downcast::<Editor>() {
                 active_editor
                     .downgrade()

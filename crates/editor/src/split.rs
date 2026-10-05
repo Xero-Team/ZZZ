@@ -2618,7 +2618,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -2637,7 +2637,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -2675,7 +2675,7 @@ mod tests {
             eee
             fff"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -2706,7 +2706,7 @@ mod tests {
             eee
             fff"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -2738,7 +2738,7 @@ mod tests {
             eee
             fff"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -2747,7 +2747,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text1 = "
             aaa
@@ -2765,8 +2765,8 @@ mod tests {
             jjj"
         .unindent();
 
-        let (buffer1, diff1) = buffer_with_diff(&base_text1, &base_text1, &mut cx);
-        let (buffer2, diff2) = buffer_with_diff(&base_text2, &base_text2, &mut cx);
+        let (buffer1, diff1) = buffer_with_diff(&base_text1, &base_text1, &mut *cx);
+        let (buffer2, diff2) = buffer_with_diff(&base_text2, &base_text2, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path1 = PathKey::for_buffer(&buffer1, cx);
@@ -2848,7 +2848,7 @@ mod tests {
             iii
             jjj"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer1_snapshot = buffer1.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -2896,7 +2896,7 @@ mod tests {
             iii
             jjj"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -2905,7 +2905,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -2924,7 +2924,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -2960,7 +2960,7 @@ mod tests {
             ccc
             ddd"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -2987,7 +2987,7 @@ mod tests {
             ccc
             ddd"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -3015,7 +3015,7 @@ mod tests {
             ccc
             ddd"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3024,7 +3024,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -3051,7 +3051,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3103,7 +3103,7 @@ mod tests {
             ccc
             ddd"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -3143,7 +3143,7 @@ mod tests {
             § spacer
             ddd"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3153,7 +3153,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -3170,7 +3170,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3206,7 +3206,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let rhs_editor = editor.update(cx, |editor, _cx| editor.rhs_editor.clone());
@@ -3239,7 +3239,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -3269,7 +3269,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3278,7 +3278,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -3300,7 +3300,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3350,7 +3350,7 @@ mod tests {
             old4
             zzz"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -3382,7 +3382,7 @@ mod tests {
             old4
             zzz"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3391,12 +3391,12 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let text = "aaaa bbbb cccc dddd eeee ffff";
 
-        let (buffer1, diff1) = buffer_with_diff(text, text, &mut cx);
-        let (buffer2, diff2) = buffer_with_diff(text, text, &mut cx);
+        let (buffer1, diff1) = buffer_with_diff(text, text, &mut *cx);
+        let (buffer2, diff2) = buffer_with_diff(text, text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let end = Point::new(0, text.len() as u32);
@@ -3450,7 +3450,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3459,7 +3459,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaaa bbbb cccc dddd eeee ffff
@@ -3474,7 +3474,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3512,7 +3512,7 @@ mod tests {
             old line one
             old line two"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3521,7 +3521,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaaa bbbb cccc dddd eeee ffff
@@ -3537,7 +3537,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3581,7 +3581,7 @@ mod tests {
             two
             after"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3590,7 +3590,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let text = "
             aaaa bbbb cccc dddd eeee ffff
@@ -3598,7 +3598,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&text, &text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&text, &text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3634,7 +3634,7 @@ mod tests {
             eeee ffff
             short"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -3663,7 +3663,7 @@ mod tests {
             eeee ffff
             short"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -3693,7 +3693,7 @@ mod tests {
             eeee ffff
             short"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3702,9 +3702,9 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
-        let (buffer1, diff1) = buffer_with_diff("xxx\nyyy", "xxx\nyyy", &mut cx);
+        let (buffer1, diff1) = buffer_with_diff("xxx\nyyy", "xxx\nyyy", &mut *cx);
 
         let current_text = "
             aaa
@@ -3764,7 +3764,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer1.update(cx, |buffer, cx| {
@@ -3797,7 +3797,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3806,7 +3806,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -3822,7 +3822,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3854,7 +3854,7 @@ mod tests {
             bbb
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -3879,7 +3879,7 @@ mod tests {
             bbb
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3888,7 +3888,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "aaaa bbbb cccc dddd eeee ffff\n";
 
@@ -3898,7 +3898,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -3934,7 +3934,7 @@ mod tests {
             eeee ffff
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         assert_split_content_with_widths(
@@ -3957,7 +3957,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -3967,7 +3967,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -3985,7 +3985,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4021,7 +4021,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -4050,7 +4050,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -4080,7 +4080,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -4089,7 +4089,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "";
         let current_text = "
@@ -4099,7 +4099,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4131,7 +4131,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         assert_split_content_with_widths(
@@ -4156,7 +4156,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -4165,7 +4165,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -4183,7 +4183,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4219,7 +4219,7 @@ mod tests {
             § spacer
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -4250,7 +4250,7 @@ mod tests {
             § spacer
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -4260,14 +4260,14 @@ mod tests {
         use gpui::size;
         use rope::Point;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let long_line = "x".repeat(200);
         let mut lines: Vec<String> = (0..50).map(|i| format!("line {i}")).collect();
         lines[25] = long_line;
         let content = lines.join("\n");
 
-        let (buffer, diff) = buffer_with_diff(&content, &content, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&content, &content, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4310,9 +4310,9 @@ mod tests {
             });
         });
 
-        let _ = editor_content_with_blocks_and_size(&rhs_editor, draw_size, &mut cx);
+        let _ = editor_content_with_blocks_and_size(&rhs_editor, draw_size, &mut *cx);
         cx.run_until_parked();
-        let _ = editor_content_with_blocks_and_size(&lhs_editor, draw_size, &mut cx);
+        let _ = editor_content_with_blocks_and_size(&lhs_editor, draw_size, &mut *cx);
         cx.run_until_parked();
 
         let rhs_pos =
@@ -4343,7 +4343,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             first line
@@ -4359,7 +4359,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4397,7 +4397,7 @@ mod tests {
                     eeee ffff
                     original"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         buffer.update(cx, |buffer, cx| {
@@ -4432,7 +4432,7 @@ mod tests {
                     eeee ffff
                     original"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.text_snapshot());
@@ -4464,7 +4464,7 @@ mod tests {
                     eeee ffff
                     original"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -4473,7 +4473,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             bbb
@@ -4487,7 +4487,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4519,7 +4519,7 @@ mod tests {
             bbb
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let block_ids = editor.update(cx, |splittable_editor, cx| {
@@ -4584,7 +4584,7 @@ mod tests {
             § custom block
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |splittable_editor, cx| {
@@ -4611,7 +4611,7 @@ mod tests {
             bbb
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -4620,7 +4620,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             bbb
@@ -4634,7 +4634,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4666,7 +4666,7 @@ mod tests {
             bbb
             ccc"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let block_ids = editor.update(cx, |splittable_editor, cx| {
@@ -4752,7 +4752,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |splittable_editor, cx| {
@@ -4781,7 +4781,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update_in(cx, |splittable_editor, window, cx| {
@@ -4833,7 +4833,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -4842,7 +4842,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             bbb
@@ -4856,7 +4856,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -4919,7 +4919,7 @@ mod tests {
 
         cx.run_until_parked();
 
-        let rhs_content = editor_content_with_blocks_and_width(&rhs_editor, px(3000.0), &mut cx);
+        let rhs_content = editor_content_with_blocks_and_width(&rhs_editor, px(3000.0), &mut *cx);
         assert_eq!(
             rhs_content,
             "
@@ -4985,7 +4985,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |splittable_editor, cx| {
@@ -5014,7 +5014,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update_in(cx, |splittable_editor, window, cx| {
@@ -5066,7 +5066,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let new_block_ids = editor.update(cx, |splittable_editor, cx| {
@@ -5129,7 +5129,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |splittable_editor, cx| {
@@ -5158,7 +5158,7 @@ mod tests {
             ccc
             § custom block 2"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -5167,7 +5167,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Unified).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Unified).await;
 
         let base_text1 = "
             aaa
@@ -5191,8 +5191,8 @@ mod tests {
             fff"
         .unindent();
 
-        let (buffer1, diff1) = buffer_with_diff(&base_text1, &current_text1, &mut cx);
-        let (buffer2, diff2) = buffer_with_diff(&base_text2, &current_text2, &mut cx);
+        let (buffer1, diff1) = buffer_with_diff(&base_text1, &current_text1, &mut *cx);
+        let (buffer2, diff2) = buffer_with_diff(&base_text2, &current_text2, &mut *cx);
 
         let buffer1_id = buffer1.read_with(cx, |buffer, _| buffer.remote_id());
         let buffer2_id = buffer2.read_with(cx, |buffer, _| buffer.remote_id());
@@ -5285,7 +5285,7 @@ mod tests {
             eee
             fff"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |editor, cx| {
@@ -5335,7 +5335,7 @@ mod tests {
             § <no file>
             § -----"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -5344,7 +5344,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             ddd
@@ -5360,7 +5360,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -5396,7 +5396,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let block_ids = editor.update(cx, |splittable_editor, cx| {
@@ -5465,7 +5465,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |splittable_editor, cx| {
@@ -5496,7 +5496,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -5505,7 +5505,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             ddd
@@ -5521,7 +5521,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -5557,7 +5557,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let block_ids = editor.update(cx, |splittable_editor, cx| {
@@ -5626,7 +5626,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         editor.update(cx, |splittable_editor, cx| {
@@ -5657,7 +5657,7 @@ mod tests {
             ddd
             eee"
             .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -5666,7 +5666,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             bbb
@@ -5680,7 +5680,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -5740,11 +5740,11 @@ mod tests {
         };
 
         assert_eq!(
-            get_block_height(&rhs_editor, block_ids[0], &mut cx),
+            get_block_height(&rhs_editor, block_ids[0], &mut *cx),
             Some(1)
         );
         assert_eq!(
-            get_block_height(&lhs_editor, lhs_block_id, &mut cx),
+            get_block_height(&lhs_editor, lhs_block_id, &mut *cx),
             Some(1)
         );
 
@@ -5759,11 +5759,11 @@ mod tests {
         cx.run_until_parked();
 
         assert_eq!(
-            get_block_height(&rhs_editor, block_ids[0], &mut cx),
+            get_block_height(&rhs_editor, block_ids[0], &mut *cx),
             Some(3)
         );
         assert_eq!(
-            get_block_height(&lhs_editor, lhs_block_id, &mut cx),
+            get_block_height(&lhs_editor, lhs_block_id, &mut *cx),
             Some(3)
         );
 
@@ -5778,11 +5778,11 @@ mod tests {
         cx.run_until_parked();
 
         assert_eq!(
-            get_block_height(&rhs_editor, block_ids[0], &mut cx),
+            get_block_height(&rhs_editor, block_ids[0], &mut *cx),
             Some(5)
         );
         assert_eq!(
-            get_block_height(&lhs_editor, lhs_block_id, &mut cx),
+            get_block_height(&lhs_editor, lhs_block_id, &mut *cx),
             Some(5)
         );
     }
@@ -5792,7 +5792,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -5811,7 +5811,7 @@ mod tests {
         .unindent();
         let current_text = base_text.clone();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -5855,7 +5855,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Unified).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Unified).await;
 
         let base_text = "
             aaa
@@ -5872,7 +5872,7 @@ mod tests {
             eee"
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -5944,7 +5944,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -5955,7 +5955,7 @@ mod tests {
         .unindent();
         let current_text = base_text.clone();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -6023,7 +6023,7 @@ mod tests {
             § spacer
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 
@@ -6032,7 +6032,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Unified).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Unified).await;
 
         let base_text_a = "
             aaa
@@ -6060,8 +6060,8 @@ mod tests {
         "
         .unindent();
 
-        let (buffer_a, diff_a) = buffer_with_diff(&base_text_a, &current_text_a, &mut cx);
-        let (buffer_b, diff_b) = buffer_with_diff(&base_text_b, &current_text_b, &mut cx);
+        let (buffer_a, diff_a) = buffer_with_diff(&base_text_a, &current_text_a, &mut *cx);
+        let (buffer_b, diff_b) = buffer_with_diff(&base_text_b, &current_text_b, &mut *cx);
 
         let path_a = cx.read(|cx| PathKey::for_buffer(&buffer_a, cx));
         let path_b = cx.read(|cx| PathKey::for_buffer(&buffer_b, cx));
@@ -6135,7 +6135,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -6150,7 +6150,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         let path_key_1 = PathKey {
             sort_prefix: Some(0),
@@ -6188,7 +6188,7 @@ mod tests {
         use rope::Point;
         use unindent::Unindent as _;
 
-        let (editor, mut cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
+        let (editor, cx) = init_test(cx, SoftWrap::EditorWidth, DiffViewStyle::Split).await;
 
         let base_text = "
             aaa
@@ -6202,7 +6202,7 @@ mod tests {
         "
         .unindent();
 
-        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut cx);
+        let (buffer, diff) = buffer_with_diff(&base_text, &current_text, &mut *cx);
 
         editor.update(cx, |editor, cx| {
             let path = PathKey::for_buffer(&buffer, cx);
@@ -6234,7 +6234,7 @@ mod tests {
             bbb
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.update(cx, |buffer, cx| {
@@ -6265,7 +6265,7 @@ mod tests {
             bbb
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
 
         let buffer_snapshot = buffer.update(cx, |buffer, cx| {
@@ -6294,7 +6294,7 @@ mod tests {
             bbb
             § spacer"
                 .unindent(),
-            &mut cx,
+            &mut *cx,
         );
     }
 

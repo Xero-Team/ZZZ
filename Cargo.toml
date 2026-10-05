@@ -486,7 +486,7 @@ async-io = "2.6.0"
 async-lock = "3.4"
 # Vendored from https://github.com/zed-industries/async-pipe-rs @ 82d00a04211cf4e1236029aa03e6b6ce2a74c553
 async-pipe = { path = "vendor/async-pipe" }
-async-recursion = "1.1.1"
+async-recursion = "1.2.0"
 async-tar = "0.6.1"
 async-task = "4.7"
 async-trait = "0.1"
@@ -595,7 +595,7 @@ indoc = "2"
 inventory = "0.3.24"
 itertools = "0.15.0"
 json_dotpath = "1.1"
-jsonschema = "0.58.3"
+jsonschema = "0.58.5"
 jsonwebtoken = "11.1"
 jupyter-protocol = "2.0.2"
 jupyter-websocket-client = "2.0.0"
@@ -690,7 +690,7 @@ prost-types = "0.14"
 pollster = "1.0.1"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 qrcodegen = "1.8"
-quick-xml = "0.41"
+quick-xml = "0.42"
 quote = "1.0.47"
 rand = "0.10"
 ratex-layout = "0.1.14"
@@ -843,10 +843,10 @@ url = "2.5"
 idna = "1"
 urlencoding = "2.1.3"
 usvg = { version = "0.48.1", default-features = false }
-uuid = { version = "1.26.1", features = ["v4", "v5", "v7", "serde"] }
+uuid = { version = "1.27.0", features = ["v4", "v5", "v7", "serde"] }
 walkdir = "2.5"
-wasm-encoder = "0.260"
-wasmparser = "0.260"
+wasm-encoder = "0.261"
+wasmparser = "0.261"
 wasmtime = { version = "49", default-features = false, features = [
     "async",
     "demangle",
@@ -866,7 +866,7 @@ console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
 # Vendored from https://github.com/zed-industries/wgpu @ 357a0c56e0070480ad9daea5d2eaa83150b79e88
 wgpu = { path = "vendor/wgpu/wgpu" }
-windows-core = "0.62"
+windows-core = "0.100"
 yaml-rust2 = "0.13"
 zeroize = "1.9"
 zstd = "0.14"
