@@ -13,14 +13,14 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
-- Current HEAD: `5f4066d786b17b17ec1d3e222516e061380204bc` plus uncommitted
-  Phase 2A changes
+- Current HEAD: tracked by the commit log; latest implementation boundary
+  `9b344ee943ba83b5b63ed8bdc59b1992f66d6143`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 2`
 - Last completed phase: `Phase 1`
 - Blocking issue: `None`
-- Next action: 提交 Phase 2A provider contract/MemoryProvider，然后实现
-  LegacyFsProvider、LocalProvider、native positioned I/O 与 watch adapter。
+- Next action: 实现 LegacyFsProvider、LocalProvider、native positioned I/O 与 watch
+  sequence/overflow adapter，并运行 shared conformance。
 
 ## 阶段状态 {#phase-status}
 
@@ -182,10 +182,11 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## 提交记录 {#commit-log}
 
-| Commit                                     | Phase | Summary                                                                               | Validation                                                                                             | Reversible boundary                                                                             |
-| ------------------------------------------ | ----- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `4c350914704df52cf4733b57a074c91db25afab2` | 0     | Baseline, ADR, fixed corpus, fault transport and legacy conformance                   | Targeted fmt/check/test/clippy and docs Prettier PASS; existing failures recorded                      | Remove the new `vfs` scaffold, Phase 0 tests and ADR without changing existing runtime behavior |
-| `86b96e7a7503decb19bdce59e3c20070058e0fac` | 1     | Lossless path/resource types, native codecs, v2 protobuf and `ProjectPath` dual-write | VFS/proto tests, cross-target checks, project adapter test, clippy and docs Prettier PASS; buf NOT RUN | Remove v2 fields/types and dual-write adapter while retaining legacy string behavior            |
+| Commit                                     | Phase | Summary                                                                                          | Validation                                                                                             | Reversible boundary                                                                             |
+| ------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `4c350914704df52cf4733b57a074c91db25afab2` | 0     | Baseline, ADR, fixed corpus, fault transport and legacy conformance                              | Targeted fmt/check/test/clippy and docs Prettier PASS; existing failures recorded                      | Remove the new `vfs` scaffold, Phase 0 tests and ADR without changing existing runtime behavior |
+| `86b96e7a7503decb19bdce59e3c20070058e0fac` | 1     | Lossless path/resource types, native codecs, v2 protobuf and `ProjectPath` dual-write            | VFS/proto tests, cross-target checks, project adapter test, clippy and docs Prettier PASS; buf NOT RUN | Remove v2 fields/types and dual-write adapter while retaining legacy string behavior            |
+| `9b344ee943ba83b5b63ed8bdc59b1992f66d6143` | 2A    | Provider/file contract, structured capability/error model, MemoryProvider and shared conformance | VFS tests, watch overflow, cross-target checks, clippy and code-smell review PASS                      | Remove provider contract and MemoryProvider without changing legacy filesystem callers          |
 
 ## 平台 QA {#platform-qa}
 
@@ -201,11 +202,11 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Remaining work {#remaining-work}
 
-- Complete Phase 2A commit, Phase 2B Local/Legacy providers and Phase 2C responsibility split.
+- Complete Phase 2B Local/Legacy providers and Phase 2C responsibility split.
 - Phase 3 through Phase 10.
 
 ## Next action {#next-action}
 
-提交 Phase 2A provider contract 和 MemoryProvider。随后实现 LegacyFsProvider 与
-LocalProvider，让 shared conformance suite 覆盖 native positioned I/O、EOF、sparse
-file、expected-version、paged listing、watch sequence/overflow 和 typed unsupported。
+实现 LegacyFsProvider 与 LocalProvider，让 shared conformance suite 覆盖 native
+positioned I/O、EOF、sparse file、expected-version、paged listing、watch
+sequence/overflow 和 typed unsupported。
