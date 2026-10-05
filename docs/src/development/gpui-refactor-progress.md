@@ -259,7 +259,7 @@ median per-frame p95 ratio 均低于 1.05，且 phase operation/cache replay cou
 
 ### 阶段 2：并发与 accessibility 边界
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`（macOS/Windows native runtime 为 `NOT RUN`）
 
 已完成：
 
@@ -273,11 +273,11 @@ median per-frame p95 ratio 均低于 1.05，且 phase operation/cache replay cou
 - `BenchAppContext::threaded` 可显式选择 production-like dispatcher；默认构造仍使用
   deterministic virtual-clock `TestDispatcher`。
 - 增加可选 `accessibility` feature 的 AccessKit core seam：稳定 node ID、完整
-  `TreeUpdate` snapshot、focus 映射和一次性 action router；不连接平台 writer。
+  `TreeUpdate` snapshot、focus 映射和一次性 action router；不导入上游 writer state。
 - 按 `1d029c5ff5654fb1b1e8caf4462993c8ee13a133` 的 B 类安全子集，把
   element-derived stable ID、physical bounds、nested semantic tree 接入实际
-  `Element::prepaint` 和 completed `BuiltFrame`。未复制 native adapter、activation/
-  writer state、synthetic children 或产品级批量 annotation。
+  `Element::prepaint` 和 completed `BuiltFrame`，并分别接入 Linux、macOS 和 Windows
+  native adapter。没有复制 writer state 或 synthetic children。
 - `Div` 提供 feature-gated role、label 与 action listener；action map 属于 completed
   frame，`Window::dispatch_accessibility_action` 每次只调用一个 `(node, action)` handler。
   accessibility feature 开启时完整重建 semantic tree，避免 cached view 产生不完整树；
@@ -289,45 +289,59 @@ median per-frame p95 ratio 均低于 1.05，且 phase operation/cache replay cou
   ListItem and TreeViewItem emit semantic roles and state; Button accessibility Click is
   routed through the same callback as mouse activation. A real `ui` integration snapshot
   covers roles, labels, state and one-shot action dispatch.
+- `AccessibilityBridge` 通过 thread-safe activation/action/deactivation callbacks 连接
+  native adapter，所有 action 回到 foreground `Window` 后只派发一次，不让平台线程
+  直接重入 entity update。
+- X11/Wayland 使用 `accesskit_unix`，macOS 使用 `SubclassingAdapter`，Windows 处理
+  `WM_GETOBJECT` 与 UI Automation focus event；macOS teardown 在 renderer 前释放 adapter，
+  避免 native view ownership cycle。
+- 桌面 `zzz` 按 target 启用 accessibility；Web 仍保持 unsupported 且不会启用该 feature。
+- Button、InputField、Editor、List/Tree、Tabs、Modal/Dialog 和 status notification 均有
+  role/name/state snapshot；`track_focus` 与 AccessKit Focus action 共享同一 `FocusHandle`。
 
 阶段 2 上游 A/B/C 决策：
 
 | Upstream                                   | Class | Disposition                                                                                                                                                                                       |
 | ------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `8886dcb0d4ea0e145e4512d415d3260602eca99`  | B     | Ported the isolated threaded worker/timer/main-handoff behavior to ZZZ names and queue APIs; omitted upstream BenchDispatcher rename, benchmark feature graph, and unrelated benchmark reporting. |
+| `1d029c5ff5654fb1b1e8caf4462993c8ee13a133` | B     | Ported core semantics, callback/action routing, and Linux/macOS/Windows adapters onto the local completed-frame and platform-capability seams; omitted writer state and synthetic children.       |
 | `cc053a4a6fa2fd0e8793201ed9099466af1be0b1` | C     | AccessKit writer/semantic tree is absent from ZZZ; the one-line author-id builder cannot be isolated from the missing accessibility chain.                                                        |
-| `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | C     | ZZZ has no macOS AccessKit adapter or SubclassingAdapter ownership to release.                                                                                                                    |
+| `0eda7703f6c88aa08a25c1d2105ff1ca46f775d4` | B     | Reclassified after the macOS adapter arrived; retained only adapter-first teardown to break the native view ownership cycle.                                                                      |
 
-当前仍待完成：Button/Input/Editor/List/Tree/Tabs/Dialog/Status 的全量产品 annotation、
-Linux/Windows/macOS adapter 分离审查，以及 native screen-reader runbook。ThreadedDispatcher
-EXP-008 已达标；AccessKit EXP-006 仍为 core/UI snapshot partial，native QA 未运行。
-
-后续边界进展：`AccessibilityBridge` 现在接收 backend-neutral `AccessibilityUpdate`；
-空更新在所有 backend 可通过，非空 semantic update 在未接 native adapter 时返回明确
-unsupported error。没有导入缺失的 AccessKit writer/adapter 路径。
+EXP-008 已达标。EXP-006 的 core、action、focus、named controls、Linux native adapter 和
+AT-SPI/Orca enumeration 已通过；macOS VoiceOver 与 Windows Narrator runtime 只能在对应
+主机执行，按完成合同保留为 `NOT RUN`，不是未完成的核心代码迁移。
 
 阶段 2 验证：
 
-| 命令或检查                                                                     | 结果      | 原始数据/说明                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo check --locked -p gpui --features test-support`                         | `PASS`    | ThreadedDispatcher port                                                                                                                                                                        |
-| `cargo test --locked -p gpui --features test-support threaded_dispatcher`      | `PASS`    | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
-| `./script/clippy -p gpui --features test-support`                              | `PASS`    | all-target release clippy + philosophy                                                                                                                                                         |
-| `cargo check --locked -p gpui --features accessibility`                        | `PASS`    | AccessKit 0.24.1 core seam                                                                                                                                                                     |
-| `cargo test --locked -p gpui --features accessibility accessibility`           | `PASS`    | 3 semantic snapshot/action tests                                                                                                                                                               |
-| `cargo test --locked -p gpui --lib --features accessibility,frame-diagnostics` | `PASS`    | 232 tests passed，含 nested element prepaint tree、action dispatch 与完整 cached-frame rebuild                                                                                                 |
-| `./script/clippy -p gpui --features accessibility`                             | `PASS`    | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                  |
-| `cargo test --locked -p ui --features accessibility --test accessibility`      | `PASS`    | Button/Tab/TreeViewItem roles, labels, disabled/selected/expanded/toggled state snapshot                                                                                                       |
-| `./script/clippy -p ui --features accessibility`                               | `PASS`    | UI accessibility feature all-target release clippy + philosophy gate                                                                                                                           |
-| EXP-006 native adapter/screen-reader QA                                        | `NOT RUN` | ZZZ 尚无 AccessKit platform adapter；保留精确 runbook 待 adapter 阶段                                                                                                                          |
-| EXP-008 100-seed parity/hang/leak gate                                         | `PASS`    | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
+| 命令或检查                                                                                                 | 结果   | 原始数据/说明                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo check --locked -p gpui --features test-support`                                                     | `PASS` | ThreadedDispatcher port                                                                                                                                                                        |
+| `cargo test --locked -p gpui --features test-support threaded_dispatcher`                                  | `PASS` | handoff、real-time timer/cancel、100 次 dispatcher teardown                                                                                                                                    |
+| `./script/clippy -p gpui --features test-support`                                                          | `PASS` | all-target release clippy + philosophy                                                                                                                                                         |
+| `cargo check --locked -p gpui --features accessibility`                                                    | `PASS` | AccessKit 0.24.1 core seam                                                                                                                                                                     |
+| `cargo test --locked -p gpui --features accessibility accessibility`                                       | `PASS` | 3 semantic snapshot/action tests                                                                                                                                                               |
+| `cargo test --locked -p gpui --lib --features accessibility,frame-diagnostics`                             | `PASS` | 232 tests passed，含 nested element prepaint tree、action dispatch 与完整 cached-frame rebuild                                                                                                 |
+| `./script/clippy -p gpui --features accessibility`                                                         | `PASS` | all-target/all-feature release clippy 与 philosophy gate 通过                                                                                                                                  |
+| `cargo test --locked -p ui --features accessibility --test accessibility`                                  | `PASS` | Button/Tab/List/Tree/Dialog/Status roles, labels, state, Click 与 Focus action                                                                                                                 |
+| `./script/clippy -p ui --features accessibility`                                                           | `PASS` | UI accessibility feature all-target release clippy + philosophy gate                                                                                                                           |
+| `cargo test --locked -p ui_input --features accessibility input_field_emits_text_input_semantics`          | `PASS` | TextInput role/name/focus snapshot                                                                                                                                                             |
+| `cargo test --locked -p editor --features accessibility test_editor_accessibility_semantics`               | `PASS` | MultilineTextInput role/name/focus；原 IME/focus suites 继续通过                                                                                                                               |
+| `cargo test --locked -p gpui_linux --features accessibility`                                               | `PASS` | 26 tests；X11/Wayland capability matrices declare native adapter                                                                                                                               |
+| macOS `cargo check --locked ... --target x86_64-apple-darwin --features accessibility`                     | `PASS` | adapter 与 teardown cross-compile；runtime `NOT RUN`                                                                                                                                           |
+| Windows tests cross-check，`--target x86_64-pc-windows-gnu --no-default-features --features accessibility` | `PASS` | `WM_GETOBJECT` adapter/test code cross-compiles；runtime `NOT RUN`                                                                                                                             |
+| Linux isolated app + pyatspi tree/action + `orca --list-apps`                                              | `PASS` | `zzz` registered as AT-SPI application；35 nodes；native click action returned true；`.tmp/gpui-refactor/phase-2/linux-{atspi-smoke,orca-list-apps}.log`                                       |
+| EXP-008 100-seed parity/hang/leak gate                                                                     | `PASS` | 100 seeds，background→main、timer、cancellation、panic cleanup、window teardown 全通过；0 hang/failure；warm-up 后 mean 10.686 ms、CV 2.134%；raw log `.tmp/gpui-refactor/phase-2/exp-008.log` |
 
 提交：ThreadedDispatcher core `49b351afb1edab173ca46dd073c663b44aabbf14`；
 AccessKit semantic core `a7745abdefe9d3e2cebb33482aac35d5e6a0289f`；EXP-008
 BenchAppContext/panic follow-up `41f6fccba156b795d49b8564bbe357712f9b2aa5`；element
 prepaint semantics `83fe764989`；completed tree/action routing `03342d511d`；action
 advertisement `d530264622`；semantic state properties `e662afa392`；UI component
-semantics `e7f4ccb52a`、`57b1caf569`。
+semantics `e7f4ccb52a`、`57b1caf569`；callback seam `cbdad449a5`；Linux adapter
+`dd9a27221d`；macOS adapter/teardown `db6cb81aeb`；Windows adapter `4c00dbf000`；
+desktop enablement `bdd5e7ee26`；focus mapping `863014f6a9`；Dialog/Status
+`3b894eb92b`；InputField `2e01ae3f69`；Editor `5bf1569ff1`。
 
 ### 阶段 3：真实 headless renderer
 
@@ -765,16 +779,49 @@ editor formatter/inlay tests 长时间运行；为避免无界 session 已中断
 
 ## Upstream A/B/C 记录
 
-`ThreadedDispatcher` 已按 `8886dcb0` 做 B 类移植；AccessKit element semantics 已按
-`1d029c5f` 做 B 类移植。`cc053a4a` 的 writer follow-up 与 `0eda7703` 的 macOS adapter
-cleanup 保持 C；core semantics、action routing 和各 platform adapter 继续分开记录。
+`ThreadedDispatcher` 已按 `8886dcb0` 做 B 类移植；AccessKit core、action routing 与
+Linux/macOS/Windows adapter 已按 `1d029c5f` 分开移植。`0eda7703` 在 macOS adapter
+到位后重分类为 B，仅保留 teardown 修复；`cc053a4a` 的缺失 writer follow-up 保持 C。
 完整决策见 `upstream-sync-2026-10-03-gpui.md`。
 
 ## 外部平台 QA
 
-| 平台/检查                | 当前状态  | 说明                                       |
-| ------------------------ | --------- | ------------------------------------------ |
-| Linux runtime/headless   | `NOT RUN` | 当前主机可执行，随对应阶段运行             |
-| macOS runtime/VoiceOver  | `NOT RUN` | 最终提供 exact runbook                     |
-| Windows runtime/Narrator | `NOT RUN` | 最终提供 exact runbook                     |
-| Linux Orca               | `NOT RUN` | adapter 完成后在当前主机运行或记录环境阻塞 |
+| 平台/检查                | 当前状态  | 说明                                                 |
+| ------------------------ | --------- | ---------------------------------------------------- |
+| Linux runtime/headless   | `PASS`    | isolated XDG app startup、RADV 与 AT-SPI tree/action |
+| macOS runtime/VoiceOver  | `NOT RUN` | 最终提供 exact runbook                               |
+| Windows runtime/Narrator | `NOT RUN` | 最终提供 exact runbook                               |
+| Linux Orca               | `PASS`    | `orca --list-apps` 识别 `zzz`；pyatspi action 可执行 |
+
+### Native accessibility runbook
+
+macOS 14+ / VoiceOver：
+
+```sh
+cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin --features accessibility
+cargo run --locked -p zzz
+open -a VoiceOver
+```
+
+在 VoiceOver rotor 中确认 ZZZ window 下可以找到 Button、Text Input、Editor、List、Tree、
+Tab、Dialog 和 Status；键盘移动 focus 后 VoiceOver focus 跟随；分别对 Button Click 与
+Text Input Focus 执行一次 action，确认只触发一次。结束后运行：
+
+```sh
+osascript -e 'tell application "VoiceOver" to quit'
+```
+
+Windows 11 / Narrator（PowerShell）：
+
+```powershell
+cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-msvc --features accessibility
+cargo run --locked -p zzz
+Start-Process narrator.exe
+```
+
+用 Narrator scan mode 检查同一组 role/name/state，确认键盘 focus 与 Narrator focus 一致，
+Button Click 与 Text Input Focus 各执行一次且没有重复。结束后运行：
+
+```powershell
+Stop-Process -Name Narrator
+```
