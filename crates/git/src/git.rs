@@ -131,6 +131,8 @@ actions!(
         AddToGitInfoExclude,
         /// Copies the current branch name to the clipboard.
         CopyBranchName,
+        /// Creates a lightweight tag at HEAD.
+        CreateTagAtHead,
     ]
 );
 
