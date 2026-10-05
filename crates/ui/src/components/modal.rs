@@ -63,7 +63,9 @@ impl ParentElement for Modal {
 
 impl RenderOnce for Modal {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        v_flex()
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self.header.headline.clone();
+        let modal = v_flex()
             .id(self.id.clone())
             .size_full()
             .flex_1()
@@ -84,7 +86,12 @@ impl RenderOnce for Modal {
                     )
                     .children(self.children),
             )
-            .children(self.footer)
+            .children(self.footer);
+        #[cfg(feature = "accessibility")]
+        let modal = modal
+            .role(gpui::accesskit::Role::Dialog)
+            .when_some(accessibility_label, |modal, label| modal.aria_label(label));
+        modal
     }
 }
 

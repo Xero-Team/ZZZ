@@ -4,8 +4,8 @@ use gpui::{
 };
 use std::{cell::Cell, rc::Rc};
 use ui::{
-    Button, ButtonCommon as _, Clickable as _, Disableable as _, ListItem, Tab, Toggleable as _,
-    TreeViewItem,
+    AnnouncementToast, Button, ButtonCommon as _, Clickable as _, Disableable as _, ListItem,
+    Modal, ModalHeader, Tab, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -43,6 +43,10 @@ impl Render for SemanticComponents {
                     .toggle(true)
                     .toggle_state(true),
             )
+            .child(
+                Modal::new("preferences", None).header(ModalHeader::new().headline("Preferences")),
+            )
+            .child(AnnouncementToast::new().heading("Update available"))
     }
 }
 
@@ -160,4 +164,22 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(list_item.label(), Some("Item"));
     assert_eq!(list_item.is_expanded(), Some(true));
     assert_eq!(list_item.is_selected(), Some(true));
+
+    let dialog = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::Dialog)
+        .map(|(_, node)| node)
+        .expect("dialog semantic node should exist");
+    assert_eq!(dialog.label(), Some("Preferences"));
+
+    let status = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::Status)
+        .map(|(_, node)| node)
+        .expect("status semantic node should exist");
+    assert_eq!(status.label(), Some("Update available"));
 }
