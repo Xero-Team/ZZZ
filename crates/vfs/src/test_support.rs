@@ -1,4 +1,16 @@
-use std::{collections::BTreeMap, fmt, num::NonZeroUsize, time::Duration};
+use crate::{
+    CollisionPolicy, CopyOptions, CreateDirOptions, CreateDisposition, DirPageRequest, FileAccess,
+    OpenOptions, OperationContext, ProviderPath, RemoveKind, RemoveOptions, RenameOptions,
+    VfsError, VfsErrorCode, VfsProvider, WatchDepth, WatchRequest, WriteAtOptions,
+};
+use futures::StreamExt as _;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    num::{NonZeroU32, NonZeroUsize},
+    sync::Arc,
+    time::Duration,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum TransportDirection {
@@ -67,6 +79,242 @@ pub struct FaultInjectingTransport {
     next_client_to_server_sequence: u64,
     next_server_to_client_sequence: u64,
     disconnected: bool,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProviderConformanceError {
+    #[error(transparent)]
+    Provider(#[from] VfsError),
+    #[error("provider conformance assertion failed: {0}")]
+    Assertion(&'static str),
+    #[error("provider watch stream ended before delivering an event")]
+    WatchEnded,
+}
+
+pub async fn run_provider_conformance(
+    provider: Arc<dyn VfsProvider>,
+) -> Result<(), ProviderConformanceError> {
+    let encoding = provider.descriptor().path_encoding;
+    let root = ProviderPath::root(encoding);
+    let directory = ProviderPath::from_byte_components(encoding, [b"workspace".as_slice()])
+        .map_err(|_| ProviderConformanceError::Assertion("fixture path must be valid"))?;
+    let source = ProviderPath::from_byte_components(
+        encoding,
+        [b"workspace".as_slice(), b"source.bin".as_slice()],
+    )
+    .map_err(|_| ProviderConformanceError::Assertion("fixture path must be valid"))?;
+    let renamed = ProviderPath::from_byte_components(
+        encoding,
+        [b"workspace".as_slice(), b"renamed.bin".as_slice()],
+    )
+    .map_err(|_| ProviderConformanceError::Assertion("fixture path must be valid"))?;
+    let copied = ProviderPath::from_byte_components(
+        encoding,
+        [b"workspace".as_slice(), b"copied.bin".as_slice()],
+    )
+    .map_err(|_| ProviderConformanceError::Assertion("fixture path must be valid"))?;
+
+    let mut watch = provider
+        .watch(WatchRequest {
+            path: root.clone(),
+            depth: WatchDepth::Recursive,
+            resume_after_sequence: None,
+            context: OperationContext::default(),
+        })
+        .await?;
+    provider
+        .create_dir(&directory, CreateDirOptions::default())
+        .await?;
+    let file = provider
+        .open(
+            &source,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await?;
+    file.write_at(0, b"hello", WriteAtOptions::default())
+        .await?;
+    file.write_at(5, b" world", WriteAtOptions::default())
+        .await?;
+
+    let mut contents = vec![0; 11];
+    let read = file
+        .read_at(0, &mut contents, OperationContext::default())
+        .await?;
+    ensure(read == 11, "positioned read length")?;
+    ensure(contents == b"hello world", "positioned read bytes")?;
+    let eof = file
+        .read_at(100, &mut contents, OperationContext::default())
+        .await?;
+    ensure(eof == 0, "read beyond EOF")?;
+
+    let metadata = provider.stat(&source, Default::default()).await?;
+    let stale_write = file
+        .write_at(
+            0,
+            b"stale",
+            WriteAtOptions {
+                expected_version: Some(crate::VfsVersion::new(vec![0xff])),
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    ensure(
+        stale_write
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.code() == VfsErrorCode::StaleVersion),
+        "stale write rejection",
+    )?;
+
+    file.set_len(32, WriteAtOptions::default()).await?;
+    let mut sparse_tail = vec![0xff; 21];
+    let sparse_read = file
+        .read_at(11, &mut sparse_tail, OperationContext::default())
+        .await?;
+    ensure(sparse_read == 21, "sparse read length")?;
+    ensure(
+        sparse_tail.iter().all(|byte| *byte == 0),
+        "sparse bytes are zero-filled",
+    )?;
+
+    provider
+        .rename(&source, &renamed, RenameOptions::default())
+        .await?;
+    let renamed_metadata = provider.stat(&renamed, Default::default()).await?;
+    ensure(
+        renamed_metadata.provider_file_key == metadata.provider_file_key,
+        "rename preserves provider file key",
+    )?;
+    provider
+        .copy(
+            &renamed,
+            &copied,
+            CopyOptions {
+                collision: CollisionPolicy::Fail,
+                ..Default::default()
+            },
+        )
+        .await?;
+    let copied_metadata = provider.stat(&copied, Default::default()).await?;
+    ensure(
+        copied_metadata.provider_file_key != renamed_metadata.provider_file_key,
+        "copy creates a new provider file key",
+    )?;
+
+    let mut listed_paths = BTreeSet::new();
+    let mut cursor = None;
+    loop {
+        let page = provider
+            .read_dir(
+                &directory,
+                DirPageRequest {
+                    cursor,
+                    limit: NonZeroU32::MIN,
+                    context: OperationContext::default(),
+                },
+            )
+            .await?;
+        listed_paths.extend(page.entries.into_iter().map(|entry| entry.path));
+        let Some(next_cursor) = page.next_cursor else {
+            break;
+        };
+        cursor = Some(next_cursor);
+    }
+    ensure(
+        listed_paths == BTreeSet::from([renamed.clone(), copied.clone()]),
+        "paged directory listing",
+    )?;
+
+    let first_batch = watch
+        .next()
+        .await
+        .ok_or(ProviderConformanceError::WatchEnded)??;
+    ensure(
+        first_batch.first_sequence > 0,
+        "watch sequence starts above zero",
+    )?;
+    ensure(
+        first_batch.last_sequence >= first_batch.first_sequence,
+        "watch sequence range",
+    )?;
+
+    let cancellation = crate::CancellationToken::default();
+    cancellation.cancel();
+    let cancelled = provider
+        .stat(
+            &renamed,
+            crate::StatOptions {
+                symbolic_link_mode: crate::SymbolicLinkMode::DoNotFollow,
+                context: OperationContext {
+                    operation_id: crate::OperationId::new(99),
+                    cancellation,
+                },
+            },
+        )
+        .await;
+    ensure(
+        cancelled
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.code() == VfsErrorCode::Cancelled),
+        "cancellation is typed",
+    )?;
+
+    let native_path = provider
+        .native_path(&renamed, OperationContext::default())
+        .await;
+    ensure(
+        native_path
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.code() == VfsErrorCode::Unsupported),
+        "unsupported operation is typed",
+    )?;
+
+    provider
+        .remove(
+            &copied,
+            RemoveOptions {
+                kind: RemoveKind::File,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await?;
+    provider
+        .remove(
+            &renamed,
+            RemoveOptions {
+                kind: RemoveKind::File,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await?;
+    provider
+        .remove(
+            &directory,
+            RemoveOptions {
+                kind: RemoveKind::EmptyDirectory,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+fn ensure(condition: bool, message: &'static str) -> Result<(), ProviderConformanceError> {
+    if condition {
+        Ok(())
+    } else {
+        Err(ProviderConformanceError::Assertion(message))
+    }
 }
 
 impl FaultInjectingTransport {
@@ -187,7 +435,6 @@ impl FaultInjectingTransport {
 mod tests {
     use super::*;
     use serde::Deserialize;
-    use std::collections::BTreeSet;
 
     #[derive(Debug, Deserialize)]
     struct PathCorpus {

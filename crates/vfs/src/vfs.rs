@@ -11,6 +11,12 @@ use std::{
 };
 use typed_path::{WindowsComponent, WindowsPath, WindowsPrefix};
 
+mod memory_provider;
+mod provider;
+
+pub use memory_provider::*;
+pub use provider::*;
+
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 

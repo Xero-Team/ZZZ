@@ -13,30 +13,30 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
-- Current HEAD: tracked by the commit log; latest implementation boundary
-  `86b96e7a7503decb19bdce59e3c20070058e0fac`
+- Current HEAD: `5f4066d786b17b17ec1d3e222516e061380204bc` plus uncommitted
+  Phase 2A changes
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 2`
 - Last completed phase: `Phase 1`
 - Blocking issue: `None`
-- Next action: 实现 Phase 2 provider/file contract、typed errors/capabilities、
-  Memory/Legacy/Local providers 与 positioned I/O conformance。
+- Next action: 提交 Phase 2A provider contract/MemoryProvider，然后实现
+  LegacyFsProvider、LocalProvider、native positioned I/O 与 watch adapter。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit       | Validation | Notes            |
-| ----- | ---------------------------------- | ----------- | ------------ | ---------- | ---------------- |
-| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470` | PASS       | VFS-EXP-001 PASS |
-| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75` | PASS       | VFS-EXP-002 PASS |
-| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -            | -          | -                |
-| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -            | -          | -                |
-| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -            | -          | -                |
-| 5     | Consumer 迁移                      | NOT STARTED | -            | -          | -                |
-| 6     | LSP/Git/native execution           | NOT STARTED | -            | -          | -                |
-| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -            | -          | -                |
-| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -            | -          | -                |
-| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -            | -          | -                |
-| 10    | 收敛与最终验证                     | NOT STARTED | -            | -          | -                |
+| Phase | Result                             | Status      | Commit       | Validation | Notes                               |
+| ----- | ---------------------------------- | ----------- | ------------ | ---------- | ----------------------------------- |
+| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470` | PASS       | VFS-EXP-001 PASS                    |
+| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75` | PASS       | VFS-EXP-002 PASS                    |
+| 2     | Provider、LocalProvider、职责拆分  | IN PROGRESS | -            | PARTIAL    | 2A contract and MemoryProvider pass |
+| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -            | -          | -                                   |
+| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -            | -          | -                                   |
+| 5     | Consumer 迁移                      | NOT STARTED | -            | -          | -                                   |
+| 6     | LSP/Git/native execution           | NOT STARTED | -            | -          | -                                   |
+| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -            | -          | -                                   |
+| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -            | -          | -                                   |
+| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -            | -          | -                                   |
+| 10    | 收敛与最终验证                     | NOT STARTED | -            | -          | -                                   |
 
 ## Baseline {#baseline}
 
@@ -175,6 +175,10 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-05 | 1     | `buf lint crates/proto/proto` and `buf format --diff --exit-code crates/proto/proto`                                       | -        | NOT RUN: `buf` unavailable                                                                         | Tool unavailable; prost build and proto tests PASS                      |
 | 2026-10-05 | 1     | `(cd docs && npx prettier --check src/)`                                                                                   | 0        | PASS                                                                                               | No                                                                      |
 | 2026-10-05 | 1     | touched-diff P0 detectors and manual P0/P1/P2 review                                                                       | 0        | PASS: fixed drive-case loss, boolean state model and intermediate collection; no remaining finding | No                                                                      |
+| 2026-10-06 | 2A    | `cargo test --locked -p vfs`                                                                                               | 0        | PASS: 11 tests including shared provider conformance and watch overflow                            | No                                                                      |
+| 2026-10-06 | 2A    | `./script/clippy -p vfs`                                                                                                   | 0        | PASS                                                                                               | No                                                                      |
+| 2026-10-06 | 2A    | `cargo check --locked -p vfs --target x86_64-pc-windows-gnu` and `x86_64-apple-darwin`                                     | 0 each   | PASS                                                                                               | No                                                                      |
+| 2026-10-06 | 2A    | touched-diff P0 detectors and manual P0/P1/P2 review                                                                       | 0        | PASS: fixed bounded paging and ID/version/sequence exhaustion semantics; no remaining finding      | No                                                                      |
 
 ## 提交记录 {#commit-log}
 
@@ -197,11 +201,11 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Remaining work {#remaining-work}
 
-- Phase 2 through Phase 10.
+- Complete Phase 2A commit, Phase 2B Local/Legacy providers and Phase 2C responsibility split.
+- Phase 3 through Phase 10.
 
 ## Next action {#next-action}
 
-实现 Phase 2 `VfsProvider`、`VfsFile`、metadata、structured capability、typed error、
-operation options、paged `read_dir` 与 cancellation contract。接入 Memory/Legacy/Local
-provider，同一 conformance suite 覆盖 positioned I/O、EOF、sparse file、watch
-overflow 与 capability/unsupported semantics。
+提交 Phase 2A provider contract 和 MemoryProvider。随后实现 LegacyFsProvider 与
+LocalProvider，让 shared conformance suite 覆盖 native positioned I/O、EOF、sparse
+file、expected-version、paged listing、watch sequence/overflow 和 typed unsupported。
