@@ -346,6 +346,7 @@ a6a23c7b	C	untriaged	Dependency-only fuzzy cleanup has no independent behavior.	
 a7bc7d77	C	upstream-infra	GitHub community/guild/triage helper consolidation.	upstream-sync-2026-09-06.md
 a7d74150	C	absent-api	Settings UI Default/Custom needs absent `PixelSetting`.	upstream-sync-2026-08-27.md
 a7e23df6	C	untriaged	Attempted port failed test compilation; reverted per B-port rule.	upstream-sync-2026-08-27.md
+a84689073d	C	absent-api	Reimplements `PathStyle` around the absent `crates/path` component and Windows-prefix architecture; ZZZ uses `util::paths` and deliberately gates foreign-style repository identity paths, so the rewrite is not isolated.	upstream-sync-2026-10-05.md
 a8491e63	C	untriaged	macOS drag restoration requires an inseparable platform lifecycle.	upstream-sync-2026-08-07.md
 a8535d86	C	philosophy	Unused `LanguageModelRequest.prompt_cache_key`; native agent and Copilot.	upstream-sync-2026-09-18.md
 a85cf449	C	absent-api	Touch prediction jitter fix targets upstream `gpui/src/gestures.rs`, which ZZZ has deleted.	upstream-sync-2026-09-02.md

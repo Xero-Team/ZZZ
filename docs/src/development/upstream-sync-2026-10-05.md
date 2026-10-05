@@ -1,6 +1,6 @@
 ---
 title: Upstream Sync 2026-10-05
-description: Review of two 20-commit Zed batches after the October 4 baseline.
+description: Review of two 20-commit batches and a final 8-commit Zed batch after the October 4 baseline.
 ---
 
 # Upstream Sync 2026-10-05
@@ -298,3 +298,114 @@ local commit.
 
 The general reviewed baseline advances to
 `3fec4830142a48c08a0e9b8aa241eeaa1a261370`.
+
+## Final Catch-up Batch
+
+### Scope
+
+- Target branch: continued `sync/upstream-2026-10-04` from
+  `7c1601ec8c092bc93b7a49b2c9bc62e0ac1f26ad`
+- Previous reviewed baseline: `3fec4830142a48c08a0e9b8aa241eeaa1a261370`
+- Reviewed head: `279fe070bb389b79652e52065b2f001edcc0b11b`
+- Live upstream head at selection and final refresh:
+  `279fe070bb389b79652e52065b2f001edcc0b11b`
+- Final query time: `2026-10-05T04:46:26Z`
+- Reviewed range: all 8 commits after `3fec483014`, oldest first
+- Remaining after this batch: 0 commits
+
+The previous baseline and reviewed head are both ancestors of the final
+`FETCH_HEAD`.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                                                |
+| ---------- | ----- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| badfb8d31f | A     | 15df077f8e   | Clean absorption: single-sided documentation keybinding pills now fall back to their only value instead of rendering empty on Linux.                                                                                       |
+| 80ee0a3563 | B     | a55a95bfad   | Added a localized Show Source action to active Markdown preview tabs and hid Markdown/SVG preview actions on inactive editor tabs.                                                                                         |
+| d9afb21688 | A     | cf4f21f3fd   | Clean absorption: added configurable self-hosted Gerrit remote parsing and commit/file permalink generation with focused tests.                                                                                            |
+| 01376d4926 | A     | d4e991d66b   | Clean absorption: added Gitiles providers, path-prefix-preserving links, settings schema, tests, and documentation.                                                                                                        |
+| a9c0144d00 | B     | 57b36b1d57   | Moved branch and tag chips into ZZZ's split Git Graph gutter, added overflow ref menus and dashed connectors, and retained localized custom-command handling.                                                              |
+| 5eed2397a8 | B     | 4624cc58c5   | Added localized lightweight-tag creation at repository HEAD for local and remote projects, rejected overwrites, refreshed tag consumers, and documented that tags are not pushed automatically.                            |
+| a84689073d | C     | --           | Reimplements `PathStyle` around the absent `crates/path` component and Windows-prefix architecture; ZZZ uses `util::paths` and deliberately gates foreign-style repository identity paths, so the rewrite is not isolated. |
+| 279fe070bb | A     | db85220999   | Clean absorption: removed JSON language-server quotes from completion `filterText` so settings keys rank by their actual typed prefix.                                                                                     |
+
+Totals: four `A`, three `B`, one `C`.
+
+### Applied Work
+
+#### Documentation keybinding fallback
+
+`15df077f8e` keeps hand-written single-value keybinding pills visible on Linux
+while preserving the existing macOS/Linux split behavior for generated pairs.
+
+#### Markdown preview source action
+
+`a55a95bfad` exposes the existing `CloseAndReturnToEditor` action as a localized
+Show Source item on the active preview tab. Preview actions are now withheld for
+inactive tabs because those items are outside the dispatch tree. The port reuses
+the existing editor preview locale keys and adds the new Show Source key to both
+catalogs.
+
+#### Gerrit and Gitiles providers
+
+`cf4f21f3fd` adds the focused Gerrit provider, including authenticated-path
+normalization and single-line Gitiles anchors. `d4e991d66b` adds the more general
+Gitiles provider, preserves configured URL path prefixes, exposes it through the
+settings schema, and documents the browse-root requirement.
+
+#### Git Graph ref gutter
+
+`57b36b1d57` ports the visible Git Graph redesign onto ZZZ's separately split
+`git_graph` crate. Ref chips now precede their commit nodes, multiple refs collapse
+behind a `+N` badge with per-ref actions, dashed connectors link badges to nodes,
+and ringed nodes preserve selected and hovered row backgrounds. ZZZ keeps its
+localized menu labels and existing custom Git command task resolution. The
+upstream file layout and unavailable prior column-visibility menu infrastructure
+were omitted.
+
+#### Create tag at HEAD
+
+`4624cc58c5` adds `git::CreateTagAtHead`, a localized single-line modal, guarded
+`git update-ref` creation, remote protocol support, success/error notifications,
+and refresh events for Git Graph and Git-panel history consumers. The action
+creates lightweight local tags and never pushes them automatically.
+
+#### JSON completion ranking
+
+`db85220999` decodes quoted JSON `filterText` values before fuzzy ranking without
+changing the inserted completion text. Invalid or unquoted filter strings remain
+untouched.
+
+The four direct `A` changes used `git cherry-pick -x -s`. The three `B` commits
+include `Upstream`, `Retained`, and `Omitted` trailers.
+
+### Rejected Work
+
+- `a84689073d` requires upstream's absent `crates/path`, its copied standard-library
+  component parser, Windows prefix parser, and earlier `PathStyle::file_name` /
+  `parent` API. ZZZ's corresponding code remains in `util::paths`, and its current
+  repository identity path intentionally falls back to local-style `std::path`
+  handling. Importing the rewrite would be a cross-crate path architecture
+  migration rather than an isolated bug fix.
+
+### Verification
+
+| Check                                                                                                                                                                         | Result  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Final live `git ls-remote` and `git fetch --no-tags` to `FETCH_HEAD`                                                                                                          | PASS    |
+| Previous baseline and reviewed head are ancestors of final `FETCH_HEAD`; remaining commit count is zero                                                                       | PASS    |
+| `git diff --check` and `cargo fmt --all -- --check`                                                                                                                           | PASS    |
+| `cargo check --locked` for `editor`, `markdown_preview`, `git_hosting_providers`, `settings_content`, `git_graph`, `git`, `fs`, `project`, `proto`, `git_ui`, and `languages` | PASS    |
+| Markdown preview active/inactive tab-menu regressions                                                                                                                         | PASS    |
+| `git_hosting_providers` unit and doc tests (138 unit tests)                                                                                                                   | PASS    |
+| Git Graph ref layout, custom command, navigation, serialization, stash refresh, and tag refresh suite (26 unit tests)                                                         | PASS    |
+| Non-overwriting ref creation, create-tag modal, and JSON completion filter regressions                                                                                        | PASS    |
+| Documentation preprocessor unit tests (9 tests) and Prettier checks for `theme/plugins.js` and `src/git.md`                                                                   | PASS    |
+| English / Simplified Chinese locale JSON and 3,555-key comparison                                                                                                             | PASS    |
+| `./script/check-philosophy`                                                                                                                                                   | PASS    |
+| `./script/backfill-upstream-ledger` and `./script/check-upstream-ledger`                                                                                                      | PASS    |
+| macOS / Windows runtime checks                                                                                                                                                | NOT RUN |
+| `cargo test --workspace`                                                                                                                                                      | NOT RUN |
+
+The general reviewed baseline advances to
+`279fe070bb389b79652e52065b2f001edcc0b11b`.
