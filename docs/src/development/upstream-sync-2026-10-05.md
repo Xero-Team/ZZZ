@@ -1,6 +1,6 @@
 ---
 title: Upstream Sync 2026-10-05
-description: Review of the next 20 Zed commits after the October 4 baseline.
+description: Review of two 20-commit Zed batches after the October 4 baseline.
 ---
 
 # Upstream Sync 2026-10-05
@@ -158,3 +158,143 @@ The two direct `A` changes, `07310d0f9d` and `981b224a46`, used
 
 The general reviewed baseline advances to
 `981b224a46f26d21f925d62f67473d2df832da7b`.
+
+## Continuation Batch
+
+### Scope
+
+- Target branch: continued `sync/upstream-2026-10-04` from
+  `1114d6fb4f4cd794a027b0580d444a02dcf7b5b1`
+- Previous reviewed baseline: `981b224a46f26d21f925d62f67473d2df832da7b`
+- Reviewed head: `3fec4830142a48c08a0e9b8aa241eeaa1a261370`
+- Live upstream head at selection and final refresh:
+  `279fe070bb389b79652e52065b2f001edcc0b11b`
+- Final query time: `2026-10-05T02:14:52Z`
+- Reviewed range: the first 20 commits after `981b224a46`, oldest first
+- Remaining after this batch: 8 commits through the final live head
+
+The reviewed baseline and reviewed head are both ancestors of the final
+`FETCH_HEAD`.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                       |
+| ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| c9daddfa0a | B     | a9b06cf9f9   | Showed file counts for ZZZ's existing Conflicts, Tracked, and Untracked Git-panel sections by reusing their current counters instead of importing upstream staging-state grouping.                |
+| 54edefa083 | C     | --           | Reorders the built-in native-agent profile tool inventory; ACP sessions receive tools from external agents, and ZZZ does not maintain this upstream in-tree tool catalog.                         |
+| 28d5832adb | B     | d0fc10afa7   | Added `markdown_preview.heading_font_weight`, preview rendering, schema, documentation, and tests; omitted the unabsorbed Settings Editor typography-section migration.                           |
+| cd8c467418 | C     | --           | Adds schema completion for the same upstream native-agent built-in tool inventory and would preserve an absent tool catalog as public settings scaffolding.                                       |
+| c5b6d4386e | B     | 004f980edc   | Scoped ACP permission prompts, actions, selections, and RPC cancellation to stable request IDs on ZZZ's existing `ToolCallStatus` model.                                                          |
+| 5c5236ded8 | A     | --           | Already equivalent: the sorting comments added by rejected `54edefa083` were never introduced into ZZZ's default settings.                                                                        |
+| 6708a25004 | A     | --           | Already equivalent: `windows-and-projects.md` already documents both open-behavior settings with ZZZ's actual `new_window` defaults.                                                              |
+| 90731bdec0 | A     | b41edd4dca   | Clean absorption: corrected minimap thumb drag geometry and added short, long, minimum-thumb, and immovable-thumb regressions.                                                                    |
+| 7362739f94 | B     | 79b7858cbc   | Added reusable pixel-snapped choice cards and moved localized ACP single/multi-select elicitations onto them; omitted unavailable GPUI Role/ARIA APIs.                                            |
+| 3209c7d31f | C     | --           | Explicitly adds generic ACP v2 permission model/UI foundation without wire enablement; the new insertion API has no production caller in this commit.                                             |
+| 309f91f564 | C     | --           | Migrates Copilot enterprise authentication and subscription settings, which belong to an intentionally absent provider path.                                                                      |
+| 9dd6993e2e | A     | 5390ed6db1   | Clean absorption with the local lockfile result: deserialize `SharedString` directly through `SmolStr` and remove the now-orphaned `borsh` package.                                               |
+| 23d10a4754 | C     | --           | Adds a typed ACP v2 streamed tool-content append API but explicitly adds no wire handler; production has no caller, so this is future scaffolding.                                                |
+| f37989fbdf | C     | --           | Broad cross-platform headless/windowed GPUI rewrite whose new switching API is called only by its example and platform tests in this commit.                                                      |
+| 57af58b3ad | B     | fd2910f0d3   | Kept the current ACP v1 transport and added live kind/choice revalidation so stale select, boolean, picker, and favorite controls cannot mutate replaced configuration.                           |
+| c83abe7d0e | B     | fbfd5b772b   | Added a localized, persisted, setting-backed collapsible Git commit editor; omitted Git Graph detail disclosures tied to the separately split and substantially diverged local `git_graph` crate. |
+| 199500e9be | A     | --           | Already equivalent: ZZZ deleted the old async `file_content` detector; the current content-analysis path has no 64 KiB stack buffer.                                                              |
+| 7ea5428f0c | C     | --           | Targets the absent in-tree Amazon Bedrock provider and `language_models` integration; rebuilding those deleted provider crates is outside this isolated commit.                                   |
+| 708c7eef55 | B     | c41114e8a4   | Pre-filled File Finder from the focused editor or terminal selection, normalized and capped the query, and added a localized opt-out setting and regressions.                                     |
+| 3fec483014 | C     | --           | First of an eight-part tabular-selection series, deliberately disabled in release builds until later copy/menu work; importing it alone would be staged future scaffolding.                       |
+
+Totals: five `A`, seven `B`, eight `C`.
+
+### Applied Work
+
+#### Git panel section counts
+
+`a9b06cf9f9` uses the current conflict, tracked, and untracked counters to
+render muted count chips beside localized section headers. The upstream
+staging-state section model remains absent.
+
+#### Markdown preview heading weight
+
+`d0fc10afa7` adds the nested `markdown_preview.heading_font_weight` setting
+with a `600` default, applies it to H1-H6 only in preview typography, and
+documents and tests the setting. ZZZ's older appearance-page structure has no
+dedicated Markdown preview typography section, so no unused UI field was added.
+
+#### Request-owned ACP permissions
+
+`004f980edc` assigns every permission prompt a `PermissionRequestId`. Old RPC
+cancellation, dropdown state, direct actions, and option selection now target
+the exact request, and selected option kinds are validated against the options
+the agent actually offered. The port keeps ZZZ's ACP-only status model instead
+of restoring upstream native-agent state or telemetry.
+
+#### Elicitation choice cards
+
+`79b7858cbc` adds a shared `ChoiceCard` for radio and checkbox rows. Its radio
+indicator uses pixel-snapped concentric quads, and both choice kinds retain
+full-row keyboard/click interaction, validation styling, descriptions, and
+localized elicitation text. GPUI's newer accessibility role APIs are not
+available locally.
+
+#### ACP configuration control hardening
+
+`fd2910f0d3` leaves the working ACP v1 shared interface intact while ensuring
+deployed selectors and pickers re-check the live option kind and choice list
+before opening, selecting, confirming, toggling, or changing favorites.
+
+#### Collapsible Git commit editor
+
+`fbfd5b772b` adds `git::ToggleCommitEditor`, a localized chevron control,
+workspace persistence, a `git_panel.commit_editor` default, Settings Editor
+support, and documentation. Collapsing clears fill mode and prevents focus from
+targeting the hidden editor.
+
+#### File Finder selection seed
+
+`c41114e8a4` reads the focused pane before the active center pane, requests the
+current selection through the existing searchable-item interface, flattens
+whitespace, caps the seed at 100 characters, and exposes a localized
+`file_finder.prefill_query_from_selection` opt-out.
+
+The two direct code absorptions, `90731bdec0` and `9dd6993e2e`, used
+`git cherry-pick -x -s`. The three already-equivalent `A` commits required no
+local commit.
+
+### Rejected Work
+
+- `54edefa083` and `cd8c467418` maintain upstream's in-tree native-agent tool
+  catalog and its settings schema.
+- `3209c7d31f` and `23d10a4754` explicitly add ACP v2 model/UI foundations
+  without production wire callers.
+- `309f91f564` restores Copilot enterprise authentication and settings.
+- `f37989fbdf` is a broad GPUI platform rewrite for a switching API without a
+  shipped ZZZ caller.
+- `7ea5428f0c` depends on deleted Bedrock and in-tree language-model provider
+  crates.
+- `3fec483014` is release-disabled part-one scaffolding for an incomplete
+  eight-commit tabular-selection series.
+
+### Verification
+
+| Check                                                                                                                                                                                                                               | Result                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Final live `git ls-remote` and `git fetch --no-tags` to `FETCH_HEAD`                                                                                                                                                                | PASS                                                                                    |
+| Previous baseline and reviewed head are ancestors of final `FETCH_HEAD`                                                                                                                                                             | PASS                                                                                    |
+| `git diff --check` and `cargo fmt --all -- --check`                                                                                                                                                                                 | PASS                                                                                    |
+| `cargo check --locked` for `git`, `git_ui`, `editor`, `gpui_shared_string`, `markdown`, `settings_content`, `theme_settings`, `acp_thread`, `agent_servers`, `agent_ui`, `ui`, `file_finder`, `open_path_prompt`, and `settings_ui` | PASS                                                                                    |
+| Git-panel count and commit-editor collapse regressions                                                                                                                                                                              | PASS                                                                                    |
+| Markdown preview heading-weight regressions                                                                                                                                                                                         | PASS                                                                                    |
+| ACP request supersession, permission buttons/actions/granularity, and conversation ordering regressions                                                                                                                             | PASS                                                                                    |
+| Elicitation choice keyboard accessibility and option-schema regressions                                                                                                                                                             | PASS                                                                                    |
+| ACP stale configuration-control regression                                                                                                                                                                                          | PASS                                                                                    |
+| Minimap thumb geometry regressions                                                                                                                                                                                                  | PASS                                                                                    |
+| `gpui_shared_string` unit and doc tests                                                                                                                                                                                             | PASS                                                                                    |
+| File Finder selection seed, opt-out, and query sanitization regressions                                                                                                                                                             | PASS                                                                                    |
+| Elicitation text-field Enter and tab-navigation tests                                                                                                                                                                               | FAIL (pre-existing; reproduced unchanged at `d0fc10afa7` in `/tmp/zzz-baseline.ISi24q`) |
+| Prettier for documentation changed in this continuation                                                                                                                                                                             | PASS                                                                                    |
+| English / Simplified Chinese locale JSON and key-set comparison                                                                                                                                                                     | PASS                                                                                    |
+| `./script/check-philosophy`                                                                                                                                                                                                         | PASS                                                                                    |
+| `./script/backfill-upstream-ledger` and `./script/check-upstream-ledger`                                                                                                                                                            | PASS                                                                                    |
+| macOS / Windows runtime checks                                                                                                                                                                                                      | NOT RUN                                                                                 |
+| `cargo test --workspace`                                                                                                                                                                                                            | NOT RUN                                                                                 |
+
+The general reviewed baseline advances to
+`3fec4830142a48c08a0e9b8aa241eeaa1a261370`.
