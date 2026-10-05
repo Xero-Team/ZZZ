@@ -1140,6 +1140,7 @@ fn windows_capabilities() -> gpui::PlatformCapabilities {
             resize_window: false,
             ..gpui::WindowControls::default()
         },
+        window_services: gpui::WindowServiceCapabilities::default(),
     }
 }
 
@@ -1713,6 +1714,10 @@ mod tests {
         assert!(capabilities.window_controls.maximize);
         assert!(capabilities.window_controls.minimize);
         assert!(capabilities.window_controls.window_menu);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities::default()
+        );
     }
 
     #[test]

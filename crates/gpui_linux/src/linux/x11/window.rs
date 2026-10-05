@@ -2049,6 +2049,12 @@ fn x11_capabilities() -> gpui::PlatformCapabilities {
         native_prompt: false,
         clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls: gpui::WindowControls::default(),
+        window_services: gpui::WindowServiceCapabilities {
+            decorations: true,
+            client_inset: true,
+            app_id: true,
+            ..Default::default()
+        },
     }
 }
 
@@ -2073,6 +2079,15 @@ mod capability_tests {
         assert_eq!(
             capabilities.window_controls,
             gpui::WindowControls::default()
+        );
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities {
+                decorations: true,
+                client_inset: true,
+                app_id: true,
+                ..Default::default()
+            }
         );
     }
 }

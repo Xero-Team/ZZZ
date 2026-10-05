@@ -475,6 +475,10 @@ impl PlatformWindow for TestWindow {
                 minimize: false,
                 window_menu: false,
             },
+            window_services: crate::WindowServiceCapabilities {
+                document_metadata: true,
+                ..Default::default()
+            },
         }
     }
 

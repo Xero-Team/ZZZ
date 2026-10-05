@@ -1027,8 +1027,10 @@ impl Window {
         let input_rate_tracker = Rc::new(RefCell::new(InputRateTracker::default()));
         let last_frame_time = Rc::new(Cell::new(None));
 
-        platform_window
-            .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
+        if platform_window.capabilities().window_services.decorations {
+            platform_window
+                .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
+        }
         platform_window.set_background_appearance(window_background);
 
         match window_bounds {
@@ -1362,7 +1364,9 @@ impl Window {
             })
         });
 
-        if let Some(app_id) = app_id {
+        if let Some(app_id) = app_id
+            && platform_window.capabilities().window_services.app_id
+        {
             platform_window.set_app_id(&app_id);
         }
 
@@ -1622,7 +1626,14 @@ impl Window {
 
     /// request a certain window decoration (Wayland)
     pub fn request_decorations(&self, decorations: WindowDecorations) {
-        self.platform_window.request_decorations(decorations);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .decorations
+        {
+            self.platform_window.request_decorations(decorations);
+        }
     }
 
     /// Start a window resize operation if this window is resizable.
@@ -1645,7 +1656,14 @@ impl Window {
     /// - `Some(&[])` is an empty region, so the window receives no pointer or touch input.
     /// - `None` resets the region to the default, so the whole window receives input again.
     pub fn set_input_region(&self, region: Option<&[Bounds<Pixels>]>) {
-        self.platform_window.set_input_region(region);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .input_region
+        {
+            self.platform_window.set_input_region(region);
+        }
     }
 
     /// Return the `WindowBounds` to indicate that how a window should be opened
@@ -1988,7 +2006,11 @@ impl Window {
     /// where it covers the entire screen including the menu bar and notch area.
     /// Always `false` on platforms other than macOS.
     pub fn is_simple_fullscreen(&self) -> bool {
-        self.platform_window.is_simple_fullscreen()
+        self.platform_window
+            .capabilities()
+            .window_services
+            .simple_fullscreen
+            && self.platform_window.is_simple_fullscreen()
     }
 
     pub(crate) fn appearance_changed(&mut self, cx: &mut App) {
@@ -2072,7 +2094,14 @@ impl Window {
     /// When using client side decorations, set this to the width of the invisible decorations (Wayland and X11)
     pub fn set_client_inset(&mut self, inset: Pixels) {
         self.client_inset = Some(inset);
-        self.platform_window.set_client_inset(inset);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .client_inset
+        {
+            self.platform_window.set_client_inset(inset);
+        }
     }
 
     /// Returns the client_inset value by [`Self::set_client_inset`].
@@ -2113,7 +2142,9 @@ impl Window {
 
     /// Sets the application identifier.
     pub fn set_app_id(&mut self, app_id: &str) {
-        self.platform_window.set_app_id(app_id);
+        if self.platform_window.capabilities().window_services.app_id {
+            self.platform_window.set_app_id(app_id);
+        }
     }
 
     /// Sets the window background appearance.
@@ -2124,13 +2155,27 @@ impl Window {
 
     /// Mark the window as dirty at the platform level.
     pub fn set_window_edited(&mut self, edited: bool) {
-        self.platform_window.set_edited(edited);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .document_metadata
+        {
+            self.platform_window.set_edited(edited);
+        }
     }
 
     /// Set the path of the file this window represents.
     /// On macOS, this sets the window's accessibility document property (AXDocument).
     pub fn set_document_path(&self, path: Option<&std::path::Path>) {
-        self.platform_window.set_document_path(path);
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .document_metadata
+        {
+            self.platform_window.set_document_path(path);
+        }
     }
 
     /// Determine the display on which the window is visible.
@@ -2143,7 +2188,14 @@ impl Window {
 
     /// Show the platform character palette.
     pub fn show_character_palette(&self) {
-        self.platform_window.show_character_palette();
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .character_palette
+        {
+            self.platform_window.show_character_palette();
+        }
     }
 
     /// The scale factor of the display associated with the window. For example, it could
@@ -4862,7 +4914,14 @@ impl Window {
     /// notch. Unlike [`Window::toggle_fullscreen`], this does not move the window
     /// into its own Mission Control space. Only has an effect on macOS.
     pub fn toggle_simple_fullscreen(&self) {
-        self.platform_window.toggle_simple_fullscreen();
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .simple_fullscreen
+        {
+            self.platform_window.toggle_simple_fullscreen();
+        }
     }
 
     /// Updates the IME panel position suggestions for languages like japanese, chinese.
@@ -5161,7 +5220,14 @@ impl Window {
     /// Perform titlebar double-click action.
     /// This is macOS specific.
     pub fn titlebar_double_click(&self) {
-        self.platform_window.titlebar_double_click();
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .titlebar_actions
+        {
+            self.platform_window.titlebar_double_click();
+        }
     }
 
     /// Gets the window's title at the platform level.
@@ -5185,26 +5251,54 @@ impl Window {
     /// Merges all open windows into a single tabbed window.
     /// This is macOS specific.
     pub fn merge_all_windows(&self) {
-        self.platform_window.merge_all_windows()
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window.merge_all_windows()
+        }
     }
 
     /// Moves the tab to a new containing window.
     /// This is macOS specific.
     pub fn move_tab_to_new_window(&self) {
-        self.platform_window.move_tab_to_new_window()
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window.move_tab_to_new_window()
+        }
     }
 
     /// Shows or hides the window tab overview.
     /// This is macOS specific.
     pub fn toggle_window_tab_overview(&self) {
-        self.platform_window.toggle_window_tab_overview()
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window.toggle_window_tab_overview()
+        }
     }
 
     /// Sets the tabbing identifier for the window.
     /// This is macOS specific.
     pub fn set_tabbing_identifier(&self, tabbing_identifier: Option<String>) {
-        self.platform_window
-            .set_tabbing_identifier(tabbing_identifier)
+        if self
+            .platform_window
+            .capabilities()
+            .window_services
+            .system_tabs
+        {
+            self.platform_window
+                .set_tabbing_identifier(tabbing_identifier)
+        }
     }
 
     /// Request the OS to play an alert sound. On some platforms this is associated
@@ -6203,6 +6297,13 @@ mod tests {
                 assert!(!capabilities.window_controls.maximize);
                 assert!(!capabilities.window_controls.minimize);
                 assert!(!capabilities.window_controls.window_menu);
+                assert_eq!(
+                    capabilities.window_services,
+                    crate::WindowServiceCapabilities {
+                        document_metadata: true,
+                        ..Default::default()
+                    }
+                );
             })
             .expect("test window should remain open");
     }

@@ -1698,6 +1698,13 @@ fn wayland_capabilities(
         native_prompt: false,
         clipboard: gpui::ClipboardCapabilities::READ_WRITE,
         window_controls,
+        window_services: gpui::WindowServiceCapabilities {
+            decorations: true,
+            input_region: true,
+            client_inset: true,
+            app_id: true,
+            ..Default::default()
+        },
     }
 }
 
@@ -1732,6 +1739,16 @@ mod capability_tests {
         assert!(capabilities.window_controls.move_window);
         assert!(capabilities.window_controls.resize_window);
         assert_eq!(capabilities.window_controls, window_controls);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities {
+                decorations: true,
+                input_region: true,
+                client_inset: true,
+                app_id: true,
+                ..Default::default()
+            }
+        );
     }
 }
 

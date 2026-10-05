@@ -486,6 +486,29 @@ pub struct WindowControls {
     pub window_menu: bool,
 }
 
+/// Optional window-host services that are not universal across backends.
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
+pub struct WindowServiceCapabilities {
+    /// Whether client/server decoration mode can be requested.
+    pub decorations: bool,
+    /// Whether the native pointer/touch input region can be changed.
+    pub input_region: bool,
+    /// Whether a client-side decoration inset can be submitted.
+    pub client_inset: bool,
+    /// Whether the native application/window identifier can be changed.
+    pub app_id: bool,
+    /// Whether edited state and represented-document paths are supported.
+    pub document_metadata: bool,
+    /// Whether the operating system character palette can be shown.
+    pub character_palette: bool,
+    /// Whether borderless simple fullscreen is supported.
+    pub simple_fullscreen: bool,
+    /// Whether native multi-window tab operations are supported.
+    pub system_tabs: bool,
+    /// Whether the platform owns titlebar double-click behavior.
+    pub titlebar_actions: bool,
+}
+
 /// Capabilities exposed by a platform window implementation.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct PlatformCapabilities {
@@ -507,6 +530,8 @@ pub struct PlatformCapabilities {
     pub clipboard: ClipboardCapabilities,
     /// Window control operations supported by the backend.
     pub window_controls: WindowControls,
+    /// Optional window-host services supported by the backend.
+    pub window_services: WindowServiceCapabilities,
 }
 
 impl Default for PlatformCapabilities {
@@ -529,6 +554,7 @@ impl Default for PlatformCapabilities {
                 minimize: false,
                 window_menu: false,
             },
+            window_services: WindowServiceCapabilities::default(),
         }
     }
 }
@@ -2965,6 +2991,10 @@ mod tests {
                 minimize: false,
                 window_menu: false,
             }
+        );
+        assert_eq!(
+            capabilities.window_services,
+            WindowServiceCapabilities::default()
         );
     }
 

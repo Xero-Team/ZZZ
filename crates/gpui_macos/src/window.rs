@@ -2114,6 +2114,14 @@ fn macos_capabilities() -> gpui::PlatformCapabilities {
             resize_window: false,
             ..gpui::WindowControls::default()
         },
+        window_services: gpui::WindowServiceCapabilities {
+            document_metadata: true,
+            character_palette: true,
+            simple_fullscreen: true,
+            system_tabs: true,
+            titlebar_actions: true,
+            ..Default::default()
+        },
     }
 }
 
@@ -3506,6 +3514,17 @@ mod tests {
         assert!(capabilities.window_controls.maximize);
         assert!(capabilities.window_controls.minimize);
         assert!(capabilities.window_controls.window_menu);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities {
+                document_metadata: true,
+                character_palette: true,
+                simple_fullscreen: true,
+                system_tabs: true,
+                titlebar_actions: true,
+                ..Default::default()
+            }
+        );
     }
 
     #[test]

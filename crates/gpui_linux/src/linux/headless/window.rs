@@ -105,6 +105,7 @@ fn headless_capabilities() -> gpui::PlatformCapabilities {
             minimize: false,
             window_menu: false,
         },
+        window_services: gpui::WindowServiceCapabilities::default(),
     }
 }
 
@@ -287,5 +288,9 @@ mod tests {
         assert!(!capabilities.window_controls.move_window);
         assert!(!capabilities.window_controls.resize_window);
         assert!(capabilities.window_controls.fullscreen);
+        assert_eq!(
+            capabilities.window_services,
+            gpui::WindowServiceCapabilities::default()
+        );
     }
 }
