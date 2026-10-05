@@ -2714,6 +2714,7 @@
     "git_graph.commit_sha_copied": "已复制提交 SHA！",
     "git_graph.copy_tag": "复制标签",
     "git_graph.copy_ref_name": "复制引用名称",
+    "git_graph.refs": "引用",
     "git_graph.path_history": "路径历史",
     "git_graph.search_commits": "搜索提交...",
     "git_graph.title": "Git Graph",

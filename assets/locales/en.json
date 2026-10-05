@@ -2714,6 +2714,7 @@
     "git_graph.commit_sha_copied": "Commit SHA Copied!",
     "git_graph.copy_tag": "Copy Tag",
     "git_graph.copy_ref_name": "Copy Ref Name",
+    "git_graph.refs": "Refs",
     "git_graph.path_history": "Path History",
     "git_graph.search_commits": "Search commits...",
     "git_graph.title": "Git Graph",
