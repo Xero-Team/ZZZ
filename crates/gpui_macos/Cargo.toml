@@ -13,6 +13,7 @@ path = "src/gpui_macos.rs"
 
 [features]
 default = ["gpui/default"]
+accessibility = ["gpui/accessibility", "dep:accesskit", "dep:accesskit_macos"]
 test-support = ["gpui/test-support"]
 runtime_shaders = []
 font-kit = ["dep:font-kit"]
@@ -22,6 +23,8 @@ screen-capture = ["gpui/screen-capture"]
 gpui.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+accesskit = { workspace = true, optional = true }
+accesskit_macos = { workspace = true, optional = true }
 anyhow.workspace = true
 async-task = "4.7"
 block = "0.1"

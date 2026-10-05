@@ -463,6 +463,7 @@ ztracing_macro = { path = "crates/ztracing_macro" }
 #
 
 accesskit = { version = "0.24.0", features = ["enumn"] }
+accesskit_macos = "0.26.0"
 accesskit_unix = "0.22"
 agent-client-protocol = { version = "=2.2.0", features = ["unstable"] }
 aho-corasick = "1.1"
