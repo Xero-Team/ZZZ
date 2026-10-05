@@ -3298,6 +3298,7 @@
     "inspector_ui.div_inspector.content_size_tooltip": "元素子项的尺寸",
     "markdown_preview.preview_title": "预览 {}",
     "markdown_preview.tab_title": "Markdown 预览",
+    "markdown_preview.tab_menu.show_source": "显示源文件",
     "markdown_preview.copy_link": "复制链接",
     "miniprofiler_ui.save": "保存",
     "repl.notebook.execute_all_cells": "执行所有单元",

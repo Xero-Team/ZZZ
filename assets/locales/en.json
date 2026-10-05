@@ -3298,6 +3298,7 @@
     "inspector_ui.div_inspector.content_size_tooltip": "Size of the element's children",
     "markdown_preview.preview_title": "Preview {}",
     "markdown_preview.tab_title": "Markdown Preview",
+    "markdown_preview.tab_menu.show_source": "Show Source",
     "repl.notebook.execute_all_cells": "Execute all cells",
     "repl.notebook.clear_all_outputs": "Clear all outputs",
     "repl.notebook.move_cell_up": "Move cell up",
