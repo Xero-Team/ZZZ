@@ -930,7 +930,7 @@ mod tests {
             cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
         let workspace =
             multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
-        let mut collector = FrameTimingCollector::new();
+        let mut collector = cx.update(|window, _| FrameTimingCollector::for_window(window));
 
         cx.simulate_keystrokes("cmd-shift-p");
         for query in ["", "b", "ba", "bck", "bcksp"] {

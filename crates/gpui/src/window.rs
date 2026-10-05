@@ -6143,7 +6143,11 @@ mod tests {
         })
         .expect("diagnostics window should remain open");
 
-        let mut collector = FrameTimingCollector::new();
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
         cx.dispatch_keystroke(handle, Keystroke::parse("a").expect("valid keystroke"));
         cx.update_window(handle, |_, window, _| window.present_for_test())
             .expect("diagnostics window should remain open");
@@ -6233,11 +6237,15 @@ mod tests {
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
     fn test_frame_diagnostics_follow_build_through_present(cx: &mut TestAppContext) {
-        let mut collector = FrameTimingCollector::new();
         let window = cx.add_window(|_, _| EmptyView);
         let handle: AnyWindowHandle = window.into();
         let window_id = handle.window_id();
         let test_window = cx.test_window(handle);
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
 
         test_window.simulate_frame_request(RequestFrameOptions::default());
         let initial = collector.snapshot();
@@ -6339,11 +6347,15 @@ mod tests {
     #[cfg(feature = "frame-diagnostics")]
     #[gpui::test]
     fn frame_diagnostics_record_skipped_submission(cx: &mut TestAppContext) {
-        let mut collector = FrameTimingCollector::new();
         let window = cx.add_window(|_, _| EmptyView);
         let handle: AnyWindowHandle = window.into();
         let window_id = handle.window_id();
         let test_window = cx.test_window(handle);
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
         collector.snapshot();
 
         test_window.set_draw_result(false);
@@ -6374,7 +6386,6 @@ mod tests {
     #[gpui::test]
     fn frame_diagnostics_runner(cx: &mut TestAppContext) {
         const ITERATIONS: usize = 100;
-        let mut collector = FrameTimingCollector::new();
         let panel = cx.new(|_| DiagnosticsPanel);
         let window = cx.add_window({
             let panel = panel.clone();
@@ -6385,6 +6396,11 @@ mod tests {
         });
         let handle: AnyWindowHandle = window.into();
         let test_window = cx.test_window(handle);
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("diagnostics window should remain open");
 
         window
             .update(cx, |view, window, cx| view.focus.focus(window, cx))

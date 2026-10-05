@@ -337,7 +337,11 @@ fn main() -> Result<()> {
     }
 
     #[cfg(feature = "frame-diagnostics")]
-    let mut collector = FrameTimingCollector::new();
+    let mut collector = cx
+        .update_window(window, |_, window, _| {
+            FrameTimingCollector::for_window(window)
+        })
+        .context("benchmark editor window should remain open")?;
 
     let cached = measure(0..CACHED_FRAMES, |_| {
         draw_frame(&mut cx, window);

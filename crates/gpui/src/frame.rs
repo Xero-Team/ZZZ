@@ -24,8 +24,9 @@ use std::{
 
 #[cfg(feature = "frame-diagnostics")]
 use crate::profiler::{
-    FrameBuildId, FrameDirtyReason, FrameEvent, FrameInputProvenance, FrameInvalidation,
-    FrameTiming, next_frame_build_id, record_frame_events,
+    FrameBuildId, FrameDiagnosticsSourceId, FrameDirtyReason, FrameEvent, FrameInputProvenance,
+    FrameInvalidation, FrameTiming, next_frame_build_id, next_frame_diagnostics_source_id,
+    record_frame_events,
 };
 #[cfg(feature = "frame-diagnostics")]
 use scheduler::Instant;
@@ -107,6 +108,8 @@ impl FrameScheduler {
 struct WindowInvalidatorInner {
     #[cfg(feature = "frame-diagnostics")]
     pub window_id: crate::WindowId,
+    #[cfg(feature = "frame-diagnostics")]
+    pub source_id: FrameDiagnosticsSourceId,
     pub dirty: bool,
     pub draw_phase: DrawPhase,
     pub dirty_views: FxHashSet<EntityId>,
@@ -184,6 +187,7 @@ impl WindowInvalidator {
         WindowInvalidator {
             inner: Rc::new(RefCell::new(WindowInvalidatorInner {
                 window_id,
+                source_id: next_frame_diagnostics_source_id(),
                 dirty: true,
                 draw_phase: DrawPhase::None,
                 dirty_views: FxHashSet::default(),
@@ -382,8 +386,16 @@ impl WindowInvalidator {
 
     #[cfg(feature = "frame-diagnostics")]
     pub(crate) fn flush_events(&self) {
-        let events = mem::take(&mut self.inner.borrow_mut().events);
-        record_frame_events(&events);
+        let (source_id, events) = {
+            let mut inner = self.inner.borrow_mut();
+            (inner.source_id, mem::take(&mut inner.events))
+        };
+        record_frame_events(source_id, &events);
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    pub(crate) fn frame_diagnostics_source_id(&self) -> FrameDiagnosticsSourceId {
+        self.inner.borrow().source_id
     }
 
     pub fn wake_platform(&self) {
