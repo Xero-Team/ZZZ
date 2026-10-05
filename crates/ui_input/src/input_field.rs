@@ -173,6 +173,65 @@ impl Render for InputField {
             focus_handle
         };
 
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self
+            .label
+            .clone()
+            .unwrap_or_else(|| self.placeholder.clone());
+        let control = h_flex()
+            .id(("input-field-control", cx.entity_id()))
+            .track_focus(&configured_handle)
+            .min_w(self.min_width)
+            .min_h_8()
+            .w_full()
+            .px_2()
+            .py_1p5()
+            .flex_grow()
+            .text_color(style.text_color)
+            .rounded_md()
+            .bg(style.background_color)
+            .border_1()
+            .border_color(style.border_color)
+            .when(
+                editor.focus_handle(cx).contains_focused(window, cx),
+                |this| this.border_color(theme_color.border_focused),
+            )
+            .when_some(self.start_icon, |this, icon| {
+                this.gap_1()
+                    .child(Icon::new(icon).size(IconSize::Small).color(Color::Muted))
+            })
+            .child(self.editor.render(window, cx))
+            .when_some(self.masked, |this, is_masked| {
+                this.child(
+                    IconButton::new(
+                        "toggle-masked",
+                        if is_masked {
+                            IconName::Eye
+                        } else {
+                            IconName::EyeOff
+                        },
+                    )
+                    .icon_size(IconSize::Small)
+                    .icon_color(Color::Muted)
+                    .tooltip(Tooltip::text(if is_masked {
+                        tr(cx, "ui_input.show", "Show")
+                    } else {
+                        tr(cx, "ui_input.hide", "Hide")
+                    }))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if let Some(ref mut masked) = this.masked {
+                            *masked = !*masked;
+                            this.editor.set_masked(*masked, window, cx);
+                            cx.notify();
+                        }
+                    })),
+                )
+            });
+        #[cfg(feature = "accessibility")]
+        let control = control
+            .role(gpui::accesskit::Role::TextInput)
+            .aria_label(accessibility_label);
+
         v_flex()
             .id(self.placeholder.clone())
             .w_full()
@@ -184,58 +243,7 @@ impl Render for InputField {
                         .color(Color::Default),
                 )
             })
-            .child(
-                h_flex()
-                    .track_focus(&configured_handle)
-                    .min_w(self.min_width)
-                    .min_h_8()
-                    .w_full()
-                    .px_2()
-                    .py_1p5()
-                    .flex_grow()
-                    .text_color(style.text_color)
-                    .rounded_md()
-                    .bg(style.background_color)
-                    .border_1()
-                    .border_color(style.border_color)
-                    .when(
-                        editor.focus_handle(cx).contains_focused(window, cx),
-                        |this| this.border_color(theme_color.border_focused),
-                    )
-                    .when_some(self.start_icon, |this, icon| {
-                        this.gap_1()
-                            .child(Icon::new(icon).size(IconSize::Small).color(Color::Muted))
-                    })
-                    .child(self.editor.render(window, cx))
-                    .when_some(self.masked, |this, is_masked| {
-                        this.child(
-                            IconButton::new(
-                                "toggle-masked",
-                                if is_masked {
-                                    IconName::Eye
-                                } else {
-                                    IconName::EyeOff
-                                },
-                            )
-                            .icon_size(IconSize::Small)
-                            .icon_color(Color::Muted)
-                            .tooltip(Tooltip::text(if is_masked {
-                                tr(cx, "ui_input.show", "Show")
-                            } else {
-                                tr(cx, "ui_input.hide", "Hide")
-                            }))
-                            .on_click(cx.listener(
-                                |this, _, window, cx| {
-                                    if let Some(ref mut masked) = this.masked {
-                                        *masked = !*masked;
-                                        this.editor.set_masked(*masked, window, cx);
-                                        cx.notify();
-                                    }
-                                },
-                            )),
-                        )
-                    }),
-            )
+            .child(control)
     }
 }
 
@@ -305,5 +313,35 @@ mod tests {
                 assert_eq!(field.text(cx), "");
             })
             .expect("test window should remain open");
+    }
+
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn input_field_emits_text_input_semantics(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+        let (_field, cx) = cx.add_window_view(|window, cx| {
+            let field = InputField::new(window, cx, "Filter").label("Search");
+            field.focus_handle(cx).focus(window, cx);
+            field
+        });
+        let snapshot = cx.update(|window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("input semantic snapshot should exist")
+        });
+        let (node_id, node) = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == gpui::accesskit::Role::TextInput)
+            .expect("text input semantic node should exist");
+        assert_eq!(node.label(), Some("Search"));
+        assert_eq!(snapshot.focused_node, *node_id);
     }
 }

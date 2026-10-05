@@ -17365,6 +17365,9 @@ dependencies = [
  "i18n",
  "log",
  "parking_lot",
+ "settings",
+ "theme",
+ "theme_settings",
  "ui",
  "ui_component_registry",
 ]
@@ -20954,6 +20957,7 @@ dependencies = [
  "tracing",
  "ui",
  "ui_component_registry",
+ "ui_input",
  "ui_prompt",
  "url",
  "urlencoding",
