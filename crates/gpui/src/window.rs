@@ -2582,7 +2582,7 @@ impl Window {
                 .update_accessibility(built_frame.accessibility.clone())
                 .log_err();
         }
-        let submission = crate::render_api::submit_compat(
+        let submission = crate::render_api::submit_platform_frame(
             self.platform_window.as_mut(),
             crate::render_api::RenderScene::new(built_frame.scene),
         );

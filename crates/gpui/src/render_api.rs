@@ -28,9 +28,9 @@ pub(crate) trait Renderer {
     fn submit(&mut self, scene: RenderScene<'_>, target: &mut dyn RenderTarget) -> FrameSubmission;
 }
 
-struct CompatibilityRenderer;
+struct PlatformRenderer;
 
-impl Renderer for CompatibilityRenderer {
+impl Renderer for PlatformRenderer {
     fn submit(&mut self, scene: RenderScene<'_>, target: &mut dyn RenderTarget) -> FrameSubmission {
         FrameSubmission {
             submitted: target.submit_scene(scene),
@@ -48,13 +48,17 @@ impl RenderTarget for PlatformWindowTarget<'_> {
     }
 }
 
-/// Submit through the existing `PlatformWindow::draw` adapter while the backends migrate.
-pub(crate) fn submit_compat(
+/// Submit a completed frame through the stable platform-window façade.
+///
+/// EXP-004/005 retained `render_api` as an internal module, so this adapter is the intentional
+/// boundary between the backend-neutral renderer contract and platform crates rather than a
+/// temporary migration path.
+pub(crate) fn submit_platform_frame(
     window: &mut dyn PlatformWindow,
     scene: RenderScene<'_>,
 ) -> FrameSubmission {
     let mut target = PlatformWindowTarget { window };
-    CompatibilityRenderer.submit(scene, &mut target)
+    PlatformRenderer.submit(scene, &mut target)
 }
 
 #[cfg(test)]
@@ -78,7 +82,7 @@ mod tests {
             let mut target = TestRenderTarget {
                 submission_result: submitted,
             };
-            let result = CompatibilityRenderer.submit(RenderScene::new(&scene), &mut target);
+            let result = PlatformRenderer.submit(RenderScene::new(&scene), &mut target);
             assert_eq!(result.submitted, submitted);
         }
     }
