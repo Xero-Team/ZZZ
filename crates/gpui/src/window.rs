@@ -5843,9 +5843,9 @@ mod tests {
     use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
-        AnyView, App, Entity, FrameEvent, FrameInputProvenance, FramePhase, FrameTimingCollector,
-        InputHandler, KeyDownEvent, Keystroke, PlatformInput, Point, StyleRefinement,
-        TextInputClient, UTF16Selection,
+        AnyView, App, Entity, FrameDirtyReason, FrameEvent, FrameInputProvenance,
+        FrameInvalidationPhase, FramePhase, FrameTimingCollector, InputHandler, KeyDownEvent,
+        Keystroke, PlatformInput, Point, StyleRefinement, TextInputClient, UTF16Selection,
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
@@ -6277,6 +6277,12 @@ mod tests {
             event,
             FrameEvent::Invalidated(invalidation)
                 if invalidation.window_id == window_id
+                    && invalidation.reason.earliest_phase() == FrameInvalidationPhase::Layout
+        )));
+        assert!(initial.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if invalidation.window_id == window_id
                     && invalidation.build_id == initial_build_id
         )));
         assert!(initial.events.iter().any(|event| matches!(
@@ -6314,6 +6320,16 @@ mod tests {
             event,
             FrameEvent::Invalidated(invalidation)
                 if invalidation.window_id == window_id && invalidation.coalesced
+        )));
+        assert!(coalesced.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Invalidated(invalidation)
+                if matches!(
+                    invalidation.reason,
+                    FrameDirtyReason::WindowRefresh {
+                        earliest_phase: FrameInvalidationPhase::Layout
+                    }
+                )
         )));
 
         cx.update_window(handle, |_, window, cx| {

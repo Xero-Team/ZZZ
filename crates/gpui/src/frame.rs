@@ -25,8 +25,8 @@ use std::{
 #[cfg(feature = "frame-diagnostics")]
 use crate::profiler::{
     FrameBuildId, FrameDiagnosticsSourceId, FrameDirtyReason, FrameEvent, FrameInputProvenance,
-    FrameInvalidation, FrameTiming, next_frame_build_id, next_frame_diagnostics_source_id,
-    record_frame_events,
+    FrameInvalidation, FrameInvalidationPhase, FrameTiming, next_frame_build_id,
+    next_frame_diagnostics_source_id, record_frame_events,
 };
 #[cfg(feature = "frame-diagnostics")]
 use scheduler::Instant;
@@ -228,7 +228,13 @@ impl WindowInvalidator {
         inner.update_count += 1;
         inner.dirty_views.insert(entity);
         #[cfg(feature = "frame-diagnostics")]
-        Self::record_invalidation(&mut inner, Some(entity), FrameDirtyReason::EntityNotify);
+        Self::record_invalidation(
+            &mut inner,
+            Some(entity),
+            FrameDirtyReason::EntityNotify {
+                earliest_phase: FrameInvalidationPhase::Layout,
+            },
+        );
         if inner.draw_phase == DrawPhase::None {
             let became_dirty = !inner.dirty;
             inner.dirty = true;
@@ -255,7 +261,13 @@ impl WindowInvalidator {
         if dirty {
             inner.update_count += 1;
             #[cfg(feature = "frame-diagnostics")]
-            Self::record_invalidation(&mut inner, None, FrameDirtyReason::WindowRefresh);
+            Self::record_invalidation(
+                &mut inner,
+                None,
+                FrameDirtyReason::WindowRefresh {
+                    earliest_phase: FrameInvalidationPhase::Layout,
+                },
+            );
         }
         let waker = became_dirty.then(|| inner.platform_waker.clone()).flatten();
         drop(inner);

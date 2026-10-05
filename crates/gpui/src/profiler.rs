@@ -444,9 +444,42 @@ pub enum FrameDirtyReason {
     /// The initial frame required when a window opens.
     Initial,
     /// An entity observed by the window emitted a notification.
-    EntityNotify,
+    EntityNotify {
+        /// The earliest frame phase that must be rebuilt.
+        earliest_phase: FrameInvalidationPhase,
+    },
     /// The window requested a complete refresh.
-    WindowRefresh,
+    WindowRefresh {
+        /// The earliest frame phase that must be rebuilt.
+        earliest_phase: FrameInvalidationPhase,
+    },
+}
+
+/// The earliest frame phase affected by an invalidation.
+#[cfg(feature = "frame-diagnostics")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameInvalidationPhase {
+    /// Layout and every later phase must be rebuilt.
+    Layout,
+    /// Prepaint, paint, and accessibility output must be rebuilt.
+    Prepaint,
+    /// Paint output must be rebuilt.
+    Paint,
+    /// Only accessibility output must be rebuilt.
+    Accessibility,
+}
+
+#[cfg(feature = "frame-diagnostics")]
+impl FrameDirtyReason {
+    /// Returns the earliest phase affected by this invalidation.
+    pub fn earliest_phase(self) -> FrameInvalidationPhase {
+        match self {
+            Self::Initial => FrameInvalidationPhase::Layout,
+            Self::EntityNotify { earliest_phase } | Self::WindowRefresh { earliest_phase } => {
+                earliest_phase
+            }
+        }
+    }
 }
 
 /// Classifies the input event that caused an invalidation.
