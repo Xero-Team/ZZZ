@@ -467,15 +467,17 @@ pub fn resolve_device(
 
 pub fn open_test_output(device_id: Option<DeviceId>) -> anyhow::Result<MixerDeviceSink> {
     let device = resolve_device(device_id.as_ref(), AudioDeviceKind::Output)?;
-    DeviceSinkBuilder::from_device(device)?
-        .open_stream()
+    let builder = DeviceSinkBuilder::from_device(device)?;
+    builder
+        .open_sink_or_fallback()
         .context("Could not open output stream")
 }
 
 pub fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<(MixerDeviceSink, Mixer)> {
     let device = resolve_device(device_id.as_ref(), AudioDeviceKind::Output)?;
-    let mut output_handle = DeviceSinkBuilder::from_device(device)?
-        .open_stream()
+    let builder = DeviceSinkBuilder::from_device(device)?;
+    let mut output_handle = builder
+        .open_sink_or_fallback()
         .context("Could not open output stream")?;
     output_handle.log_on_drop(false);
     log::info!("Output stream: {:?}", output_handle);
