@@ -68,6 +68,18 @@ profile directory). `--deb` uses `cargo-deb` and `--rpm` uses
 `ZZZ_BUILD_JOBS` to override the number of parallel Cargo jobs, or
 `ZZZ_CROSS_BUILD_JOBS` to limit each optional cross-target build.
 
+To build every Linux format through one preflighted entrypoint, use:
+
+```sh
+cargo install --locked --version 0.26.11 tree-sitter-cli
+script/bundle-all-linux
+```
+
+The wrapper checks all required packagers before starting the build and prints
+the exact missing-tool command if the environment is incomplete. Use
+`--skip-flatpak`, `--skip-snap`, or `--skip-appimage` when only selected
+formats are needed.
+
 The release bundle downloads a pinned LGPL FFmpeg package into
 `.deps/ffmpeg/<target-triple>` and includes its runtime libraries. Set
 `FFMPEG_DIR` to use another development package, or `ZZZ_FFMPEG_ROOT` to move

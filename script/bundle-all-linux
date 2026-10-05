@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+workspace_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$workspace_root"
+
+skip_appimage=false
+skip_flatpak=false
+skip_snap=false
+
+help_info() {
+    cat <<'EOF'
+Usage: script/bundle-all-linux [options]
+
+Build all supported Linux package formats from one release build:
+
+  tar.gz, deb, rpm, AppImage, Flatpak, and Snap.
+
+Options:
+  -h, --help       Show this help.
+  --skip-appimage  Do not build the AppImage.
+  --skip-flatpak   Do not build the Flatpak.
+  --skip-snap      Do not build the Snap.
+
+Environment:
+  CARGO_BUILD_JOBS              Main Cargo parallelism; defaults to nproc.
+  ZZZ_CROSS_BUILD_JOBS          Parallelism per optional cross-target build.
+  ZZZ_SNAP_ARCHIVE              Override the local tarball used by Snapcraft.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            help_info
+            exit 0
+            ;;
+        --skip-appimage)
+            skip_appimage=true
+            shift
+            ;;
+        --skip-flatpak)
+            skip_flatpak=true
+            shift
+            ;;
+        --skip-snap)
+            skip_snap=true
+            shift
+            ;;
+        *)
+            echo "Error: unknown option: $1" >&2
+            help_info >&2
+            exit 2
+            ;;
+    esac
+done
+
+on_error() {
+    local exit_code=$?
+    echo "ERROR: Linux packaging stopped at line ${BASH_LINENO[0]}: ${BASH_COMMAND}" >&2
+    echo "ERROR: exit code ${exit_code}" >&2
+    exit "$exit_code"
+}
+trap on_error ERR
+
+require_command() {
+    local command_name="$1"
+    local install_hint="$2"
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        echo "Error: required command '$command_name' is missing." >&2
+        echo "Install with: ${install_hint}" >&2
+        exit 1
+    fi
+}
+
+require_command cargo "rustup/toolchain setup"
+require_command nproc "coreutils"
+require_command tree-sitter "cargo install --locked --version 0.26.11 tree-sitter-cli"
+require_command cargo-deb "cargo install cargo-deb --version 3.8.0 --locked"
+require_command cargo-generate-rpm "cargo install cargo-generate-rpm --version 0.21.0 --locked"
+
+if [[ "$(tree-sitter --version | awk '{print $2}')" != "$(sed -n 's/^tree-sitter-cli-version = "\([^"]*\)"/\1/p' crates/grammars/vendor/manifest.toml)" ]]; then
+    echo "Error: tree-sitter 0.26.11 is required; install it with:" >&2
+    echo "cargo install --locked --version 0.26.11 tree-sitter-cli" >&2
+    exit 1
+fi
+
+if [[ "$(cargo-deb --version | awk '{print $2}')" != "${ZZZ_CARGO_DEB_VERSION:-3.8.0}" ]]; then
+    echo "Error: cargo-deb 3.8.0 is required." >&2
+    exit 1
+fi
+if [[ "$(cargo-generate-rpm --version | awk '{print $2}')" != "${ZZZ_CARGO_GENERATE_RPM_VERSION:-0.21.0}" ]]; then
+    echo "Error: cargo-generate-rpm 0.21.0 is required." >&2
+    exit 1
+fi
+
+if [[ "$skip_appimage" == false ]]; then
+    require_command sha256sum "coreutils"
+fi
+if [[ "$skip_flatpak" == false ]]; then
+    require_command flatpak "sudo apt install flatpak"
+    require_command flatpak-builder "sudo apt install flatpak-builder"
+    require_command envsubst "sudo apt install gettext-base"
+fi
+if [[ "$skip_snap" == false ]]; then
+    require_command snapcraft "sudo snap install snapcraft --classic"
+fi
+
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(nproc)}"
+export ZZZ_CROSS_BUILD_JOBS="${ZZZ_CROSS_BUILD_JOBS:-$(( (CARGO_BUILD_JOBS + 1) / 2 ))}"
+
+echo "==> Fetching locked Cargo dependencies"
+cargo fetch --locked
+
+echo "==> Building tar.gz, DEB, and RPM"
+CARGO_NET_OFFLINE=true ./script/bundle-linux --deb --rpm
+
+architecture="$(uname -m)"
+archive="${workspace_root}/target/release/zzz-linux-${architecture}.tar.gz"
+if [[ ! -f "$archive" ]]; then
+    echo "Error: expected Linux archive was not created: $archive" >&2
+    exit 1
+fi
+
+if [[ "$skip_appimage" == false ]]; then
+    echo "==> Building AppImage"
+    ./script/bundle-appimage --skip-build
+fi
+
+if [[ "$skip_flatpak" == false ]]; then
+    echo "==> Preparing Flatpak runtime"
+    ./script/flatpak/deps
+    echo "==> Building Flatpak"
+    ZZZ_SKIP_BUNDLE=1 ./script/flatpak/bundle-flatpak
+fi
+
+if [[ "$skip_snap" == false ]]; then
+    echo "==> Building Snap"
+    version="$(./script/get-crate-version zzz)"
+    ZZZ_SNAP_ARCHIVE="${ZZZ_SNAP_ARCHIVE:-$archive}" ./script/snap-build "$version"
+fi
+
+echo
+echo "Linux packages created:"
+find "${workspace_root}/target/release" -maxdepth 1 -type f \
+    \( -name '*.tar.gz' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.flatpak' \) \
+    -printf '  %f\n' | sort
+echo "Snap output is written to the repository root by snapcraft."

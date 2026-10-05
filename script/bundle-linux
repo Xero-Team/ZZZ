@@ -133,6 +133,14 @@ if [[ "$package_rpm" == true ]]; then
     fi
 fi
 
+expected_tree_sitter_version="$(sed -n 's/^tree-sitter-cli-version = "\([^"]*\)"/\1/p' crates/grammars/vendor/manifest.toml)"
+actual_tree_sitter_version="$(tree-sitter --version 2>/dev/null | awk '{print $2}' || true)"
+if [[ -z "$expected_tree_sitter_version" || "$actual_tree_sitter_version" != "$expected_tree_sitter_version" ]]; then
+    echo "Error: tree-sitter ${expected_tree_sitter_version} is required; found ${actual_tree_sitter_version:-missing}." >&2
+    echo "Install it with: cargo install --locked --version ${expected_tree_sitter_version} tree-sitter-cli" >&2
+    exit 1
+fi
+
 cargo xtask grammars generate
 
 version="$(script/get-crate-version zzz)"
