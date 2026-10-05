@@ -7,6 +7,12 @@ if [ "$#" -ne 1 ]; then
   exit 1
 fi
 
+if ! command -v snapcraft >/dev/null 2>&1; then
+  echo "Error: Snap packaging requires snapcraft on PATH." >&2
+  echo "Install with: sudo snap install snapcraft --classic" >&2
+  exit 1
+fi
+
 workspace_root="$(pwd)"
 if [[ -z "${ZZZ_SNAP_ARCHIVE:-}" ]]; then
   script/bundle-linux

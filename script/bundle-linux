@@ -121,7 +121,8 @@ if [[ "$package_deb" == true ]]; then
     fi
 fi
 if [[ "$package_rpm" == true ]] && ! command -v cargo-generate-rpm >/dev/null 2>&1; then
-    echo "Error: --rpm requires cargo-generate-rpm on PATH; install it before running bundle-linux." >&2
+    echo "Error: --rpm requires cargo-generate-rpm 0.21.0 on PATH." >&2
+    echo "Install it with: cargo install cargo-generate-rpm --version 0.21.0 --locked" >&2
     exit 1
 fi
 if [[ "$package_rpm" == true ]]; then

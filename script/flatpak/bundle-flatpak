@@ -4,6 +4,21 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 shopt -s extglob
 
+for required_tool in flatpak flatpak-builder envsubst; do
+    if ! command -v "$required_tool" >/dev/null 2>&1; then
+        echo "Error: Flatpak packaging requires '$required_tool' on PATH." >&2
+        case "$required_tool" in
+            flatpak|flatpak-builder)
+                echo "Install with: sudo apt install flatpak flatpak-builder" >&2
+                ;;
+            envsubst)
+                echo "Install with: sudo apt install gettext-base" >&2
+                ;;
+        esac
+        exit 1
+    fi
+done
+
 if [[ "${ZZZ_SKIP_BUNDLE:-}" != "1" ]]; then
     script/bundle-linux --flatpak
 fi
