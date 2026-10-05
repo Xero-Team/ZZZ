@@ -789,8 +789,7 @@ impl settings::Settings for ThemeSettings {
                 .map(ThemeSelection::from),
             markdown_preview_heading_font_weight: markdown_preview
                 .and_then(|preview| preview.heading_font_weight)
-                .map(|weight| weight.into_gpui())
-                .unwrap_or(FontWeight::SEMIBOLD),
+                .map_or(FontWeight::SEMIBOLD, |weight| weight.into_gpui()),
             theme: theme_selection,
             experimental_theme_overrides: content.experimental_theme_overrides.clone(),
             theme_overrides: content.theme_overrides.clone(),
