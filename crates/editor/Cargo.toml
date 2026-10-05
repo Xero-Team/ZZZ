@@ -13,6 +13,7 @@ path = "src/editor.rs"
 doctest = false
 
 [features]
+accessibility = ["gpui/accessibility"]
 frame-diagnostics = ["gpui/frame-diagnostics"]
 test-support = [
     "text/test-support",

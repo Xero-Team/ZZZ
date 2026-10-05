@@ -256,6 +256,15 @@ pub struct EditorElement {
     editor: Entity<Editor>,
     style: EditorStyle,
     split_side: Option<SplitSide>,
+    #[cfg(feature = "accessibility")]
+    accessibility: Option<EditorAccessibility>,
+}
+
+#[cfg(feature = "accessibility")]
+struct EditorAccessibility {
+    role: gpui::accesskit::Role,
+    label: SharedString,
+    focus_handle: gpui::FocusHandle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,7 +281,24 @@ impl EditorElement {
             editor: editor.clone(),
             style,
             split_side: None,
+            #[cfg(feature = "accessibility")]
+            accessibility: None,
         }
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub fn accessibility(
+        mut self,
+        role: gpui::accesskit::Role,
+        label: impl Into<SharedString>,
+        focus_handle: gpui::FocusHandle,
+    ) -> Self {
+        self.accessibility = Some(EditorAccessibility {
+            role,
+            label: label.into(),
+            focus_handle,
+        });
+        self
     }
 
     pub fn set_split_side(&mut self, side: SplitSide) {
@@ -9889,11 +9915,38 @@ impl Element for EditorElement {
     type PrepaintState = EditorLayout;
 
     fn id(&self) -> Option<ElementId> {
+        #[cfg(feature = "accessibility")]
+        if self.accessibility.is_some() {
+            return Some(("editor-element", self.editor.entity_id()).into());
+        }
         None
     }
 
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
         None
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn a11y_role(&self) -> Option<gpui::accesskit::Role> {
+        self.accessibility
+            .as_ref()
+            .map(|accessibility| accessibility.role)
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn write_a11y_info(&self, node: &mut gpui::accesskit::Node) {
+        if let Some(accessibility) = &self.accessibility {
+            node.set_label(accessibility.label.to_string());
+            node.add_action(gpui::accesskit::Action::Focus);
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn register_a11y_actions(&mut self, node_id: gpui::accesskit::NodeId, window: &mut Window) {
+        let Some(accessibility) = &self.accessibility else {
+            return;
+        };
+        window.register_accessibility_focus(node_id, accessibility.focus_handle.clone());
     }
 
     fn request_layout(

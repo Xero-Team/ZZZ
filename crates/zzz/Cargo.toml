@@ -210,6 +210,7 @@ zlog.workspace = true
 zlog_settings.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
+editor = { workspace = true, features = ["accessibility"] }
 etw_tracing.workspace = true
 windows.workspace = true
 gpui = { workspace = true, features = [
@@ -226,6 +227,7 @@ ui_input = { workspace = true, features = ["accessibility"] }
 windows_resources = { path = "../windows_resources" }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+editor = { workspace = true, features = ["accessibility"] }
 gpui = { workspace = true, features = [
     "accessibility",
     "input-latency-histogram",
@@ -240,6 +242,7 @@ ashpd.workspace = true
 image.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+editor = { workspace = true, features = ["accessibility"] }
 gpui = { workspace = true, features = ["accessibility"] }
 gpui_platform = { workspace = true, features = ["accessibility"] }
 ui = { workspace = true, features = ["accessibility"] }

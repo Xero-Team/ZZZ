@@ -1674,6 +1674,32 @@ impl Window {
         handled
     }
 
+    /// Connects a semantic node to GPUI keyboard focus.
+    #[cfg(feature = "accessibility")]
+    #[doc(hidden)]
+    pub fn register_accessibility_focus(
+        &mut self,
+        node_id: accesskit::NodeId,
+        focus_handle: FocusHandle,
+    ) {
+        if focus_handle.is_focused(self)
+            && let Err(error) = self
+                .interaction
+                .next_frame
+                .accessibility_builder
+                .set_focus(node_id)
+        {
+            log::error!("failed to map semantic focus: {error:?}");
+        }
+        self.interaction.next_frame.accessibility_actions.register(
+            node_id,
+            accesskit::Action::Focus,
+            move |_, window, cx| {
+                focus_handle.focus(window, cx);
+            },
+        );
+    }
+
     /// Returns the completed semantic snapshot for integration tests.
     #[cfg(all(feature = "accessibility", any(test, feature = "test-support")))]
     pub fn accessibility_snapshot_for_test(
