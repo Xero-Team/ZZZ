@@ -10,17 +10,17 @@ use futures::future::join_all;
 use gpui::{App, Entity, Pixels, Task};
 use itertools::Itertools;
 use language::{
-    BufferRow,
+    BufferRow, BufferSnapshot,
     language_settings::{InlayHintKind, InlayHintSettings},
 };
 use lsp::LanguageServerId;
 use multi_buffer::{Anchor, MultiBufferSnapshot};
 use project::{
-    CodeAction, HoverBlock, HoverBlockKind, InlayHintLabel, InlayHintLabelPartTooltip,
+    CodeAction, HoverBlock, HoverBlockKind, InlayHint, InlayHintLabel, InlayHintLabelPartTooltip,
     InlayHintTooltip, InvalidationStrategy, LspAction, ResolveState,
     lsp_store::{CacheInlayHints, ResolvedHint},
 };
-use text::{Bias, BufferId};
+use text::{Bias, BufferId, ToOffset};
 use ui::{Context, Window};
 use util::debug_panic;
 
@@ -893,14 +893,11 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let multi_buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let visible_inlay_hint_ids = Self::visible_inlay_hints(self.display_map.read(cx))
-            .filter(|inlay| {
-                multi_buffer_snapshot
-                    .anchor_to_buffer_anchor(inlay.position)
-                    .map(|(anchor, _)| anchor.buffer_id)
-                    == Some(buffer_id)
+        let visible_hints_for_buffer = Self::visible_inlay_hints(self.display_map.read(cx))
+            .filter_map(|inlay| {
+                let (anchor, _) = multi_buffer_snapshot.anchor_to_buffer_anchor(inlay.position)?;
+                (anchor.buffer_id == buffer_id).then_some((inlay, anchor))
             })
-            .map(|inlay| inlay.id)
             .collect::<Vec<_>>();
         let Some(inlay_hints) = &mut self.inlay_hints else {
             return;
@@ -924,7 +921,12 @@ impl Editor {
         // Another issue is in the fact that changing one buffer may lead to other buffers' hints changing, so more cache entries may be removed.
         // Hence, clear all excerpts' hints in the multi buffer: later, the invalidated ones will re-trigger the LSP query, the rest will be restored
         // from the cache.
-        if invalidate_cache.should_invalidate() {
+        let invalidating = invalidate_cache.should_invalidate();
+        if invalidating {
+            let visible_inlay_hint_ids = visible_hints_for_buffer.iter().map(|(inlay, _)| inlay.id);
+            for hint_id in visible_inlay_hint_ids.clone() {
+                inlay_hints.added_hints.remove(&hint_id);
+            }
             hints_to_remove.extend(visible_inlay_hint_ids);
 
             // When invalidating, this task removes ALL visible hints for the buffer
@@ -940,8 +942,23 @@ impl Editor {
             }
         }
 
-        let mut inserted_hint_text = HashMap::default();
-        let new_hints = new_hints
+        let surviving_visible_hints = if invalidating
+            || inlay_hints
+                .invalidate_hints_for_buffers
+                .contains(&buffer_id)
+        {
+            Vec::new()
+        } else {
+            visible_hints_for_buffer
+                .into_iter()
+                .map(|(inlay, anchor)| {
+                    let offset = anchor.to_offset(&buffer_snapshot);
+                    (inlay, anchor.bias, offset)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut new_hints = new_hints
             .into_iter()
             .filter_map(|(chunk_range, hints_result)| {
                 let chunks_fetched = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id);
@@ -967,53 +984,91 @@ impl Editor {
                     }
                 }
             })
-            .flat_map(|new_hints| {
-                let mut hints_deduplicated = Vec::new();
+            .flat_map(|hints_by_server| {
+                hints_by_server.into_iter().flat_map(|(server_id, hints)| {
+                    let buffer_snapshot = &buffer_snapshot;
+                    hints.into_iter().map(move |(hint_id, hint)| {
+                        let offset = hint.position.to_offset(buffer_snapshot);
+                        (server_id, hint_id, hint, offset)
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
 
-                if new_hints.len() > 1 {
-                    for (server_id, new_hints) in new_hints {
-                        for (new_id, new_hint) in new_hints {
-                            let hints_text_for_position = inserted_hint_text
-                                .entry(new_hint.position)
-                                .or_insert_with(HashMap::default);
-                            let insert =
-                                match hints_text_for_position.entry(new_hint.text().to_string()) {
-                                    hash_map::Entry::Occupied(o) => o.get() == &server_id,
-                                    hash_map::Entry::Vacant(v) => {
-                                        v.insert(server_id);
-                                        true
-                                    }
-                                };
+        let rebiased_inlays = normalize_hint_biases(
+            &mut new_hints,
+            surviving_visible_hints,
+            &buffer_snapshot,
+            &multi_buffer_snapshot,
+        );
 
-                            if insert {
-                                hints_deduplicated.push((new_id, new_hint));
-                            }
-                        }
+        let rebiased_kinds = rebiased_inlays
+            .iter()
+            .filter_map(|inlay| {
+                let kind = inlay_hints
+                    .added_hints
+                    .get(&inlay.id)
+                    .copied()
+                    .or_else(|| {
+                        new_hints
+                            .iter()
+                            .find(|(_, hint_id, _, _)| *hint_id == inlay.id)
+                            .map(|(_, _, hint, _)| hint.kind)
+                    })?;
+                Some((inlay.id, kind))
+            })
+            .collect::<Vec<_>>();
+        hints_to_remove.extend(rebiased_inlays.iter().map(|inlay| inlay.id));
+
+        let mut seen_ids = rebiased_inlays
+            .iter()
+            .map(|inlay| inlay.id)
+            .collect::<HashSet<InlayId>>();
+
+        new_hints.sort_by_key(|(_, hint_id, _, _)| {
+            !(inlay_hints.added_hints.contains_key(hint_id) || seen_ids.contains(hint_id))
+        });
+
+        let mut inserted_hint_text: HashMap<usize, HashMap<String, LanguageServerId>> =
+            HashMap::default();
+        let new_hints = new_hints
+            .into_iter()
+            .filter(|(_, _, hint, _)| {
+                should_show && inlay_hints.allowed_hint_kinds.contains(&hint.kind)
+            })
+            .filter(|(server_id, _, hint, offset)| {
+                match inserted_hint_text
+                    .entry(*offset)
+                    .or_default()
+                    .entry(hint.text().to_string())
+                {
+                    hash_map::Entry::Occupied(occupied) => occupied.get() == server_id,
+                    hash_map::Entry::Vacant(vacant) => {
+                        vacant.insert(*server_id);
+                        true
                     }
-                } else {
-                    hints_deduplicated.extend(new_hints.into_values().flatten());
                 }
-
-                hints_deduplicated
             })
-            .filter(|(hint_id, lsp_hint)| {
-                should_show
-                    && inlay_hints.allowed_hint_kinds.contains(&lsp_hint.kind)
-                    && inlay_hints
-                        .added_hints
-                        .insert(*hint_id, lsp_hint.kind)
-                        .is_none()
+            .filter(|(_, hint_id, _, _)| {
+                !inlay_hints.added_hints.contains_key(hint_id) && seen_ids.insert(*hint_id)
             })
+            .map(|(_, hint_id, hint, _)| (hint_id, hint))
             .sorted_by(|(_, a), (_, b)| a.position.cmp(&b.position, &buffer_snapshot))
             .collect::<Vec<_>>();
 
-        let hints_to_insert = multi_buffer_snapshot
-            .text_anchors_to_visible_anchors(
-                new_hints.iter().map(|(_, lsp_hint)| lsp_hint.position),
-            )
+        let hints_to_insert: Vec<Inlay> = rebiased_inlays
             .into_iter()
-            .zip(&new_hints)
-            .filter_map(|(position, (hint_id, hint))| Some(Inlay::hint(*hint_id, position?, &hint)))
+            .chain(
+                multi_buffer_snapshot
+                    .text_anchors_to_visible_anchors(
+                        new_hints.iter().map(|(_, hint)| hint.position),
+                    )
+                    .into_iter()
+                    .zip(&new_hints)
+                    .filter_map(|(position, (hint_id, hint))| {
+                        Some(Inlay::hint(*hint_id, position?, hint))
+                    }),
+            )
             .collect();
         let invalidate_hints_for_buffers =
             std::mem::take(&mut inlay_hints.invalidate_hints_for_buffers);
@@ -1032,7 +1087,61 @@ impl Editor {
         }
 
         self.splice_inlays(&hints_to_remove, hints_to_insert, cx);
+
+        if let Some(inlay_hints) = &mut self.inlay_hints {
+            let fetched = new_hints.iter().map(|(id, hint)| (*id, hint.kind));
+            inlay_hints
+                .added_hints
+                .extend(rebiased_kinds.into_iter().chain(fetched));
+        }
     }
+}
+
+fn normalize_hint_biases(
+    new_hints: &mut [(LanguageServerId, InlayId, InlayHint, usize)],
+    displayed_hints: Vec<(Inlay, Bias, usize)>,
+    buffer_snapshot: &BufferSnapshot,
+    multi_buffer_snapshot: &MultiBufferSnapshot,
+) -> Vec<Inlay> {
+    let mut bias_by_offset: HashMap<usize, Bias> = HashMap::default();
+    let fetched = new_hints
+        .iter()
+        .map(|(_, _, hint, offset)| (*offset, hint.position.bias));
+    let displayed = displayed_hints
+        .iter()
+        .map(|(_, bias, offset)| (*offset, *bias));
+    for (offset, bias) in fetched.chain(displayed) {
+        bias_by_offset
+            .entry(offset)
+            .and_modify(|existing| {
+                if *existing != bias {
+                    *existing = Bias::Right;
+                }
+            })
+            .or_insert(bias);
+    }
+
+    for (_, _, hint, offset) in new_hints.iter_mut() {
+        if bias_by_offset.get(offset) == Some(&Bias::Right) {
+            hint.position = hint.position.bias_right(buffer_snapshot);
+        }
+    }
+
+    let offsets_to_rebias = displayed_hints
+        .iter()
+        .filter(|(_, bias, offset)| {
+            *bias == Bias::Left && bias_by_offset.get(offset) == Some(&Bias::Right)
+        })
+        .map(|(_, _, offset)| *offset)
+        .collect::<HashSet<_>>();
+    displayed_hints
+        .into_iter()
+        .filter(|(_, _, offset)| offsets_to_rebias.contains(offset))
+        .map(|(inlay, _, _)| Inlay {
+            position: inlay.position.bias_right(multi_buffer_snapshot),
+            ..inlay
+        })
+        .collect()
 }
 
 #[derive(Debug)]
@@ -1101,28 +1210,30 @@ fn spawn_editor_hints_refresh(
 
 #[cfg(test)]
 pub mod tests {
-    use super::{HoveredInlayHintCommand, LspInlayHintData};
+    use super::{HoveredInlayHintCommand, LspInlayHintData, normalize_hint_biases};
     use crate::editor_tests::update_test_language_settings;
     use crate::hover_links::InlayHighlight;
     use crate::inlays::inlay_hints::InlayHintRefreshReason;
     use crate::scroll::Autoscroll;
     use crate::scroll::ScrollAmount;
     use crate::test::editor_lsp_test_context::EditorLspTestContext;
-    use crate::{Editor, SelectionEffects};
+    use crate::{Editor, Inlay, SelectionEffects};
     use collections::HashSet;
     use futures::channel::oneshot;
     use futures::{StreamExt, future};
     use gpui::{AppContext as _, Context, TestAppContext, UpdateGlobal, WindowHandle};
     use itertools::Itertools as _;
     use language::language_settings::{InlayHintKind, InlayHintSettings};
-    use language::{Capability, FakeLspAdapter};
+    use language::{Buffer, Capability, FakeLspAdapter};
     use language::{Language, LanguageConfig, LanguageMatcher};
     use languages::rust_lang;
     use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT, FakeLanguageServer, LanguageServerId};
     use multi_buffer::{MultiBuffer, MultiBufferOffset, PathKey};
     use parking_lot::Mutex;
     use pretty_assertions::assert_eq;
-    use project::{CodeAction, FakeFs, InlayId, LspAction, Project};
+    use project::{
+        CodeAction, FakeFs, InlayHint, InlayHintLabel, InlayId, LspAction, Project, ResolveState,
+    };
     use serde_json::json;
     use settings::{
         AllLanguageSettingsContent, InlayHintSettingsContent, SettingsContent, SettingsStore,
@@ -1131,10 +1242,69 @@ pub mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
     use std::time::Duration;
-    use text::{BufferId, OffsetRangeExt, Point};
+    use text::{Bias, BufferId, OffsetRangeExt, Point};
     use ui::App;
     use util::path;
     use util::paths::natural_sort;
+
+    #[gpui::test]
+    fn test_normalize_hint_biases_rebiases_colocated_hints(cx: &mut TestAppContext) {
+        let buffer = cx.new(|cx| Buffer::local("abc", cx));
+        let buffer_snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
+        let multi_buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
+        let multi_buffer_snapshot = multi_buffer.read_with(cx, |buffer, cx| buffer.snapshot(cx));
+
+        let hint = |position| InlayHint {
+            position,
+            label: InlayHintLabel::String("hint".into()),
+            kind: None,
+            padding_left: false,
+            padding_right: false,
+            tooltip: None,
+            resolve_state: ResolveState::Resolved,
+        };
+        let mut new_hints = vec![
+            (
+                LanguageServerId(1),
+                InlayId::Hint(1),
+                hint(buffer_snapshot.anchor_before(1)),
+                1,
+            ),
+            (
+                LanguageServerId(2),
+                InlayId::Hint(2),
+                hint(buffer_snapshot.anchor_after(1)),
+                1,
+            ),
+        ];
+        let displayed = vec![(
+            Inlay::mock_hint(
+                3,
+                multi_buffer_snapshot.anchor_before(MultiBufferOffset(1)),
+                "shown",
+            ),
+            Bias::Left,
+            1,
+        )];
+
+        let rebiased = normalize_hint_biases(
+            &mut new_hints,
+            displayed,
+            &buffer_snapshot,
+            &multi_buffer_snapshot,
+        );
+
+        assert!(
+            new_hints
+                .iter()
+                .all(|(_, _, hint, _)| hint.position.bias == Bias::Right)
+        );
+        assert_eq!(rebiased.len(), 1);
+        assert_eq!(
+            rebiased[0].position,
+            multi_buffer_snapshot.anchor_after(MultiBufferOffset(1))
+        );
+    }
 
     #[gpui::test]
     fn test_clearing_buffers_clears_only_matching_hovered_command(cx: &mut TestAppContext) {

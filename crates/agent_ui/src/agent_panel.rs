@@ -426,13 +426,21 @@ pub fn init(cx: &mut App) {
 
                         agent_panel.update(cx, |panel, cx| {
                             panel.last_context_source = Some(source);
-                            cx.defer_in(window, move |panel, window, cx| {
-                                if let Some(conversation_view) = panel.active_conversation_view() {
-                                    conversation_view.update(cx, |conversation_view, cx| {
+                            if let Some(conversation_view) = panel.active_conversation_view() {
+                                conversation_view.update(cx, |conversation_view, cx| {
+                                    if conversation_view.active_thread().is_some() {
+                                        cx.defer_in(
+                                            window,
+                                            move |conversation_view, window, cx| {
+                                                conversation_view
+                                                    .insert_selection(selection, window, cx);
+                                            },
+                                        );
+                                    } else {
                                         conversation_view.insert_selection(selection, window, cx);
-                                    });
-                                }
-                            });
+                                    }
+                                });
+                            }
                         });
                     },
                 );
@@ -1227,7 +1235,7 @@ impl AgentPanel {
         let desired_agent = self.selected_agent(cx);
         if let Some(draft) = &self.draft_thread {
             let agent_matches = *draft.read(cx).agent_key() == desired_agent;
-            if agent_matches {
+            if agent_matches || draft.read(cx).has_pending_selections() {
                 return Some(draft.clone());
             }
             self.draft_thread = None;
@@ -1981,7 +1989,11 @@ impl AgentPanel {
             .retained_threads
             .iter()
             .filter(|(_id, view)| {
-                let Some(thread_view) = view.read(cx).root_thread_view() else {
+                let view = view.read(cx);
+                if view.has_pending_selections() {
+                    return false;
+                }
+                let Some(thread_view) = view.root_thread_view() else {
                     return true;
                 };
                 let thread = thread_view.read(cx).thread.read(cx);
@@ -2521,6 +2533,9 @@ impl AgentPanel {
         match &self.base_view {
             BaseView::Uninitialized => false,
             BaseView::AgentThread { conversation_view } => {
+                if conversation_view.read(cx).has_pending_selections() {
+                    return true;
+                }
                 let has_entries = conversation_view
                     .read(cx)
                     .root_thread_view()

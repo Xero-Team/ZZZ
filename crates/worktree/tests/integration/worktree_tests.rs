@@ -915,6 +915,64 @@ async fn test_root_rescan_does_not_miss_event_before_readding_root_watcher(
     .await;
 }
 
+// Native watches are recursive on macOS and Windows, so the new directory is
+// covered by the root watch and never watched separately.
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[gpui::test]
+async fn test_new_directory_scan_does_not_miss_event_before_adding_watcher(
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree("/root", json!({})).await;
+
+    let tree = Worktree::local(
+        Path::new("/root"),
+        true,
+        fs.clone(),
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .expect("worktree should open");
+
+    cx.read(|cx| {
+        tree.read(cx)
+            .as_local()
+            .expect("local worktree")
+            .scan_complete()
+    })
+    .await;
+
+    fs.create_file_before_next_watch_add("/root/new-directory", "/root/new-directory/file.txt");
+    fs.create_dir(Path::new("/root/new-directory"))
+        .await
+        .expect("directory should be created");
+
+    wait_for_condition(cx, |cx| {
+        tree.read_with(cx, |tree, _| {
+            tree.entry_for_path(rel_path("new-directory/file.txt"))
+                .is_some()
+        })
+    })
+    .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert_eq!(
+            tree.entries(true, 0)
+                .map(|entry| entry.path.as_ref())
+                .collect::<Vec<_>>(),
+            vec![
+                rel_path(""),
+                rel_path("new-directory"),
+                rel_path("new-directory/file.txt"),
+            ]
+        );
+    });
+}
+
 #[gpui::test]
 async fn test_subtree_rescan_reports_unchanged_descendants_as_updated(cx: &mut TestAppContext) {
     init_test(cx);

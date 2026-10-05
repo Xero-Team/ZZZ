@@ -8,6 +8,7 @@ pub struct FileFinderSettings {
     pub modal_max_width: FileFinderWidth,
     pub skip_focus_for_active_in_search: bool,
     pub include_ignored: Option<bool>,
+    pub prefill_query_from_selection: bool,
 }
 
 impl Settings for FileFinderSettings {
@@ -36,6 +37,9 @@ impl Settings for FileFinderSettings {
                 settings::IncludeIgnoredContent::Indexed => Some(false),
                 settings::IncludeIgnoredContent::Smart => None,
             },
+            prefill_query_from_selection: file_finder
+                .prefill_query_from_selection
+                .expect("prefill_query_from_selection should be present"),
         }
     }
 }

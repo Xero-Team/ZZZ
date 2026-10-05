@@ -11,7 +11,7 @@ use gpui::{
 use language::{Bias, ToOffset};
 use linkify::{LinkFinder, LinkKind};
 use lsp::LanguageServerId;
-use project::{InlayId, LocationLink, Project, ResolvedPath};
+use project::{InlayId, LocationLink, Project, ProjectPath, ResolvedPath};
 use regex::Regex;
 use settings::Settings;
 use std::{ops::Range, str::FromStr as _, sync::LazyLock};
@@ -311,12 +311,21 @@ impl Editor {
                 let links = hovered_link_state
                     .links
                     .into_iter()
-                    .filter(|link| {
-                        if let HoverLink::Text(location) = link {
+                    .filter(|link| match link {
+                        HoverLink::Text(location) => {
                             exclude_link_to_position(&buffer, &anchor, location, cx)
-                        } else {
-                            true
                         }
+                        HoverLink::File(target) => match &target.resolved_path {
+                            ResolvedPath::ProjectPath { project_path, .. } => {
+                                let current_project_path = buffer
+                                    .read(cx)
+                                    .file()
+                                    .map(|file| ProjectPath::from_file(file.as_ref(), cx));
+                                Some(project_path) != current_project_path.as_ref()
+                            }
+                            ResolvedPath::AbsPath { .. } => true,
+                        },
+                        _ => true,
                     })
                     .collect();
                 let nav_entry = self.navigation_entry(multi_buffer_anchor, cx);
@@ -1093,7 +1102,7 @@ mod tests {
     };
     use indoc::indoc;
     use language::Point;
-    use lsp::request::{GotoDefinition, GotoTypeDefinition};
+    use lsp::request::{GotoDefinition, GotoTypeDefinition, References};
     use multi_buffer::{MultiBufferOffset, PathKey};
     use settings::InlayHintSettingsContent;
     use std::{
@@ -1338,6 +1347,101 @@ mod tests {
                 cx,
             );
         });
+    }
+
+    #[gpui::test]
+    async fn test_cmd_click_on_file_link_to_current_file_falls_back_to_references(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx, |_| {});
+
+        let mut cx = EditorLspTestContext::new_rust(
+            lsp::ServerCapabilities {
+                references_provider: Some(lsp::OneOf::Left(true)),
+                definition_provider: Some(lsp::OneOf::Left(true)),
+                ..Default::default()
+            },
+            cx,
+        )
+        .await;
+
+        cx.set_state(indoc! {"struct fileˇ;"});
+
+        let target_range = cx.lsp_range(indoc! {"struct «file»;"});
+        let _definitions =
+            cx.set_request_handler::<GotoDefinition, _, _>(move |url, _, _| async move {
+                Ok(Some(lsp::GotoDefinitionResponse::Scalar(lsp::Location {
+                    uri: url,
+                    range: target_range,
+                })))
+            });
+
+        let references_count = Arc::new(AtomicUsize::new(0));
+        let _references = cx.set_request_handler::<References, _, _>({
+            let request_count = references_count.clone();
+            move |_, _, _| {
+                request_count.fetch_add(1, Ordering::SeqCst);
+                async move { Ok(Some(vec![])) }
+            }
+        });
+
+        cx.run_until_parked();
+        let screen_coord = cx.pixel_position(indoc! {"struct fiˇle;"});
+        cx.run_until_parked();
+        cx.simulate_mouse_move(screen_coord, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+        cx.simulate_click(screen_coord, Modifiers::secondary_key());
+        cx.run_until_parked();
+        assert_eq!(references_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[gpui::test]
+    async fn test_cmd_click_on_file_link_to_another_file_still_navigates(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        init_test(cx, |_| {});
+        let mut cx = EditorLspTestContext::new_rust(
+            lsp::ServerCapabilities {
+                definition_provider: Some(lsp::OneOf::Left(true)),
+                references_provider: Some(lsp::OneOf::Left(true)),
+                ..Default::default()
+            },
+            cx,
+        )
+        .await;
+        let fs = cx.update_workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
+        fs.as_fake()
+            .insert_file(path!("/root/dir/file2.rs"), b"".to_vec())
+            .await;
+
+        cx.set_state(indoc! {"// see file2ˇ.rs"});
+
+        let _definitions = cx
+            .set_request_handler::<GotoDefinition, _, _>(move |_url, _, _| async move { Ok(None) });
+        let references_count = Arc::new(AtomicUsize::new(0));
+        let _references = cx.set_request_handler::<References, _, _>({
+            let request_count = references_count.clone();
+            move |_, _, _| {
+                request_count.fetch_add(1, Ordering::SeqCst);
+                async move { Ok(Some(vec![])) }
+            }
+        });
+
+        cx.run_until_parked();
+        let screen_coord = cx.pixel_position(indoc! {"// see fileˇ2.rs"});
+        cx.run_until_parked();
+        cx.simulate_mouse_move(screen_coord, None, Modifiers::secondary_key());
+        cx.run_until_parked();
+        cx.simulate_click(screen_coord, Modifiers::secondary_key());
+        cx.run_until_parked();
+        cx.update_workspace(|workspace, _, cx| {
+            let path = workspace
+                .active_item(cx)
+                .and_then(|item| item.project_path(cx))
+                .expect("cmd-click should have opened a file");
+            assert_eq!(path.path.as_unix_str(), "dir/file2.rs");
+        });
+        assert_eq!(references_count.load(Ordering::SeqCst), 0);
     }
 
     #[gpui::test]

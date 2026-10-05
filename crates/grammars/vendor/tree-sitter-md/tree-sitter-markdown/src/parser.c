@@ -2509,11 +2509,6 @@ static const TSStateId ts_primary_state_ids[STATE_COUNT] = {
   [924] = 918,
 };
 
-static const TSCharacterRange aux_sym__word_token1_character_set_1[] = {
-  {0, 0x08}, {0x0b, '\f'}, {0x0e, 0x1f}, {'0', '9'}, {'A', 'Z'}, {'a', 'z'}, {0x7f, 0x17e}, {0x180, 0x2129},
-  {0x212b, 0x10ffff},
-};
-
 static bool ts_lex(TSLexer *lexer, TSStateId state) {
   START_LEXER();
   eof = lexer->eof(lexer);
@@ -2559,9 +2554,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 1:
       ADVANCE_MAP(
@@ -2603,9 +2596,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 2:
       ADVANCE_MAP(
@@ -2647,9 +2638,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 3:
       ADVANCE_MAP(
@@ -2691,9 +2680,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 4:
       ADVANCE_MAP(
@@ -2735,9 +2722,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 5:
       ADVANCE_MAP(
@@ -2779,9 +2764,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 6:
       if (lookahead == '1') ADVANCE(2010);
@@ -10851,9 +10834,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       if (lookahead != 0 &&
           lookahead != '\t' &&
           lookahead != '\n' &&
-          lookahead != '\r' &&
-          lookahead != 0x17f &&
-          lookahead != 0x212a) ADVANCE(2075);
+          lookahead != '\r') ADVANCE(2075);
       END_STATE();
     case 2031:
       ACCEPT_TOKEN(ts_builtin_sym_end);
@@ -11055,7 +11036,14 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       END_STATE();
     case 2075:
       ACCEPT_TOKEN(aux_sym__word_token1);
-      if ((!eof && set_contains(aux_sym__word_token1_character_set_1, 9, lookahead))) ADVANCE(2075);
+      if (lookahead != 0 &&
+          lookahead != '\t' &&
+          lookahead != '\n' &&
+          lookahead != '\r' &&
+          (lookahead < ' ' || '/' < lookahead) &&
+          (lookahead < ':' || '@' < lookahead) &&
+          (lookahead < '[' || '`' < lookahead) &&
+          (lookahead < '{' || '~' < lookahead)) ADVANCE(2075);
       END_STATE();
     case 2076:
       ACCEPT_TOKEN(aux_sym__word_token2);

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use buffer_diff::BufferDiff;
 use collections::HashSet;
-use futures::StreamExt;
+use futures::{FutureExt as _, StreamExt, future::LocalBoxFuture};
 use git::{
     repository::RepoPath,
     status::{DiffTreeType, FileStatus, StatusCode, TrackedStatus, TreeDiff, TreeDiffStatus},
@@ -365,7 +365,13 @@ impl BranchDiff {
                 else {
                     continue;
                 };
-                let task = Self::load_buffer(branch_diff, project_path, repo.clone(), cx);
+                let task = Self::load_buffer(
+                    self.project.clone(),
+                    branch_diff,
+                    project_path,
+                    repo.clone(),
+                    cx,
+                );
 
                 output.push(DiffBuffer {
                     repo_path: item.repo_path.clone(),
@@ -385,8 +391,13 @@ impl BranchDiff {
                 let Some(project_path) = repo.read(cx).repo_path_to_project_path(&path, cx) else {
                     continue;
                 };
-                let task =
-                    Self::load_buffer(Some(branch_diff.clone()), project_path, repo.clone(), cx);
+                let task = Self::load_buffer(
+                    self.project.clone(),
+                    Some(branch_diff.clone()),
+                    project_path,
+                    repo.clone(),
+                    cx,
+                );
 
                 let file_status = diff_status_to_file_status(branch_diff);
 
@@ -402,14 +413,18 @@ impl BranchDiff {
 
     #[instrument(skip_all)]
     fn load_buffer(
+        project: Entity<Project>,
         branch_diff: Option<git::status::TreeDiffStatus>,
         project_path: crate::ProjectPath,
         repo: Entity<Repository>,
         cx: &Context<'_, Project>,
-    ) -> Task<Result<(Entity<Buffer>, Entity<BufferDiff>, Entity<ConflictSet>)>> {
-        let task = cx.spawn(async move |project, cx| {
+    ) -> LocalBoxFuture<'static, Result<(Entity<Buffer>, Entity<BufferDiff>, Entity<ConflictSet>)>>
+    {
+        let mut cx = cx.to_async();
+        async move {
+            let cx = &mut cx;
             let buffer = project
-                .update(cx, |project, cx| project.open_buffer(project_path, cx))?
+                .update(cx, |project, cx| project.open_buffer(project_path, cx))
                 .await?;
 
             let changes = if let Some(entry) = branch_diff {
@@ -423,13 +438,13 @@ impl BranchDiff {
                         project.git_store().update(cx, |git_store, cx| {
                             git_store.open_diff_since(oid, buffer.clone(), repo, cx)
                         })
-                    })?
+                    })
                     .await?
             } else {
                 project
                     .update(cx, |project, cx| {
                         project.open_uncommitted_diff(buffer.clone(), cx)
-                    })?
+                    })
                     .await?
             };
             let conflict_set = project
@@ -437,11 +452,11 @@ impl BranchDiff {
                     project.git_store().update(cx, |git_store, cx| {
                         git_store.open_conflict_set(buffer.clone(), cx)
                     })
-                })?
+                })
                 .await;
             Ok((buffer, changes, conflict_set))
-        });
-        task
+        }
+        .boxed_local()
     }
 }
 
@@ -463,9 +478,10 @@ fn diff_status_to_file_status(branch_diff: &git::status::TreeDiffStatus) -> File
     file_status
 }
 
-#[derive(Debug)]
 pub struct DiffBuffer {
     pub repo_path: RepoPath,
     pub file_status: FileStatus,
-    pub load: Task<Result<(Entity<Buffer>, Entity<BufferDiff>, Entity<ConflictSet>)>>,
+    /// Not started until polled, so the consumer controls load concurrency.
+    pub load:
+        LocalBoxFuture<'static, Result<(Entity<Buffer>, Entity<BufferDiff>, Entity<ConflictSet>)>>,
 }

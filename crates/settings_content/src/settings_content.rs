@@ -686,6 +686,34 @@ pub struct GitPanelSettingsContent {
     ///
     /// Default: project_diff
     pub entry_primary_click_action: Option<GitPanelClickBehavior>,
+
+    /// Whether the commit message editor is shown in the Git panel by default.
+    ///
+    /// Default: expanded
+    pub commit_editor: Option<GitPanelCommitEditor>,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    MergeFrom,
+    PartialEq,
+    Eq,
+    strum::VariantArray,
+    strum::VariantNames,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum GitPanelCommitEditor {
+    /// Show the commit message editor.
+    #[default]
+    Expanded,
+    /// Hide the commit message editor, leaving only the commit button row.
+    Collapsed,
 }
 
 /// Configuration for the Telegram panel.
@@ -886,6 +914,11 @@ pub struct FileFinderSettingsContent {
     ///
     /// Default: Smart
     pub include_ignored: Option<IncludeIgnoredContent>,
+    /// Whether to pre-fill the file finder's query with text selected in the
+    /// focused item, such as an editor or terminal.
+    ///
+    /// Default: true
+    pub prefill_query_from_selection: Option<bool>,
 }
 
 #[derive(
@@ -1187,6 +1220,12 @@ pub enum LineIndicatorFormat {
 #[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, Default, PartialEq)]
 pub struct MarkdownPreviewSettingsContent {
+    /// The weight of headings (H1 through H6) in the markdown preview, in CSS
+    /// units from 100 to 900. Also applies to rendered Markdown cells in
+    /// notebooks, which share the preview typography.
+    ///
+    /// Default: 600
+    pub heading_font_weight: Option<FontWeightContent>,
     /// Whether to limit the width of the rendered markdown content. When
     /// enabled, content is constrained to `max_width` and centered
     /// horizontally within the preview pane, for optimal readability.

@@ -64,8 +64,17 @@ script/bundle-linux --deb --rpm
 
 The generated packages are written to `target/release/` (or the selected
 profile directory). `--deb` uses `cargo-deb` and `--rpm` uses
-`cargo-generate-rpm`; neither option rebuilds the Rust binaries. Set
-`ZZZ_BUILD_JOBS` to override the number of parallel Cargo jobs, or
+`cargo-generate-rpm`. The bundle script builds the Rust binaries once and
+passes `--no-build` to the packagers. To package an existing bundle without
+running the build workflow again, use:
+
+```sh
+script/package-linux --deb --rpm
+# Equivalent convenience form:
+script/bundle-linux --deb --rpm --skip-build
+```
+
+Set `ZZZ_BUILD_JOBS` to override the number of parallel Cargo jobs, or
 `ZZZ_CROSS_BUILD_JOBS` to limit each optional cross-target build.
 
 To build every Linux format through one preflighted entrypoint, use:

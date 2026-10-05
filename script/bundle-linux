@@ -18,6 +18,7 @@ Options:
   --native       Build the local app with the linux-native profile and target-cpu=native
   --deb          Also generate a Debian package with cargo-deb
   --rpm          Also generate an RPM package with cargo-generate-rpm
+  --skip-build   Only generate --deb/--rpm from an existing Linux bundle
 
 Environment:
   ZZZ_PGO_GENERATE_DIR=/abs/dir   Build host binaries with PGO instrumentation into this directory
@@ -37,6 +38,7 @@ host_build_profile=release
 host_build_native=false
 package_deb=false
 package_rpm=false
+skip_build=false
 
 # Parse all arguments manually
 while [[ $# -gt 0 ]]; do
@@ -62,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             package_rpm=true
             shift
             ;;
+        --skip-build)
+            skip_build=true
+            shift
+            ;;
         --)
             shift
             break
@@ -78,6 +84,23 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$skip_build" == true ]]; then
+    if [[ "$package_deb" == false && "$package_rpm" == false ]]; then
+        echo "Error: --skip-build requires --deb and/or --rpm." >&2
+        help_info
+        exit 1
+    fi
+    if [[ "${ZZZ_BUNDLE_TYPE:-}" == flatpak ]]; then
+        echo "Error: --flatpak cannot be combined with --skip-build." >&2
+        exit 1
+    fi
+    package_args=()
+    [[ "$package_deb" == true ]] && package_args+=(--deb)
+    [[ "$package_rpm" == true ]] && package_args+=(--rpm)
+    [[ "$host_build_native" == true ]] && package_args+=(--native)
+    exec script/package-linux "${package_args[@]}"
+fi
 
 export ZZZ_BUNDLE=true
 
@@ -600,7 +623,7 @@ tar -czvf "${bundle_artifact_dir}/$archive" -C "${temp_dir}" "zzz$suffix.app"
 gzip -f --stdout --best "${remote_artifact_dir}/remote_server" > "${target_dir}/zzz-remote-server-linux-${arch}.gz"
 
 if [[ "$package_deb" == true || "$package_rpm" == true ]]; then
-    package_assets_dir="${bundle_artifact_dir}/package-assets"
+    package_assets_dir="${host_artifact_dir}/package-assets"
     rm -rf "$package_assets_dir"
     mkdir -p "$package_assets_dir"
 
@@ -609,18 +632,19 @@ if [[ "$package_deb" == true || "$package_rpm" == true ]]; then
     # metadata stable while staging channel-specific generated assets here.
     cp "${zzz_dir}/share/applications/${APP_ID}.desktop" "$package_assets_dir/zzz.desktop"
     cp "${zzz_dir}/share/icons/hicolor/512x512/apps/zzz.png" "$package_assets_dir/zzz.png"
-    cp "${zzz_dir}/share/icons/hicolor/1024x1024@2x/apps/zzz.png" "$package_assets_dir/zzz@2x.png"
+    cp "${zzz_dir}/share/icons/hicolor/1024x1024/apps/zzz.png" "$package_assets_dir/zzz@2x.png"
     cp "assets/licenses.md" "$package_assets_dir/licenses.md"
     cp "${zzz_dir}/FFmpeg-LICENSE.txt" "$package_assets_dir/FFmpeg-LICENSE.txt"
 
     if [[ "$package_deb" == true ]]; then
         cargo deb --locked --no-build --package zzz --profile "$host_build_profile" \
-            --variant "$package_variant" \
+            --target "$target_triple" --variant "$package_variant" \
             --output "${bundle_artifact_dir}/zzz-${package_variant}-linux-${arch}.deb"
     fi
 
     if [[ "$package_rpm" == true ]]; then
         cargo generate-rpm --package crates/zzz --profile "$host_build_profile" \
+            --target "$target_triple" --target-dir "$target_dir" \
             --variant "$package_variant" \
             --output "${bundle_artifact_dir}/zzz-${package_variant}-linux-${arch}.rpm"
     fi

@@ -2,6 +2,7 @@ use crate::{
     branch_picker, conflict_view,
     git_panel::{GitPanel, GitPanelAddon, GitStatusEntry},
     git_panel_settings::GitPanelSettings,
+    solo_diff_view::SoloDiffView,
 };
 use agent_settings::AgentSettings;
 use anyhow::{Context as _, Result, anyhow};
@@ -13,6 +14,7 @@ use editor::{
     multibuffer_context_lines,
     scroll::Autoscroll,
 };
+use futures::{FutureExt as _, StreamExt as _, stream};
 use futures_lite::future::yield_now;
 use git::repository::DiffType;
 
@@ -54,6 +56,10 @@ use workspace::{
 use ztracing::instrument;
 use zzz_actions::agent::ReviewBranchDiff;
 
+/// Keep normal diffs responsive while preventing a large diff from starting
+/// one buffer load per changed file at once.
+pub(crate) const MAX_CONCURRENT_PROJECT_DIFF_LOADS: usize = 16;
+
 actions!(
     git,
     [
@@ -71,6 +77,58 @@ actions!(
         CompareWithBranch,
     ]
 );
+
+pub(crate) const MAX_PROJECT_DIFF_FILES: usize = 512;
+pub(crate) const MAX_PROJECT_DIFF_CHANGED_LINES: u64 = 262_144;
+pub(crate) const MAX_PROJECT_DIFF_CHANGED_BYTES: u64 = 64 * 1024 * 1024;
+
+// `git diff --numstat` gives line counts, not byte counts. This deliberately
+// conservative estimate is used before opening buffers, so the safety gate
+// never needs to parse the diff it is trying to protect us from.
+const ESTIMATED_BYTES_PER_CHANGED_LINE: u64 = 256;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ProjectDiffSummary {
+    pub file_count: usize,
+    pub changed_lines: u64,
+    pub estimated_changed_bytes: u64,
+}
+
+impl ProjectDiffSummary {
+    pub(crate) fn from_counts(file_count: usize, added_lines: u64, deleted_lines: u64) -> Self {
+        let changed_lines = added_lines.saturating_add(deleted_lines);
+        Self {
+            file_count,
+            changed_lines,
+            estimated_changed_bytes: changed_lines.saturating_mul(ESTIMATED_BYTES_PER_CHANGED_LINE),
+        }
+    }
+
+    pub(crate) fn exceeds_default_limits(self) -> bool {
+        self.file_count > MAX_PROJECT_DIFF_FILES
+            || self.changed_lines > MAX_PROJECT_DIFF_CHANGED_LINES
+            || self.estimated_changed_bytes > MAX_PROJECT_DIFF_CHANGED_BYTES
+    }
+}
+
+pub(crate) fn project_diff_summary(repo: &Repository) -> ProjectDiffSummary {
+    let mut file_count = 0;
+    let mut added_lines = 0u64;
+    let mut deleted_lines = 0u64;
+
+    for entry in repo
+        .cached_status()
+        .filter(|entry| entry.status.has_changes())
+    {
+        file_count += 1;
+        if let Some(stat) = entry.diff_stat {
+            added_lines = added_lines.saturating_add(u64::from(stat.added));
+            deleted_lines = deleted_lines.saturating_add(u64::from(stat.deleted));
+        }
+    }
+
+    ProjectDiffSummary::from_counts(file_count, added_lines, deleted_lines)
+}
 
 struct BufferSubscriptions {
     _diff: Entity<BufferDiff>,
@@ -327,6 +385,31 @@ impl ProjectDiff {
         cx: &mut Context<Workspace>,
     ) {
         let intended_repo = workspace.project().read(cx).active_repository(cx);
+
+        if let Some(repo) = intended_repo.as_ref()
+            && project_diff_summary(&repo.read(cx)).exceeds_default_limits()
+        {
+            let workspace_handle = cx.entity().downgrade();
+            if let Some(entry) = entry {
+                let repo = repo.clone();
+                window.defer(cx, move |window, cx| {
+                    SoloDiffView::open_or_focus(entry, repo, workspace_handle.clone(), window, cx)
+                        .detach_and_notify_err(workspace_handle, window, cx);
+                });
+            } else {
+                window.defer(cx, move |window, cx| {
+                    workspace_handle
+                        .update(cx, |workspace, cx| {
+                            workspace.open_panel::<GitPanel>(window, cx);
+                            if let Some(panel) = workspace.panel::<GitPanel>(cx) {
+                                panel.update(cx, |panel, cx| panel.focus_changes(window, cx));
+                            }
+                        })
+                        .log_err();
+                });
+            }
+            return;
+        }
 
         let existing = workspace
             .items_of_type::<Self>(cx)
@@ -1029,16 +1112,28 @@ impl ProjectDiff {
 
         let mut buffers_to_fold = Vec::new();
 
-        for (path_key, entry) in entries {
-            if let Some((buffer, diff, conflict_set)) = entry.load.await.log_err() {
-                // We might be lagging behind enough that all future entry.load futures are no longer pending.
-                // If that is the case, this task will never yield, starving the foreground thread of execution time.
-                yield_now().await;
+        // Keep loads lazy and bounded. The ordered stream ensures excerpts do
+        // not move underneath the reader as later files finish first.
+        let mut loads = stream::iter(entries.into_iter().map(|(path_key, entry)| {
+            let branch_diff::DiffBuffer {
+                repo_path: _,
+                file_status,
+                load,
+            } = entry;
+            load.map(move |loaded| (path_key, file_status, loaded))
+        }))
+        .buffered(MAX_CONCURRENT_PROJECT_DIFF_LOADS);
+
+        while let Some((path_key, file_status, loaded)) = loads.next().await {
+            // A completed buffered future may otherwise starve the foreground
+            // executor when a large batch is already cached.
+            yield_now().await;
+            if let Some((buffer, diff, conflict_set)) = loaded.log_err() {
                 cx.update(|window, cx| {
                     this.update(cx, |this, cx| {
                         if let Some(buffer_id) = this.register_buffer(
                             path_key,
-                            entry.file_status,
+                            file_status,
                             buffer,
                             diff,
                             conflict_set,
@@ -2193,6 +2288,50 @@ mod tests {
             editor::init(cx);
             crate::init(cx);
         });
+    }
+
+    #[test]
+    fn project_diff_default_limits_are_inclusive() {
+        assert!(
+            !ProjectDiffSummary::from_counts(MAX_PROJECT_DIFF_FILES, 0, 0,)
+                .exceeds_default_limits()
+        );
+        assert!(
+            ProjectDiffSummary::from_counts(MAX_PROJECT_DIFF_FILES + 1, 0, 0,)
+                .exceeds_default_limits()
+        );
+
+        assert!(
+            !ProjectDiffSummary::from_counts(1, MAX_PROJECT_DIFF_CHANGED_LINES, 0,)
+                .exceeds_default_limits()
+        );
+        assert!(
+            ProjectDiffSummary::from_counts(1, MAX_PROJECT_DIFF_CHANGED_LINES + 1, 0,)
+                .exceeds_default_limits()
+        );
+    }
+
+    #[test]
+    fn project_diff_changed_bytes_limit_is_enforced() {
+        // 262,144 changed lines at the conservative 256-byte estimate is
+        // exactly 64 MiB; the line limit is intentionally the same boundary.
+        let at_limit = ProjectDiffSummary::from_counts(
+            1,
+            MAX_PROJECT_DIFF_CHANGED_LINES / 2,
+            MAX_PROJECT_DIFF_CHANGED_LINES / 2,
+        );
+        assert_eq!(
+            at_limit.estimated_changed_bytes,
+            MAX_PROJECT_DIFF_CHANGED_BYTES
+        );
+        assert!(!at_limit.exceeds_default_limits());
+
+        let over_limit = ProjectDiffSummary::from_counts(
+            1,
+            MAX_PROJECT_DIFF_CHANGED_LINES / 2 + 1,
+            MAX_PROJECT_DIFF_CHANGED_LINES / 2,
+        );
+        assert!(over_limit.exceeds_default_limits());
     }
 
     #[gpui::test]

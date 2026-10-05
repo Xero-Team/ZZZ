@@ -1,7 +1,7 @@
 use std::{future::IntoFuture, path::Path, time::Duration};
 
 use super::*;
-use editor::Editor;
+use editor::{Editor, SelectionEffects};
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use menu::{Cancel, Confirm, SelectNext, SelectPrevious};
 use pretty_assertions::{assert_eq, assert_matches};
@@ -4574,6 +4574,105 @@ fn collect_search_matches(picker: &Picker<FileFinderDelegate>) -> SearchEntries 
         }
     }
     search_entries
+}
+
+fn select_range_in_active_editor(
+    workspace: &Entity<Workspace>,
+    cx: &mut VisualTestContext,
+    range: Range<Point>,
+) {
+    let editor = cx.read(|cx| workspace.read(cx).active_item_as::<Editor>(cx).unwrap());
+    editor.update_in(cx, |editor, window, cx| {
+        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
+            selections.select_ranges([range]);
+        });
+    });
+}
+
+#[gpui::test]
+async fn test_seed_query_from_editor_selection(cx: &mut TestAppContext) {
+    let app_state = init_test(cx);
+
+    app_state
+        .fs
+        .as_fake()
+        .insert_tree(
+            path!("/src"),
+            json!({
+                "the_quick.rs": "quick brown",
+                "unrelated.rs": "",
+            }),
+        )
+        .await;
+
+    let project = Project::test(app_state.fs.clone(), [path!("/src").as_ref()], cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let workspace =
+        multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
+
+    open_queried_buffer("the_quick", 1, "the_quick.rs", &workspace, cx).await;
+    select_range_in_active_editor(&workspace, cx, Point::new(0, 0)..Point::new(0, 5));
+
+    cx.dispatch_action(ToggleFileFinder {
+        separate_history: true,
+    });
+    let picker = active_file_picker(&workspace, cx);
+    assert_eq!(picker.read_with(cx, |picker, cx| picker.query(cx)), "quick");
+}
+
+#[gpui::test]
+async fn test_seed_query_from_selection_can_be_disabled(cx: &mut TestAppContext) {
+    let app_state = init_test(cx);
+    cx.update(|cx| {
+        let settings = *FileFinderSettings::get_global(cx);
+        FileFinderSettings::override_global(
+            FileFinderSettings {
+                prefill_query_from_selection: false,
+                ..settings
+            },
+            cx,
+        );
+    });
+
+    app_state
+        .fs
+        .as_fake()
+        .insert_tree(path!("/src"), json!({ "the_quick.rs": "quick brown" }))
+        .await;
+
+    let project = Project::test(app_state.fs.clone(), [path!("/src").as_ref()], cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let workspace =
+        multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
+
+    open_queried_buffer("the_quick", 1, "the_quick.rs", &workspace, cx).await;
+    select_range_in_active_editor(&workspace, cx, Point::new(0, 0)..Point::new(0, 5));
+
+    cx.dispatch_action(ToggleFileFinder {
+        separate_history: true,
+    });
+    let picker = active_file_picker(&workspace, cx);
+    assert_eq!(picker.read_with(cx, |picker, cx| picker.query(cx)), "");
+}
+
+#[test]
+fn test_sanitize_file_query() {
+    assert_eq!(
+        sanitize_file_query("  the   quick\nbrown fox\ttabs ").as_deref(),
+        Some("the quick brown fox tabs")
+    );
+    assert_eq!(sanitize_file_query("").as_deref(), None);
+    assert_eq!(sanitize_file_query("  \n\t ").as_deref(), None);
+    let long_selection = "a".repeat(MAX_SEED_QUERY_LENGTH + 1);
+    assert_eq!(
+        sanitize_file_query(&long_selection)
+            .expect("non-empty selection")
+            .chars()
+            .count(),
+        MAX_SEED_QUERY_LENGTH
+    );
 }
 
 #[track_caller]

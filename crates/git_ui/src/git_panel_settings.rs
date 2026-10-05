@@ -3,7 +3,8 @@ use gpui::Pixels;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{
-    GitPanelClickBehavior, GitPanelGroupBy, GitPanelSortBy, RegisterSetting, Settings, StatusStyle,
+    GitPanelClickBehavior, GitPanelCommitEditor, GitPanelGroupBy, GitPanelSortBy, RegisterSetting,
+    Settings, StatusStyle,
 };
 use ui::{
     px,
@@ -36,6 +37,7 @@ pub struct GitPanelSettings {
     pub starts_open: bool,
     pub commit_title_max_length: usize,
     pub entry_primary_click_action: GitPanelClickBehavior,
+    pub commit_editor: GitPanelCommitEditor,
 }
 
 #[derive(Default)]
@@ -108,6 +110,9 @@ impl Settings for GitPanelSettings {
             entry_primary_click_action: git_panel
                 .entry_primary_click_action
                 .expect("entry_primary_click_action should be present"),
+            commit_editor: git_panel
+                .commit_editor
+                .expect("commit_editor should be present"),
         }
     }
 }
