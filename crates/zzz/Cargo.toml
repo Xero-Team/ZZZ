@@ -213,23 +213,34 @@ zlog_settings.workspace = true
 etw_tracing.workspace = true
 windows.workspace = true
 gpui = { workspace = true, features = [
+    "accessibility",
     "input-latency-histogram",
     "stacker",
     "windows-manifest",
 ] }
+gpui_platform = { workspace = true, features = ["accessibility"] }
+ui = { workspace = true, features = ["accessibility"] }
 
 [build-dependencies]
 windows_resources = { path = "../windows_resources" }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
 gpui = { workspace = true, features = [
+    "accessibility",
     "input-latency-histogram",
     "stacker",
     "wayland",
     "x11",
 ] }
+gpui_platform = { workspace = true, features = ["accessibility"] }
+ui = { workspace = true, features = ["accessibility"] }
 ashpd.workspace = true
 image.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+gpui = { workspace = true, features = ["accessibility"] }
+gpui_platform = { workspace = true, features = ["accessibility"] }
+ui = { workspace = true, features = ["accessibility"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.build-dependencies]
 image.workspace = true
