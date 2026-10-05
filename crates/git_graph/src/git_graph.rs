@@ -1917,7 +1917,7 @@ impl GitGraph {
             .min_w_0()
             .overflow_hidden()
             .child(
-                Chip::new(name.clone())
+                Chip::new(name)
                     .label_size(LabelSize::Small)
                     .truncate()
                     .map(|chip| {

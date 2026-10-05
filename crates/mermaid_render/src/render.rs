@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context as _, Result, anyhow};
+use merman::svg::{CssOverridePostprocessor, SvgPipeline, SvgRenderOptions};
+use merman::{OperationControl, RenderOutput, RenderRequest, Renderer, SvgRequest};
 
 use crate::{MermaidTheme, css_color};
 
@@ -10,24 +12,34 @@ pub(super) fn render_mermaid(source: &str, theme: &MermaidTheme) -> Result<Strin
     let diagram_id = format!("merman-{id}");
 
     let config = to_merman_config(theme);
-    let renderer = merman::svg::HeadlessRenderer::new()
-        .with_site_config(config)
-        .with_vendored_text_measurer()
-        .with_diagram_id(&diagram_id);
+    let engine = merman::Engine::new().with_site_config(config);
     // Apply merman's raster-safe pipeline before Zed-specific styling. The
     // pipeline handles generic rasterizer compatibility cleanup: foreignObject
     // fallback text, unsupported CSS removal, and invalid SVG attribute cleanup.
     // Zed also strips merman's existing `!important` declarations before
     // injecting its own theme CSS so host styling wins consistently in usvg/resvg.
-    let pipeline = merman::svg::SvgPipeline::resvg_safe()
-        .with_postprocessor(merman::svg::CssOverridePostprocessor::strip_existing_important());
+    let pipeline = SvgPipeline::resvg_safe()
+        .with_postprocessor(CssOverridePostprocessor::strip_existing_important());
 
-    let svg = renderer
-        .render_svg_with_pipeline_sync(source, &pipeline)
-        .context("merman render failed")?
-        .ok_or_else(|| anyhow!("merman returned no SVG for the given input"))?;
+    let output = Renderer::new()
+        .with_engine(engine)
+        .render(RenderRequest::svg(
+            source,
+            OperationControl::new(),
+            SvgRequest {
+                options: SvgRenderOptions {
+                    diagram_id: Some(diagram_id),
+                    ..Default::default()
+                },
+                pipeline: Some(pipeline),
+                ..Default::default()
+            },
+        ));
+    let RenderOutput::Svg(Some(svg)) = output.context("merman render failed")? else {
+        return Err(anyhow!("merman returned no SVG for the given input"));
+    };
 
-    Ok(svg)
+    Ok(svg.into_parts().0)
 }
 
 fn to_merman_config(theme: &MermaidTheme) -> merman::MermaidConfig {

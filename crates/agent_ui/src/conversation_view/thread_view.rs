@@ -2190,9 +2190,10 @@ impl ThreadView {
         tool_call_id: &str,
         cx: &App,
     ) -> Option<(acp::SessionId, PermissionRequestId)> {
-        let session_id = session_id
-            .map(acp::SessionId::new)
-            .unwrap_or_else(|| self.thread.read(cx).session_id().clone());
+        let session_id = session_id.map_or_else(
+            || self.thread.read(cx).session_id().clone(),
+            acp::SessionId::new,
+        );
         let conversation = self.conversation.read(cx);
         let request_id = if let Some(request_id) = request_id {
             conversation

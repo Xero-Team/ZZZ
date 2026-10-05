@@ -1411,7 +1411,7 @@ mod tests {
         .await;
         let fs = cx.update_workspace(|workspace, _, cx| workspace.project().read(cx).fs().clone());
         fs.as_fake()
-            .insert_file(path!("/root/dir/file2.rs"), "".as_bytes().to_vec())
+            .insert_file(path!("/root/dir/file2.rs"), b"".to_vec())
             .await;
 
         cx.set_state(indoc! {"// see file2ˇ.rs"});
