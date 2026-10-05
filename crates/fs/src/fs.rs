@@ -1,7 +1,9 @@
 pub mod fs_watcher;
 mod git_clone_progress;
+mod vfs_provider;
 
 pub use fs_watcher::requires_poll_watcher;
+pub use vfs_provider::{LegacyFsProvider, LocalProvider};
 
 use parking_lot::Mutex;
 use std::ffi::OsString;
@@ -27,6 +29,8 @@ use std::os::unix::ffi::OsStrExt;
 
 #[cfg(unix)]
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt as _;
 
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
 use std::mem::MaybeUninit;
@@ -96,7 +100,33 @@ impl From<PathEvent> for PathBuf {
 }
 
 #[async_trait::async_trait]
-pub trait Fs: Send + Sync {
+pub trait ArchiveService: Send + Sync {
+    async fn extract_tar_file(
+        &self,
+        path: &Path,
+        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
+    ) -> Result<()>;
+}
+
+#[async_trait::async_trait]
+pub trait GitService: Send + Sync {
+    fn open_repo(
+        &self,
+        abs_dot_git: &Path,
+        system_git_binary_path: Option<&Path>,
+    ) -> Result<Arc<dyn GitRepository>>;
+    async fn git_init(&self, abs_work_directory: &Path, fallback_branch_name: String)
+    -> Result<()>;
+    async fn git_clone(&self, abs_work_directory: &Path, repo_url: &str) -> Result<()>;
+    async fn git_config(&self, abs_work_directory: &Path, args: Vec<String>) -> Result<String>;
+}
+
+pub trait ProcessService: Send + Sync {
+    fn subscribe_to_jobs(&self) -> JobEventReceiver;
+}
+
+#[async_trait::async_trait]
+pub trait Fs: Send + Sync + ArchiveService + GitService + ProcessService {
     async fn create_dir(&self, path: &Path) -> Result<()>;
     async fn create_symlink(&self, path: &Path, target: PathBuf) -> Result<()>;
     async fn create_file(&self, path: &Path, options: CreateOptions) -> Result<()>;
@@ -104,11 +134,6 @@ pub trait Fs: Send + Sync {
         &self,
         path: &Path,
         content: Pin<&mut (dyn AsyncRead + Send)>,
-    ) -> Result<()>;
-    async fn extract_tar_file(
-        &self,
-        path: &Path,
-        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
     ) -> Result<()>;
     async fn copy_file(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<()>;
     async fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<()>;
@@ -156,18 +181,8 @@ pub trait Fs: Send + Sync {
         Arc<dyn Watcher>,
     );
 
-    fn open_repo(
-        &self,
-        abs_dot_git: &Path,
-        system_git_binary_path: Option<&Path>,
-    ) -> Result<Arc<dyn GitRepository>>;
-    async fn git_init(&self, abs_work_directory: &Path, fallback_branch_name: String)
-    -> Result<()>;
-    async fn git_clone(&self, abs_work_directory: &Path, repo_url: &str) -> Result<()>;
-    async fn git_config(&self, abs_work_directory: &Path, args: Vec<String>) -> Result<String>;
     fn is_fake(&self) -> bool;
     async fn is_case_sensitive(&self) -> bool;
-    fn subscribe_to_jobs(&self) -> JobEventReceiver;
 
     /// Restores a given `TrashedEntry`, moving it from the system's trash back
     /// to the original path.
@@ -298,6 +313,7 @@ pub struct Metadata {
     pub is_fifo: bool,
     pub is_executable: bool,
     pub is_writable: bool,
+    pub change_token: Option<[u8; 16]>,
 }
 
 /// Filesystem modification time. The purpose of this newtype is to discourage use of operations
@@ -739,15 +755,6 @@ impl Fs for RealFs {
         Ok(())
     }
 
-    async fn extract_tar_file(
-        &self,
-        path: &Path,
-        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
-    ) -> Result<()> {
-        content.unpack(path).await?;
-        Ok(())
-    }
-
     async fn copy_file(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<()> {
         if !options.overwrite && smol::fs::metadata(target).await.is_ok() {
             if options.ignore_if_exists {
@@ -1068,8 +1075,24 @@ impl Fs for RealFs {
         #[cfg(unix)]
         let inode = metadata.ino();
 
+        #[cfg(unix)]
+        let change_token = {
+            let mut token = [0; 16];
+            token[..8].copy_from_slice(&metadata.ctime().to_be_bytes());
+            token[8..].copy_from_slice(&metadata.ctime_nsec().to_be_bytes());
+            Some(token)
+        };
+
         #[cfg(windows)]
         let inode = file_id(path).await?;
+
+        #[cfg(windows)]
+        let change_token = {
+            let mut token = [0; 16];
+            token[..8].copy_from_slice(&metadata.last_write_time().to_be_bytes());
+            token[8..].copy_from_slice(&metadata.creation_time().to_be_bytes());
+            Some(token)
+        };
 
         #[cfg(windows)]
         let is_fifo = false;
@@ -1097,6 +1120,7 @@ impl Fs for RealFs {
             is_fifo,
             is_executable,
             is_writable: !metadata.permissions().readonly(),
+            change_token,
         }))
     }
 
@@ -1185,110 +1209,8 @@ impl Fs for RealFs {
         )
     }
 
-    fn open_repo(
-        &self,
-        dotgit_path: &Path,
-        system_git_binary_path: Option<&Path>,
-    ) -> Result<Arc<dyn GitRepository>> {
-        Ok(Arc::new(RealGitRepository::new(
-            dotgit_path,
-            self.bundled_git_binary_path.clone(),
-            system_git_binary_path.map(|path| path.to_path_buf()),
-            self.executor.clone(),
-        )?))
-    }
-
-    async fn git_init(
-        &self,
-        abs_work_directory_path: &Path,
-        fallback_branch_name: String,
-    ) -> Result<()> {
-        let result = new_command("git")
-            .current_dir(abs_work_directory_path)
-            .args(&["config", "--global", "--get", "init.defaultBranch"])
-            .output()
-            .await;
-
-        // In case the `git config` command fails, which would be the case if
-        // the user doesn't have an `init.defaultBranch` value set, we'll just
-        // default to the provided `fallback_branch_name`.
-        let branch_name = match result {
-            Ok(output) if !output.stdout.is_empty() => String::from_utf8(output.stdout)?,
-            _ => fallback_branch_name,
-        };
-
-        new_command("git")
-            .current_dir(abs_work_directory_path)
-            .args(&["init", "-b"])
-            .arg(branch_name.trim())
-            .output()
-            .await?;
-
-        Ok(())
-    }
-
-    async fn git_clone(&self, abs_work_directory: &Path, repo_url: &str) -> Result<()> {
-        let job_id = self.next_job_id.fetch_add(1, Ordering::SeqCst);
-        let job_info = JobInfo {
-            id: job_id,
-            start: Instant::now(),
-            message: SharedString::from(format!("Cloning {}", repo_url)),
-        };
-
-        let job_tracker = JobTracker::new(job_info, self.job_event_subscribers.clone());
-        let mut child = new_command("git")
-            .current_dir(abs_work_directory)
-            .args(["clone", "--progress", repo_url])
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()?;
-        let stderr = child
-            .stderr
-            .take()
-            .context("failed to read git clone progress")?;
-        let stderr_output = git_clone_progress::read(stderr, |message| {
-            job_tracker.update(message.into());
-        })
-        .await?;
-        let status = child.status().await?;
-
-        if !status.success() {
-            anyhow::bail!(
-                "git clone failed: {}",
-                git_clone_progress::failure_message(&stderr_output)
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Runs `git config` with the given arguments.
-    /// Will return `Ok` if the commands exit status is `0`, with the stdout
-    /// contents. Otherwise returns `Err` with the stderr contents.
-    async fn git_config(&self, abs_work_directory: &Path, args: Vec<String>) -> Result<String> {
-        let output = new_command("git")
-            .current_dir(abs_work_directory)
-            .args([String::from("config")].into_iter().chain(args))
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let err = String::from_utf8(output.stderr)?;
-            anyhow::bail!(err);
-        }
-
-        String::from_utf8(output.stdout).map_err(Into::into)
-    }
-
     fn is_fake(&self) -> bool {
         false
-    }
-
-    fn subscribe_to_jobs(&self) -> JobEventReceiver {
-        let (sender, receiver) = futures::channel::mpsc::unbounded();
-        self.job_event_subscribers.lock().push(sender);
-        receiver
     }
 
     /// Checks whether the file system is case sensitive by attempting to create two files
@@ -1367,9 +1289,126 @@ impl Fs for RealFs {
                 let res = trash::restore_all([trashed_entry.into_trash_item()]);
                 tx.send(res)
             })
-            .expect("The OS can spawn a threads");
-        rx.await.expect("Restore all never panics")?;
+            .map_err(|error| TrashRestoreError::Unknown {
+                description: format!("failed to spawn trash restore thread: {error}"),
+            })?;
+        rx.await.map_err(|error| TrashRestoreError::Unknown {
+            description: format!("trash restore thread ended without a result: {error}"),
+        })??;
         Ok(restored_item_path)
+    }
+}
+
+#[async_trait::async_trait]
+impl ArchiveService for RealFs {
+    async fn extract_tar_file(
+        &self,
+        path: &Path,
+        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
+    ) -> Result<()> {
+        content.unpack(path).await?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl GitService for RealFs {
+    fn open_repo(
+        &self,
+        dotgit_path: &Path,
+        system_git_binary_path: Option<&Path>,
+    ) -> Result<Arc<dyn GitRepository>> {
+        Ok(Arc::new(RealGitRepository::new(
+            dotgit_path,
+            self.bundled_git_binary_path.clone(),
+            system_git_binary_path.map(|path| path.to_path_buf()),
+            self.executor.clone(),
+        )?))
+    }
+
+    async fn git_init(
+        &self,
+        abs_work_directory_path: &Path,
+        fallback_branch_name: String,
+    ) -> Result<()> {
+        let result = new_command("git")
+            .current_dir(abs_work_directory_path)
+            .args(&["config", "--global", "--get", "init.defaultBranch"])
+            .output()
+            .await;
+
+        let branch_name = match result {
+            Ok(output) if !output.stdout.is_empty() => String::from_utf8(output.stdout)?,
+            _ => fallback_branch_name,
+        };
+
+        new_command("git")
+            .current_dir(abs_work_directory_path)
+            .args(&["init", "-b"])
+            .arg(branch_name.trim())
+            .output()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn git_clone(&self, abs_work_directory: &Path, repo_url: &str) -> Result<()> {
+        let job_id = self.next_job_id.fetch_add(1, Ordering::SeqCst);
+        let job_info = JobInfo {
+            id: job_id,
+            start: Instant::now(),
+            message: SharedString::from(format!("Cloning {}", repo_url)),
+        };
+
+        let job_tracker = JobTracker::new(job_info, self.job_event_subscribers.clone());
+        let mut child = new_command("git")
+            .current_dir(abs_work_directory)
+            .args(["clone", "--progress", repo_url])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()?;
+        let stderr = child
+            .stderr
+            .take()
+            .context("failed to read git clone progress")?;
+        let stderr_output = git_clone_progress::read(stderr, |message| {
+            job_tracker.update(message.into());
+        })
+        .await?;
+        let status = child.status().await?;
+
+        if !status.success() {
+            anyhow::bail!(
+                "git clone failed: {}",
+                git_clone_progress::failure_message(&stderr_output)
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn git_config(&self, abs_work_directory: &Path, args: Vec<String>) -> Result<String> {
+        let output = new_command("git")
+            .current_dir(abs_work_directory)
+            .args([String::from("config")].into_iter().chain(args))
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let error = String::from_utf8(output.stderr)?;
+            anyhow::bail!(error);
+        }
+
+        String::from_utf8(output.stdout).map_err(Into::into)
+    }
+}
+
+impl ProcessService for RealFs {
+    fn subscribe_to_jobs(&self) -> JobEventReceiver {
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        self.job_event_subscribers.lock().push(sender);
+        receiver
     }
 }
 
@@ -2980,29 +3019,6 @@ impl Fs for FakeFs {
         Ok(())
     }
 
-    async fn extract_tar_file(
-        &self,
-        path: &Path,
-        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
-    ) -> Result<()> {
-        let mut entries = content.entries()?;
-        while let Some(entry) = entries.next().await {
-            let mut entry = entry?;
-            if entry.header().entry_type().is_file() {
-                let path = path.join(entry.path()?.as_ref());
-                let mut bytes = Vec::new();
-                entry.read_to_end(&mut bytes).await?;
-                self.create_dir(
-                    path.parent()
-                        .expect("path should have the expected component"),
-                )
-                .await?;
-                self.write_file_internal(&path, bytes, true)?;
-            }
-        }
-        Ok(())
-    }
-
     async fn rename(&self, old_path: &Path, new_path: &Path, options: RenameOptions) -> Result<()> {
         self.simulate_random_delay().await;
 
@@ -3273,6 +3289,7 @@ impl Fs for FakeFs {
                     is_fifo: false,
                     is_executable: false,
                     is_writable: true,
+                    change_token: None,
                 },
                 FakeFsEntry::Dir {
                     inode, mtime, len, ..
@@ -3285,6 +3302,7 @@ impl Fs for FakeFs {
                     is_fifo: false,
                     is_executable: false,
                     is_writable: true,
+                    change_token: None,
                 },
                 FakeFsEntry::Symlink { .. } => unreachable!(),
             }))
@@ -3364,56 +3382,12 @@ impl Fs for FakeFs {
         )
     }
 
-    fn open_repo(
-        &self,
-        abs_dot_git: &Path,
-        _system_git_binary: Option<&Path>,
-    ) -> Result<Arc<dyn GitRepository>> {
-        self.with_git_state_and_paths(
-            abs_dot_git,
-            false,
-            |_, repository_dir_path, common_dir_path| {
-                Arc::new(fake_git_repo::FakeGitRepository {
-                    fs: self.this.upgrade().expect("entity should be alive"),
-                    executor: self.executor.clone(),
-                    dot_git_path: abs_dot_git.to_path_buf(),
-                    repository_dir_path: repository_dir_path.to_owned(),
-                    common_dir_path: common_dir_path.to_owned(),
-                    checkpoints: Arc::default(),
-                    is_trusted: Arc::default(),
-                }) as _
-            },
-        )
-    }
-
-    async fn git_init(
-        &self,
-        abs_work_directory_path: &Path,
-        _fallback_branch_name: String,
-    ) -> Result<()> {
-        self.create_dir(&abs_work_directory_path.join(".git")).await
-    }
-
-    async fn git_clone(&self, _abs_work_directory: &Path, _repo_url: &str) -> Result<()> {
-        anyhow::bail!("Git clone is not supported in fake Fs")
-    }
-
-    async fn git_config(&self, _abs_work_directory: &Path, _args: Vec<String>) -> Result<String> {
-        anyhow::bail!("Git config is not supported in fake Fs")
-    }
-
     fn is_fake(&self) -> bool {
         true
     }
 
     async fn is_case_sensitive(&self) -> bool {
         self.state.lock().case_sensitive
-    }
-
-    fn subscribe_to_jobs(&self) -> JobEventReceiver {
-        let (sender, receiver) = futures::channel::mpsc::unbounded();
-        self.state.lock().job_event_subscribers.lock().push(sender);
-        receiver
     }
 
     async fn restore(&self, trashed_entry: TrashedEntry) -> Result<PathBuf, TrashRestoreError> {
@@ -3462,6 +3436,82 @@ impl Fs for FakeFs {
     #[cfg(feature = "test-support")]
     fn as_fake(&self) -> Arc<FakeFs> {
         self.this.upgrade().expect("entity should be alive")
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[async_trait::async_trait]
+impl ArchiveService for FakeFs {
+    async fn extract_tar_file(
+        &self,
+        path: &Path,
+        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
+    ) -> Result<()> {
+        let mut entries = content.entries()?;
+        while let Some(entry) = entries.next().await {
+            let mut entry = entry?;
+            if entry.header().entry_type().is_file() {
+                let path = path.join(entry.path()?.as_ref());
+                let mut bytes = Vec::new();
+                entry.read_to_end(&mut bytes).await?;
+                let parent = path.parent().context("archive entry has no parent")?;
+                self.create_dir(parent).await?;
+                self.write_file_internal(&path, bytes, true)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[async_trait::async_trait]
+impl GitService for FakeFs {
+    fn open_repo(
+        &self,
+        abs_dot_git: &Path,
+        _system_git_binary: Option<&Path>,
+    ) -> Result<Arc<dyn GitRepository>> {
+        self.with_git_state_and_paths(
+            abs_dot_git,
+            false,
+            |_, repository_dir_path, common_dir_path| {
+                let filesystem = self.this.upgrade().context("fake filesystem was dropped")?;
+                anyhow::Ok(Arc::new(fake_git_repo::FakeGitRepository {
+                    fs: filesystem,
+                    executor: self.executor.clone(),
+                    dot_git_path: abs_dot_git.to_path_buf(),
+                    repository_dir_path: repository_dir_path.to_owned(),
+                    common_dir_path: common_dir_path.to_owned(),
+                    checkpoints: Arc::default(),
+                    is_trusted: Arc::default(),
+                }) as Arc<dyn GitRepository>)
+            },
+        )?
+    }
+
+    async fn git_init(
+        &self,
+        abs_work_directory_path: &Path,
+        _fallback_branch_name: String,
+    ) -> Result<()> {
+        self.create_dir(&abs_work_directory_path.join(".git")).await
+    }
+
+    async fn git_clone(&self, _abs_work_directory: &Path, _repo_url: &str) -> Result<()> {
+        anyhow::bail!("Git clone is not supported in fake Fs")
+    }
+
+    async fn git_config(&self, _abs_work_directory: &Path, _args: Vec<String>) -> Result<String> {
+        anyhow::bail!("Git config is not supported in fake Fs")
+    }
+}
+
+#[cfg(feature = "test-support")]
+impl ProcessService for FakeFs {
+    fn subscribe_to_jobs(&self) -> JobEventReceiver {
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        self.state.lock().job_event_subscribers.lock().push(sender);
+        receiver
     }
 }
 

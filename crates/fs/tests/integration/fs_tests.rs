@@ -17,6 +17,13 @@ use gpui::{BackgroundExecutor, TestAppContext};
 use serde_json::json;
 use tempfile::TempDir;
 use util::path;
+use vfs::{
+    CancellationToken, CaseSensitivity, CopyOptions as VfsCopyOptions, CreateDisposition,
+    EntryKind as VfsEntryKind, FileAccess, OpenOptions, OperationContext, OperationId,
+    ProviderPath, RenameOptions as VfsRenameOptions, StatOptions, SymbolicLinkMode, VfsErrorCode,
+    VfsEventKind, VfsProvider, WatchDepth, WatchRequest, WriteAtOptions,
+    test_support::run_provider_conformance,
+};
 
 #[gpui::test]
 async fn test_fake_fs(executor: BackgroundExecutor) {
@@ -154,6 +161,532 @@ async fn test_real_fs_legacy_storage_conformance(
         result.is_ok(),
         "real filesystem conformance failed: {result:?}"
     );
+}
+
+#[gpui::test]
+async fn test_legacy_fs_provider_conformance(executor: BackgroundExecutor) {
+    let filesystem: Arc<dyn Fs> = FakeFs::new(executor);
+    let provider: Arc<dyn VfsProvider> = Arc::new(LegacyFsProvider::new(
+        "legacy-fake",
+        Arc::<Path>::from(Path::new(path!("/vfs-provider"))),
+        filesystem.clone(),
+        CaseSensitivity::Sensitive,
+    ));
+    let create_root = filesystem
+        .create_dir(Path::new(path!("/vfs-provider")))
+        .await;
+    assert!(
+        create_root.is_ok(),
+        "failed to create legacy provider root: {create_root:?}"
+    );
+    let result = run_provider_conformance(provider).await;
+    assert!(
+        result.is_ok(),
+        "legacy provider conformance failed: {result:?}"
+    );
+}
+
+#[gpui::test]
+async fn test_local_provider_conformance(executor: BackgroundExecutor, cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new();
+    let Ok(temporary_directory) = temporary_directory else {
+        panic!("failed to create local provider root: {temporary_directory:?}");
+    };
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let provider = LocalProvider::new(
+        "local-real",
+        Arc::<Path>::from(temporary_directory.path()),
+        filesystem,
+    )
+    .await;
+    let provider = match provider {
+        Ok(provider) => provider,
+        Err(error) => panic!("failed to create local provider: {error:?}"),
+    };
+    let result = run_provider_conformance(Arc::new(provider)).await;
+    assert!(
+        result.is_ok(),
+        "local provider conformance failed: {result:?}"
+    );
+}
+
+#[gpui::test]
+async fn test_local_provider_concurrent_positioned_io(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new();
+    let Ok(temporary_directory) = temporary_directory else {
+        panic!("failed to create positioned I/O root: {temporary_directory:?}");
+    };
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let provider = LocalProvider::new(
+        "local-positioned-io",
+        Arc::<Path>::from(temporary_directory.path()),
+        filesystem,
+    )
+    .await;
+    let provider = match provider {
+        Ok(provider) => provider,
+        Err(error) => panic!("failed to create local provider: {error:?}"),
+    };
+    let path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"positioned.bin".as_slice()],
+    );
+    let Ok(path) = path else {
+        panic!("positioned I/O path must be valid: {path:?}");
+    };
+    let file = provider
+        .open(
+            &path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    let file = match file {
+        Ok(file) => file,
+        Err(error) => panic!("failed to open positioned I/O fixture: {error:?}"),
+    };
+
+    const BLOCK_COUNT: usize = 16;
+    const BLOCK_SIZE: usize = 4_096;
+    let writes = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
+        let file = file.clone();
+        async move {
+            let bytes = vec![block_index as u8; BLOCK_SIZE];
+            file.write_at(
+                (block_index * BLOCK_SIZE) as u64,
+                &bytes,
+                WriteAtOptions::default(),
+            )
+            .await
+        }
+    }))
+    .await;
+    assert!(
+        writes
+            .iter()
+            .all(|result| result.as_ref().is_ok_and(|written| *written == BLOCK_SIZE)),
+        "concurrent positioned write failed: {writes:?}"
+    );
+
+    let reads = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
+        let file = file.clone();
+        async move {
+            let mut bytes = vec![0; BLOCK_SIZE];
+            let result = file
+                .read_at(
+                    (block_index * BLOCK_SIZE) as u64,
+                    &mut bytes,
+                    OperationContext::default(),
+                )
+                .await;
+            (block_index, result, bytes)
+        }
+    }))
+    .await;
+    for (block_index, result, bytes) in reads {
+        assert!(matches!(result, Ok(BLOCK_SIZE)));
+        assert!(
+            bytes.iter().all(|byte| *byte == block_index as u8),
+            "positioned read returned bytes from another offset"
+        );
+    }
+
+    let cancellation = CancellationToken::default();
+    cancellation.cancel();
+    let mut bytes = [0; 1];
+    let cancelled = file
+        .read_at(
+            0,
+            &mut bytes,
+            OperationContext {
+                operation_id: OperationId::new(10_000),
+                cancellation,
+            },
+        )
+        .await;
+    assert!(
+        cancelled
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.code() == VfsErrorCode::Cancelled)
+    );
+}
+
+#[gpui::test]
+async fn test_local_provider_positioned_io_throughput_not_below_legacy(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new();
+    let Ok(temporary_directory) = temporary_directory else {
+        panic!("failed to create positioned I/O benchmark root: {temporary_directory:?}");
+    };
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let native_root = temporary_directory.path().join("native");
+    let legacy_root = temporary_directory.path().join("legacy");
+    let create_native_root = filesystem.create_dir(&native_root).await;
+    let create_legacy_root = filesystem.create_dir(&legacy_root).await;
+    assert!(create_native_root.is_ok(), "failed to create native root");
+    assert!(create_legacy_root.is_ok(), "failed to create legacy root");
+
+    let local_provider = LocalProvider::new(
+        "local-throughput",
+        Arc::<Path>::from(native_root),
+        filesystem.clone(),
+    )
+    .await;
+    let local_provider = match local_provider {
+        Ok(provider) => provider,
+        Err(error) => panic!("failed to create local provider: {error:?}"),
+    };
+    let legacy_provider = LegacyFsProvider::new(
+        "legacy-throughput",
+        Arc::<Path>::from(legacy_root),
+        filesystem,
+        CaseSensitivity::Sensitive,
+    );
+    let local_path = ProviderPath::from_byte_components(
+        local_provider.descriptor().path_encoding,
+        [b"throughput.bin".as_slice()],
+    );
+    let legacy_path = ProviderPath::from_byte_components(
+        legacy_provider.descriptor().path_encoding,
+        [b"throughput.bin".as_slice()],
+    );
+    let (Ok(local_path), Ok(legacy_path)) = (local_path, legacy_path) else {
+        panic!("throughput fixture paths must be valid");
+    };
+    let local_file = local_provider
+        .open(
+            &local_path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    let legacy_file = legacy_provider
+        .open(
+            &legacy_path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    let local_file = match local_file {
+        Ok(file) => file,
+        Err(error) => panic!("failed to open local throughput file: {error:?}"),
+    };
+    let legacy_file = match legacy_file {
+        Ok(file) => file,
+        Err(error) => panic!("failed to open legacy throughput file: {error:?}"),
+    };
+
+    const BLOCK_COUNT: usize = 8;
+    const BLOCK_SIZE: usize = 256 * 1_024;
+    let legacy_start = std::time::Instant::now();
+    let legacy_results = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
+        let file = legacy_file.clone();
+        async move {
+            let bytes = vec![block_index as u8; BLOCK_SIZE];
+            file.write_at(
+                (block_index * BLOCK_SIZE) as u64,
+                &bytes,
+                WriteAtOptions::default(),
+            )
+            .await
+        }
+    }))
+    .await;
+    let legacy_elapsed = legacy_start.elapsed();
+    assert!(legacy_results.iter().all(Result::is_ok));
+
+    let local_start = std::time::Instant::now();
+    let local_results = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
+        let file = local_file.clone();
+        async move {
+            let bytes = vec![block_index as u8; BLOCK_SIZE];
+            file.write_at(
+                (block_index * BLOCK_SIZE) as u64,
+                &bytes,
+                WriteAtOptions::default(),
+            )
+            .await
+        }
+    }))
+    .await;
+    let local_elapsed = local_start.elapsed();
+    assert!(local_results.iter().all(Result::is_ok));
+
+    println!(
+        "legacy positioned emulation: {legacy_elapsed:?}; native positioned I/O: {local_elapsed:?}"
+    );
+    assert!(
+        local_elapsed.as_secs_f64() <= legacy_elapsed.as_secs_f64() * 1.10,
+        "native positioned I/O regressed by more than 10%: legacy={legacy_elapsed:?}, local={local_elapsed:?}"
+    );
+}
+
+#[gpui::test]
+async fn test_legacy_provider_watch_sequence_rename_storm_and_overflow(
+    executor: BackgroundExecutor,
+) {
+    let filesystem = FakeFs::new(executor);
+    let create_root = filesystem
+        .create_dir(Path::new(path!("/watch-provider")))
+        .await;
+    assert!(create_root.is_ok(), "failed to create watch provider root");
+    let provider = LegacyFsProvider::new(
+        "legacy-watch",
+        Arc::<Path>::from(Path::new(path!("/watch-provider"))),
+        filesystem.clone(),
+        CaseSensitivity::Sensitive,
+    );
+    let root = ProviderPath::root(provider.descriptor().path_encoding);
+    let initial_path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"entry-0".as_slice()],
+    );
+    let Ok(initial_path) = initial_path else {
+        panic!("watch fixture path must be valid: {initial_path:?}");
+    };
+    let watch = provider
+        .watch(WatchRequest {
+            path: root.clone(),
+            depth: WatchDepth::Recursive,
+            resume_after_sequence: None,
+            context: OperationContext::default(),
+        })
+        .await;
+    let mut watch = match watch {
+        Ok(watch) => watch,
+        Err(error) => panic!("failed to register provider watch: {error:?}"),
+    };
+    let file = provider
+        .open(
+            &initial_path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    assert!(file.is_ok(), "failed to create watched file");
+
+    let mut current_path = initial_path;
+    for rename_index in 1..=20 {
+        let target = ProviderPath::from_byte_components(
+            provider.descriptor().path_encoding,
+            [format!("entry-{rename_index}").as_bytes()],
+        );
+        let Ok(target) = target else {
+            panic!("rename target must be valid: {target:?}");
+        };
+        let rename = provider
+            .rename(&current_path, &target, VfsRenameOptions::default())
+            .await;
+        assert!(rename.is_ok(), "provider rename failed: {rename:?}");
+        current_path = target;
+    }
+    filesystem.emit_fs_event(path!("/watch-provider"), Some(PathEventKind::Rescan));
+
+    let mut last_sequence = 0;
+    let mut saw_overflow = false;
+    for _ in 0..64 {
+        let Some(batch) = watch.next().await else {
+            break;
+        };
+        let Ok(batch) = batch else {
+            panic!("provider watch failed: {batch:?}");
+        };
+        assert!(batch.first_sequence > last_sequence);
+        assert!(batch.last_sequence >= batch.first_sequence);
+        last_sequence = batch.last_sequence;
+        if batch
+            .events
+            .iter()
+            .any(|event| matches!(event.kind, VfsEventKind::Overflow { .. }))
+        {
+            saw_overflow = true;
+            break;
+        }
+    }
+    assert!(
+        saw_overflow,
+        "watch did not expose backend rescan as overflow"
+    );
+    let final_metadata = provider.stat(&current_path, StatOptions::default()).await;
+    assert!(
+        final_metadata.is_ok(),
+        "final renamed path was not committed: {final_metadata:?}"
+    );
+    let reconciled = provider.read_dir(&root, Default::default()).await;
+    let Ok(reconciled) = reconciled else {
+        panic!("scoped rescan failed: {reconciled:?}");
+    };
+    assert_eq!(reconciled.entries.len(), 1);
+    assert_eq!(
+        reconciled.entries.first().map(|entry| &entry.path),
+        Some(&current_path)
+    );
+}
+
+#[gpui::test]
+#[cfg(unix)]
+async fn test_local_provider_rejects_symlink_escape(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new();
+    let Ok(temporary_directory) = temporary_directory else {
+        panic!("failed to create containment fixture: {temporary_directory:?}");
+    };
+    let provider_root = temporary_directory.path().join("provider");
+    let outside_file = temporary_directory.path().join("outside.txt");
+    let create_root = smol::fs::create_dir(&provider_root).await;
+    let write_outside = smol::fs::write(&outside_file, b"private").await;
+    assert!(create_root.is_ok(), "failed to create provider root");
+    assert!(write_outside.is_ok(), "failed to create outside file");
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let link_path = provider_root.join("escape-link");
+    let create_link = filesystem
+        .create_symlink(&link_path, outside_file.clone())
+        .await;
+    assert!(create_link.is_ok(), "failed to create containment symlink");
+    let provider = LocalProvider::new(
+        "local-containment",
+        Arc::<Path>::from(provider_root),
+        filesystem,
+    )
+    .await;
+    let provider = match provider {
+        Ok(provider) => provider,
+        Err(error) => panic!("failed to create local provider: {error:?}"),
+    };
+    let path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"escape-link".as_slice()],
+    );
+    let Ok(path) = path else {
+        panic!("containment path must be valid: {path:?}");
+    };
+    let metadata = provider
+        .stat(
+            &path,
+            StatOptions {
+                symbolic_link_mode: SymbolicLinkMode::DoNotFollow,
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    let Ok(metadata) = metadata else {
+        panic!("symlink metadata should be visible: {metadata:?}");
+    };
+    assert_eq!(metadata.kind, VfsEntryKind::SymbolicLink);
+    assert!(metadata.symbolic_link_target.is_none());
+
+    let opened = provider.open(&path, OpenOptions::default()).await;
+    assert!(
+        opened
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.code() == VfsErrorCode::PermissionDenied),
+        "symlink escape was not rejected"
+    );
+    let copied_path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"copied-link".as_slice()],
+    );
+    let Ok(copied_path) = copied_path else {
+        panic!("copy target path must be valid: {copied_path:?}");
+    };
+    let copied = provider
+        .copy(&path, &copied_path, VfsCopyOptions::default())
+        .await;
+    assert!(
+        copied
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.code() == VfsErrorCode::PermissionDenied),
+        "copy followed a symlink outside the provider root"
+    );
+}
+
+#[gpui::test]
+#[cfg(unix)]
+async fn test_local_provider_preserves_non_utf8_directory_names(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    use std::os::unix::ffi::OsStringExt as _;
+
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new();
+    let Ok(temporary_directory) = temporary_directory else {
+        panic!("failed to create non-UTF-8 fixture: {temporary_directory:?}");
+    };
+    let exact_name = vec![0xff, b'-', b'f', b'i', b'l', b'e'];
+    let file_path = temporary_directory
+        .path()
+        .join(OsString::from_vec(exact_name.clone()));
+    let write_path = file_path.clone();
+    let write_result = smol::unblock(move || std::fs::write(write_path, b"bytes")).await;
+    assert!(write_result.is_ok(), "failed to write non-UTF-8 fixture");
+
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let provider = LocalProvider::new(
+        "local-non-utf8",
+        Arc::<Path>::from(temporary_directory.path()),
+        filesystem,
+    )
+    .await;
+    let provider = match provider {
+        Ok(provider) => provider,
+        Err(error) => panic!("failed to create local provider: {error:?}"),
+    };
+    let root = ProviderPath::root(provider.descriptor().path_encoding);
+    let page = provider.read_dir(&root, Default::default()).await;
+    let Ok(page) = page else {
+        panic!("failed to read non-UTF-8 directory: {page:?}");
+    };
+    assert_eq!(page.entries.len(), 1);
+    let Some(entry) = page.entries.first() else {
+        panic!("non-UTF-8 directory entry was missing");
+    };
+    assert_eq!(
+        entry.path.file_name().map(|name| name.as_bytes()),
+        Some(exact_name.as_slice())
+    );
+
+    let file = provider.open(&entry.path, OpenOptions::default()).await;
+    let file = match file {
+        Ok(file) => file,
+        Err(error) => panic!("failed to open non-UTF-8 path: {error:?}"),
+    };
+    let mut bytes = [0; 5];
+    let read = file
+        .read_at(0, &mut bytes, OperationContext::default())
+        .await;
+    assert!(matches!(read, Ok(5)));
+    assert_eq!(&bytes, b"bytes");
 }
 
 #[gpui::test]

@@ -125,7 +125,7 @@ impl ActivityIndicator {
             .detach();
 
             let fs = project.read(cx).fs().clone();
-            let mut job_events = fs.subscribe_to_jobs();
+            let mut job_events = fs::ProcessService::subscribe_to_jobs(fs.as_ref());
             cx.spawn(async move |this, cx| {
                 while let Some(job_event) = job_events.next().await {
                     this.update(cx, |this: &mut ActivityIndicator, cx| {

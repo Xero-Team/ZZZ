@@ -4,10 +4,10 @@ use crate::{
     EntryMetadata, EntryName, EntryPermissions, EventBatch, FileAccess, LinkCapabilities,
     MutationCapabilities, OpenOptions, OperationContext, PathEncoding, ProviderCapabilities,
     ProviderDescriptor, ProviderFileKey, ProviderId, ProviderLimits, ProviderPath,
-    ReadCapabilities, RemoveKind, RemoveOptions, RemoveOutcome, RenameOptions, StatOptions,
-    SupportLevel, TrashCapabilities, VfsError, VfsErrorCode, VfsEvent, VfsEventKind, VfsFile,
-    VfsOperation, VfsProvider, VfsResult, VfsVersion, WatchCapabilities, WatchDepth, WatchRequest,
-    WriteAtOptions, WriteCapabilities,
+    ReadCapabilities, RemoveKind, RemoveOptions, RemoveOutcome, RemovedEntryCount, RenameOptions,
+    StatOptions, SupportLevel, TrashCapabilities, VfsError, VfsErrorCode, VfsEvent, VfsEventKind,
+    VfsFile, VfsOperation, VfsProvider, VfsResult, VfsVersion, WatchCapabilities, WatchDepth,
+    WatchRequest, WriteAtOptions, WriteCapabilities,
 };
 use async_trait::async_trait;
 use futures::{
@@ -658,7 +658,9 @@ impl VfsProvider for MemoryProvider {
             }],
             VfsOperation::Remove,
         )?;
-        Ok(RemoveOutcome { removed_entries })
+        Ok(RemoveOutcome {
+            removed_entries: RemovedEntryCount::Exact(removed_entries),
+        })
     }
 
     async fn rename(

@@ -5607,6 +5607,7 @@ dependencies = [
  "anyhow",
  "ashpd",
  "async-channel 2.5.0",
+ "async-lock",
  "async-tar",
  "async-trait",
  "collections",
@@ -5635,6 +5636,7 @@ dependencies = [
  "trash",
  "unicode-normalization",
  "util",
+ "vfs",
  "windows 0.62.2",
 ]
 

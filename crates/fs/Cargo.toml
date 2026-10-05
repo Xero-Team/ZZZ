@@ -20,6 +20,7 @@ path = "tests/integration/fs_tests.rs"
 [dependencies]
 anyhow.workspace = true
 async-channel.workspace = true
+async-lock.workspace = true
 async-tar.workspace = true
 async-trait.workspace = true
 collections.workspace = true
@@ -41,6 +42,7 @@ tempfile.workspace = true
 text.workspace = true
 time.workspace = true
 util.workspace = true
+vfs.workspace = true
 is_executable = "1.0.6"
 notify = "8.2.0"
 # Vendored from https://github.com/ArturKovacs/trash @ 54e0a2d69fdc058cc2efa19a497ec8f44631d61f
@@ -63,6 +65,7 @@ unicode-normalization = "0.1"
 fs = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 git = { workspace = true, features = ["test-support"] }
+vfs = { workspace = true, features = ["test-support"] }
 
 [features]
 test-support = ["gpui/test-support", "git/test-support", "util/test-support"]

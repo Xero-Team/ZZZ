@@ -268,13 +268,17 @@ pub async fn run_provider_conformance(
     let native_path = provider
         .native_path(&renamed, OperationContext::default())
         .await;
-    ensure(
-        native_path
-            .as_ref()
-            .err()
-            .is_some_and(|error| error.code() == VfsErrorCode::Unsupported),
-        "unsupported operation is typed",
-    )?;
+    if provider.capabilities().links.native_path.is_supported() {
+        ensure(native_path.is_ok(), "supported native path mapping")?;
+    } else {
+        ensure(
+            native_path
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.code() == VfsErrorCode::Unsupported),
+            "unsupported operation is typed",
+        )?;
+    }
 
     provider
         .remove(

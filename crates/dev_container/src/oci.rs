@@ -137,10 +137,12 @@ pub(crate) async fn download_oci_tarball(
     futures::pin_mut!(body);
     let body: Pin<&mut (dyn AsyncRead + Send)> = body;
     let archive = async_tar::Archive::new(body);
-    fs.extract_tar_file(dest_dir, archive).await.map_err(|e| {
-        log::error!("Failed to extract feature tarball: {e}");
-        DevContainerError::FilesystemError
-    })?;
+    fs::ArchiveService::extract_tar_file(fs.as_ref(), dest_dir, archive)
+        .await
+        .map_err(|e| {
+            log::error!("Failed to extract feature tarball: {e}");
+            DevContainerError::FilesystemError
+        })?;
 
     Ok(())
 }

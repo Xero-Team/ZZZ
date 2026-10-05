@@ -1,4 +1,4 @@
-use fs::{FakeFs, Fs};
+use fs::{FakeFs, Fs, GitService};
 use gpui::{BackgroundExecutor, TestAppContext};
 use serde_json::json;
 use std::path::{Path, PathBuf};

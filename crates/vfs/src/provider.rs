@@ -611,7 +611,13 @@ impl Default for CopyOptions {
 
 #[derive(Clone, Debug)]
 pub struct RemoveOutcome {
-    pub removed_entries: u64,
+    pub removed_entries: RemovedEntryCount,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RemovedEntryCount {
+    Exact(u64),
+    Unknown,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

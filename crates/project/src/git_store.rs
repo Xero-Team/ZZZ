@@ -487,7 +487,11 @@ impl LocalRepositoryState {
                         git_from_process,
                     );
 
-                    fs.open_repo(&dot_git_abs_path, system_git_binary_path.as_deref())
+                    fs::GitService::open_repo(
+                        fs.as_ref(),
+                        &dot_git_abs_path,
+                        system_git_binary_path.as_deref(),
+                    )
                         .with_context(|| format!("opening repository at {dot_git_abs_path:?}"))
                 }
             })
@@ -2146,8 +2150,9 @@ impl GitStore {
         match &self.state {
             GitStoreState::Local { fs, .. } => {
                 let fs = fs.clone();
-                cx.background_executor()
-                    .spawn(async move { fs.git_init(&path, fallback_branch_name).await })
+                cx.background_executor().spawn(async move {
+                    fs::GitService::git_init(fs.as_ref(), &path, fallback_branch_name).await
+                })
             }
             GitStoreState::Remote {
                 upstream_client,
@@ -2180,8 +2185,9 @@ impl GitStore {
         match &self.state {
             GitStoreState::Local { fs, .. } => {
                 let fs = fs.clone();
-                cx.background_executor()
-                    .spawn(async move { fs.git_clone(&path, &repo).await })
+                cx.background_executor().spawn(async move {
+                    fs::GitService::git_clone(fs.as_ref(), &path, &repo).await
+                })
             }
             GitStoreState::Remote {
                 upstream_client,
@@ -2211,8 +2217,9 @@ impl GitStore {
         match &self.state {
             GitStoreState::Local { fs, .. } => {
                 let fs = fs.clone();
-                cx.background_executor()
-                    .spawn(async move { fs.git_config(&path, args).await })
+                cx.background_executor().spawn(async move {
+                    fs::GitService::git_config(fs.as_ref(), &path, args).await
+                })
             }
             GitStoreState::Remote { .. } => {
                 // TODO: Implement this for remote repositories.

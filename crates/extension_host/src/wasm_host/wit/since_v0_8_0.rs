@@ -1126,10 +1126,12 @@ impl ExtensionImports for WasmState {
                     let decompressed_bytes =
                         GzipDecoder::new(BufReader::new(tar_gz_bytes.as_slice()));
                     futures::pin_mut!(decompressed_bytes);
-                    self.host
-                        .fs
-                        .extract_tar_file(&destination_path, Archive::new(decompressed_bytes))
-                        .await?;
+                    fs::ArchiveService::extract_tar_file(
+                        self.host.fs.as_ref(),
+                        &destination_path,
+                        Archive::new(decompressed_bytes),
+                    )
+                    .await?;
                 }
                 DownloadedFileType::Zip => {
                     futures::pin_mut!(body);
