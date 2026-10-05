@@ -21,7 +21,7 @@ description: Execution ledger for the staged GPUI infrastructure refactor.
 | 2026-10-05 续作基线        | `c4fc7df24af6e096efb01fece5a6dafec0145f2e` |
 | 基线复核                   | `PASS`：开始执行时 HEAD 与计划基线相同     |
 | 通用 Zed reviewed baseline | `decbf641b18f1982b3475c037e7c5c554471574f` |
-| 当前阶段                   | 阶段 4/6/7 收敛                            |
+| 当前阶段                   | 阶段 7/9 收敛                              |
 | Goal 状态                  | `ACTIVE`                                   |
 
 开始执行时，工作树包含用户已有的 GUI 研究文档修改、未跟踪的计划文档和
@@ -396,7 +396,7 @@ cargo test --locked -p gpui_wgpu --features test-support --test headless_rendere
 
 ### 阶段 4：拆分 `Window`
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 4A frame owner 当前进度：
 
@@ -407,7 +407,10 @@ cargo test --locked -p gpui_wgpu --features test-support --test headless_rendere
   `frame.rs`；`Window` 只保留绘制 orchestration 和必要的 `pub(crate)` owner 边界。
 - 新增 `FrameScheduler`，集中持有 next-frame callbacks、expanded dirty views、present
   demand 和 full-refresh state；`Window` 与 `App` 只通过 owner 方法协调这些状态。
-- 第一、第二提交都只移动状态和私有算法，不改变行为；不可变 `BuiltFrame` 尚未迁移。
+- `FrameBuilder` 最终集中持有 layout engine、element/text-style/entity/offset/mask/image-cache
+  stacks、opacity 和 autoscroll request；字段保持私有，`Window` 只通过窄 owner 方法协调。
+- builder 在 frame 边界检查 layout engine 与所有临时 stack/opacity invariant，避免 build
+  state 泄漏到下一帧；本轮只改变所有权和访问路径，不改变布局或绘制算法。
 
 验证：
 
@@ -420,9 +423,8 @@ cargo test --locked -p gpui_wgpu --features test-support --test headless_rendere
 | `git diff --check`                                               | `PASS` | frame/window 迁移无 whitespace error                    |
 
 提交：invalidation owner `1946811f30`；completed frame state owner `ccd2a038df`；frame
-scheduler state `9317625c82`。
-下一步：继续 4B，先抽出 hitbox、dispatch tree、focus/tab、pointer capture 和 key/action
-routing owner，并固定 routing order 回归测试。
+scheduler state `9317625c82`；frame construction owner `1a311a8d03`；owner encapsulation
+`3ec68ed823`。
 
 4B interaction owner 当前进度：
 
@@ -460,8 +462,8 @@ order snapshot `1c52ff05bd`；hitbox/cursor owner methods `9f4d68603c`。
 pointer/action routing owner `d52a99235d`。
 key routing owner `8a2ce07544`；focus/pending-input owner `0ea05bb762`。
 pointer position `3cb415ee42`；tooltip state `be55f5df44`。
-下一步：收敛 4D completed-frame accessibility/diagnostics payload，并继续检查
-`window.rs` 中仍可归属 owner 的平行状态。
+frame、interaction、focus、pointer、tooltip 和 routing state 已归属 owner；`window.rs`
+保留公开 façade、platform/lifecycle 组合和 draw/present 协调。
 
 4C text input owner 当前进度：
 
@@ -491,39 +493,48 @@ pointer position `3cb415ee42`；tooltip state `be55f5df44`。
 
 提交：handler cache owner `71c66cc2ae`；narrow client seam `34694640b2`；cache-slot swap
 fix `ff126abc7a`；platform client boundary `ad83ac2e12`。
-下一步：完成 native platform IME repetition runbook；当前 Linux 单元层的 Editor IME、
-UTF-16、多 cursor 和 candidate geometry checks 已通过。
+native platform IME repetition runbook 归阶段 7 的平台验证债务；不再阻塞阶段 4 的
+text-input ownership 边界。
 
 4D built frame 当前进度：
 
-- 增加只读 `BuiltFrame` projection，包含 `Scene`、interaction snapshot、text-input
-  snapshot、accessibility update placeholder 和 diagnostics snapshot。
+- 增加只读 `BuiltFrame` projection，包含 `Scene`、窄 interaction snapshot、text-input
+  snapshot、accessibility update 和 diagnostics snapshot。
 - platform `draw` 与 test-support `render_to_image` 现在只接收 completed frame 的不可变
   scene view；frame owner 继续负责构建、交换和 cache replay。
-- 这是 4D 的第一步，snapshot 的 accessibility/diagnostics 数据接线和 renderer contract
-  仍待阶段 5；当前不宣称 immutable ownership 已完全收敛。
+- `BuiltFrame` 有意借用 completed frame 的 scene、hitboxes 和 dispatch tree，而不复制
+  `Scene`；Rust shared borrow 在 synchronous submission 生命周期内禁止 owner mutation。
+  interaction projection 不再暴露整个 `Frame`，platform/render consumer 无法取得 mutable
+  completed-frame state。
+- cache replay 仍是下一帧 build 内部算法，只在 `BuiltFrame` projection 已释放后从上一
+  completed frame 读取/转移 cache payload；它不穿过 platform/render contract。
 - `AccessibilityUpdate` 与 diagnostics snapshot 现在由 completed `Frame` 持有，随 frame
   swap 进入 `BuiltFrame`；frame clear 会清空旧 payload，避免复用上一帧数据。
 - `Window.pending_frame_timing` 平行状态已删除；`present` 从 `BuiltFrame.diagnostics` 读取
   当前 build timing，accessibility bridge 从同一 completed frame 读取 semantic update。
 - accessibility semantic core 的非空 update 已通过 frame build/swap 测试；native adapter
-  仍未接入，本提交没有复制 Zed writer 或平台 adapter 代码。
+  随后在阶段 2 平台验证中接入并通过 Linux runtime，macOS/Windows 保留明确 runbook。
+- `built_frame_projects_only_completed_read_only_state` 固定 scene identity、interaction
+  collections/state 与 active text-input slot projection，防止重新暴露 mutable frame owner。
 
 验证：
 
-| 命令或检查                                                                 | 结果   | 证据                                                |
-| -------------------------------------------------------------------------- | ------ | --------------------------------------------------- |
-| `cargo check --locked -p gpui`                                             | `PASS` | built frame projection 编译通过                     |
-| `cargo test --locked -p gpui --lib`                                        | `PASS` | 223 tests passed                                    |
-| `cargo test --locked -p gpui --lib --features frame-diagnostics`           | `PASS` | 225 tests passed                                    |
-| `cargo test --locked -p gpui --lib --features accessibility accessibility` | `PASS` | 5 tests passed，含 completed-frame semantic payload |
-| `./script/clippy -p gpui --features frame-diagnostics`                     | `PASS` | all-target release clippy 与 philosophy gate 通过   |
-| `git diff --check`                                                         | `PASS` | built frame migration 无 whitespace error           |
+| 命令或检查                                                                     | 结果   | 证据                                                               |
+| ------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------ |
+| `cargo check --locked -p gpui`                                                 | `PASS` | final owner/projection 默认配置编译通过                            |
+| `cargo check --locked -p gpui --features frame-diagnostics,accessibility`      | `PASS` | diagnostics/accessibility owner 组合编译通过                       |
+| `cargo test --locked -p gpui --lib`                                            | `PASS` | 226 tests passed，含 read-only completed-frame projection          |
+| `cargo test --locked -p gpui --lib --features frame-diagnostics,accessibility` | `PASS` | 237 tests passed，含 semantic、diagnostics、routing 与 owner tests |
+| `./script/clippy -p gpui --features frame-diagnostics,accessibility`           | `PASS` | all-target release clippy 与 philosophy gate 通过                  |
+| `git diff --check`                                                             | `PASS` | final frame owner/built-frame migration 无 whitespace error        |
 
 提交：BuiltFrame projection `e321e6fa0b`；render contract adapter `32d3b403a8`；
-completed-frame payload `8897cb326c`。
-下一步：审查并收敛剩余 completed-frame/read-only renderer contract，再按 EXP-004/005
-决定是否抽出 `gpui_render` crate。
+completed-frame payload `8897cb326c`；narrow read-only projection `98f2e0e21c`。
+
+阶段 4 退出结论：公开 consumer 无需迁移；frame、interaction、text-input 与 completed-frame
+边界均已有 owner，`Window` 不再保存可归属这些 owner 的平行集合。scene、semantic、input、
+focus、IME 单元层/routing 与 visual/headless gates 保持通过；EXP-001、EXP-002、EXP-011 均为
+`PASS` 且未超过既定预算。阶段 4 标记 `COMPLETE`。
 
 ### 阶段 5：render contract 与 WGPU 模块化
 
