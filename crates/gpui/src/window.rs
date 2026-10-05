@@ -27,6 +27,8 @@ use collections::FxHashMap;
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
 use futures::channel::oneshot;
+#[cfg(feature = "accessibility")]
+use futures::{StreamExt as _, channel::mpsc};
 use gpui_util::post_inc;
 use gpui_util::{ResultExt, measure};
 #[cfg(feature = "input-latency-histogram")]
@@ -1033,6 +1035,70 @@ impl Window {
             WindowBounds::Fullscreen(_) => platform_window.toggle_fullscreen(),
             WindowBounds::Maximized(_) => platform_window.zoom(),
             WindowBounds::Windowed(_) => {}
+        }
+
+        #[cfg(feature = "accessibility")]
+        if platform_window.capabilities().accessibility {
+            enum AccessibilityEvent {
+                Activated,
+                Deactivated,
+                Action(accesskit::ActionRequest),
+            }
+
+            let initial_tree = crate::SemanticTreeBuilder::new().snapshot().update;
+            let (event_sender, mut event_receiver) = mpsc::unbounded();
+            platform_window.initialize_accessibility(crate::AccessibilityCallbacks {
+                activation: {
+                    let event_sender = event_sender.clone();
+                    Box::new(move || {
+                        if let Err(error) =
+                            event_sender.unbounded_send(AccessibilityEvent::Activated)
+                        {
+                            log::error!("failed to report accessibility activation: {error}");
+                        }
+                        Some(initial_tree.clone())
+                    })
+                },
+                action: {
+                    let event_sender = event_sender.clone();
+                    Box::new(move |request| {
+                        if let Err(error) =
+                            event_sender.unbounded_send(AccessibilityEvent::Action(request))
+                        {
+                            log::error!("failed to route accessibility action: {error}");
+                        }
+                    })
+                },
+                deactivation: Box::new(move || {
+                    if let Err(error) = event_sender.unbounded_send(AccessibilityEvent::Deactivated)
+                    {
+                        log::error!("failed to report accessibility deactivation: {error}");
+                    }
+                }),
+            })?;
+
+            let mut async_cx = cx.to_async();
+            cx.foreground_executor()
+                .spawn(async move {
+                    while let Some(event) = event_receiver.next().await {
+                        handle
+                            .update(&mut async_cx, |_, window, cx| match event {
+                                AccessibilityEvent::Activated | AccessibilityEvent::Deactivated => {
+                                    window.refresh()
+                                }
+                                AccessibilityEvent::Action(request) => {
+                                    window.dispatch_accessibility_action(
+                                        request.target_node,
+                                        request.action,
+                                        request.data.as_ref(),
+                                        cx,
+                                    );
+                                }
+                            })
+                            .log_err();
+                    }
+                })
+                .detach();
         }
 
         platform_window.on_close(Box::new({
@@ -5840,6 +5906,8 @@ pub fn outline(
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "accessibility")]
+    use crate::AccessibilityUpdate;
+    #[cfg(feature = "accessibility")]
     use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
@@ -6092,7 +6160,7 @@ mod tests {
                 assert!(!capabilities.ime_candidate_position);
                 assert!(capabilities.frame_callbacks);
                 assert!(capabilities.native_prompt);
-                assert!(!capabilities.accessibility);
+                assert_eq!(capabilities.accessibility, cfg!(feature = "accessibility"));
                 assert_eq!(
                     capabilities.clipboard,
                     crate::ClipboardCapabilities::READ_WRITE
@@ -6232,6 +6300,47 @@ mod tests {
             assert_eq!(cached_snapshot.update.nodes.len(), 3);
         })
         .expect("accessibility window should remain open");
+    }
+
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn platform_accessibility_callbacks_route_one_action(cx: &mut TestAppContext) {
+        let action_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let action_count = action_count.clone();
+            move |_, _| AccessibilityView { action_count }
+        });
+        let handle: AnyWindowHandle = window.into();
+        let test_window = cx.test_window(handle);
+
+        let initial_tree = test_window
+            .simulate_accessibility_activation()
+            .expect("test adapter should provide an initial tree");
+        assert_eq!(initial_tree.nodes.len(), 1);
+        cx.run_until_parked();
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+
+        let update = test_window
+            .accessibility_update()
+            .and_then(AccessibilityUpdate::into_semantic_snapshot)
+            .expect("completed frame should reach the platform bridge");
+        let button_id = update
+            .update
+            .nodes
+            .iter()
+            .find_map(|(node_id, node)| {
+                (node.role() == accesskit::Role::Button).then_some(*node_id)
+            })
+            .expect("semantic button should be present");
+
+        test_window.simulate_accessibility_action(accesskit::ActionRequest {
+            action: accesskit::Action::Click,
+            target_tree: accesskit::TreeId::ROOT,
+            target_node: button_id,
+            data: None,
+        });
+        cx.run_until_parked();
+        assert_eq!(action_count.get(), 1);
     }
 
     #[cfg(feature = "frame-diagnostics")]

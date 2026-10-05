@@ -1,3 +1,5 @@
+#[cfg(feature = "accessibility")]
+use crate::{AccessibilityCallbacks, AccessibilityUpdate};
 use crate::{
     AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, GpuSpecs, HeadlessAtlas, Pixels,
     PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput, PlatformWindow, Point,
@@ -40,6 +42,10 @@ pub(crate) struct TestWindowState {
     is_fullscreen: bool,
     scale_factor: f32,
     appearance: WindowAppearance,
+    #[cfg(feature = "accessibility")]
+    accessibility_callbacks: Option<AccessibilityCallbacks>,
+    #[cfg(feature = "accessibility")]
+    accessibility_update: Option<AccessibilityUpdate>,
 }
 
 #[derive(Clone)]
@@ -101,6 +107,10 @@ impl TestWindow {
             // Preserve the test platform's historical 2x default.
             scale_factor: 2.0,
             appearance: WindowAppearance::Light,
+            #[cfg(feature = "accessibility")]
+            accessibility_callbacks: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_update: None,
         })))
     }
 
@@ -176,9 +186,56 @@ impl TestWindow {
         self.0.lock().input_callback = Some(callback);
         !result.propagate
     }
+
+    #[cfg(feature = "accessibility")]
+    pub fn simulate_accessibility_activation(&self) -> Option<accesskit::TreeUpdate> {
+        let state = self.0.lock();
+        state
+            .accessibility_callbacks
+            .as_ref()
+            .and_then(|callbacks| (callbacks.activation)())
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub fn simulate_accessibility_action(&self, request: accesskit::ActionRequest) {
+        if let Some(callbacks) = self.0.lock().accessibility_callbacks.as_ref() {
+            (callbacks.action)(request);
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub fn accessibility_update(&self) -> Option<AccessibilityUpdate> {
+        self.0.lock().accessibility_update.clone()
+    }
 }
 
-impl crate::AccessibilityBridge for TestWindow {}
+impl crate::AccessibilityBridge for TestWindow {
+    #[cfg(feature = "accessibility")]
+    fn initialize_accessibility(
+        &mut self,
+        callbacks: AccessibilityCallbacks,
+    ) -> anyhow::Result<()> {
+        self.0.lock().accessibility_callbacks = Some(callbacks);
+        Ok(())
+    }
+
+    fn update_accessibility(&mut self, update: crate::AccessibilityUpdate) -> anyhow::Result<()> {
+        #[cfg(feature = "accessibility")]
+        {
+            self.0.lock().accessibility_update = Some(update);
+            return Ok(());
+        }
+
+        #[cfg(not(feature = "accessibility"))]
+        {
+            if update.is_empty() {
+                Ok(())
+            } else {
+                anyhow::bail!("accessibility support is not compiled in")
+            }
+        }
+    }
+}
 
 impl crate::TextInputBridge for TestWindow {
     fn set_input_handler(&mut self, input_handler: TextInputClient) {
@@ -399,7 +456,7 @@ impl PlatformWindow for TestWindow {
         crate::PlatformCapabilities {
             text_input: true,
             ime_candidate_position: false,
-            accessibility: false,
+            accessibility: cfg!(feature = "accessibility"),
             headless_renderer: self.0.lock().renderer.is_some(),
             frame_callbacks: true,
             system_bell: false,
