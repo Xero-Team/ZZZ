@@ -1,6 +1,6 @@
 [package]
 name = "gh-workflow"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 
 description = "A type-safe GitHub Actions workflow generator"
@@ -12,15 +12,21 @@ keywords = ["github", "actions", "workflow", "generator"]
 readme = "../../README.md"
 
 [dependencies]
-derive_more = { version = "2.0.0", features = ["from", "deref", "deref_mut"] }
-derive_setters = "0.1.9"
-indexmap = { version = "2.6.0", features = ["serde"] }
-merge = "0.1.0"
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = { version = "1.0.128" }
-serde_yaml = "0.9.34"
-gh-workflow-macros = { path = "../gh-workflow-macros", version = "0.8.0" }
+async-trait = { workspace = true }
+derive_more = { workspace = true }
+derive_setters = { workspace = true }
+indexmap = { workspace = true }
+merge = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yml = { workspace = true }
+strum_macros = { workspace = true }
+gh-workflow-macros = { path = "../gh-workflow-macros", version = "0.8.1" }
 
 [dev-dependencies]
-insta = "1.40.0"
-pretty_assertions = "1.4.1"
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+
+
+[lints]
+workspace = true

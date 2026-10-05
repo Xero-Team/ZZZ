@@ -147,7 +147,7 @@ impl<'a> PathContextCondition<'a> {
             .unwrap_or_else(|| panic!("condition {},is never set", self.condition.name));
         NamedJob {
             name: job.name,
-            job: job.job.add_need(set_by_step.clone()).cond(Expression::new(
+            job: job.job.add_needs(set_by_step.clone()).cond(Expression::new(
                 format!(
                     "needs.{}.outputs.{} == 'true' {merge_queue_condition}",
                     set_by_step,

@@ -33,7 +33,7 @@ use pw::{
 use crate::{
     Target,
     capturer::Options,
-    frame::{BGRxFrame, Frame, RGBFrame, RGBxFrame, XBGRFrame},
+    frame::{BGRxFrame, Frame, RGBFrame, RGBxFrame, VideoFrame, XBGRFrame},
 };
 
 use self::portal::ScreenCastPortal;
@@ -146,7 +146,8 @@ fn process_callback_impl(
         return Ok(None);
     }
 
-    let timestamp = unsafe { get_timestamp(buffer) };
+    let _timestamp = unsafe { get_timestamp(buffer) };
+    let display_time = std::time::SystemTime::now();
 
     let n_datas = unsafe { (*buffer).n_datas };
     if n_datas < 1 {
@@ -162,30 +163,30 @@ fn process_callback_impl(
     };
 
     match user_data.format.format() {
-        VideoFormat::RGBx => Ok(Some(Frame::RGBx(RGBxFrame {
-            display_time: timestamp as u64,
+        VideoFormat::RGBx => Ok(Some(Frame::Video(VideoFrame::RGBx(RGBxFrame {
+            display_time,
             width: frame_size.width as i32,
             height: frame_size.height as i32,
             data: frame_data,
-        }))),
-        VideoFormat::RGB => Ok(Some(Frame::RGB(RGBFrame {
-            display_time: timestamp as u64,
+        })))),
+        VideoFormat::RGB => Ok(Some(Frame::Video(VideoFrame::RGB(RGBFrame {
+            display_time,
             width: frame_size.width as i32,
             height: frame_size.height as i32,
             data: frame_data,
-        }))),
-        VideoFormat::xBGR => Ok(Some(Frame::XBGR(XBGRFrame {
-            display_time: timestamp as u64,
+        })))),
+        VideoFormat::xBGR => Ok(Some(Frame::Video(VideoFrame::XBGR(XBGRFrame {
+            display_time,
             width: frame_size.width as i32,
             height: frame_size.height as i32,
             data: frame_data,
-        }))),
-        VideoFormat::BGRx => Ok(Some(Frame::BGRx(BGRxFrame {
-            display_time: timestamp as u64,
+        })))),
+        VideoFormat::BGRx => Ok(Some(Frame::Video(VideoFrame::BGRx(BGRxFrame {
+            display_time,
             width: frame_size.width as i32,
             height: frame_size.height as i32,
             data: frame_data,
-        }))),
+        })))),
         _ => Err(anyhow!("Unsupported frame format received")),
     }
 }

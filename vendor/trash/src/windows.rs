@@ -4,13 +4,13 @@ use std::{
     borrow::Borrow,
     ffi::{OsStr, OsString, c_void},
     os::windows::{ffi::OsStrExt, prelude::*},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf, Prefix},
     sync::{Arc, Mutex},
     time::SystemTime,
 };
 use windows::Win32::{
     Foundation::*, Storage::EnhancedStorage::*, System::Com::*, System::SystemServices::*,
-    UI::Shell::PropertiesSystem::*, UI::Shell::*,
+    UI::Shell::*,
 };
 use windows::{
     Win32::System::Com::StructuredStorage::PropVariantToBSTR,
@@ -40,6 +40,60 @@ fn to_wide_path(path: impl AsRef<OsStr>) -> Vec<u16> {
         .encode_wide()
         .chain(std::iter::once(0))
         .collect()
+}
+
+/// Converts a path to the form accepted by `SHCreateItemFromParsingName`.
+///
+/// Paths reaching this module have been canonicalized with `Path::canonicalize`.
+/// On Windows, this produces verbatim paths, which the shell does not accept.
+/// This function converts them back to ordinary Windows paths:
+///
+/// - Local drive: `\\?\C:\dir\file` becomes `C:\dir\file`.
+/// - Network share: `\\?\UNC\host\share\dir\file` becomes `\\host\share\dir\file`.
+///
+/// Mapped drives resolve to network-share paths during canonicalization.
+/// Other path prefixes are left unchanged.
+/// The result is encoded as a null-terminated UTF-16 string.
+fn to_shell_parsing_name(path: &Path) -> Vec<u16> {
+    let mut components = path.components();
+    let mut out = OsString::new();
+    // A separator goes between two name parts, never right after the prefix
+    // (`C:dir` stays drive-relative) or after the root (its backslash is
+    // written by the `RootDir` arm).
+    let mut needs_separator = false;
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(letter) => out.push(format!("{}:", letter as char)),
+            Prefix::VerbatimUNC(host, share_name) => {
+                out.push(r"\\");
+                out.push(host);
+                out.push(r"\");
+                out.push(share_name);
+            }
+            _ => out.push(prefix.as_os_str()),
+        },
+        Some(component) => {
+            out.push(component.as_os_str());
+            needs_separator = true;
+        }
+        None => {}
+    }
+    for component in components {
+        match component {
+            Component::RootDir => {
+                out.push(r"\");
+                needs_separator = false;
+            }
+            component => {
+                if needs_separator {
+                    out.push(r"\");
+                }
+                out.push(component.as_os_str());
+                needs_separator = true;
+            }
+        }
+    }
+    to_wide_path(out)
 }
 
 #[derive(Clone, Default, Debug)]
@@ -83,16 +137,10 @@ impl TrashContext {
             };
 
             for full_path in full_paths.iter() {
-                let path_prefix = ['\\' as u16, '\\' as u16, '?' as u16, '\\' as u16];
-                let wide_path_container = to_wide_path(full_path);
-                let wide_path_slice = if wide_path_container.starts_with(&path_prefix) {
-                    &wide_path_container[path_prefix.len()..]
-                } else {
-                    &wide_path_container[0..]
-                };
+                let parsing_name = to_shell_parsing_name(full_path);
 
                 let shi: IShellItem =
-                    SHCreateItemFromParsingName(PCWSTR(wide_path_slice.as_ptr()), None)?;
+                    SHCreateItemFromParsingName(PCWSTR(parsing_name.as_ptr()), None)?;
 
                 pfo.DeleteItem(&shi, None)?;
             }
@@ -147,11 +195,8 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
     unsafe {
         let mut item_vec = Vec::new();
 
-        let recycle_bin: IShellItem = SHGetKnownFolderItem(
-            &FOLDERID_RecycleBinFolder,
-            KF_FLAG_DEFAULT,
-            HANDLE::default(),
-        )?;
+        let recycle_bin: IShellItem =
+            SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
 
         let pesi: IEnumShellItems = recycle_bin.BindToHandler(None, &BHID_EnumItems)?;
 
@@ -171,7 +216,7 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
                     let item2: IShellItem2 = item.cast()?;
                     let original_location_variant = item2.GetProperty(&SCID_ORIGINAL_LOCATION)?;
                     let original_location_bstr = PropVariantToBSTR(&original_location_variant)?;
-                    let original_location = OsString::from_wide(original_location_bstr.as_wide());
+                    let original_location = OsString::from_wide(&original_location_bstr);
                     let date_deleted = get_date_deleted_unix(&item2)?;
 
                     // NTFS paths are valid Unicode according to this chart:
@@ -200,11 +245,8 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
 pub fn is_empty() -> Result<bool, Error> {
     ensure_com_initialized();
     unsafe {
-        let recycle_bin: IShellItem = SHGetKnownFolderItem(
-            &FOLDERID_RecycleBinFolder,
-            KF_FLAG_DEFAULT,
-            HANDLE::default(),
-        )?;
+        let recycle_bin: IShellItem =
+            SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
         let pesi: IEnumShellItems = recycle_bin.BindToHandler(None, &BHID_EnumItems)?;
 
         let mut count = 0u32;
@@ -585,4 +627,105 @@ thread_local! {
 }
 fn ensure_com_initialized() {
     CO_INITIALIZER.with(|_| {});
+}
+
+#[cfg(test)]
+mod tests {
+    use super::to_shell_parsing_name;
+    use std::path::Path;
+
+    fn convert(path: &str) -> String {
+        let wide = to_shell_parsing_name(Path::new(path));
+        String::from_utf16(&wide[..wide.len() - 1]).unwrap()
+    }
+
+    #[test]
+    fn verbatim_disk_becomes_plain_disk() {
+        assert_eq!(convert(r"\\?\C:\dir\file.txt"), r"C:\dir\file.txt");
+    }
+
+    #[test]
+    fn verbatim_unc_becomes_plain_unc() {
+        // What `canonicalize` returns for a mapped drive or a UNC path.
+        // Before the fix this came out as `UNC\host\share\dir\file.txt`,
+        // which the shell reads as a relative path (issue #55).
+        assert_eq!(
+            convert(r"\\?\UNC\host\share\dir\file.txt"),
+            r"\\host\share\dir\file.txt"
+        );
+    }
+
+    #[test]
+    fn non_verbatim_paths_are_unchanged() {
+        assert_eq!(convert(r"C:\dir\file.txt"), r"C:\dir\file.txt");
+        assert_eq!(
+            convert(r"\\host\share\dir\file.txt"),
+            r"\\host\share\dir\file.txt"
+        );
+        assert_eq!(convert(r"dir\file.txt"), r"dir\file.txt");
+    }
+
+    #[test]
+    fn empty_path_stays_empty() {
+        assert_eq!(convert(""), "");
+    }
+
+    #[test]
+    fn drive_root_keeps_its_backslash() {
+        // `C:` alone would mean the current directory on C:, not the root.
+        assert_eq!(convert(r"\\?\C:\"), r"C:\");
+        assert_eq!(convert(r"C:\"), r"C:\");
+    }
+
+    #[test]
+    fn share_root_with_and_without_trailing_backslash() {
+        assert_eq!(convert(r"\\?\UNC\host\share"), r"\\host\share");
+        assert_eq!(convert(r"\\?\UNC\host\share\"), r"\\host\share\");
+    }
+
+    #[test]
+    fn drive_relative_path_gets_no_separator_after_the_colon() {
+        assert_eq!(convert(r"C:dir\file.txt"), r"C:dir\file.txt");
+    }
+
+    #[test]
+    fn other_verbatim_and_device_prefixes_are_unchanged() {
+        assert_eq!(convert(r"\\?\pictures\file.txt"), r"\\?\pictures\file.txt");
+        assert_eq!(convert(r"\\.\pipe\name"), r"\\.\pipe\name");
+    }
+
+    #[test]
+    fn spaces_dots_and_non_ascii_names_survive() {
+        assert_eq!(
+            convert(r"\\?\UNC\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"),
+            r"\\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"
+        );
+        assert_eq!(
+            convert(r"\\?\C:\a.b\c..d\file.tar.gz"),
+            r"C:\a.b\c..d\file.tar.gz"
+        );
+    }
+
+    #[test]
+    fn trailing_and_doubled_separators_are_dropped() {
+        // `components()` normalizes these; the shell accepts either form.
+        assert_eq!(convert(r"\\?\C:\dir\"), r"C:\dir");
+        assert_eq!(convert(r"\\?\C:\dir\\file.txt"), r"C:\dir\file.txt");
+        assert_eq!(
+            convert(r"\\?\UNC\host\share\dir\\file.txt"),
+            r"\\host\share\dir\file.txt"
+        );
+    }
+
+    #[test]
+    fn long_paths_are_not_truncated() {
+        let deep = (0..40)
+            .map(|i| format!("folder{i:02}"))
+            .collect::<Vec<_>>()
+            .join(r"\");
+        let input = format!(r"\\?\UNC\host\share\{deep}\file.txt");
+        let expected = format!(r"\\host\share\{deep}\file.txt");
+        assert!(input.len() > 260);
+        assert_eq!(convert(&input), expected);
+    }
 }

@@ -1,0 +1,3513 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 8c84b68b9641b3a543abf08a00cf446519d57373..406c3620bae32338948e01bdd6fba789c82be3e9 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -15,21 +15,28 @@ documentation = "https://docs.rs/scap"
+ keywords = ["screen", "recording", "video", "capture", "media"]
+ categories = ["graphics", "multimedia", "multimedia::video"]
+ 
++[features]
++default = ["wayland", "x11"]
++wayland = ["dep:pipewire", "dep:dbus"]
++x11 = ["dep:xcb", "dep:x11"]
++
+ [dependencies]
++anyhow = "1.0.86"
+ futures = "0.3.31"
+-sysinfo = "0.30.0"
++log = "0.4.16"
++sysinfo = "0.31.0"
+ thiserror = "2.0.12"
+ 
+ [target.'cfg(target_os = "windows")'.dependencies]
+-windows-capture = "1.5.0"
+-windows = { version = "0.58", features = [
++windows-capture = "2.0.1"
++windows = { version = "0.62.2", features = [
+ 	"Win32_Foundation",
+ 	"Win32_Graphics_Gdi",
+ 	"Win32_UI_HiDpi",
+ 	"Win32_UI_WindowsAndMessaging",
+ 	"Win32_System_Performance",
+ ] }
+-cpal = "0.15.3"
++cpal = "0.18"
+ 
+ [target.'cfg(target_os = "macos")'.dependencies]
+ core-graphics-helmer-fork = "0.24.0"
+@@ -43,7 +50,9 @@ cidre = { version = "0.10.1", default-features = false, features = [
+ 	"macos_13_0",
+ ] }
+ 
+-[target.'cfg(target_os = "linux")'.dependencies]
+-pipewire = "0.8.0"
+-dbus = "0.9.7"
++[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+ rand = "0.8.5"
++xcb = { version = "1.4.0", features = ["randr", "xlib_xcb", "xfixes"], optional = true }
++x11 = { version = "2.21.0", optional = true }
++pipewire = { version = "0.8.0", optional = true }
++dbus = { version = "0.9.7", optional = true, features = ["vendored"] }
+diff --git a/src/capturer/engine/linux/error.rs b/src/capturer/engine/linux/error.rs
+index 678aee35f28f8bcd2a2432f73c0c703a07092e67..80c60896c26a40fd6aea6acb4e6b80c722f0cf19 100644
+--- a/src/capturer/engine/linux/error.rs
++++ b/src/capturer/engine/linux/error.rs
+@@ -4,6 +4,7 @@ use std::{
+     sync::PoisonError,
+ };
+ 
++#[cfg(feature = "wayland")]
+ use pipewire::spa::pod::serialize::GenError;
+ 
+ #[derive(Debug)]
+@@ -25,6 +26,7 @@ impl Display for LinCapError {
+     }
+ }
+ 
++#[cfg(feature = "wayland")]
+ impl From<pipewire::Error> for LinCapError {
+     fn from(e: pipewire::Error) -> Self {
+         Self::new(e.to_string())
+@@ -37,12 +39,14 @@ impl From<std::sync::mpsc::SendError<bool>> for LinCapError {
+     }
+ }
+ 
++#[cfg(feature = "wayland")]
+ impl From<GenError> for LinCapError {
+     fn from(e: GenError) -> Self {
+         Self::new(e.to_string())
+     }
+ }
+ 
++#[cfg(feature = "wayland")]
+ impl From<dbus::Error> for LinCapError {
+     fn from(e: dbus::Error) -> Self {
+         Self::new(e.to_string())
+diff --git a/src/capturer/engine/linux/mod.rs b/src/capturer/engine/linux/mod.rs
+index 07967fb3d83eb9b3a9301eae93f50020367e2e62..37d88cbc86dd5e741e0a932911b8c4002e0d914f 100644
+--- a/src/capturer/engine/linux/mod.rs
++++ b/src/capturer/engine/linux/mod.rs
+@@ -1,369 +1,72 @@
+-use std::{
+-    mem::size_of,
+-    sync::{
+-        atomic::{AtomicBool, AtomicU8},
+-        mpsc::{self, sync_channel, SyncSender},
+-    },
+-    thread::JoinHandle,
+-    time::Duration,
+-};
++#[cfg(not(any(feature = "wayland", feature = "x11")))]
++compile_error!("'wayland' or 'x11' feature must be enabled.");
+ 
+-use pipewire as pw;
+-use pw::{
+-    context::Context,
+-    main_loop::MainLoop,
+-    properties::properties,
+-    spa::{
+-        self,
+-        param::{
+-            format::{FormatProperties, MediaSubtype, MediaType},
+-            video::VideoFormat,
+-            ParamType,
+-        },
+-        pod::{Pod, Property},
+-        sys::{
+-            spa_buffer, spa_meta_header, SPA_META_Header, SPA_PARAM_META_size, SPA_PARAM_META_type,
+-        },
+-        utils::{Direction, SpaTypes},
+-    },
+-    stream::{StreamRef, StreamState},
+-};
++use std::{env, sync::mpsc};
+ 
+-use crate::{
+-    capturer::Options,
+-    frame::{BGRxFrame, Frame, RGBFrame, RGBxFrame, XBGRFrame},
+-};
++use anyhow::{Result, anyhow};
+ 
+-use self::{error::LinCapError, portal::ScreenCastPortal};
++#[cfg(feature = "x11")]
++use x11::X11Capturer;
+ 
+-mod error;
+-mod portal;
+-
+-static CAPTURER_STATE: AtomicU8 = AtomicU8::new(0);
+-static STREAM_STATE_CHANGED_TO_ERROR: AtomicBool = AtomicBool::new(false);
+-
+-#[derive(Clone)]
+-struct ListenerUserData {
+-    pub tx: mpsc::Sender<Frame>,
+-    pub format: spa::param::video::VideoInfoRaw,
+-}
+-
+-fn param_changed_callback(
+-    _stream: &StreamRef,
+-    user_data: &mut ListenerUserData,
+-    id: u32,
+-    param: Option<&Pod>,
+-) {
+-    let Some(param) = param else {
+-        return;
+-    };
+-    if id != pw::spa::param::ParamType::Format.as_raw() {
+-        return;
+-    }
+-    let (media_type, media_subtype) = match pw::spa::param::format_utils::parse_format(param) {
+-        Ok(v) => v,
+-        Err(_) => return,
+-    };
+-
+-    if media_type != MediaType::Video || media_subtype != MediaSubtype::Raw {
+-        return;
+-    }
+-
+-    user_data
+-        .format
+-        .parse(param)
+-        // TODO: Tell library user of the error
+-        .expect("Failed to parse format parameter");
+-}
+-
+-fn state_changed_callback(
+-    _stream: &StreamRef,
+-    _user_data: &mut ListenerUserData,
+-    _old: StreamState,
+-    new: StreamState,
+-) {
+-    match new {
+-        StreamState::Error(e) => {
+-            eprintln!("pipewire: State changed to error({e})");
+-            STREAM_STATE_CHANGED_TO_ERROR.store(true, std::sync::atomic::Ordering::Relaxed);
+-        }
+-        _ => {}
+-    }
+-}
++use crate::{Target, capturer::Options, frame::Frame};
+ 
+-unsafe fn get_timestamp(buffer: *mut spa_buffer) -> i64 {
+-    let n_metas = (*buffer).n_metas;
+-    if n_metas > 0 {
+-        let mut meta_ptr = (*buffer).metas;
+-        let metas_end = (*buffer).metas.wrapping_add(n_metas as usize);
+-        while meta_ptr != metas_end {
+-            if (*meta_ptr).type_ == SPA_META_Header {
+-                let meta_header: &mut spa_meta_header =
+-                    &mut *((*meta_ptr).data as *mut spa_meta_header);
+-                return meta_header.pts;
+-            }
+-            meta_ptr = meta_ptr.wrapping_add(1);
+-        }
+-        0
+-    } else {
+-        0
+-    }
+-}
+-
+-fn process_callback(stream: &StreamRef, user_data: &mut ListenerUserData) {
+-    let buffer = unsafe { stream.dequeue_raw_buffer() };
+-    if !buffer.is_null() {
+-        'outside: {
+-            let buffer = unsafe { (*buffer).buffer };
+-            if buffer.is_null() {
+-                break 'outside;
+-            }
+-            let timestamp = unsafe { get_timestamp(buffer) };
+-
+-            let n_datas = unsafe { (*buffer).n_datas };
+-            if n_datas < 1 {
+-                return;
+-            }
+-            let frame_size = user_data.format.size();
+-            let frame_data: Vec<u8> = unsafe {
+-                std::slice::from_raw_parts(
+-                    (*(*buffer).datas).data as *mut u8,
+-                    (*(*buffer).datas).maxsize as usize,
+-                )
+-                .to_vec()
+-            };
+-
+-            if let Err(e) = match user_data.format.format() {
+-                VideoFormat::RGBx => user_data.tx.send(Frame::RGBx(RGBxFrame {
+-                    display_time: timestamp as u64,
+-                    width: frame_size.width as i32,
+-                    height: frame_size.height as i32,
+-                    data: frame_data,
+-                })),
+-                VideoFormat::RGB => user_data.tx.send(Frame::RGB(RGBFrame {
+-                    display_time: timestamp as u64,
+-                    width: frame_size.width as i32,
+-                    height: frame_size.height as i32,
+-                    data: frame_data,
+-                })),
+-                VideoFormat::xBGR => user_data.tx.send(Frame::XBGR(XBGRFrame {
+-                    display_time: timestamp as u64,
+-                    width: frame_size.width as i32,
+-                    height: frame_size.height as i32,
+-                    data: frame_data,
+-                })),
+-                VideoFormat::BGRx => user_data.tx.send(Frame::BGRx(BGRxFrame {
+-                    display_time: timestamp as u64,
+-                    width: frame_size.width as i32,
+-                    height: frame_size.height as i32,
+-                    data: frame_data,
+-                })),
+-                _ => panic!("Unsupported frame format received"),
+-            } {
+-                eprintln!("{e}");
+-            }
+-        }
+-    } else {
+-        eprintln!("Out of buffers");
+-    }
+-
+-    unsafe { stream.queue_raw_buffer(buffer) };
+-}
+-
+-// TODO: Format negotiation
+-fn pipewire_capturer(
+-    options: Options,
+-    tx: mpsc::Sender<Frame>,
+-    ready_sender: &SyncSender<bool>,
+-    stream_id: u32,
+-) -> Result<(), LinCapError> {
+-    pw::init();
+-
+-    let mainloop = MainLoop::new(None)?;
+-    let context = Context::new(&mainloop)?;
+-    let core = context.connect(None)?;
+-
+-    let user_data = ListenerUserData {
+-        tx,
+-        format: Default::default(),
+-    };
+-
+-    let stream = pw::stream::Stream::new(
+-        &core,
+-        "scap",
+-        properties! {
+-            *pw::keys::MEDIA_TYPE => "Video",
+-            *pw::keys::MEDIA_CATEGORY => "Capture",
+-            *pw::keys::MEDIA_ROLE => "Screen",
+-        },
+-    )?;
+-
+-    let _listener = stream
+-        .add_local_listener_with_user_data(user_data.clone())
+-        .state_changed(state_changed_callback)
+-        .param_changed(param_changed_callback)
+-        .process(process_callback)
+-        .register()?;
+-
+-    let obj = pw::spa::pod::object!(
+-        pw::spa::utils::SpaTypes::ObjectParamFormat,
+-        pw::spa::param::ParamType::EnumFormat,
+-        pw::spa::pod::property!(FormatProperties::MediaType, Id, MediaType::Video),
+-        pw::spa::pod::property!(FormatProperties::MediaSubtype, Id, MediaSubtype::Raw),
+-        pw::spa::pod::property!(
+-            FormatProperties::VideoFormat,
+-            Choice,
+-            Enum,
+-            Id,
+-            pw::spa::param::video::VideoFormat::RGB,
+-            pw::spa::param::video::VideoFormat::RGBA,
+-            pw::spa::param::video::VideoFormat::RGBx,
+-            pw::spa::param::video::VideoFormat::BGRx,
+-        ),
+-        pw::spa::pod::property!(
+-            FormatProperties::VideoSize,
+-            Choice,
+-            Range,
+-            Rectangle,
+-            pw::spa::utils::Rectangle {
+-                // Default
+-                width: 128,
+-                height: 128,
+-            },
+-            pw::spa::utils::Rectangle {
+-                // Min
+-                width: 1,
+-                height: 1,
+-            },
+-            pw::spa::utils::Rectangle {
+-                // Max
+-                width: 4096,
+-                height: 4096,
+-            }
+-        ),
+-        pw::spa::pod::property!(
+-            FormatProperties::VideoMaxFramerate,
+-            Fraction,
+-            pw::spa::utils::Fraction {
+-                num: options.fps,
+-                denom: 1
+-            }
+-        ),
+-    );
+-
+-    let metas_obj = pw::spa::pod::object!(
+-        SpaTypes::ObjectParamMeta,
+-        ParamType::Meta,
+-        Property::new(
+-            SPA_PARAM_META_type,
+-            pw::spa::pod::Value::Id(pw::spa::utils::Id(SPA_META_Header))
+-        ),
+-        Property::new(
+-            SPA_PARAM_META_size,
+-            pw::spa::pod::Value::Int(size_of::<pw::spa::sys::spa_meta_header>() as i32)
+-        ),
+-    );
+-
+-    let values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
+-        std::io::Cursor::new(Vec::new()),
+-        &pw::spa::pod::Value::Object(obj),
+-    )?
+-    .0
+-    .into_inner();
+-    let metas_values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
+-        std::io::Cursor::new(Vec::new()),
+-        &pw::spa::pod::Value::Object(metas_obj),
+-    )?
+-    .0
+-    .into_inner();
+-
+-    let mut params = [
+-        pw::spa::pod::Pod::from_bytes(&values).unwrap(),
+-        pw::spa::pod::Pod::from_bytes(&metas_values).unwrap(),
+-    ];
+-
+-    stream.connect(
+-        Direction::Input,
+-        Some(stream_id),
+-        pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
+-        &mut params,
+-    )?;
++mod error;
+ 
+-    ready_sender.send(true)?;
++#[cfg(feature = "wayland")]
++mod wayland;
+ 
+-    while CAPTURER_STATE.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+-        std::thread::sleep(Duration::from_millis(10));
+-    }
++#[cfg(feature = "x11")]
++mod x11;
+ 
+-    let pw_loop = mainloop.loop_();
++#[cfg(feature = "wayland")]
++use wayland::WaylandCapturer;
+ 
+-    // User has called Capturer::start() and we start the main loop
+-    while CAPTURER_STATE.load(std::sync::atomic::Ordering::Relaxed) == 1
+-        && /* If the stream state got changed to `Error`, we exit. TODO: tell user that we exited */
+-          !STREAM_STATE_CHANGED_TO_ERROR.load(std::sync::atomic::Ordering::Relaxed)
+-    {
+-        pw_loop.iterate(Duration::from_millis(100));
++pub trait LinuxCapturerImpl {
++    fn start_capture(&mut self);
++    fn stop_capture(&mut self);
++    fn target(&self) -> Option<&Target> {
++        None
+     }
+-
+-    Ok(())
+ }
+ 
+ pub struct LinuxCapturer {
+-    capturer_join_handle: Option<JoinHandle<Result<(), LinCapError>>>,
+-    // The pipewire stream is deleted when the connection is dropped.
+-    // That's why we keep it alive
+-    _connection: dbus::blocking::Connection,
++    pub imp: Box<dyn LinuxCapturerImpl>,
+ }
+ 
+-impl LinuxCapturer {
+-    // TODO: Error handling
+-    pub fn new(options: &Options, tx: mpsc::Sender<Frame>) -> Self {
+-        let connection =
+-            dbus::blocking::Connection::new_session().expect("Failed to create dbus connection");
+-        let stream_id = ScreenCastPortal::new(&connection)
+-            .show_cursor(options.show_cursor)
+-            .expect("Unsupported cursor mode")
+-            .create_stream()
+-            .expect("Failed to get screencast stream")
+-            .pw_node_id();
+-
+-        // TODO: Fix this hack
+-        let options = options.clone();
+-        let (ready_sender, ready_recv) = sync_channel(1);
+-        let capturer_join_handle = std::thread::spawn(move || {
+-            let res = pipewire_capturer(options, tx, &ready_sender, stream_id);
+-            if res.is_err() {
+-                ready_sender.send(false)?;
+-            }
+-            res
+-        });
++type Type = mpsc::Sender<Result<Frame>>;
+ 
+-        if !ready_recv.recv().expect("Failed to receive") {
+-            panic!("Failed to setup capturer");
++impl LinuxCapturer {
++    pub fn new(options: &Options, tx: Type) -> Result<Self> {
++        #[cfg(feature = "wayland")]
++        if env::var("WAYLAND_DISPLAY").is_ok() {
++            log::debug!("Creating new Wayland screen capturer.");
++            return Ok(Self {
++                imp: Box::new(WaylandCapturer::new(options, tx)?),
++            });
+         }
+ 
+-        Self {
+-            capturer_join_handle: Some(capturer_join_handle),
+-            _connection: connection,
++        #[cfg(feature = "x11")]
++        if env::var("DISPLAY").is_ok() {
++            log::debug!("Creating new X11 screen capturer.");
++            return Ok(Self {
++                imp: Box::new(X11Capturer::new(options, tx)?),
++            });
+         }
+-    }
+ 
+-    pub fn start_capture(&self) {
+-        CAPTURER_STATE.store(1, std::sync::atomic::Ordering::Relaxed);
+-    }
++        #[cfg(all(feature = "wayland", feature = "x11"))]
++        let error_msg = "Unsupported platform. Could not detect Wayland or X11 displays";
++        #[cfg(all(not(feature = "wayland"), feature = "x11"))]
++        let error_msg = "Unsupported platform. Could not detect X11 display. Enable the 'wayland' feature for Wayland support.";
++        #[cfg(all(feature = "wayland", not(feature = "x11")))]
++        let error_msg = "Unsupported platform. Could not detect wayland display. Enable the 'x11' feature for X11 support.";
+ 
+-    pub fn stop_capture(&mut self) {
+-        CAPTURER_STATE.store(2, std::sync::atomic::Ordering::Relaxed);
+-        if let Some(handle) = self.capturer_join_handle.take() {
+-            if let Err(e) = handle.join().expect("Failed to join capturer thread") {
+-                eprintln!("Error occured capturing: {e}");
+-            }
+-        }
+-        CAPTURER_STATE.store(0, std::sync::atomic::Ordering::Relaxed);
+-        STREAM_STATE_CHANGED_TO_ERROR.store(false, std::sync::atomic::Ordering::Relaxed);
++        Err(anyhow!(error_msg))
+     }
+ }
+ 
+-pub fn create_capturer(options: &Options, tx: mpsc::Sender<Frame>) -> LinuxCapturer {
++pub fn create_capturer(
++    options: &Options,
++    tx: mpsc::Sender<Result<Frame>>,
++) -> Result<LinuxCapturer> {
+     LinuxCapturer::new(options, tx)
+ }
+diff --git a/src/capturer/engine/linux/portal.rs b/src/capturer/engine/linux/portal.rs
+index 013d4dd456ce8096993ec743545b5fb4e61f03df..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 100644
+--- a/src/capturer/engine/linux/portal.rs
++++ b/src/capturer/engine/linux/portal.rs
+@@ -1,422 +0,0 @@
+-use std::{
+-    sync::{atomic::AtomicBool, Arc, Mutex},
+-    time::Duration,
+-};
+-
+-use dbus::{
+-    arg::{self, PropMap, RefArg, Variant},
+-    blocking::{Connection, Proxy},
+-    message::MatchRule,
+-    strings::{BusName, Interface},
+-};
+-
+-use super::error::LinCapError;
+-
+-// This code was autogenerated with `dbus-codegen-rust -d org.freedesktop.portal.Desktop -p /org/freedesktop/portal/desktop -f org.freedesktop.portal.ScreenCast`, see https://github.com/diwic/dbus-rs
+-// {
+-use dbus::blocking;
+-
+-trait OrgFreedesktopPortalScreenCast {
+-    fn create_session(&self, options: arg::PropMap) -> Result<dbus::Path<'static>, dbus::Error>;
+-    fn select_sources(
+-        &self,
+-        session_handle: dbus::Path,
+-        options: arg::PropMap,
+-    ) -> Result<dbus::Path<'static>, dbus::Error>;
+-    fn start(
+-        &self,
+-        session_handle: dbus::Path,
+-        parent_window: &str,
+-        options: arg::PropMap,
+-    ) -> Result<dbus::Path<'static>, dbus::Error>;
+-    fn open_pipe_wire_remote(
+-        &self,
+-        session_handle: dbus::Path,
+-        options: arg::PropMap,
+-    ) -> Result<arg::OwnedFd, dbus::Error>;
+-    fn available_source_types(&self) -> Result<u32, dbus::Error>;
+-    fn available_cursor_modes(&self) -> Result<u32, dbus::Error>;
+-    fn version(&self) -> Result<u32, dbus::Error>;
+-}
+-
+-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>>
+-    OrgFreedesktopPortalScreenCast for blocking::Proxy<'a, C>
+-{
+-    fn create_session(&self, options: arg::PropMap) -> Result<dbus::Path<'static>, dbus::Error> {
+-        self.method_call(
+-            "org.freedesktop.portal.ScreenCast",
+-            "CreateSession",
+-            (options,),
+-        )
+-        .and_then(|r: (dbus::Path<'static>,)| Ok(r.0))
+-    }
+-
+-    fn select_sources(
+-        &self,
+-        session_handle: dbus::Path,
+-        options: arg::PropMap,
+-    ) -> Result<dbus::Path<'static>, dbus::Error> {
+-        self.method_call(
+-            "org.freedesktop.portal.ScreenCast",
+-            "SelectSources",
+-            (session_handle, options),
+-        )
+-        .and_then(|r: (dbus::Path<'static>,)| Ok(r.0))
+-    }
+-
+-    fn start(
+-        &self,
+-        session_handle: dbus::Path,
+-        parent_window: &str,
+-        options: arg::PropMap,
+-    ) -> Result<dbus::Path<'static>, dbus::Error> {
+-        self.method_call(
+-            "org.freedesktop.portal.ScreenCast",
+-            "Start",
+-            (session_handle, parent_window, options),
+-        )
+-        .and_then(|r: (dbus::Path<'static>,)| Ok(r.0))
+-    }
+-
+-    fn open_pipe_wire_remote(
+-        &self,
+-        session_handle: dbus::Path,
+-        options: arg::PropMap,
+-    ) -> Result<arg::OwnedFd, dbus::Error> {
+-        self.method_call(
+-            "org.freedesktop.portal.ScreenCast",
+-            "OpenPipeWireRemote",
+-            (session_handle, options),
+-        )
+-        .and_then(|r: (arg::OwnedFd,)| Ok(r.0))
+-    }
+-
+-    fn available_source_types(&self) -> Result<u32, dbus::Error> {
+-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+-            &self,
+-            "org.freedesktop.portal.ScreenCast",
+-            "AvailableSourceTypes",
+-        )
+-    }
+-
+-    fn available_cursor_modes(&self) -> Result<u32, dbus::Error> {
+-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+-            &self,
+-            "org.freedesktop.portal.ScreenCast",
+-            "AvailableCursorModes",
+-        )
+-    }
+-
+-    fn version(&self) -> Result<u32, dbus::Error> {
+-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+-            &self,
+-            "org.freedesktop.portal.ScreenCast",
+-            "version",
+-        )
+-    }
+-}
+-// }
+-
+-// This code was autogenerated with `dbus-codegen-rust --file org.freedesktop.portal.Request.xml`, see https://github.com/diwic/dbus-rs
+-// {
+-trait OrgFreedesktopPortalRequest {
+-    fn close(&self) -> Result<(), dbus::Error>;
+-}
+-
+-#[derive(Debug)]
+-pub struct OrgFreedesktopPortalRequestResponse {
+-    pub response: u32,
+-    pub results: arg::PropMap,
+-}
+-
+-impl arg::AppendAll for OrgFreedesktopPortalRequestResponse {
+-    fn append(&self, i: &mut arg::IterAppend) {
+-        arg::RefArg::append(&self.response, i);
+-        arg::RefArg::append(&self.results, i);
+-    }
+-}
+-
+-impl arg::ReadAll for OrgFreedesktopPortalRequestResponse {
+-    fn read(i: &mut arg::Iter) -> Result<Self, arg::TypeMismatchError> {
+-        Ok(OrgFreedesktopPortalRequestResponse {
+-            response: i.read()?,
+-            results: i.read()?,
+-        })
+-    }
+-}
+-
+-impl dbus::message::SignalArgs for OrgFreedesktopPortalRequestResponse {
+-    const NAME: &'static str = "Response";
+-    const INTERFACE: &'static str = "org.freedesktop.portal.Request";
+-}
+-
+-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgFreedesktopPortalRequest
+-    for blocking::Proxy<'a, C>
+-{
+-    fn close(&self) -> Result<(), dbus::Error> {
+-        self.method_call("org.freedesktop.portal.Request", "Close", ())
+-    }
+-}
+-// }
+-
+-type Response = Option<OrgFreedesktopPortalRequestResponse>;
+-
+-#[derive(Debug)]
+-#[allow(dead_code)]
+-pub struct StreamVardict {
+-    id: Option<String>,
+-    position: Option<(i32, i32)>,
+-    size: Option<(i32, i32)>,
+-    source_type: Option<u32>,
+-    mapping_id: Option<String>,
+-}
+-
+-#[derive(Debug)]
+-pub struct Stream(u32, StreamVardict);
+-
+-impl Stream {
+-    pub fn pw_node_id(&self) -> u32 {
+-        self.0
+-    }
+-
+-    pub fn from_dbus(stream: &Variant<Box<dyn RefArg>>) -> Option<Self> {
+-        let mut stream = stream.as_iter()?.next()?.as_iter()?;
+-        let pipewire_node_id = stream.next()?.as_iter()?.next()?.as_u64()?;
+-
+-        // TODO: Get the rest of the properties
+-
+-        Some(Self(
+-            pipewire_node_id as u32,
+-            StreamVardict {
+-                id: None,
+-                position: None,
+-                size: None,
+-                source_type: None,
+-                mapping_id: None,
+-            },
+-        ))
+-    }
+-}
+-
+-macro_rules! match_response {
+-    ( $code:expr ) => {
+-        match $code {
+-            0 => {}
+-            1 => {
+-                return Err(LinCapError::new(String::from(
+-                    "User cancelled the interaction",
+-                )));
+-            }
+-            2 => {
+-                return Err(LinCapError::new(String::from(
+-                    "The user interaction was ended in some other way",
+-                )));
+-            }
+-            _ => unreachable!(),
+-        }
+-    };
+-}
+-
+-pub struct ScreenCastPortal<'a> {
+-    proxy: Proxy<'a, &'a Connection>,
+-    token: String,
+-    cursor_mode: u32,
+-}
+-
+-impl<'a> ScreenCastPortal<'a> {
+-    pub fn new(connection: &'a Connection) -> Self {
+-        let proxy = connection.with_proxy(
+-            "org.freedesktop.portal.Desktop",
+-            "/org/freedesktop/portal/desktop",
+-            Duration::from_secs(4),
+-        );
+-
+-        let token = format!("scap_{}", rand::random::<u16>());
+-
+-        Self {
+-            proxy,
+-            token,
+-            cursor_mode: 1,
+-        }
+-    }
+-
+-    fn create_session_args(&self) -> arg::PropMap {
+-        let mut map = arg::PropMap::new();
+-        map.insert(
+-            String::from("handle_token"),
+-            Variant(Box::new(self.token.clone())),
+-        );
+-        map.insert(
+-            String::from("session_handle_token"),
+-            Variant(Box::new(self.token.clone())),
+-        );
+-        map
+-    }
+-
+-    fn select_sources_args(&self) -> Result<arg::PropMap, dbus::Error> {
+-        let mut map = arg::PropMap::new();
+-        map.insert(
+-            String::from("handle_token"),
+-            Variant(Box::new(self.token.clone())),
+-        );
+-        map.insert(
+-            String::from("types"),
+-            Variant(Box::new(self.proxy.available_source_types()?)),
+-        );
+-        map.insert(String::from("multiple"), Variant(Box::new(false)));
+-        map.insert(
+-            String::from("cursor_mode"),
+-            Variant(Box::new(self.cursor_mode)),
+-        );
+-        Ok(map)
+-    }
+-
+-    fn handle_req_response(
+-        connection: &Connection,
+-        path: dbus::Path<'static>,
+-        iterations: usize,
+-        timeout: Duration,
+-        response: Arc<Mutex<Response>>,
+-    ) -> Result<(), dbus::Error> {
+-        let got_response = Arc::new(AtomicBool::new(false));
+-        let got_response_clone = Arc::clone(&got_response);
+-
+-        let mut rule = MatchRule::new();
+-        rule.path = Some(dbus::Path::from(path));
+-        rule.msg_type = Some(dbus::MessageType::Signal);
+-        rule.sender = Some(BusName::from("org.freedesktop.portal.Desktop"));
+-        rule.interface = Some(Interface::from("org.freedesktop.portal.Request"));
+-        connection.add_match(
+-            rule,
+-            move |res: OrgFreedesktopPortalRequestResponse, _chuh, _msg| {
+-                let mut response = response.lock().expect("Failed to lock response mutex");
+-                *response = Some(res);
+-                got_response_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+-                false
+-            },
+-        )?;
+-
+-        for _ in 0..iterations {
+-            connection.process(timeout)?;
+-
+-            if got_response.load(std::sync::atomic::Ordering::Relaxed) {
+-                break;
+-            }
+-        }
+-
+-        Ok(())
+-    }
+-
+-    fn create_session(&self) -> Result<dbus::Path, LinCapError> {
+-        let request_handle = self.proxy.create_session(self.create_session_args())?;
+-
+-        let response = Arc::new(Mutex::new(None));
+-        let response_clone = Arc::clone(&response);
+-        Self::handle_req_response(
+-            self.proxy.connection,
+-            request_handle,
+-            100,
+-            Duration::from_millis(100),
+-            response_clone,
+-        )?;
+-
+-        if let Some(res) = response.lock()?.take() {
+-            match_response!(res.response);
+-            match res
+-                .results
+-                .get("session_handle")
+-                .map(|h| h.0.as_str().map(String::from))
+-            {
+-                Some(h) => {
+-                    let p = dbus::Path::from(match h {
+-                        Some(p) => p,
+-                        None => {
+-                            return Err(LinCapError::new(String::from(
+-                                "Invalid session_handle received",
+-                            )))
+-                        }
+-                    });
+-
+-                    return Ok(p);
+-                }
+-                None => return Err(LinCapError::new(String::from("Did not get session handle"))),
+-            }
+-        }
+-
+-        Err(LinCapError::new(String::from("Did not get response")))
+-    }
+-
+-    fn select_sources(&self, session_handle: dbus::Path) -> Result<(), LinCapError> {
+-        let request_handle = self
+-            .proxy
+-            .select_sources(session_handle, self.select_sources_args()?)?;
+-
+-        let response = Arc::new(Mutex::new(None));
+-        let response_clone = Arc::clone(&response);
+-        Self::handle_req_response(
+-            self.proxy.connection,
+-            request_handle,
+-            1200, // Wait 2 min
+-            Duration::from_millis(100),
+-            response_clone,
+-        )?;
+-
+-        if let Some(res) = response.lock()?.take() {
+-            match_response!(res.response);
+-            return Ok(());
+-        }
+-
+-        Err(LinCapError::new(String::from("Did not get response")))
+-    }
+-
+-    fn start(&self, session_handle: dbus::Path) -> Result<Stream, LinCapError> {
+-        let request_handle = self.proxy.start(session_handle, "", PropMap::new())?;
+-
+-        let response = Arc::new(Mutex::new(None));
+-        let response_clone = Arc::clone(&response);
+-        Self::handle_req_response(
+-            self.proxy.connection,
+-            request_handle,
+-            100, // Wait 10 s
+-            Duration::from_millis(100),
+-            response_clone,
+-        )?;
+-
+-        if let Some(res) = response.lock()?.take() {
+-            match_response!(res.response);
+-            match res.results.get("streams") {
+-                Some(s) => match Stream::from_dbus(s) {
+-                    Some(s) => return Ok(s),
+-                    None => {
+-                        return Err(LinCapError::new(String::from(
+-                            "Failed to extract stream properties",
+-                        )))
+-                    }
+-                },
+-                None => return Err(LinCapError::new(String::from("Did not get any streams"))),
+-            }
+-        }
+-
+-        Err(LinCapError::new(String::from("Did not get response")))
+-    }
+-
+-    pub fn create_stream(&self) -> Result<Stream, LinCapError> {
+-        let session_handle = self.create_session()?;
+-        self.select_sources(session_handle.clone())?;
+-        self.start(session_handle)
+-    }
+-
+-    pub fn show_cursor(mut self, mode: bool) -> Result<Self, LinCapError> {
+-        let available_modes = self.proxy.available_cursor_modes()?;
+-        if mode && available_modes & 2 == 2 {
+-            self.cursor_mode = 2;
+-            return Ok(self);
+-        }
+-        if !mode && available_modes & 1 == 1 {
+-            self.cursor_mode = 1;
+-            return Ok(self);
+-        }
+-
+-        Err(LinCapError::new("Unsupported cursor mode".to_string()))
+-    }
+-}
+diff --git a/src/capturer/engine/linux/wayland/mod.rs b/src/capturer/engine/linux/wayland/mod.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d4052a964cad2c72ec894a9c6618d0ccfe35a4b9
+--- /dev/null
++++ b/src/capturer/engine/linux/wayland/mod.rs
+@@ -0,0 +1,416 @@
++use std::{
++    mem::size_of,
++    sync::{
++        atomic::{AtomicBool, AtomicU8},
++        mpsc::{RecvError, SendError, Sender, SyncSender, sync_channel},
++    },
++    thread::JoinHandle,
++    time::Duration,
++};
++
++use anyhow::{Context as _, Result, anyhow};
++use pipewire as pw;
++use pw::{
++    context::Context,
++    main_loop::MainLoop,
++    properties::properties,
++    spa::{
++        self,
++        param::{
++            ParamType,
++            format::{FormatProperties, MediaSubtype, MediaType},
++            video::VideoFormat,
++        },
++        pod::{Pod, Property},
++        sys::{
++            SPA_META_Header, SPA_PARAM_META_size, SPA_PARAM_META_type, spa_buffer, spa_meta_header,
++        },
++        utils::{Direction, SpaTypes},
++    },
++    stream::{StreamRef, StreamState},
++};
++
++use crate::{
++    Target,
++    capturer::Options,
++    frame::{BGRxFrame, Frame, RGBFrame, RGBxFrame, VideoFrame, XBGRFrame},
++};
++
++use self::portal::ScreenCastPortal;
++
++use super::LinuxCapturerImpl;
++
++mod portal;
++
++// TODO: Move to wayland capturer with Arc<>
++static CAPTURER_STATE: AtomicU8 = AtomicU8::new(0);
++static STREAM_STATE_CHANGED_TO_ERROR: AtomicBool = AtomicBool::new(false);
++
++#[derive(Clone)]
++struct ListenerUserData {
++    pub tx: Sender<Result<Frame>>,
++    pub format: spa::param::video::VideoInfoRaw,
++}
++
++fn param_changed_callback(
++    _stream: &StreamRef,
++    user_data: &mut ListenerUserData,
++    id: u32,
++    param: Option<&Pod>,
++) {
++    let Some(param) = param else {
++        return;
++    };
++    if id != pw::spa::param::ParamType::Format.as_raw() {
++        return;
++    }
++    let (media_type, media_subtype) = match pw::spa::param::format_utils::parse_format(param) {
++        Ok(v) => v,
++        Err(_) => return,
++    };
++
++    if media_type != MediaType::Video || media_subtype != MediaSubtype::Raw {
++        return;
++    }
++
++    user_data
++        .format
++        .parse(param)
++        // TODO: Tell library user of the error
++        .expect("Failed to parse format parameter");
++}
++
++fn state_changed_callback(
++    _stream: &StreamRef,
++    _user_data: &mut ListenerUserData,
++    _old: StreamState,
++    new: StreamState,
++) {
++    match new {
++        StreamState::Error(e) => {
++            log::debug!("pipewire: State changed to error({e})");
++            STREAM_STATE_CHANGED_TO_ERROR.store(true, std::sync::atomic::Ordering::Relaxed);
++        }
++        _ => {}
++    }
++}
++
++unsafe fn get_timestamp(buffer: *mut spa_buffer) -> i64 {
++    let n_metas = (*buffer).n_metas;
++    if n_metas > 0 {
++        let mut meta_ptr = (*buffer).metas;
++        let metas_end = (*buffer).metas.wrapping_add(n_metas as usize);
++        while meta_ptr != metas_end {
++            if (*meta_ptr).type_ == SPA_META_Header {
++                let meta_header: &mut spa_meta_header =
++                    &mut *((*meta_ptr).data as *mut spa_meta_header);
++                return meta_header.pts;
++            }
++            meta_ptr = meta_ptr.wrapping_add(1);
++        }
++        0
++    } else {
++        0
++    }
++}
++
++fn process_callback(stream: &StreamRef, user_data: &mut ListenerUserData) {
++    let buffer = unsafe { stream.dequeue_raw_buffer() };
++    let frame_result = match process_callback_impl(buffer, user_data) {
++        Ok(None) => None,
++        Ok(Some(frame)) => Some(Ok(frame)),
++        Err(err) => Some(Err(err)),
++    };
++    if let Some(frame_result) = frame_result {
++        match user_data.tx.send(frame_result) {
++            Ok(()) => {}
++            Err(SendError(_)) => {
++                log::debug!("Frame receiver was dropped.")
++            }
++        }
++    }
++    unsafe { stream.queue_raw_buffer(buffer) };
++}
++
++fn process_callback_impl(
++    buffer: *mut pipewire::sys::pw_buffer,
++    user_data: &mut ListenerUserData,
++) -> Result<Option<Frame>> {
++    if buffer.is_null() {
++        return Err(anyhow!("Wayland screen capture out of buffers."));
++    }
++    let buffer = unsafe { (*buffer).buffer };
++    if buffer.is_null() {
++        // TODO: This matches the behavior of the original code by not having an error here.
++        log::error!("Buffer pointer unexpectedly null in Wayland screen capture.");
++        return Ok(None);
++    }
++
++    let _timestamp = unsafe { get_timestamp(buffer) };
++    let display_time = std::time::SystemTime::now();
++
++    let n_datas = unsafe { (*buffer).n_datas };
++    if n_datas < 1 {
++        return Ok(None);
++    }
++    let frame_size = user_data.format.size();
++    let frame_data: Vec<u8> = unsafe {
++        std::slice::from_raw_parts(
++            (*(*buffer).datas).data as *mut u8,
++            (*(*buffer).datas).maxsize as usize,
++        )
++        .to_vec()
++    };
++
++    match user_data.format.format() {
++        VideoFormat::RGBx => Ok(Some(Frame::Video(VideoFrame::RGBx(RGBxFrame {
++            display_time,
++            width: frame_size.width as i32,
++            height: frame_size.height as i32,
++            data: frame_data,
++        })))),
++        VideoFormat::RGB => Ok(Some(Frame::Video(VideoFrame::RGB(RGBFrame {
++            display_time,
++            width: frame_size.width as i32,
++            height: frame_size.height as i32,
++            data: frame_data,
++        })))),
++        VideoFormat::xBGR => Ok(Some(Frame::Video(VideoFrame::XBGR(XBGRFrame {
++            display_time,
++            width: frame_size.width as i32,
++            height: frame_size.height as i32,
++            data: frame_data,
++        })))),
++        VideoFormat::BGRx => Ok(Some(Frame::Video(VideoFrame::BGRx(BGRxFrame {
++            display_time,
++            width: frame_size.width as i32,
++            height: frame_size.height as i32,
++            data: frame_data,
++        })))),
++        _ => Err(anyhow!("Unsupported frame format received")),
++    }
++}
++
++fn start_pipewire_capturer(
++    options: Options,
++    tx: Sender<Result<Frame>>,
++    stream_id: u32,
++) -> Result<MainLoop> {
++    pw::init();
++
++    let mainloop = MainLoop::new(None)?;
++    let context = Context::new(&mainloop)?;
++    let core = context.connect(None)?;
++
++    let user_data = ListenerUserData {
++        tx,
++        format: Default::default(),
++    };
++
++    let stream = pw::stream::Stream::new(
++        &core,
++        "scap",
++        properties! {
++            *pw::keys::MEDIA_TYPE => "Video",
++            *pw::keys::MEDIA_CATEGORY => "Capture",
++            *pw::keys::MEDIA_ROLE => "Screen",
++        },
++    )?;
++
++    let _listener = stream
++        .add_local_listener_with_user_data(user_data.clone())
++        .state_changed(state_changed_callback)
++        .param_changed(param_changed_callback)
++        .process(process_callback)
++        .register()?;
++
++    let obj = pw::spa::pod::object!(
++        pw::spa::utils::SpaTypes::ObjectParamFormat,
++        pw::spa::param::ParamType::EnumFormat,
++        pw::spa::pod::property!(FormatProperties::MediaType, Id, MediaType::Video),
++        pw::spa::pod::property!(FormatProperties::MediaSubtype, Id, MediaSubtype::Raw),
++        pw::spa::pod::property!(
++            FormatProperties::VideoFormat,
++            Choice,
++            Enum,
++            Id,
++            pw::spa::param::video::VideoFormat::RGB,
++            pw::spa::param::video::VideoFormat::RGBA,
++            pw::spa::param::video::VideoFormat::RGBx,
++            pw::spa::param::video::VideoFormat::BGRx,
++        ),
++        pw::spa::pod::property!(
++            FormatProperties::VideoSize,
++            Choice,
++            Range,
++            Rectangle,
++            pw::spa::utils::Rectangle {
++                // Default
++                width: 128,
++                height: 128,
++            },
++            pw::spa::utils::Rectangle {
++                // Min
++                width: 1,
++                height: 1,
++            },
++            pw::spa::utils::Rectangle {
++                // Max
++                width: 4096,
++                height: 4096,
++            }
++        ),
++        pw::spa::pod::property!(
++            FormatProperties::VideoFramerate,
++            Choice,
++            Range,
++            Fraction,
++            pw::spa::utils::Fraction {
++                num: options.fps,
++                denom: 1
++            },
++            pw::spa::utils::Fraction { num: 0, denom: 1 },
++            pw::spa::utils::Fraction {
++                num: 1000,
++                denom: 1
++            }
++        ),
++    );
++
++    let metas_obj = pw::spa::pod::object!(
++        SpaTypes::ObjectParamMeta,
++        ParamType::Meta,
++        Property::new(
++            SPA_PARAM_META_type,
++            pw::spa::pod::Value::Id(pw::spa::utils::Id(SPA_META_Header))
++        ),
++        Property::new(
++            SPA_PARAM_META_size,
++            pw::spa::pod::Value::Int(size_of::<pw::spa::sys::spa_meta_header>() as i32)
++        ),
++    );
++
++    let values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
++        std::io::Cursor::new(Vec::new()),
++        &pw::spa::pod::Value::Object(obj),
++    )?
++    .0
++    .into_inner();
++    let metas_values: Vec<u8> = pw::spa::pod::serialize::PodSerializer::serialize(
++        std::io::Cursor::new(Vec::new()),
++        &pw::spa::pod::Value::Object(metas_obj),
++    )?
++    .0
++    .into_inner();
++
++    let mut params = [
++        pw::spa::pod::Pod::from_bytes(&values)
++            .context("Not enough space in screen capture 'values' param.")?,
++        pw::spa::pod::Pod::from_bytes(&metas_values)
++            .context("Not enough space in screen capture 'metas_values' param.")?,
++    ];
++
++    stream.connect(
++        Direction::Input,
++        Some(stream_id),
++        pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
++        &mut params,
++    )?;
++
++    Ok(mainloop)
++}
++
++// TODO: Format negotiation
++fn pipewire_capturer(
++    options: Options,
++    tx: Sender<Result<Frame>>,
++    ready_sender: &SyncSender<Result<()>>,
++    stream_id: u32,
++) {
++    let mainloop = match start_pipewire_capturer(options, tx, stream_id) {
++        Ok(mainloop) => {
++            ready_sender.send(Ok(())).ok();
++            mainloop
++        }
++        Err(err) => {
++            ready_sender.send(Err(err)).ok();
++            return;
++        }
++    };
++
++    while CAPTURER_STATE.load(std::sync::atomic::Ordering::Relaxed) == 0 {
++        std::thread::sleep(Duration::from_millis(10));
++    }
++
++    let pw_loop = mainloop.loop_();
++
++    // User has called Capturer::start() and we start the main loop
++    while CAPTURER_STATE.load(std::sync::atomic::Ordering::Relaxed) == 1
++        && /* If the stream state got changed to `Error`, we exit. TODO: tell user that we exited */
++          !STREAM_STATE_CHANGED_TO_ERROR.load(std::sync::atomic::Ordering::Relaxed)
++    {
++        pw_loop.iterate(Duration::from_millis(100));
++    }
++}
++
++pub struct WaylandCapturer {
++    capturer_join_handle: Option<JoinHandle<()>>,
++    // The pipewire stream is deleted when the connection is dropped.
++    // That's why we keep it alive
++    _connection: dbus::blocking::Connection,
++}
++
++impl WaylandCapturer {
++    // TODO: Error handling
++    pub fn new(options: &Options, tx: Sender<Result<Frame>>) -> Result<Self> {
++        let connection = dbus::blocking::Connection::new_session()
++            .context("Failed to create dbus connection")?;
++        let stream_id = ScreenCastPortal::new(&connection)
++            .show_cursor(options.show_cursor)
++            .context("Unsupported screen capture cursor display mode")?
++            .create_stream()
++            .context("Failed to get screen capture stream")?
++            .pw_node_id();
++
++        // TODO: Fix this hack
++        let options = options.clone();
++        let (ready_sender, ready_recv) = sync_channel(1);
++        let capturer_join_handle =
++            std::thread::spawn(move || pipewire_capturer(options, tx, &ready_sender, stream_id));
++
++        match ready_recv.recv() {
++            Ok(Ok(())) => {}
++            Ok(Err(err)) => {
++                return Err(anyhow!(err));
++            }
++            Err(RecvError) => {
++                return Err(anyhow!(
++                    "Wayland screen capture bug: stream unexpectedly dropped."
++                ));
++            }
++        }
++
++        Ok(Self {
++            capturer_join_handle: Some(capturer_join_handle),
++            _connection: connection,
++        })
++    }
++}
++
++impl LinuxCapturerImpl for WaylandCapturer {
++    fn start_capture(&mut self) {
++        CAPTURER_STATE.store(1, std::sync::atomic::Ordering::Relaxed);
++    }
++
++    fn stop_capture(&mut self) {
++        CAPTURER_STATE.store(2, std::sync::atomic::Ordering::Relaxed);
++        if let Some(handle) = self.capturer_join_handle.take() {
++            match handle.join() {
++                Ok(()) => {}
++                Err(err) => log::error!("Failed to join Wayland screen capture thread: {:?}", err),
++            }
++        }
++        CAPTURER_STATE.store(0, std::sync::atomic::Ordering::Relaxed);
++        STREAM_STATE_CHANGED_TO_ERROR.store(false, std::sync::atomic::Ordering::Relaxed);
++    }
++}
+diff --git a/src/capturer/engine/linux/wayland/portal.rs b/src/capturer/engine/linux/wayland/portal.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..307a05f2c7f56109675428b0f759d86574f0d067
+--- /dev/null
++++ b/src/capturer/engine/linux/wayland/portal.rs
+@@ -0,0 +1,425 @@
++use std::{
++    sync::{Arc, Mutex, atomic::AtomicBool},
++    time::Duration,
++};
++
++use dbus::{
++    arg::{self, PropMap, RefArg, Variant},
++    blocking::{Connection, Proxy},
++    message::MatchRule,
++    strings::{BusName, Interface},
++};
++
++// This code was autogenerated with `dbus-codegen-rust -d org.freedesktop.portal.Desktop -p /org/freedesktop/portal/desktop -f org.freedesktop.portal.ScreenCast`, see https://github.com/diwic/dbus-rs
++// {
++use dbus::blocking;
++
++use crate::capturer::engine::linux::error::LinCapError;
++
++#[allow(unused)]
++trait OrgFreedesktopPortalScreenCast {
++    fn create_session(&self, options: arg::PropMap) -> Result<dbus::Path<'static>, dbus::Error>;
++    fn select_sources(
++        &self,
++        session_handle: dbus::Path,
++        options: arg::PropMap,
++    ) -> Result<dbus::Path<'static>, dbus::Error>;
++    fn start(
++        &self,
++        session_handle: dbus::Path,
++        parent_window: &str,
++        options: arg::PropMap,
++    ) -> Result<dbus::Path<'static>, dbus::Error>;
++    fn open_pipe_wire_remote(
++        &self,
++        session_handle: dbus::Path,
++        options: arg::PropMap,
++    ) -> Result<arg::OwnedFd, dbus::Error>;
++    fn available_source_types(&self) -> Result<u32, dbus::Error>;
++    fn available_cursor_modes(&self) -> Result<u32, dbus::Error>;
++    fn version(&self) -> Result<u32, dbus::Error>;
++}
++
++impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>>
++    OrgFreedesktopPortalScreenCast for blocking::Proxy<'a, C>
++{
++    fn create_session(&self, options: arg::PropMap) -> Result<dbus::Path<'static>, dbus::Error> {
++        self.method_call(
++            "org.freedesktop.portal.ScreenCast",
++            "CreateSession",
++            (options,),
++        )
++        .and_then(|r: (dbus::Path<'static>,)| Ok(r.0))
++    }
++
++    fn select_sources(
++        &self,
++        session_handle: dbus::Path,
++        options: arg::PropMap,
++    ) -> Result<dbus::Path<'static>, dbus::Error> {
++        self.method_call(
++            "org.freedesktop.portal.ScreenCast",
++            "SelectSources",
++            (session_handle, options),
++        )
++        .and_then(|r: (dbus::Path<'static>,)| Ok(r.0))
++    }
++
++    fn start(
++        &self,
++        session_handle: dbus::Path,
++        parent_window: &str,
++        options: arg::PropMap,
++    ) -> Result<dbus::Path<'static>, dbus::Error> {
++        self.method_call(
++            "org.freedesktop.portal.ScreenCast",
++            "Start",
++            (session_handle, parent_window, options),
++        )
++        .and_then(|r: (dbus::Path<'static>,)| Ok(r.0))
++    }
++
++    fn open_pipe_wire_remote(
++        &self,
++        session_handle: dbus::Path,
++        options: arg::PropMap,
++    ) -> Result<arg::OwnedFd, dbus::Error> {
++        self.method_call(
++            "org.freedesktop.portal.ScreenCast",
++            "OpenPipeWireRemote",
++            (session_handle, options),
++        )
++        .and_then(|r: (arg::OwnedFd,)| Ok(r.0))
++    }
++
++    fn available_source_types(&self) -> Result<u32, dbus::Error> {
++        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
++            &self,
++            "org.freedesktop.portal.ScreenCast",
++            "AvailableSourceTypes",
++        )
++    }
++
++    fn available_cursor_modes(&self) -> Result<u32, dbus::Error> {
++        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
++            &self,
++            "org.freedesktop.portal.ScreenCast",
++            "AvailableCursorModes",
++        )
++    }
++
++    fn version(&self) -> Result<u32, dbus::Error> {
++        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
++            &self,
++            "org.freedesktop.portal.ScreenCast",
++            "version",
++        )
++    }
++}
++// }
++
++// This code was autogenerated with `dbus-codegen-rust --file org.freedesktop.portal.Request.xml`, see https://github.com/diwic/dbus-rs
++// {
++#[allow(unused)]
++trait OrgFreedesktopPortalRequest {
++    fn close(&self) -> Result<(), dbus::Error>;
++}
++
++#[derive(Debug)]
++pub struct OrgFreedesktopPortalRequestResponse {
++    pub response: u32,
++    pub results: arg::PropMap,
++}
++
++impl arg::AppendAll for OrgFreedesktopPortalRequestResponse {
++    fn append(&self, i: &mut arg::IterAppend) {
++        arg::RefArg::append(&self.response, i);
++        arg::RefArg::append(&self.results, i);
++    }
++}
++
++impl arg::ReadAll for OrgFreedesktopPortalRequestResponse {
++    fn read(i: &mut arg::Iter) -> Result<Self, arg::TypeMismatchError> {
++        Ok(OrgFreedesktopPortalRequestResponse {
++            response: i.read()?,
++            results: i.read()?,
++        })
++    }
++}
++
++impl dbus::message::SignalArgs for OrgFreedesktopPortalRequestResponse {
++    const NAME: &'static str = "Response";
++    const INTERFACE: &'static str = "org.freedesktop.portal.Request";
++}
++
++impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgFreedesktopPortalRequest
++    for blocking::Proxy<'a, C>
++{
++    fn close(&self) -> Result<(), dbus::Error> {
++        self.method_call("org.freedesktop.portal.Request", "Close", ())
++    }
++}
++// }
++
++type Response = Option<OrgFreedesktopPortalRequestResponse>;
++
++#[derive(Debug)]
++#[allow(dead_code)]
++pub struct StreamVardict {
++    id: Option<String>,
++    position: Option<(i32, i32)>,
++    size: Option<(i32, i32)>,
++    source_type: Option<u32>,
++    mapping_id: Option<String>,
++}
++
++#[derive(Debug)]
++#[allow(unused)]
++pub struct Stream(u32, StreamVardict);
++
++impl Stream {
++    pub fn pw_node_id(&self) -> u32 {
++        self.0
++    }
++
++    pub fn from_dbus(stream: &Variant<Box<dyn RefArg>>) -> Option<Self> {
++        let mut stream = stream.as_iter()?.next()?.as_iter()?;
++        let pipewire_node_id = stream.next()?.as_iter()?.next()?.as_u64()?;
++
++        // TODO: Get the rest of the properties
++
++        Some(Self(
++            pipewire_node_id as u32,
++            StreamVardict {
++                id: None,
++                position: None,
++                size: None,
++                source_type: None,
++                mapping_id: None,
++            },
++        ))
++    }
++}
++
++macro_rules! match_response {
++    ( $code:expr ) => {
++        match $code {
++            0 => {}
++            1 => {
++                return Err(LinCapError::new(String::from(
++                    "User cancelled the interaction",
++                )));
++            }
++            2 => {
++                return Err(LinCapError::new(String::from(
++                    "The user interaction was ended in some other way",
++                )));
++            }
++            _ => unreachable!(),
++        }
++    };
++}
++
++pub struct ScreenCastPortal<'a> {
++    proxy: Proxy<'a, &'a Connection>,
++    token: String,
++    cursor_mode: u32,
++}
++
++impl<'a> ScreenCastPortal<'a> {
++    pub fn new(connection: &'a Connection) -> Self {
++        let proxy = connection.with_proxy(
++            "org.freedesktop.portal.Desktop",
++            "/org/freedesktop/portal/desktop",
++            Duration::from_secs(4),
++        );
++
++        let token = format!("scap_{}", rand::random::<u16>());
++
++        Self {
++            proxy,
++            token,
++            cursor_mode: 1,
++        }
++    }
++
++    fn create_session_args(&self) -> arg::PropMap {
++        let mut map = arg::PropMap::new();
++        map.insert(
++            String::from("handle_token"),
++            Variant(Box::new(self.token.clone())),
++        );
++        map.insert(
++            String::from("session_handle_token"),
++            Variant(Box::new(self.token.clone())),
++        );
++        map
++    }
++
++    fn select_sources_args(&self) -> Result<arg::PropMap, dbus::Error> {
++        let mut map = arg::PropMap::new();
++        map.insert(
++            String::from("handle_token"),
++            Variant(Box::new(self.token.clone())),
++        );
++        map.insert(
++            String::from("types"),
++            Variant(Box::new(self.proxy.available_source_types()?)),
++        );
++        map.insert(String::from("multiple"), Variant(Box::new(false)));
++        map.insert(
++            String::from("cursor_mode"),
++            Variant(Box::new(self.cursor_mode)),
++        );
++        Ok(map)
++    }
++
++    fn handle_req_response(
++        connection: &Connection,
++        path: dbus::Path<'static>,
++        iterations: usize,
++        timeout: Duration,
++        response: Arc<Mutex<Response>>,
++    ) -> Result<(), dbus::Error> {
++        let got_response = Arc::new(AtomicBool::new(false));
++        let got_response_clone = Arc::clone(&got_response);
++
++        let mut rule = MatchRule::new();
++        rule.path = Some(dbus::Path::from(path));
++        rule.msg_type = Some(dbus::MessageType::Signal);
++        rule.sender = Some(BusName::from("org.freedesktop.portal.Desktop"));
++        rule.interface = Some(Interface::from("org.freedesktop.portal.Request"));
++        connection.add_match(
++            rule,
++            move |res: OrgFreedesktopPortalRequestResponse, _chuh, _msg| {
++                let mut response = response.lock().expect("Failed to lock response mutex");
++                *response = Some(res);
++                got_response_clone.store(true, std::sync::atomic::Ordering::Relaxed);
++                false
++            },
++        )?;
++
++        for _ in 0..iterations {
++            connection.process(timeout)?;
++
++            if got_response.load(std::sync::atomic::Ordering::Relaxed) {
++                break;
++            }
++        }
++
++        Ok(())
++    }
++
++    fn create_session(&self) -> Result<dbus::Path, LinCapError> {
++        let request_handle = self.proxy.create_session(self.create_session_args())?;
++
++        let response = Arc::new(Mutex::new(None));
++        let response_clone = Arc::clone(&response);
++        Self::handle_req_response(
++            self.proxy.connection,
++            request_handle,
++            100,
++            Duration::from_millis(100),
++            response_clone,
++        )?;
++
++        if let Some(res) = response.lock()?.take() {
++            match_response!(res.response);
++            match res
++                .results
++                .get("session_handle")
++                .map(|h| h.0.as_str().map(String::from))
++            {
++                Some(h) => {
++                    let p = dbus::Path::from(match h {
++                        Some(p) => p,
++                        None => {
++                            return Err(LinCapError::new(String::from(
++                                "Invalid session_handle received",
++                            )));
++                        }
++                    });
++
++                    return Ok(p);
++                }
++                None => return Err(LinCapError::new(String::from("Did not get session handle"))),
++            }
++        }
++
++        Err(LinCapError::new(String::from("Did not get response")))
++    }
++
++    fn select_sources(&self, session_handle: dbus::Path) -> Result<(), LinCapError> {
++        let request_handle = self
++            .proxy
++            .select_sources(session_handle, self.select_sources_args()?)?;
++
++        let response = Arc::new(Mutex::new(None));
++        let response_clone = Arc::clone(&response);
++        Self::handle_req_response(
++            self.proxy.connection,
++            request_handle,
++            1200, // Wait 2 min
++            Duration::from_millis(100),
++            response_clone,
++        )?;
++
++        if let Some(res) = response.lock()?.take() {
++            match_response!(res.response);
++            return Ok(());
++        }
++
++        Err(LinCapError::new(String::from("Did not get response")))
++    }
++
++    fn start(&self, session_handle: dbus::Path) -> Result<Stream, LinCapError> {
++        let request_handle = self.proxy.start(session_handle, "", PropMap::new())?;
++
++        let response = Arc::new(Mutex::new(None));
++        let response_clone = Arc::clone(&response);
++        Self::handle_req_response(
++            self.proxy.connection,
++            request_handle,
++            100, // Wait 10 s
++            Duration::from_millis(100),
++            response_clone,
++        )?;
++
++        if let Some(res) = response.lock()?.take() {
++            match_response!(res.response);
++            match res.results.get("streams") {
++                Some(s) => match Stream::from_dbus(s) {
++                    Some(s) => return Ok(s),
++                    None => {
++                        return Err(LinCapError::new(String::from(
++                            "Failed to extract stream properties",
++                        )));
++                    }
++                },
++                None => return Err(LinCapError::new(String::from("Did not get any streams"))),
++            }
++        }
++
++        Err(LinCapError::new(String::from("Did not get response")))
++    }
++
++    pub fn create_stream(&self) -> Result<Stream, LinCapError> {
++        let session_handle = self.create_session()?;
++        self.select_sources(session_handle.clone())?;
++        self.start(session_handle)
++    }
++
++    pub fn show_cursor(mut self, mode: bool) -> Result<Self, LinCapError> {
++        let available_modes = self.proxy.available_cursor_modes()?;
++        if mode && available_modes & 2 == 2 {
++            self.cursor_mode = 2;
++            return Ok(self);
++        }
++        if !mode && available_modes & 1 == 1 {
++            self.cursor_mode = 1;
++            return Ok(self);
++        }
++
++        Err(LinCapError::new("Unsupported cursor mode".to_string()))
++    }
++}
+diff --git a/src/capturer/engine/linux/x11/mod.rs b/src/capturer/engine/linux/x11/mod.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..df6bb7247d343ab9ccd756fba44c09456420a868
+--- /dev/null
++++ b/src/capturer/engine/linux/x11/mod.rs
+@@ -0,0 +1,259 @@
++use std::{
++    sync::{
++        Arc,
++        atomic::{AtomicU8, Ordering},
++        mpsc::{SendError, Sender},
++    },
++    thread::JoinHandle,
++};
++
++use xcb::{Xid, x};
++
++use crate::{Target, capturer::Options, frame::Frame, targets::linux::get_default_x_display};
++
++use super::{LinuxCapturerImpl, error::LinCapError};
++
++pub struct X11Capturer {
++    capturer_join_handle: Option<JoinHandle<()>>,
++    capturer_state: Arc<AtomicU8>,
++    target: Target,
++}
++
++fn draw_cursor(
++    conn: &xcb::Connection,
++    img: &mut [u8],
++    win_x: i16,
++    win_y: i16,
++    win_width: i16,
++    win_height: i16,
++    is_win: bool,
++    win: &xcb::x::Window,
++) -> Result<(), xcb::Error> {
++    let cursor_image_cookie = conn.send_request(&xcb::xfixes::GetCursorImage {});
++    let cursor_image = conn.wait_for_reply(cursor_image_cookie)?;
++
++    let win_x = win_x as i32;
++    let win_y = win_y as i32;
++
++    let win_width = win_width as i32;
++    let win_height = win_height as i32;
++
++    let mut cursor_x = cursor_image.x() as i32 - cursor_image.xhot() as i32;
++    let mut cursor_y = cursor_image.y() as i32 - cursor_image.yhot() as i32;
++    if is_win {
++        let disp = conn.get_raw_dpy();
++        let mut ncursor_x = 0;
++        let mut ncursor_y = 0;
++        let mut child_return = 0;
++        if unsafe {
++            x11::xlib::XTranslateCoordinates(
++                disp,
++                x11::xlib::XDefaultRootWindow(disp),
++                win.resource_id() as u64,
++                cursor_image.x() as i32,
++                cursor_image.y() as i32,
++                &mut ncursor_x,
++                &mut ncursor_y,
++                &mut child_return,
++            )
++        } == 0
++        {
++            return Ok(());
++        }
++        cursor_x = ncursor_x as i32 - cursor_image.xhot() as i32;
++        cursor_y = ncursor_y as i32 - cursor_image.yhot() as i32;
++    }
++
++    if cursor_x >= win_width + win_x
++        || cursor_y >= win_height + win_y
++        || cursor_x < win_x
++        || cursor_y < win_y
++    {
++        return Ok(());
++    }
++
++    let x = cursor_x.max(win_x);
++    let y = cursor_y.max(win_y);
++
++    let w = ((cursor_x + cursor_image.width() as i32).min(win_x + win_width) - x) as u32;
++    let h = ((cursor_y + cursor_image.height() as i32).min(win_y + win_height) - y) as u32;
++
++    let c_off = (x - cursor_x) as u32;
++    let i_off: i32 = x - win_x;
++
++    let stride: u32 = 4;
++    let mut cursor_idx: u32 = ((y - cursor_y) * cursor_image.width() as i32) as u32;
++    let mut image_idx: u32 = ((y - win_y) * win_width * stride as i32) as u32;
++
++    for _row in 0..h {
++        cursor_idx += c_off;
++        image_idx += i_off as u32 * stride;
++        for _column in 0..w {
++            let cursor_pix = cursor_image.cursor_image()[cursor_idx as usize];
++            let r = (cursor_pix & 0xFF) as u8;
++            let g = ((cursor_pix >> 8) & 0xFF) as u8;
++            let b = ((cursor_pix >> 16) & 0xFF) as u8;
++            let a = (cursor_pix >> 24) & 0xFF;
++
++            let i = image_idx as usize;
++            if a == 0xFF {
++                img[i] = r;
++                img[i + 1] = g;
++                img[i + 2] = b;
++            } else if a > 0 {
++                let a = 255 - a;
++                img[i] = r + ((img[i] as u32 * a + 255 / 2) / 255) as u8;
++                img[i + 1] = g + ((img[i + 1] as u32 * a + 255 / 2) / 255) as u8;
++                img[i + 2] = b + ((img[i + 2] as u32 * a + 255 / 2) / 255) as u8;
++            }
++
++            cursor_idx += 1;
++            image_idx += stride;
++        }
++        cursor_idx += cursor_image.width() as u32 - w as u32 - c_off as u32;
++        image_idx += (win_width - w as i32 - i_off) as u32 * stride;
++    }
++
++    Ok(())
++}
++
++fn grab(conn: &xcb::Connection, target: &Target, show_cursor: bool) -> anyhow::Result<Frame> {
++    let (x, y, width, height, window, is_win) = match &target {
++        Target::Window(win) => {
++            let geom_cookie = conn.send_request(&x::GetGeometry {
++                drawable: x::Drawable::Window(win.raw_handle),
++            });
++            let geom = conn.wait_for_reply(geom_cookie)?;
++            (0, 0, geom.width(), geom.height(), win.raw_handle, true)
++        }
++        Target::Display(disp) => (
++            disp.x_offset,
++            disp.y_offset,
++            disp.width,
++            disp.height,
++            disp.raw_handle,
++            false,
++        ),
++    };
++
++    let img_cookie = conn.send_request(&x::GetImage {
++        format: x::ImageFormat::ZPixmap,
++        drawable: x::Drawable::Window(window),
++        x,
++        y,
++        width,
++        height,
++        plane_mask: u32::MAX,
++    });
++    let img = conn.wait_for_reply(img_cookie)?;
++
++    let mut img_data = img.data().to_vec();
++
++    if show_cursor {
++        draw_cursor(
++            &conn,
++            &mut img_data,
++            x,
++            y,
++            width as i16,
++            height as i16,
++            is_win,
++            &window,
++        )?;
++    }
++
++    Ok(Frame::Video(crate::frame::VideoFrame::BGRx(
++        crate::frame::BGRxFrame {
++            display_time: std::time::SystemTime::now(),
++            width: width as i32,
++            height: height as i32,
++            data: img_data,
++        },
++    )))
++}
++
++fn query_xfixes_version(conn: &xcb::Connection) -> Result<(), xcb::Error> {
++    let cookie = conn.send_request(&xcb::xfixes::QueryVersion {
++        client_major_version: xcb::xfixes::MAJOR_VERSION,
++        client_minor_version: xcb::xfixes::MINOR_VERSION,
++    });
++    let _ = conn.wait_for_reply(cookie)?;
++    Ok(())
++}
++
++impl X11Capturer {
++    pub fn new(options: &Options, tx: Sender<anyhow::Result<Frame>>) -> Result<Self, LinCapError> {
++        let (conn, screen_num) = xcb::Connection::connect_with_xlib_display_and_extensions(
++            &[xcb::Extension::RandR, xcb::Extension::XFixes],
++            &[],
++        )
++        .map_err(|e| LinCapError::new(e.to_string()))?;
++        query_xfixes_version(&conn).map_err(|e| LinCapError::new(e.to_string()))?;
++        let setup = conn.get_setup();
++        let Some(screen) = setup.roots().nth(screen_num as usize) else {
++            return Err(LinCapError::new(String::from("Failed to get setup root")));
++        };
++
++        let target = match &options.target {
++            Some(t) => t.clone(),
++            None => Target::Display(
++                get_default_x_display(&conn, screen)
++                    .map_err(|e| LinCapError::new(e.to_string()))?,
++            ),
++        };
++
++        let framerate = options.fps as f32;
++        let show_cursor = options.show_cursor;
++        let capturer_state = Arc::new(AtomicU8::new(0));
++        let capturer_state_clone = Arc::clone(&capturer_state);
++
++        let target_clone = target.clone();
++        let jh = std::thread::spawn(move || {
++            while capturer_state_clone.load(Ordering::Acquire) == 0 {
++                std::thread::sleep(std::time::Duration::from_millis(10));
++            }
++
++            let frame_time = std::time::Duration::from_secs_f32(1.0 / framerate);
++            while capturer_state_clone.load(Ordering::Acquire) == 1 {
++                let start = std::time::Instant::now();
++
++                match tx.send(grab(&conn, &target_clone, show_cursor)) {
++                    Ok(()) => {}
++                    Err(SendError(_)) => {
++                        log::debug!("Frame receiver was dropped.")
++                    }
++                }
++
++                let elapsed = start.elapsed();
++                if elapsed < frame_time {
++                    std::thread::sleep(frame_time - elapsed);
++                }
++            }
++        });
++
++        Ok(Self {
++            capturer_state,
++            capturer_join_handle: Some(jh),
++            target,
++        })
++    }
++}
++
++impl LinuxCapturerImpl for X11Capturer {
++    fn start_capture(&mut self) {
++        self.capturer_state.store(1, Ordering::Release);
++    }
++
++    fn stop_capture(&mut self) {
++        self.capturer_state.store(2, Ordering::Release);
++        if let Some(handle) = self.capturer_join_handle.take() {
++            match handle.join() {
++                Ok(()) => {}
++                Err(err) => log::error!("Failed to join X11 screen capture thread: {:?}", err),
++            }
++        }
++    }
++    fn target(&self) -> Option<&Target> {
++        Some(&self.target)
++    }
++}
+diff --git a/src/capturer/engine/mac/mod.rs b/src/capturer/engine/mac/mod.rs
+index 3136a3e641c41561da9dba4ea41808f4fb0ef1c4..0fc105b9460bb562f8bb7668f326c2a7f927a476 100644
+--- a/src/capturer/engine/mac/mod.rs
++++ b/src/capturer/engine/mac/mod.rs
+@@ -53,7 +53,7 @@ impl sc::stream::DelegateImpl for ErrorHandler {
+ 
+ #[repr(C)]
+ pub struct CapturerInner {
+-    pub tx: mpsc::Sender<ChannelItem>,
++    pub tx: mpsc::Sender<anyhow::Result<ChannelItem>>,
+ }
+ 
+ define_obj_type!(pub Capturer + StreamOutputImpl, CapturerInner, CAPTURER);
+@@ -69,7 +69,14 @@ impl sc::stream::OutputImpl for Capturer {
+         sample_buf: &mut cm::SampleBuf,
+         kind: sc::OutputType,
+     ) {
+-        let _ = self.inner_mut().tx.send((sample_buf.retained(), kind));
++        if self
++            .inner_mut()
++            .tx
++            .send(Ok((sample_buf.retained(), kind)))
++            .is_err()
++        {
++            log::debug!("screen capture receiver dropped");
++        }
+     }
+ }
+ 
+@@ -85,14 +92,14 @@ pub(crate) enum CreateCapturerError {
+ 
+ pub(crate) fn create_capturer(
+     options: &Options,
+-    tx: mpsc::Sender<ChannelItem>,
++    tx: mpsc::Sender<anyhow::Result<ChannelItem>>,
+     error_flag: Arc<AtomicBool>,
+-) -> Result<(arc::R<Capturer>, arc::R<ErrorHandler>, arc::R<sc::Stream>), CreateCapturerError> {
++) -> anyhow::Result<(arc::R<Capturer>, arc::R<ErrorHandler>, arc::R<sc::Stream>)> {
+     // If no target is specified, capture the main display
+-    let target = options
+-        .target
+-        .clone()
+-        .unwrap_or_else(|| Target::Display(targets::get_main_display()));
++    let target = match options.target.clone() {
++        Some(target) => target,
++        None => Target::Display(targets::get_main_display()?),
++    };
+ 
+     let shareable_content = block_on(sc::ShareableContent::current())?;
+ 
+@@ -148,7 +155,7 @@ pub(crate) fn create_capturer(
+         }
+     };
+ 
+-    let crop_area = get_crop_area(options);
++    let crop_area = get_crop_area(options)?;
+ 
+     let source_rect = cg::Rect {
+         origin: cg::Point {
+@@ -168,7 +175,7 @@ pub(crate) fn create_capturer(
+         FrameType::BGRAFrame => cv::PixelFormat::_32_BGRA,
+     };
+ 
+-    let [width, height] = get_output_frame_size(options);
++    let [width, height] = get_output_frame_size(options)?;
+ 
+     let mut stream_config = sc::StreamCfg::new();
+     stream_config.set_width(width as usize);
+@@ -196,24 +203,24 @@ pub(crate) fn create_capturer(
+     if options.captures_audio {
+         stream
+             .add_stream_output(capturer.as_ref(), sc::OutputType::Audio, Some(&queue))
+-            .unwrap();
++            .map_err(CreateCapturerError::OtherNative)?;
+     }
+ 
+     stream
+         .add_stream_output(capturer.as_ref(), sc::OutputType::Screen, Some(&queue))
+-        .unwrap();
++        .map_err(CreateCapturerError::OtherNative)?;
+ 
+     Ok((capturer, error_handler, stream))
+ }
+ 
+-pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
+-    let target = options
+-        .target
+-        .clone()
+-        .unwrap_or_else(|| Target::Display(targets::get_main_display()));
++pub fn get_output_frame_size(options: &Options) -> anyhow::Result<[u32; 2]> {
++    let target = match options.target.clone() {
++        Some(target) => target,
++        None => Target::Display(targets::get_main_display()?),
++    };
+ 
+     let scale_factor = targets::get_scale_factor(&target);
+-    let source_rect = get_crop_area(options);
++    let source_rect = get_crop_area(options)?;
+ 
+     // Calculate the output height & width based on the required resolution
+     // Output width and height need to be multiplied by scale (or dpi)
+@@ -235,18 +242,18 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
+     output_width -= output_width % 2;
+     output_height -= output_height % 2;
+ 
+-    [output_width, output_height]
++    Ok([output_width, output_height])
+ }
+ 
+-pub fn get_crop_area(options: &Options) -> Area {
+-    let target = options
+-        .target
+-        .clone()
+-        .unwrap_or_else(|| Target::Display(targets::get_main_display()));
++pub fn get_crop_area(options: &Options) -> anyhow::Result<Area> {
++    let target = match options.target.clone() {
++        Some(target) => target,
++        None => Target::Display(targets::get_main_display()?),
++    };
+ 
+     let (width, height) = targets::get_target_dimensions(&target);
+ 
+-    options
++    Ok(options
+         .crop_area
+         .as_ref()
+         .map(|val| {
+@@ -270,7 +277,7 @@ pub fn get_crop_area(options: &Options) -> Area {
+                 width: width as f64,
+                 height: height as f64,
+             },
+-        })
++        }))
+ }
+ 
+ pub fn process_sample_buffer(
+diff --git a/src/capturer/engine/mac/pixelformat.rs b/src/capturer/engine/mac/pixelformat.rs
+index fd9047aebcd302eb176c528df451e51876879ce1..7cf0406110988dc7dc1b2612430bb7d4f438d19c 100644
+--- a/src/capturer/engine/mac/pixelformat.rs
++++ b/src/capturer/engine/mac/pixelformat.rs
+@@ -3,8 +3,8 @@ use std::time::SystemTime;
+ use cidre::{cm, cv};
+ 
+ use crate::frame::{
+-    convert_bgra_to_rgb, get_cropped_data, remove_alpha_channel, BGRAFrame, BGRFrame, RGBFrame,
+-    YUVFrame,
++    BGRAFrame, BGRFrame, RGBFrame, YUVFrame, convert_bgra_to_rgb, get_cropped_data,
++    remove_alpha_channel,
+ };
+ 
+ pub unsafe fn create_yuv_frame(
+diff --git a/src/capturer/engine/mod.rs b/src/capturer/engine/mod.rs
+index e8aa3a0088dea2fbd08dda536cdee05ecd430fae..34fe3951330d5b8fb3906bc44eb39bbf13887ffc 100644
+--- a/src/capturer/engine/mod.rs
++++ b/src/capturer/engine/mod.rs
+@@ -1,7 +1,11 @@
+ use std::sync::mpsc;
+ 
++use anyhow::Result;
++
+ use super::Options;
+-use crate::frame::Frame;
++#[cfg(any(target_os = "macos", target_os = "windows"))]
++use crate::targets;
++use crate::{Target, frame::Frame};
+ 
+ #[cfg(target_os = "macos")]
+ pub mod mac;
+@@ -9,7 +13,7 @@ pub mod mac;
+ #[cfg(target_os = "windows")]
+ mod win;
+ 
+-#[cfg(target_os = "linux")]
++#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+ mod linux;
+ 
+ #[cfg(target_os = "macos")]
+@@ -20,7 +24,7 @@ pub type ChannelItem = (
+ #[cfg(not(target_os = "macos"))]
+ pub type ChannelItem = Frame;
+ 
+-pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
++pub fn get_output_frame_size(options: &Options) -> Result<[u32; 2]> {
+     #[cfg(target_os = "macos")]
+     {
+         mac::get_output_frame_size(options)
+@@ -31,15 +35,16 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
+         win::get_output_frame_size(options)
+     }
+ 
+-    #[cfg(target_os = "linux")]
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+     {
+-        // TODO: How to calculate this on Linux?
+-        return [0, 0];
++        let _options = options;
++        Ok([0, 0])
+     }
+ }
+ 
+ pub struct Engine {
+     options: Options,
++    target: Option<Target>,
+ 
+     #[cfg(target_os = "macos")]
+     mac: (
+@@ -53,40 +58,52 @@ pub struct Engine {
+     #[cfg(target_os = "windows")]
+     win: win::WCStream,
+ 
+-    #[cfg(target_os = "linux")]
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+     linux: linux::LinuxCapturer,
+ }
+ 
+ impl Engine {
+-    pub fn new(options: &Options, tx: mpsc::Sender<ChannelItem>) -> Engine {
++    pub fn new(options: &Options, tx: mpsc::Sender<Result<ChannelItem>>) -> Result<Engine> {
+         #[cfg(target_os = "macos")]
+         {
+             let error_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+-            let mac = mac::create_capturer(options, tx, error_flag.clone()).unwrap();
++            let target = match options.target.clone() {
++                Some(target) => target,
++                None => Target::Display(targets::get_main_display()?),
++            };
++            let mac = mac::create_capturer(options, tx, error_flag.clone())?;
+ 
+-            Engine {
++            Ok(Engine {
+                 mac,
+                 error_flag,
+                 options: (*options).clone(),
+-            }
++                target: Some(target),
++            })
+         }
+ 
+         #[cfg(target_os = "windows")]
+         {
+-            let win = win::create_capturer(&options, tx).unwrap();
+-            return Engine {
++            let target = match options.target.clone() {
++                Some(target) => target,
++                None => Target::Display(targets::get_main_display()?),
++            };
++            let win = win::create_capturer(options, tx)?;
++            Ok(Engine {
+                 win,
+                 options: (*options).clone(),
+-            };
++                target: Some(target),
++            })
+         }
+ 
+-        #[cfg(target_os = "linux")]
++        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+         {
+-            let linux = linux::create_capturer(&options, tx);
+-            return Engine {
++            let linux = linux::create_capturer(options, tx)?;
++            let target = linux.imp.target().cloned();
++            Ok(Engine {
+                 linux,
+                 options: (*options).clone(),
+-            };
++                target,
++            })
+         }
+     }
+ 
+@@ -103,9 +120,9 @@ impl Engine {
+             self.win.start_capture();
+         }
+ 
+-        #[cfg(target_os = "linux")]
++        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+         {
+-            self.linux.start_capture();
++            self.linux.imp.start_capture();
+         }
+     }
+ 
+@@ -122,13 +139,13 @@ impl Engine {
+             self.win.stop_capture();
+         }
+ 
+-        #[cfg(target_os = "linux")]
++        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+         {
+-            self.linux.stop_capture();
++            self.linux.imp.stop_capture();
+         }
+     }
+ 
+-    pub fn get_output_frame_size(&mut self) -> [u32; 2] {
++    pub fn get_output_frame_size(&mut self) -> Result<[u32; 2]> {
+         get_output_frame_size(&self.options)
+     }
+ 
+@@ -140,4 +157,8 @@ impl Engine {
+         #[cfg(not(target_os = "macos"))]
+         return Some(data);
+     }
++
++    pub fn target(&self) -> Option<&Target> {
++        self.target.as_ref()
++    }
+ }
+diff --git a/src/capturer/engine/win/mod.rs b/src/capturer/engine/win/mod.rs
+index 409b658204ad57710fcc63f663ba8ec5078d9360..adab6aab3e7367ff25ac31c0a888db24069be6e2 100644
+--- a/src/capturer/engine/win/mod.rs
++++ b/src/capturer/engine/win/mod.rs
+@@ -1,20 +1,13 @@
+ use crate::{
+     capturer::{Area, Options, Point, Resolution, Size},
+     frame::{AudioFormat, AudioFrame, BGRAFrame, Frame, FrameType, VideoFrame},
+-    targets::{self, get_scale_factor, Target},
++    targets::{self, Target},
+ };
+ use ::windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
+-use cpal::{
+-    traits::{DeviceTrait, HostTrait, StreamTrait},
+-    StreamInstant,
+-};
+-use std::time::{SystemTime, UNIX_EPOCH};
++use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
++use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
++use std::time::SystemTime;
+ use std::{cmp, time::Duration};
+-use std::{
+-    os::windows,
+-    ptr::null_mut,
+-    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
+-};
+ use windows_capture::{
+     capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
+     frame::Frame as WCFrame,
+@@ -29,7 +22,7 @@ use windows_capture::{
+ 
+ #[derive(Debug)]
+ struct Capturer {
+-    pub tx: mpsc::Sender<Frame>,
++    pub tx: mpsc::Sender<anyhow::Result<Frame>>,
+     pub crop: Option<Area>,
+     pub start_time: (i64, SystemTime),
+     pub perf_freq: i64,
+@@ -58,14 +51,14 @@ impl GraphicsCaptureApiHandler for Capturer {
+             start_time: (
+                 unsafe {
+                     let mut time = 0;
+-                    QueryPerformanceCounter(&mut time);
++                    QueryPerformanceCounter(&mut time)?;
+                     time
+                 },
+                 SystemTime::now(),
+             ),
+             perf_freq: unsafe {
+                 let mut freq = 0;
+-                QueryPerformanceFrequency(&mut freq);
++                QueryPerformanceFrequency(&mut freq)?;
+                 freq
+             },
+         })
+@@ -76,14 +69,14 @@ impl GraphicsCaptureApiHandler for Capturer {
+         frame: &mut WCFrame,
+         _: InternalCaptureControl,
+     ) -> Result<(), Self::Error> {
+-        let elapsed = frame.timespan().Duration - self.start_time.0;
++        let elapsed = frame.timestamp()?.Duration - self.start_time.0;
+         let display_time = self
+             .start_time
+             .1
+             .checked_add(Duration::from_secs_f64(
+                 elapsed as f64 / self.perf_freq as f64,
+             ))
+-            .unwrap();
++            .ok_or("frame timestamp overflow")?;
+ 
+         match &self.crop {
+             Some(cropped_area) => {
+@@ -94,20 +87,13 @@ impl GraphicsCaptureApiHandler for Capturer {
+                 let end_y = (cropped_area.origin.y + cropped_area.size.height) as u32;
+ 
+                 // crop the frame
+-                let mut cropped_buffer = frame
++                let cropped_buffer = frame
+                     .buffer_crop(start_x, start_y, end_x, end_y)
+-                    .expect("Failed to crop buffer");
++                    .map_err(|error| format!("failed to crop buffer: {error}"))?;
+ 
+                 // get raw frame buffer
+-                let raw_frame_buffer = match cropped_buffer.as_nopadding_buffer() {
+-                    Ok(buffer) => buffer,
+-                    Err(_) => return Err(("Failed to get raw buffer").into()),
+-                };
+-
+-                let current_time = SystemTime::now()
+-                    .duration_since(UNIX_EPOCH)
+-                    .expect("Failed to get current time")
+-                    .as_nanos() as u64;
++                let mut contiguous_buffer = Vec::new();
++                let raw_frame_buffer = cropped_buffer.as_nopadding_buffer(&mut contiguous_buffer);
+ 
+                 let bgr_frame = BGRAFrame {
+                     display_time,
+@@ -116,25 +102,27 @@ impl GraphicsCaptureApiHandler for Capturer {
+                     data: raw_frame_buffer.to_vec(),
+                 };
+ 
+-                let _ = self.tx.send(Frame::Video(VideoFrame::BGRA(bgr_frame)));
++                self.tx
++                    .send(Ok(Frame::Video(VideoFrame::BGRA(bgr_frame))))
++                    .map_err(|_| "screen capture receiver dropped")?;
+             }
+             None => {
+                 // get raw frame buffer
+-                let mut frame_buffer = frame.buffer().unwrap();
++                let width = frame.width() as i32;
++                let height = frame.height() as i32;
++                let mut frame_buffer = frame.buffer()?;
+                 let raw_frame_buffer = frame_buffer.as_raw_buffer();
+                 let frame_data = raw_frame_buffer.to_vec();
+-                let current_time = SystemTime::now()
+-                    .duration_since(UNIX_EPOCH)
+-                    .expect("Failed to get current time")
+-                    .as_nanos() as u64;
+                 let bgr_frame = BGRAFrame {
+                     display_time,
+-                    width: frame.width() as i32,
+-                    height: frame.height() as i32,
++                    width,
++                    height,
+                     data: frame_data,
+                 };
+ 
+-                let _ = self.tx.send(Frame::Video(VideoFrame::BGRA(bgr_frame)));
++                self.tx
++                    .send(Ok(Frame::Video(VideoFrame::BGRA(bgr_frame))))
++                    .map_err(|_| "screen capture receiver dropped")?;
+             }
+         }
+         Ok(())
+@@ -172,24 +160,24 @@ impl WCStream {
+ 
+ #[derive(Clone, Debug)]
+ struct FlagStruct {
+-    pub tx: mpsc::Sender<Frame>,
++    pub tx: mpsc::Sender<anyhow::Result<Frame>>,
+     pub crop: Option<Area>,
+ }
+ 
+-#[derive(Debug)]
++#[derive(Debug, thiserror::Error)]
+ pub enum CreateCapturerError {
+-    AudioStreamConfig(cpal::DefaultStreamConfigError),
+-    BuildAudioStream(cpal::BuildStreamError),
++    #[error("audio capture failed: {0}")]
++    Audio(#[from] cpal::Error),
+ }
+ 
+ pub fn create_capturer(
+     options: &Options,
+-    tx: mpsc::Sender<Frame>,
+-) -> Result<WCStream, CreateCapturerError> {
+-    let target = options
+-        .target
+-        .clone()
+-        .unwrap_or_else(|| Target::Display(targets::get_main_display()));
++    tx: mpsc::Sender<anyhow::Result<Frame>>,
++) -> anyhow::Result<WCStream> {
++    let target = match options.target.clone() {
++        Some(target) => target,
++        None => Target::Display(targets::get_main_display()?),
++    };
+ 
+     let color_format = match options.output_type {
+         FrameType::BGRAFrame => ColorFormat::Bgra8,
+@@ -201,7 +189,7 @@ pub fn create_capturer(
+         false => CursorCaptureSettings::WithoutCursor,
+     };
+ 
+-    let draw_border = if GraphicsCaptureApi::is_border_settings_supported().unwrap_or(false) {
++    let draw_border = if GraphicsCaptureApi::is_border_settings_supported()? {
+         options
+             .show_highlight
+             .then_some(DrawBorderSettings::WithBorder)
+@@ -215,13 +203,13 @@ pub fn create_capturer(
+             WCMonitor::from_raw_hmonitor(display.raw_handle.0),
+             show_cursor,
+             draw_border,
+-            color_format,
+             SecondaryWindowSettings::Default,
+             MinimumUpdateIntervalSettings::Default,
+             DirtyRegionSettings::Default,
++            color_format,
+             FlagStruct {
+                 tx: tx.clone(),
+-                crop: Some(get_crop_area(options)),
++                crop: Some(get_crop_area(options)?),
+             },
+         )),
+         Target::Window(window) => Settings::Window(WCSettings::new(
+@@ -234,7 +222,7 @@ pub fn create_capturer(
+             color_format,
+             FlagStruct {
+                 tx: tx.clone(),
+-                crop: Some(get_crop_area(options)),
++                crop: Some(get_crop_area(options)?),
+             },
+         )),
+     };
+@@ -247,8 +235,8 @@ pub fn create_capturer(
+ 
+         match ready_rx.recv() {
+             Ok(Ok(())) => {}
+-            Ok(Err(e)) => return Err(e),
+-            Err(_) => panic!("Audio spawn panicked"),
++            Ok(Err(error)) => return Err(error.into()),
++            Err(error) => return Err(error.into()),
+         }
+ 
+         Some(AudioStreamHandle { ctrl_tx })
+@@ -263,13 +251,8 @@ pub fn create_capturer(
+     })
+ }
+ 
+-pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
+-    let target = options
+-        .target
+-        .clone()
+-        .unwrap_or_else(|| Target::Display(targets::get_main_display()));
+-
+-    let crop_area = get_crop_area(options);
++pub fn get_output_frame_size(options: &Options) -> anyhow::Result<[u32; 2]> {
++    let crop_area = get_crop_area(options)?;
+ 
+     let mut output_width = (crop_area.size.width) as u32;
+     let mut output_height = (crop_area.size.height) as u32;
+@@ -289,36 +272,35 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
+     output_width -= output_width % 2;
+     output_height -= output_height % 2;
+ 
+-    [output_width, output_height]
++    Ok([output_width, output_height])
+ }
+ 
+-fn get_absolute_value(value: f64, scale_factor: f64) -> f64 {
++fn get_absolute_value(value: f64) -> f64 {
+     let value = (value).floor();
+     value + value % 2.0
+ }
+ 
+-pub fn get_crop_area(options: &Options) -> Area {
+-    let target = options
+-        .target
+-        .clone()
+-        .unwrap_or_else(|| Target::Display(targets::get_main_display()));
++pub fn get_crop_area(options: &Options) -> anyhow::Result<Area> {
++    let target = match options.target.clone() {
++        Some(target) => target,
++        None => Target::Display(targets::get_main_display()?),
++    };
+ 
+     let (width, height) = targets::get_target_dimensions(&target);
+ 
+-    let scale_factor = targets::get_scale_factor(&target);
+-    options
++    Ok(options
+         .crop_area
+         .as_ref()
+         .map(|val| {
+             // WINDOWS: limit values [input-width, input-height] = [146, 50]
+             Area {
+                 origin: Point {
+-                    x: get_absolute_value(val.origin.x, scale_factor),
+-                    y: get_absolute_value(val.origin.y, scale_factor),
++                    x: get_absolute_value(val.origin.x),
++                    y: get_absolute_value(val.origin.y),
+                 },
+                 size: Size {
+-                    width: get_absolute_value(val.size.width, scale_factor),
+-                    height: get_absolute_value(val.size.height, scale_factor),
++                    width: get_absolute_value(val.size.width),
++                    height: get_absolute_value(val.size.height),
+                 },
+             }
+         })
+@@ -328,7 +310,7 @@ pub fn get_crop_area(options: &Options) -> Area {
+                 width: width as f64,
+                 height: height as f64,
+             },
+-        })
++        }))
+ }
+ 
+ struct AudioStreamHandle {
+@@ -342,45 +324,42 @@ enum AudioStreamControl {
+ }
+ 
+ fn build_audio_stream(
+-    sample_tx: mpsc::Sender<
+-        Result<(Vec<u8>, cpal::InputCallbackInfo, SystemTime), cpal::StreamError>,
+-    >,
++    sample_tx: mpsc::Sender<Result<(Vec<u8>, cpal::InputCallbackInfo, SystemTime), cpal::Error>>,
+ ) -> Result<(cpal::Stream, cpal::SupportedStreamConfig), CreateCapturerError> {
+     let host = cpal::default_host();
+-    let output_device =
+-        host.default_output_device()
+-            .ok_or(CreateCapturerError::AudioStreamConfig(
+-                cpal::DefaultStreamConfigError::DeviceNotAvailable,
+-            ))?;
+-    let supported_config = output_device
+-        .default_output_config()
+-        .map_err(CreateCapturerError::AudioStreamConfig)?;
++    let output_device = host
++        .default_output_device()
++        .ok_or(cpal::Error::new(cpal::ErrorKind::DeviceNotAvailable))?;
++    let supported_config = output_device.default_output_config()?;
+     let config = supported_config.clone().into();
+ 
+-    let stream = output_device
+-        .build_input_stream_raw(
+-            &config,
+-            supported_config.sample_format(),
+-            {
+-                let sample_tx = sample_tx.clone();
+-                move |data, info: &cpal::InputCallbackInfo| {
+-                    sample_tx
+-                        .send(Ok((data.bytes().to_vec(), info.clone(), SystemTime::now())))
+-                        .unwrap();
++    let stream = output_device.build_input_stream_raw(
++        config,
++        supported_config.sample_format(),
++        {
++            let sample_tx = sample_tx.clone();
++            move |data, info: &cpal::InputCallbackInfo| {
++                if sample_tx
++                    .send(Ok((data.bytes().to_vec(), info.clone(), SystemTime::now())))
++                    .is_err()
++                {
++                    log::debug!("audio capture receiver dropped");
+                 }
+-            },
+-            move |e| {
+-                let _ = sample_tx.send(Err(e));
+-            },
+-            None,
+-        )
+-        .map_err(CreateCapturerError::BuildAudioStream)?;
++            }
++        },
++        move |error| {
++            if sample_tx.send(Err(error)).is_err() {
++                log::debug!("audio capture receiver dropped after an error");
++            }
++        },
++        None,
++    )?;
+ 
+     Ok((stream, supported_config))
+ }
+ 
+ fn spawn_audio_stream(
+-    tx: Sender<Frame>,
++    tx: Sender<anyhow::Result<Frame>>,
+     ready_tx: Sender<Result<(), CreateCapturerError>>,
+     ctrl_rx: Receiver<AudioStreamControl>,
+ ) {
+@@ -391,11 +370,15 @@ fn spawn_audio_stream(
+ 
+         let (stream, config) = match res {
+             Ok(stream) => {
+-                let _ = ready_tx.send(Ok(()));
++                if ready_tx.send(Ok(())).is_err() {
++                    return;
++                }
+                 stream
+             }
+-            Err(e) => {
+-                let _ = ready_tx.send(Err(e));
++            Err(error) => {
++                if ready_tx.send(Err(error)).is_err() {
++                    log::debug!("audio capture startup receiver dropped");
++                }
+                 return;
+             }
+         };
+@@ -406,7 +389,10 @@ fn spawn_audio_stream(
+ 
+         match ctrl {
+             AudioStreamControl::Start => {
+-                stream.play().unwrap();
++                if let Err(error) = stream.play() {
++                    log::error!("failed to start audio capture: {error}");
++                    return;
++                }
+             }
+             AudioStreamControl::Stop => {
+                 return;
+@@ -422,16 +408,17 @@ fn spawn_audio_stream(
+                 Err(_) => return,
+             };
+ 
+-            let (data, info, timestamp) = match sample_rx.recv_timeout(Duration::from_millis(100)) {
+-                Ok(Ok(data)) => data,
+-                Err(RecvTimeoutError::Timeout) => {
+-                    continue;
+-                }
+-                _ => {
+-                    // let _ = tx.send(Err(e));
+-                    return;
+-                }
+-            };
++            let (data, _callback_info, timestamp) =
++                match sample_rx.recv_timeout(Duration::from_millis(100)) {
++                    Ok(Ok(data)) => data,
++                    Err(RecvTimeoutError::Timeout) => {
++                        continue;
++                    }
++                    _ => {
++                        // let _ = tx.send(Err(e));
++                        return;
++                    }
++                };
+ 
+             let sample_count =
+                 data.len() / (audio_format.sample_size() * config.channels() as usize);
+@@ -441,11 +428,11 @@ fn spawn_audio_stream(
+                 false,
+                 data,
+                 sample_count,
+-                config.sample_rate().0,
++                config.sample_rate(),
+                 timestamp,
+             );
+ 
+-            if let Err(_) = tx.send(Frame::Audio(frame)) {
++            if tx.send(Ok(Frame::Audio(frame))).is_err() {
+                 return;
+             };
+         }
+diff --git a/src/capturer/mod.rs b/src/capturer/mod.rs
+index 04a189bb6a8ca23f9cc5c07a434a937fb56e4d1f..a4c61f39b640dbb2df6fe0db644b9a816f9fdcdf 100644
+--- a/src/capturer/mod.rs
++++ b/src/capturer/mod.rs
+@@ -5,7 +5,7 @@ use std::{error::Error, sync::mpsc};
+ use engine::ChannelItem;
+ 
+ use crate::{
+-    frame::{Frame, FrameType, VideoFrame},
++    frame::{Frame, FrameType},
+     has_permission, is_supported,
+     targets::Target,
+ };
+@@ -26,6 +26,7 @@ pub enum Resolution {
+ }
+ 
+ impl Resolution {
++    #[cfg(any(target_os = "macos", target_os = "windows"))]
+     fn value(&self, aspect_ratio: f32) -> [u32; 2] {
+         match *self {
+             Resolution::_480p => [640, (640_f32 / aspect_ratio).floor() as u32],
+@@ -78,13 +79,14 @@ pub struct Options {
+ /// Screen capturer class
+ pub struct Capturer {
+     engine: engine::Engine,
+-    rx: mpsc::Receiver<ChannelItem>,
++    rx: mpsc::Receiver<anyhow::Result<ChannelItem>>,
+ }
+ 
+ #[derive(Debug)]
+ pub enum CapturerBuildError {
+     NotSupported,
+     PermissionNotGranted,
++    Engine(anyhow::Error),
+ }
+ 
+ impl std::fmt::Display for CapturerBuildError {
+@@ -94,11 +96,19 @@ impl std::fmt::Display for CapturerBuildError {
+             CapturerBuildError::PermissionNotGranted => {
+                 write!(f, "Permission to capture the screen is not granted")
+             }
++            CapturerBuildError::Engine(error) => error.fmt(f),
+         }
+     }
+ }
+ 
+-impl Error for CapturerBuildError {}
++impl Error for CapturerBuildError {
++    fn source(&self) -> Option<&(dyn Error + 'static)> {
++        match self {
++            Self::Engine(error) => Some(error.as_ref()),
++            Self::NotSupported | Self::PermissionNotGranted => None,
++        }
++    }
++}
+ 
+ impl Capturer {
+     /// Build a new [Capturer] instance with the provided options
+@@ -112,7 +122,7 @@ impl Capturer {
+         }
+ 
+         let (tx, rx) = mpsc::channel();
+-        let engine = engine::Engine::new(&options, tx);
++        let engine = engine::Engine::new(&options, tx).map_err(CapturerBuildError::Engine)?;
+ 
+         Ok(Capturer { engine, rx })
+     }
+@@ -130,9 +140,9 @@ impl Capturer {
+     }
+ 
+     /// Get the next captured frame
+-    pub fn get_next_frame(&self) -> Result<Frame, mpsc::RecvError> {
++    pub fn get_next_frame(&self) -> anyhow::Result<Frame> {
+         loop {
+-            let res = self.rx.recv()?;
++            let res = self.rx.recv().map_err(anyhow::Error::from)??;
+ 
+             if let Some(frame) = self.engine.process_channel_item(res) {
+                 return Ok(frame);
+@@ -141,15 +151,11 @@ impl Capturer {
+     }
+ 
+     /// Get the dimensions the frames will be captured in
+-    pub fn get_output_frame_size(&mut self) -> [u32; 2] {
++    pub fn get_output_frame_size(&mut self) -> anyhow::Result<[u32; 2]> {
+         self.engine.get_output_frame_size()
+     }
+ 
+-    pub fn raw(&self) -> RawCapturer {
+-        RawCapturer { capturer: self }
++    pub fn target(&self) -> Option<&Target> {
++        self.engine.target()
+     }
+ }
+-
+-pub struct RawCapturer<'a> {
+-    capturer: &'a Capturer,
+-}
+diff --git a/src/frame/audio.rs b/src/frame/audio.rs
+index 08e065bf4f545375c178bfe6b56323e9093ca37b..857472941023c662ba1e265f98668b22c066971a 100644
+--- a/src/frame/audio.rs
++++ b/src/frame/audio.rs
+@@ -1,4 +1,4 @@
+-use std::{alloc::System, time::SystemTime};
++use std::time::SystemTime;
+ 
+ pub struct AudioFrame {
+     format: AudioFormat,
+@@ -38,11 +38,7 @@ impl AudioFrame {
+     }
+ 
+     pub fn planes(&self) -> u16 {
+-        if self.is_planar {
+-            self.channels
+-        } else {
+-            1
+-        }
++        if self.is_planar { self.channels } else { 1 }
+     }
+ 
+     pub fn channels(&self) -> u16 {
+diff --git a/src/frame/mod.rs b/src/frame/mod.rs
+index c347d55832d8291f6f05b57099029854e6ffa088..68613271d3d001cee0bf9471513fc487051fef40 100644
+--- a/src/frame/mod.rs
++++ b/src/frame/mod.rs
+@@ -1,10 +1,13 @@
++#[cfg(any(target_os = "macos", target_os = "windows"))]
+ mod audio;
+ mod video;
+ 
++#[cfg(any(target_os = "macos", target_os = "windows"))]
+ pub use audio::*;
+ pub use video::*;
+ 
+ pub enum Frame {
++    #[cfg(any(target_os = "macos", target_os = "windows"))]
+     Audio(AudioFrame),
+     Video(VideoFrame),
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index d0d7360c21724fe4dc40c88da177ce6e4645dfdb..b53895e5f11f7d74498f4d5aab0100b3e62656c1 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -6,8 +6,7 @@ mod targets;
+ mod utils;
+ 
+ // Helper Methods
+-pub use targets::{get_all_targets, get_main_display};
+-pub use targets::{Display, Target};
++pub use targets::{Display, Target, Window, get_all_targets, get_main_display};
+ pub use utils::has_permission;
+ pub use utils::is_supported;
+ pub use utils::request_permission;
+diff --git a/src/targets/linux/mod.rs b/src/targets/linux/mod.rs
+index fd0ccdc4b47d3264449da0c4e856a7faa5549d76..ddbdeb3bdec05f6f46d41b39e76ee88e613f34c7 100644
+--- a/src/targets/linux/mod.rs
++++ b/src/targets/linux/mod.rs
+@@ -1,7 +1,273 @@
+-use super::Target;
++#[cfg(not(any(feature = "wayland", feature = "x11")))]
++compile_error!("'wayland' or 'x11' feature must be enabled.");
+ 
+-// On Linux, the target is selected when a Recorder is instanciated because this
+-// requires user interaction
+-pub fn get_all_targets() -> Vec<Target> {
+-    Vec::new()
++#[cfg(feature = "x11")]
++use std::ffi::{CStr, CString, NulError, c_char};
++
++use super::{Display, Target};
++
++#[cfg(feature = "x11")]
++use anyhow::Context as _;
++use anyhow::anyhow;
++
++#[cfg(feature = "x11")]
++use x11::xlib::{XFreeStringList, XGetTextProperty, XTextProperty, XmbTextPropertyToTextList};
++#[cfg(feature = "x11")]
++use xcb::{
++    Xid,
++    randr::{GetCrtcInfo, GetOutputInfo, GetOutputPrimary, GetScreenResources},
++    x::{self, GetPropertyReply, Screen},
++};
++
++#[cfg(feature = "x11")]
++fn get_atom(conn: &xcb::Connection, atom_name: &str) -> Result<x::Atom, xcb::Error> {
++    let cookie = conn.send_request(&x::InternAtom {
++        only_if_exists: true,
++        name: atom_name.as_bytes(),
++    });
++    Ok(conn.wait_for_reply(cookie)?.atom())
++}
++
++#[cfg(feature = "x11")]
++fn get_property(
++    conn: &xcb::Connection,
++    win: x::Window,
++    prop: x::Atom,
++    typ: x::Atom,
++    length: u32,
++) -> Result<GetPropertyReply, xcb::Error> {
++    let cookie = conn.send_request(&x::GetProperty {
++        delete: false,
++        window: win,
++        property: prop,
++        r#type: typ,
++        long_offset: 0,
++        long_length: length,
++    });
++    Ok(conn.wait_for_reply(cookie)?)
++}
++
++#[cfg(feature = "x11")]
++fn decode_compound_text(
++    conn: &xcb::Connection,
++    value: &[u8],
++    client: &xcb::x::Window,
++    ttype: xcb::x::Atom,
++) -> Result<String, NulError> {
++    let display = conn.get_raw_dpy();
++    assert!(!display.is_null());
++
++    let c_string = CString::new(value.to_vec())?;
++    let mut text_prop = XTextProperty {
++        value: std::ptr::null_mut(),
++        encoding: 0,
++        format: 0,
++        nitems: 0,
++    };
++    let res = unsafe {
++        XGetTextProperty(
++            display,
++            client.resource_id() as u64,
++            &mut text_prop,
++            x::ATOM_WM_NAME.resource_id() as u64,
++        )
++    };
++    if res == 0 || text_prop.nitems == 0 {
++        return Ok(String::from("n/a"));
++    }
++
++    let mut xname = XTextProperty {
++        value: c_string.as_ptr() as *mut u8,
++        encoding: ttype.resource_id() as u64,
++        format: 8,
++        nitems: text_prop.nitems,
++    };
++    let mut list: *mut *mut c_char = std::ptr::null_mut();
++    let mut count: i32 = 0;
++    let result = unsafe { XmbTextPropertyToTextList(display, &mut xname, &mut list, &mut count) };
++    if result < 1 || list.is_null() || count < 1 {
++        Ok(String::from("n/a"))
++    } else {
++        let title = unsafe { CStr::from_ptr(*list).to_string_lossy().into_owned() };
++        unsafe { XFreeStringList(list) };
++        Ok(title)
++    }
++}
++
++#[cfg(feature = "x11")]
++fn get_x11_targets() -> Result<Vec<Target>, xcb::Error> {
++    let (conn, _screen_num) =
++        xcb::Connection::connect_with_xlib_display_and_extensions(&[xcb::Extension::RandR], &[])?;
++    let setup = conn.get_setup();
++    let screens = setup.roots();
++
++    let wm_client_list = get_atom(&conn, "_NET_CLIENT_LIST")?;
++    assert!(wm_client_list != x::ATOM_NONE, "EWMH not supported");
++
++    let atom_net_wm_name = get_atom(&conn, "_NET_WM_NAME")?;
++    let atom_text = get_atom(&conn, "TEXT")?;
++    let atom_utf8_string = get_atom(&conn, "UTF8_STRING")?;
++    let atom_compound_text = get_atom(&conn, "COMPOUND_TEXT")?;
++
++    let mut targets = Vec::new();
++    for screen in screens {
++        let window_list = get_property(&conn, screen.root(), wm_client_list, x::ATOM_NONE, 100)?;
++
++        for client in window_list.value::<x::Window>() {
++            let cr = get_property(&conn, *client, atom_net_wm_name, x::ATOM_STRING, 4096)?;
++            if !cr.value::<x::Atom>().is_empty() {
++                targets.push(Target::Window(crate::targets::Window {
++                    id: 0,
++                    title: String::from_utf8(cr.value().to_vec())
++                        .map_err(|_| xcb::Error::Connection(xcb::ConnError::ClosedParseErr))?,
++                    raw_handle: *client,
++                }));
++                continue;
++            }
++
++            let reply = get_property(&conn, *client, x::ATOM_WM_NAME, x::ATOM_ANY, 4096)?;
++            let value: &[u8] = reply.value();
++            if !value.is_empty() {
++                let ttype = reply.r#type();
++                let title =
++                    if ttype == x::ATOM_STRING || ttype == atom_utf8_string || ttype == atom_text {
++                        String::from_utf8(reply.value().to_vec()).unwrap_or(String::from("n/a"))
++                    } else if ttype == atom_compound_text {
++                        decode_compound_text(&conn, value, client, ttype)
++                            .map_err(|_| xcb::Error::Connection(xcb::ConnError::ClosedParseErr))?
++                    } else {
++                        String::from_utf8(reply.value().to_vec()).unwrap_or(String::from("n/a"))
++                    };
++
++                targets.push(Target::Window(crate::targets::Window {
++                    id: 0,
++                    title,
++                    raw_handle: *client,
++                }));
++                continue;
++            }
++            targets.push(Target::Window(crate::targets::Window {
++                id: 0,
++                title: String::from("n/a"),
++                raw_handle: *client,
++            }));
++        }
++
++        let resources = conn.send_request(&GetScreenResources {
++            window: screen.root(),
++        });
++        let resources = conn.wait_for_reply(resources)?;
++        for output in resources.outputs() {
++            let info = conn.send_request(&GetOutputInfo {
++                output: *output,
++                config_timestamp: 0,
++            });
++            let info = conn.wait_for_reply(info)?;
++            if info.connection() == xcb::randr::Connection::Connected {
++                let crtc = info.crtc();
++                let crtc_info = conn.send_request(&GetCrtcInfo {
++                    crtc,
++                    config_timestamp: 0,
++                });
++                let crtc_info = conn.wait_for_reply(crtc_info)?;
++                let title = String::from_utf8(info.name().to_vec()).unwrap_or(String::from("n/a"));
++                targets.push(Target::Display(crate::targets::Display {
++                    id: crtc.resource_id(),
++                    title,
++                    width: crtc_info.width(),
++                    height: crtc_info.height(),
++                    x_offset: crtc_info.x(),
++                    y_offset: crtc_info.y(),
++                    raw_handle: screen.root(),
++                }));
++            }
++        }
++    }
++
++    Ok(targets)
++}
++
++pub fn get_all_targets() -> anyhow::Result<Vec<Target>> {
++    #[cfg(feature = "wayland")]
++    if std::env::var("WAYLAND_DISPLAY").is_ok() {
++        // On Wayland, the target is selected when a Recorder is instanciated because it requires user interaction
++        return Ok(Vec::new());
++    }
++
++    #[cfg(feature = "x11")]
++    if std::env::var("DISPLAY").is_ok() {
++        return Ok(get_x11_targets()?);
++    }
++
++    #[cfg(all(feature = "wayland", feature = "x11"))]
++    let error_msg = "Unsupported platform. Could not detect Wayland or X11 displays";
++    #[cfg(all(not(feature = "wayland"), feature = "x11"))]
++    let error_msg = "Unsupported platform. Could not detect X11 display. Enable the 'wayland' feature for Wayland support.";
++    #[cfg(all(feature = "wayland", not(feature = "x11")))]
++    let error_msg = "Unsupported platform. Could not detect Wayland display. Enable the 'x11' feature for X11 support.";
++
++    Err(anyhow!(error_msg))
++}
++
++#[cfg(feature = "x11")]
++pub(crate) fn get_default_x_display(
++    conn: &xcb::Connection,
++    screen: &Screen,
++) -> Result<Display, xcb::Error> {
++    let primary_display_cookie = conn.send_request(&GetOutputPrimary {
++        window: screen.root(),
++    });
++    let primary_display = conn.wait_for_reply(primary_display_cookie)?;
++    let info_cookie = conn.send_request(&GetOutputInfo {
++        output: primary_display.output(),
++        config_timestamp: 0,
++    });
++    let info = conn.wait_for_reply(info_cookie)?;
++    let crtc = info.crtc();
++    let crtc_info_cookie = conn.send_request(&GetCrtcInfo {
++        crtc,
++        config_timestamp: 0,
++    });
++    let crtc_info = conn.wait_for_reply(crtc_info_cookie)?;
++    Ok(Display {
++        id: crtc.resource_id(),
++        title: String::from_utf8(info.name().to_vec()).unwrap_or(String::from("default")),
++        width: crtc_info.width(),
++        height: crtc_info.height(),
++        x_offset: crtc_info.x(),
++        y_offset: crtc_info.y(),
++        raw_handle: screen.root(),
++    })
++}
++
++pub fn get_main_display() -> anyhow::Result<Display> {
++    #[cfg(feature = "wayland")]
++    if std::env::var("WAYLAND_DISPLAY").is_ok() {
++        return Err(anyhow!(
++            "Getting main display not currently supported on Wayland."
++        ));
++    }
++
++    #[cfg(feature = "x11")]
++    if std::env::var("DISPLAY").is_ok() {
++        let (connection, screen_number) =
++            xcb::Connection::connect_with_extensions(None, &[xcb::Extension::RandR], &[])
++                .context("Failed to connect to the X11 display")?;
++        let setup = connection.get_setup();
++        let screen = setup
++            .roots()
++            .nth(screen_number as usize)
++            .context("X11 screen was not found")?;
++        return get_default_x_display(&connection, screen)
++            .context("Failed to get main X11 display.");
++    }
++
++    #[cfg(all(feature = "wayland", feature = "x11"))]
++    let error_msg = "Unsupported platform. Could not detect Wayland or X11 displays";
++    #[cfg(all(not(feature = "wayland"), feature = "x11"))]
++    let error_msg = "Unsupported platform. Could not detect X11 display. Enable the 'wayland' feature for Wayland support.";
++    #[cfg(all(feature = "wayland", not(feature = "x11")))]
++    let error_msg = "Unsupported platform. Could not detect Wayland display. Enable the 'x11' feature for X11 support.";
++
++    Err(anyhow!(error_msg))
+ }
+diff --git a/src/targets/mod.rs b/src/targets/mod.rs
+index c19b00c338cf0cb77677900fb1c06f3579a4f66e..23d81e4e5b1020a1dd965d0a3996cb2a928cc70c 100644
+--- a/src/targets/mod.rs
++++ b/src/targets/mod.rs
+@@ -7,8 +7,10 @@ mod mac;
+ #[cfg(target_os = "windows")]
+ mod win;
+ 
+-#[cfg(target_os = "linux")]
+-mod linux;
++#[cfg(any(target_os = "linux", target_os = "freebsd"))]
++pub(crate) mod linux;
++
++use anyhow::Result;
+ 
+ #[derive(Debug, Clone)]
+ pub struct Window {
+@@ -20,6 +22,9 @@ pub struct Window {
+ 
+     #[cfg(target_os = "macos")]
+     pub raw_handle: cidre::cg::WindowId,
++
++    #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "x11"))]
++    pub raw_handle: xcb::x::Window,
+ }
+ 
+ #[derive(Debug, Clone)]
+@@ -32,6 +37,17 @@ pub struct Display {
+ 
+     #[cfg(target_os = "macos")]
+     pub raw_handle: cidre::cg::DirectDisplayId,
++
++    #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "x11"))]
++    pub raw_handle: xcb::x::Window,
++    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "windows"))]
++    pub width: u16,
++    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "windows"))]
++    pub height: u16,
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    pub x_offset: i16,
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    pub y_offset: i16,
+ }
+ 
+ #[derive(Debug, Clone)]
+@@ -40,47 +56,50 @@ pub enum Target {
+     Display(Display),
+ }
+ 
++// SAFETY: HWND and HMONITOR are opaque copyable handles; moving these wrappers does not transfer
++// ownership of the underlying Windows objects.
++#[cfg(target_os = "windows")]
++unsafe impl Send for Display {}
++#[cfg(target_os = "windows")]
++unsafe impl Sync for Display {}
++#[cfg(target_os = "windows")]
++unsafe impl Send for Window {}
++#[cfg(target_os = "windows")]
++unsafe impl Sync for Window {}
++
+ /// Returns a list of targets that can be captured
+-pub fn get_all_targets() -> Vec<Target> {
++pub fn get_all_targets() -> Result<Vec<Target>> {
+     #[cfg(target_os = "macos")]
+-    return mac::get_all_targets();
++    return Ok(mac::get_all_targets());
+ 
+     #[cfg(target_os = "windows")]
+     return win::get_all_targets();
+ 
+-    #[cfg(target_os = "linux")]
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+     return linux::get_all_targets();
+ }
+ 
++#[cfg(target_os = "macos")]
+ pub fn get_scale_factor(target: &Target) -> f64 {
+-    #[cfg(target_os = "macos")]
+-    return mac::get_scale_factor(target);
+-
+-    #[cfg(target_os = "windows")]
+-    return win::get_scale_factor(target);
+-
+-    #[cfg(target_os = "linux")]
+-    return 1.0;
++    mac::get_scale_factor(target)
+ }
+ 
+-pub fn get_main_display() -> Display {
++pub fn get_main_display() -> Result<Display> {
+     #[cfg(target_os = "macos")]
+-    return mac::get_main_display();
++    return Ok(mac::get_main_display());
+ 
+     #[cfg(target_os = "windows")]
+     return win::get_main_display();
+ 
+-    #[cfg(target_os = "linux")]
+-    unreachable!();
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    return linux::get_main_display();
+ }
+ 
++#[cfg(any(target_os = "macos", target_os = "windows"))]
+ pub fn get_target_dimensions(target: &Target) -> (u64, u64) {
+     #[cfg(target_os = "macos")]
+     return mac::get_target_dimensions(target);
+ 
+     #[cfg(target_os = "windows")]
+     return win::get_target_dimensions(target);
+-
+-    #[cfg(target_os = "linux")]
+-    unreachable!();
+ }
+diff --git a/src/targets/win/mod.rs b/src/targets/win/mod.rs
+index 9c782929f1e954f1aaf36a87b351bbc19d4bcc43..43b56c15a902ee9464590cecac3aee9e7813d68e 100644
+--- a/src/targets/win/mod.rs
++++ b/src/targets/win/mod.rs
+@@ -1,33 +1,41 @@
+ use super::{Display, Target};
+-use windows::Win32::UI::HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI};
++use anyhow::{Context as _, Result};
+ use windows::Win32::{
+     Foundation::{HWND, RECT},
+     Graphics::Gdi::HMONITOR,
+ };
+-use windows_capture::{monitor::Monitor, window::Window};
++use windows_capture::{
++    monitor::{Error as MonitorError, Monitor},
++    window::Window,
++};
+ 
+-pub fn get_all_targets() -> Vec<Target> {
++pub fn get_all_targets() -> Result<Vec<Target>> {
+     let mut targets: Vec<Target> = Vec::new();
+ 
+     // Add displays to targets
+-    let displays = Monitor::enumerate().expect("Failed to enumerate monitors");
++    let displays = Monitor::enumerate().context("Failed to enumerate monitors")?;
+     for display in displays {
+         let id = display.as_raw_hmonitor() as u32;
+-        let title = display.device_name().expect("Failed to get monitor name");
++        let title = monitor_title(&display).context("Failed to get monitor name")?;
+ 
+         let target = Target::Display(super::Display {
+             id,
+             title,
+             raw_handle: HMONITOR(display.as_raw_hmonitor()),
++            width: display.width()? as u16,
++            height: display.height()? as u16,
+         });
+         targets.push(target);
+     }
+ 
+     // Add windows to targets
+-    let windows = Window::enumerate().expect("Failed to enumerate windows");
++    let windows = Window::enumerate().context("Failed to enumerate windows")?;
+     for window in windows {
+         let id = window.as_raw_hwnd() as u32;
+-        let title = window.title().unwrap().to_string();
++        let title = window
++            .title()
++            .context("Window title not found")?
++            .to_string();
+ 
+         let target = Target::Window(super::Window {
+             id,
+@@ -37,47 +45,27 @@ pub fn get_all_targets() -> Vec<Target> {
+         targets.push(target);
+     }
+ 
+-    targets
++    Ok(targets)
+ }
+ 
+-pub fn get_main_display() -> Display {
+-    let display = Monitor::primary().expect("Failed to get primary monitor");
++pub fn get_main_display() -> Result<Display> {
++    let display = Monitor::primary().context("Failed to get primary monitor")?;
+     let id = display.as_raw_hmonitor() as u32;
+ 
+-    Display {
++    Ok(Display {
+         id,
+-        title: display.device_name().expect("Failed to get monitor name"),
++        title: monitor_title(&display).context("Failed to get monitor name")?,
+         raw_handle: HMONITOR(display.as_raw_hmonitor()),
+-    }
++        width: display.width()? as u16,
++        height: display.height()? as u16,
++    })
+ }
+ 
+-// Referred to: https://github.com/tauri-apps/tao/blob/ab792dbd6c5f0a708c818b20eaff1d9a7534c7c1/src/platform_impl/windows/dpi.rs#L50
+-pub fn get_scale_factor(target: &Target) -> f64 {
+-    const BASE_DPI: u32 = 96;
+-
+-    let mut dpi_x = 0;
+-    let mut dpi_y = 0;
+-
+-    let dpi = match target {
+-        Target::Window(window) => unsafe { GetDpiForWindow(window.raw_handle) },
+-        Target::Display(display) => unsafe {
+-            if GetDpiForMonitor(
+-                display.raw_handle,
+-                MDT_EFFECTIVE_DPI,
+-                &mut dpi_x,
+-                &mut dpi_y,
+-            )
+-            .is_ok()
+-            {
+-                dpi_x.into()
+-            } else {
+-                BASE_DPI
+-            }
+-        },
+-    };
+-
+-    let scale_factor = dpi as f64 / BASE_DPI as f64;
+-    scale_factor as f64
++fn monitor_title(monitor: &Monitor) -> Result<String, MonitorError> {
++    monitor
++        .name()
++        .or_else(|_| monitor.device_string())
++        .or_else(|_| monitor.device_name())
+ }
+ 
+ pub fn get_target_dimensions(target: &Target) -> (u64, u64) {
+diff --git a/src/utils/linux/mod.rs b/src/utils/linux/mod.rs
+index 5dd4b0c7d73c72b6c366bfc332c10a10828fb058..ec7543a8895b010ed7595ad3455c71b5742b5161 100644
+--- a/src/utils/linux/mod.rs
++++ b/src/utils/linux/mod.rs
+@@ -1,11 +1,7 @@
+-// TODO
+ pub fn is_supported() -> bool {
+     true
+-    // false
+ }
+ 
+-// TODO
+ pub fn has_permission() -> bool {
+     true
+-    // false
+ }
+diff --git a/src/utils/mod.rs b/src/utils/mod.rs
+index d3dc237d320482df5ccfe3e3c15b423d411a3ee8..1ca7374673cbda3452f3d80ab4bee3467f62baaa 100644
+--- a/src/utils/mod.rs
++++ b/src/utils/mod.rs
+@@ -4,7 +4,7 @@ mod mac;
+ #[cfg(target_os = "windows")]
+ mod win;
+ 
+-#[cfg(target_os = "linux")]
++#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+ mod linux;
+ 
+ /// Checks if process has permission to capture the screen
+@@ -15,8 +15,8 @@ pub fn has_permission() -> bool {
+     #[cfg(target_os = "windows")]
+     return true;
+ 
+-    #[cfg(target_os = "linux")]
+-    return true;
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
++    return linux::has_permission();
+ }
+ 
+ /// Prompts user to grant screen capturing permission to current process
+@@ -29,7 +29,7 @@ pub fn request_permission() -> bool {
+     return true;
+ 
+     // TODO: check if linux has permission system
+-    #[cfg(target_os = "linux")]
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+     return true;
+ }
+ 
+@@ -41,6 +41,6 @@ pub fn is_supported() -> bool {
+     #[cfg(target_os = "windows")]
+     return win::is_supported();
+ 
+-    #[cfg(target_os = "linux")]
++    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+     return linux::is_supported();
+ }

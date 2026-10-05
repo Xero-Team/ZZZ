@@ -131,7 +131,7 @@ fn start_default_target_screen_capture(
             let first_frame = capturer
                 .get_next_frame()
                 .context("Failed to get first frame of screenshare to get the size.")?;
-            let size = frame_size(&first_frame);
+            let size = frame_size(&first_frame)?;
             let target = capturer
                 .target()
                 .context("Unable to determine the target display.")?;
@@ -200,7 +200,7 @@ impl ScreenCaptureSource for ScapDefaultTargetCaptureSource {
 }
 
 fn new_scap_capturer(target: Option<scap::Target>) -> Result<scap::capturer::Capturer> {
-    scap::capturer::Capturer::build(scap::capturer::Options {
+    Ok(scap::capturer::Capturer::build(scap::capturer::Options {
         fps: 60,
         show_cursor: true,
         show_highlight: true,
@@ -210,7 +210,9 @@ fn new_scap_capturer(target: Option<scap::Target>) -> Result<scap::capturer::Cap
         crop_area: None,
         target,
         excluded_targets: None,
-    })
+        captures_audio: false,
+        exclude_current_process_audio: false,
+    })?)
 }
 
 fn run_capture(
@@ -267,17 +269,33 @@ impl Drop for ScapStream {
     }
 }
 
-fn frame_size(frame: &scap::frame::Frame) -> Size<DevicePixels> {
+fn frame_size(frame: &scap::frame::Frame) -> Result<Size<DevicePixels>> {
     let (width, height) = match frame {
-        scap::frame::Frame::YUVFrame(frame) => (frame.width, frame.height),
-        scap::frame::Frame::RGB(frame) => (frame.width, frame.height),
-        scap::frame::Frame::RGBx(frame) => (frame.width, frame.height),
-        scap::frame::Frame::XBGR(frame) => (frame.width, frame.height),
-        scap::frame::Frame::BGRx(frame) => (frame.width, frame.height),
-        scap::frame::Frame::BGR0(frame) => (frame.width, frame.height),
-        scap::frame::Frame::BGRA(frame) => (frame.width, frame.height),
+        scap::frame::Frame::Video(scap::frame::VideoFrame::YUVFrame(frame)) => {
+            (frame.width, frame.height)
+        }
+        scap::frame::Frame::Video(scap::frame::VideoFrame::RGB(frame)) => {
+            (frame.width, frame.height)
+        }
+        scap::frame::Frame::Video(scap::frame::VideoFrame::RGBx(frame)) => {
+            (frame.width, frame.height)
+        }
+        scap::frame::Frame::Video(scap::frame::VideoFrame::XBGR(frame)) => {
+            (frame.width, frame.height)
+        }
+        scap::frame::Frame::Video(scap::frame::VideoFrame::BGRx(frame)) => {
+            (frame.width, frame.height)
+        }
+        scap::frame::Frame::Video(scap::frame::VideoFrame::BGR0(frame)) => {
+            (frame.width, frame.height)
+        }
+        scap::frame::Frame::Video(scap::frame::VideoFrame::BGRA(frame)) => {
+            (frame.width, frame.height)
+        }
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        scap::frame::Frame::Audio(_) => return Err(anyhow!("Expected a video capture frame")),
     };
-    size(DevicePixels(width), DevicePixels(height))
+    Ok(size(DevicePixels(width), DevicePixels(height)))
 }
 
 /// This is used by `get_screen_targets` and `start_default_target_screen_capture` to turn their

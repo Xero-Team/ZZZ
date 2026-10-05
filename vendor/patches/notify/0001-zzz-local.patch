@@ -1,0 +1,553 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index c401fd42843529ec8ab677a6ca4772d3a5ad56b8..c245aff2b806fa4ed1237e232bdcc53a29f640f6 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,13 +3,6 @@ resolver = "2"
+ members = [
+   "notify",
+   "notify-types",
+-  "notify-debouncer-mini",
+-  "notify-debouncer-full",
+-  "file-id",
+-  "examples",
+-]
+-exclude = [
+-  "examples/hot_reload_tide", # excluded until https://github.com/rustsec/rustsec/issues/501 is resolved
+ ]
+ 
+ [workspace.package]
+@@ -24,7 +17,6 @@ crossbeam-channel = "0.5.0"
+ flume = "0.11.1"
+ deser-hjson = "2.2.4"
+ env_logger = "0.11.2"
+-file-id = { version = "0.2.3", path = "file-id" }
+ fsevent-sys = "4.0.0"
+ futures = "0.3.30"
+ inotify = { version = "0.11.0", default-features = false }
+@@ -36,8 +28,6 @@ mio = { version = "1.0", features = ["os-ext"] }
+ web-time = "1.1.0"
+ nix = "0.29.0"
+ notify = { version = "8.2.0", path = "notify" }
+-notify-debouncer-full = { version = "0.6.0", path = "notify-debouncer-full" }
+-notify-debouncer-mini = { version = "0.7.0", path = "notify-debouncer-mini" }
+ notify-types = { version = "2.0.0", path = "notify-types" }
+ pretty_assertions = "1.3.0"
+ rand = "0.8.5"
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-any.snap b/notify-types/src/snapshots/notify_types__event__tests__access-any.snap
+deleted file mode 100644
+index ab0db488c35c2692eae835dc2a640a7b41c5d902..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-close-any.snap b/notify-types/src/snapshots/notify_types__event__tests__access-close-any.snap
+deleted file mode 100644
+index cfd8a846b9e892aef806f331d7991e2c76224d51..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-close-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"close","mode":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-close-execute.snap b/notify-types/src/snapshots/notify_types__event__tests__access-close-execute.snap
+deleted file mode 100644
+index aabfe24d01c9c7d53ff2b1d9b3159e22cebc854f..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-close-execute.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"close","mode":"execute","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-close-other.snap b/notify-types/src/snapshots/notify_types__event__tests__access-close-other.snap
+deleted file mode 100644
+index 85b32dc3c9a6da9233fa3c95efa76bcc4d687667..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-close-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"close","mode":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-close-read.snap b/notify-types/src/snapshots/notify_types__event__tests__access-close-read.snap
+deleted file mode 100644
+index 7295f1bf51d6994f11dda5780f348a0ebcb1e81f..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-close-read.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"close","mode":"read","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-close-write.snap b/notify-types/src/snapshots/notify_types__event__tests__access-close-write.snap
+deleted file mode 100644
+index 79c1322efd8ac0a4ceabba81bcd6f02ffab0abcf..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-close-write.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"close","mode":"write","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-open-any.snap b/notify-types/src/snapshots/notify_types__event__tests__access-open-any.snap
+deleted file mode 100644
+index 2fa7f722951755db721e211fb6140ddd709c1530..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-open-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"open","mode":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-open-execute.snap b/notify-types/src/snapshots/notify_types__event__tests__access-open-execute.snap
+deleted file mode 100644
+index 17203e2916866c8adadb620fbf3f7ecda87a3b01..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-open-execute.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"open","mode":"execute","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-open-other.snap b/notify-types/src/snapshots/notify_types__event__tests__access-open-other.snap
+deleted file mode 100644
+index 1d678d7c804effe1883d725478728bfcc406f17d..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-open-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"open","mode":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-open-read.snap b/notify-types/src/snapshots/notify_types__event__tests__access-open-read.snap
+deleted file mode 100644
+index e7340efc639023c50445128a83ed4734412e707c..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-open-read.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"open","mode":"read","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-open-write.snap b/notify-types/src/snapshots/notify_types__event__tests__access-open-write.snap
+deleted file mode 100644
+index e7dbac995b59a7fbb514634f86d2ca04a1b735eb..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-open-write.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"open","mode":"write","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-other.snap b/notify-types/src/snapshots/notify_types__event__tests__access-other.snap
+deleted file mode 100644
+index fac2346e9e5c104dc446d3d144331ff4c6ecf2bc..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__access-read.snap b/notify-types/src/snapshots/notify_types__event__tests__access-read.snap
+deleted file mode 100644
+index 16b9e65e7a3ad424ffde657501ecaab646985268..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__access-read.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"access","kind":"read","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__any.snap b/notify-types/src/snapshots/notify_types__event__tests__any.snap
+deleted file mode 100644
+index 158bd11cfcb48f4bf07dcecb83525654da6dd55d..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__create-any.snap b/notify-types/src/snapshots/notify_types__event__tests__create-any.snap
+deleted file mode 100644
+index b59bdfbad4ce7221cfa170c9e3bd3e6fdf02c736..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__create-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"create","kind":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__create-file.snap b/notify-types/src/snapshots/notify_types__event__tests__create-file.snap
+deleted file mode 100644
+index 87cc695a3d711ba3e5b825c2fe7b2166f1c44084..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__create-file.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"create","kind":"file","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__create-folder.snap b/notify-types/src/snapshots/notify_types__event__tests__create-folder.snap
+deleted file mode 100644
+index fc411488cd0747ec31104465f4c5f272c6926417..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__create-folder.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"create","kind":"folder","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__create-other.snap b/notify-types/src/snapshots/notify_types__event__tests__create-other.snap
+deleted file mode 100644
+index 7e3e4c9927c4bdd1d08c2e48770abfbcdf2f3f86..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__create-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"create","kind":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-any.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-any.snap
+deleted file mode 100644
+index 05a7e9b6f77ae34144347969675920482fa845e3..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-data-any.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-data-any.snap
+deleted file mode 100644
+index aef1405ac6fbf58f65d592656883649fc1be9311..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-data-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"data","mode":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-data-content.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-data-content.snap
+deleted file mode 100644
+index 10ba0902c642eda4308d9f5661f836f8156be7b5..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-data-content.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"data","mode":"content","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-data-other.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-data-other.snap
+deleted file mode 100644
+index ed7b794278fb13c3312872b11eec4e81dca25ab8..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-data-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"data","mode":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-data-size.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-data-size.snap
+deleted file mode 100644
+index 03a4124114ca7de68179f469190849192d493368..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-data-size.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"data","mode":"size","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-accesstime.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-accesstime.snap
+deleted file mode 100644
+index 87245c8047939beffa1d41f03acfb7849ee928c0..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-accesstime.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"access-time","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-any.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-any.snap
+deleted file mode 100644
+index 0b2d24f22ccb32d68da64f6c6690ae1770ca2f7c..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-extended.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-extended.snap
+deleted file mode 100644
+index 1519a62ad29c83e2386c7990468adc02edcbe369..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-extended.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"extended","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-other.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-other.snap
+deleted file mode 100644
+index a524a468ad630c2743362de70325dcd26ff3cff1..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-ownership.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-ownership.snap
+deleted file mode 100644
+index d89c2230541171ab5a0938aa9ba4c8c272497edd..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-ownership.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"ownership","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-permissions.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-permissions.snap
+deleted file mode 100644
+index df2e5d2da32d5e1523f5d4068321148918c5210c..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-permissions.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"permissions","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-writetime.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-writetime.snap
+deleted file mode 100644
+index f87395baadd95d053017d4d70b7b04b47e018d3a..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-metadata-writetime.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"metadata","mode":"write-time","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-name-any.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-name-any.snap
+deleted file mode 100644
+index f0000f3e41cb898fe05d9a8f72c1736ecaa38fda..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-name-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"rename","mode":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-name-both.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-name-both.snap
+deleted file mode 100644
+index 9044379de849386e631f5cf238e6220863e3e0f9..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-name-both.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"rename","mode":"both","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-name-from.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-name-from.snap
+deleted file mode 100644
+index 5f809e5d6b1179c52fecc16b0e4e2b425f092004..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-name-from.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"rename","mode":"from","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-name-other.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-name-other.snap
+deleted file mode 100644
+index afea033e356ba3889353fa6f91f218a05a183ed7..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-name-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"rename","mode":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-name-to.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-name-to.snap
+deleted file mode 100644
+index d9dc10d4cb5fc79c07278672bd4d038de9adb5fb..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-name-to.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"rename","mode":"to","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__modify-other.snap b/notify-types/src/snapshots/notify_types__event__tests__modify-other.snap
+deleted file mode 100644
+index f05f37f7f1e666a6848697b17c614bb4db28b11a..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__modify-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"modify","kind":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__other.snap b/notify-types/src/snapshots/notify_types__event__tests__other.snap
+deleted file mode 100644
+index dc825ae590bf62e19224bc9596b420df7a41350f..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__remove-any.snap b/notify-types/src/snapshots/notify_types__event__tests__remove-any.snap
+deleted file mode 100644
+index e554a00d6f27ec8e0d5f6a478124ed7619656f78..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__remove-any.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"remove","kind":"any","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__remove-file.snap b/notify-types/src/snapshots/notify_types__event__tests__remove-file.snap
+deleted file mode 100644
+index cc9fed679bea6e58086b0e4f8a75fbbffe8e3acf..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__remove-file.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"remove","kind":"file","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__remove-folder.snap b/notify-types/src/snapshots/notify_types__event__tests__remove-folder.snap
+deleted file mode 100644
+index a361f3ccdd27c70709775a380e5777bc669f36a5..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__remove-folder.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"remove","kind":"folder","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__remove-other.snap b/notify-types/src/snapshots/notify_types__event__tests__remove-other.snap
+deleted file mode 100644
+index ed276ace9e7e6bdc57b2026021affbd007c551ce..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__remove-other.snap
++++ /dev/null
+@@ -1,5 +0,0 @@
+----
+-source: notify/src/event.rs
+-expression: json
+----
+-{"type":"remove","kind":"other","paths":[],"attrs":{}}
+diff --git a/notify-types/src/snapshots/notify_types__event__tests__serialize_event_with_attrs.snap b/notify-types/src/snapshots/notify_types__event__tests__serialize_event_with_attrs.snap
+deleted file mode 100644
+index 652da128ea3aa5b87c886b15a893943ecc113f75..0000000000000000000000000000000000000000
+--- a/notify-types/src/snapshots/notify_types__event__tests__serialize_event_with_attrs.snap
++++ /dev/null
+@@ -1,6 +0,0 @@
+----
+-source: notify/src/event.rs
+-assertion_line: 694
+-expression: json
+----
+-{"type":"any","paths":[],"attrs":{"tracker":123,"flag":"rescan","info":"test event"}}
+diff --git a/notify/src/fsevent.rs b/notify/src/fsevent.rs
+index 01a87b6f230d1277f60b54e542bc04c12ca549d4..cc68775f778890085f8e195c59468c804099faeb 100644
+--- a/notify/src/fsevent.rs
++++ b/notify/src/fsevent.rs
+@@ -265,6 +265,7 @@ extern "C" fn release_context(info: *const libc::c_void) {
+ extern "C" {
+     /// Indicates whether the run loop is waiting for an event.
+     fn CFRunLoopIsWaiting(runloop: cf::CFRunLoopRef) -> cf::Boolean;
++    fn CFRetain(cf: cf::CFRef) -> cf::CFRef;
+ }
+ 
+ struct FsEventPathsMut<'a>(&'a mut FsEventWatcher);
+@@ -298,7 +299,9 @@ impl FsEventWatcher {
+             },
+             since_when: fs::kFSEventStreamEventIdSinceNow,
+             latency: 0.0,
+-            flags: fs::kFSEventStreamCreateFlagFileEvents | fs::kFSEventStreamCreateFlagNoDefer,
++            flags: fs::kFSEventStreamCreateFlagFileEvents
++                | fs::kFSEventStreamCreateFlagNoDefer
++                | fs::kFSEventStreamCreateFlagWatchRoot,
+             event_handler,
+             runloop: None,
+             recursive_info: HashMap::new(),
+@@ -344,6 +347,11 @@ impl FsEventWatcher {
+ 
+             // Wait for the thread to shut down.
+             thread_handle.join().expect("thread to shut down");
++
++            // Release the retained reference from run().
++            unsafe {
++                cf::CFRelease(runloop);
++            }
+         }
+     }
+ 
+@@ -473,10 +481,16 @@ impl FsEventWatcher {
+                     );
+                     fs::FSEventStreamStart(stream);
+ 
++                    // Retain the runloop so the reference we send to the
++                    // caller survives even if this thread exits before
++                    // stop() uses it. The caller releases in stop().
++                    CFRetain(cur_runloop);
++
+                     // the calling to CFRunLoopRun will be terminated by CFRunLoopStop call in drop()
+-                    rl_tx
+-                        .send(CFSendWrapper(cur_runloop))
+-                        .expect("Unable to send runloop to watcher");
++                    let Ok(_) = rl_tx.send(CFSendWrapper(cur_runloop)) else {
++                        cf::CFRelease(cur_runloop);
++                        panic!("Unable to send runloop to watcher");
++                    };
+ 
+                     cf::CFRunLoopRun();
+                     fs::FSEventStreamStop(stream);

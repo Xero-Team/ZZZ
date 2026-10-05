@@ -5,6 +5,155 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 5.2.9 (2026-09-13)
+
+This is a bug-fix release, where unfortunately I forgot to make the needed edits
+to the commit message for all of them to automatically show up here.
+Check the "Commit Details" section instead for everything that went into it.
+
+### Bug Fixes
+
+ - <csr-id-50ede33d307dff61ee7db26d508e4cdf90164533/> fall back to the home trash when per-volume trash cannot be created
+   The spec (v1.0, section "Trash directories") says an implementation
+   "MUST either trash the file into the user's home trash or refuse to
+   trash it" when both $topdir/.Trash/$uid and $topdir/.Trash-$uid are
+   unavailable.  Until now the crate took the "refuse" branch, returning
+   a PermissionDenied error whenever the mount-point root was not
+   writable by the calling user - the common case on every partition
+   whose root is owned by root.
+
+   Catch PermissionDenied from execute_on_mounted_trash_folders and
+   fall back to move_to_trash with the home trash, which already
+   handles cross-device copies via copy+delete.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 8 commits contributed to the release.
+ - 5 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Prepare changelog prior to release ([`deaf4de`](https://github.com/Byron/trash-rs/commit/deaf4dea2a4b033d58fb999cd586edf452a4ef80))
+    - Merge pull request #151 from jaroslavpachola/home-trash-fallback ([`f99e82e`](https://github.com/Byron/trash-rs/commit/f99e82e6e86c401a30f40a83f1f91841dbc119d0))
+    - Review ([`18cbe14`](https://github.com/Byron/trash-rs/commit/18cbe148dcbbd2f75b1f3227432018c0991dcf44))
+    - Fall back to the home trash when per-volume trash cannot be created ([`50ede33`](https://github.com/Byron/trash-rs/commit/50ede33d307dff61ee7db26d508e4cdf90164533))
+    - Merge pull request #150 from ggand0/fix-windows-unc-parsing-name ([`29ad086`](https://github.com/Byron/trash-rs/commit/29ad0861cb1542038b00490f496d7568ad910a1c))
+    - Review ([`e57c153`](https://github.com/Byron/trash-rs/commit/e57c153766ef4d62aca90c7c6261098904ffa2bd))
+    - Keep the root backslash when rebuilding shell parsing names ([`e99afbd`](https://github.com/Byron/trash-rs/commit/e99afbdbe57fe0500eec92c4f03fe3d14c187e57))
+    - Rebuild verbatim paths before handing them to the shell on Windows ([`ba1d72f`](https://github.com/Byron/trash-rs/commit/ba1d72fd76f91a34bb8d812e83e0d95d3f21dfc3))
+</details>
+
+## 5.2.8 (2026-09-08)
+
+### Chore
+
+ - <csr-id-287633358210c3c1c2349211cb2f4cd2cbee5ab2/> upgrade windows to 0.62
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 3 commits contributed to the release.
+ - 5 days passed between releases.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Release trash v5.2.8 ([`836b6e5`](https://github.com/Byron/trash-rs/commit/836b6e50e6fc3cd0e6cbfd88f0b389b5e669432a))
+    - Merge pull request #149 from shaddollxz/chore/update-windows-dep ([`6bd5e33`](https://github.com/Byron/trash-rs/commit/6bd5e33113757f8b45b619d5511fd557d0b326a0))
+    - Upgrade windows to 0.62 ([`2876333`](https://github.com/Byron/trash-rs/commit/287633358210c3c1c2349211cb2f4cd2cbee5ab2))
+</details>
+
+## 5.2.7 (2026-09-03)
+
+A small bugfix release that helps with orphaned files in the Cosmic desktop.
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 5 commits contributed to the release.
+ - 123 days passed between releases.
+ - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Release trash v5.2.7 ([`428004f`](https://github.com/Byron/trash-rs/commit/428004f7348d2d2c9a2e2b74bd4f3bca63ac4e27))
+    - Prepare changelog prior to release ([`e52d748`](https://github.com/Byron/trash-rs/commit/e52d7483602a13a063fd0cfa8c66dc19db45e834))
+    - Merge pull request #148 from ZackMercury/fix-147 ([`ff8a074`](https://github.com/Byron/trash-rs/commit/ff8a074b1ada7aef4c4f4350f47ec34a26fa5984))
+    - Review ([`bbdb9d6`](https://github.com/Byron/trash-rs/commit/bbdb9d681e8a748f772bb6fe2ebc0d8b52aa9916))
+    - Fixed handling orphaned entries ([`21376e1`](https://github.com/Byron/trash-rs/commit/21376e113f8313a3f8aa5a62b377399a31a7389a))
+</details>
+
+## 5.2.6 (2026-05-03)
+
+### Bug Fixes
+
+ - <csr-id-bed74bd0fe35a0593288cbb41cf3f0b571826872/> replace assert! with ensure_virtually_exists to gracefully handle missing trash files
+   When a .trashinfo file references a file in trash/files that no longer
+   exists, the assert! in metadata() and restore_all() would panic instead
+   of returning a proper error. This caused cosmic-files to crash when
+   encountering such orphaned trash entries.
+
+   Replace assert! with ensure_virtually_exists() which returns a proper
+   Error::FileSystem instead of panicking, allowing callers to handle
+   the missing file gracefully.
+
+### Other
+
+ - <csr-id-8997e9aa267eb7fffb76720405719bb41d319944/> it's parents -> its parents
+ - <csr-id-ac00b38e54f386f80a661ada4372e4b75a4427d4/> test canonicalize_path_or_parents
+ - <csr-id-ec086e19de97acf1bf6c193201318d96dcc12a7d/> Update log messages to refer to home trash topdir
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 9 commits contributed to the release.
+ - 190 days passed between releases.
+ - 4 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 1 unique issue was worked on: [#144](https://github.com/Byron/trash-rs/issues/144)
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **[#144](https://github.com/Byron/trash-rs/issues/144)**
+    - Test freedesktop trash implementation in container ([`c21e99e`](https://github.com/Byron/trash-rs/commit/c21e99e449da077ea927eef27898b492bf66c64e))
+ * **Uncategorized**
+    - Release trash v5.2.6 ([`1dca800`](https://github.com/Byron/trash-rs/commit/1dca80069ec9d91bf14143c9649e680741ee159a))
+    - Merge pull request #145 from ZlordHUN/fix/graceful-missing-trash-file ([`75bb3b7`](https://github.com/Byron/trash-rs/commit/75bb3b70433db74aa023d0e930d9e49d115aad83))
+    - Replace assert! with ensure_virtually_exists to gracefully handle missing trash files ([`bed74bd`](https://github.com/Byron/trash-rs/commit/bed74bd0fe35a0593288cbb41cf3f0b571826872))
+    - Merge pull request #143 from null-dev/nd/canonicalize-trash-path ([`5a7c7f7`](https://github.com/Byron/trash-rs/commit/5a7c7f77f8025d651b6b964725637e60e8cd37cc))
+    - It's parents -> its parents ([`8997e9a`](https://github.com/Byron/trash-rs/commit/8997e9aa267eb7fffb76720405719bb41d319944))
+    - Test canonicalize_path_or_parents ([`ac00b38`](https://github.com/Byron/trash-rs/commit/ac00b38e54f386f80a661ada4372e4b75a4427d4))
+    - Update log messages to refer to home trash topdir ([`ec086e1`](https://github.com/Byron/trash-rs/commit/ec086e19de97acf1bf6c193201318d96dcc12a7d))
+    - Implement canonicalize_path for non-existent paths ([`59add80`](https://github.com/Byron/trash-rs/commit/59add80bea4f14911862092c1edc9027def98602))
+</details>
+
 ## 5.2.5 (2025-10-25)
 
 ### Bug Fixes
@@ -16,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 1 day passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#142](https://github.com/Byron/trash-rs/issues/142)
@@ -29,6 +178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
  * **[#142](https://github.com/Byron/trash-rs/issues/142)**
     - Set the `objc2-foundation` to the one that's actually required ([`23ca2a2`](https://github.com/Byron/trash-rs/commit/23ca2a2ea182fe551ac0d4630ebbb98c3db0abad))
+ * **Uncategorized**
+    - Release trash v5.2.5 ([`3ca5818`](https://github.com/Byron/trash-rs/commit/3ca5818fac0f4eac0b9244f0bacf16c557683c2d))
 </details>
 
 ## 5.2.4 (2025-10-24)
@@ -42,7 +193,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 69 calendar days.
- - 69 days passed between releases.
+ - 70 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -69,6 +220,7 @@ Updated the `obj2` crate when building or MacOS.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release over the course of 114 calendar days.
+ - 174 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -94,12 +246,6 @@ Updated the `obj2` crate when building or MacOS.
 ## 5.2.2 (2025-02-22)
 
 <csr-id-083743e848ff1b2a61af47bb3afdd8aa04e3eace/>
-
-### Chore
-
- - <csr-id-083743e848ff1b2a61af47bb3afdd8aa04e3eace/> prepare for objc2 frameworks v0.3
-   These will have a bunch of default features enabled, so let's
-   pre-emptively disable them.
 
 ### Bug Fixes
 
@@ -148,28 +294,12 @@ Updated the `obj2` crate when building or MacOS.
  - <csr-id-6f0b737668c0f9c19e09657e8cbc98caf90e30a9/> Support for non-UTF8 paths on HFS+ on MacOS
    Now illegal UTF8 is percent-encoded. Previously this code would have panicked.
 
-### Other
-
- - <csr-id-415c87d81ff859ae40ba5d2e31ffcc44a1ebfffa/> add an overview table to DeleteMethod on Mac
- - <csr-id-6fbad98299ffde1acf2a63552d39e4085664d6f1/> move macos deps behind macos cfg target
- - <csr-id-3978204c7b5d7ca1038717da3238c82f7bb6a6c6/> add simdutf8 for fast utf8 validation
- - <csr-id-e58e92baee1f3121114befe73e2a7a1d1dba363e/> add percent encoding support
- - <csr-id-9ed83e724f944f4eacf2e4cafdf8025548f7a17b/> replace create with create_new to avoid potentially nulling existing files
-
-### Test
-
- - <csr-id-175d6f5de323b2fed7c8049eaf6bb91266171b30/> new delete illegal bytes via Finder
-   Disabled since only works on older FS, but tested manually to work on a USB HFS drive
- - <csr-id-bfbc394a1aba8cb3f348c77f3dffc18a59dde28f/> new delete illegal bytes
-   Disabled since only works on older FS, but tested manually to work on a USB HFS drive
- - <csr-id-dc7dca02ba13b34d57f63244522044a17e88cecc/> add for from_utf8_lossy_pc
- - <csr-id-9c213c91817d718b1785b9cd8a52d6c87beef936/> replace create with create_new to avoid potentially nulling existing files
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
  - 26 commits contributed to the release.
+ - 42 days passed between releases.
  - 11 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -319,10 +449,6 @@ code break unless `name` is actually used.
    will try to remove the `url` crate and use `urlencoding` in its place
    in the next commit.
 
-### Other
-
- - <csr-id-58b99ef34a0dc6cce11fdc46c9fa18ffb013e33e/> Use objc2-foundation
-
 ### Bug Fixes (BREAKING)
 
  - <csr-id-0971b8f7f0f1e20ee4356a40ae6b2ba41900c4b3/> Support non-UTF8 paths.
@@ -334,7 +460,7 @@ code break unless `name` is actually used.
 <csr-read-only-do-not-edit/>
 
  - 11 commits contributed to the release over the course of 34 calendar days.
- - 47 days passed between releases.
+ - 48 days passed between releases.
  - 3 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -367,6 +493,7 @@ This release updates the `windows` dependency (on Windows) to v0.56.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
+ - 43 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -426,7 +553,7 @@ This release updates the `windows` dependency (on Windows) to v0.56.
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release.
- - 28 days passed between releases.
+ - 29 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -487,7 +614,7 @@ This release updates the `windows` dependency (on Windows) to v0.56.
 <csr-read-only-do-not-edit/>
 
  - 6 commits contributed to the release over the course of 5 calendar days.
- - 25 days passed between releases.
+ - 26 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#99](https://github.com/Byron/trash-rs/issues/99)
 
@@ -551,15 +678,12 @@ This release updates the `windows` dependency (on Windows) to v0.56.
    Metadata is currently limited to the amount of things, like bytes or entries,
    in the metadata item, but there is potential for adding more later.
 
-### Other
-
- - <csr-id-be43b098c6c4db66f19c90471cd6ff0c066832ef/> update ci job to use cargo-cross
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
  - 14 commits contributed to the release.
+ - 84 days passed between releases.
  - 2 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -622,7 +746,7 @@ This release fixes compile errors on DragonFly, a fork of FreeBSD.
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release over the course of 9 calendar days.
- - 9 days passed between releases.
+ - 10 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -648,10 +772,6 @@ This release fixes compile errors on DragonFly, a fork of FreeBSD.
 
  - <csr-id-24e0cb6f9fe15a0db1609e04cda6446e3335f89b/> compatibility with OpenBSD and NetBSD
  - <csr-id-0789b23c6c8e21bc1493455beaca75d46e0aa575/> allow passing in items' ownership or reference
-
-### Other
-
- - <csr-id-554c2735c8dd924fd7cebe863b529d91bb0cac0d/> describe how to retry restoring when encountering `RestoreCollision` error
 
 ### Commit Statistics
 
@@ -693,7 +813,7 @@ This release fixes compile errors on DragonFly, a fork of FreeBSD.
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
- - 5 days passed between releases.
+ - 6 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -725,7 +845,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 9 commits contributed to the release over the course of 1 calendar day.
- - 4 days passed between releases.
+ - 5 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -760,7 +880,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 3 commits contributed to the release.
- - 19 days passed between releases.
+ - 20 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#75](https://github.com/Byron/trash-rs/issues/75)
 
@@ -818,6 +938,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
+ - 107 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -837,11 +958,6 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 ## 3.0.1 (2023-01-30)
 
 <csr-id-865a7c6d688cc6dd00dc8b16cd0e4a4fd60d953c/>
-
-### Chore
-
- - <csr-id-865a7c6d688cc6dd00dc8b16cd0e4a4fd60d953c/> bump `windows` crate to 0.44
-   Merge branch 'bump-windows-0.44'
 
 ### Commit Statistics
 
@@ -876,15 +992,12 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 
 <csr-id-a024b44b6e1cd4a357ffabda8f31e82dcc7e78cb/>
 
-### Chore (BREAKING)
-
- - <csr-id-a024b44b6e1cd4a357ffabda8f31e82dcc7e78cb/> Upgrade from `windows` v0.37 to v0.43.
-
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release.
+ - 145 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -918,7 +1031,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release.
- - 40 days passed between releases.
+ - 41 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#39](https://github.com/Byron/trash-rs/issues/39)
 
@@ -978,7 +1091,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 5 commits contributed to the release.
- - 3 days passed between releases.
+ - 4 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#5050505050](https://github.com/Byron/trash-rs/issues/5050505050)
 
@@ -1015,7 +1128,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
- - 2 days passed between releases.
+ - 3 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#39](https://github.com/Byron/trash-rs/issues/39)
 
@@ -1053,7 +1166,7 @@ YANKED: It was discovered that symlinks aren't handled correctly, which can lead
 <csr-read-only-do-not-edit/>
 
  - 7 commits contributed to the release over the course of 2 calendar days.
- - 3 days passed between releases.
+ - 4 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#47](https://github.com/Byron/trash-rs/issues/47)
 
@@ -1128,7 +1241,7 @@ All previous 2.0.* releases which contained this function were yanked from crate
 <csr-read-only-do-not-edit/>
 
  - 10 commits contributed to the release over the course of 30 calendar days.
- - 30 days passed between releases.
+ - 31 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -1163,6 +1276,7 @@ All previous 2.0.* releases which contained this function were yanked from crate
 <csr-read-only-do-not-edit/>
 
  - 6 commits contributed to the release.
+ - 127 days passed between releases.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 2 unique issues were worked on: [#37](https://github.com/Byron/trash-rs/issues/37), [#40](https://github.com/Byron/trash-rs/issues/40)
 
@@ -1233,7 +1347,7 @@ All previous 2.0.* releases which contained this function were yanked from crate
 <csr-read-only-do-not-edit/>
 
  - 4 commits contributed to the release.
- - 11 days passed between releases.
+ - 12 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -1265,6 +1379,7 @@ All previous 2.0.* releases which contained this function were yanked from crate
 <csr-read-only-do-not-edit/>
 
  - 32 commits contributed to the release over the course of 4 calendar days.
+ - 86 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -1316,6 +1431,7 @@ All previous 2.0.* releases which contained this function were yanked from crate
 <csr-read-only-do-not-edit/>
 
  - 18 commits contributed to the release.
+ - 165 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -1353,7 +1469,7 @@ All previous 2.0.* releases which contained this function were yanked from crate
 <csr-read-only-do-not-edit/>
 
  - 2 commits contributed to the release.
- - 87 days passed between releases.
+ - 88 days passed between releases.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 1 unique issue was worked on: [#17](https://github.com/Byron/trash-rs/issues/17)
 
@@ -1372,16 +1488,6 @@ All previous 2.0.* releases which contained this function were yanked from crate
 ## v1.0.1 (2020-05-16)
 
 <csr-id-576fad719cb240203dec030890d54fe416a42edd/>
-
-### Refactor
-
- - <csr-id-576fad719cb240203dec030890d54fe416a42edd/> port mac implementation to work with v2
-   Updates the existing Mac implementation to compile with v2 of the
-   library. Does not add any new functionality other defining required
-   methods.
-   
-   Tests fail for methods relating to `list`, `purge_all`, or
-   `restore_all`, which are unimplemented.
 
 ### Commit Statistics
 
@@ -1464,16 +1570,6 @@ All previous 2.0.* releases which contained this function were yanked from crate
 
 <csr-id-576fad719cb240203dec030890d54fe416a42edd/>
 
-### Refactor
-
- - <csr-id-576fad719cb240203dec030890d54fe416a42edd/> port mac implementation to work with v2
-   Updates the existing Mac implementation to compile with v2 of the
-   library. Does not add any new functionality other defining required
-   methods.
-   
-   Tests fail for methods relating to `list`, `purge_all`, or
-   `restore_all`, which are unimplemented.
-
 ### New Features
 
  - <csr-id-d68cc2aedee5e8316117bec257975da30cbd7483/> implementation for macOS
@@ -1515,4 +1611,3 @@ All previous 2.0.* releases which contained this function were yanked from crate
     - Changed required winapi version. ([`d49bce8`](https://github.com/Byron/trash-rs/commit/d49bce8d346e10c08910520383ed4054a3948535))
     - Initial ([`4c23314`](https://github.com/Byron/trash-rs/commit/4c233148288711419a04fdfa96e36dcb77f0469f))
 </details>
-

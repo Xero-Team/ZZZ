@@ -2,8 +2,7 @@ use crate::{
     PartialResultParams, StaticTextDocumentColorProviderOptions, TextDocumentIdentifier,
     WorkDoneProgressParams,
 };
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
+use serde::{Deserialize, Serialize};
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FoldingRangeParams {
@@ -101,7 +100,8 @@ pub struct FoldingRangeClientCapabilities {
 }
 
 /// Enum of known range kinds
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
 pub enum FoldingRangeKind {
     /// Folding range for a comment
     Comment,
@@ -109,37 +109,6 @@ pub enum FoldingRangeKind {
     Imports,
     /// Folding range for a region (e.g. `#region`)
     Region,
-    /// Folding range for other kinds, as certain language servers may extend the defined list.
-    Other(String),
-}
-
-impl<'de> Deserialize<'de> for FoldingRangeKind {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Ok(match s.as_str() {
-            "comment" => Self::Comment,
-            "imports" => Self::Imports,
-            "region" => Self::Region,
-            _ => Self::Other(s.to_lowercase()),
-        })
-    }
-}
-
-impl Serialize for FoldingRangeKind {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(match self {
-            Self::Comment => "comment",
-            Self::Imports => "imports",
-            Self::Region => "region",
-            Self::Other(s) => s,
-        })
-    }
 }
 
 /// Represents a folding range.

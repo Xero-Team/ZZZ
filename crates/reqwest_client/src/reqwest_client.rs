@@ -20,6 +20,13 @@ static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static REDACT_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"key=[^&]+").expect("valid regex literal"));
 
+fn is_supported_proxy_url(proxy_url: &Url) -> bool {
+    matches!(
+        proxy_url.scheme(),
+        "http" | "https" | "socks4" | "socks4a" | "socks5" | "socks5h"
+    )
+}
+
 pub struct ReqwestClient {
     client: reqwest::Client,
     proxy: Option<Url>,
@@ -95,6 +102,10 @@ impl ReqwestClient {
         let client_has_proxy;
 
         if let Some(proxy) = proxy.as_ref().and_then(|proxy_url| {
+            if !is_supported_proxy_url(proxy_url) {
+                log::error!("Unsupported proxy URL scheme: {}", proxy_url.scheme());
+                return None;
+            }
             reqwest::Proxy::all(proxy_url.clone())
                 .inspect_err(|e| {
                     log::error!(
@@ -391,7 +402,8 @@ mod tests {
 
     use futures::AsyncReadExt as _;
     use http_client::{
-        AsyncBody, HttpClient, HttpRequestExt as _, Method, Request as HttpRequest, Url,
+        AsyncBody, HttpClient, HttpRequestExt as _, Method, RedirectPolicy, Request as HttpRequest,
+        Url,
     };
 
     use crate::ReqwestClient;
@@ -523,6 +535,60 @@ mod tests {
         );
         drop(response);
         server.join().unwrap();
+    }
+
+    #[test]
+    fn test_per_request_redirect_policy() {
+        fn request(policy: RedirectPolicy, expected_requests: usize) -> http_client::StatusCode {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                for request_index in 0..expected_requests {
+                    let (mut stream, _) = listener.accept().unwrap();
+                    let mut reader = BufReader::new(&mut stream);
+                    let mut line = String::new();
+                    loop {
+                        line.clear();
+                        assert_ne!(reader.read_line(&mut line).unwrap(), 0);
+                        if line == "\r\n" {
+                            break;
+                        }
+                    }
+                    drop(reader);
+                    if request_index == 0 {
+                        write!(
+                            stream,
+                            "HTTP/1.1 302 Found\r\nlocation: http://{address}/final\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                        )
+                        .unwrap();
+                    } else {
+                        stream
+                            .write_all(
+                                b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                            )
+                            .unwrap();
+                    }
+                }
+            });
+
+            let client = ReqwestClient::new();
+            let request = HttpRequest::get(format!("http://{address}/start"))
+                .follow_redirects(policy)
+                .body(AsyncBody::default())
+                .unwrap();
+            let response = futures::executor::block_on(client.send(request)).unwrap();
+            server.join().unwrap();
+            response.status()
+        }
+
+        assert_eq!(
+            request(RedirectPolicy::NoFollow, 1),
+            http_client::StatusCode::FOUND
+        );
+        assert_eq!(
+            request(RedirectPolicy::FollowLimit(1), 2),
+            http_client::StatusCode::OK
+        );
     }
 
     #[test]

@@ -324,19 +324,10 @@ pub fn script(name: &str) -> Step<Run> {
     }
 }
 
-pub struct NamedJob<J: JobType = RunJob> {
+pub struct NamedJob {
     pub name: String,
-    pub job: Job<J>,
+    pub job: Job,
 }
-
-// impl NamedJob {
-//     pub fn map(self, f: impl FnOnce(Job) -> Job) -> Self {
-//         NamedJob {
-//             name: self.name,
-//             job: f(self.job),
-//         }
-//     }
-// }
 
 pub(crate) const DEFAULT_REPOSITORY_OWNER_GUARD: &str = "true";
 
@@ -362,18 +353,23 @@ impl CommonJobConditions for Job {
     }
 }
 
-pub(crate) fn release_job(deps: &[&NamedJob]) -> Job {
-    dependant_job(deps)
+pub(crate) fn release_job(dependencies: &[&NamedJob]) -> Job {
+    dependent_job(dependencies)
         .with_repository_owner_guard()
         .timeout_minutes(60u32)
 }
 
-pub(crate) fn dependant_job(deps: &[&NamedJob]) -> Job {
+pub(crate) fn dependent_job(dependencies: &[&NamedJob]) -> Job {
     let job = Job::default();
-    if deps.len() > 0 {
-        job.needs(deps.iter().map(|j| j.name.clone()).collect::<Vec<_>>())
-    } else {
+    if dependencies.is_empty() {
         job
+    } else {
+        job.needs(
+            dependencies
+                .iter()
+                .map(|dependency| dependency.name.clone())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -493,9 +489,13 @@ pub mod named {
 
     /// Returns a Job with the same name as the enclosing function.
     /// (note job names may not contain `::`)
-    pub fn job<J: JobType>(job: Job<J>) -> NamedJob<J> {
+    pub fn job(job: Job) -> NamedJob {
+        let function_name = function_name(1);
         NamedJob {
-            name: function_name(1).split("::").last().unwrap().to_owned(),
+            name: function_name
+                .rsplit_once("::")
+                .map_or(function_name.as_str(), |(_, name)| name)
+                .to_owned(),
             job,
         }
     }

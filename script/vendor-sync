@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import tomllib
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+VENDOR_ROOT = REPOSITORY_ROOT / "vendor"
+MANIFEST_PATH = VENDOR_ROOT / "UPSTREAMS.toml"
+
+
+class VendorSyncError(RuntimeError):
+    pass
+
+
+def run(command: list[str], *, cwd: Path | None = None) -> None:
+    completed = subprocess.run(command, cwd=cwd, check=False)
+    if completed.returncode != 0:
+        rendered = " ".join(command)
+        raise VendorSyncError(f"command failed ({completed.returncode}): {rendered}")
+
+
+def output(command: list[str], *, cwd: Path | None = None) -> str:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode != 0:
+        rendered = " ".join(command)
+        raise VendorSyncError(f"command failed ({completed.returncode}): {rendered}")
+    return completed.stdout.strip()
+
+
+def load_packages(selected_names: set[str]) -> list[dict[str, object]]:
+    with MANIFEST_PATH.open("rb") as manifest_file:
+        manifest = tomllib.load(manifest_file)
+
+    if manifest.get("schema") != 1:
+        raise VendorSyncError(f"unsupported schema in {MANIFEST_PATH}")
+
+    packages = manifest.get("package")
+    if not isinstance(packages, list):
+        raise VendorSyncError(f"missing [[package]] entries in {MANIFEST_PATH}")
+
+    by_name: dict[str, dict[str, object]] = {}
+    for package in packages:
+        if not isinstance(package, dict):
+            raise VendorSyncError("every package entry must be a table")
+        name = package.get("name")
+        if not isinstance(name, str) or not name or "/" in name or name in {".", ".."}:
+            raise VendorSyncError(f"invalid package name: {name!r}")
+        if name in by_name:
+            raise VendorSyncError(f"duplicate package name: {name}")
+        by_name[name] = package
+
+    unknown_names = selected_names.difference(by_name)
+    if unknown_names:
+        unknown = ", ".join(sorted(unknown_names))
+        raise VendorSyncError(f"unknown package(s): {unknown}")
+
+    if selected_names:
+        return [by_name[name] for name in sorted(selected_names)]
+    return [by_name[name] for name in sorted(by_name)]
+
+
+def required_string(package: dict[str, object], field: str) -> str:
+    value = package.get(field)
+    if not isinstance(value, str) or not value:
+        raise VendorSyncError(f"{package.get('name')}: invalid {field}")
+    return value
+
+
+def string_list(package: dict[str, object], field: str) -> list[str]:
+    value = package.get(field)
+    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+        raise VendorSyncError(f"{package.get('name')}: invalid {field}")
+    return value
+
+
+def relative_path(package_name: str, field: str, value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise VendorSyncError(f"{package_name}: {field} must stay inside the repository: {value}")
+    return path
+
+
+def prepare_package(package: dict[str, object], temporary_root: Path) -> Path:
+    name = required_string(package, "name")
+    repository = required_string(package, "repository")
+    revision = required_string(package, "revision")
+    includes = string_list(package, "include")
+    patches = string_list(package, "patches")
+    for include in includes:
+        relative_path(name, "include", include)
+
+    source_directory = temporary_root / f"{name}-source"
+    staged_directory = temporary_root / f"{name}-staged"
+    source_directory.mkdir()
+    staged_directory.mkdir()
+
+    run(["git", "init", "--quiet"], cwd=source_directory)
+    run(["git", "remote", "add", "upstream", repository], cwd=source_directory)
+    run(
+        [
+            "git",
+            "-c",
+            "protocol.version=2",
+            "fetch",
+            "--quiet",
+            "--depth=1",
+            "--filter=blob:none",
+            "upstream",
+            revision,
+        ],
+        cwd=source_directory,
+    )
+
+    fetched_revision = output(["git", "rev-parse", f"{revision}^{{commit}}"], cwd=source_directory)
+    if fetched_revision != revision:
+        raise VendorSyncError(
+            f"{name}: fetched an unexpected revision "
+            f"({fetched_revision}, expected {revision})"
+        )
+
+    archive_path = temporary_root / f"{name}.tar"
+    run(
+        ["git", "archive", "--format=tar", f"--output={archive_path}", revision, "--", *includes],
+        cwd=source_directory,
+    )
+    with tarfile.open(archive_path) as archive:
+        archive.extractall(staged_directory, filter="data")
+
+    for relative_patch_path in patches:
+        patch_path = REPOSITORY_ROOT / relative_path(name, "patch", relative_patch_path)
+        if not patch_path.is_file():
+            raise VendorSyncError(f"{name}: patch does not exist: {relative_patch_path}")
+        run(
+            [
+                "patch",
+                "--batch",
+                "--forward",
+                "--no-backup-if-mismatch",
+                "--silent",
+                "--strip=1",
+                f"--directory={staged_directory}",
+                f"--input={patch_path}",
+            ]
+        )
+
+    return staged_directory
+
+
+def tree_digest(directory: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*")):
+        relative_path = path.relative_to(directory)
+        if relative_path.parts[0] in {".git", "target"}:
+            continue
+        digest.update(os.fsencode(relative_path))
+        if path.is_symlink():
+            digest.update(b"symlink\0")
+            digest.update(os.fsencode(os.readlink(path)))
+        elif path.is_file():
+            digest.update(b"file\0")
+            digest.update(b"executable\0" if os.access(path, os.X_OK) else b"regular\0")
+            with path.open("rb") as source_file:
+                while chunk := source_file.read(1024 * 1024):
+                    digest.update(chunk)
+        elif path.is_dir():
+            digest.update(b"directory\0")
+        else:
+            raise VendorSyncError(f"unsupported file type: {path}")
+    return digest.hexdigest()
+
+
+def check_packages(packages: list[dict[str, object]], staged: dict[str, Path]) -> bool:
+    is_clean = True
+    for package in packages:
+        name = required_string(package, "name")
+        destination = VENDOR_ROOT / name
+        if not destination.is_dir():
+            print(f"OUTDATED {name}: destination is missing")
+            is_clean = False
+            continue
+        if tree_digest(destination) != tree_digest(staged[name]):
+            print(f"OUTDATED {name}")
+            is_clean = False
+        else:
+            print(f"OK       {name}")
+    return is_clean
+
+
+def replace_packages(packages: list[dict[str, object]], staged: dict[str, Path], temporary_root: Path) -> None:
+    replaced_names: list[str] = []
+    try:
+        for package in packages:
+            name = required_string(package, "name")
+            destination = VENDOR_ROOT / name
+            backup = temporary_root / f"{name}-backup"
+            if not destination.is_dir():
+                raise VendorSyncError(f"refusing to replace missing directory: {destination}")
+            os.replace(destination, backup)
+            os.replace(staged[name], destination)
+            replaced_names.append(name)
+            print(f"SYNCED   {name}")
+    except BaseException:
+        for name in reversed(replaced_names):
+            destination = VENDOR_ROOT / name
+            backup = temporary_root / f"{name}-backup"
+            if destination.exists():
+                shutil.rmtree(destination)
+            os.replace(backup, destination)
+        raise
+
+
+def show_status(packages: list[dict[str, object]], temporary_root: Path) -> bool:
+    is_current = True
+    for package in packages:
+        name = required_string(package, "name")
+        repository = required_string(package, "repository")
+        source_ref = required_string(package, "source_ref")
+        revision = required_string(package, "revision")
+        source_directory = temporary_root / f"{name}-status"
+        source_directory.mkdir()
+        run(["git", "init", "--quiet"], cwd=source_directory)
+        run(["git", "remote", "add", "upstream", repository], cwd=source_directory)
+        run(
+            [
+                "git",
+                "-c",
+                "protocol.version=2",
+                "fetch",
+                "--quiet",
+                "--depth=1",
+                "--filter=blob:none",
+                "upstream",
+                source_ref,
+            ],
+            cwd=source_directory,
+        )
+        latest_revision = output(["git", "rev-parse", "FETCH_HEAD^{commit}"], cwd=source_directory)
+        if latest_revision == revision:
+            print(f"CURRENT  {name} {revision}")
+        else:
+            print(f"UPDATE   {name} {revision} -> {latest_revision}")
+            is_current = False
+    return is_current
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Rebuild vendored source snapshots from pinned upstream revisions and patches."
+    )
+    parser.add_argument("action", choices=("check", "status", "sync"))
+    parser.add_argument("packages", nargs="*", help="package names; all packages when omitted")
+    return parser.parse_args()
+
+
+def main() -> int:
+    os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
+    sys.stdout.reconfigure(line_buffering=True)
+    arguments = parse_arguments()
+    packages = load_packages(set(arguments.packages))
+
+    with tempfile.TemporaryDirectory(prefix=".vendor-sync-", dir=VENDOR_ROOT) as temporary_directory:
+        temporary_root = Path(temporary_directory)
+        if arguments.action == "status":
+            return 0 if show_status(packages, temporary_root) else 1
+
+        staged: dict[str, Path] = {}
+        for package in packages:
+            name = required_string(package, "name")
+            print(f"PREPARE  {name}")
+            staged[name] = prepare_package(package, temporary_root)
+
+        if arguments.action == "check":
+            return 0 if check_packages(packages, staged) else 1
+
+        replace_packages(packages, staged, temporary_root)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except VendorSyncError as error:
+        print(f"vendor-sync: {error}", file=sys.stderr)
+        raise SystemExit(1) from error

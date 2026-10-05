@@ -1,6 +1,6 @@
 [package]
 name = "gh-workflow-macros"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 
 description = "macros for gh-workflow"
@@ -14,6 +14,10 @@ keywords = ["github", "actions", "workflow", "generator"]
 proc-macro = true
 
 [dependencies]
-syn = "2.0"
-quote = "1.0"
-heck = "0.5.0"
+syn = { workspace = true }
+quote = { workspace = true }
+heck = { workspace = true }
+
+
+[lints]
+workspace = true

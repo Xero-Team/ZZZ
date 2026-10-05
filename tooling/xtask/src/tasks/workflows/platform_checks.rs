@@ -65,8 +65,9 @@ fn run_platform_tests_impl(platform: Platform, filter_packages: bool) -> NamedJo
             .when(platform == Platform::Linux, |job| {
                 job.add_service(
                     "postgres",
-                    Container::new("postgres:15")
-                        .add_env(("POSTGRES_HOST_AUTH_METHOD", "trust"))
+                    Container::default()
+                        .image("postgres:15")
+                        .env(("POSTGRES_HOST_AUTH_METHOD", "trust"))
                         .ports(vec![Port::Name("5432:5432".into())])
                         .options(
                             "--health-cmd pg_isready \

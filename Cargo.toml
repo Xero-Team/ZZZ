@@ -488,7 +488,7 @@ async-dispatcher = "0.1"
 async-fs = "2.2"
 async-io = "2.6.0"
 async-lock = "3.4"
-# Vendored from https://github.com/zed-industries/async-pipe-rs @ 82d00a04211cf4e1236029aa03e6b6ce2a74c553
+# Vendored from https://github.com/routerify/async-pipe-rs @ 14aed755ea9fb016a63498fa8c0ec479757fa5f6
 async-pipe = { path = "vendor/async-pipe" }
 async-recursion = "1.2.0"
 async-tar = "0.6.1"
@@ -527,7 +527,7 @@ cpal = "0.18"
 crash-handler = "0.8"
 criterion = { version = "0.8", features = ["html_reports"] }
 ctor = "1.0.13"
-# Vendored from https://github.com/zed-industries/dap-types @ 1b461b310481d01e02b2603c16d7144b926339f8
+# Vendored from https://github.com/jDomantas/dap-types @ 591bd28ef0d5283b37057577dc11d616e60fbd37
 dap-types = { path = "vendor/dap-types/dap-types" }
 dashmap = "6.2"
 derive_more = { version = "2.1.1", features = [
@@ -556,7 +556,7 @@ flume = "0.12"
 futures = "0.3.34"
 futures-concurrency = "7.7.1"
 futures-lite = "2.6"
-# Vendored from https://github.com/zed-industries/gh-workflow @ 37f3c0575d379c218a9c455ee67585184e40d43f
+# Vendored from https://github.com/tailcallhq/gh-workflow @ ef51106c4c4152f595dc6d18295d78a5ca3c54f9
 gh-workflow = { path = "vendor/gh-workflow/crates/gh-workflow" }
 git2 = { version = "0.21.0", default-features = false, features = ["vendored-libgit2", "unstable-sha256"] }
 globset = "0.4"
@@ -609,7 +609,7 @@ linkify = "0.11.0"
 lofty = "0.25"
 log = { version = "0.4.34", features = ["kv_unstable_serde", "serde"] }
 lru = "0.18"
-# Vendored from https://github.com/zed-industries/lsp-types @ f4dfa89a21ca35cd929b70354b1583fabae325f8
+# Vendored from https://github.com/gluon-lang/lsp-types @ be7336e92a6ad23f214df19bcdceab17f39531a9
 lsp-types = { path = "vendor/lsp-types" }
 mach2 = "0.7"
 markup5ever_rcdom = { package = "spider-markup5ever_rcdom", version = "0.40.0" }
@@ -703,16 +703,16 @@ ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 rayon = "1.12"
 regex = "1.13"
-# Vendored from https://github.com/zed-industries/reqwest @ c15662463bda39148ba154100dd44d3fba5873a4
+# Vendored from https://github.com/seanmonstar/reqwest @ de55373434f07f42926599dbb5a88550d8e55112
 reqwest = { path = "vendor/reqwest", default-features = false, features = [
     "charset",
     "http2",
-    "macos-system-configuration",
     "multipart",
-    "rustls-tls-native-roots",
+    "rustls",
     "socks",
     "stream",
-], package = "zed-reqwest" }
+    "system-proxy",
+] }
 runtimelib = { version = "3.0.0", default-features = false, features = [
     "async-dispatcher-runtime", "aws-lc-rs"
 ] }
@@ -721,8 +721,8 @@ rustc-hash = "2.1.3"
 rustix = { version = "1.1", features = ["fs"] }
 rustls = { version = "0.23.45" }
 rustls-platform-verifier = "0.7.1"
-# Vendored from https://github.com/zed-industries/scap @ 4afea48c3b002197176fb19cd0f9b180dd36eaac
-scap = { path = "vendor/scap", default-features = false, package = "zed-scap" }
+# Vendored from https://github.com/helmerapp/scap @ f9a62144bf1011e29ffa6ac1f49e5e0d020ca40a
+scap = { path = "vendor/scap", default-features = false }
 schemars = { version = "1.2", features = ["indexmap2"] }
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 semver = { version = "1.0", features = ["serde"] }
@@ -868,7 +868,7 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
-# Vendored from https://github.com/zed-industries/wgpu @ 357a0c56e0070480ad9daea5d2eaa83150b79e88
+# Vendored from https://github.com/gfx-rs/wgpu v29 @ e99f5305ded96ff7006f0714d043a7f735bd45c2
 wgpu = { path = "vendor/wgpu/wgpu" }
 windows-core = "0.100"
 yaml-rust2 = "0.13"
@@ -941,10 +941,11 @@ async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd
 # RUSTSEC-2026-0194 and RUSTSEC-2026-0195. This upstream commit keeps the same
 # citationberg API and raises quick-xml to the patched 0.41 series.
 citationberg = { git = "https://github.com/typst/citationberg", rev = "8966cf7c178b38b621d297c9eb6d0bb81e14be5e" }
-# Vendored from https://github.com/zed-industries/notify @ ce58c24cad542c28e04ced02e20325a4ec28a31d
+reqwest = { path = "vendor/reqwest" }
+# Vendored from https://github.com/notify-rs/notify @ a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf
 notify = { path = "vendor/notify/notify" }
 notify-types = { path = "vendor/notify/notify-types" }
-# Vendored from https://github.com/zed-industries/windows-capture @ f0d6c1b6691db75461b732f6d5ff56eed002eeb9
+# Vendored from https://github.com/NiiightmareXD/windows-capture @ c7d106448eb9d9b251345c39047711e1cd408ae2
 windows-capture = { path = "vendor/windows-capture" }
 
 [profile.dev]

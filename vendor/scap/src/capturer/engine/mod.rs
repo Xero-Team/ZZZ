@@ -3,6 +3,8 @@ use std::sync::mpsc;
 use anyhow::Result;
 
 use super::Options;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use crate::targets;
 use crate::{Target, frame::Frame};
 
 #[cfg(target_os = "macos")]
@@ -16,13 +18,13 @@ mod linux;
 
 #[cfg(target_os = "macos")]
 pub type ChannelItem = (
-    screencapturekit::cm_sample_buffer::CMSampleBuffer,
-    screencapturekit::sc_output_handler::SCStreamOutputType,
+    cidre::arc::R<cidre::cm::SampleBuf>,
+    cidre::sc::stream::OutputType,
 );
 #[cfg(not(target_os = "macos"))]
 pub type ChannelItem = Frame;
 
-pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
+pub fn get_output_frame_size(options: &Options) -> Result<[u32; 2]> {
     #[cfg(target_os = "macos")]
     {
         mac::get_output_frame_size(options)
@@ -35,16 +37,21 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
-        // TODO: How to calculate this on Linux?
-        return [0, 0];
+        let _options = options;
+        Ok([0, 0])
     }
 }
 
 pub struct Engine {
     options: Options,
     target: Option<Target>,
+
     #[cfg(target_os = "macos")]
-    mac: screencapturekit::sc_stream::SCStream,
+    mac: (
+        cidre::arc::R<mac::Capturer>,
+        cidre::arc::R<mac::ErrorHandler>,
+        cidre::arc::R<cidre::sc::Stream>,
+    ),
     #[cfg(target_os = "macos")]
     error_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
 
@@ -60,7 +67,11 @@ impl Engine {
         #[cfg(target_os = "macos")]
         {
             let error_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let (mac, target) = mac::create_capturer(options, tx, error_flag.clone());
+            let target = match options.target.clone() {
+                Some(target) => target,
+                None => Target::Display(targets::get_main_display()?),
+            };
+            let mac = mac::create_capturer(options, tx, error_flag.clone())?;
 
             Ok(Engine {
                 mac,
@@ -72,7 +83,11 @@ impl Engine {
 
         #[cfg(target_os = "windows")]
         {
-            let (win, target) = win::create_capturer(&options, tx);
+            let target = match options.target.clone() {
+                Some(target) => target,
+                None => Target::Display(targets::get_main_display()?),
+            };
+            let win = win::create_capturer(options, tx)?;
             Ok(Engine {
                 win,
                 options: (*options).clone(),
@@ -82,8 +97,7 @@ impl Engine {
 
         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
         {
-            use linux::LinuxCapturerImpl;
-            let linux = linux::create_capturer(&options, tx)?;
+            let linux = linux::create_capturer(options, tx)?;
             let target = linux.imp.target().cloned();
             Ok(Engine {
                 linux,
@@ -96,8 +110,9 @@ impl Engine {
     pub fn start(&mut self) {
         #[cfg(target_os = "macos")]
         {
-            // self.mac.add_output(Capturer::new(tx));
-            self.mac.start_capture().expect("Failed to start capture");
+            use futures::executor::block_on;
+
+            block_on(self.mac.2.start()).expect("Failed to start capture");
         }
 
         #[cfg(target_os = "windows")]
@@ -114,7 +129,9 @@ impl Engine {
     pub fn stop(&mut self) {
         #[cfg(target_os = "macos")]
         {
-            self.mac.stop_capture().expect("Failed to stop capture");
+            use futures::executor::block_on;
+
+            block_on(self.mac.2.stop()).expect("Failed to stop capture");
         }
 
         #[cfg(target_os = "windows")]
@@ -128,7 +145,7 @@ impl Engine {
         }
     }
 
-    pub fn get_output_frame_size(&mut self) -> [u32; 2] {
+    pub fn get_output_frame_size(&mut self) -> Result<[u32; 2]> {
         get_output_frame_size(&self.options)
     }
 
@@ -138,8 +155,9 @@ impl Engine {
             mac::process_sample_buffer(data.0, data.1, self.options.output_type)
         }
         #[cfg(not(target_os = "macos"))]
-        Some(data)
+        return Some(data);
     }
+
     pub fn target(&self) -> Option<&Target> {
         self.target.as_ref()
     }

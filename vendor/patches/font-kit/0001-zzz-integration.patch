@@ -1,0 +1,425 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 1fe5cb4e7d589b7e978c2f27e81caa1cb643b687..d00b1a458d95468fa06564918b4b672a7ff9b15e 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -52,9 +52,9 @@ version = "0.3"
+ features = ["dwrite", "minwindef", "sysinfoapi", "winbase", "winnt"]
+ 
+ [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+-core-foundation = "0.9"
+-core-graphics = "0.23"
+-core-text = "20.1.0"
++core-foundation = "0.10"
++core-graphics = "0.25"
++core-text = "22"
+ 
+ [target.'cfg(not(any(target_family = "windows", target_os = "macos", target_os = "ios")))'.dependencies]
+ freetype-sys = "0.20"
+diff --git a/src/handle.rs b/src/handle.rs
+index d6f8bbc70e2d3b9771a9d333d8640af59c3c0e1b..e280f5abbc0db8ab023cb4e1cb67cbaccd14cac0 100644
+--- a/src/handle.rs
++++ b/src/handle.rs
+@@ -14,11 +14,13 @@
+ //!
+ //! To open the font referenced by a handle, use a loader.
+ 
++use std::any::Any;
+ use std::path::PathBuf;
+ use std::sync::Arc;
+ 
+ use crate::error::FontLoadingError;
+ use crate::font::Font;
++use crate::loader::Loader;
+ 
+ /// Encapsulates the information needed to locate and open a font.
+ ///
+@@ -45,6 +47,11 @@ pub enum Handle {
+         /// If the memory consists of a single font, this value will be 0.
+         font_index: u32,
+     },
++    /// An already-loaded font.
++    Native {
++        /// Type-erased font storage. Use [`Self::from_native`] to retrieve the font object.
++        inner: Arc<dyn Any + Sync + Send>,
++    },
+ }
+ 
+ impl Handle {
+@@ -66,6 +73,25 @@ impl Handle {
+         Handle::Memory { bytes, font_index }
+     }
+ 
++    /// Creates a new handle from a system handle.
++    pub fn from_native<T: Loader>(inner: &T) -> Self
++    where
++        T::NativeFont: Sync + Send,
++    {
++        Self::Native {
++            inner: Arc::new(inner.native_font()),
++        }
++    }
++    /// Retrieves a handle to the font object.
++    ///
++    /// May return None if inner object is not of type `T` or if this handle does not contain a native font object.
++    pub fn native_as<T: 'static>(&self) -> Option<&T> {
++        if let Self::Native { inner } = self {
++            inner.downcast_ref()
++        } else {
++            None
++        }
++    }
+     /// A convenience method to load this handle with the default loader, producing a Font.
+     #[inline]
+     pub fn load(&self) -> Result<Font, FontLoadingError> {
+diff --git a/src/lib.rs b/src/lib.rs
+index d1d4945a3be4f4f96ea2c119ae481afa5f389f71..ad2c4fee328226e9500474f3b349404da2e07d17 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -144,5 +144,5 @@ pub mod source;
+ #[cfg(feature = "source")]
+ pub mod sources;
+ 
+-mod matching;
++pub mod matching;
+ mod utils;
+diff --git a/src/loader.rs b/src/loader.rs
+index fc94617fae3e8d91d48fb8ddf899cffad87666c1..b651fffe866ba796982d8a8cb7d3d93ffd412bb6 100644
+--- a/src/loader.rs
++++ b/src/loader.rs
+@@ -35,7 +35,7 @@ use std::path::Path;
+ /// fonts.
+ pub trait Loader: Clone + Sized {
+     /// The handle that the API natively uses to represent a font.
+-    type NativeFont;
++    type NativeFont: 'static;
+ 
+     /// Loads a font from raw font data (the contents of a `.ttf`/`.otf`/etc. file).
+     ///
+@@ -63,22 +63,23 @@ pub trait Loader: Clone + Sized {
+     }
+ 
+     /// Creates a font from a native API handle.
+-    unsafe fn from_native_font(native_font: Self::NativeFont) -> Self;
++    unsafe fn from_native_font(native_font: &Self::NativeFont) -> Self;
+ 
+     /// Loads the font pointed to by a handle.
+     fn from_handle(handle: &Handle) -> Result<Self, FontLoadingError> {
+-        match *handle {
+-            Handle::Memory {
+-                ref bytes,
+-                font_index,
+-            } => Self::from_bytes((*bytes).clone(), font_index),
++        match handle {
++            Handle::Memory { bytes, font_index } => Self::from_bytes((*bytes).clone(), *font_index),
+             #[cfg(not(target_arch = "wasm32"))]
+-            Handle::Path {
+-                ref path,
+-                font_index,
+-            } => Self::from_path(path, font_index),
++            Handle::Path { path, font_index } => Self::from_path(path, *font_index),
+             #[cfg(target_arch = "wasm32")]
+             Handle::Path { .. } => Err(FontLoadingError::NoFilesystem),
++            Handle::Native { .. } => {
++                if let Some(native) = handle.native_as::<Self::NativeFont>() {
++                    unsafe { Ok(Self::from_native_font(native)) }
++                } else {
++                    Err(FontLoadingError::UnknownFormat)
++                }
++            }
+         }
+     }
+ 
+diff --git a/src/loaders/core_text.rs b/src/loaders/core_text.rs
+index f0315a54cafd50b274a32765a4fd56d52585f576..44d39bc960abfb3eaa1cf2d1658aad552e9fe713 100644
+--- a/src/loaders/core_text.rs
++++ b/src/loaders/core_text.rs
+@@ -11,12 +11,12 @@
+ //! A loader that uses Apple's Core Text API to load and rasterize fonts.
+ 
+ use byteorder::{BigEndian, ReadBytesExt};
+-use core_graphics::base::{kCGImageAlphaPremultipliedLast, CGFloat};
++use core_graphics::base::{CGFloat, kCGImageAlphaPremultipliedLast};
+ use core_graphics::color_space::CGColorSpace;
+ use core_graphics::context::{CGContext, CGTextDrawingMode};
+ use core_graphics::font::{CGFont, CGGlyph};
+-use core_graphics::geometry::{CGAffineTransform, CGPoint, CGRect, CGSize};
+ use core_graphics::geometry::{CG_AFFINE_TRANSFORM_IDENTITY, CG_ZERO_POINT, CG_ZERO_SIZE};
++use core_graphics::geometry::{CGAffineTransform, CGPoint, CGRect, CGSize};
+ use core_graphics::path::CGPathElementType;
+ use core_text;
+ use core_text::font::CTFont;
+@@ -122,29 +122,14 @@ impl Font {
+     }
+ 
+     /// Creates a font from a native API handle.
+-    pub unsafe fn from_native_font(core_text_font: NativeFont) -> Font {
+-        Font::from_core_text_font(core_text_font)
+-    }
+-
+-    unsafe fn from_core_text_font(core_text_font: NativeFont) -> Font {
+-        let mut font_data = FontData::Unavailable;
+-        match core_text_font.url() {
+-            None => warn!("No URL found for Core Text font!"),
+-            Some(url) => match url.to_path() {
+-                Some(path) => match File::open(path) {
+-                    Ok(ref mut file) => match utils::slurp_file(file) {
+-                        Ok(data) => font_data = FontData::Memory(Arc::new(data)),
+-                        Err(_) => warn!("Couldn't read file data for Core Text font!"),
+-                    },
+-                    Err(_) => warn!("Could not open file for Core Text font!"),
+-                },
+-                None => warn!("Could not convert URL from Core Text font to path!"),
+-            },
+-        }
+-
++    pub unsafe fn from_native_font(core_text_font: &NativeFont) -> Font {
++        Font::from_core_text_font_no_path(core_text_font.clone())
++    }
++    /// Creates a font from a native API handle, without performing a lookup on the disk.
++    pub unsafe fn from_core_text_font_no_path(core_text_font: NativeFont) -> Font {
+         Font {
+             core_text_font,
+-            font_data,
++            font_data: FontData::Unavailable,
+         }
+     }
+ 
+@@ -153,7 +138,10 @@ impl Font {
+     /// This function is only available on the Core Text backend.
+     pub fn from_core_graphics_font(core_graphics_font: CGFont) -> Font {
+         unsafe {
+-            Font::from_core_text_font(core_text::font::new_from_CGFont(&core_graphics_font, 16.0))
++            Font::from_core_text_font_no_path(core_text::font::new_from_CGFont(
++                &core_graphics_font,
++                16.0,
++            ))
+         }
+     }
+ 
+@@ -276,11 +264,7 @@ impl Font {
+                 .get_glyphs_for_characters(src.as_ptr(), dest.as_mut_ptr(), 2);
+ 
+             let id = dest[0] as u32;
+-            if id != 0 {
+-                Some(id)
+-            } else {
+-                None
+-            }
++            if id != 0 { Some(id) } else { None }
+         }
+     }
+ 
+@@ -628,7 +612,7 @@ impl Loader for Font {
+     }
+ 
+     #[inline]
+-    unsafe fn from_native_font(native_font: Self::NativeFont) -> Self {
++    unsafe fn from_native_font(native_font: &Self::NativeFont) -> Self {
+         Font::from_native_font(native_font)
+     }
+ 
+@@ -836,9 +820,11 @@ fn unpack_otc_font(data: &mut [u8], font_index: u32) -> Result<(), FontLoadingEr
+ 
+     let offset_table_pos =
+         get_slice_from_start(&data, offset_table_pos_pos)?.read_u32::<BigEndian>()? as usize;
+-    debug_assert!(utils::SFNT_VERSIONS
+-        .iter()
+-        .any(|version| { data[offset_table_pos..(offset_table_pos + 4)] == *version }));
++    debug_assert!(
++        utils::SFNT_VERSIONS
++            .iter()
++            .any(|version| { data[offset_table_pos..(offset_table_pos + 4)] == *version })
++    );
+     let num_tables = get_slice_from_start(&data, offset_table_pos + 4)?.read_u16::<BigEndian>()?;
+ 
+     // Must copy forward in order to avoid problems with overlapping memory.
+diff --git a/src/loaders/directwrite.rs b/src/loaders/directwrite.rs
+index 4f77fd9309996a21f6751a319ecdb31f5947f502..e58c2974f3e34495a2b09f0819b1eb786e3cb52e 100644
+--- a/src/loaders/directwrite.rs
++++ b/src/loaders/directwrite.rs
+@@ -23,9 +23,9 @@ use dwrote::GlyphOffset as DWriteGlyphOffset;
+ use dwrote::GlyphRunAnalysis as DWriteGlyphRunAnalysis;
+ use dwrote::InformationalStringId as DWriteInformationalStringId;
+ use dwrote::OutlineBuilder as DWriteOutlineBuilder;
+-use dwrote::{DWRITE_TEXTURE_ALIASED_1x1, DWRITE_TEXTURE_CLEARTYPE_3x1};
+ use dwrote::{DWRITE_GLYPH_RUN, DWRITE_MEASURING_MODE_NATURAL};
+ use dwrote::{DWRITE_RENDERING_MODE_ALIASED, DWRITE_RENDERING_MODE_NATURAL};
++use dwrote::{DWRITE_TEXTURE_ALIASED_1x1, DWRITE_TEXTURE_CLEARTYPE_3x1};
+ use pathfinder_geometry::line_segment::LineSegment2F;
+ use pathfinder_geometry::rect::{RectF, RectI};
+ use pathfinder_geometry::transform2d::Transform2F;
+@@ -61,6 +61,7 @@ const OPENTYPE_TABLE_TAG_HEAD: u32 = 0x68656164;
+ 
+ /// DirectWrite's representation of a font.
+ #[allow(missing_debug_implementations)]
++#[derive(Clone)]
+ pub struct NativeFont {
+     /// The native DirectWrite font object.
+     pub dwrite_font: DWriteFont,
+@@ -162,7 +163,8 @@ impl Font {
+ 
+     /// Creates a font from a native API handle.
+     #[inline]
+-    pub unsafe fn from_native_font(native_font: NativeFont) -> Font {
++    pub unsafe fn from_native_font(native_font: &NativeFont) -> Font {
++        let native_font = native_font.clone();
+         Font {
+             dwrite_font: native_font.dwrite_font,
+             dwrite_font_face: native_font.dwrite_font_face,
+@@ -263,11 +265,7 @@ impl Font {
+             .and_then(|g| {
+                 // 0 means the char is not present in the font per
+                 // https://docs.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwritefontface-getglyphindices
+-                if g != 0 {
+-                    Some(g as u32)
+-                } else {
+-                    None
+-                }
++                if g != 0 { Some(g as u32) } else { None }
+             })
+     }
+ 
+@@ -749,7 +747,7 @@ impl Loader for Font {
+     }
+ 
+     #[inline]
+-    unsafe fn from_native_font(native_font: Self::NativeFont) -> Self {
++    unsafe fn from_native_font(native_font: &Self::NativeFont) -> Self {
+         Font::from_native_font(native_font)
+     }
+ 
+diff --git a/src/loaders/freetype.rs b/src/loaders/freetype.rs
+index a2ca581933310bd3a54b9fa2f54a839ee16b2c91..c4205450e80e597ee603449a39357683b32b4574 100644
+--- a/src/loaders/freetype.rs
++++ b/src/loaders/freetype.rs
+@@ -15,15 +15,15 @@
+ 
+ use byteorder::{BigEndian, ReadBytesExt};
+ use freetype_sys::{
+-    ft_sfnt_os2, FT_Byte, FT_Done_Face, FT_Done_FreeType, FT_Error, FT_Face, FT_Fixed,
++    FT_Byte, FT_Done_Face, FT_Done_FreeType, FT_Error, FT_FACE_FLAG_FIXED_WIDTH, FT_Face, FT_Fixed,
+     FT_Get_Char_Index, FT_Get_Name_Index, FT_Get_Postscript_Name, FT_Get_Sfnt_Name,
+-    FT_Get_Sfnt_Name_Count, FT_Get_Sfnt_Table, FT_Init_FreeType, FT_Library,
+-    FT_Library_SetLcdFilter, FT_Load_Glyph, FT_Long, FT_Matrix, FT_New_Memory_Face, FT_Pos,
+-    FT_Reference_Face, FT_Set_Char_Size, FT_Set_Transform, FT_UInt, FT_ULong, FT_Vector,
+-    FT_FACE_FLAG_FIXED_WIDTH, FT_LCD_FILTER_DEFAULT, FT_LOAD_DEFAULT, FT_LOAD_MONOCHROME,
+-    FT_LOAD_NO_HINTING, FT_LOAD_RENDER, FT_LOAD_TARGET_LCD, FT_LOAD_TARGET_LIGHT,
+-    FT_LOAD_TARGET_MONO, FT_LOAD_TARGET_NORMAL, FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD,
+-    FT_PIXEL_MODE_LCD_V, FT_PIXEL_MODE_MONO, FT_STYLE_FLAG_ITALIC, TT_OS2,
++    FT_Get_Sfnt_Name_Count, FT_Get_Sfnt_Table, FT_Init_FreeType, FT_LCD_FILTER_DEFAULT,
++    FT_LOAD_DEFAULT, FT_LOAD_MONOCHROME, FT_LOAD_NO_HINTING, FT_LOAD_RENDER, FT_LOAD_TARGET_LCD,
++    FT_LOAD_TARGET_LIGHT, FT_LOAD_TARGET_MONO, FT_LOAD_TARGET_NORMAL, FT_Library,
++    FT_Library_SetLcdFilter, FT_Load_Glyph, FT_Long, FT_Matrix, FT_New_Memory_Face,
++    FT_PIXEL_MODE_GRAY, FT_PIXEL_MODE_LCD, FT_PIXEL_MODE_LCD_V, FT_PIXEL_MODE_MONO, FT_Pos,
++    FT_Reference_Face, FT_STYLE_FLAG_ITALIC, FT_Set_Char_Size, FT_Set_Transform, FT_UInt, FT_ULong,
++    FT_Vector, TT_OS2, ft_sfnt_os2,
+ };
+ use log::warn;
+ use pathfinder_geometry::line_segment::LineSegment2F;
+@@ -180,9 +180,10 @@ impl Font {
+     }
+ 
+     /// Creates a font from a native API handle.
+-    pub unsafe fn from_native_font(freetype_face: NativeFont) -> Font {
++    pub unsafe fn from_native_font(freetype_face: &NativeFont) -> Font {
+         // We make an in-memory copy of the underlying font data. This is because the native font
+         // does not necessarily hold a strong reference to the memory backing it.
++        let freetype_face = *freetype_face;
+         const CHUNK_SIZE: usize = 4096;
+         let mut font_data = vec![];
+         loop {
+@@ -1032,7 +1033,7 @@ impl Loader for Font {
+     }
+ 
+     #[inline]
+-    unsafe fn from_native_font(native_font: Self::NativeFont) -> Self {
++    unsafe fn from_native_font(native_font: &Self::NativeFont) -> Self {
+         Font::from_native_font(native_font)
+     }
+ 
+diff --git a/src/sources/core_text.rs b/src/sources/core_text.rs
+index 2c4a0ed159ae2cecadaff4279f469686cd0c5ad6..ec60a39601b29f929cd7de292253531de8030093 100644
+--- a/src/sources/core_text.rs
++++ b/src/sources/core_text.rs
+@@ -14,6 +14,7 @@ use core_foundation::array::CFArray;
+ use core_foundation::base::{CFType, TCFType};
+ use core_foundation::dictionary::CFDictionary;
+ use core_foundation::string::CFString;
++use core_text::font::new_from_descriptor;
+ use core_text::font_collection::{self, CTFontCollection};
+ use core_text::font_descriptor::{self, CTFontDescriptor};
+ use core_text::font_manager;
+@@ -153,68 +154,17 @@ fn css_stretchiness_to_core_text_width(css_stretchiness: Stretch) -> f32 {
+     0.1 * core_text_loader::piecewise_linear_find_index(css_stretchiness, &Stretch::MAPPING) - 0.4
+ }
+ 
+-#[derive(Clone)]
+-struct FontDataInfo {
+-    data: Arc<Vec<u8>>,
+-    file_type: FileType,
+-}
+-
+ fn create_handles_from_core_text_collection(
+     collection: CTFontCollection,
+ ) -> Result<Vec<Handle>, SelectionError> {
+     let mut fonts = vec![];
+     if let Some(descriptors) = collection.get_descriptors() {
+-        let mut font_data_info_cache: HashMap<PathBuf, FontDataInfo> = HashMap::new();
+-
+-        'outer: for index in 0..descriptors.len() {
++        for index in 0..descriptors.len() {
+             let descriptor = descriptors.get(index).unwrap();
+-            let font_path = descriptor.font_path().unwrap();
+-
+-            let data_info = if let Some(data_info) = font_data_info_cache.get(&font_path) {
+-                data_info.clone()
+-            } else {
+-                let mut file = if let Ok(file) = File::open(&font_path) {
+-                    file
+-                } else {
+-                    continue;
+-                };
+-                let data = if let Ok(data) = utils::slurp_file(&mut file) {
+-                    Arc::new(data)
+-                } else {
+-                    continue;
+-                };
+-
+-                let file_type = match Font::analyze_bytes(Arc::clone(&data)) {
+-                    Ok(file_type) => file_type,
+-                    Err(_) => continue,
+-                };
+-
+-                let data_info = FontDataInfo { data, file_type };
+-
+-                font_data_info_cache.insert(font_path.clone(), data_info.clone());
+-
+-                data_info
+-            };
+-
+-            match data_info.file_type {
+-                FileType::Collection(font_count) => {
+-                    let postscript_name = descriptor.font_name();
+-                    for font_index in 0..font_count {
+-                        if let Ok(font) = Font::from_bytes(Arc::clone(&data_info.data), font_index)
+-                        {
+-                            if let Some(font_postscript_name) = font.postscript_name() {
+-                                if postscript_name == font_postscript_name {
+-                                    fonts.push(Handle::from_memory(data_info.data, font_index));
+-                                    continue 'outer;
+-                                }
+-                            }
+-                        }
+-                    }
+-                }
+-                FileType::Single => {
+-                    fonts.push(Handle::from_memory(data_info.data, 0));
+-                }
+-            }
++            let native = new_from_descriptor(&descriptor, 16.);
++            let font = unsafe { Font::from_core_text_font_no_path(native.clone()) };
++
++            fonts.push(Handle::from_native(&font));
+         }
+     }
+     if fonts.is_empty() {

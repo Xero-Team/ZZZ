@@ -231,7 +231,7 @@ pub fn serialize_diagnostics<'a>(
             group_id: entry.diagnostic.group_id as u64,
             is_primary: entry.diagnostic.is_primary,
             underline: entry.diagnostic.underline,
-            code: entry.diagnostic.code.as_ref().map(|s| s.to_string()),
+            code: entry.diagnostic.code.as_ref().map(ToString::to_string),
             code_description: entry
                 .diagnostic
                 .code_description
@@ -458,7 +458,7 @@ pub fn deserialize_diagnostics(
                     message: diagnostic.message,
                     markdown: diagnostic.markdown,
                     group_id: diagnostic.group_id as usize,
-                    code: diagnostic.code.map(lsp::NumberOrString::from_string),
+                    code: diagnostic.code.map(lsp::NumberOrString::from),
                     code_description: diagnostic
                         .code_description
                         .and_then(|s| lsp::Uri::from_str(&s).ok()),

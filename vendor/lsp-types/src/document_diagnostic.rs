@@ -81,11 +81,9 @@ pub struct DocumentDiagnosticParams {
     pub text_document: TextDocumentIdentifier,
 
     /// The additional identifier provided during registration.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
 
     /// The result ID of a previous response if provided.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_result_id: Option<String>,
 
     #[serde(flatten)]
@@ -159,7 +157,6 @@ pub struct RelatedFullDocumentDiagnosticReport {
     /// macro definitions in a file `a.cpp` result in errors in a header file `b.hpp`.
     ///
     /// @since 3.17.0
-    #[serde(with = "crate::url_map")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub related_documents: Option<HashMap<Uri, DocumentDiagnosticReportKind>>,
@@ -181,7 +178,6 @@ pub struct RelatedUnchangedDocumentDiagnosticReport {
     /// macro definitions in a file `a.cpp` result in errors in a header file `b.hpp`.
     ///
     /// @since 3.17.0
-    #[serde(with = "crate::url_map")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub related_documents: Option<HashMap<Uri, DocumentDiagnosticReportKind>>,
@@ -224,7 +220,6 @@ impl From<RelatedUnchangedDocumentDiagnosticReport> for DocumentDiagnosticReport
 #[derive(Debug, PartialEq, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentDiagnosticReportPartialResult {
-    #[serde(with = "crate::url_map")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub related_documents: Option<HashMap<Uri, DocumentDiagnosticReportKind>>,

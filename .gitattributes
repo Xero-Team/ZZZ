@@ -6,3 +6,6 @@
 
 # Ensure the WSL script always has LF line endings, even on Windows
 crates/zzz/resources/windows/zzz.sh text eol=lf
+
+# Patch payload whitespace is source data and must survive vendor reconstruction unchanged.
+vendor/patches/**/*.patch -whitespace

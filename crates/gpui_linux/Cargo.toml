@@ -130,9 +130,9 @@ x11rb = { version = "0.14.0", features = [
     "sync",
     "dri3",
 ], optional = true }
-# Vendored from https://github.com/zed-industries/xim-rs @ 16f35a2c881b815a2b6cdfd6687988e84f8447d8
+# Vendored from https://github.com/Riey/xim-rs @ c4b897800137f022fbf617cd1e81756c6f3bc955
 xim = { path = "../../vendor/xim-rs", features = [
     "x11rb-xcb",
     "x11rb-client",
-], package = "zed-xim", optional = true }
+], optional = true }
 x11-clipboard = { version = "0.9.3", optional = true }

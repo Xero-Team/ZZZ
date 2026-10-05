@@ -1,6 +1,4 @@
-use gh_workflow::{
-    Event, Expression, Input, Job, Level, Permissions, Push, Strategy, UsesJob, Workflow,
-};
+use gh_workflow::{Event, Expression, Input, Job, Level, Permissions, Push, Strategy, Workflow};
 use indoc::indoc;
 use serde_json::json;
 
@@ -74,7 +72,7 @@ fn detect_changed_extensions() -> NamedJob {
     named::job(job)
 }
 
-fn bump_extension_versions(detect_job: &NamedJob) -> NamedJob<UsesJob> {
+fn bump_extension_versions(detect_job: &NamedJob) -> NamedJob {
     let job = Job::default()
         .needs(vec![detect_job.name.clone()])
         .cond(Expression::new(format!(
@@ -101,7 +99,7 @@ fn bump_extension_versions(detect_job: &NamedJob) -> NamedJob<UsesJob> {
                     )
                 })),
         )
-        .uses_local(".github/workflows/extension_bump.yml")
+        .uses("./.github/workflows/extension_bump.yml")
         .with(
             Input::default()
                 .add("working-directory", "${{ matrix.extension }}")

@@ -49,6 +49,10 @@ tempfile = "3.17.1"
 fastrand = "2.1.1"
 criterion = "0.5.1"
 
+[profile.bench]
+lto = true
+debug = true
+
 [[bench]]
 name = "rpc_tokio"
 harness = false

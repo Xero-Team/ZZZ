@@ -1,0 +1,558 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index d3f37ffdae6785a6272e71fbbe7f95c7cbaabe9d..7b1d6626f21847b0a3183859c3b4b7f07d6b2a35 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -2,8 +2,8 @@
+ name = "async-pipe"
+ version = "0.1.3"
+ description = "Creates an asynchronous piped reader and writer pair using tokio.rs"
+-homepage = "https://github.com/rousan/async-pipe-rs"
+-repository = "https://github.com/rousan/async-pipe-rs"
++homepage = "https://github.com/routerify/async-pipe-rs"
++repository = "https://github.com/routerify/async-pipe-rs"
+ keywords = ["pipe", "future", "async", "reader", "writer"]
+ categories = ["asynchronous"]
+ authors = ["Rousan Ali <rousanali786@gmail.com>"]
+@@ -11,9 +11,15 @@ readme = "README.md"
+ license = "MIT"
+ edition = "2018"
+ 
++[features]
++default = ["futures"]
++
+ [dependencies]
+-tokio = { version = "0.2", features= [] }
+-log = "0.4"
++tokio = { version = "1", features= [], optional = true }
++futures = { version = "0.3", optional = true }
+ 
+ [dev-dependencies]
+-tokio = { version = "0.2", features = ["full"] }
++tokio = { version = "1", features = ["full"] }
++
++[package.metadata.docs.rs]
++features = ["futures", "tokio"]
+diff --git a/README.md b/README.md
+index 5721578dcd2c281939975ec5aa43ca7634c5a1a0..ecfaebda8606fb9c006f57dffc87784fe53c59e1 100644
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,8 @@
+ [![Documentation](https://docs.rs/async-pipe/badge.svg)](https://docs.rs/async-pipe)
+ [![MIT](https://img.shields.io/crates/l/async-pipe.svg)](./LICENSE)
+ 
+-Creates an asynchronous piped reader and writer pair using `tokio.rs`.
++Creates an asynchronous piped reader and writer pair using `tokio.rs` or
++`futures`
+ 
+ [Docs](https://docs.rs/async-pipe)
+ 
+@@ -38,4 +39,4 @@ async fn main() {
+ 
+ ## Contributing
+ 
+-Your PRs and stars are always welcome.
+\ No newline at end of file
++Your PRs and stars are always welcome.
+diff --git a/src/lib.rs b/src/lib.rs
+index d14eeafd82330a8b5fea38026fe1f7bb38404c4c..2cb53c776e2e0ba889e1ca58ca70b2fe3922b558 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,11 +1,11 @@
+-//! Creates an asynchronous piped reader and writer pair using `tokio.rs`.
++//! Creates an asynchronous piped reader and writer pair using `tokio.rs` and `futures`.
+ //!
+ //! # Examples
+ //!
+ //! ```
+ //! # async fn run() {
+ //! use async_pipe;
+-//! use tokio::prelude::*;
++//! use tokio::io::{AsyncWriteExt, AsyncReadExt};
+ //!
+ //! let (mut w, mut r) = async_pipe::pipe();
+ //!  
+@@ -21,6 +21,11 @@
+ //!
+ //! tokio::runtime::Runtime::new().unwrap().block_on(run());
+ //! ```
++//!
++//! # Featues
++//!
++//! * `futures` (default) Implement `AsyncWrite` and `AsyncRead` from `futures::io`
++//! * `tokio` Implement `AsyncWrite` and `AsyncRead` from `tokio::io`.
+ 
+ use state::State;
+ use std::sync::{Arc, Mutex};
+@@ -32,25 +37,89 @@ mod reader;
+ mod state;
+ mod writer;
+ 
+-/// Creates a piped pair of an [`AsyncWrite`](https://docs.rs/tokio/0.2.16/tokio/io/trait.AsyncWrite.html) and an [`AsyncRead`](https://docs.rs/tokio/0.2.15/tokio/io/trait.AsyncRead.html).
++/// Creates a piped pair of an [`AsyncWrite`](https://docs.rs/tokio/1.9.0/tokio/io/trait.AsyncWrite.html) and an [`AsyncRead`](https://docs.rs/tokio/1.9.0/tokio/io/trait.AsyncRead.html).
+ pub fn pipe() -> (PipeWriter, PipeReader) {
+     let shared_state = Arc::new(Mutex::new(State {
+         reader_waker: None,
+         writer_waker: None,
+-        data: None,
+-        done_reading: false,
+-        read: 0,
+-        done_cycle: true,
+         closed: false,
++        buffer: Vec::new(),
+     }));
+ 
+     let w = PipeWriter {
+-        state: Arc::clone(&shared_state),
++        state: shared_state.clone(),
+     };
+ 
+     let r = PipeReader {
+-        state: Arc::clone(&shared_state),
++        state: shared_state,
+     };
+ 
+     (w, r)
+ }
++
++#[cfg(test)]
++mod test {
++    #[cfg(feature = "tokio")]
++    mod test_tokio {
++        use crate::*;
++        use std::io;
++        use tokio::io::{AsyncReadExt, AsyncWriteExt};
++
++        #[tokio::test]
++        async fn read_write() {
++            let (mut writer, mut reader) = pipe();
++            let data = b"hello world";
++
++            let write_handle = tokio::spawn(async move {
++                writer.write_all(data).await.unwrap();
++            });
++
++            let mut read_buf = Vec::new();
++            reader.read_to_end(&mut read_buf).await.unwrap();
++            write_handle.await.unwrap();
++
++            assert_eq!(&read_buf, data);
++        }
++
++        #[tokio::test]
++        async fn eof_when_writer_is_shutdown() {
++            let (mut writer, mut reader) = pipe();
++            writer.shutdown().await.unwrap();
++            let mut buf = [0u8; 8];
++            let bytes_read = reader.read(&mut buf).await.unwrap();
++            assert_eq!(bytes_read, 0);
++        }
++
++        #[tokio::test]
++        async fn broken_pipe_when_reader_is_dropped() {
++            let (mut writer, reader) = pipe();
++            drop(reader);
++            let io_error = writer.write_all(&[0u8; 8]).await.unwrap_err();
++            assert_eq!(io_error.kind(), io::ErrorKind::BrokenPipe);
++        }
++
++        #[tokio::test]
++        async fn eof_when_writer_is_dropped() {
++            let (writer, mut reader) = pipe();
++            drop(writer);
++            let mut buf = [0u8; 8];
++            let bytes_read = reader.read(&mut buf).await.unwrap();
++            assert_eq!(bytes_read, 0);
++        }
++
++        #[tokio::test]
++        async fn drop_read_exact() {
++            let (mut writer, mut reader) = pipe();
++            const BUF_SIZE: usize = 8;
++
++            let write_handle = tokio::spawn(async move {
++                writer.write_all(&[0u8; BUF_SIZE]).await.unwrap();
++            });
++
++            let mut buf = [0u8; BUF_SIZE];
++            reader.read_exact(&mut buf).await.unwrap();
++            drop(reader);
++            write_handle.await.unwrap();
++        }
++    }
++}
+diff --git a/src/reader.rs b/src/reader.rs
+index fb2c292868dc941962a55af543fd9218bef7cc81..5dba4bca3213be450af39f81993b80727e113a24 100644
+--- a/src/reader.rs
++++ b/src/reader.rs
+@@ -1,11 +1,17 @@
+-use crate::state::{Data, State};
++use crate::state::State;
++use std::io;
+ use std::pin::Pin;
+-use std::ptr;
+ use std::sync::{Arc, Mutex};
+ use std::task::{Context, Poll};
+-use tokio::io::{self, AsyncRead};
+ 
+-/// The read half of the pipe which implements [`AsyncRead`](https://docs.rs/tokio/0.2.15/tokio/io/trait.AsyncRead.html).
++/// The read half of the pipe
++///
++/// Implements [`tokio::io::AsyncRead`][tokio-async-read] when feature `tokio` is enabled (the
++/// default). Implements [`futures::io::AsyncRead`][futures-async-read] when feature `futures` is
++/// enabled.
++///
++/// [futures-async-read]: https://docs.rs/futures/0.3.16/futures/io/trait.AsyncRead.html
++/// [tokio-async-read]: https://docs.rs/tokio/1.9.0/tokio/io/trait.AsyncRead.html
+ pub struct PipeReader {
+     pub(crate) state: Arc<Mutex<State>>,
+ }
+@@ -46,7 +52,7 @@ impl PipeReader {
+             }
+         };
+ 
+-        Ok(state.done_cycle)
++        Ok(state.buffer.is_empty())
+     }
+ 
+     fn wake_writer_half(&self, state: &State) {
+@@ -55,36 +61,13 @@ impl PipeReader {
+         }
+     }
+ 
+-    fn copy_data_into_buffer(&self, data: &Data, buf: &mut [u8]) -> usize {
+-        let len = data.len.min(buf.len());
+-        unsafe {
+-            ptr::copy_nonoverlapping(data.ptr, buf.as_mut_ptr(), len);
+-        }
+-        len
+-    }
+-}
+-
+-impl Drop for PipeReader {
+-    fn drop(&mut self) {
+-        if let Err(err) = self.close() {
+-            log::warn!(
+-                "{}: PipeReader: Failed to close the channel on drop: {}",
+-                env!("CARGO_PKG_NAME"),
+-                err
+-            );
+-        }
+-    }
+-}
+-
+-impl AsyncRead for PipeReader {
+     fn poll_read(
+         self: Pin<&mut Self>,
+         cx: &mut Context,
+         buf: &mut [u8],
+     ) -> Poll<io::Result<usize>> {
+-        let mut state;
+-        match self.state.lock() {
+-            Ok(s) => state = s,
++        let mut state = match self.state.lock() {
++            Ok(s) => s,
+             Err(err) => {
+                 return Poll::Ready(Err(io::Error::new(
+                     io::ErrorKind::Other,
+@@ -93,33 +76,57 @@ impl AsyncRead for PipeReader {
+                         env!("CARGO_PKG_NAME"),
+                         err
+                     ),
+-                )))
++                )));
+             }
+-        }
+-
+-        if state.closed {
+-            return Poll::Ready(Ok(0));
+-        }
+-
+-        return if state.done_cycle {
+-            state.reader_waker = Some(cx.waker().clone());
+-            Poll::Pending
+-        } else {
+-            if let Some(ref data) = state.data {
+-                let copied_bytes_len = self.copy_data_into_buffer(data, buf);
+-
+-                state.data = None;
+-                state.read = copied_bytes_len;
+-                state.done_reading = true;
+-                state.reader_waker = None;
+-
+-                self.wake_writer_half(&*state);
++        };
+ 
+-                Poll::Ready(Ok(copied_bytes_len))
++        if state.buffer.is_empty() {
++            if state.closed || Arc::strong_count(&self.state) == 1 {
++                Poll::Ready(Ok(0))
+             } else {
++                self.wake_writer_half(&*state);
+                 state.reader_waker = Some(cx.waker().clone());
+                 Poll::Pending
+             }
+-        };
++        } else {
++            self.wake_writer_half(&*state);
++            let size_to_read = state.buffer.len().min(buf.len());
++            let (to_read, rest) = state.buffer.split_at(size_to_read);
++            buf[..size_to_read].copy_from_slice(to_read);
++            state.buffer = rest.to_vec();
++
++            Poll::Ready(Ok(size_to_read))
++        }
++    }
++}
++
++#[cfg(feature = "tokio")]
++impl tokio::io::AsyncRead for PipeReader {
++    fn poll_read(
++        self: Pin<&mut Self>,
++        cx: &mut Context,
++        buf: &mut tokio::io::ReadBuf,
++    ) -> Poll<io::Result<()>> {
++        let dst = buf.initialize_unfilled();
++        self.poll_read(cx, dst).map_ok(|read| {
++            buf.advance(read);
++        })
++    }
++}
++
++#[cfg(feature = "futures")]
++impl futures::io::AsyncRead for PipeReader {
++    fn poll_read(
++        self: Pin<&mut Self>,
++        cx: &mut Context,
++        buf: &mut [u8],
++    ) -> Poll<io::Result<usize>> {
++        self.poll_read(cx, buf)
++    }
++}
++
++impl Drop for PipeReader {
++    fn drop(&mut self) {
++        self.close().ok();
+     }
+ }
+diff --git a/src/state.rs b/src/state.rs
+index 7982fdff63732580b0b44b3082c3537fcb8d0fa8..fc37fbd35cbe2556619743761b7950d5bfdec337 100644
+--- a/src/state.rs
++++ b/src/state.rs
+@@ -1,18 +1,10 @@
+ use std::task::Waker;
+ 
++pub const BUFFER_SIZE: usize = 1024;
++
+ pub(crate) struct State {
+     pub(crate) reader_waker: Option<Waker>,
+     pub(crate) writer_waker: Option<Waker>,
+-    pub(crate) data: Option<Data>,
+-    pub(crate) done_reading: bool,
+-    pub(crate) read: usize,
+-    pub(crate) done_cycle: bool,
+     pub(crate) closed: bool,
++    pub(crate) buffer: Vec<u8>,
+ }
+-
+-pub(crate) struct Data {
+-    pub(crate) ptr: *const u8,
+-    pub(crate) len: usize,
+-}
+-
+-unsafe impl Send for Data {}
+diff --git a/src/writer.rs b/src/writer.rs
+index 119fcca34a158105315d905eb235acc626f3f017..dd2ba1ae18dcc41dac2e3cf98330918ff60e10d5 100644
+--- a/src/writer.rs
++++ b/src/writer.rs
+@@ -1,11 +1,17 @@
+-use crate::state::Data;
+-use crate::state::State;
++use crate::state::{BUFFER_SIZE, State};
++use std::io;
+ use std::pin::Pin;
+ use std::sync::{Arc, Mutex};
+ use std::task::{Context, Poll};
+-use tokio::io::{self, AsyncWrite};
+ 
+-/// The write half of the pipe which implements [`AsyncWrite`](https://docs.rs/tokio/0.2.16/tokio/io/trait.AsyncWrite.html).
++/// The write half of the pipe
++///
++/// Implements [`tokio::io::AsyncWrite`][tokio-async-write] when feature `tokio` is enabled (the
++/// default). Implements [`futures::io::AsyncWrite`][futures-async-write] when feature `futures` is
++/// enabled.
++///
++/// [futures-async-write]: https://docs.rs/futures/0.3.16/futures/io/trait.AsyncWrite.html
++/// [tokio-async-write]: https://docs.rs/tokio/1.9.0/tokio/io/trait.AsyncWrite.html
+ pub struct PipeWriter {
+     pub(crate) state: Arc<Mutex<State>>,
+ }
+@@ -46,7 +52,7 @@ impl PipeWriter {
+             }
+         };
+ 
+-        Ok(state.done_cycle)
++        Ok(state.buffer.is_empty())
+     }
+ 
+     fn wake_reader_half(&self, state: &State) {
+@@ -54,25 +60,20 @@ impl PipeWriter {
+             waker.clone().wake();
+         }
+     }
+-}
+ 
+-impl Drop for PipeWriter {
+-    fn drop(&mut self) {
+-        if let Err(err) = self.close() {
+-            log::warn!(
+-                "{}: PipeWriter: Failed to close the channel on drop: {}",
+-                env!("CARGO_PKG_NAME"),
+-                err
+-            );
++    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
++        if Arc::strong_count(&self.state) == 1 {
++            return Poll::Ready(Err(io::Error::new(
++                io::ErrorKind::BrokenPipe,
++                format!(
++                    "{}: PipeWriter: The channel is closed",
++                    env!("CARGO_PKG_NAME")
++                ),
++            )));
+         }
+-    }
+-}
+ 
+-impl AsyncWrite for PipeWriter {
+-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
+-        let mut state;
+-        match self.state.lock() {
+-            Ok(s) => state = s,
++        let mut state = match self.state.lock() {
++            Ok(s) => s,
+             Err(err) => {
+                 return Poll::Ready(Err(io::Error::new(
+                     io::ErrorKind::Other,
+@@ -81,11 +82,25 @@ impl AsyncWrite for PipeWriter {
+                         env!("CARGO_PKG_NAME"),
+                         err
+                     ),
+-                )))
++                )));
+             }
++        };
++
++        self.wake_reader_half(&*state);
++
++        let remaining = BUFFER_SIZE - state.buffer.len();
++        if remaining == 0 {
++            state.writer_waker = Some(cx.waker().clone());
++            Poll::Pending
++        } else {
++            let bytes_to_write = remaining.min(buf.len());
++            state.buffer.extend_from_slice(&buf[..bytes_to_write]);
++            Poll::Ready(Ok(bytes_to_write))
+         }
++    }
+ 
+-        if state.closed {
++    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        if Arc::strong_count(&self.state) == 1 {
+             return Poll::Ready(Err(io::Error::new(
+                 io::ErrorKind::BrokenPipe,
+                 format!(
+@@ -95,37 +110,27 @@ impl AsyncWrite for PipeWriter {
+             )));
+         }
+ 
+-        return if state.done_cycle {
+-            state.data = Some(Data {
+-                ptr: buf.as_ptr(),
+-                len: buf.len(),
+-            });
+-            state.done_cycle = false;
+-            state.writer_waker = Some(cx.waker().clone());
+-
+-            self.wake_reader_half(&*state);
+-
+-            Poll::Pending
+-        } else {
+-            if state.done_reading {
+-                let read_bytes_len = state.read;
+-
+-                state.done_cycle = true;
+-                state.read = 0;
+-                state.writer_waker = None;
+-                state.data = None;
+-                state.done_reading = false;
+-
+-                Poll::Ready(Ok(read_bytes_len))
+-            } else {
+-                state.writer_waker = Some(cx.waker().clone());
+-                Poll::Pending
++        let mut state = match self.state.lock() {
++            Ok(s) => s,
++            Err(err) => {
++                return Poll::Ready(Err(io::Error::new(
++                    io::ErrorKind::Other,
++                    format!(
++                        "{}: PipeWriter: Failed to lock the channel state: {}",
++                        env!("CARGO_PKG_NAME"),
++                        err
++                    ),
++                )));
+             }
+         };
+-    }
+ 
+-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<io::Result<()>> {
+-        Poll::Ready(Ok(()))
++        if state.buffer.is_empty() {
++            Poll::Ready(Ok(()))
++        } else {
++            state.writer_waker = Some(cx.waker().clone());
++            self.wake_reader_half(&*state);
++            Poll::Pending
++        }
+     }
+ 
+     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<io::Result<()>> {
+@@ -142,3 +147,39 @@ impl AsyncWrite for PipeWriter {
+         }
+     }
+ }
++
++impl Drop for PipeWriter {
++    fn drop(&mut self) {
++        self.close().ok();
++    }
++}
++
++#[cfg(feature = "tokio")]
++impl tokio::io::AsyncWrite for PipeWriter {
++    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
++        self.poll_write(cx, buf)
++    }
++
++    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        self.poll_flush(cx)
++    }
++
++    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        self.poll_shutdown(cx)
++    }
++}
++
++#[cfg(feature = "futures")]
++impl futures::io::AsyncWrite for PipeWriter {
++    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
++        self.poll_write(cx, buf)
++    }
++
++    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        self.poll_flush(cx)
++    }
++
++    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        self.poll_shutdown(cx)
++    }
++}

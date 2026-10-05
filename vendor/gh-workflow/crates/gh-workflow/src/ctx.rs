@@ -20,30 +20,30 @@ enum Step {
     Root,
     Select {
         name: Rc<String>,
-        object: Box<Step>,
+        object: Box<Self>,
     },
     Eq {
-        left: Box<Step>,
-        right: Box<Step>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     And {
-        left: Box<Step>,
-        right: Box<Step>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Or {
-        left: Box<Step>,
-        right: Box<Step>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Literal(String),
     Concat {
-        left: Box<Step>,
-        right: Box<Step>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
 }
 
 impl<A> Context<A> {
     fn new() -> Self {
-        Context {
+        Self {
             marker: PhantomData,
             step: Step::Root,
         }
@@ -59,7 +59,7 @@ impl<A> Context<A> {
         }
     }
 
-    pub fn eq(&self, other: Context<A>) -> Context<bool> {
+    pub fn eq(&self, other: Self) -> Context<bool> {
         Context {
             marker: Default::default(),
             step: Step::Eq {
@@ -69,7 +69,7 @@ impl<A> Context<A> {
         }
     }
 
-    pub fn and(&self, other: Context<A>) -> Context<bool> {
+    pub fn and(&self, other: Self) -> Context<bool> {
         Context {
             marker: Default::default(),
             step: Step::And {
@@ -79,7 +79,7 @@ impl<A> Context<A> {
         }
     }
 
-    pub fn or(&self, other: Context<A>) -> Context<bool> {
+    pub fn or(&self, other: Self) -> Context<bool> {
         Context {
             marker: Default::default(),
             step: Step::Or {
@@ -91,8 +91,8 @@ impl<A> Context<A> {
 }
 
 impl Context<String> {
-    pub fn concat(&self, other: Context<String>) -> Context<String> {
-        Context {
+    pub fn concat(&self, other: Self) -> Self {
+        Self {
             marker: Default::default(),
             step: Step::Concat {
                 left: Box::new(self.step.clone()),
@@ -202,27 +202,27 @@ impl Context<Github> {
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Step::Root => write!(f, ""),
-            Step::Select { name, object } => {
-                if matches!(**object, Step::Root) {
+            Self::Root => write!(f, ""),
+            Self::Select { name, object } => {
+                if matches!(**object, Self::Root) {
                     write!(f, "{name}")
                 } else {
                     write!(f, "{object}.{name}")
                 }
             }
-            Step::Eq { left, right } => {
+            Self::Eq { left, right } => {
                 write!(f, "{left} == {right}")
             }
-            Step::And { left, right } => {
+            Self::And { left, right } => {
                 write!(f, "{left} && {right}")
             }
-            Step::Or { left, right } => {
+            Self::Or { left, right } => {
                 write!(f, "{left} || {right}")
             }
-            Step::Literal(value) => {
+            Self::Literal(value) => {
                 write!(f, "'{value}'")
             }
-            Step::Concat { left, right } => {
+            Self::Concat { left, right } => {
                 write!(f, "{left}{right}")
             }
         }
@@ -237,13 +237,13 @@ impl<A> fmt::Display for Context<A> {
 
 impl<A> From<Context<A>> for Expression {
     fn from(value: Context<A>) -> Self {
-        Expression::new(value.to_string())
+        Self::new(value.to_string())
     }
 }
 
 impl<T: Into<String>> From<T> for Context<String> {
     fn from(value: T) -> Self {
-        Context {
+        Self {
             marker: Default::default(),
             step: Step::Literal(value.into()),
         }

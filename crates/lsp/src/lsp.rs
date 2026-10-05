@@ -824,11 +824,9 @@ impl LanguageServer {
                     inlay_hint: Some(InlayHintWorkspaceClientCapabilities {
                         refresh_support: Some(true),
                     }),
-                    diagnostics: pull_diagnostics.then_some(
-                        DiagnosticWorkspaceClientCapabilities {
-                            refresh_support: Some(true),
-                        },
-                    ),
+                    diagnostic: pull_diagnostics.then_some(DiagnosticWorkspaceClientCapabilities {
+                        refresh_support: Some(true),
+                    }),
                     code_lens: Some(CodeLensWorkspaceClientCapabilities {
                         refresh_support: Some(true),
                     }),
@@ -1042,6 +1040,7 @@ impl LanguageServer {
                     }),
                     ..TextDocumentClientCapabilities::default()
                 }),
+                notebook_document: None,
                 experimental: Some(json!({
                     "serverStatusNotification": true,
                     "localDocs": true,

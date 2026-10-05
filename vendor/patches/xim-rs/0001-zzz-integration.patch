@@ -1,0 +1,314 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 082dafe34aa90bd053a35df43fa46a344b97d15e..d15dbca15bc46dd790b27469b057b5dd1d3df3b7 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -41,32 +41,9 @@ ahash = { version = "0.8", default-features = false, features = [
+     "compile-time-rng",
+ ] }
+ 
+-x11rb = { version = "0.13", optional = true }
++x11rb = { version = "0.14", optional = true }
+ x11-dl = { version = "2.18.5", optional = true }
+ hashbrown = { version = "0.16.0", default-features = false }
+ 
+-[[example]]
+-name = "x11rb_client"
+-path = "examples/x11rb_client.rs"
+-required-features = ["x11rb-client"]
+-
+-[[example]]
+-name = "x11rb_server"
+-path = "examples/x11rb_server.rs"
+-required-features = ["x11rb-server"]
+-
+-[[example]]
+-name = "xlib_client"
+-path = "examples/xlib_client.rs"
+-required-features = ["xlib-client"]
+-
+-[dev-dependencies]
+-criterion = "0.5.1"
+-pretty_env_logger = "0.5.0"
+-
+-[[bench]]
+-name = "rw"
+-harness = false
+-
+ [package.metadata.docs.rs]
+ features = ["x11rb-client", "x11rb-server", "x11rb-xcb", "xlib-client"]
+diff --git a/src/client.rs b/src/client.rs
+index 0b2b0a77f76ca801b8857ed99b1f6f4b52cfa1bb..c97047b89b86bc035c487efdec803a219c21ff7d 100644
+--- a/src/client.rs
++++ b/src/client.rs
+@@ -16,6 +16,7 @@ use core::fmt;
+ #[non_exhaustive]
+ pub enum ClientError {
+     ReadProtocol(xim_parser::ReadError),
++    DecodeCompoundText(xim_ctext::DecodeError),
+     XimError(xim_parser::ErrorCode, String),
+     UnsupportedTransport,
+     InvalidReply,
+@@ -30,10 +31,19 @@ impl From<xim_parser::ReadError> for ClientError {
+     }
+ }
+ 
++impl From<xim_ctext::DecodeError> for ClientError {
++    fn from(error: xim_ctext::DecodeError) -> Self {
++        Self::DecodeCompoundText(error)
++    }
++}
++
+ impl fmt::Display for ClientError {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+         match self {
+             ClientError::ReadProtocol(e) => write!(f, "Can't read xim message: {}", e),
++            ClientError::DecodeCompoundText(error) => {
++                write!(f, "Can't decode XIM compound text: {error}")
++            }
+             ClientError::XimError(code, detail) => {
+                 write!(f, "Server send error code: {:?}, detail: {}", code, detail)
+             }
+@@ -114,6 +124,10 @@ pub fn handle_request<C: ClientCore>(
+             input_method_id,
+             input_context_id,
+         } => handler.handle_create_ic(client, input_method_id, input_context_id),
++        Request::DestroyIcReply {
++            input_method_id,
++            input_context_id,
++        } => handler.handle_destroy_ic(client, input_method_id, input_context_id),
+         Request::SetEventMask {
+             input_method_id,
+             input_context_id,
+@@ -131,6 +145,14 @@ pub fn handle_request<C: ClientCore>(
+             handler.handle_disconnect();
+             Ok(())
+         }
++        Request::ResetIcReply {
++            input_method_id,
++            input_context_id,
++            preedit_string,
++        } => {
++            let preedit_string = xim_ctext::compound_text_to_utf8(&preedit_string)?;
++            handler.handle_reset_ic(client, input_method_id, input_context_id, &preedit_string)
++        }
+         Request::Error { code, detail, .. } => Err(ClientError::XimError(code, detail)),
+         Request::ForwardEvent {
+             xev,
+@@ -173,7 +195,7 @@ pub fn handle_request<C: ClientCore>(
+                     client,
+                     input_method_id,
+                     input_context_id,
+-                    &xim_ctext::compound_text_to_utf8(&commited).expect("Encoding Error"),
++                    &xim_ctext::compound_text_to_utf8(&commited)?,
+                 )?;
+ 
+                 if syncronous {
+@@ -219,7 +241,7 @@ pub fn handle_request<C: ClientCore>(
+             status,
+             feedbacks,
+         } => {
+-            let preedit_string = xim_ctext::compound_text_to_utf8(&preedit_string).unwrap();
++            let preedit_string = xim_ctext::compound_text_to_utf8(&preedit_string)?;
+             handler.handle_preedit_draw(
+                 client,
+                 input_method_id,
+@@ -317,12 +339,13 @@ pub trait Client {
+         xev: &Self::XEvent,
+     ) -> Result<(), ClientError>;
+     fn set_focus(&mut self, input_method_id: u16, input_context_id: u16)
+-        -> Result<(), ClientError>;
++    -> Result<(), ClientError>;
+     fn unset_focus(
+         &mut self,
+         input_method_id: u16,
+         input_context_id: u16,
+     ) -> Result<(), ClientError>;
++    fn reset_ic(&mut self, input_method_id: u16, input_context_id: u16) -> Result<(), ClientError>;
+ }
+ 
+ impl<C> Client for C
+@@ -450,6 +473,12 @@ where
+             input_context_id,
+         })
+     }
++    fn reset_ic(&mut self, input_method_id: u16, input_context_id: u16) -> Result<(), ClientError> {
++        self.send_req(Request::ResetIc {
++            input_method_id,
++            input_context_id,
++        })
++    }
+ }
+ 
+ #[allow(unused_variables)]
+@@ -573,4 +602,13 @@ pub trait ClientHandler<C: Client> {
+     ) -> Result<(), ClientError> {
+         Ok(())
+     }
++    fn handle_reset_ic(
++        &mut self,
++        client: &mut C,
++        input_method_id: u16,
++        input_context_id: u16,
++        preedit_text: &str,
++    ) -> Result<(), ClientError> {
++        Ok(())
++    }
+ }
+diff --git a/src/server/connection.rs b/src/server/connection.rs
+index 785fb42c73657f60b3c93a366e5b052be94c0809..e0fdd75cd5bd9e100f414771bd66264089f1f3ec 100644
+--- a/src/server/connection.rs
++++ b/src/server/connection.rs
+@@ -6,8 +6,8 @@ use alloc::vec;
+ use alloc::vec::Vec;
+ use core::num::{NonZeroU16, NonZeroU32};
+ use xim_parser::{
+-    attrs, Attribute, AttributeName, ErrorCode, ForwardEventFlag, InputStyle, InputStyleList,
+-    Point, Request, XimWrite,
++    Attribute, AttributeName, ErrorCode, ForwardEventFlag, InputStyle, InputStyleList, Point,
++    Request, XimWrite, attrs,
+ };
+ 
+ use self::im_vec::ImVec;
+diff --git a/src/x11rb.rs b/src/x11rb.rs
+index ac928da424f746eada57dbd39eb9a3a86ac66b01..f0de8cd1b6e3b0e08df752ae33ab577de66dfcc0 100644
+--- a/src/x11rb.rs
++++ b/src/x11rb.rs
+@@ -11,15 +11,15 @@ use alloc::vec::Vec;
+ use std::{convert::TryInto, rc::Rc, sync::Arc};
+ use x11rb::protocol::xproto::EventMask;
+ 
++#[cfg(feature = "x11rb-client")]
++use crate::AHashMap;
+ #[cfg(feature = "x11rb-client")]
+ use crate::client::{
+-    handle_request as client_handle_request, ClientCore, ClientError, ClientHandler,
++    ClientCore, ClientError, ClientHandler, handle_request as client_handle_request,
+ };
+ #[cfg(feature = "x11rb-server")]
+ use crate::server::{ServerCore, ServerError, ServerHandler, XimConnection, XimConnections};
+ #[cfg(feature = "x11rb-client")]
+-use crate::AHashMap;
+-#[cfg(feature = "x11rb-client")]
+ use xim_parser::{Attr, AttributeName};
+ 
+ use crate::Atoms;
+@@ -29,19 +29,19 @@ use x11rb::xcb_ffi::XCBConnection;
+ 
+ #[allow(unused_imports)]
+ use x11rb::{
++    COPY_DEPTH_FROM_PARENT, CURRENT_TIME,
+     connection::Connection,
+     errors::{ConnectError, ConnectionError, ParseError, ReplyError, ReplyOrIdError},
+     protocol::{
++        Event,
+         xproto::{
+-            Atom, AtomEnum, ClientMessageEvent, ConnectionExt, KeyPressEvent, PropMode, Screen,
+-            SelectionNotifyEvent, SelectionRequestEvent, Window, WindowClass, CLIENT_MESSAGE_EVENT,
+-            SELECTION_NOTIFY_EVENT,
++            Atom, AtomEnum, CLIENT_MESSAGE_EVENT, ClientMessageEvent, ConnectionExt, KeyPressEvent,
++            PropMode, SELECTION_NOTIFY_EVENT, Screen, SelectionNotifyEvent, SelectionRequestEvent,
++            Window, WindowClass,
+         },
+-        Event,
+     },
+     rust_connection::RustConnection,
+     wrapper::ConnectionExt as _,
+-    COPY_DEPTH_FROM_PARENT, CURRENT_TIME,
+ };
+ 
+ use xim_parser::{Request, XimWrite};
+@@ -567,6 +567,12 @@ impl<C: HasConnection> X11rbClient<C> {
+                     Ok(false)
+                 }
+             }
++            Event::Error(ref err)
++                if err.error_kind == x11rb::protocol::ErrorKind::Window
++                    && err.bad_value == self.im_window =>
++            {
++                Err(ClientError::NoXimServer)
++            }
+             _ => Ok(false),
+         }
+     }
+diff --git a/src/xlib.rs b/src/xlib.rs
+index cac60556c65b7a82509dc35efbebbc457a32461c..53119976a3227c3a43b5d278b9bb37d07131232e 100644
+--- a/src/xlib.rs
++++ b/src/xlib.rs
+@@ -12,8 +12,8 @@ use std::sync::Arc;
+ use std::{convert::TryInto, os::raw::c_long};
+ 
+ use crate::{
+-    client::{handle_request, ClientCore, ClientError, ClientHandler},
+     Atoms,
++    client::{ClientCore, ClientError, ClientHandler, handle_request},
+ };
+ use x11_dl::xlib;
+ use xim_parser::{AttributeName, Request, XimWrite};
+diff --git a/xim-gen/src/format_type.rs b/xim-gen/src/format_type.rs
+index 3cc816939caeb9a8674d72f01b7cd5393c0766fc..b1b47d954beeeaa2540f42e7a9d6bd2780d9a23e 100644
+--- a/xim-gen/src/format_type.rs
++++ b/xim-gen/src/format_type.rs
+@@ -33,7 +33,11 @@ impl FormatType {
+                 write!(out, "; reader.pad4()?; inner }}")?;
+             }
+             FormatType::List(inner, prefix, len) => {
+-                writeln!(out, "{{ let mut out = Vec::new(); let len = u{}::read(reader)? as usize; let end = reader.cursor() - len;", len * 8)?;
++                writeln!(
++                    out,
++                    "{{ let mut out = Vec::new(); let len = u{}::read(reader)? as usize; let end = reader.cursor() - len;",
++                    len * 8
++                )?;
+                 if *prefix > 0 {
+                     writeln!(out, "u{}::read(reader)?;", prefix * 8)?;
+                 }
+diff --git a/xim-gen/src/lib.rs b/xim-gen/src/lib.rs
+index 5d992b73ebab99997002c485ec7e646fb0544c31..6145a89785f5fc8aa21572067c02edc01c55ec2e 100644
+--- a/xim-gen/src/lib.rs
++++ b/xim-gen/src/lib.rs
+@@ -56,7 +56,9 @@ impl EnumFormat {
+ 
+         writeln!(
+             out,
+-            "fn read(reader: &mut Reader) -> Result<Self, ReadError> {{ let repr = {}::read(reader)?;", self.repr)?;
++            "fn read(reader: &mut Reader) -> Result<Self, ReadError> {{ let repr = {}::read(reader)?;",
++            self.repr
++        )?;
+ 
+         if self.bitflag {
+             writeln!(
+@@ -243,7 +245,10 @@ impl XimFormat {
+         for (key, value) in self.attribute_names.iter() {
+             writeln!(out, "b\"{}\" => Ok(Self::{}),", value, key)?;
+         }
+-        writeln!(out, "bytes => Err(reader.invalid_data(\"AttributeName\", core::str::from_utf8(bytes).unwrap_or(\"NOT_UTF8\"))),")?;
++        writeln!(
++            out,
++            "bytes => Err(reader.invalid_data(\"AttributeName\", core::str::from_utf8(bytes).unwrap_or(\"NOT_UTF8\"))),"
++        )?;
+         // match
+         writeln!(out, "}}")?;
+         // fn read
+@@ -254,7 +259,10 @@ impl XimFormat {
+         writeln!(out, "impl XimWrite for AttributeName {{")?;
+ 
+         writeln!(out, "fn write(&self, writer: &mut Writer) {{")?;
+-        writeln!(out, "let name = self.name(); (name.len() as u16).write(writer); writer.write(name.as_bytes());")?;
++        writeln!(
++            out,
++            "let name = self.name(); (name.len() as u16).write(writer); writer.write(name.as_bytes());"
++        )?;
+         // fn write
+         writeln!(out, "}}")?;
+ 
+@@ -324,7 +332,10 @@ impl XimFormat {
+             writeln!(out, "}}),")?;
+         }
+ 
+-        writeln!(out, "_ => Err(reader.invalid_data(\"Opcode\", alloc::format!(\"({{}}, {{}})\", major_opcode, minor_opcode))),")?;
++        writeln!(
++            out,
++            "_ => Err(reader.invalid_data(\"Opcode\", alloc::format!(\"({{}}, {{}})\", major_opcode, minor_opcode))),"
++        )?;
+ 
+         // match
+         writeln!(out, "}}")?;

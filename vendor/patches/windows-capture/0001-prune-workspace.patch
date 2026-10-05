@@ -1,0 +1,27 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 2d3e488709372392b4b842e088f15fd48f87ef34..31bc9980b5b50a2565d2ea1d9721bfe820782069 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -69,22 +69,3 @@ ctrlc = "3.5.2"
+ [package.metadata.docs.rs]
+ default-target = "x86_64-pc-windows-msvc"
+ targets = ["x86_64-pc-windows-msvc"]
+-
+-[[example]]
+-name = "graphics_capture"
+-doc-scrape-examples = false
+-
+-[[example]]
+-name = "dxgi_duplication"
+-doc-scrape-examples = false
+-
+-[[example]]
+-name = "cli"
+-doc-scrape-examples = false
+-
+-[[example]]
+-name = "stream_capture"
+-doc-scrape-examples = false
+-
+-[workspace]
+-members = ["windows-capture-python"]

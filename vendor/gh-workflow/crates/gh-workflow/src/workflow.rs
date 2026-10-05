@@ -9,22 +9,20 @@ use serde::{Deserialize, Serialize};
 use crate::concurrency::Concurrency;
 use crate::defaults::Defaults;
 // Import the moved types
+use crate::Event;
 use crate::env::Env;
 use crate::error::Result;
 use crate::generate::Generate;
 use crate::job::Job;
 use crate::permissions::Permissions;
 use crate::secret::Secret;
-use crate::{Event, JobType, JobValue};
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
-pub struct Jobs(pub(crate) IndexMap<String, JobValue>);
+pub struct Jobs(pub(crate) IndexMap<String, Job>);
 impl Jobs {
-    pub fn add<J: Into<Job<T>>, T: JobType>(mut self, key: String, value: J) -> Self {
-        let job: Job<T> = value.into();
-        let job: JobValue = T::to_value(job);
-        self.0.insert(key, job);
+    pub fn add(mut self, key: String, value: Job) -> Self {
+        self.0.insert(key, value);
         self
     }
 
@@ -37,7 +35,7 @@ impl Jobs {
     /// # Returns
     ///
     /// Returns `Some(&Job)` if the job exists, `None` otherwise.
-    pub fn get(&self, key: &str) -> Option<&JobValue> {
+    pub fn get(&self, key: &str) -> Option<&Job> {
         self.0.get(key)
     }
 }
@@ -58,8 +56,8 @@ pub struct Workflow {
     pub name: Option<String>,
 
     /// Environment variables that can be used in the workflow.
-    #[serde(skip_serializing_if = "Option::is_none", rename = "env")]
-    pub envs: Option<Env>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env: Option<Env>,
 
     /// The name for workflow runs generated from the workflow.
     /// GitHub displays the workflow run name in the list of workflow runs.
@@ -121,11 +119,11 @@ impl Workflow {
 
     /// Converts the `Workflow` to a YAML string representation.
     pub fn to_string(&self) -> Result<String> {
-        Ok(serde_yaml::to_string(self)?)
+        Ok(serde_yml::to_string(self)?)
     }
 
     /// Adds a job to the workflow with the specified ID and job configuration.
-    pub fn add_job<I: ToString, J: Into<Job<T>>, T: JobType>(mut self, id: I, job: J) -> Self {
+    pub fn add_job<T: ToString, J: Into<Job>>(mut self, id: T, job: J) -> Self {
         let key = id.to_string();
         let jobs = self.jobs.take().unwrap_or_default().add(key, job.into());
 
@@ -135,7 +133,7 @@ impl Workflow {
 
     /// Parses a YAML string into a `Workflow`.
     pub fn parse(yml: &str) -> Result<Self> {
-        Ok(serde_yaml::from_str(yml)?)
+        Ok(serde_yml::from_str(yml)?)
     }
 
     /// Generates the workflow using the `Generate` struct.
@@ -156,10 +154,10 @@ impl Workflow {
 
     /// Adds an environment variable to the workflow.
     pub fn add_env<T: Into<Env>>(mut self, new_env: T) -> Self {
-        let mut env = self.envs.take().unwrap_or_default();
+        let mut env = self.env.take().unwrap_or_default();
 
         env.0.extend(new_env.into().0);
-        self.envs = Some(env);
+        self.env = Some(env);
         self
     }
 }

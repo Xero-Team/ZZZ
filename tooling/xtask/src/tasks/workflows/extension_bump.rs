@@ -6,7 +6,7 @@ use crate::tasks::workflows::{
     runners,
     steps::{
         self, BASH_SHELL, CommonJobConditions, DEFAULT_REPOSITORY_OWNER_GUARD, NamedJob,
-        RepositoryTarget, cache_rust_dependencies_namespace, checkout_repo, dependant_job,
+        RepositoryTarget, cache_rust_dependencies_namespace, checkout_repo, dependent_job,
         generate_token, named,
     },
     vars::{
@@ -123,7 +123,7 @@ fn create_version_label(
     let (generate_token, generated_token) =
         generate_token(&app_id.to_string(), &app_secret.to_string()).into();
     let (determine_tag_step, tag) = determine_tag(current_version);
-    let job = steps::dependant_job(dependencies)
+    let job = steps::dependent_job(dependencies)
         .defaults(extension_job_defaults())
         .cond(Expression::new(format!(
             "{DEFAULT_REPOSITORY_OWNER_GUARD} && github.event_name == 'push' && \
@@ -228,7 +228,7 @@ fn bump_extension_version(
     let (bump_version, _new_version, title, body, branch_name) =
         bump_version(current_version, bump_type);
 
-    let job = steps::dependant_job(dependencies)
+    let job = steps::dependent_job(dependencies)
         .defaults(extension_job_defaults())
         .cond(Expression::new(format!(
             "{DEFAULT_REPOSITORY_OWNER_GUARD} &&\n({force_bump} == true || {version_changed} == 'false')",
@@ -343,7 +343,7 @@ fn trigger_release(
     let (get_extension_id, extension_id) = get_extension_id();
     let (release_action, pull_request_number) = release_action(extension_id, tag, &generated_token);
 
-    let job = dependant_job(dependencies)
+    let job = dependent_job(dependencies)
         .defaults(extension_job_defaults())
         .with_repository_owner_guard()
         .runs_on(runners::LINUX_SMALL)

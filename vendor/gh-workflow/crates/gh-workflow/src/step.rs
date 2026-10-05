@@ -1,8 +1,6 @@
 //!
 //! Step-related structures and implementations for GitHub workflow steps.
 
-use std::time::Duration;
-
 use derive_setters::Setters;
 use indexmap::IndexMap;
 use merge::Merge;
@@ -75,7 +73,7 @@ pub struct Input(#[serde(skip_serializing_if = "IndexMap::is_empty")] pub IndexM
 impl From<IndexMap<String, Value>> for Input {
     /// Converts an `IndexMap` into an `Input`.
     fn from(value: IndexMap<String, Value>) -> Self {
-        Input(value)
+        Self(value)
     }
 }
 
@@ -100,6 +98,7 @@ impl Input {
 }
 
 /// Represents a step value in the workflow.
+#[allow(clippy::duplicated_attributes)]
 #[derive(Debug, Setters, Serialize, Deserialize, Clone, Default, PartialEq, Eq, Merge)]
 #[serde(rename_all = "kebab-case")]
 #[setters(
@@ -111,63 +110,76 @@ impl Input {
 pub struct StepValue {
     /// The ID of the step.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub id: Option<String>,
 
     /// The name of the step.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub name: Option<String>,
 
     /// The condition under which the step runs.
     #[serde(skip_serializing_if = "Option::is_none", rename = "if")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub if_condition: Option<Expression>,
 
     /// The action to use in the step.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[setters(skip)]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub uses: Option<String>,
 
     /// Input parameters for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub with: Option<Input>,
 
     /// The command to run in the step.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[setters(skip)]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub run: Option<String>,
 
     /// Shell to run with
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub shell: Option<String>,
 
     /// Environment variables for the step.
-    #[serde(skip_serializing_if = "Option::is_none", rename = "env")]
-    pub envs: Option<Env>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
+    pub env: Option<Env>,
 
     /// The timeout for the step in minutes.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub timeout_minutes: Option<u32>,
 
     /// Whether to continue on error.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub continue_on_error: Option<bool>,
 
     /// The working directory for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub working_directory: Option<String>,
 
     /// The retry strategy for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub retry: Option<RetryStrategy>,
 
     /// Artifacts produced by the step.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge::option::overwrite_none)]
     pub artifacts: Option<Artifacts>,
 }
 
 impl StepValue {
     /// Creates a new `StepValue` that runs the provided shell command.
     pub fn run<T: ToString>(cmd: T) -> Self {
-        StepValue {
+        Self {
             run: Some(cmd.to_string()),
             ..Default::default()
         }
@@ -179,7 +191,7 @@ impl StepValue {
         repo: Repo,
         version: Version,
     ) -> Self {
-        StepValue {
+        Self {
             uses: Some(format!(
                 "{}/{}@{}",
                 owner.to_string(),
@@ -195,23 +207,17 @@ impl StepValue {
 impl<T> Step<T> {
     /// Adds an environment variable to the step.
     pub fn add_env<R: Into<Env>>(mut self, new_env: R) -> Self {
-        let mut env = self.value.envs.take().unwrap_or_default();
+        let mut env = self.value.env.take().unwrap_or_default();
 
         env.0.extend(new_env.into().0);
-        self.value.envs = Some(env);
-        self
-    }
-
-    /// Sets the timeout for the job.
-    pub fn timeout(mut self, duration: Duration) -> Self {
-        self.value = self.value.timeout_minutes(duration.as_secs() as u32 / 60);
+        self.value.env = Some(env);
         self
     }
 }
 
 impl Step<()> {
     pub fn new(name: impl ToString) -> Self {
-        Step {
+        Self {
             value: StepValue::default().name(name.to_string()),
             marker: Default::default(),
         }
@@ -242,7 +248,7 @@ impl Step<()> {
 /// Represents a step that uses an action.
 impl Step<Use> {
     /// Creates a step pointing to the default GitHub's Checkout Action.
-    pub fn checkout() -> Step<Use> {
+    pub fn checkout() -> Self {
         Step::new("Checkout Code").uses("actions", "checkout", "v5")
     }
 
@@ -261,18 +267,18 @@ impl Step<Use> {
 }
 
 /// Represents a key-value pair for inputs.
-impl<S1: ToString, S2: Into<Value>> From<(S1, S2)> for Input {
+impl<S1: ToString, S2: ToString> From<(S1, S2)> for Input {
     /// Converts a tuple into an `Input`.
     fn from(value: (S1, S2)) -> Self {
         let mut index_map: IndexMap<String, Value> = IndexMap::new();
-        index_map.insert(value.0.to_string(), value.1.into());
-        Input(index_map)
+        index_map.insert(value.0.to_string(), Value::String(value.1.to_string()));
+        Self(index_map)
     }
 }
 
 impl Step<Toolchain> {
-    pub fn toolchain() -> Step<Toolchain> {
-        Step {
+    pub fn toolchain() -> Self {
+        Self {
             value: Default::default(),
             marker: Toolchain::default(),
         }

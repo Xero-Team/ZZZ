@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::tasks::workflows::{
     nix_build::build_nix,
     runners::{Arch, Platform, ReleaseChannel},
-    steps::{DEFAULT_REPOSITORY_OWNER_GUARD, FluentBuilder, NamedJob, dependant_job, named},
+    steps::{DEFAULT_REPOSITORY_OWNER_GUARD, FluentBuilder, NamedJob, dependent_job, named},
     vars::{assets, bundle_envs},
 };
 
@@ -94,9 +94,9 @@ fn nix_job(platform: Platform, arch: Arch) -> NamedJob {
     job
 }
 
-fn bundle_job(deps: &[&NamedJob]) -> Job {
-    dependant_job(deps)
-        .when(deps.len() == 0, |job|
+fn bundle_job(dependencies: &[&NamedJob]) -> Job {
+    dependent_job(dependencies)
+        .when(dependencies.is_empty(), |job|
             job.cond(Expression::new(
                 indoc! {
                     r#"(github.event.action == 'labeled' && github.event.label.name == 'run-bundling') ||
@@ -126,7 +126,7 @@ pub(crate) fn bundle_mac(
         name: format!("bundle_mac_{arch}"),
         job: bundle_job(deps)
             .runs_on(runners::MAC_DEFAULT)
-            .envs(bundle_envs(platform))
+            .env(bundle_envs(platform))
             .add_step(steps::checkout_repo())
             .when_some(release_channel, |job, release_channel| {
                 job.add_step(set_release_channel(platform, release_channel))
@@ -179,7 +179,7 @@ pub(crate) fn bundle_linux(
         name: format!("bundle_linux_{arch}"),
         job: bundle_job(deps)
             .runs_on(arch.linux_bundler())
-            .envs(bundle_envs(platform))
+            .env(bundle_envs(platform))
             .add_env(Env::new("CC", "clang-18"))
             .add_env(Env::new("CXX", "clang++-18"))
             .add_step(steps::checkout_repo())
@@ -220,7 +220,7 @@ pub(crate) fn bundle_windows(
         name: format!("bundle_windows_{arch}"),
         job: bundle_job(deps)
             .runs_on(runners::WINDOWS_DEFAULT)
-            .envs(bundle_envs(platform))
+            .env(bundle_envs(platform))
             .add_step(steps::checkout_repo())
             .when_some(release_channel, |job, release_channel| {
                 job.add_step(set_release_channel(platform, release_channel))

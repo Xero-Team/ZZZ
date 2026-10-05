@@ -1,6 +1,6 @@
 [package]
-name = "zed-font-kit"
-version = "0.14.1-zed"
+name = "font-kit"
+version = "0.14.3"
 authors = ["Patrick Walton <pcwalton@mimiga.net>"]
 description = "A cross-platform font loading library"
 license = "MIT OR Apache-2.0"
@@ -28,7 +28,7 @@ lazy_static = "1.1"
 libc = "0.2"
 log = "0.4.4"
 pathfinder_geometry = "0.5"
-pathfinder_simd = "0.5.4"
+pathfinder_simd = "0.5.5"
 
 [dependencies.freetype]
 version = "0.7"
@@ -45,7 +45,7 @@ pbr = "1.0"
 prettytable-rs = "0.10"
 
 [target.'cfg(target_family = "windows")'.dependencies]
-dwrote = { version = "0.11", default-features = false }
+dwrote = { version = "^0.11.3", default-features = false }
 
 [target.'cfg(target_family = "windows")'.dependencies.winapi]
 version = "0.3"

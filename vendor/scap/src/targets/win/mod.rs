@@ -1,6 +1,5 @@
 use super::{Display, Target};
 use anyhow::{Context as _, Result};
-use windows::Win32::UI::HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI};
 use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::HMONITOR,
@@ -67,35 +66,6 @@ fn monitor_title(monitor: &Monitor) -> Result<String, MonitorError> {
         .name()
         .or_else(|_| monitor.device_string())
         .or_else(|_| monitor.device_name())
-}
-
-// Referred to: https://github.com/tauri-apps/tao/blob/ab792dbd6c5f0a708c818b20eaff1d9a7534c7c1/src/platform_impl/windows/dpi.rs#L50
-pub fn get_scale_factor(target: &Target) -> f64 {
-    const BASE_DPI: u32 = 96;
-
-    let mut dpi_x = 0;
-    let mut dpi_y = 0;
-
-    let dpi = match target {
-        Target::Window(window) => unsafe { GetDpiForWindow(window.raw_handle) },
-        Target::Display(display) => unsafe {
-            if GetDpiForMonitor(
-                display.raw_handle,
-                MDT_EFFECTIVE_DPI,
-                &mut dpi_x,
-                &mut dpi_y,
-            )
-            .is_ok()
-            {
-                dpi_x.into()
-            } else {
-                BASE_DPI
-            }
-        },
-    };
-
-    let scale_factor = dpi as f64 / BASE_DPI as f64;
-    scale_factor as f64
 }
 
 pub fn get_target_dimensions(target: &Target) -> (u64, u64) {

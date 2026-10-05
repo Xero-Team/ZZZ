@@ -2,8 +2,6 @@ pub mod engine;
 
 use std::{error::Error, sync::mpsc};
 
-use anyhow::anyhow;
-
 use engine::ChannelItem;
 
 use crate::{
@@ -28,6 +26,7 @@ pub enum Resolution {
 }
 
 impl Resolution {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn value(&self, aspect_ratio: f32) -> [u32; 2] {
         match *self {
             Resolution::_480p => [640, (640_f32 / aspect_ratio).floor() as u32],
@@ -72,6 +71,9 @@ pub struct Options {
     pub output_resolution: Resolution,
     // excluded targets will only work on macOS
     pub excluded_targets: Option<Vec<Target>>,
+    /// Only implemented for Windows and macOS currently
+    pub captures_audio: bool,
+    pub exclude_current_process_audio: bool,
 }
 
 /// Screen capturer class
@@ -84,6 +86,7 @@ pub struct Capturer {
 pub enum CapturerBuildError {
     NotSupported,
     PermissionNotGranted,
+    Engine(anyhow::Error),
 }
 
 impl std::fmt::Display for CapturerBuildError {
@@ -93,37 +96,33 @@ impl std::fmt::Display for CapturerBuildError {
             CapturerBuildError::PermissionNotGranted => {
                 write!(f, "Permission to capture the screen is not granted")
             }
+            CapturerBuildError::Engine(error) => error.fmt(f),
         }
     }
 }
 
-impl Error for CapturerBuildError {}
+impl Error for CapturerBuildError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Engine(error) => Some(error.as_ref()),
+            Self::NotSupported | Self::PermissionNotGranted => None,
+        }
+    }
+}
 
 impl Capturer {
-    /// Create a new capturer instance with the provided options
-    #[deprecated(
-        since = "0.0.6",
-        note = "Use `build` instead of `new` to create a new capturer instance."
-    )]
-    pub fn new(options: Options) -> anyhow::Result<Capturer> {
-        let (tx, rx) = mpsc::channel();
-        let engine = engine::Engine::new(&options, tx)?;
-
-        Ok(Capturer { engine, rx })
-    }
-
     /// Build a new [Capturer] instance with the provided options
-    pub fn build(options: Options) -> anyhow::Result<Capturer> {
+    pub fn build(options: Options) -> Result<Capturer, CapturerBuildError> {
         if !is_supported() {
-            return Err(anyhow!(CapturerBuildError::NotSupported));
+            return Err(CapturerBuildError::NotSupported);
         }
 
         if !has_permission() {
-            return Err(anyhow!(CapturerBuildError::PermissionNotGranted));
+            return Err(CapturerBuildError::PermissionNotGranted);
         }
 
         let (tx, rx) = mpsc::channel();
-        let engine = engine::Engine::new(&options, tx)?;
+        let engine = engine::Engine::new(&options, tx).map_err(CapturerBuildError::Engine)?;
 
         Ok(Capturer { engine, rx })
     }
@@ -143,7 +142,7 @@ impl Capturer {
     /// Get the next captured frame
     pub fn get_next_frame(&self) -> anyhow::Result<Frame> {
         loop {
-            let res = self.rx.recv()??;
+            let res = self.rx.recv().map_err(anyhow::Error::from)??;
 
             if let Some(frame) = self.engine.process_channel_item(res) {
                 return Ok(frame);
@@ -152,19 +151,11 @@ impl Capturer {
     }
 
     /// Get the dimensions the frames will be captured in
-    pub fn get_output_frame_size(&mut self) -> [u32; 2] {
+    pub fn get_output_frame_size(&mut self) -> anyhow::Result<[u32; 2]> {
         self.engine.get_output_frame_size()
-    }
-
-    pub fn raw(&self) -> RawCapturer {
-        RawCapturer { capturer: self }
     }
 
     pub fn target(&self) -> Option<&Target> {
         self.engine.target()
     }
-}
-
-pub struct RawCapturer<'a> {
-    capturer: &'a Capturer,
 }

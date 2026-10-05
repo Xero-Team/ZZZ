@@ -41,7 +41,6 @@ pub struct PreviousResultId {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceDiagnosticParams {
     /// The additional identifier provided during registration.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
 
     /// The currently known diagnostic reports with their

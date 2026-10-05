@@ -1,0 +1,168 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 8123a6ebec4f16de6820ea00a6575ed00108b3a1..b33d03da48394875f76c6485b6f7875faf366b53 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -213,76 +213,3 @@ libc = "0"
+ 
+ [lints.rust]
+ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(reqwest_unstable)'] }
+-
+-[[example]]
+-name = "blocking"
+-path = "examples/blocking.rs"
+-required-features = ["blocking"]
+-
+-[[example]]
+-name = "json_dynamic"
+-path = "examples/json_dynamic.rs"
+-required-features = ["json"]
+-
+-[[example]]
+-name = "json_typed"
+-path = "examples/json_typed.rs"
+-required-features = ["json"]
+-
+-[[example]]
+-name = "tor_socks"
+-path = "examples/tor_socks.rs"
+-required-features = ["socks"]
+-
+-[[example]]
+-name = "form"
+-path = "examples/form.rs"
+-required-features = ["form"]
+-
+-[[example]]
+-name = "simple"
+-path = "examples/simple.rs"
+-
+-[[example]]
+-name = "h3_simple"
+-path = "examples/h3_simple.rs"
+-required-features = ["http3", "rustls"]
+-
+-[[example]]
+-name = "connect_via_lower_priority_tokio_runtime"
+-path = "examples/connect_via_lower_priority_tokio_runtime.rs"
+-
+-[[test]]
+-name = "blocking"
+-path = "tests/blocking.rs"
+-required-features = ["blocking"]
+-
+-[[test]]
+-name = "cookie"
+-path = "tests/cookie.rs"
+-required-features = ["cookies"]
+-
+-[[test]]
+-name = "gzip"
+-path = "tests/gzip.rs"
+-required-features = ["gzip", "stream"]
+-
+-[[test]]
+-name = "brotli"
+-path = "tests/brotli.rs"
+-required-features = ["brotli", "stream"]
+-
+-[[test]]
+-name = "zstd"
+-path = "tests/zstd.rs"
+-required-features = ["zstd", "stream"]
+-
+-[[test]]
+-name = "deflate"
+-path = "tests/deflate.rs"
+-required-features = ["deflate", "stream"]
+-
+-[[test]]
+-name = "multipart"
+-path = "tests/multipart.rs"
+-required-features = ["multipart"]
+diff --git a/src/async_impl/client.rs b/src/async_impl/client.rs
+index 20ca85b33d4ee0f962e2e3a39285da06fed213ce..1abb6a78b9b2b015aca09d22e4a4220f284248e3 100644
+--- a/src/async_impl/client.rs
++++ b/src/async_impl/client.rs
+@@ -2646,10 +2646,13 @@ impl Client {
+         self.proxy_auth(&uri, &mut headers);
+         self.proxy_custom_headers(&uri, &mut headers);
+ 
+-        let builder = hyper::Request::builder()
++        let mut builder = hyper::Request::builder()
+             .method(method.clone())
+             .uri(uri)
+             .version(version);
++        if let Some(redirect_policy) = extensions.get::<redirect::RequestPolicy>().cloned() {
++            builder = builder.extension(redirect_policy);
++        }
+ 
+         let in_flight = match version {
+             #[cfg(feature = "http3")]
+diff --git a/src/async_impl/request.rs b/src/async_impl/request.rs
+index 4e9c57e1395a1a58652510618f84ee815159dea5..9ad9ad260c41cb88e0a57a8a349bd07850036f2a 100644
+--- a/src/async_impl/request.rs
++++ b/src/async_impl/request.rs
+@@ -19,7 +19,7 @@ use crate::header::CONTENT_LENGTH;
+ #[cfg(any(feature = "multipart", feature = "form", feature = "json"))]
+ use crate::header::CONTENT_TYPE;
+ use crate::header::{HeaderMap, HeaderName, HeaderValue};
+-use crate::{Method, Url};
++use crate::{Method, Url, redirect};
+ use http::{request::Parts, Extensions, Request as HttpRequest, Version};
+ 
+ /// A request which can be executed with `Client::execute()`.
+@@ -193,6 +193,16 @@ impl RequestBuilder {
+         }
+     }
+ 
++    /// Overrides the redirect policy for this request.
++    pub fn redirect_policy(mut self, policy: redirect::Policy) -> RequestBuilder {
++        if let Ok(request) = self.request.as_mut() {
++            request
++                .extensions_mut()
++                .insert(redirect::RequestPolicy(std::sync::Arc::new(policy)));
++        }
++        self
++    }
++
+     /// Add a `Header` to this Request.
+     pub fn header<K, V>(self, key: K, value: V) -> RequestBuilder
+     where
+diff --git a/src/lib.rs b/src/lib.rs
+index e6584ce7a9d055ceaf045244bcfad6c333895e52..3cb394c65d75228f1767171b1036309ca2036510 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -276,8 +276,8 @@ macro_rules! if_hyper {
+     )*}
+ }
+ 
+-pub use http::header;
+ pub use http::Method;
++pub use http::header;
+ pub use http::{StatusCode, Version};
+ pub use url::Url;
+ 
+diff --git a/src/redirect.rs b/src/redirect.rs
+index 2d3862c29316cd39cf27b7d49bc4e9f31e88f8a8..66e6248ee6e51743561186dd5bedd275fff1fe42 100644
+--- a/src/redirect.rs
++++ b/src/redirect.rs
+@@ -29,6 +29,9 @@ pub struct Policy {
+     inner: PolicyKind,
+ }
+ 
++#[derive(Clone)]
++pub(crate) struct RequestPolicy(pub(crate) Arc<Policy>);
++
+ /// A type that holds information on the next request and previous requests
+ /// in redirect chain.
+ #[derive(Debug)]
+@@ -335,6 +338,9 @@ impl TowerPolicy<async_impl::body::Body, crate::Error> for TowerRedirectPolicy {
+     }
+ 
+     fn on_request(&mut self, req: &mut http::Request<async_impl::body::Body>) {
++        if let Some(request_policy) = req.extensions().get::<RequestPolicy>() {
++            self.policy = request_policy.0.clone();
++        }
+         if let Ok(next_url) = Url::parse(&req.uri().to_string()) {
+             remove_sensitive_headers(req.headers_mut(), &next_url, &self.urls);
+             if self.referer {

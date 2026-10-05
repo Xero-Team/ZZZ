@@ -40,8 +40,8 @@ ctor.workspace = true
 derive_more.workspace = true
 dispatch2 = "0.3.1"
 etagere = "0.3"
-# Vendored from https://github.com/zed-industries/font-kit @ 94b0f28166665e8fd2f53ff6d268a14955c82269 (local: core-text 22, core-graphics 0.25)
-font-kit = { path = "../../vendor/font-kit", package = "zed-font-kit", optional = true }
+# Vendored from https://github.com/servo/font-kit @ ab6bb2eb87e8ebcd7aa3a88442d8a079bce66200
+font-kit = { path = "../../vendor/font-kit", optional = true }
 foreign-types = "0.5"
 futures.workspace = true
 image.workspace = true

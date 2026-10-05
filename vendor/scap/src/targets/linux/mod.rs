@@ -250,11 +250,16 @@ pub fn get_main_display() -> anyhow::Result<Display> {
 
     #[cfg(feature = "x11")]
     if std::env::var("DISPLAY").is_ok() {
-        let (conn, screen_num) =
-            xcb::Connection::connect_with_extensions(None, &[xcb::Extension::RandR], &[]).unwrap();
-        let setup = conn.get_setup();
-        let screen = setup.roots().nth(screen_num as usize).unwrap();
-        return get_default_x_display(&conn, screen).context("Failed to get main X11 display.");
+        let (connection, screen_number) =
+            xcb::Connection::connect_with_extensions(None, &[xcb::Extension::RandR], &[])
+                .context("Failed to connect to the X11 display")?;
+        let setup = connection.get_setup();
+        let screen = setup
+            .roots()
+            .nth(screen_number as usize)
+            .context("X11 screen was not found")?;
+        return get_default_x_display(&connection, screen)
+            .context("Failed to get main X11 display.");
     }
 
     #[cfg(all(feature = "wayland", feature = "x11"))]
@@ -265,11 +270,4 @@ pub fn get_main_display() -> anyhow::Result<Display> {
     let error_msg = "Unsupported platform. Could not detect Wayland display. Enable the 'x11' feature for X11 support.";
 
     Err(anyhow!(error_msg))
-}
-
-pub fn get_target_dimensions(target: &Target) -> (u64, u64) {
-    match target {
-        Target::Window(_w) => (0, 0), // TODO
-        Target::Display(d) => (d.width as u64, d.height as u64),
-    }
 }

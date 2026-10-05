@@ -7,7 +7,6 @@ use std::{
     thread::JoinHandle,
 };
 
-use anyhow::Context as _;
 use xcb::{Xid, x};
 
 use crate::{Target, capturer::Options, frame::Frame, targets::linux::get_default_x_display};
@@ -86,15 +85,15 @@ fn draw_cursor(
     let mut cursor_idx: u32 = ((y - cursor_y) * cursor_image.width() as i32) as u32;
     let mut image_idx: u32 = ((y - win_y) * win_width * stride as i32) as u32;
 
-    for y in 0..h {
+    for _row in 0..h {
         cursor_idx += c_off;
         image_idx += i_off as u32 * stride;
-        for x in 0..w {
+        for _column in 0..w {
             let cursor_pix = cursor_image.cursor_image()[cursor_idx as usize];
             let r = (cursor_pix & 0xFF) as u8;
             let g = ((cursor_pix >> 8) & 0xFF) as u8;
             let b = ((cursor_pix >> 16) & 0xFF) as u8;
-            let a = ((cursor_pix >> 24) & 0xFF);
+            let a = (cursor_pix >> 24) & 0xFF;
 
             let i = image_idx as usize;
             if a == 0xFF {
@@ -163,15 +162,14 @@ fn grab(conn: &xcb::Connection, target: &Target, show_cursor: bool) -> anyhow::R
         )?;
     }
 
-    Ok(Frame::BGRx(crate::frame::BGRxFrame {
-        display_time: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .context("Unix epoch is in the past")?
-            .as_nanos() as u64,
-        width: width as i32,
-        height: height as i32,
-        data: img_data,
-    }))
+    Ok(Frame::Video(crate::frame::VideoFrame::BGRx(
+        crate::frame::BGRxFrame {
+            display_time: std::time::SystemTime::now(),
+            width: width as i32,
+            height: height as i32,
+            data: img_data,
+        },
+    )))
 }
 
 fn query_xfixes_version(conn: &xcb::Connection) -> Result<(), xcb::Error> {
