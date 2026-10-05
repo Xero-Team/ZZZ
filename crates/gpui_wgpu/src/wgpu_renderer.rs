@@ -8,6 +8,7 @@ use log::warn;
 #[cfg(not(target_family = "wasm"))]
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::num::NonZeroU64;
+#[cfg(not(target_family = "wasm"))]
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -33,10 +34,16 @@ use resources::WgpuResources;
 
 pub struct WgpuRenderer {
     /// Shared GPU context for device recovery coordination (unused on WASM).
-    #[allow(dead_code)]
+    #[cfg_attr(
+        target_family = "wasm",
+        allow(dead_code, reason = "native device recovery is unavailable on Web")
+    )]
     context: Option<GpuContext>,
     /// Compositor GPU hint for adapter selection (unused on WASM).
-    #[allow(dead_code)]
+    #[cfg_attr(
+        target_family = "wasm",
+        allow(dead_code, reason = "Web adapter selection has no compositor GPU hint")
+    )]
     compositor_gpu: Option<CompositorGpuHint>,
     resources: Option<WgpuResources>,
     surface_config: wgpu::SurfaceConfiguration,
