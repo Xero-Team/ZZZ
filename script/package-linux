@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+help_info() {
+    echo "
+Usage: ${0##*/} [options]
+Create Debian and/or RPM packages from an existing Linux bundle.
+
+The host binaries and the .tar.gz archive must already have been produced by
+script/bundle-linux. This script does not run Cargo builds.
+
+Options:
+  -h, --help     Display this help and exit.
+  --native       Use artifacts from the linux-native profile.
+  --deb          Generate a Debian package with cargo-deb.
+  --rpm          Generate an RPM package with cargo-generate-rpm.
+
+Environment:
+  ZZZ_CARGO_DEB_VERSION=3.8.0          Required cargo-deb version
+  ZZZ_CARGO_GENERATE_RPM_VERSION=0.21.0  Required cargo-generate-rpm version
+  CARGO_TARGET_DIR=/abs/dir             Cargo target directory (default: target)
+  "
+}
+
+host_build_profile=release
+package_deb=false
+package_rpm=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            help_info
+            exit 0
+            ;;
+        --native)
+            host_build_profile=linux-native
+            shift
+            ;;
+        --deb)
+            package_deb=true
+            shift
+            ;;
+        --rpm)
+            package_rpm=true
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*|*)
+            echo "Unknown option: $1" >&2
+            help_info
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "$package_deb" == false && "$package_rpm" == false ]]; then
+    echo "Error: select at least one of --deb or --rpm." >&2
+    help_info
+    exit 1
+fi
+
+if [[ "$(uname -s)" != Linux ]]; then
+    echo "Error: Linux packages can only be created on Linux." >&2
+    exit 1
+fi
+
+target_dir="${CARGO_TARGET_DIR:-target}"
+bundle_artifact_dir="${target_dir}/${host_build_profile}"
+
+rustc_info=$(rustc --version --verbose)
+target_triple=$(awk '/^host:/ { print $2 }' <<<"$rustc_info")
+if [[ -z "$target_triple" ]]; then
+    echo "Error: unable to determine the Rust host target." >&2
+    exit 1
+fi
+
+host_arch=$(uname -m)
+host_artifact_dir="${target_dir}/${target_triple}/${host_build_profile}"
+for binary in zzz cli; do
+    if [[ ! -f "${host_artifact_dir}/${binary}" ]]; then
+        echo "Error: missing ${host_artifact_dir}/${binary}." >&2
+        echo "Run script/bundle-linux first, then retry this command." >&2
+        exit 1
+    fi
+done
+
+channel=$(<crates/zzz/RELEASE_CHANNEL)
+case "$channel" in
+    stable|preview|nightly|dev) package_variant="$channel" ;;
+    *) package_variant=dev ;;
+esac
+
+if [[ "$package_deb" == true ]]; then
+    if ! command -v cargo-deb >/dev/null 2>&1; then
+        echo "Error: --deb requires cargo-deb on PATH." >&2
+        exit 1
+    fi
+    cargo_deb_version="${ZZZ_CARGO_DEB_VERSION:-3.8.0}"
+    if [[ "$(cargo-deb --version | awk '{ print $2 }')" != "$cargo_deb_version" ]]; then
+        echo "Error: cargo-deb ${cargo_deb_version} is required." >&2
+        exit 1
+    fi
+fi
+
+if [[ "$package_rpm" == true ]]; then
+    if ! command -v cargo-generate-rpm >/dev/null 2>&1; then
+        echo "Error: --rpm requires cargo-generate-rpm on PATH." >&2
+        echo "Install it with: cargo install cargo-generate-rpm --version 0.21.0 --locked" >&2
+        exit 1
+    fi
+    cargo_generate_rpm_version="${ZZZ_CARGO_GENERATE_RPM_VERSION:-0.21.0}"
+    if [[ "$(cargo-generate-rpm --version | awk '{ print $2 }')" != "$cargo_generate_rpm_version" ]]; then
+        echo "Error: cargo-generate-rpm ${cargo_generate_rpm_version} is required." >&2
+        exit 1
+    fi
+fi
+
+archive_path="${bundle_artifact_dir}/zzz-linux-${host_arch}.tar.gz"
+if [[ ! -f "$archive_path" ]]; then
+    archive_path=""
+    shopt -s nullglob
+    archive_candidates=("${bundle_artifact_dir}"/zzz*-linux-"${host_arch}".tar.gz)
+    shopt -u nullglob
+    if [[ "${#archive_candidates[@]}" -eq 0 ]]; then
+        echo "Error: no Linux bundle found in ${bundle_artifact_dir}." >&2
+        echo "Run script/bundle-linux first, then retry this command." >&2
+        exit 1
+    fi
+    for candidate in "${archive_candidates[@]}"; do
+        if [[ -z "$archive_path" || "$candidate" -nt "$archive_path" ]]; then
+            archive_path="$candidate"
+        fi
+    done
+fi
+
+temp_dir=$(mktemp -d)
+trap 'rm -rf "$temp_dir"' EXIT
+tar -xzf "$archive_path" -C "$temp_dir"
+
+shopt -s nullglob
+app_directories=("${temp_dir}"/*.app)
+shopt -u nullglob
+if [[ "${#app_directories[@]}" -ne 1 ]]; then
+    echo "Error: expected one .app directory in ${archive_path}." >&2
+    exit 1
+fi
+app_dir="${app_directories[0]}"
+
+desktop_files=("${app_dir}"/share/applications/*.desktop)
+icon_512="${app_dir}/share/icons/hicolor/512x512/apps/zzz.png"
+icon_1024="${app_dir}/share/icons/hicolor/1024x1024/apps/zzz.png"
+ffmpeg_license="${app_dir}/FFmpeg-LICENSE.txt"
+if [[ "${#desktop_files[@]}" -ne 1 || ! -f "${desktop_files[0]}" \
+    || ! -f "$icon_512" || ! -f "$icon_1024" || ! -f "$ffmpeg_license" ]]; then
+    echo "Error: ${archive_path} is missing package assets." >&2
+    exit 1
+fi
+
+package_assets_dir="${host_artifact_dir}/package-assets"
+rm -rf "$package_assets_dir"
+mkdir -p "$package_assets_dir"
+cp "${desktop_files[0]}" "$package_assets_dir/zzz.desktop"
+cp "$icon_512" "$package_assets_dir/zzz.png"
+cp "$icon_1024" "$package_assets_dir/zzz@2x.png"
+cp assets/licenses.md "$package_assets_dir/licenses.md"
+cp "$ffmpeg_license" "$package_assets_dir/FFmpeg-LICENSE.txt"
+
+mkdir -p "$bundle_artifact_dir"
+if [[ "$package_deb" == true ]]; then
+    cargo deb --locked --no-build --package zzz --profile "$host_build_profile" \
+        --target "$target_triple" --variant "$package_variant" \
+        --output "${bundle_artifact_dir}/zzz-${package_variant}-linux-${host_arch}.deb"
+fi
+
+if [[ "$package_rpm" == true ]]; then
+    cargo generate-rpm --package crates/zzz --profile "$host_build_profile" \
+        --target "$target_triple" --target-dir "$target_dir" \
+        --variant "$package_variant" \
+        --output "${bundle_artifact_dir}/zzz-${package_variant}-linux-${host_arch}.rpm"
+fi
+
+echo "Created Linux package(s) in ${bundle_artifact_dir}."
