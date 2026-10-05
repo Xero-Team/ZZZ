@@ -26,7 +26,7 @@ use project::{
     PathMatchCandidateSet, Project, ProjectPath, WorktreeId, worktree_store::WorktreeStore,
 };
 use project_panel::project_panel_settings::ProjectPanelSettings;
-use settings::Settings;
+use settings::{SeedQuerySetting, Settings};
 use std::{
     borrow::Cow,
     cmp,
@@ -109,7 +109,8 @@ impl FileFinder {
         workspace.register_action(
             |workspace, action: &workspace::ToggleFileFinder, window, cx| {
                 let Some(file_finder) = workspace.active_modal::<Self>(cx) else {
-                    Self::open(workspace, action.separate_history, window, cx).detach();
+                    let seed_query = Self::seed_query(workspace, window, cx);
+                    Self::open(workspace, action.separate_history, seed_query, window, cx).detach();
                     return;
                 };
 
@@ -126,6 +127,7 @@ impl FileFinder {
     fn open(
         workspace: &mut Workspace,
         separate_history: bool,
+        seed_query: Option<String>,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Task<()> {
@@ -182,19 +184,58 @@ impl FileFinder {
                             cx,
                         );
 
-                        FileFinder::new(delegate, window, cx)
+                        FileFinder::new(delegate, seed_query, window, cx)
                     });
                 })
                 .log_err();
         })
     }
 
-    fn new(delegate: FileFinderDelegate, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn seed_query(
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) -> Option<String> {
+        if !FileFinderSettings::get_global(cx).prefill_query_from_selection {
+            return None;
+        }
+
+        let focused_item = workspace.focused_pane(window, cx).read(cx).active_item();
+        let active_item = workspace
+            .active_item(cx)
+            .filter(|active| match &focused_item {
+                Some(focused) => focused.item_id() != active.item_id(),
+                None => true,
+            });
+
+        focused_item
+            .into_iter()
+            .chain(active_item)
+            .find_map(|item| {
+                let query = item.to_searchable_item_handle(cx)?.query_suggestion(
+                    Some(SeedQuerySetting::Selection),
+                    window,
+                    cx,
+                );
+                sanitize_file_query(&query)
+            })
+    }
+
+    fn new(
+        delegate: FileFinderDelegate,
+        seed_query: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let project = delegate.project.clone();
         let picker = cx.new(|cx| Picker::uniform_list_with_preview(delegate, project, window, cx));
         let picker_focus_handle = picker.focus_handle(cx);
-        picker.update(cx, |picker, _| {
+        picker.update(cx, |picker, cx| {
             picker.delegate.focus_handle = picker_focus_handle.clone();
+            if let Some(seed_query) = seed_query {
+                picker.set_query(&seed_query, window, cx);
+                picker.select_query(window, cx);
+            }
         });
         Self {
             picker,
@@ -374,6 +415,13 @@ impl FileFinder {
             FileFinderWidth::Medium => (window_width - px(1024.)).max(small_width),
         }
     }
+}
+
+const MAX_SEED_QUERY_LENGTH: usize = 100;
+
+fn sanitize_file_query(selection: &str) -> Option<String> {
+    let query = selection.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!query.is_empty()).then(|| query.chars().take(MAX_SEED_QUERY_LENGTH).collect())
 }
 
 impl EventEmitter<DismissEvent> for FileFinder {}

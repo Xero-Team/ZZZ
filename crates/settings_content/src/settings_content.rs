@@ -914,6 +914,11 @@ pub struct FileFinderSettingsContent {
     ///
     /// Default: Smart
     pub include_ignored: Option<IncludeIgnoredContent>,
+    /// Whether to pre-fill the file finder's query with text selected in the
+    /// focused item, such as an editor or terminal.
+    ///
+    /// Default: true
+    pub prefill_query_from_selection: Option<bool>,
 }
 
 #[derive(

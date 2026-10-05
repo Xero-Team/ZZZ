@@ -4104,7 +4104,7 @@ fn search_and_files_page() -> SettingsPage {
         ]
     }
 
-    fn file_finder_section() -> [SettingsPageItem; 5] {
+    fn file_finder_section() -> [SettingsPageItem; 6] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.file.finder",
@@ -4211,6 +4211,34 @@ fn search_and_files_page() -> SettingsPage {
                             .file_finder
                             .get_or_insert_default()
                             .skip_focus_for_active_in_search = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt(
+                    "settings_ui.page_data.title.prefill.query.from.selection",
+                    "Prefill Query From Selection",
+                ),
+                description: lt(
+                    "settings_ui.page_data.description.whether.to.pre.fill.the.file.finders.query.with.text.selected.in.the.focused.item",
+                    "Whether to pre-fill the file finder's query with text selected in the focused item.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("file_finder.prefill_query_from_selection"),
+                    pick: |settings_content| {
+                        settings_content
+                            .file_finder
+                            .as_ref()?
+                            .prefill_query_from_selection
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .file_finder
+                            .get_or_insert_default()
+                            .prefill_query_from_selection = value;
                     },
                 }),
                 metadata: None,
