@@ -13,30 +13,30 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
-- Current HEAD: `92f5ce0611c37783e9d89c80c4e9544135474f93` plus uncommitted
-  Phase 1 changes
+- Current HEAD: tracked by the commit log; latest implementation boundary
+  `86b96e7a7503decb19bdce59e3c20070058e0fac`
 - Branch/worktree: `vfs-refactor` in the primary worktree
-- Active phase: `Phase 1`
-- Last completed phase: `Phase 0`
+- Active phase: `Phase 2`
+- Last completed phase: `Phase 1`
 - Blocking issue: `None`
-- Next action: 完成 Phase 1 touched-diff code-smell review、docs/proto validation 和
-  signed-off commit，随后进入 Phase 2 provider contract。
+- Next action: 实现 Phase 2 provider/file contract、typed errors/capabilities、
+  Memory/Legacy/Local providers 与 positioned I/O conformance。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit       | Validation | Notes                          |
-| ----- | ---------------------------------- | ----------- | ------------ | ---------- | ------------------------------ |
-| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470` | PASS       | VFS-EXP-001 PASS               |
-| 1     | Path/resource types 与 v2 wire     | IN PROGRESS | -            | PASS       | Final review and commit remain |
-| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -            | -          | -                              |
-| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -            | -          | -                              |
-| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -            | -          | -                              |
-| 5     | Consumer 迁移                      | NOT STARTED | -            | -          | -                              |
-| 6     | LSP/Git/native execution           | NOT STARTED | -            | -          | -                              |
-| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -            | -          | -                              |
-| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -            | -          | -                              |
-| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -            | -          | -                              |
-| 10    | 收敛与最终验证                     | NOT STARTED | -            | -          | -                              |
+| Phase | Result                             | Status      | Commit       | Validation | Notes            |
+| ----- | ---------------------------------- | ----------- | ------------ | ---------- | ---------------- |
+| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470` | PASS       | VFS-EXP-001 PASS |
+| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75` | PASS       | VFS-EXP-002 PASS |
+| 2     | Provider、LocalProvider、职责拆分  | NOT STARTED | -            | -          | -                |
+| 3     | Snapshot、ResourceId、Worktree     | NOT STARTED | -            | -          | -                |
+| 4     | RemoteProviderProxy 与 VFS RPC     | NOT STARTED | -            | -          | -                |
+| 5     | Consumer 迁移                      | NOT STARTED | -            | -          | -                |
+| 6     | LSP/Git/native execution           | NOT STARTED | -            | -          | -                |
+| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -            | -          | -                |
+| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -            | -          | -                |
+| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -            | -          | -                |
+| 10    | 收敛与最终验证                     | NOT STARTED | -            | -          | -                |
 
 ## Baseline {#baseline}
 
@@ -178,9 +178,10 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## 提交记录 {#commit-log}
 
-| Commit                                     | Phase | Summary                                                             | Validation                                                                        | Reversible boundary                                                                             |
-| ------------------------------------------ | ----- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `4c350914704df52cf4733b57a074c91db25afab2` | 0     | Baseline, ADR, fixed corpus, fault transport and legacy conformance | Targeted fmt/check/test/clippy and docs Prettier PASS; existing failures recorded | Remove the new `vfs` scaffold, Phase 0 tests and ADR without changing existing runtime behavior |
+| Commit                                     | Phase | Summary                                                                               | Validation                                                                                             | Reversible boundary                                                                             |
+| ------------------------------------------ | ----- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `4c350914704df52cf4733b57a074c91db25afab2` | 0     | Baseline, ADR, fixed corpus, fault transport and legacy conformance                   | Targeted fmt/check/test/clippy and docs Prettier PASS; existing failures recorded                      | Remove the new `vfs` scaffold, Phase 0 tests and ADR without changing existing runtime behavior |
+| `86b96e7a7503decb19bdce59e3c20070058e0fac` | 1     | Lossless path/resource types, native codecs, v2 protobuf and `ProjectPath` dual-write | VFS/proto tests, cross-target checks, project adapter test, clippy and docs Prettier PASS; buf NOT RUN | Remove v2 fields/types and dual-write adapter while retaining legacy string behavior            |
 
 ## 平台 QA {#platform-qa}
 
@@ -196,11 +197,11 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Remaining work {#remaining-work}
 
-- Complete Phase 1 review/commit.
 - Phase 2 through Phase 10.
 
 ## Next action {#next-action}
 
-完成 Phase 1 touched-diff code-smell review、docs Prettier 和 proto 可用验证，创建
-signed-off commit。然后实现 Phase 2 `VfsProvider`/`VfsFile`、typed error/capability、
-Memory/Legacy/Local provider 与 positioned I/O。
+实现 Phase 2 `VfsProvider`、`VfsFile`、metadata、structured capability、typed error、
+operation options、paged `read_dir` 与 cancellation contract。接入 Memory/Legacy/Local
+provider，同一 conformance suite 覆盖 positioned I/O、EOF、sparse file、watch
+overflow 与 capability/unsupported semantics。
