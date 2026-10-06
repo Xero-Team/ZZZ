@@ -273,18 +273,11 @@ pub struct Project {
     _vfs_lease_reaper: Task<()>,
 }
 
-enum DownloadDestination {
-    File(PathBuf),
-    Memory(futures::channel::oneshot::Sender<Result<Vec<u8>>>),
-}
-
-/// Process-wide counter for remote file-transfer ids. Shared by
-/// `download_file` and `read_file_bytes` so their transfers never collide in
-/// `Project::downloading_files`.
+/// Process-wide counter for remote file-transfer ids.
 static NEXT_DOWNLOAD_FILE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 struct DownloadingFile {
-    destination: DownloadDestination,
+    destination_path: PathBuf,
     chunks: Vec<u8>,
     total_size: u64,
 }
@@ -450,6 +443,13 @@ impl ProjectResourceIdentity {
     pub fn new(resource_id: Option<vfs::ResourceId>, path: ProjectPath) -> Self {
         resource_id.map_or(Self::Path(path), Self::Resource)
     }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ProjectEntryIdentity {
+    pub entry_id: Option<ProjectEntryId>,
+    pub resource_id: Option<vfs::ResourceId>,
+    pub vfs_path: Option<vfs::VfsPath>,
 }
 
 impl ProjectPath {
@@ -1478,14 +1478,7 @@ impl Project {
                     cx,
                 )
             });
-            let image_store = cx.new(|cx| {
-                ImageStore::remote(
-                    worktree_store.clone(),
-                    remote.read(cx).proto_client(),
-                    REMOTE_SERVER_PROJECT_ID,
-                    cx,
-                )
-            });
+            let image_store = cx.new(|cx| ImageStore::remote(worktree_store.clone(), cx));
             cx.subscribe(&buffer_store, Self::on_buffer_store_event)
                 .detach();
             let toolchain_store = cx.new(|cx| {
@@ -2612,40 +2605,28 @@ impl Project {
         destination_path: PathBuf,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.start_download(
-            worktree_id,
-            path,
-            DownloadDestination::File(destination_path),
-            cx,
-        )
+        self.start_download(worktree_id, path, destination_path, cx)
     }
 
-    /// Read a remote worktree file into memory, returning its raw bytes. This
-    /// mirrors [`Project::download_file`] but keeps the transferred contents in
-    /// memory instead of writing them to a local path, so it also works for
-    /// remote/SSH projects where the file has no local absolute path.
+    /// Reads a worktree resource through its local or remote VFS provider.
     pub fn read_file_bytes(
         &mut self,
         worktree_id: WorktreeId,
         path: Arc<RelPath>,
         cx: &mut Context<Self>,
     ) -> Task<Result<Vec<u8>>> {
-        let (completion_tx, completion_rx) = futures::channel::oneshot::channel();
-        let request = self.start_download(
-            worktree_id,
-            path,
-            DownloadDestination::Memory(completion_tx),
-            cx,
-        );
-        cx.spawn(async move |_this, _cx| {
-            request.await?;
-            completion_rx.await.context("file download was cancelled")?
-        })
+        let Some(worktree) = self.worktree_for_id(worktree_id, cx) else {
+            return Task::ready(Err(anyhow!("no such worktree")));
+        };
+        let load = worktree.update(cx, |worktree, cx| {
+            worktree.load_binary_file(path.as_ref(), cx)
+        });
+        cx.spawn(async move |_this, _cx| Ok(load.await?.content))
     }
 
-    /// Reads a remote worktree file and writes it to a temporary local file so a
-    /// decoder that needs a filesystem path can open it. The returned
-    /// `TempPath` deletes the file on drop.
+    /// Materializes a resource without a native path into a temporary local file
+    /// for decoders that require filesystem access. The returned `TempPath`
+    /// deletes the file on drop.
     pub fn stage_file_to_temp(
         &mut self,
         worktree_id: WorktreeId,
@@ -2675,7 +2656,7 @@ impl Project {
         &mut self,
         worktree_id: WorktreeId,
         path: Arc<RelPath>,
-        destination: DownloadDestination,
+        destination_path: PathBuf,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         let Some(remote_client) = &self.remote_client else {
@@ -2696,7 +2677,7 @@ impl Project {
         downloading_files.lock().insert(
             file_id,
             DownloadingFile {
-                destination,
+                destination_path,
                 chunks: Vec::new(),
                 total_size: 0,
             },
@@ -2879,7 +2860,6 @@ impl Project {
             image_store.open_image(path.into(), cx)
         });
 
-        let weak_project = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
             let image_item = open_image_task.await?;
 
@@ -2888,9 +2868,7 @@ impl Project {
                 cx.read_entity(&image_item, |item, _| item.image_metadata.is_none());
 
             if needs_metadata {
-                let project = weak_project.upgrade().context("Project dropped")?;
-                let metadata =
-                    ImageItem::load_image_metadata(image_item.clone(), project, cx).await?;
+                let metadata = ImageItem::load_image_metadata(image_item.clone(), cx).await?;
                 image_item.update(cx, |image_item, cx| {
                     image_item.image_metadata = Some(metadata);
                     cx.emit(ImageItemEvent::MetadataUpdated);
@@ -4519,6 +4497,28 @@ impl Project {
         ProjectResourceIdentity::new(self.vfs_identity_for_project_path(path, cx).0, path.clone())
     }
 
+    pub fn entry_identity_for_project_path(
+        &self,
+        path: &ProjectPath,
+        cx: &App,
+    ) -> Option<ProjectEntryIdentity> {
+        let worktree = self.worktree_for_id(path.worktree_id, cx)?;
+        if let Some(entry) = worktree.read(cx).entry_for_path(&path.path) {
+            return Some(ProjectEntryIdentity {
+                entry_id: Some(entry.id),
+                resource_id: entry.resource_id,
+                vfs_path: entry.vfs_path.clone(),
+            });
+        }
+        let (resource_id, vfs_path) =
+            worktree::File::vfs_identity_for_path(&path.path, &worktree, cx);
+        Some(ProjectEntryIdentity {
+            entry_id: None,
+            resource_id,
+            vfs_path,
+        })
+    }
+
     pub fn entry_for_resource_id(
         &self,
         resource_id: vfs::ResourceId,
@@ -5343,7 +5343,7 @@ impl Project {
                     state.content_size
                 );
 
-                let empty_file_destination: Option<DownloadDestination> = {
+                let empty_file_destination: Option<PathBuf> = {
                     let mut files = downloading_files.lock();
                     if let Some(file_entry) = files.get_mut(&state.id) {
                         file_entry.total_size = state.content_size;
@@ -5356,7 +5356,7 @@ impl Project {
 
                     if state.content_size == 0 {
                         // No chunks will arrive for an empty file; finish it now.
-                        files.remove(&state.id).map(|entry| entry.destination)
+                        files.remove(&state.id).map(|entry| entry.destination_path)
                     } else {
                         None
                     }
@@ -5375,7 +5375,7 @@ impl Project {
                 );
 
                 // Extract data while holding the lock, then release it before await
-                let completed: Option<(DownloadDestination, Vec<u8>)> = {
+                let completed: Option<(PathBuf, Vec<u8>)> = {
                     let mut files = downloading_files.lock();
                     match files.get_mut(&chunk.file_id) {
                         Some(file_entry) => {
@@ -5392,7 +5392,7 @@ impl Project {
                                 let content = std::mem::take(&mut file_entry.chunks);
                                 files
                                     .remove(&chunk.file_id)
-                                    .map(|entry| (entry.destination, content))
+                                    .map(|entry| (entry.destination_path, content))
                             } else {
                                 None
                             }
@@ -5418,26 +5418,19 @@ impl Project {
         Ok(())
     }
 
-    async fn finish_download(destination: DownloadDestination, content: Vec<u8>) {
-        match destination {
-            DownloadDestination::File(destination) => {
-                log::debug!(
-                    "handle_create_file_for_peer: writing {} bytes to {:?}",
-                    content.len(),
-                    destination
-                );
-                match smol::fs::write(&destination, &content).await {
-                    Ok(_) => log::info!(
-                        "handle_create_file_for_peer: successfully wrote file to {:?}",
-                        destination
-                    ),
-                    Err(e) => {
-                        log::error!("handle_create_file_for_peer: failed to write file: {:?}", e)
-                    }
-                }
-            }
-            DownloadDestination::Memory(completion_tx) => {
-                completion_tx.send(Ok(content)).ok();
+    async fn finish_download(destination_path: PathBuf, content: Vec<u8>) {
+        log::debug!(
+            "handle_create_file_for_peer: writing {} bytes to {:?}",
+            content.len(),
+            destination_path
+        );
+        match smol::fs::write(&destination_path, &content).await {
+            Ok(_) => log::info!(
+                "handle_create_file_for_peer: successfully wrote file to {:?}",
+                destination_path
+            ),
+            Err(error) => {
+                log::error!("handle_create_file_for_peer: failed to write file: {error:?}")
             }
         }
     }

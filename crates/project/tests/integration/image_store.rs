@@ -55,6 +55,62 @@ async fn test_image_not_loaded_twice(cx: &mut TestAppContext) {
     let image2 = task2.await.unwrap();
 
     assert_eq!(image1, image2);
+    assert!(cx.read(|cx| image1.read(cx).image_metadata.is_some()));
+
+    let (entry_id, resource_id) = cx.read(|cx| {
+        let file = &image1.read(cx).file;
+        (
+            file.entry_id
+                .expect("image fixture should have an entry ID"),
+            file.resource_id
+                .expect("image fixture should have a resource ID"),
+        )
+    });
+    project
+        .update(cx, |project, cx| {
+            project.rename_entry(
+                entry_id,
+                ProjectPath {
+                    worktree_id,
+                    path: rel_path("renamed.png").into(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("image rename should succeed");
+    cx.run_until_parked();
+
+    let renamed_image = project
+        .update(cx, |project, cx| {
+            project.open_image(
+                ProjectPath {
+                    worktree_id,
+                    path: rel_path("renamed.png").into(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("renamed image should open");
+    assert_eq!(image1, renamed_image);
+    cx.read(|cx| {
+        let file = &renamed_image.read(cx).file;
+        assert_eq!(file.resource_id, Some(resource_id));
+        assert_eq!(file.path.as_ref(), rel_path("renamed.png"));
+    });
+}
+
+#[gpui::test]
+async fn test_closed_image_loading_watch_reports_cancellation(_cx: &mut TestAppContext) {
+    let (sender, receiver) = postage::watch::channel();
+    drop(sender);
+
+    let error = ImageStore::wait_for_loading_image(receiver)
+        .await
+        .expect_err("closed loading watch should report cancellation");
+
+    assert_eq!(error.to_string(), "image load was cancelled");
 }
 
 #[gpui::test]
