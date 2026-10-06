@@ -826,6 +826,44 @@ impl VfsSnapshot {
 
     pub async fn apply_event_batch(&self, batch: EventBatch) -> VfsResult<SnapshotDelta> {
         let _event_reconciliation_guard = self.event_reconciliation_lock.write().await;
+        self.apply_event_batch_locked(batch).await
+    }
+
+    pub async fn reconcile_known_rename(
+        &self,
+        old_path: ProviderPath,
+        new_path: ProviderPath,
+    ) -> VfsResult<SnapshotDelta> {
+        let _event_reconciliation_guard = self.event_reconciliation_lock.write().await;
+        let mut rescan_roots = BTreeSet::new();
+        rescan_roots.extend(old_path.parent());
+        rescan_roots.extend(new_path.parent());
+        if !rescan_roots.is_empty() {
+            self.registry.set_rescan_state(SnapshotRescanState::Running);
+        }
+        let mut delta = SnapshotDelta::default();
+        for rescan_root in rescan_roots {
+            if self.registry.id_for_path(&rescan_root).is_none() {
+                continue;
+            }
+            let rescan_delta = match self.load_directory_for_reconciliation(&rescan_root).await {
+                Ok(delta) => delta,
+                Err(error) => {
+                    self.registry.prune_tombstone_file_keys();
+                    self.registry
+                        .set_rescan_state(SnapshotRescanState::Required);
+                    return Err(error);
+                }
+            };
+            delta.changes.extend(rescan_delta.changes);
+        }
+        coalesce_delta_changes(&mut delta);
+        self.registry.prune_tombstone_file_keys();
+        self.registry.set_rescan_state(SnapshotRescanState::Idle);
+        Ok(delta)
+    }
+
+    async fn apply_event_batch_locked(&self, batch: EventBatch) -> VfsResult<SnapshotDelta> {
         let last_sequence = self.registry.last_sequence();
         if batch.last_sequence <= last_sequence {
             return Ok(SnapshotDelta::default());
@@ -2050,7 +2088,7 @@ mod tests {
     }
 
     #[test]
-    fn event_reconciliation_preserves_cross_directory_rename_identity() {
+    fn known_rename_preserves_cross_directory_identity() {
         let result = block_on(async {
             let provider = Arc::new(MemoryProvider::new(
                 "snapshot-cross-directory-rename",
@@ -2101,18 +2139,10 @@ mod tests {
                 .rename(&source_path, &target_path, RenameOptions::default())
                 .await?;
             let delta = snapshot
-                .apply_event_batch(EventBatch {
-                    first_sequence: 1,
-                    last_sequence: 1,
-                    events: vec![crate::VfsEvent {
-                        path: target_path.clone(),
-                        kind: VfsEventKind::Renamed {
-                            old_path: source_path.clone(),
-                        },
-                    }],
-                })
+                .reconcile_known_rename(source_path.clone(), target_path.clone())
                 .await?;
             if snapshot.registry().id_for_path(&target_path) != Some(source_id)
+                || snapshot.registry().last_sequence() != 0
                 || !delta.changes.iter().any(|change| {
                     change.resource_id == source_id
                         && matches!(

@@ -572,6 +572,25 @@ impl WorktreeStore {
                     .as_local()
                     .expect("should be a local instance")
                     .fs_is_case_sensitive();
+                let vfs_rename =
+                    if !is_root_entry && old_worktree.read(cx).id() == new_worktree_ref.id() {
+                        old_worktree.read(cx).vfs_snapshot().and_then(|snapshot| {
+                            let path_encoding = snapshot.provider().descriptor().path_encoding;
+                            let old_path = vfs::provider_path_from_legacy_utf8(
+                                old_entry.path.as_unix_str(),
+                                path_encoding,
+                            )
+                            .ok()?;
+                            let new_path = vfs::provider_path_from_legacy_utf8(
+                                new_project_path.path.as_unix_str(),
+                                path_encoding,
+                            )
+                            .ok()?;
+                            Some((snapshot, old_path, new_path))
+                        })
+                    } else {
+                        None
+                    };
 
                 let do_rename =
                     async move |fs: &dyn Fs, old_path: &Path, new_path: &Path, overwrite| {
@@ -598,26 +617,30 @@ impl WorktreeStore {
                                 == abs_new_path.to_str().map(|p| p.to_lowercase());
 
                         // The directory we're renaming into might not exist yet
-                        if let Err(e) =
+                        if let Err(error) =
                             do_rename(fs.as_ref(), &abs_old_path, &abs_new_path, overwrite).await
                         {
-                            if let Some(err) = e.downcast_ref::<std::io::Error>()
+                            if let Some(err) = error.downcast_ref::<std::io::Error>()
                                 && err.kind() == std::io::ErrorKind::NotFound
                             {
                                 if let Some(parent) = abs_new_path.parent() {
                                     fs.create_dir(parent).await.with_context(|| {
                                         format!("creating parent directory {parent:?}")
                                     })?;
-                                    return do_rename(
-                                        fs.as_ref(),
-                                        &abs_old_path,
-                                        &abs_new_path,
-                                        overwrite,
-                                    )
-                                    .await;
+                                    do_rename(fs.as_ref(), &abs_old_path, &abs_new_path, overwrite)
+                                        .await?;
+                                } else {
+                                    return Err(error);
                                 }
+                            } else {
+                                return Err(error);
                             }
-                            return Err(e);
+                        }
+                        if let Some((snapshot, old_path, new_path)) = vfs_rename
+                            && let Err(error) =
+                                snapshot.reconcile_known_rename(old_path, new_path).await
+                        {
+                            log::error!("failed to reconcile known VFS rename: {error:#}");
                         }
                         Ok(())
                     }
