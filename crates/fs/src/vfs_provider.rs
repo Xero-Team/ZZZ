@@ -242,6 +242,9 @@ impl FsProviderCore {
         let Some(canonical_root) = &self.canonical_root else {
             return Ok(());
         };
+        if absolute_path == self.root.as_ref() {
+            return Ok(());
+        }
         let path_to_check = if follow_final_component {
             absolute_path
         } else {
@@ -400,9 +403,11 @@ impl FsProviderCore {
             if cursor.as_ref().is_some_and(|cursor| &file_name <= cursor) {
                 continue;
             }
-            let metadata = self
-                .metadata(&provider_path, StatOptions::default())
-                .await?;
+            let metadata = match self.metadata(&provider_path, StatOptions::default()).await {
+                Ok(metadata) => metadata,
+                Err(error) if error.code() == VfsErrorCode::NotFound => continue,
+                Err(error) => return Err(error),
+            };
             entries.insert(
                 file_name,
                 DirEntry {
@@ -1326,6 +1331,13 @@ fn metadata_to_entry(
         content_version: version.clone(),
         structure_version: version,
         symbolic_link_target,
+        symbolic_link_target_kind: metadata.is_symlink.then_some(if metadata.is_dir {
+            EntryKind::Directory
+        } else if metadata.is_fifo {
+            EntryKind::Special
+        } else {
+            EntryKind::File
+        }),
         case_sensitivity,
     }
 }

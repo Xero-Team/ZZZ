@@ -13,9 +13,11 @@ use typed_path::{WindowsComponent, WindowsPath, WindowsPrefix};
 
 mod memory_provider;
 mod provider;
+mod snapshot;
 
 pub use memory_provider::*;
 pub use provider::*;
+pub use snapshot::*;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

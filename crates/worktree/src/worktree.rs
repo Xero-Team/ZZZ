@@ -8,8 +8,8 @@ use clock::ReplicaId;
 use collections::{HashMap, HashSet, VecDeque};
 use encoding_rs::Encoding;
 use fs::{
-    Fs, MTime, PathEvent, PathEventKind, RemoveOptions, TrashedEntry, Watcher, copy_recursive,
-    read_dir_items,
+    Fs, MTime, Metadata, PathEvent, PathEventKind, RemoveOptions, TrashedEntry, Watcher,
+    copy_recursive, read_dir_items,
 };
 use futures::{
     FutureExt as _, Stream, StreamExt,
@@ -53,11 +53,12 @@ use std::{
     any::Any,
     borrow::Borrow as _,
     cmp::Ordering,
-    collections::hash_map,
+    collections::{BTreeMap, hash_map, hash_map::DefaultHasher},
     convert::TryFrom,
     ffi::OsStr,
     fmt,
     future::Future,
+    hash::{Hash as _, Hasher as _},
     mem::{self},
     ops::{Deref, DerefMut, Range},
     path::{Path, PathBuf},
@@ -66,7 +67,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering::SeqCst},
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 use sum_tree::{Bias, Dimensions, Edit, KeyedItem, SeekTarget, SumTree, Summary, TreeMap, TreeSet};
 use text::{LineEnding, Rope};
@@ -74,6 +75,11 @@ use util::{
     ResultExt, maybe,
     paths::{PathMatcher, PathStyle, SanitizedPath, home_dir},
     rel_path::{RelPath, RelPathBuf},
+};
+use vfs::{
+    CaseSensitivity as VfsCaseSensitivity, CompatibilityPathError,
+    EntryMetadata as VfsEntryMetadata, SnapshotBudgets, VfsProvider, VfsSnapshot,
+    provider_path_from_legacy_utf8, provider_path_to_legacy_utf8,
 };
 pub use worktree_settings::WorktreeSettings;
 
@@ -144,6 +150,7 @@ pub struct LocalWorktree {
     _background_scanner_tasks: Vec<Task<()>>,
     update_observer: Option<UpdateObservationState>,
     fs: Arc<dyn Fs>,
+    vfs_snapshot: Option<VfsSnapshot>,
     fs_case_sensitive: bool,
     visible: bool,
     next_entry_id: Arc<AtomicUsize>,
@@ -459,6 +466,36 @@ impl Worktree {
             .context("failed to stat worktree path")?;
 
         let fs_case_sensitive = fs.is_case_sensitive().await;
+        let vfs_snapshot = if metadata.is_some() {
+            let provider: Arc<dyn VfsProvider> = if fs.is_fake() {
+                Arc::new(fs::LegacyFsProvider::new(
+                    format!("worktree-{}", worktree_id.to_proto()),
+                    abs_path.clone(),
+                    fs.clone(),
+                    if fs_case_sensitive {
+                        VfsCaseSensitivity::Sensitive
+                    } else {
+                        VfsCaseSensitivity::Insensitive
+                    },
+                ))
+            } else {
+                Arc::new(
+                    fs::LocalProvider::new(
+                        format!("worktree-{}", worktree_id.to_proto()),
+                        abs_path.clone(),
+                        fs.clone(),
+                    )
+                    .await
+                    .context("failed to create worktree LocalProvider")?,
+                )
+            };
+            Some(
+                VfsSnapshot::mount(provider, SnapshotBudgets::default())
+                    .context("failed to allocate worktree VFS mount")?,
+            )
+        } else {
+            None
+        };
 
         let root_file_handle = if metadata.as_ref().is_some() {
             fs.open_handle(&abs_path)
@@ -565,6 +602,7 @@ impl Worktree {
                 path_prefixes_to_scan_tx,
                 _background_scanner_tasks: Vec::new(),
                 fs,
+                vfs_snapshot,
                 fs_case_sensitive,
                 visible,
                 settings,
@@ -1237,6 +1275,7 @@ impl LocalWorktree {
         let share_private_files = self.share_private_files;
         let next_entry_id = self.next_entry_id.clone();
         let fs = self.fs.clone();
+        let vfs_snapshot = self.vfs_snapshot.clone();
         let scanning_enabled = self.scanning_enabled;
         let force_defer_watch = self.force_defer_watch;
         let track_git_repositories = self.visible;
@@ -1259,6 +1298,7 @@ impl LocalWorktree {
                 let is_single_file = snapshot.snapshot.root_dir().is_none();
                 let mut scanner = BackgroundScanner {
                     fs,
+                    vfs_snapshot,
                     fs_case_sensitive,
                     status_updates_tx: scan_states_tx,
                     executor: background,
@@ -4244,6 +4284,7 @@ impl<'a> sum_tree::Dimension<'a, EntrySummary> for PathKey {
 struct BackgroundScanner {
     state: async_lock::Mutex<BackgroundScannerState>,
     fs: Arc<dyn Fs>,
+    vfs_snapshot: Option<VfsSnapshot>,
     fs_case_sensitive: bool,
     status_updates_tx: UnboundedSender<ScanState>,
     executor: BackgroundExecutor,
@@ -5336,21 +5377,46 @@ impl BackgroundScanner {
         // produces an event.
         self.watcher.add(job.abs_path.as_ref()).log_err();
 
-        let mut child_paths = self
-            .fs
-            .read_dir(&job.abs_path)
-            .await?
-            .filter_map(|entry| async {
-                match entry {
-                    Ok(entry) => Some(entry),
-                    Err(error) => {
-                        log::error!("error processing entry {:?}", error);
-                        None
+        let mut provider_metadata = BTreeMap::new();
+        let mut child_paths = if let Some(vfs_snapshot) = &self.vfs_snapshot {
+            let provider_path = provider_path_from_legacy_utf8(
+                job.path.as_unix_str(),
+                vfs_snapshot.provider().descriptor().path_encoding,
+            )?;
+            vfs_snapshot.load_directory(&provider_path).await?;
+            let mut child_paths = Vec::new();
+            for record in vfs_snapshot.registry().children(&provider_path) {
+                let Some(metadata) = record.metadata else {
+                    continue;
+                };
+                let relative_path = match provider_path_to_legacy_utf8(&record.path) {
+                    Ok(relative_path) => relative_path,
+                    Err(CompatibilityPathError::UnrepresentableComponent { .. }) => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                let relative_path = RelPath::from_proto(&relative_path)?;
+                let child_abs_path = root_abs_path.join(relative_path.as_std_path());
+                provider_metadata
+                    .insert(child_abs_path.clone(), legacy_metadata_from_vfs(&metadata));
+                child_paths.push(child_abs_path);
+            }
+            child_paths
+        } else {
+            self.fs
+                .read_dir(&job.abs_path)
+                .await?
+                .filter_map(|entry| async {
+                    match entry {
+                        Ok(entry) => Some(entry),
+                        Err(error) => {
+                            log::error!("error processing entry {:?}", error);
+                            None
+                        }
                     }
-                }
-            })
-            .collect::<Vec<_>>()
-            .await;
+                })
+                .collect::<Vec<_>>()
+                .await
+        };
 
         // Ensure that .git and .gitignore are processed first.
         swap_to_front(&mut child_paths, GITIGNORE);
@@ -5420,14 +5486,19 @@ impl BackgroundScanner {
                 continue;
             }
 
-            let child_metadata = match self.fs.metadata(&child_abs_path).await {
-                Ok(Some(metadata)) => metadata,
-                Ok(None) => continue,
-                Err(err) => {
-                    log::error!("error processing {:?}: {err:#}", child_abs_path.display());
-                    continue;
-                }
-            };
+            let child_metadata =
+                if let Some(metadata) = provider_metadata.remove(child_abs_path.as_ref()) {
+                    metadata
+                } else {
+                    match self.fs.metadata(&child_abs_path).await {
+                        Ok(Some(metadata)) => metadata,
+                        Ok(None) => continue,
+                        Err(err) => {
+                            log::error!("error processing {:?}: {err:#}", child_abs_path.display());
+                            continue;
+                        }
+                    }
+                };
 
             let mut child_entry = Entry::new(
                 child_path.clone(),
@@ -6990,6 +7061,35 @@ fn parse_gitfile(content: &str) -> anyhow::Result<&Path> {
         .strip_prefix("gitdir:")
         .with_context(|| format!("parsing gitfile content {content:?}"))?;
     Ok(Path::new(path.trim()))
+}
+
+fn legacy_metadata_from_vfs(metadata: &VfsEntryMetadata) -> Metadata {
+    let inode = metadata.provider_file_key.as_ref().map_or(0, |file_key| {
+        if let Ok(bytes) = <[u8; 8]>::try_from(file_key.as_bytes()) {
+            u64::from_be_bytes(bytes)
+        } else {
+            let mut hasher = DefaultHasher::new();
+            file_key.as_bytes().hash(&mut hasher);
+            hasher.finish()
+        }
+    });
+    let change_token = metadata.content_version.as_bytes().get(..16).map(|bytes| {
+        let mut token = [0; 16];
+        token.copy_from_slice(bytes);
+        token
+    });
+    Metadata {
+        inode,
+        mtime: MTime::from_system_time(metadata.modified_at.unwrap_or(UNIX_EPOCH)),
+        is_symlink: metadata.kind == vfs::EntryKind::SymbolicLink,
+        is_dir: metadata.kind == vfs::EntryKind::Directory
+            || metadata.symbolic_link_target_kind == Some(vfs::EntryKind::Directory),
+        len: metadata.size,
+        is_fifo: metadata.kind == vfs::EntryKind::Special,
+        is_executable: metadata.permissions.executable,
+        is_writable: metadata.permissions.writable,
+        change_token,
+    }
 }
 
 fn resolve_gitfile_path(dot_git_abs_path: &Path, gitfile_path: &Path) -> PathBuf {

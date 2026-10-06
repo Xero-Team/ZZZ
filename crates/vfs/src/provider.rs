@@ -355,7 +355,7 @@ impl Default for OperationContext {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct VfsVersion(Arc<[u8]>);
 
@@ -369,7 +369,7 @@ impl VfsVersion {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ProviderFileKey(Arc<[u8]>);
 
@@ -412,6 +412,7 @@ pub struct EntryMetadata {
     pub content_version: VfsVersion,
     pub structure_version: VfsVersion,
     pub symbolic_link_target: Option<ProviderPath>,
+    pub symbolic_link_target_kind: Option<EntryKind>,
     pub case_sensitivity: CaseSensitivity,
 }
 

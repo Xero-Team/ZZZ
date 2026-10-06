@@ -127,6 +127,7 @@ impl MemoryProvider {
             content_version: node.content_version.clone(),
             structure_version: node.structure_version.clone(),
             symbolic_link_target: None,
+            symbolic_link_target_kind: None,
             case_sensitivity: CaseSensitivity::Sensitive,
         }
     }
