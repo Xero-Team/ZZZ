@@ -410,6 +410,10 @@ pub enum Event {
     },
     RefreshCodeLens,
     RevealInProjectPanel(ProjectEntryId),
+    RevealResourceInProjectPanel {
+        resource_id: vfs::ResourceId,
+        fallback_entry_id: Option<ProjectEntryId>,
+    },
     SnippetEdit(BufferId, Vec<(lsp::Range, Snippet)>),
     ExpandedAllForEntry(WorktreeId, ProjectEntryId),
     EntryRenamed {
@@ -4493,6 +4497,18 @@ impl Project {
             return (None, None);
         };
         worktree::File::vfs_identity_for_path(&path.path, &worktree, cx)
+    }
+
+    pub fn entry_for_resource_id(
+        &self,
+        resource_id: vfs::ResourceId,
+        cx: &App,
+    ) -> Option<(WorktreeId, ProjectEntryId)> {
+        self.worktrees(cx).find_map(|worktree| {
+            let worktree = worktree.read(cx);
+            let entry = worktree.entry_for_resource_id(resource_id)?;
+            Some((worktree.id(), entry.id))
+        })
     }
 
     pub fn path_for_entry(&self, entry_id: ProjectEntryId, cx: &App) -> Option<ProjectPath> {

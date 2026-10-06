@@ -207,6 +207,7 @@ pub struct Snapshot {
     root_char_bag: CharBag,
     entries_by_path: SumTree<Entry>,
     entries_by_id: SumTree<PathEntry>,
+    entries_by_resource_id: HashMap<ResourceId, ProjectEntryId>,
     root_repo_common_dir: Option<Arc<SanitizedPath>>,
     root_repo_is_linked_worktree: bool,
 
@@ -2620,6 +2621,7 @@ impl Snapshot {
             root_name,
             entries_by_path: Default::default(),
             entries_by_id: Default::default(),
+            entries_by_resource_id: Default::default(),
             root_repo_common_dir: None,
             root_repo_is_linked_worktree: false,
             scan_id: 1,
@@ -2716,6 +2718,12 @@ impl Snapshot {
         always_included_paths: &PathMatcher,
     ) -> Result<Entry> {
         let entry = Entry::try_from((&self.root_char_bag, always_included_paths, entry))?;
+        if let Some(resource_id) = self
+            .entry_for_id(entry.id)
+            .and_then(|entry| entry.resource_id)
+        {
+            self.entries_by_resource_id.remove(&resource_id);
+        }
         let old_entry = self.entries_by_id.insert_or_replace(
             PathEntry {
                 id: entry.id,
@@ -2728,7 +2736,14 @@ impl Snapshot {
         if let Some(old_entry) = old_entry {
             self.entries_by_path.remove(&PathKey(old_entry.path), ());
         }
-        self.entries_by_path.insert_or_replace(entry.clone(), ());
+        if let Some(replaced_entry) = self.entries_by_path.insert_or_replace(entry.clone(), ())
+            && let Some(resource_id) = replaced_entry.resource_id
+        {
+            self.entries_by_resource_id.remove(&resource_id);
+        }
+        if let Some(resource_id) = entry.resource_id {
+            self.entries_by_resource_id.insert(resource_id, entry.id);
+        }
         Ok(entry)
     }
 
@@ -2741,6 +2756,9 @@ impl Snapshot {
             while let Some(entry) = cursor.item() {
                 if entry.path.starts_with(&removed_entry.path) {
                     self.entries_by_id.remove(&entry.id, ());
+                    if let Some(resource_id) = entry.resource_id {
+                        self.entries_by_resource_id.remove(&resource_id);
+                    }
                     cursor.next();
                 } else {
                     break;
@@ -2784,12 +2802,15 @@ impl Snapshot {
 
         let mut entries_by_path_edits = Vec::new();
         let mut entries_by_id_edits = Vec::new();
+        let mut removed_resource_ids = Vec::new();
+        let mut updated_resources = Vec::new();
 
         for entry_id in update.removed_entries {
             let entry_id = ProjectEntryId::from_proto(entry_id);
             entries_by_id_edits.push(Edit::Remove(entry_id));
             if let Some(entry) = self.entry_for_id(entry_id) {
                 entries_by_path_edits.push(Edit::Remove(PathKey(entry.path.clone())));
+                removed_resource_ids.extend(entry.resource_id);
             }
         }
 
@@ -2799,6 +2820,9 @@ impl Snapshot {
             else {
                 continue;
             };
+            if let Some(old_entry) = self.entry_for_id(entry.id) {
+                removed_resource_ids.extend(old_entry.resource_id);
+            }
             if let Some(PathEntry { path, .. }) = self.entries_by_id.get(&entry.id, ()) {
                 entries_by_path_edits.push(Edit::Remove(PathKey(path.clone())));
             }
@@ -2806,6 +2830,10 @@ impl Snapshot {
                 && old_entry.id != entry.id
             {
                 entries_by_id_edits.push(Edit::Remove(old_entry.id));
+                removed_resource_ids.extend(old_entry.resource_id);
+            }
+            if let Some(resource_id) = entry.resource_id {
+                updated_resources.push((resource_id, entry.id));
             }
             entries_by_id_edits.push(Edit::Insert(PathEntry {
                 id: entry.id,
@@ -2818,6 +2846,10 @@ impl Snapshot {
 
         self.entries_by_path.edit(entries_by_path_edits, ());
         self.entries_by_id.edit(entries_by_id_edits, ());
+        for resource_id in removed_resource_ids {
+            self.entries_by_resource_id.remove(&resource_id);
+        }
+        self.entries_by_resource_id.extend(updated_resources);
 
         // A `None` from a completed scan is a real repo removal, whereas a `None`
         // mid-scan may just mean the sender hasn't registered the root repo yet.
@@ -3027,6 +3059,10 @@ impl Snapshot {
         self.entry_for_path(&entry.path)
     }
 
+    pub fn entry_for_resource_id(&self, resource_id: ResourceId) -> Option<&Entry> {
+        self.entry_for_id(*self.entries_by_resource_id.get(&resource_id)?)
+    }
+
     pub fn path_style(&self) -> PathStyle {
         self.path_style
     }
@@ -3114,10 +3150,13 @@ impl LocalSnapshot {
 
         let scan_id = self.scan_id;
         let removed = self.entries_by_path.insert_or_replace(entry.clone(), ());
-        if let Some(removed) = removed
-            && removed.id != entry.id
-        {
-            self.entries_by_id.remove(&removed.id, ());
+        if let Some(removed) = removed {
+            if let Some(resource_id) = removed.resource_id {
+                self.entries_by_resource_id.remove(&resource_id);
+            }
+            if removed.id != entry.id {
+                self.entries_by_id.remove(&removed.id, ());
+            }
         }
         self.entries_by_id.insert_or_replace(
             PathEntry {
@@ -3128,6 +3167,9 @@ impl LocalSnapshot {
             },
             (),
         );
+        if let Some(resource_id) = entry.resource_id {
+            self.entries_by_resource_id.insert(resource_id, entry.id);
+        }
 
         entry
     }
@@ -3275,6 +3317,16 @@ impl LocalSnapshot {
 
         assert!(files.next().is_none());
         assert!(visible_files.next().is_none());
+
+        let expected_resources = self
+            .entries_by_path
+            .cursor::<()>(())
+            .filter_map(|entry| entry.resource_id.map(|resource_id| (resource_id, entry.id)))
+            .collect::<HashMap<_, _>>();
+        assert_eq!(
+            self.entries_by_resource_id, expected_resources,
+            "entries_by_resource_id is inconsistent"
+        );
 
         let mut bfs_paths = Vec::new();
         let mut stack = self
@@ -3496,6 +3548,16 @@ impl BackgroundScannerState {
         let mut entries_by_id_edits = Vec::new();
 
         for entry in entries {
+            if let Some(existing_entry) = self.snapshot.entry_for_path(&entry.path)
+                && let Some(resource_id) = existing_entry.resource_id
+            {
+                self.snapshot.entries_by_resource_id.remove(&resource_id);
+            }
+            if let Some(resource_id) = entry.resource_id {
+                self.snapshot
+                    .entries_by_resource_id
+                    .insert(resource_id, entry.id);
+            }
             entries_by_id_edits.push(Edit::Insert(PathEntry {
                 id: entry.id,
                 path: entry.path.clone(),
@@ -3594,6 +3656,9 @@ impl BackgroundScannerState {
             }
 
             self.removed_entries.insert(entry);
+            if let Some(resource_id) = entry.resource_id {
+                self.snapshot.entries_by_resource_id.remove(&resource_id);
+            }
 
             if entry.path.file_name() == Some(GITIGNORE) {
                 let abs_parent_path = self.snapshot.absolutize(

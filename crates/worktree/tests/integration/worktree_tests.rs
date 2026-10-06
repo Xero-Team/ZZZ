@@ -6567,6 +6567,12 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
             .expect("remote identity entry should decode");
         assert_eq!(entry.resource_id, Some(resource_id));
         assert_eq!(entry.vfs_path, Some(vfs_path.clone()));
+        assert_eq!(
+            worktree
+                .entry_for_resource_id(resource_id)
+                .map(|entry| entry.id),
+            Some(entry.id)
+        );
     });
     let entry = worktree.read_with(cx, |worktree, _cx| {
         worktree
@@ -6603,6 +6609,31 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
 
     worktree.read_with(cx, |worktree, _cx| {
         assert!(worktree.entry_for_path(rel_path("different.txt")).is_none());
+    });
+
+    worktree.update(cx, |worktree, _cx| {
+        worktree
+            .as_remote()
+            .expect("remote fixture should remain remote")
+            .update_from_remote(proto::UpdateWorktree {
+                project_id: 1,
+                worktree_id: 1,
+                abs_path: "/home/user/project".to_owned(),
+                root_name: "project".to_owned(),
+                updated_entries: Vec::new(),
+                removed_entries: vec![9],
+                scan_id: 3,
+                is_last_update: true,
+                updated_repositories: Vec::new(),
+                removed_repositories: Vec::new(),
+                root_repo_common_dir: None,
+                root_repo_is_linked_worktree: false,
+            });
+    });
+    cx.run_until_parked();
+
+    worktree.read_with(cx, |worktree, _cx| {
+        assert!(worktree.entry_for_resource_id(resource_id).is_none());
     });
 }
 

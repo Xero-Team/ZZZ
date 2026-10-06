@@ -6005,6 +6005,16 @@ async fn test_explicit_reveal(cx: &mut gpui::TestAppContext) {
         .expect("dir 1 file is not ignored and should have an entry");
     let dir_2_file = find_project_entry(&panel, "project_root/dir_2/file_1.py", cx)
         .expect("dir 2 file is not ignored and should have an entry");
+    let dir_2_resource_id = project.read_with(cx, |project, cx| {
+        let worktree = project
+            .worktree_for_entry(dir_2_file, cx)
+            .expect("dir 2 fixture should belong to a worktree");
+        worktree
+            .read(cx)
+            .entry_for_id(dir_2_file)
+            .and_then(|entry| entry.resource_id)
+            .expect("dir 2 fixture should carry a VFS resource identity")
+    });
     let gitignored_dir_file =
         find_project_entry(&panel, "project_root/dir_1/gitignored_dir/file_a.py", cx);
     assert_eq!(
@@ -6095,7 +6105,10 @@ async fn test_explicit_reveal(cx: &mut gpui::TestAppContext) {
 
     panel.update(cx, |panel, cx| {
         panel.project.update(cx, |_, cx| {
-            cx.emit(project::Event::RevealInProjectPanel(dir_2_file))
+            cx.emit(project::Event::RevealResourceInProjectPanel {
+                resource_id: dir_2_resource_id,
+                fallback_entry_id: Some(ProjectEntryId::MAX),
+            })
         })
     });
     cx.run_until_parked();

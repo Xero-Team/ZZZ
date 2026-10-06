@@ -841,6 +841,8 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
                     size: None,
                     canonical_path: None,
                     is_unloaded: false,
+                    vfs_path: None,
+                    resource_id: None,
                 }],
                 removed_entries: vec![],
                 scan_id: 1,

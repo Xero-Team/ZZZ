@@ -4618,9 +4618,26 @@ impl Render for Pane {
                             .map(ProjectEntryId::from_proto)
                             .or_else(|| item.project_entry_ids(cx).first().copied())
                     });
+                    let resource_id = action
+                        .entry_id
+                        .is_none()
+                        .then(|| active_item.as_ref()?.resource_id(cx))
+                        .flatten();
 
                     pane.project
                         .update(cx, |project, cx| {
+                            if let Some(resource_id) = resource_id
+                                && let Some((worktree_id, _)) =
+                                    project.entry_for_resource_id(resource_id, cx)
+                                && project
+                                    .worktree_for_id(worktree_id, cx)
+                                    .is_some_and(|worktree| worktree.read(cx).is_visible())
+                            {
+                                return cx.emit(project::Event::RevealResourceInProjectPanel {
+                                    resource_id,
+                                    fallback_entry_id: entry_id,
+                                });
+                            }
                             if let Some(entry_id) = entry_id
                                 && project
                                     .worktree_for_entry(entry_id, cx)

@@ -693,6 +693,24 @@ impl ProjectPanel {
                             cx.emit(PanelEvent::Activate);
                         }
                     }
+                    project::Event::RevealResourceInProjectPanel {
+                        resource_id,
+                        fallback_entry_id,
+                    } => {
+                        let entry_id = project
+                            .read(cx)
+                            .entry_for_resource_id(*resource_id, cx)
+                            .map(|(_, entry_id)| entry_id)
+                            .or(*fallback_entry_id);
+                        if let Some(entry_id) = entry_id
+                            && this
+                                .reveal_entry(project.clone(), entry_id, false, window, cx)
+                                .log_err()
+                                == Some(())
+                        {
+                            cx.emit(PanelEvent::Activate);
+                        }
+                    }
                     project::Event::ActivateProjectPanel => {
                         cx.emit(PanelEvent::Activate);
                     }

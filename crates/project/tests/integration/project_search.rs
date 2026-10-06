@@ -47,6 +47,8 @@ async fn test_path_inclusion_matcher(cx: &mut gpui::TestAppContext) {
     // be loaded by the worktree
     let entry = Entry {
         id: ProjectEntryId::from_proto(1),
+        resource_id: None,
+        vfs_path: None,
         kind: EntryKind::UnloadedDir,
         path: Arc::from(RelPath::unix(Path::new("src/data")).unwrap()),
         inode: 0,
