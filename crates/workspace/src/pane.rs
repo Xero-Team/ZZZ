@@ -67,9 +67,30 @@ pub struct SelectedEntry {
 pub struct DraggedSelection {
     pub active_selection: SelectedEntry,
     pub marked_selections: Arc<[SelectedEntry]>,
+    resource_ids: Arc<HashMap<SelectedEntry, vfs::ResourceId>>,
 }
 
 impl DraggedSelection {
+    pub fn new(active_selection: SelectedEntry, marked_selections: Arc<[SelectedEntry]>) -> Self {
+        Self {
+            active_selection,
+            marked_selections,
+            resource_ids: Arc::new(HashMap::default()),
+        }
+    }
+
+    pub fn with_resource_ids(
+        mut self,
+        resource_ids: impl IntoIterator<Item = (SelectedEntry, vfs::ResourceId)>,
+    ) -> Self {
+        self.resource_ids = Arc::new(resource_ids.into_iter().collect());
+        self
+    }
+
+    pub fn resource_id(&self, selection: &SelectedEntry) -> Option<vfs::ResourceId> {
+        self.resource_ids.get(selection).copied()
+    }
+
     pub fn items<'a>(&'a self) -> Box<dyn Iterator<Item = &'a SelectedEntry> + 'a> {
         if self.marked_selections.contains(&self.active_selection) {
             Box::new(self.marked_selections.iter())

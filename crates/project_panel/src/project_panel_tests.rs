@@ -4891,10 +4891,8 @@ async fn test_multiple_marked_entries(cx: &mut gpui::TestAppContext) {
     );
     cx.update(|window, cx| {
         panel.update(cx, |this, cx| {
-            let drag = DraggedSelection {
-                active_selection: this.selection.unwrap(),
-                marked_selections: this.marked_entries.clone().into(),
-            };
+            let drag =
+                DraggedSelection::new(this.selection.unwrap(), this.marked_entries.clone().into());
             let target_entry = this
                 .project
                 .read(cx)
@@ -5033,10 +5031,24 @@ async fn test_dragged_selection_resolve_entry(cx: &mut gpui::TestAppContext) {
     // Case 1: Move last dir 'd' - should move only 'd', leaving 'a/b/c'
     select_path(&panel, "root/a/b/c/d", cx);
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection: *panel.selection.as_ref().unwrap(),
-            marked_selections: Arc::new([*panel.selection.as_ref().unwrap()]),
+        let selection = *panel.selection.as_ref().unwrap();
+        let resource_id = {
+            let project = panel.project.read(cx);
+            let worktree = project
+                .worktree_for_id(selection.worktree_id, cx)
+                .unwrap()
+                .read(cx);
+            worktree
+                .entry_for_id(selection.entry_id)
+                .and_then(|entry| entry.resource_id)
+                .unwrap()
         };
+        let stale_selection = SelectedEntry {
+            worktree_id: selection.worktree_id,
+            entry_id: ProjectEntryId::MAX,
+        };
+        let drag = DraggedSelection::new(stale_selection, Arc::new([stale_selection]))
+            .with_resource_ids([(stale_selection, resource_id)]);
         let target_entry = panel
             .project
             .read(cx)
@@ -5063,10 +5075,10 @@ async fn test_dragged_selection_resolve_entry(cx: &mut gpui::TestAppContext) {
     // Reset
     select_path(&panel, "root/target_destination/d", cx);
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection: *panel.selection.as_ref().unwrap(),
-            marked_selections: Arc::new([*panel.selection.as_ref().unwrap()]),
-        };
+        let drag = DraggedSelection::new(
+            *panel.selection.as_ref().unwrap(),
+            Arc::new([*panel.selection.as_ref().unwrap()]),
+        );
         let target_entry = panel
             .project
             .read(cx)
@@ -5083,10 +5095,10 @@ async fn test_dragged_selection_resolve_entry(cx: &mut gpui::TestAppContext) {
     // Case 2: Move middle dir 'b' - should move 'b/c/d', leaving only 'a'
     select_path(&panel, "root/a/b", cx);
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection: *panel.selection.as_ref().unwrap(),
-            marked_selections: Arc::new([*panel.selection.as_ref().unwrap()]),
-        };
+        let drag = DraggedSelection::new(
+            *panel.selection.as_ref().unwrap(),
+            Arc::new([*panel.selection.as_ref().unwrap()]),
+        );
         let target_entry = panel
             .project
             .read(cx)
@@ -5109,10 +5121,10 @@ async fn test_dragged_selection_resolve_entry(cx: &mut gpui::TestAppContext) {
     // Reset
     select_path(&panel, "root/target_destination/b", cx);
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection: *panel.selection.as_ref().unwrap(),
-            marked_selections: Arc::new([*panel.selection.as_ref().unwrap()]),
-        };
+        let drag = DraggedSelection::new(
+            *panel.selection.as_ref().unwrap(),
+            Arc::new([*panel.selection.as_ref().unwrap()]),
+        );
         let target_entry = panel
             .project
             .read(cx)
@@ -5129,10 +5141,10 @@ async fn test_dragged_selection_resolve_entry(cx: &mut gpui::TestAppContext) {
     // Case 3: Move first dir 'a' - should move whole 'a/b/c/d'
     select_path(&panel, "root/a", cx);
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection: *panel.selection.as_ref().unwrap(),
-            marked_selections: Arc::new([*panel.selection.as_ref().unwrap()]),
-        };
+        let drag = DraggedSelection::new(
+            *panel.selection.as_ref().unwrap(),
+            Arc::new([*panel.selection.as_ref().unwrap()]),
+        );
         let target_entry = panel
             .project
             .read(cx)
@@ -5206,10 +5218,10 @@ async fn test_drag_marked_entries_in_folded_directories(cx: &mut gpui::TestAppCo
     select_folded_path_with_mark(&panel, "root/e/f/g", "root/e/f", cx);
 
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection: *panel.selection.as_ref().unwrap(),
-            marked_selections: panel.marked_entries.clone().into(),
-        };
+        let drag = DraggedSelection::new(
+            *panel.selection.as_ref().unwrap(),
+            panel.marked_entries.clone().into(),
+        );
         let target_entry = panel
             .project
             .read(cx)
@@ -5284,12 +5296,12 @@ async fn test_dragging_same_named_files_preserves_one_source_on_conflict(
             (root_entry_id, worktree_id, entry_a_id, entry_b_id)
         };
 
-        let drag = DraggedSelection {
-            active_selection: SelectedEntry {
+        let drag = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id,
                 entry_id: entry_a_id,
             },
-            marked_selections: Arc::new([
+            Arc::new([
                 SelectedEntry {
                     worktree_id,
                     entry_id: entry_a_id,
@@ -5299,7 +5311,7 @@ async fn test_dragging_same_named_files_preserves_one_source_on_conflict(
                     entry_id: entry_b_id,
                 },
             ]),
-        };
+        );
 
         panel.drag_onto(&drag, root_entry_id, false, window, cx);
     });
@@ -9054,16 +9066,16 @@ async fn test_highlight_entry_for_selection_drag(cx: &mut gpui::TestAppContext) 
             .unwrap();
 
         // Test 1: Single item drag, don't highlight parent directory
-        let dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id,
                 entry_id: child_file.id,
             },
-            marked_selections: Arc::new([SelectedEntry {
+            Arc::new([SelectedEntry {
                 worktree_id,
                 entry_id: child_file.id,
             }]),
-        };
+        );
         let result =
             panel.highlight_entry_for_selection_drag(parent_dir, worktree, &dragged_selection, cx);
         assert_eq!(result, None, "Should not highlight parent of dragged item");
@@ -9096,12 +9108,12 @@ async fn test_highlight_entry_for_selection_drag(cx: &mut gpui::TestAppContext) 
         );
 
         // Test 5: Multiple items drag, highlight parent directory
-        let dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id,
                 entry_id: child_file.id,
             },
-            marked_selections: Arc::new([
+            Arc::new([
                 SelectedEntry {
                     worktree_id,
                     entry_id: child_file.id,
@@ -9111,7 +9123,7 @@ async fn test_highlight_entry_for_selection_drag(cx: &mut gpui::TestAppContext) 
                     entry_id: sibling_file.id,
                 },
             ]),
-        };
+        );
         let result =
             panel.highlight_entry_for_selection_drag(parent_dir, worktree, &dragged_selection, cx);
         assert_eq!(
@@ -9193,16 +9205,16 @@ async fn test_highlight_entry_for_selection_drag_cross_worktree(cx: &mut gpui::T
             .unwrap();
 
         // Test dragging file from worktree A onto parent of file with same relative path in worktree B
-        let dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id: worktree_a.read(cx).id(),
                 entry_id: main_rs_from_a.id,
             },
-            marked_selections: Arc::new([SelectedEntry {
+            Arc::new([SelectedEntry {
                 worktree_id: worktree_a.read(cx).id(),
                 entry_id: main_rs_from_a.id,
             }]),
-        };
+        );
 
         let result = panel.highlight_entry_for_selection_drag(
             src_dir_from_b,
@@ -9289,12 +9301,12 @@ async fn test_should_highlight_background_for_selection_drag(cx: &mut gpui::Test
         let root_file = worktree1.entry_for_path(rel_path("root_file.txt")).unwrap();
 
         // Test 1: Multiple entries - should always highlight background
-        let multiple_dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let multiple_dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: child_file.id,
             },
-            marked_selections: Arc::new([
+            Arc::new([
                 SelectedEntry {
                     worktree_id: worktree1_id,
                     entry_id: child_file.id,
@@ -9304,7 +9316,7 @@ async fn test_should_highlight_background_for_selection_drag(cx: &mut gpui::Test
                     entry_id: nested_file.id,
                 },
             ]),
-        };
+        );
 
         let result = panel.should_highlight_background_for_selection_drag(
             &multiple_dragged_selection,
@@ -9314,16 +9326,16 @@ async fn test_should_highlight_background_for_selection_drag(cx: &mut gpui::Test
         assert!(result, "Should highlight background for multiple entries");
 
         // Test 2: Single entry with non-empty parent path - should highlight background
-        let nested_dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let nested_dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: nested_file.id,
             },
-            marked_selections: Arc::new([SelectedEntry {
+            Arc::new([SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: nested_file.id,
             }]),
-        };
+        );
 
         let result = panel.should_highlight_background_for_selection_drag(
             &nested_dragged_selection,
@@ -9333,16 +9345,16 @@ async fn test_should_highlight_background_for_selection_drag(cx: &mut gpui::Test
         assert!(result, "Should highlight background for nested file");
 
         // Test 3: Single entry at root level, same worktree - should NOT highlight background
-        let root_file_dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let root_file_dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: root_file.id,
             },
-            marked_selections: Arc::new([SelectedEntry {
+            Arc::new([SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: root_file.id,
             }]),
-        };
+        );
 
         let result = panel.should_highlight_background_for_selection_drag(
             &root_file_dragged_selection,
@@ -9366,16 +9378,16 @@ async fn test_should_highlight_background_for_selection_drag(cx: &mut gpui::Test
         );
 
         // Test 5: Single entry in subdirectory - should highlight background
-        let child_file_dragged_selection = DraggedSelection {
-            active_selection: SelectedEntry {
+        let child_file_dragged_selection = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: child_file.id,
             },
-            marked_selections: Arc::new([SelectedEntry {
+            Arc::new([SelectedEntry {
                 worktree_id: worktree1_id,
                 entry_id: child_file.id,
             }]),
-        };
+        );
 
         let result = panel.should_highlight_background_for_selection_drag(
             &child_file_dragged_selection,
@@ -10088,13 +10100,13 @@ pub(crate) fn drag_selection_to(
         let selection = panel
             .selection
             .expect("a selection is required before dragging");
-        let drag = DraggedSelection {
-            active_selection: SelectedEntry {
+        let drag = DraggedSelection::new(
+            SelectedEntry {
                 worktree_id: selection.worktree_id,
                 entry_id: panel.resolve_entry(selection.entry_id),
             },
-            marked_selections: Arc::from(panel.marked_entries.clone()),
-        };
+            Arc::from(panel.marked_entries.clone()),
+        );
         panel.drag_onto(&drag, target_entry, is_file, window, cx);
     });
     cx.executor().run_until_parked();
@@ -10133,10 +10145,7 @@ pub(crate) fn drag_entries_onto(
         .expect("at least one source path is required");
 
     panel.update_in(cx, |panel, window, cx| {
-        let drag = DraggedSelection {
-            active_selection,
-            marked_selections: Arc::from(selections),
-        };
+        let drag = DraggedSelection::new(active_selection, Arc::from(selections));
         panel.drag_onto(&drag, target_entry_id, target_is_file, window, cx);
     });
     cx.executor().run_until_parked();

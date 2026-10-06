@@ -2934,12 +2934,12 @@ mod tests {
                 );
 
                 // Dragging multiple selections should write both paths to the terminal
-                let dragged_selection = DraggedSelection {
-                    active_selection: SelectedEntry {
+                let dragged_selection = DraggedSelection::new(
+                    SelectedEntry {
                         worktree_id,
                         entry_id: first_entry.id,
                     },
-                    marked_selections: Arc::from([
+                    Arc::from([
                         SelectedEntry {
                             worktree_id,
                             entry_id: first_entry.id,
@@ -2949,7 +2949,7 @@ mod tests {
                             entry_id: second_entry.id,
                         },
                     ]),
-                };
+                );
                 assert_drop_writes_to_terminal(
                     &active_pane,
                     terminal_view_index,

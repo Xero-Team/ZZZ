@@ -5173,7 +5173,7 @@ impl ProjectPanel {
         let resolved_selections = selections
             .items()
             .map(|entry| SelectedEntry {
-                entry_id: self.resolve_entry(entry.entry_id),
+                entry_id: self.resolve_entry(self.current_drag_entry_id(entry, selections, cx)),
                 worktree_id: entry.worktree_id,
             })
             .collect::<BTreeSet<SelectedEntry>>();
@@ -5924,6 +5924,23 @@ impl ProjectPanel {
         }
     }
 
+    fn current_drag_entry_id(
+        &self,
+        selection: &SelectedEntry,
+        drag_state: &DraggedSelection,
+        cx: &App,
+    ) -> ProjectEntryId {
+        drag_state
+            .resource_id(selection)
+            .and_then(|resource_id| {
+                self.project
+                    .read(cx)
+                    .entry_for_resource_id(resource_id, cx)
+                    .map(|(_, entry_id)| entry_id)
+            })
+            .unwrap_or(selection.entry_id)
+    }
+
     fn highlight_entry_for_selection_drag(
         &self,
         target_entry: &Entry,
@@ -5938,10 +5955,9 @@ impl ProjectPanel {
         if drag_state.items().count() == 1
             && drag_state.active_selection.worktree_id == target_worktree.id()
         {
-            let active_entry_path = self
-                .project
-                .read(cx)
-                .path_for_entry(drag_state.active_selection.entry_id, cx)?;
+            let active_entry_id =
+                self.current_drag_entry_id(&drag_state.active_selection, drag_state, cx);
+            let active_entry_path = self.project.read(cx).path_for_entry(active_entry_id, cx)?;
 
             if let Some(active_parent_path) = active_entry_path.path.parent() {
                 // Do not highlight active entry parent
@@ -5978,11 +5994,9 @@ impl ProjectPanel {
         }
 
         // Since root will always have empty relative path
-        if let Some(entry_path) = self
-            .project
-            .read(cx)
-            .path_for_entry(drag_state.active_selection.entry_id, cx)
-        {
+        let active_entry_id =
+            self.current_drag_entry_id(&drag_state.active_selection, drag_state, cx);
+        if let Some(entry_path) = self.project.read(cx).path_for_entry(active_entry_id, cx) {
             if let Some(parent_path) = entry_path.path.parent() {
                 if !parent_path.is_empty() {
                     return true;
@@ -6189,10 +6203,22 @@ impl ProjectPanel {
                 .when(settings.drag_and_drop, |this| {
                     let path_for_external_paths = path.clone();
                     let path_for_dragged_selection = path.clone();
-                    let dragged_selection = DraggedSelection {
-                        active_selection: selection,
-                        marked_selections: marked_selections.clone(),
+                    let resource_ids = {
+                        let project = self.project.read(cx);
+                        std::iter::once(selection)
+                            .chain(marked_selections.iter().copied())
+                            .filter_map(|selection| {
+                                let worktree =
+                                    project.worktree_for_id(selection.worktree_id, cx)?.read(cx);
+                                let resource_id =
+                                    worktree.entry_for_id(selection.entry_id)?.resource_id?;
+                                Some((selection, resource_id))
+                            })
+                            .collect::<Vec<_>>()
                     };
+                    let dragged_selection =
+                        DraggedSelection::new(selection, marked_selections.clone())
+                            .with_resource_ids(resource_ids);
 
                     this.on_drag_move::<ExternalPaths>(cx.listener(
                         move |this, event: &DragMoveEvent<ExternalPaths>, _, cx| {
