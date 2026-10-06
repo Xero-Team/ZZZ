@@ -1872,10 +1872,14 @@ impl OpenBuffer {
 }
 
 fn is_not_found_error(error: &anyhow::Error) -> bool {
-    error
-        .root_cause()
-        .downcast_ref::<io::Error>()
-        .is_some_and(|err| err.kind() == io::ErrorKind::NotFound)
+    error.chain().any(|source| {
+        source
+            .downcast_ref::<io::Error>()
+            .is_some_and(|error| error.kind() == io::ErrorKind::NotFound)
+            || source
+                .downcast_ref::<vfs::VfsError>()
+                .is_some_and(|error| error.code() == vfs::VfsErrorCode::NotFound)
+    })
 }
 
 fn apply_initial_line_ending(buffer: &mut Buffer, cx: &mut Context<Buffer>) {
