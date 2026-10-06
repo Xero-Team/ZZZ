@@ -2932,6 +2932,68 @@ mod tests {
         }
     }
 
+    #[gpui::test]
+    async fn test_deserialize_prefers_exact_vfs_path(cx: &mut gpui::TestAppContext) {
+        use util::rel_path::rel_path;
+
+        init_test(cx, |_| {});
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            path!("/root"),
+            json!({
+                "legacy.rs": "legacy content",
+                "exact.rs": "exact content",
+            }),
+        )
+        .await;
+
+        let project = Project::test(fs, [path!("/root").as_ref()], cx).await;
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
+        let workspace_id = cx
+            .update(|_, cx| workspace::WorkspaceDb::global(cx))
+            .next_id()
+            .await
+            .unwrap();
+        let editor_db = cx.update(|_, cx| EditorDb::global(cx));
+        let serialized_provider_path = project.read_with(cx, |project, cx| {
+            let worktree_id = project.worktrees(cx).next().unwrap().read(cx).id();
+            let project_path = ProjectPath {
+                worktree_id,
+                path: rel_path("exact.rs").into(),
+            };
+            let (_, exact_vfs_path) = project.vfs_identity_for_project_path(&project_path, cx);
+            proto::ProviderPathV2::from_provider_path(exact_vfs_path.unwrap().provider_path())
+                .encode_to_vec()
+        });
+        let item_id = 12345 as ItemId;
+
+        editor_db
+            .save_serialized_editor(
+                item_id,
+                workspace_id,
+                SerializedEditor {
+                    abs_path: Some(PathBuf::from(path!("/root/legacy.rs"))),
+                    vfs_path: Some(serialized_provider_path),
+                    contents: None,
+                    language: None,
+                    mtime: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let deserialized = deserialize_editor(item_id, workspace_id, workspace, project, cx).await;
+
+        deserialized.read_with(cx, |editor, cx| {
+            assert_eq!(editor.text(cx), "exact content");
+            let buffer = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
+            assert_eq!(buffer.file().unwrap().path().as_ref(), rel_path("exact.rs"));
+        });
+    }
+
     // Verify that renaming an open file emits EditorEvent::FileHandleChanged so that
     // the workspace re-serializes the editor with the updated path.
     #[gpui::test]
