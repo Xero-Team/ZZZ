@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 4 进行中                              |
+| 当前阶段      | 阶段 5 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -300,12 +300,97 @@ LRU page retirement 和 whole-page compaction，并完成 TEXT-004/005/006。
 
 ### 阶段 4：content-class budget、LRU 和 compaction
 
+状态：`COMPLETE`
+
+- 增加 `AtlasContentKind::{GlyphAlpha, GlyphSubpixel, GlyphColor, SvgMask, Image}`；
+  `AtlasTextureKind` 只决定 GPU pixel format。即使 texture format 相同，glyph/image、
+  glyph/SVG 也使用不同 page pool、budget、recency 和 diagnostics。
+- 增加 `AtlasPolicy`，production defaults 按 TEXT-001 baseline 保留现有常用 workload：
+  GlyphAlpha 16 MiB、GlyphSubpixel 32 MiB、GlyphColor 32 MiB、SvgMask 8 MiB、Image
+  64 MiB；test 可注入 page size 和每类 retained budget，不新增用户 setting。
+- page 记录 content kind、resident bytes、active/tombstone entries 和 last-used frame；
+  snapshot 提供每类 page/bytes/entries/budget/working-set/eviction/compaction/pressure。
+- budget maintenance 只在 atlas frame boundary 执行。当前 completed usage 构成
+  working-set floor；可见 working set 超 budget 时完整保留并记录 pressure，不返回空 tile。
+- 超预算时按 content class 和 page recency 退休 cold entries/pages；无 cross-class eviction。
+  cold entry 已不在 completed Scene，finish-frame retirement 不推进 epoch。
+- 仍超预算时每个 frame 最多调度一个 sparse page whole-page compaction：hot lookup 退休，
+  下一 full repaint 按需重新 raster/upload 到新 monotonic identity。旧 page 在新 completed
+  usage 不引用后销毁；不在旧 page 上就地覆盖。
+- compaction raster/allocation/upload 失败会恢复旧 lookup、active count 与正确 resident
+  content，避免把失败变成缺字；单元测试覆盖 raster failure rollback。
+
+TEXT-004：`PASS`
+
+- hardware 与 fallback 各运行 10,000 个 CJK scalar × 14/16/20 px ×
+  1.0/1.25/2.0 scale，共 711 frames 和 89,991 unique atlas keys。
+- injected GlyphSubpixel budget 1,048,576 bytes，page 262,144 bytes；maximum resident 与
+  maximum working set 均为 1,572,864 bytes，满足
+  `max(budget, working set) + one page`。
+- 每帧真实 WGPU render 后逐 8×8 cell 检查非空 coverage；0 missing/wrong glyph。
+- hardware p95 30.830 ms，fallback p95 30.252 ms；两者最终 resident 262,144 bytes、
+  eviction 89,975、whole-page compaction 77、pressure frames 383。
+
+TEXT-005：`PASS`
+
+- image retained budget 为 0，单 frame visible working set 为 4 个独立 8×8 pages，
+  resident/working-set 均为 1,024 bytes，pressure=1、eviction=0。
+- hardware/fallback pixel output 完全相同，四个 visible tiles 全部保留。
+
+TEXT-006：`PASS`
+
+- hardware/fallback 各运行 128 frames 的 glyph、SVG、animated image frame 和 128×128
+  large-image churn，并逐帧验证可见 glyph/SVG/image pixels。
+- 最终 GlyphSubpixel eviction=0；Image eviction=255；SvgMask eviction=124；最终各类
+  resident bytes 分别 16,384 / 16,384 / 4,096，证明大 image 与 SVG pressure 不驱逐
+  glyph working set。
+
+验证：
+
+| 命令或检查                                                                                     | 结果   | 说明                                                            |
+| ---------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------- |
+| `cargo test --locked -p gpui atlas::tests`                                                     | `PASS` | 15 budget/floor/isolation/compaction/failure tests              |
+| `cargo test --locked -p gpui --features frame-diagnostics`                                     | `PASS` | 255 unit + 1 integration，0 failed                              |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                     | `PASS` | 17 unit passed、1 ignored；5 headless passed、3 runners ignored |
+| `text_atlas_budget_runner -- --ignored --nocapture`                                            | `PASS` | TEXT-004 RADV + llvmpipe，32.37 s                               |
+| `working_set_over_budget_renders_without_missing_tiles`                                        | `PASS` | TEXT-005 RADV + llvmpipe pixel                                  |
+| `text_atlas_content_isolation_runner -- --ignored --nocapture`                                 | `PASS` | TEXT-006 RADV + llvmpipe，1.00 s                                |
+| `text_atlas_baseline_runner -- --ignored --nocapture`                                          | `PASS` | phase-0 workload remains 9 pages/34,603,008 bytes/9,502 uploads |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                      | `PASS` | Metal policy contract cross-compile；仅既有 vendor warnings     |
+| isolated `cargo check --target x86_64-pc-windows-gnu --tests --offline` for `directx_atlas.rs` | `PASS` | DirectX policy contract cross-compile                           |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                           | `PASS` | all-target/all-feature release clippy + philosophy              |
+| `cargo fmt --all -- --check`                                                                   | `PASS` | workspace Rust formatting                                       |
+
+原始 artifact：
+
+- TEXT-004 hardware/fallback JSON：
+  `09e9d5de93d1fec265d22599b2a5f1507a8e4133347fc54d185d86d0d37d7d1b` /
+  `7f0b05a080fe31bba9207006bd2b4b82dbf02dc4e354f1bcaaf9b3e7002aea44`
+- TEXT-005 hardware/fallback PNG：相同 SHA-256
+  `0c5c8c2d8550670cbffb81d5bbd17b2868a70543bf88115ee34b815c61c398e9`；对应 JSON
+  `8f6fd437626128355029df146ec19d26f75b9065be497b54ff` /
+  `2d464d5b83365583e3c6790cf25878453d86239774230edbf0e49c3f471816eb`
+- TEXT-006 hardware/fallback JSON：
+  `5f2c86330781b90ca2b2a97443ca378e78f59b5a64c9ab55dd76d58f48c1649a` /
+  `b773a2f541280245f4ce60173daab718ca12c65891305d676c81ee80543d9f99`
+- TEXT-006 hardware/fallback PNG：
+  `cf7d1442d0c185e231b24d0a9c8a49ee5a063284265ebe2eaa038999f45d0b59` /
+  `d5a6018ded3960d0659c3121215ee18028f80731dc41e4dbd6cebc9f0fde70cf`
+
+提交：content-class separation `162932b0c68aae3bf438bef765fdabad22383dfe`；
+budget/LRU/compaction `76c1dfea7dca29c4a4d4fc3b392a029fe22a5dbc`（均 signed）。
+
+下一步：阶段 5 引入明确的 `GlyphRasterFormat`/`GlyphRasterInfo`/`RasterizedGlyph`，让实际
+raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路径与 TEXT-007。
+
+### 阶段 5：format-aware glyph raster contract
+
 状态：`IN PROGRESS`
 
-尚未修改代码。先把 content lifecycle 与 texture format 分离并增加 test-injected small
-budgets，再接 working-set floor 和 compaction。
+尚未修改代码。先收敛 platform trait 和 WGPU Swash content，再分别处理 Windows
+per-glyph color detection 与 macOS CoreText color capability。
 
-### 阶段 5–9
+### 阶段 6–9
 
 状态：`NOT STARTED`
 
