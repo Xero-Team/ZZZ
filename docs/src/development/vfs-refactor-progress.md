@@ -14,30 +14,30 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `345e726fbd2756a720817fc31dbcb5cc4c2d9dfe`
+  `3783d71910022249360d91847c1cd76ca3fe9eac`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 5`
 - Last completed phase: `Phase 4`
 - Blocking issue: `None`
-- Next action: 按 Phase 5 顺序迁移 `language::File` 与 BufferStore 到
-  `ResourceId`/`VfsPath` 和 versioned provider operations，保留窄 compatibility view，
-  并建立 local/loopback-remote parity tests。
+- Next action: 让 RemoteBufferStore ordinary open/save 使用 Worktree 的
+  `RemoteProviderProxy` 与 versioned VFS file operations，缩窄 `OpenBufferByPath`/
+  `SaveBuffer` 到 collaboration registration compatibility seam，并补 local/remote parity tests。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit                                                                             | Validation | Notes                    |
-| ----- | ---------------------------------- | ----------- | ---------------------------------------------------------------------------------- | ---------- | ------------------------ |
-| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470`                                                                       | PASS       | VFS-EXP-001 PASS         |
-| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75`                                                                       | PASS       | VFS-EXP-002 PASS         |
-| 2     | Provider、LocalProvider、职责拆分  | PASS        | `9b344ee943`, `96a761f5be`                                                         | PASS       | VFS-EXP-003/004/005 PASS |
-| 3     | Snapshot、ResourceId、Worktree     | PASS        | `9514700ac9`                                                                       | PASS       | VFS-EXP-006 PASS         |
-| 4     | RemoteProviderProxy 与 VFS RPC     | PASS        | `a5d4bbc219`, `ce1038a9e7`, `82df2b06e3`, `31d8d5406d`, `067f939b01`, `345e726fbd` | PASS       | VFS-EXP-007/008 PASS     |
-| 5     | Consumer 迁移                      | NOT STARTED | -                                                                                  | -          | -                        |
-| 6     | LSP/Git/native execution           | NOT STARTED | -                                                                                  | -          | -                        |
-| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -                                                                                  | -          | -                        |
-| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -                                                                                  | -          | -                        |
-| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -                                                                                  | -          | -                        |
-| 10    | 收敛与最终验证                     | NOT STARTED | -                                                                                  | -          | -                        |
+| Phase | Result                             | Status      | Commit                                                                             | Validation | Notes                              |
+| ----- | ---------------------------------- | ----------- | ---------------------------------------------------------------------------------- | ---------- | ---------------------------------- |
+| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470`                                                                       | PASS       | VFS-EXP-001 PASS                   |
+| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75`                                                                       | PASS       | VFS-EXP-002 PASS                   |
+| 2     | Provider、LocalProvider、职责拆分  | PASS        | `9b344ee943`, `96a761f5be`                                                         | PASS       | VFS-EXP-003/004/005 PASS           |
+| 3     | Snapshot、ResourceId、Worktree     | PASS        | `9514700ac9`                                                                       | PASS       | VFS-EXP-006 PASS                   |
+| 4     | RemoteProviderProxy 与 VFS RPC     | PASS        | `a5d4bbc219`, `ce1038a9e7`, `82df2b06e3`, `31d8d5406d`, `067f939b01`, `345e726fbd` | PASS       | VFS-EXP-007/008 PASS               |
+| 5     | Consumer 迁移                      | IN PROGRESS | `3783d71910`                                                                       | PARTIAL    | Buffer identity/local I/O migrated |
+| 6     | LSP/Git/native execution           | NOT STARTED | -                                                                                  | -          | -                                  |
+| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -                                                                                  | -          | -                                  |
+| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -                                                                                  | -          | -                                  |
+| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -                                                                                  | -          | -                                  |
+| 10    | 收敛与最终验证                     | NOT STARTED | -                                                                                  | -          | -                                  |
 
 ## Baseline {#baseline}
 
@@ -107,17 +107,18 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Compatibility adapter 清单 {#compatibility-adapters}
 
-| Adapter                                     | Introduced | Callers                                                                                      | Removal phase | Status    |
-| ------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- | ------------- | --------- |
-| Legacy `Fs` storage façade                  | Existing   | Storage callers remain; Git/archive/job methods moved to service supertraits                 | Phase 9       | MIGRATING |
-| `LegacyFsProvider`                          | Phase 2    | Shared conformance and staged consumer migration                                             | Phase 9       | ACTIVE    |
-| Generic UTF-8 `ProviderPath` bridge         | Phase 1    | `ProjectPath` dual-read/write; [inventory](./vfs-research/path-adapter-inventory.md)         | Phase 9       | ACTIVE    |
-| `WorktreeId` to temporary `MountId`         | Phase 1    | `ProjectPath` v2 dual-wire adapter; runtime snapshots now allocate session mount IDs         | Phase 5       | MIGRATING |
-| `RelPath`/`ProjectPath` UTF-8 wire          | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)                       | Phase 9       | MIGRATING |
-| `Worktree::Local/Remote` behavior branches  | Existing   | 49 enum matches and 64 `is_local` calls                                                      | Phase 5/9     | BASELINE  |
-| Dedicated image/download byte RPC           | Existing   | Project media/download handlers                                                              | Phase 5/9     | BASELINE  |
-| Worktree snapshot-to-legacy metadata bridge | Phase 3    | `BackgroundScanner` while Worktree entries still use `RelPath`/legacy `Metadata`             | Phase 5/9     | ACTIVE    |
-| Lazy remote Worktree VFS provider task      | Phase 4    | Remote Worktree exposes a cached `RemoteProviderProxy` task before Phase 5 consumers migrate | Phase 5       | ACTIVE    |
+| Adapter                                         | Introduced | Callers                                                                                      | Removal phase | Status    |
+| ----------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- | ------------- | --------- |
+| Legacy `Fs` storage façade                      | Existing   | Storage callers remain; Git/archive/job methods moved to service supertraits                 | Phase 9       | MIGRATING |
+| `LegacyFsProvider`                              | Phase 2    | Shared conformance and staged consumer migration                                             | Phase 9       | ACTIVE    |
+| Generic UTF-8 `ProviderPath` bridge             | Phase 1    | `ProjectPath` dual-read/write; [inventory](./vfs-research/path-adapter-inventory.md)         | Phase 9       | ACTIVE    |
+| `WorktreeId` to temporary `MountId`             | Phase 1    | `ProjectPath` v2 dual-wire adapter; runtime snapshots now allocate session mount IDs         | Phase 5       | MIGRATING |
+| `RelPath`/`ProjectPath` UTF-8 wire              | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)                       | Phase 9       | MIGRATING |
+| `Worktree::Local/Remote` behavior branches      | Existing   | 49 enum matches and 64 `is_local` calls                                                      | Phase 5/9     | BASELINE  |
+| Dedicated image/download byte RPC               | Existing   | Project media/download handlers                                                              | Phase 5/9     | BASELINE  |
+| Worktree snapshot-to-legacy metadata bridge     | Phase 3    | `BackgroundScanner` while Worktree entries still use `RelPath`/legacy `Metadata`             | Phase 5/9     | ACTIVE    |
+| Lazy remote Worktree VFS provider task          | Phase 4    | Remote Worktree exposes a cached `RemoteProviderProxy` task before Phase 5 consumers migrate | Phase 5       | ACTIVE    |
+| Optional `language::File` VFS identity defaults | Phase 5    | Test/historic file implementations may return `None` while consumers migrate                 | Phase 9       | ACTIVE    |
 
 ## 实验结果 {#experiments}
 
@@ -227,6 +228,11 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-06 | 4F    | `./script/clippy -p vfs -p rpc -p proto -p worktree -p project`                                                                               | 0        | PASS; philosophy gate also PASS                                                                                                                | No                                                                      |
 | 2026-10-06 | 4F    | `(cd docs && npx prettier --write src/development/vfs-refactor-progress.md && npx prettier --check src/)`                                     | 0        | PASS                                                                                                                                           | No                                                                      |
 | 2026-10-06 | 4F    | touched-diff P0 detectors and `hunting-code-smells` P0/P1/P2 review                                                                           | 0        | PASS: fixed native capability leakage, stale private policy, payload retention, watch cancellation, orphan close responses and lease ownership | No                                                                      |
+| 2026-10-06 | 5A    | `cargo test --locked -p vfs -p proto`                                                                                                         | 0        | PASS: VFS 23 and proto 9 tests including bounded whole-file positioned reads                                                                   | No                                                                      |
+| 2026-10-06 | 5A    | `cargo test --locked -p worktree`                                                                                                             | 101      | FAIL: 91 passed, 1 failed                                                                                                                      | Yes: exact Phase 0 `test_load_file_encoding` failure                    |
+| 2026-10-06 | 5A    | `test_loaded_file_carries_vfs_identity`, `test_remote_file_vfs_identity_wire_validation`, `test_write_file_rejects_stale_vfs_version`         | 0 each   | PASS                                                                                                                                           | No                                                                      |
+| 2026-10-06 | 5A    | `cargo test --locked -p project --test integration test_buffer_identity_across_renames -- --exact --nocapture`                                | 0        | PASS: 10 deterministic iterations preserve `ResourceId` and BufferStore resource lookup                                                        | No                                                                      |
+| 2026-10-06 | 5A    | `./script/clippy -p vfs -p proto -p language -p worktree -p project`                                                                          | 0        | PASS; philosophy gate also PASS                                                                                                                | No                                                                      |
 
 ## 提交记录 {#commit-log}
 
@@ -243,6 +249,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `31d8d5406dff0e0b819e48de541608e018547a7b` | 4D    | Project-authorized VFS request/stream routing and lazy remote Worktree proxy                                          | Proto/rpc tests, project/worktree checks and targeted clippy PASS                                                               | Remove Project handlers and lazy proxy task while retaining loopback service                          |
 | `067f939b0165b0c093082f2ddae76d69b6fa2c20` | 4E    | Bounded idempotent result journal and active remote cancellation                                                      | VFS/rpc tests, response-loss retry, watch resume/overflow and clippy PASS                                                       | Remove recovery/cancellation layer while retaining basic remote operations                            |
 | `345e726fbd2756a720817fc31dbcb5cc4c2d9dfe` | 4F    | `VfsManager`, live path authorization, stat-many, leased handle reaper and final remote protocol hardening            | VFS-EXP-007/008, full targeted tests, baseline failure parity, cross-target core and code-smell review PASS                     | Remove final service hardening while retaining Phase 4A-E protocol and proxy boundaries               |
+| `3783d71910022249360d91847c1cd76ca3fe9eac` | 5A    | `language::File` VFS identity, dual-wire file handles, BufferStore resource index and versioned local provider I/O    | VFS/proto tests, Worktree regression parity, identity/rename/stale-version tests and targeted clippy PASS                       | Remove optional identity defaults and local `Fs` fallback after remaining consumers migrate           |
 
 ## 平台 QA {#platform-qa}
 
