@@ -7,6 +7,7 @@ pub mod pending_op;
 use crate::{
     ProjectEnvironment, ProjectItem, ProjectPath,
     buffer_store::{BufferStore, BufferStoreEvent},
+    native_execution::NativeExecutionContext,
     project_settings::ProjectSettings,
     trusted_worktrees::{
         PathTrust, TrustedWorktrees, TrustedWorktreesEvent, TrustedWorktreesStore,
@@ -191,7 +192,7 @@ enum GitStoreState {
         next_repository_id: Arc<AtomicU64>,
         downstream: Option<LocalDownstreamState>,
         project_environment: Entity<ProjectEnvironment>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         _fs_watches: Box<[Task<()>]>,
     },
     Remote {
@@ -421,10 +422,12 @@ impl LocalRepositoryState {
         work_directory_abs_path: Arc<Path>,
         dot_git_abs_path: Arc<Path>,
         project_environment: WeakEntity<ProjectEnvironment>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         is_trusted: bool,
         cx: &mut AsyncApp,
     ) -> anyhow::Result<Self> {
+        let fs = native_execution_context.file_system().clone();
+        let git_service = native_execution_context.git_service().clone();
         let environment = project_environment
                 .update(cx, |project_environment, cx| {
                     project_environment.local_directory_environment(&Shell::System, work_directory_abs_path.clone(), cx)
@@ -443,7 +446,6 @@ impl LocalRepositoryState {
         let search_paths = environment.get("PATH").map(|val| val.to_owned());
         let backend = cx
             .background_spawn({
-                let fs = fs.clone();
                 async move {
                     let path_from_environment = search_paths.clone();
                     let git_from_settings = configured_git_path
@@ -487,11 +489,8 @@ impl LocalRepositoryState {
                         git_from_process,
                     );
 
-                    fs::GitService::open_repo(
-                        fs.as_ref(),
-                        &dot_git_abs_path,
-                        system_git_binary_path.as_deref(),
-                    )
+                    git_service
+                        .open_repo(&dot_git_abs_path, system_git_binary_path.as_deref())
                         .with_context(|| format!("opening repository at {dot_git_abs_path:?}"))
                 }
             })
@@ -605,9 +604,10 @@ impl GitStore {
         worktree_store: &Entity<WorktreeStore>,
         buffer_store: Entity<BufferStore>,
         environment: Entity<ProjectEnvironment>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         cx: &mut Context<Self>,
     ) -> Self {
+        let fs = native_execution_context.file_system().clone();
         let _fs_watches = if fs.is_fake() {
             Box::new([])
         } else {
@@ -626,14 +626,14 @@ impl GitStore {
                         let Ok(_) = this.update(cx, |this, cx| {
                             let GitStoreState::Local {
                                 project_environment,
-                                fs,
+                                native_execution_context,
                                 ..
                             } = &this.state
                             else {
                                 return;
                             };
                             let project_environment = project_environment.downgrade();
-                            let fs = fs.clone();
+                            let native_execution_context = native_execution_context.clone();
                             let repositories_to_respawn = this
                                 .repositories
                                 .iter()
@@ -649,7 +649,7 @@ impl GitStore {
                                 repo.update(cx, |repo, cx| {
                                     repo.respawn_local_worker(
                                         project_environment.clone(),
-                                        fs.clone(),
+                                        native_execution_context.clone(),
                                         is_trusted,
                                         cx,
                                     );
@@ -675,7 +675,7 @@ impl GitStore {
                 downstream: None,
                 project_environment: environment,
                 _fs_watches,
-                fs,
+                native_execution_context,
             },
             cx,
         )
@@ -1594,7 +1594,7 @@ impl GitStore {
             project_environment,
             downstream,
             next_repository_id,
-            fs,
+            native_execution_context,
             ..
         } = &self.state
         else {
@@ -1638,7 +1638,7 @@ impl GitStore {
                         .as_ref()
                         .map(|downstream| downstream.updates_tx.clone()),
                     changed_repos.clone(),
-                    fs.clone(),
+                    native_execution_context.clone(),
                     cx,
                 );
                 self.local_worktree_git_repos_changed(worktree, changed_repos, cx);
@@ -1756,7 +1756,7 @@ impl GitStore {
         next_repository_id: Arc<AtomicU64>,
         updates_tx: Option<mpsc::UnboundedSender<DownstreamUpdate>>,
         updated_git_repositories: UpdatedGitRepositoriesSet,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         cx: &mut Context<Self>,
     ) {
         let mut removed_ids = Vec::new();
@@ -1798,7 +1798,7 @@ impl GitStore {
                                 repository_dir_abs_path,
                                 common_dir_abs_path,
                                 project_environment.downgrade(),
-                                fs.clone(),
+                                native_execution_context.clone(),
                                 is_trusted,
                                 cx,
                             );
@@ -1835,7 +1835,7 @@ impl GitStore {
                         common_dir_abs_path.clone(),
                         dot_git_abs_path.clone(),
                         project_environment.downgrade(),
-                        fs.clone(),
+                        native_execution_context.clone(),
                         is_trusted,
                         git_store,
                         blob_read_limiter,
@@ -2148,11 +2148,13 @@ impl GitStore {
         cx: &App,
     ) -> Task<Result<()>> {
         match &self.state {
-            GitStoreState::Local { fs, .. } => {
-                let fs = fs.clone();
-                cx.background_executor().spawn(async move {
-                    fs::GitService::git_init(fs.as_ref(), &path, fallback_branch_name).await
-                })
+            GitStoreState::Local {
+                native_execution_context,
+                ..
+            } => {
+                let git_service = native_execution_context.git_service().clone();
+                cx.background_executor()
+                    .spawn(async move { git_service.git_init(&path, fallback_branch_name).await })
             }
             GitStoreState::Remote {
                 upstream_client,
@@ -2183,11 +2185,13 @@ impl GitStore {
     ) -> Task<Result<()>> {
         let path = path.into();
         match &self.state {
-            GitStoreState::Local { fs, .. } => {
-                let fs = fs.clone();
-                cx.background_executor().spawn(async move {
-                    fs::GitService::git_clone(fs.as_ref(), &path, &repo).await
-                })
+            GitStoreState::Local {
+                native_execution_context,
+                ..
+            } => {
+                let git_service = native_execution_context.git_service().clone();
+                cx.background_executor()
+                    .spawn(async move { git_service.git_clone(&path, &repo).await })
             }
             GitStoreState::Remote {
                 upstream_client,
@@ -2215,11 +2219,13 @@ impl GitStore {
 
     pub fn git_config(&self, path: Arc<Path>, args: Vec<String>, cx: &App) -> Task<Result<String>> {
         match &self.state {
-            GitStoreState::Local { fs, .. } => {
-                let fs = fs.clone();
-                cx.background_executor().spawn(async move {
-                    fs::GitService::git_config(fs.as_ref(), &path, args).await
-                })
+            GitStoreState::Local {
+                native_execution_context,
+                ..
+            } => {
+                let git_service = native_execution_context.git_service().clone();
+                cx.background_executor()
+                    .spawn(async move { git_service.git_config(&path, args).await })
             }
             GitStoreState::Remote { .. } => {
                 // TODO: Implement this for remote repositories.
@@ -4700,7 +4706,7 @@ impl Repository {
     fn respawn_local_worker(
         &mut self,
         project_environment: WeakEntity<ProjectEnvironment>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         is_trusted: bool,
         cx: &mut Context<Self>,
     ) {
@@ -4713,7 +4719,7 @@ impl Repository {
                     work_directory_abs_path,
                     dot_git_abs_path,
                     project_environment,
-                    fs,
+                    native_execution_context,
                     is_trusted,
                     cx,
                 )
@@ -4749,7 +4755,7 @@ impl Repository {
         repository_dir_abs_path: Arc<Path>,
         common_dir_abs_path: Arc<Path>,
         project_environment: WeakEntity<ProjectEnvironment>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         is_trusted: bool,
         cx: &mut Context<Self>,
     ) {
@@ -4757,7 +4763,12 @@ impl Repository {
         self.snapshot.dot_git_abs_path = dot_git_abs_path;
         self.snapshot.repository_dir_abs_path = repository_dir_abs_path;
         self.snapshot.common_dir_abs_path = common_dir_abs_path;
-        self.respawn_local_worker(project_environment, fs, is_trusted, cx);
+        self.respawn_local_worker(
+            project_environment,
+            native_execution_context,
+            is_trusted,
+            cx,
+        );
     }
 
     fn local(
@@ -4767,7 +4778,7 @@ impl Repository {
         common_dir_abs_path: Arc<Path>,
         dot_git_abs_path: Arc<Path>,
         project_environment: WeakEntity<ProjectEnvironment>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         is_trusted: bool,
         git_store: WeakEntity<GitStore>,
         blob_read_limiter: Arc<Semaphore>,
@@ -4802,7 +4813,12 @@ impl Repository {
             commit_data: Default::default(),
             commit_data_handler: CommitDataHandlerState::Closed,
         };
-        repo.respawn_local_worker(project_environment, fs, is_trusted, cx);
+        repo.respawn_local_worker(
+            project_environment,
+            native_execution_context,
+            is_trusted,
+            cx,
+        );
         cx.subscribe_self(Self::handle_subscribe_self).detach();
         repo
     }

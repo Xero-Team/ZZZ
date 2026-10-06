@@ -22,6 +22,7 @@ use project::{
     git_store::GitStore,
     image_store::ImageId,
     lsp_store::log_store::{self, GlobalLogStore, LanguageServerKind, LogKind},
+    native_execution::NativeExecutionContext,
     project_settings::SettingsObserver,
     search::SearchQuery,
     task_store::TaskStore,
@@ -114,6 +115,8 @@ impl HeadlessProject {
             store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
             store
         });
+        let native_execution_context =
+            NativeExecutionContext::new(worktree_store.clone(), fs.clone());
 
         if init_worktree_trust {
             project::trusted_worktrees::track_worktree_trust(
@@ -173,7 +176,7 @@ impl HeadlessProject {
                 &worktree_store,
                 buffer_store.clone(),
                 environment.clone(),
-                fs.clone(),
+                native_execution_context.clone(),
                 cx,
             );
             store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
@@ -228,7 +231,7 @@ impl HeadlessProject {
                 manifest_tree,
                 languages.clone(),
                 http_client.clone(),
-                fs.clone(),
+                native_execution_context.clone(),
                 cx,
             );
             lsp_store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);

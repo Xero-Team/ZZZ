@@ -45,6 +45,9 @@ use crate::{
         LanguageServerTree, LanguageServerTreeNode, LaunchDisposition, ManifestQueryDelegate,
         ManifestTree,
     },
+    native_execution::{
+        LspResourceOperation, MappedLspResource, NativeExecutionContext, NativeExecutionError,
+    },
     prettier_store::{self, PrettierStore, PrettierStoreEvent},
     project_settings::{BinarySettings, LspSettings, ProjectSettings},
     toolchain_store::{LocalToolchainStore, ToolchainStoreEvent},
@@ -341,7 +344,7 @@ pub struct LocalLspStore {
     toolchain_store: Entity<LocalToolchainStore>,
     http_client: Arc<dyn HttpClient>,
     environment: Entity<ProjectEnvironment>,
-    fs: Arc<dyn Fs>,
+    native_execution_context: NativeExecutionContext,
     languages: Arc<LanguageRegistry>,
     language_server_ids: HashMap<LanguageServerSeed, UnifiedLanguageServer>,
     yarn: Entity<YarnPathStore>,
@@ -387,6 +390,42 @@ pub struct LocalLspStore {
     buffers_to_refresh_hash_set: HashSet<BufferId>,
     buffers_to_refresh_queue: VecDeque<BufferId>,
     _background_diagnostics_worker: Shared<Task<()>>,
+}
+
+enum ValidatedWorkspaceEditOperation {
+    Create {
+        operation: lsp::CreateFile,
+        resource: MappedLspResource,
+    },
+    Rename {
+        operation: lsp::RenameFile,
+        source: MappedLspResource,
+        target: MappedLspResource,
+    },
+    Delete {
+        operation: lsp::DeleteFile,
+        resource: MappedLspResource,
+    },
+    Edit {
+        operation: lsp::TextDocumentEdit,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("workspace edit change {change_index} failed: {source}")]
+struct WorkspaceEditFailure {
+    change_index: usize,
+    #[source]
+    source: anyhow::Error,
+}
+
+impl WorkspaceEditFailure {
+    fn new(change_index: usize, source: impl Into<anyhow::Error>) -> Self {
+        Self {
+            change_index,
+            source: source.into(),
+        }
+    }
 }
 
 impl LocalLspStore {
@@ -3622,27 +3661,16 @@ impl LocalLspStore {
         })
     }
 
-    pub(crate) async fn deserialize_workspace_edit(
-        this: Entity<LspStore>,
-        edit: lsp::WorkspaceEdit,
-        push_to_history: bool,
-        language_server: Arc<LanguageServer>,
-        cx: &mut AsyncApp,
-    ) -> Result<ProjectTransaction> {
-        let fs = this.read_with(cx, |this, _| {
-            this.as_local()
-                .expect("should be a local instance")
-                .fs
-                .clone()
-        });
-
+    fn workspace_edit_operations(edit: lsp::WorkspaceEdit) -> Vec<lsp::DocumentChangeOperation> {
         let mut operations = Vec::new();
         if let Some(document_changes) = edit.document_changes {
             match document_changes {
                 lsp::DocumentChanges::Edits(edits) => {
-                    operations.extend(edits.into_iter().map(lsp::DocumentChangeOperation::Edit))
+                    operations.extend(edits.into_iter().map(lsp::DocumentChangeOperation::Edit));
                 }
-                lsp::DocumentChanges::Operations(ops) => operations = ops,
+                lsp::DocumentChanges::Operations(document_operations) => {
+                    operations = document_operations;
+                }
             }
         } else if let Some(changes) = edit.changes {
             operations.extend(changes.into_iter().map(|(uri, edits)| {
@@ -3655,21 +3683,135 @@ impl LocalLspStore {
                 })
             }));
         }
+        operations
+    }
+
+    async fn validate_workspace_edit_operations(
+        this: &Entity<LspStore>,
+        operations: Vec<lsp::DocumentChangeOperation>,
+        cx: &mut AsyncApp,
+    ) -> Result<Vec<ValidatedWorkspaceEditOperation>> {
+        let mapper = this
+            .read_with(cx, |this, _| {
+                this.as_local()
+                    .map(|local| local.native_execution_context.lsp_path_mapper())
+            })
+            .context("workspace edits require a native execution context")?;
+        let mut validated_operations = Vec::with_capacity(operations.len());
+
+        for (change_index, operation) in operations.into_iter().enumerate() {
+            match operation {
+                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Create(operation)) => {
+                    let resource = this
+                        .read_with(cx, |_, cx| mapper.uri_to_resource(&operation.uri, cx))
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    let operation_kind = if operation.uri.path().ends_with('/') {
+                        LspResourceOperation::CreateDirectory
+                    } else {
+                        LspResourceOperation::CreateFile
+                    };
+                    mapper
+                        .validate_resource_operation(&resource, operation_kind)
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    validated_operations.push(ValidatedWorkspaceEditOperation::Create {
+                        operation,
+                        resource,
+                    });
+                }
+                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(operation)) => {
+                    let source = this
+                        .read_with(cx, |_, cx| mapper.uri_to_resource(&operation.old_uri, cx))
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    let target = this
+                        .read_with(cx, |_, cx| mapper.uri_to_resource(&operation.new_uri, cx))
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    mapper
+                        .validate_rename(&source, &target)
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    validated_operations.push(ValidatedWorkspaceEditOperation::Rename {
+                        operation,
+                        source,
+                        target,
+                    });
+                }
+                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Delete(operation)) => {
+                    let resource = this
+                        .read_with(cx, |_, cx| mapper.uri_to_resource(&operation.uri, cx))
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    mapper
+                        .validate_resource_operation(&resource, LspResourceOperation::Delete)
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    validated_operations.push(ValidatedWorkspaceEditOperation::Delete {
+                        operation,
+                        resource,
+                    });
+                }
+                lsp::DocumentChangeOperation::Edit(operation) => {
+                    let resource = this
+                        .read_with(cx, |_, cx| {
+                            mapper.uri_to_resource(&operation.text_document.uri, cx)
+                        })
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    if resource.project_path().is_none() {
+                        return Err(WorkspaceEditFailure::new(
+                            change_index,
+                            NativeExecutionError::LegacyProjectPathUnavailable,
+                        )
+                        .into());
+                    }
+                    mapper
+                        .validate_resource_operation(&resource, LspResourceOperation::Edit)
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    validated_operations.push(ValidatedWorkspaceEditOperation::Edit { operation });
+                }
+            }
+        }
+
+        Ok(validated_operations)
+    }
+
+    pub(crate) async fn deserialize_workspace_edit(
+        this: Entity<LspStore>,
+        edit: lsp::WorkspaceEdit,
+        push_to_history: bool,
+        language_server: Arc<LanguageServer>,
+        cx: &mut AsyncApp,
+    ) -> Result<ProjectTransaction> {
+        let fs = this
+            .read_with(cx, |this, _| {
+                this.as_local()
+                    .map(|local| local.native_execution_context.file_system().clone())
+            })
+            .context("workspace edits require a native execution context")?;
+
+        let operations = Self::workspace_edit_operations(edit);
+        let operations = Self::validate_workspace_edit_operations(&this, operations, cx).await?;
 
         let mut project_transaction = ProjectTransaction::default();
-        for operation in operations {
+        for (change_index, operation) in operations.into_iter().enumerate() {
             match operation {
-                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Create(op)) => {
-                    let abs_path = op
-                        .uri
-                        .to_file_path()
-                        .map_err(|()| anyhow!("can't convert URI to path"))?;
+                ValidatedWorkspaceEditOperation::Create {
+                    operation: op,
+                    resource,
+                } => {
+                    let abs_path = resource
+                        .native_path()
+                        .to_local_path_buf()
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
 
                     if let Some(parent_path) = abs_path.parent() {
-                        fs.create_dir(parent_path).await?;
+                        fs.create_dir(parent_path)
+                            .await
+                            .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     }
-                    if abs_path.ends_with("/") {
-                        fs.create_dir(&abs_path).await?;
+                    if op.uri.path().ends_with('/') {
+                        fs.create_dir(&abs_path)
+                            .await
+                            .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     } else {
                         fs.create_file(
                             &abs_path,
@@ -3680,29 +3822,40 @@ impl LocalLspStore {
                                 })
                                 .unwrap_or_default(),
                         )
-                        .await?;
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     }
                 }
 
-                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(op)) => {
-                    let source_abs_path = op
-                        .old_uri
-                        .to_file_path()
-                        .map_err(|()| anyhow!("can't convert URI to path"))?;
-                    let target_abs_path = op
-                        .new_uri
-                        .to_file_path()
-                        .map_err(|()| anyhow!("can't convert URI to path"))?;
+                ValidatedWorkspaceEditOperation::Rename {
+                    operation: op,
+                    source,
+                    target,
+                } => {
+                    let source_abs_path = source
+                        .native_path()
+                        .to_local_path_buf()
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    let target_abs_path = target
+                        .native_path()
+                        .to_local_path_buf()
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
+                    let source_resource_id = source.resource_id();
+                    let source_project_path = source.project_path().cloned();
+                    let target_project_path = target.project_path().cloned();
 
                     // An LSP "rename symbol" can also rename the file, with the text edit
                     // applied only to the in-memory buffer. Persist it before renaming, or
                     // fs.rename moves the stale on-disk content and the files' contents swap.
                     let dirty_buffer = this.update(cx, |this, cx| {
-                        let project_path = this
-                            .worktree_store()
-                            .read(cx)
-                            .project_path_for_absolute_path(&source_abs_path, cx)?;
-                        let buffer = this.buffer_store().read(cx).get_by_path(&project_path)?;
+                        let buffer_store = this.buffer_store().read(cx);
+                        let buffer = source_resource_id
+                            .and_then(|resource_id| buffer_store.get_by_resource(resource_id))
+                            .or_else(|| {
+                                source_project_path
+                                    .as_ref()
+                                    .and_then(|path| buffer_store.get_by_path(path))
+                            })?;
                         buffer.read(cx).is_dirty().then_some(buffer)
                     });
                     if let Some(buffer) = dirty_buffer {
@@ -3710,7 +3863,8 @@ impl LocalLspStore {
                             this.buffer_store()
                                 .update(cx, |buffer_store, cx| buffer_store.save_buffer(buffer, cx))
                         })
-                        .await?;
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     }
 
                     let options = fs::RenameOptions {
@@ -3728,7 +3882,8 @@ impl LocalLspStore {
                     };
 
                     fs.rename(&source_abs_path, &target_abs_path, options)
-                        .await?;
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
 
                     // Preserve the entry id across the rename so an open buffer follows it
                     // to the new path, instead of being stranded at the old path when the
@@ -3736,35 +3891,38 @@ impl LocalLspStore {
                     // rename within one worktree can do this; anything else falls back to
                     // the watcher.
                     let refresh = this.update(cx, |this, cx| {
-                        let (source_worktree, source_rel_path) = this
-                            .worktree_store()
-                            .read(cx)
-                            .find_worktree(&source_abs_path, cx)?;
-                        let (target_worktree, target_rel_path) = this
-                            .worktree_store()
-                            .read(cx)
-                            .find_worktree(&target_abs_path, cx)?;
-                        if source_worktree != target_worktree {
+                        let source_project_path = source_project_path.as_ref()?;
+                        let target_project_path = target_project_path.as_ref()?;
+                        if source_project_path.worktree_id != target_project_path.worktree_id {
                             return None;
                         }
-                        target_worktree.update(cx, |worktree, cx| {
+                        let worktree = this
+                            .worktree_store()
+                            .read(cx)
+                            .worktree_for_id(source_project_path.worktree_id, cx)?;
+                        worktree.update(cx, |worktree, cx| {
                             Some(worktree.as_local()?.refresh_entry(
-                                target_rel_path,
-                                Some(source_rel_path),
+                                target_project_path.path.clone(),
+                                Some(source_project_path.path.clone()),
                                 cx,
                             ))
                         })
                     });
                     if let Some(refresh) = refresh {
-                        refresh.await?;
+                        refresh
+                            .await
+                            .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     }
                 }
 
-                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Delete(op)) => {
-                    let abs_path = op
-                        .uri
-                        .to_file_path()
-                        .map_err(|()| anyhow!("can't convert URI to path"))?;
+                ValidatedWorkspaceEditOperation::Delete {
+                    operation: op,
+                    resource,
+                } => {
+                    let abs_path = resource
+                        .native_path()
+                        .to_local_path_buf()
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     let options = op
                         .options
                         .map(|options| fs::RemoveOptions {
@@ -3772,14 +3930,18 @@ impl LocalLspStore {
                             ignore_if_not_exists: options.ignore_if_not_exists.unwrap_or(false),
                         })
                         .unwrap_or_default();
-                    if abs_path.ends_with("/") {
-                        fs.remove_dir(&abs_path, options).await?;
+                    if op.uri.path().ends_with('/') {
+                        fs.remove_dir(&abs_path, options)
+                            .await
+                            .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     } else {
-                        fs.remove_file(&abs_path, options).await?;
+                        fs.remove_file(&abs_path, options)
+                            .await
+                            .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     }
                 }
 
-                lsp::DocumentChangeOperation::Edit(op) => {
+                ValidatedWorkspaceEditOperation::Edit { operation: op } => {
                     let buffer_to_edit = this
                         .update(cx, |this, cx| {
                             this.open_local_buffer_via_lsp(
@@ -3788,7 +3950,8 @@ impl LocalLspStore {
                                 cx,
                             )
                         })
-                        .await?;
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
 
                     let edits = this
                         .update(cx, |this, cx| {
@@ -3874,7 +4037,8 @@ impl LocalLspStore {
                                 cx,
                             )
                         })
-                        .await?;
+                        .await
+                        .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
 
                     let transaction = buffer_to_edit.update(cx, |buffer, cx| {
                         buffer.finalize_last_transaction();
@@ -3919,23 +4083,40 @@ impl LocalLspStore {
             language_server.clone(),
             cx,
         )
-        .await
-        .log_err();
-        this.update(cx, |this, cx| {
-            if let Some(transaction) = transaction {
-                cx.emit(LspStoreEvent::WorkspaceEditApplied(transaction.clone()));
-
-                this.as_local_mut()
-                    .expect("should be a local instance")
-                    .last_workspace_edits_by_language_server
-                    .insert(server_id, transaction);
+        .await;
+        match transaction {
+            Ok(transaction) => {
+                let stored = this.update(cx, |this, cx| {
+                    let Some(local) = this.as_local_mut() else {
+                        return false;
+                    };
+                    cx.emit(LspStoreEvent::WorkspaceEditApplied(transaction.clone()));
+                    local
+                        .last_workspace_edits_by_language_server
+                        .insert(server_id, transaction);
+                    true
+                });
+                anyhow::ensure!(
+                    stored,
+                    "workspace edit response lost native execution context"
+                );
+                Ok(lsp::ApplyWorkspaceEditResponse {
+                    applied: true,
+                    failed_change: None,
+                    failure_reason: None,
+                })
             }
-        });
-        Ok(lsp::ApplyWorkspaceEditResponse {
-            applied: true,
-            failed_change: None,
-            failure_reason: None,
-        })
+            Err(error) => {
+                let failed_change = error
+                    .downcast_ref::<WorkspaceEditFailure>()
+                    .and_then(|failure| u32::try_from(failure.change_index).ok());
+                Ok(lsp::ApplyWorkspaceEditResponse {
+                    applied: false,
+                    failed_change,
+                    failure_reason: Some(format!("{error:#}")),
+                })
+            }
+        }
     }
 
     fn remove_worktree(
@@ -4066,7 +4247,7 @@ impl LocalLspStore {
                 .any(|c| matches!(c, path::Component::Normal(_)))
             {
                 let abs_path: Arc<Path> = path.into();
-                let fs = self.fs.clone();
+                let fs = self.native_execution_context.file_system().clone();
                 let entry = watched
                     .abs_paths
                     .entry(abs_path.clone())
@@ -4646,9 +4827,10 @@ impl LspStore {
         manifest_tree: Entity<ManifestTree>,
         languages: Arc<LanguageRegistry>,
         http_client: Arc<dyn HttpClient>,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         cx: &mut Context<Self>,
     ) -> Self {
+        let fs = native_execution_context.file_system().clone();
         let yarn = YarnPathStore::new(fs.clone(), cx);
         cx.subscribe(&buffer_store, Self::on_buffer_store_event)
             .detach();
@@ -4688,7 +4870,7 @@ impl LspStore {
                 prettier_store,
                 environment,
                 http_client,
-                fs,
+                native_execution_context,
                 yarn,
                 next_diagnostic_group_id: Default::default(),
                 diagnostics: Default::default(),
@@ -5862,7 +6044,7 @@ impl LspStore {
             let weak = local.weak.clone();
             let worktree_store = local.worktree_store.clone();
             let http_client = local.http_client.clone();
-            let fs = local.fs.clone();
+            let fs = local.native_execution_context.file_system().clone();
             move |worktree_id, cx: &mut App| {
                 let worktree = worktree_store.read(cx).worktree_for_id(worktree_id, cx)?;
                 Some(LocalLspAdapterDelegate::new(
@@ -8853,7 +9035,7 @@ impl LspStore {
                                         cx.weak_entity(),
                                         &worktree,
                                         local.http_client.clone(),
-                                        local.fs.clone(),
+                                        local.native_execution_context.file_system().clone(),
                                         cx,
                                     )
                                 })?;
@@ -14315,7 +14497,9 @@ async fn find_worktree_for_lsp_path(
 ) -> Result<Option<(Entity<Worktree>, Arc<RelPath>)>> {
     let (fs, worktree) = lsp_store.read_with(cx, |lsp_store, cx| {
         (
-            lsp_store.as_local().map(|local| local.fs.clone()),
+            lsp_store
+                .as_local()
+                .map(|local| local.native_execution_context.file_system().clone()),
             lsp_store
                 .worktree_store
                 .read(cx)
@@ -15445,7 +15629,7 @@ impl LocalLspAdapterDelegate {
             local.weak.clone(),
             worktree,
             local.http_client.clone(),
-            local.fs.clone(),
+            local.native_execution_context.file_system().clone(),
             cx,
         )
     }

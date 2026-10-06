@@ -11,6 +11,7 @@ pub mod image_store;
 pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
+pub mod native_execution;
 pub mod prettier_store;
 pub mod project_search;
 pub mod project_settings;
@@ -38,6 +39,7 @@ use crate::{
     bookmark_store::BookmarkStore,
     git_store::GitStore,
     lsp_store::{SymbolLocation, log_store::LogKind},
+    native_execution::NativeExecutionContext,
     project_search::SearchResultsHandle,
     trusted_worktrees::{PathTrust, RemoteHostLocation, TrustedWorktrees},
     worktree_store::WorktreeIdCounter,
@@ -244,6 +246,7 @@ pub struct Project {
     task_store: Entity<TaskStore>,
     user_store: Entity<UserStore>,
     fs: Arc<dyn Fs>,
+    native_execution_context: Option<NativeExecutionContext>,
     remote_client: Option<Entity<RemoteClient>>,
     git_store: Entity<GitStore>,
     collaborators: HashMap<proto::PeerId, Collaborator>,
@@ -1240,6 +1243,8 @@ impl Project {
             let snippets = SnippetProvider::new(fs.clone(), BTreeSet::from_iter([]), cx);
             let worktree_store =
                 cx.new(|cx| WorktreeStore::local(false, fs.clone(), WorktreeIdCounter::get(cx)));
+            let native_execution_context =
+                NativeExecutionContext::new(worktree_store.clone(), fs.clone());
             if flags.init_worktree_trust {
                 trusted_worktrees::track_worktree_trust(
                     worktree_store.clone(),
@@ -1320,7 +1325,7 @@ impl Project {
                     &worktree_store,
                     buffer_store.clone(),
                     environment.clone(),
-                    fs.clone(),
+                    native_execution_context.clone(),
                     cx,
                 )
             });
@@ -1362,7 +1367,7 @@ impl Project {
                     manifest_tree,
                     languages.clone(),
                     client.http_client(),
-                    fs.clone(),
+                    native_execution_context.clone(),
                     cx,
                 )
             });
@@ -1411,6 +1416,7 @@ impl Project {
                 user_store,
                 settings_observer,
                 fs,
+                native_execution_context: Some(native_execution_context),
                 remote_client: None,
                 bookmark_store,
                 breakpoint_store,
@@ -1652,6 +1658,7 @@ impl Project {
                 user_store,
                 settings_observer,
                 fs,
+                native_execution_context: None,
                 remote_client: Some(remote.clone()),
                 buffers_needing_diff: Default::default(),
                 git_diff_debouncer: DebouncedDelay::new(),
@@ -2009,6 +2016,10 @@ impl Project {
     #[inline]
     pub fn fs(&self) -> &Arc<dyn Fs> {
         &self.fs
+    }
+
+    pub fn native_execution_context(&self) -> Option<&NativeExecutionContext> {
+        self.native_execution_context.as_ref()
     }
 
     #[inline]

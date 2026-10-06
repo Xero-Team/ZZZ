@@ -898,6 +898,138 @@ async fn test_remote_lsp(cx: &mut TestAppContext, server_cx: &mut TestAppContext
 }
 
 #[gpui::test]
+async fn test_remote_lsp_workspace_file_operation_runs_on_server(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(
+        path!("/code"),
+        json!({
+            "project": {
+                "src": {
+                    "lib.rs": "fn one() -> usize { 1 }",
+                },
+            },
+        }),
+    )
+    .await;
+    let (project, headless) = init_test(&fs, cx, server_cx).await;
+    project.read_with(cx, |project, _| {
+        assert!(
+            project.native_execution_context().is_none(),
+            "the remote UI project must not interpret server-native paths"
+        );
+    });
+
+    cx.update_entity(&project, |project, _| {
+        project.languages().register_test_language(LanguageConfig {
+            name: "Rust".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["rs".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        project.languages().register_fake_lsp_adapter(
+            "Rust",
+            FakeLspAdapter {
+                name: "rust-analyzer",
+                capabilities: lsp::ServerCapabilities {
+                    rename_provider: Some(lsp::OneOf::Left(true)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+    });
+    let mut fake_lsp = server_cx.update(|cx| {
+        headless.read(cx).languages.register_fake_lsp_server(
+            LanguageServerName("rust-analyzer".into()),
+            lsp::ServerCapabilities {
+                rename_provider: Some(lsp::OneOf::Left(true)),
+                ..Default::default()
+            },
+            None,
+        )
+    });
+
+    let worktree_id = project
+        .update(cx, |project, cx| {
+            project.languages().add(rust_lang());
+            project.find_or_create_worktree(path!("/code/project"), true, cx)
+        })
+        .await
+        .expect("remote worktree should open")
+        .0
+        .read_with(cx, |worktree, _| worktree.id());
+    let (buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp((worktree_id, rel_path("src/lib.rs")), cx)
+        })
+        .await
+        .expect("remote buffer should open with LSP");
+    let fake_lsp = fake_lsp.next().await.expect("remote LSP should start");
+    cx.run_until_parked();
+    server_cx.run_until_parked();
+
+    fake_lsp.set_request_handler::<lsp::request::Rename, _, _>(|_, _| async move {
+        Ok(Some(lsp::WorkspaceEdit {
+            changes: None,
+            document_changes: Some(lsp::DocumentChanges::Operations(vec![
+                lsp::DocumentChangeOperation::Edit(lsp::TextDocumentEdit {
+                    text_document: lsp::OptionalVersionedTextDocumentIdentifier {
+                        uri: lsp::Uri::from_file_path(path!("/code/project/src/lib.rs")).unwrap(),
+                        version: None,
+                    },
+                    edits: vec![lsp::Edit::Plain(lsp::TextEdit::new(
+                        lsp::Range::new(lsp::Position::new(0, 3), lsp::Position::new(0, 6)),
+                        "two".to_owned(),
+                    ))],
+                }),
+                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(lsp::RenameFile {
+                    old_uri: lsp::Uri::from_file_path(path!("/code/project/src/lib.rs")).unwrap(),
+                    new_uri: lsp::Uri::from_file_path(path!("/code/project/src/renamed.rs"))
+                        .unwrap(),
+                    options: None,
+                    annotation_id: None,
+                })),
+            ])),
+            change_annotations: None,
+        }))
+    });
+
+    project
+        .update(cx, |project, cx| {
+            project.perform_rename(buffer.clone(), 3, "two".to_owned(), cx)
+        })
+        .await
+        .expect("remote rename workspace edit should apply");
+    cx.run_until_parked();
+    server_cx.run_until_parked();
+
+    let old_contents = fs.load(Path::new(path!("/code/project/src/lib.rs"))).await;
+    let renamed_contents = fs
+        .load(Path::new(path!("/code/project/src/renamed.rs")))
+        .await;
+    assert!(
+        old_contents.is_err(),
+        "old file remained after remote workspace edit: {old_contents:?}; renamed: {renamed_contents:?}"
+    );
+    assert_eq!(
+        renamed_contents.expect("renamed file should exist on the remote host"),
+        "fn two() -> usize { 1 }"
+    );
+    buffer.read_with(cx, |buffer, _| {
+        assert_eq!(
+            buffer.file().unwrap().path().as_ref(),
+            rel_path("src/renamed.rs")
+        );
+        assert_eq!(buffer.text(), "fn two() -> usize { 1 }");
+    });
+}
+
+#[gpui::test]
 async fn test_remote_cancel_language_server_work(
     cx: &mut TestAppContext,
     server_cx: &mut TestAppContext,

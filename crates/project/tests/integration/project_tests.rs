@@ -146,6 +146,291 @@ fn test_persisted_provider_path_precedes_legacy_media_path() {
 }
 
 #[gpui::test]
+async fn test_lsp_path_mapper_round_trip(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "src": {
+                "main.rs": "fn main() {}",
+            },
+        }),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/root").as_ref()], cx).await;
+
+    let (mapper, vfs_path, expected_resource_id) = project.read_with(cx, |project, cx| {
+        let worktree = project.worktrees(cx).next().expect("worktree should exist");
+        let project_path = ProjectPath {
+            worktree_id: worktree.read(cx).id(),
+            path: rel_path("src/main.rs").into(),
+        };
+        let identity = project
+            .entry_identity_for_project_path(&project_path, cx)
+            .expect("VFS identity should exist");
+        (
+            project
+                .native_execution_context()
+                .expect("local project should expose native execution")
+                .lsp_path_mapper(),
+            identity.vfs_path.expect("VFS path should exist"),
+            identity.resource_id,
+        )
+    });
+    let uri = project
+        .update(cx, |_, cx| {
+            let vfs_path = vfs_path.clone();
+            cx.spawn(async move |_, cx| mapper.resource_to_uri(&vfs_path, cx).await)
+        })
+        .await
+        .expect("VFS path should map to an execution-host URI");
+    let mapped = project.read_with(cx, |project, cx| {
+        project
+            .native_execution_context()
+            .expect("local project should expose native execution")
+            .lsp_path_mapper()
+            .uri_to_resource(&uri, cx)
+            .expect("execution-host URI should map back to a VFS resource")
+    });
+
+    assert_eq!(mapped.vfs_path(), &vfs_path);
+    assert_eq!(mapped.resource_id(), expected_resource_id);
+    assert_eq!(
+        mapped.project_path().expect("UTF-8 path should adapt"),
+        &ProjectPath {
+            worktree_id: project.read_with(cx, |project, cx| {
+                project.worktrees(cx).next().unwrap().read(cx).id()
+            }),
+            path: rel_path("src/main.rs").into(),
+        }
+    );
+}
+
+#[gpui::test]
+#[cfg(unix)]
+async fn test_lsp_path_mapper_preserves_non_utf8_native_path(cx: &mut gpui::TestAppContext) {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt as _;
+
+    init_test(cx);
+    cx.executor().allow_parking();
+
+    let root = tempfile::tempdir().expect("temporary worktree should be created");
+    let relative_path = PathBuf::from(OsString::from_vec(b"non-utf8-\xff.rs".to_vec()));
+    std::fs::write(root.path().join(&relative_path), b"fn main() {}")
+        .expect("non-UTF-8 fixture should be written");
+    let project = Project::test(
+        Arc::new(RealFs::new(None, cx.executor())),
+        [root.path()],
+        cx,
+    )
+    .await;
+
+    let (mapper, vfs_path) = project.read_with(cx, |project, cx| {
+        let worktree = project.worktrees(cx).next().expect("worktree should exist");
+        let snapshot = worktree
+            .read(cx)
+            .vfs_snapshot()
+            .expect("local worktree should have a VFS snapshot");
+        let provider_path = vfs::NativePath::from_local_path(&relative_path)
+            .expect("relative native path should encode")
+            .provider_path()
+            .clone();
+        (
+            project
+                .native_execution_context()
+                .expect("local project should expose native execution")
+                .lsp_path_mapper(),
+            vfs::VfsPath::new(snapshot.registry().mount_id(), provider_path),
+        )
+    });
+    let uri = project
+        .update(cx, |_, cx| {
+            let mapper = mapper.clone();
+            let vfs_path = vfs_path.clone();
+            cx.spawn(async move |_, cx| mapper.resource_to_uri(&vfs_path, cx).await)
+        })
+        .await
+        .expect("non-UTF-8 VFS path should map to a file URI");
+    let mapped = project.read_with(cx, |project, cx| {
+        project
+            .native_execution_context()
+            .expect("local project should expose native execution")
+            .lsp_path_mapper()
+            .uri_to_resource(&uri, cx)
+            .expect("file URI should map back without losing native bytes")
+    });
+
+    assert_eq!(mapped.vfs_path(), &vfs_path);
+    assert!(
+        mapped.project_path().is_none(),
+        "non-UTF-8 identity must not be coerced through the legacy ProjectPath adapter"
+    );
+}
+
+#[gpui::test]
+async fn test_lsp_workspace_edit_prevalidates_all_resource_operations(
+    cx: &mut gpui::TestAppContext,
+) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/dir"),
+        json!({
+            "a.rs": "fn main() {}",
+        }),
+    )
+    .await;
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(rust_lang());
+    let mut fake_servers = language_registry.register_fake_lsp("Rust", FakeLspAdapter::default());
+
+    project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/dir/a.rs"), cx)
+        })
+        .await
+        .expect("buffer should open");
+    let fake_server = fake_servers
+        .next()
+        .await
+        .expect("language server should start");
+    cx.executor().run_until_parked();
+
+    let response = fake_server
+        .server
+        .request::<lsp::request::ApplyWorkspaceEdit>(
+            lsp::ApplyWorkspaceEditParams {
+                label: None,
+                edit: lsp::WorkspaceEdit {
+                    changes: None,
+                    document_changes: Some(DocumentChanges::Operations(vec![
+                        lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Create(
+                            lsp::CreateFile {
+                                uri: Uri::from_file_path(path!("/dir/should-not-exist.rs"))
+                                    .unwrap(),
+                                options: None,
+                                annotation_id: None,
+                            },
+                        )),
+                        lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Delete(
+                            lsp::DeleteFile {
+                                uri: Uri::from_str("untitled:///outside").unwrap(),
+                                options: None,
+                            },
+                        )),
+                    ])),
+                    change_annotations: None,
+                },
+            },
+            DEFAULT_LSP_REQUEST_TIMEOUT,
+        )
+        .await
+        .into_response()
+        .expect("workspace edit request should receive a response");
+
+    assert!(!response.applied);
+    assert_eq!(response.failed_change, Some(1));
+    assert!(
+        response
+            .failure_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("does not use the file scheme"))
+    );
+    assert!(
+        fs.metadata(Path::new(path!("/dir/should-not-exist.rs")))
+            .await
+            .expect("filesystem metadata lookup should succeed")
+            .is_none(),
+        "prevalidation must reject the edit before creating an earlier resource"
+    );
+}
+
+#[gpui::test]
+#[cfg(not(windows))]
+async fn test_lsp_workspace_edit_rejects_read_only_resource(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    cx.executor().allow_parking();
+
+    let root = TempTree::new(json!({
+        "project": {
+            "read-only.rs": "fn main() {}",
+        },
+    }));
+    let file_path = root.path().join("project/read-only.rs");
+    let mut permissions = std::fs::metadata(&file_path)
+        .expect("read-only fixture should have metadata")
+        .permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file_path, permissions)
+        .expect("read-only fixture permissions should update");
+
+    let project = Project::test(
+        Arc::new(RealFs::new(None, cx.executor())),
+        [root.path().join("project").as_path()],
+        cx,
+    )
+    .await;
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(rust_lang());
+    let mut fake_servers = language_registry.register_fake_lsp("Rust", FakeLspAdapter::default());
+    project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(&file_path, cx)
+        })
+        .await
+        .expect("read-only buffer should open");
+    let fake_server = fake_servers
+        .next()
+        .await
+        .expect("language server should start");
+    cx.executor().run_until_parked();
+
+    let response = fake_server
+        .server
+        .request::<lsp::request::ApplyWorkspaceEdit>(
+            lsp::ApplyWorkspaceEditParams {
+                label: None,
+                edit: lsp::WorkspaceEdit {
+                    changes: Some(
+                        [(
+                            Uri::from_file_path(&file_path).unwrap(),
+                            vec![lsp::TextEdit::new(
+                                lsp::Range::new(lsp::Position::new(0, 0), lsp::Position::new(0, 2)),
+                                "pub fn".to_owned(),
+                            )],
+                        )]
+                        .into_iter()
+                        .collect(),
+                    ),
+                    ..Default::default()
+                },
+            },
+            DEFAULT_LSP_REQUEST_TIMEOUT,
+        )
+        .await
+        .into_response()
+        .expect("workspace edit request should receive a response");
+
+    assert!(!response.applied);
+    assert_eq!(response.failed_change, Some(0));
+    assert!(
+        response
+            .failure_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("read-only"))
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file_path).expect("fixture should remain readable"),
+        "fn main() {}"
+    );
+}
+
+#[gpui::test]
 async fn test_block_via_channel(cx: &mut gpui::TestAppContext) {
     cx.executor().allow_parking();
 

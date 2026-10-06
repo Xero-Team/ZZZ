@@ -263,6 +263,24 @@ impl FsProviderCore {
         Ok(())
     }
 
+    async fn native_path(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<NativePath> {
+        context
+            .cancellation
+            .check(VfsOperation::NativePath, &self.descriptor.id)?;
+        let absolute_path = self.absolute_path(path, VfsOperation::NativePath)?;
+        self.ensure_contained(&absolute_path, false, VfsOperation::NativePath)
+            .await?;
+        NativePath::from_local_path(&absolute_path).map_err(|error| {
+            self.error(VfsErrorCode::InvalidPath, VfsOperation::NativePath)
+                .with_path(path.clone())
+                .with_detail(error.to_string())
+        })
+    }
+
     async fn metadata(
         &self,
         path: &ProviderPath,
@@ -810,6 +828,14 @@ impl VfsProvider for LegacyFsProvider {
     ) -> VfsResult<BoxStream<'static, VfsResult<EventBatch>>> {
         self.core.watch_path(request).await
     }
+
+    async fn native_path(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<NativePath> {
+        self.core.native_path(path, context).await
+    }
 }
 
 #[async_trait]
@@ -937,19 +963,7 @@ impl VfsProvider for LocalProvider {
         path: &ProviderPath,
         context: OperationContext,
     ) -> VfsResult<NativePath> {
-        context
-            .cancellation
-            .check(VfsOperation::NativePath, &self.core.descriptor.id)?;
-        let absolute_path = self.core.absolute_path(path, VfsOperation::NativePath)?;
-        self.core
-            .ensure_contained(&absolute_path, false, VfsOperation::NativePath)
-            .await?;
-        NativePath::from_local_path(&absolute_path).map_err(|error| {
-            self.core
-                .error(VfsErrorCode::InvalidPath, VfsOperation::NativePath)
-                .with_path(path.clone())
-                .with_detail(error.to_string())
-        })
+        self.core.native_path(path, context).await
     }
 }
 
@@ -1439,11 +1453,7 @@ fn filesystem_capabilities(
             hard_links: SupportLevel::Unsupported,
             permissions: SupportLevel::Native,
             extended_attributes: SupportLevel::Unsupported,
-            native_path: if native_positioned_io {
-                SupportLevel::Native
-            } else {
-                SupportLevel::Unsupported
-            },
+            native_path: SupportLevel::Native,
         },
         trash: TrashCapabilities {
             trash: SupportLevel::Unsupported,

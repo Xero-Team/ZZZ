@@ -621,6 +621,13 @@ impl NativePath {
         self.root == prefix.root && self.path.starts_with(&prefix.path)
     }
 
+    pub fn strip_prefix(&self, prefix: &Self) -> Result<ProviderPath, PathError> {
+        if self.root != prefix.root {
+            return Err(PathError::PrefixMismatch);
+        }
+        self.path.strip_prefix(&prefix.path)
+    }
+
     pub fn from_unix_bytes(bytes: &[u8]) -> Result<Self, PathError> {
         let (root, relative_bytes) = match bytes.strip_prefix(b"/") {
             Some(relative_bytes) => (NativePathRoot::Posix, relative_bytes),
@@ -664,10 +671,15 @@ impl NativePath {
 
     pub fn from_windows_wide(wide: &[u16]) -> Result<Self, PathError> {
         let encoded = encode_windows_wide(wide);
+        Self::from_windows_wtf8(&encoded)
+    }
+
+    pub fn from_windows_wtf8(encoded: &[u8]) -> Result<Self, PathError> {
+        decode_wtf8_to_wide(encoded)?;
         let mut root = NativePathRoot::Relative;
         let mut exact_components = Vec::new();
 
-        for component in WindowsPath::new(&encoded).components() {
+        for component in WindowsPath::new(encoded).components() {
             match component {
                 WindowsComponent::Prefix(prefix) => {
                     root = match prefix.kind() {
@@ -1174,7 +1186,9 @@ mod tests {
         let Ok(parsed) = parsed else {
             panic!("Windows drive path must parse: {parsed:?}");
         };
+        let encoded = encode_windows_wide(&drive_path);
         assert_eq!(parsed.to_windows_wide(), Ok(drive_path));
+        assert_eq!(NativePath::from_windows_wtf8(&encoded), Ok(parsed));
 
         for path in [
             r"\\server\share\folder\file.txt",
