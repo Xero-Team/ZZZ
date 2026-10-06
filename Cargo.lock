@@ -14852,6 +14852,7 @@ dependencies = [
  "unindent",
  "util",
  "util_macros",
+ "vfs",
  "workspace",
  "ztracing",
  "zzz_actions",

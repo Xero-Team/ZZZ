@@ -440,6 +440,18 @@ pub struct ProjectPath {
     pub path: Arc<RelPath>,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ProjectResourceIdentity {
+    Resource(vfs::ResourceId),
+    Path(ProjectPath),
+}
+
+impl ProjectResourceIdentity {
+    pub fn new(resource_id: Option<vfs::ResourceId>, path: ProjectPath) -> Self {
+        resource_id.map_or(Self::Path(path), Self::Resource)
+    }
+}
+
 impl ProjectPath {
     pub fn from_file(value: &dyn language::File, cx: &App) -> Self {
         ProjectPath {
@@ -4497,6 +4509,14 @@ impl Project {
             return (None, None);
         };
         worktree::File::vfs_identity_for_path(&path.path, &worktree, cx)
+    }
+
+    pub fn resource_identity_for_project_path(
+        &self,
+        path: &ProjectPath,
+        cx: &App,
+    ) -> ProjectResourceIdentity {
+        ProjectResourceIdentity::new(self.vfs_identity_for_project_path(path, cx).0, path.clone())
     }
 
     pub fn entry_for_resource_id(

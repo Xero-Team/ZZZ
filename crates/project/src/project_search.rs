@@ -23,6 +23,7 @@ use rpc::{AnyProtoClient, proto};
 
 use language::ByteContent;
 use util::{ResultExt, maybe, paths::compare_rel_paths, rel_path::RelPath};
+use vfs::ResourceId;
 use worktree::{
     Entry, ProjectEntryId, Snapshot, Worktree, WorktreeSettings, decode_byte_header,
     decode_file_text,
@@ -164,7 +165,7 @@ impl Search {
     /// Prepares a project search run. The resulting [`SearchResultsHandle`] has to be used to specify whether you're interested in matching buffers
     /// or full search results.
     pub fn into_handle(mut self, query: SearchQuery, cx: &mut App) -> SearchResultsHandle {
-        let mut open_buffers = HashSet::default();
+        let mut open_buffers = OpenResources::default();
         let mut unnamed_buffers = Vec::new();
         const MAX_CONCURRENT_BUFFER_OPENS: usize = 64;
         let buffers = self.buffer_store.read(cx);
@@ -179,8 +180,12 @@ impl Search {
             {
                 continue;
             }
-            if let Some(entry_id) = buffer.entry_id(cx) {
-                open_buffers.insert(entry_id);
+            if let Some(file) = buffer.file()
+                && let Some(resource_id) = file.resource_id()
+            {
+                open_buffers.resource_ids.insert(resource_id);
+            } else if let Some(entry_id) = buffer.entry_id(cx) {
+                open_buffers.entry_ids.insert(entry_id);
             } else {
                 self.limit = self.limit.saturating_sub(1);
                 unnamed_buffers.push(handle)
@@ -670,7 +675,7 @@ impl Search {
 
 struct Worker {
     query: Arc<SearchQuery>,
-    open_buffers: Arc<HashSet<ProjectEntryId>>,
+    open_buffers: Arc<OpenResources>,
     candidates: FindSearchCandidates,
     /// Ok, we're back in background: run full scan & find all matches in a given buffer snapshot.
     /// Then, when you're done, share them via the channel you were given.
@@ -750,7 +755,7 @@ impl Worker {
 struct RequestHandler<'worker> {
     query: &'worker SearchQuery,
     fs: Option<&'worker dyn Fs>,
-    open_entries: &'worker HashSet<ProjectEntryId>,
+    open_entries: &'worker OpenResources,
     confirm_contents_will_match_tx: &'worker Sender<MatchingEntry>,
 }
 
@@ -865,7 +870,7 @@ impl RequestHandler<'_> {
                 }
             }
 
-            if self.open_entries.contains(&entry.id) {
+            if self.open_entries.contains(entry.resource_id, entry.id) {
                 // The buffer is already in memory and that's the version we want to scan;
                 // hence skip the dilly-dally and look for all matches straight away.
                 should_scan_tx
@@ -893,6 +898,19 @@ impl RequestHandler<'_> {
             anyhow::Ok(())
         })
         .await;
+    }
+}
+
+#[derive(Default)]
+struct OpenResources {
+    resource_ids: HashSet<ResourceId>,
+    entry_ids: HashSet<ProjectEntryId>,
+}
+
+impl OpenResources {
+    fn contains(&self, resource_id: Option<ResourceId>, entry_id: ProjectEntryId) -> bool {
+        resource_id.is_some_and(|resource_id| self.resource_ids.contains(&resource_id))
+            || self.entry_ids.contains(&entry_id)
     }
 }
 
@@ -1121,5 +1139,23 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
     pub async fn flush(self) {
         _ = self.flush_batch.send(true).await;
         self._batch_task.await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_resources_prefers_vfs_identity() {
+        let resource_id = ResourceId::new(vfs::MountId::new(1), 2, 0);
+        let legacy_entry_id = ProjectEntryId::from_proto(3);
+        let mut open_resources = OpenResources::default();
+        open_resources.resource_ids.insert(resource_id);
+        open_resources.entry_ids.insert(legacy_entry_id);
+
+        assert!(open_resources.contains(Some(resource_id), ProjectEntryId::from_proto(999),));
+        assert!(open_resources.contains(None, legacy_entry_id));
+        assert!(!open_resources.contains(None, ProjectEntryId::from_proto(999)));
     }
 }

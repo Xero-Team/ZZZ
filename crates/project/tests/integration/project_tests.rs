@@ -7206,6 +7206,19 @@ async fn test_buffer_identity_across_renames(cx: &mut gpui::TestAppContext) {
             .and_then(|file| file.resource_id())
             .expect("opened buffer should have a VFS resource ID")
     });
+    let resource_identity = project.read_with(cx, |project, cx| {
+        project.resource_identity_for_project_path(
+            &ProjectPath {
+                worktree_id: tree_id,
+                path: rel_path("a/file1").into(),
+            },
+            cx,
+        )
+    });
+    assert_eq!(
+        resource_identity,
+        ProjectResourceIdentity::Resource(resource_id)
+    );
     assert_eq!(
         project.update(cx, |project, cx| {
             project.buffer_store().read(cx).get_by_resource(resource_id)
@@ -7226,6 +7239,18 @@ async fn test_buffer_identity_across_renames(cx: &mut gpui::TestAppContext) {
 
     assert_eq!(id_for_path("b", cx), dir_id);
     assert_eq!(id_for_path("b/file1", cx), file_id);
+    assert_eq!(
+        project.read_with(cx, |project, cx| {
+            project.resource_identity_for_project_path(
+                &ProjectPath {
+                    worktree_id: tree_id,
+                    path: rel_path("b/file1").into(),
+                },
+                cx,
+            )
+        }),
+        resource_identity
+    );
     assert_eq!(
         buffer.read_with(cx, |buffer, _| {
             buffer.file().and_then(|file| file.resource_id())

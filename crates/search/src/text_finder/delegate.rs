@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{ops::Range, time::Duration};
 
-use collections::{HashMap, HashSet};
+use collections::{HashMap, HashSet, hash_map};
 use editor::{MultiBufferSnapshot, PathKey, multibuffer_context_lines};
 use file_icons::FileIcons;
 use futures::StreamExt;
@@ -18,7 +18,8 @@ use i18n::tr;
 use language::{Buffer, LanguageAwareStyling};
 use picker::{Picker, PickerDelegate};
 use project::{
-    Project, ProjectPath, Search, SearchResults, search::SearchQuery, search::SearchResult,
+    Project, ProjectPath, ProjectResourceIdentity, Search, SearchResults, search::SearchQuery,
+    search::SearchResult,
 };
 use settings::Settings;
 use smol::future::yield_now;
@@ -52,10 +53,9 @@ pub struct Delegate {
     pub(crate) active_query: Option<SearchQuery>,
     pub(crate) imported_from_project_search: bool,
     pub(crate) in_progress_search: InProgressSearch,
-    pub(crate) unique_files: HashSet<ProjectPath>,
     pub(crate) max_line_number: u32,
     pub(crate) selected_matches: Vec<SelectedMatch>,
-    pub(crate) collapsed_paths: HashSet<ProjectPath>,
+    pub(crate) collapsed_files: HashSet<ProjectResourceIdentity>,
 }
 
 /// Wrapper with Eq is path + range equality
@@ -72,12 +72,15 @@ impl Eq for SelectedMatch {}
 
 impl PartialEq<SearchMatch> for SelectedMatch {
     fn eq(&self, other: &SearchMatch) -> bool {
-        self.0.path == other.path && self.0.range == other.range
+        self.0.file_identity() == other.file_identity() && self.0.range == other.range
     }
 }
 
 pub(crate) enum Entry {
-    Header(ProjectPath),
+    Header {
+        identity: ProjectResourceIdentity,
+        path: ProjectPath,
+    },
     Match(usize),
     Separator,
 }
@@ -122,6 +125,8 @@ fn multibuffer_ranges_to_search_matches<'a>(
 
         Some(SearchMatch {
             path,
+            resource_id: file.resource_id(),
+            vfs_path: file.vfs_path().cloned(),
             buffer,
             anchor_range: text_range,
             range: start_offset..end_offset,
@@ -129,6 +134,52 @@ fn multibuffer_ranges_to_search_matches<'a>(
             line_number: point.row + 1,
         })
     })
+}
+
+fn merge_search_matches(existing_matches: &mut Vec<SearchMatch>, new_matches: Vec<SearchMatch>) {
+    let latest_paths = new_matches
+        .iter()
+        .filter_map(|search_match| {
+            search_match
+                .resource_id
+                .map(|resource_id| (resource_id, (&search_match.path, &search_match.vfs_path)))
+        })
+        .collect::<HashMap<_, _>>();
+
+    for search_match in existing_matches.iter_mut() {
+        let Some(resource_id) = search_match.resource_id else {
+            continue;
+        };
+        let Some((path, vfs_path)) = latest_paths.get(&resource_id) else {
+            continue;
+        };
+        search_match.path.clone_from(path);
+        search_match.vfs_path.clone_from(vfs_path);
+    }
+
+    let mut identity_order = Vec::new();
+    let mut matches_by_identity: HashMap<ProjectResourceIdentity, Vec<SearchMatch>> =
+        HashMap::default();
+    for search_match in std::mem::take(existing_matches)
+        .into_iter()
+        .chain(new_matches)
+    {
+        let identity = search_match.file_identity();
+        match matches_by_identity.entry(identity.clone()) {
+            hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(search_match),
+            hash_map::Entry::Vacant(entry) => {
+                identity_order.push(identity);
+                entry.insert(vec![search_match]);
+            }
+        }
+    }
+    for identity in identity_order {
+        if let Some(matches) = matches_by_identity.remove(&identity) {
+            existing_matches.extend(matches);
+        } else {
+            debug_assert!(false, "search identity order lost its match group");
+        }
+    }
 }
 
 async fn stream_plunder_to_picker(
@@ -164,10 +215,7 @@ async fn stream_plunder_to_picker(
             };
 
             let delegate = &mut picker.delegate;
-            delegate
-                .unique_files
-                .extend(new_matches.iter().map(|m| m.path.clone()));
-            delegate.matches.extend(new_matches);
+            merge_search_matches(&mut delegate.matches, new_matches);
             delegate.rebuild_entries();
             cx.notify();
             ControlFlow::Continue(())
@@ -285,10 +333,9 @@ impl Delegate {
                 active_query,
                 imported_from_project_search,
                 in_progress_search,
-                unique_files: HashSet::default(),
                 max_line_number: 0,
                 selected_matches: Vec::new(),
-                collapsed_paths: HashSet::default(),
+                collapsed_files: HashSet::default(),
             });
 
             this
@@ -325,16 +372,20 @@ impl Delegate {
         };
 
         let mut entries = Vec::with_capacity(self.matches.len());
-        let mut last_path: Option<&ProjectPath> = None;
+        let mut last_identity = None;
         for (match_index, search_match) in self.matches.iter().enumerate() {
-            if last_path != Some(&search_match.path) {
-                if last_path.is_some() {
+            let identity = search_match.file_identity();
+            if last_identity.as_ref() != Some(&identity) {
+                if last_identity.is_some() {
                     entries.push(Entry::Separator);
                 }
-                entries.push(Entry::Header(search_match.path.clone()));
-                last_path = Some(&search_match.path);
+                entries.push(Entry::Header {
+                    identity: identity.clone(),
+                    path: search_match.path.clone(),
+                });
+                last_identity = Some(identity.clone());
             }
-            if !self.collapsed_paths.contains(&search_match.path) {
+            if !self.collapsed_files.contains(&identity) {
                 entries.push(Entry::Match(match_index));
             }
         }
@@ -362,9 +413,9 @@ impl Delegate {
             .position(|entry| matches!(entry, Entry::Match(_)))
     }
 
-    pub(crate) fn toggle_group_collapsed(&mut self, path: &ProjectPath) {
-        if !self.collapsed_paths.remove(path) {
-            self.collapsed_paths.insert(path.clone());
+    pub(crate) fn toggle_group_collapsed(&mut self, identity: &ProjectResourceIdentity) {
+        if !self.collapsed_files.remove(identity) {
+            self.collapsed_files.insert(identity.clone());
         }
         self.rebuild_entries();
     }
@@ -374,31 +425,33 @@ impl Delegate {
         collapsed: bool,
         cx: &mut Context<Picker<Self>>,
     ) {
-        let path = match self.entries.get(self.selected_index) {
+        let selected_file = match self.entries.get(self.selected_index) {
             Some(Entry::Match(match_index)) => self
                 .matches
                 .get(*match_index)
-                .map(|search_match| search_match.path.clone()),
-            Some(Entry::Header(path)) => Some(path.clone()),
+                .map(|search_match| (search_match.file_identity(), search_match.path.clone())),
+            Some(Entry::Header { identity, path }) => Some((identity.clone(), path.clone())),
             Some(Entry::Separator) | None => None,
         };
-        let Some(path) = path else {
+        let Some((identity, path)) = selected_file else {
             return;
         };
-        if collapsed == self.collapsed_paths.contains(&path) {
+        if collapsed == self.collapsed_files.contains(&identity) {
             return;
         }
 
-        self.toggle_group_collapsed(&path);
+        self.toggle_group_collapsed(&identity);
 
         if let Some(index) = self.entries.iter().position(|entry| match entry {
-            Entry::Header(header_path) => collapsed && *header_path == path,
+            Entry::Header {
+                identity: header_identity,
+                ..
+            } => collapsed && *header_identity == identity,
             Entry::Match(match_index) => {
                 !collapsed
-                    && self
-                        .matches
-                        .get(*match_index)
-                        .is_some_and(|search_match| search_match.path == path)
+                    && self.matches.get(*match_index).is_some_and(|search_match| {
+                        search_match.file_identity() == identity && search_match.path == path
+                    })
             }
             Entry::Separator => false,
         }) {
@@ -408,14 +461,14 @@ impl Delegate {
     }
 
     pub(crate) fn toggle_all_collapsed(&mut self, cx: &mut Context<Picker<Self>>) {
-        if self.collapsed_paths.is_empty() {
-            self.collapsed_paths = self
+        if self.collapsed_files.is_empty() {
+            self.collapsed_files = self
                 .matches
                 .iter()
-                .map(|search_match| search_match.path.clone())
+                .map(SearchMatch::file_identity)
                 .collect();
         } else {
-            self.collapsed_paths.clear();
+            self.collapsed_files.clear();
         }
         self.rebuild_entries();
         cx.notify();
@@ -428,7 +481,7 @@ impl Delegate {
     fn search_match_for_entry(&self, ix: usize) -> Option<&SearchMatch> {
         match self.entries.get(ix)? {
             Entry::Match(match_index) => self.matches.get(*match_index),
-            Entry::Header(_) | Entry::Separator => None,
+            Entry::Header { .. } | Entry::Separator => None,
         }
     }
 
@@ -443,8 +496,6 @@ impl Delegate {
             .iter()
             .map(|selected| selected.0.clone())
             .collect();
-        self.unique_files
-            .extend(matches.iter().map(|m| m.path.clone()));
         matches.append(&mut self.matches);
         self.matches = matches;
     }
@@ -602,9 +653,15 @@ impl Delegate {
 
         buffer.read_with(cx, |buf, cx| {
             let file = buf.file();
-            let path = file.map(|f| ProjectPath {
-                worktree_id: f.worktree_id(cx),
-                path: f.path().clone(),
+            let file_identity = file.map(|file| {
+                (
+                    ProjectPath {
+                        worktree_id: file.worktree_id(cx),
+                        path: file.path().clone(),
+                    },
+                    file.resource_id(),
+                    file.vfs_path().cloned(),
+                )
             });
             let mut matches = Vec::new();
             for anchor_range in ranges {
@@ -612,9 +669,11 @@ impl Delegate {
                 let end_offset: usize = buf.summary_for_anchor(&anchor_range.end);
                 let point = buf.offset_to_point(start_offset);
 
-                if let Some(path) = &path {
+                if let Some((path, resource_id, vfs_path)) = &file_identity {
                     matches.push(SearchMatch {
                         path: path.clone(),
+                        resource_id: *resource_id,
+                        vfs_path: vfs_path.clone(),
                         buffer: buffer.clone(),
                         anchor_range: anchor_range.clone(),
                         range: start_offset..end_offset,
@@ -829,7 +888,7 @@ impl PickerDelegate for Delegate {
     fn can_select(&self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> bool {
         match self.entries.get(ix) {
             Some(Entry::Match(_)) => true,
-            Some(Entry::Header(path)) => self.collapsed_paths.contains(path),
+            Some(Entry::Header { identity, .. }) => self.collapsed_files.contains(identity),
             Some(Entry::Separator) | None => false,
         }
     }
@@ -872,8 +931,7 @@ impl PickerDelegate for Delegate {
             }
             self.matches.clear();
             self.entries.clear();
-            self.unique_files.clear();
-            self.collapsed_paths.clear();
+            self.collapsed_files.clear();
             self.selected_index = 0;
             self.active_query = None;
             self.prepend_selected_matches();
@@ -1062,7 +1120,7 @@ impl Delegate {
                     .child(Divider::horizontal())
                     .into_any_element(),
             ),
-            Entry::Header(path) => {
+            Entry::Header { identity, path } => {
                 let path_style = self.project(cx).read(cx).path_style(cx);
                 let file_name = path
                     .path
@@ -1084,8 +1142,8 @@ impl Delegate {
                             .color(Color::Muted)
                             .size(IconSize::Small)
                     });
-                let is_collapsed = self.collapsed_paths.contains(path);
-                let toggle_path = path.clone();
+                let is_collapsed = self.collapsed_files.contains(identity);
+                let toggle_identity = identity.clone();
                 let tooltip_focus_handle = self.focus_handle.clone();
 
                 Some(
@@ -1138,7 +1196,7 @@ impl Delegate {
                                                             this.delegate.toggle_all_collapsed(cx);
                                                         } else {
                                                             this.delegate.toggle_group_collapsed(
-                                                                &toggle_path,
+                                                                &toggle_identity,
                                                             );
                                                             cx.notify();
                                                         }
@@ -1270,16 +1328,12 @@ async fn stream_results_to_picker(
                 if clear_existing {
                     delegate.matches.clear();
                     delegate.entries.clear();
-                    delegate.unique_files.clear();
-                    delegate.collapsed_paths.clear();
+                    delegate.collapsed_files.clear();
                     delegate.selected_index = 0;
                     clear_existing = false;
                 }
 
-                delegate
-                    .unique_files
-                    .extend(batch_matches.iter().map(|m| &m.path).cloned());
-                delegate.matches.extend(batch_matches);
+                merge_search_matches(&mut delegate.matches, batch_matches);
                 delegate.prepend_selected_matches();
                 // Rebuild the grouped view and resnap the selection onto a
                 // selectable row (the header/separator rows are not selectable).
@@ -1417,9 +1471,10 @@ mod tests {
     use project::search::{SearchQuery, SearchResult};
     use project::{FakeFs, Project};
     use serde_json::json;
-    use settings::SettingsStore;
+    use settings::{SettingsStore, WorktreeId};
     use util::path;
     use util::paths::PathMatcher;
+    use util::rel_path::rel_path;
 
     fn init_test(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -1437,6 +1492,65 @@ mod tests {
         fs.insert_tree(path!("/dir"), json!({ "sample.js": contents }))
             .await;
         Project::test(fs, [path!("/dir").as_ref()], cx).await
+    }
+
+    #[gpui::test]
+    fn test_merge_search_matches_after_rename(cx: &mut TestAppContext) {
+        let buffer = cx.new(|cx| Buffer::local("", cx));
+        let anchor = cx.read(|cx| buffer.read(cx).snapshot().anchor_before(0));
+        let mount_id = vfs::MountId::new(1);
+        let resource_id = vfs::ResourceId::new(mount_id, 2, 0);
+        let old_vfs_path = vfs::VfsPath::new(
+            mount_id,
+            vfs::provider_path_from_legacy_utf8("old.rs", vfs::PathEncoding::PortableUtf8)
+                .expect("test path should be representable"),
+        );
+        let new_vfs_path = vfs::VfsPath::new(
+            mount_id,
+            vfs::provider_path_from_legacy_utf8("renamed.rs", vfs::PathEncoding::PortableUtf8)
+                .expect("test path should be representable"),
+        );
+        let mut existing_matches = vec![SearchMatch {
+            path: ProjectPath {
+                worktree_id: WorktreeId::from_proto(1),
+                path: rel_path("old.rs").into(),
+            },
+            resource_id: Some(resource_id),
+            vfs_path: Some(old_vfs_path),
+            buffer: buffer.clone(),
+            anchor_range: anchor..anchor,
+            range: 0..0,
+            match_start_byte_column: 0,
+            line_number: 1,
+        }];
+        let new_matches = vec![SearchMatch {
+            path: ProjectPath {
+                worktree_id: WorktreeId::from_proto(1),
+                path: rel_path("renamed.rs").into(),
+            },
+            resource_id: Some(resource_id),
+            vfs_path: Some(new_vfs_path.clone()),
+            buffer,
+            anchor_range: anchor..anchor,
+            range: 1..1,
+            match_start_byte_column: 1,
+            line_number: 2,
+        }];
+
+        let new_identity = new_matches[0].file_identity();
+        merge_search_matches(&mut existing_matches, new_matches);
+
+        assert_eq!(existing_matches.len(), 2);
+        assert_eq!(
+            existing_matches[0].path.path.as_ref(),
+            rel_path("renamed.rs")
+        );
+        assert_eq!(existing_matches[0].vfs_path, Some(new_vfs_path));
+        assert!(
+            existing_matches
+                .iter()
+                .all(|search_match| search_match.file_identity() == new_identity)
+        );
     }
 
     #[gpui::test]

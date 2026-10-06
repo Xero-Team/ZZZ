@@ -11,10 +11,11 @@ use gpui::{
 };
 use language::Buffer;
 use picker::Picker;
-use project::ProjectPath;
+use project::{ProjectPath, ProjectResourceIdentity};
 use settings::SeedQuerySetting;
 use text::Anchor;
 use ui::Window;
+use vfs::{ResourceId, VfsPath};
 use workspace::{DismissDecision, ItemHandle, ModalView, Workspace, WorkspaceDb, WorkspaceId};
 
 mod delegate;
@@ -488,11 +489,19 @@ impl Focusable for TextFinder {
 #[derive(Clone)]
 pub struct SearchMatch {
     pub path: ProjectPath,
+    pub resource_id: Option<ResourceId>,
+    pub vfs_path: Option<VfsPath>,
     pub buffer: Entity<Buffer>,
     pub anchor_range: Range<Anchor>,
     pub range: Range<usize>,
     pub match_start_byte_column: u32,
     pub line_number: u32,
+}
+
+impl SearchMatch {
+    pub(crate) fn file_identity(&self) -> ProjectResourceIdentity {
+        ProjectResourceIdentity::new(self.resource_id, self.path.clone())
+    }
 }
 
 #[cfg(test)]

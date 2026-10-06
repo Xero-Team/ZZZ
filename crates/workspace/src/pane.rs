@@ -28,7 +28,9 @@ use i18n::tr;
 use itertools::Itertools;
 use language::{Capability, DiagnosticSeverity};
 use parking_lot::Mutex;
-use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, WorktreeId};
+use project::{
+    DirectoryLister, Project, ProjectEntryId, ProjectPath, ProjectResourceIdentity, WorktreeId,
+};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::{Settings, SettingsStore};
@@ -467,7 +469,7 @@ pub struct Pane {
     pub new_item_context_menu_handle: PopoverMenuHandle<ContextMenu>,
     pub split_item_context_menu_handle: PopoverMenuHandle<ContextMenu>,
     pinned_tab_count: usize,
-    diagnostics: HashMap<ProjectPath, DiagnosticSeverity>,
+    diagnostics: HashMap<ProjectResourceIdentity, DiagnosticSeverity>,
     zoom_out_on_close: bool,
     focus_follows_mouse: FocusFollowsMouse,
     diagnostic_summary_update: Task<()>,
@@ -790,19 +792,21 @@ impl Pane {
         self.diagnostics = if show_diagnostics == ShowDiagnostics::Off {
             HashMap::default()
         } else {
+            let project = project.read(cx);
             project
-                .read(cx)
                 .diagnostic_summaries(false, cx)
                 .filter_map(|(project_path, _, diagnostic_summary)| {
-                    if diagnostic_summary.error_count > 0 {
-                        Some((project_path, DiagnosticSeverity::ERROR))
+                    let severity = if diagnostic_summary.error_count > 0 {
+                        DiagnosticSeverity::ERROR
                     } else if diagnostic_summary.warning_count > 0
                         && show_diagnostics != ShowDiagnostics::Errors
                     {
-                        Some((project_path, DiagnosticSeverity::WARNING))
+                        DiagnosticSeverity::WARNING
                     } else {
-                        None
-                    }
+                        return None;
+                    };
+                    let identity = project.resource_identity_for_project_path(&project_path, cx);
+                    Some((identity, severity))
                 })
                 .collect()
         }
@@ -2857,9 +2861,10 @@ impl Pane {
             .size(IconSize::Small)
             .color(Color::Muted);
 
-        let item_diagnostic = item
-            .project_path(cx)
-            .and_then(|project_path| self.diagnostics.get(&project_path));
+        let item_diagnostic = item.project_path(cx).and_then(|project_path| {
+            let identity = ProjectResourceIdentity::new(item.resource_id(cx), project_path);
+            self.diagnostics.get(&identity)
+        });
 
         let Some(diagnostic) = item_diagnostic else {
             return Some(icon.into_any_element());
