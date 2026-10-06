@@ -259,6 +259,12 @@ impl VfsError {
     pub fn detail(&self) -> Option<&str> {
         self.detail.as_deref()
     }
+
+    pub fn remap(mut self, provider: ProviderId, path: Option<ProviderPath>) -> Self {
+        self.provider = provider;
+        self.path = path;
+        self
+    }
 }
 
 impl fmt::Debug for VfsError {

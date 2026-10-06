@@ -18954,6 +18954,7 @@ dependencies = [
  "binrw",
  "event-listener 5.4.2",
  "futures 0.3.34",
+ "lru",
  "parking_lot",
  "serde",
  "serde_json",

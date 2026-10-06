@@ -23,6 +23,7 @@ async_zip.workspace = true
 binrw.workspace = true
 event-listener.workspace = true
 futures.workspace = true
+lru.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 thiserror.workspace = true

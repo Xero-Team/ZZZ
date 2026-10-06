@@ -12,6 +12,7 @@ use std::{
 use typed_path::{WindowsComponent, WindowsPath, WindowsPrefix};
 
 mod archive_provider;
+mod composition_provider;
 mod cursor;
 mod manager;
 mod memory_provider;
@@ -19,6 +20,7 @@ mod provider;
 mod snapshot;
 
 pub use archive_provider::*;
+pub use composition_provider::*;
 pub use cursor::*;
 pub use manager::*;
 pub use memory_provider::*;
