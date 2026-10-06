@@ -400,7 +400,7 @@ pub struct EntryPermissions {
     pub hidden: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EntryMetadata {
     pub name: Option<EntryName>,
     pub kind: EntryKind,

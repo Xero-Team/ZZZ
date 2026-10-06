@@ -64,3 +64,463 @@ message VfsPathComponentV2 {
   string display = 3;
   bytes lookup_key = 4;
 }
+
+enum VfsSupportLevelV2 {
+  VFS_SUPPORT_LEVEL_V2_UNSPECIFIED = 0;
+  VFS_SUPPORT_LEVEL_V2_UNSUPPORTED = 1;
+  VFS_SUPPORT_LEVEL_V2_EMULATED = 2;
+  VFS_SUPPORT_LEVEL_V2_NATIVE = 3;
+}
+
+enum VfsAtomicityV2 {
+  VFS_ATOMICITY_V2_UNSPECIFIED = 0;
+  VFS_ATOMICITY_V2_BEST_EFFORT = 1;
+  VFS_ATOMICITY_V2_ATOMIC_WITHIN_FILE = 2;
+  VFS_ATOMICITY_V2_ATOMIC_WITHIN_DIRECTORY = 3;
+  VFS_ATOMICITY_V2_ATOMIC_WITHIN_MOUNT = 4;
+}
+
+enum VfsCaseSensitivityV2 {
+  VFS_CASE_SENSITIVITY_V2_UNSPECIFIED = 0;
+  VFS_CASE_SENSITIVITY_V2_SENSITIVE = 1;
+  VFS_CASE_SENSITIVITY_V2_INSENSITIVE = 2;
+  VFS_CASE_SENSITIVITY_V2_PER_DIRECTORY = 3;
+}
+
+enum VfsEntryKindV2 {
+  VFS_ENTRY_KIND_V2_UNSPECIFIED = 0;
+  VFS_ENTRY_KIND_V2_FILE = 1;
+  VFS_ENTRY_KIND_V2_DIRECTORY = 2;
+  VFS_ENTRY_KIND_V2_SYMBOLIC_LINK = 3;
+  VFS_ENTRY_KIND_V2_SPECIAL = 4;
+}
+
+enum VfsErrorCodeV2 {
+  VFS_ERROR_CODE_V2_UNSPECIFIED = 0;
+  VFS_ERROR_CODE_V2_NOT_FOUND = 1;
+  VFS_ERROR_CODE_V2_ALREADY_EXISTS = 2;
+  VFS_ERROR_CODE_V2_NOT_DIRECTORY = 3;
+  VFS_ERROR_CODE_V2_IS_DIRECTORY = 4;
+  VFS_ERROR_CODE_V2_PERMISSION_DENIED = 5;
+  VFS_ERROR_CODE_V2_READ_ONLY = 6;
+  VFS_ERROR_CODE_V2_UNSUPPORTED = 7;
+  VFS_ERROR_CODE_V2_INVALID_PATH = 8;
+  VFS_ERROR_CODE_V2_INVALID_ARGUMENT = 9;
+  VFS_ERROR_CODE_V2_CONFLICT = 10;
+  VFS_ERROR_CODE_V2_STALE_VERSION = 11;
+  VFS_ERROR_CODE_V2_DISCONNECTED = 12;
+  VFS_ERROR_CODE_V2_CANCELLED = 13;
+  VFS_ERROR_CODE_V2_TIMEOUT = 14;
+  VFS_ERROR_CODE_V2_QUOTA = 15;
+  VFS_ERROR_CODE_V2_TOO_LARGE = 16;
+  VFS_ERROR_CODE_V2_CORRUPT_DATA = 17;
+  VFS_ERROR_CODE_V2_WATCH_OVERFLOW = 18;
+  VFS_ERROR_CODE_V2_INTERNAL = 19;
+}
+
+enum VfsOperationV2 {
+  VFS_OPERATION_V2_UNSPECIFIED = 0;
+  VFS_OPERATION_V2_STAT = 1;
+  VFS_OPERATION_V2_READ_DIRECTORY = 2;
+  VFS_OPERATION_V2_OPEN = 3;
+  VFS_OPERATION_V2_READ = 4;
+  VFS_OPERATION_V2_WRITE = 5;
+  VFS_OPERATION_V2_SET_LENGTH = 6;
+  VFS_OPERATION_V2_FLUSH = 7;
+  VFS_OPERATION_V2_SYNC = 8;
+  VFS_OPERATION_V2_CREATE_DIRECTORY = 9;
+  VFS_OPERATION_V2_REMOVE = 10;
+  VFS_OPERATION_V2_RENAME = 11;
+  VFS_OPERATION_V2_COPY = 12;
+  VFS_OPERATION_V2_WATCH = 13;
+  VFS_OPERATION_V2_NATIVE_PATH = 14;
+}
+
+enum VfsFileAccessV2 {
+  VFS_FILE_ACCESS_V2_UNSPECIFIED = 0;
+  VFS_FILE_ACCESS_V2_READ = 1;
+  VFS_FILE_ACCESS_V2_WRITE = 2;
+  VFS_FILE_ACCESS_V2_READ_WRITE = 3;
+}
+
+enum VfsCreateDispositionV2 {
+  VFS_CREATE_DISPOSITION_V2_UNSPECIFIED = 0;
+  VFS_CREATE_DISPOSITION_V2_OPEN_EXISTING = 1;
+  VFS_CREATE_DISPOSITION_V2_CREATE_NEW = 2;
+  VFS_CREATE_DISPOSITION_V2_OPEN_OR_CREATE = 3;
+  VFS_CREATE_DISPOSITION_V2_TRUNCATE_EXISTING = 4;
+}
+
+enum VfsRemoveKindV2 {
+  VFS_REMOVE_KIND_V2_UNSPECIFIED = 0;
+  VFS_REMOVE_KIND_V2_FILE = 1;
+  VFS_REMOVE_KIND_V2_EMPTY_DIRECTORY = 2;
+  VFS_REMOVE_KIND_V2_RECURSIVE = 3;
+}
+
+enum VfsCollisionPolicyV2 {
+  VFS_COLLISION_POLICY_V2_UNSPECIFIED = 0;
+  VFS_COLLISION_POLICY_V2_FAIL = 1;
+  VFS_COLLISION_POLICY_V2_REPLACE = 2;
+}
+
+enum VfsWatchDepthV2 {
+  VFS_WATCH_DEPTH_V2_UNSPECIFIED = 0;
+  VFS_WATCH_DEPTH_V2_DIRECT_CHILDREN = 1;
+  VFS_WATCH_DEPTH_V2_RECURSIVE = 2;
+}
+
+enum VfsHandleOperationKindV2 {
+  VFS_HANDLE_OPERATION_KIND_V2_UNSPECIFIED = 0;
+  VFS_HANDLE_OPERATION_KIND_V2_FLUSH = 1;
+  VFS_HANDLE_OPERATION_KIND_V2_SYNC = 2;
+}
+
+message VfsReadCapabilitiesV2 {
+  VfsSupportLevelV2 whole_file = 1;
+  VfsSupportLevelV2 stream = 2;
+  VfsSupportLevelV2 positioned = 3;
+  VfsSupportLevelV2 atomic_snapshot = 4;
+}
+
+message VfsWriteCapabilitiesV2 {
+  VfsSupportLevelV2 positioned = 1;
+  VfsSupportLevelV2 append = 2;
+  VfsSupportLevelV2 truncate = 3;
+  VfsSupportLevelV2 set_len = 4;
+  VfsSupportLevelV2 flush = 5;
+  VfsSupportLevelV2 sync = 6;
+  VfsSupportLevelV2 conditional = 7;
+  VfsAtomicityV2 maximum_atomicity = 8;
+}
+
+message VfsDirectoryCapabilitiesV2 {
+  VfsSupportLevelV2 paged = 1;
+  VfsSupportLevelV2 recursive_list = 2;
+  VfsSupportLevelV2 stat_many = 3;
+}
+
+message VfsMutationCapabilitiesV2 {
+  VfsSupportLevelV2 create_directory = 1;
+  VfsSupportLevelV2 remove = 2;
+  VfsSupportLevelV2 rename = 3;
+  VfsSupportLevelV2 copy = 4;
+  VfsSupportLevelV2 cross_provider_copy = 5;
+  VfsSupportLevelV2 idempotency = 6;
+  VfsAtomicityV2 maximum_rename_atomicity = 7;
+  VfsAtomicityV2 maximum_delete_atomicity = 8;
+}
+
+message VfsWatchCapabilitiesV2 {
+  VfsSupportLevelV2 watch = 1;
+  VfsSupportLevelV2 recursive = 2;
+  VfsSupportLevelV2 resumable_journal = 3;
+}
+
+message VfsLinkCapabilitiesV2 {
+  VfsSupportLevelV2 symbolic_links = 1;
+  VfsSupportLevelV2 hard_links = 2;
+  VfsSupportLevelV2 permissions = 3;
+  VfsSupportLevelV2 extended_attributes = 4;
+  VfsSupportLevelV2 native_path = 5;
+}
+
+message VfsTrashCapabilitiesV2 {
+  VfsSupportLevelV2 trash = 1;
+  VfsSupportLevelV2 restore = 2;
+}
+
+message VfsProviderLimitsV2 {
+  uint32 maximum_page_size = 1;
+  uint32 maximum_stat_batch = 2;
+  uint64 maximum_range_size = 3;
+  uint64 maximum_request_size = 4;
+  uint32 maximum_open_handles = 5;
+}
+
+message VfsProviderCapabilitiesV2 {
+  VfsReadCapabilitiesV2 read = 1;
+  VfsWriteCapabilitiesV2 write = 2;
+  VfsDirectoryCapabilitiesV2 directories = 3;
+  VfsMutationCapabilitiesV2 mutations = 4;
+  VfsWatchCapabilitiesV2 watch = 5;
+  VfsLinkCapabilitiesV2 links = 6;
+  VfsTrashCapabilitiesV2 trash = 7;
+  VfsSupportLevelV2 stable_file_key = 8;
+  VfsCaseSensitivityV2 case_sensitivity = 9;
+  VfsProviderLimitsV2 limits = 10;
+  repeated VfsCapabilityExtensionV2 extensions = 11;
+}
+
+message VfsCapabilityExtensionV2 {
+  uint32 id = 1;
+  bytes payload = 2;
+}
+
+message VfsProviderDescriptorV2 {
+  string id = 1;
+  string display_name = 2;
+  PathEncodingV2 path_encoding = 3;
+  VfsCaseSensitivityV2 case_sensitivity = 4;
+}
+
+message VfsTimestampV2 {
+  sint64 seconds = 1;
+  uint32 nanos = 2;
+}
+
+message VfsEntryPermissionsV2 {
+  bool writable = 1;
+  bool executable = 2;
+  bool private = 3;
+  bool hidden = 4;
+}
+
+message VfsEntryMetadataV2 {
+  VfsPathComponentV2 name = 1;
+  VfsEntryKindV2 kind = 2;
+  uint64 size = 3;
+  VfsTimestampV2 modified_at = 4;
+  VfsTimestampV2 created_at = 5;
+  VfsEntryPermissionsV2 permissions = 6;
+  optional bytes provider_file_key = 7;
+  bytes content_version = 8;
+  bytes structure_version = 9;
+  ProviderPathV2 symbolic_link_target = 10;
+  VfsEntryKindV2 symbolic_link_target_kind = 11;
+  VfsCaseSensitivityV2 case_sensitivity = 12;
+}
+
+message VfsDirectoryEntryV2 {
+  ProviderPathV2 path = 1;
+  VfsEntryMetadataV2 metadata = 2;
+}
+
+message VfsErrorV2 {
+  VfsErrorCodeV2 code = 1;
+  VfsOperationV2 operation = 2;
+  string provider_id = 3;
+  ProviderPathV2 path = 4;
+  string detail = 5;
+}
+
+message VfsOperationResponseV2 {
+  VfsErrorV2 error = 1;
+}
+
+message VfsNegotiateRequestV2 {
+  uint64 project_id = 1;
+  uint64 worktree_id = 2;
+  uint32 minimum_protocol_version = 3;
+  uint32 maximum_protocol_version = 4;
+  repeated PathEncodingV2 supported_path_encodings = 5;
+}
+
+message VfsNegotiateResponseV2 {
+  uint32 protocol_version = 1;
+  MountIdV2 mount_id = 2;
+  VfsProviderDescriptorV2 descriptor = 3;
+  VfsProviderCapabilitiesV2 capabilities = 4;
+  VfsErrorV2 error = 5;
+}
+
+message VfsStatRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  uint64 operation_id = 4;
+  bool follow_symbolic_link = 5;
+}
+
+message VfsStatResponseV2 {
+  VfsEntryMetadataV2 metadata = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsReadDirectoryRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  optional bytes cursor = 4;
+  uint32 limit = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsReadDirectoryResponseV2 {
+  repeated VfsDirectoryEntryV2 entries = 1;
+  optional bytes next_cursor = 2;
+  VfsErrorV2 error = 3;
+}
+
+message VfsOpenRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  VfsFileAccessV2 access = 4;
+  VfsCreateDispositionV2 create = 5;
+  optional bytes expected_version = 6;
+  uint64 operation_id = 7;
+}
+
+message VfsOpenResponseV2 {
+  uint64 handle_id = 1;
+  uint64 lease_duration_millis = 2;
+  VfsErrorV2 error = 3;
+}
+
+message VfsCloseHandleRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 operation_id = 4;
+}
+
+message VfsRenewHandleRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 operation_id = 4;
+}
+
+message VfsRenewHandleResponseV2 {
+  uint64 lease_duration_millis = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsFileLengthRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 operation_id = 4;
+}
+
+message VfsFileLengthResponseV2 {
+  uint64 length = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsReadAtRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 offset = 4;
+  uint32 length = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsReadAtResponseV2 {
+  bytes data = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsWriteAtRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 offset = 4;
+  bytes data = 5;
+  optional bytes expected_version = 6;
+  uint64 operation_id = 7;
+}
+
+message VfsWriteAtResponseV2 {
+  uint32 written = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsSetLengthRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 length = 4;
+  optional bytes expected_version = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsHandleOperationRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
+  uint64 operation_id = 4;
+  VfsHandleOperationKindV2 kind = 5;
+}
+
+message VfsCreateDirectoryRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  bool parents = 4;
+  uint64 operation_id = 5;
+}
+
+message VfsRemoveRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  VfsRemoveKindV2 kind = 4;
+  optional bytes expected_version = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsRemoveResponseV2 {
+  optional uint64 removed_entries = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsRenameRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 source = 3;
+  ProviderPathV2 target = 4;
+  VfsCollisionPolicyV2 collision = 5;
+  VfsAtomicityV2 required_atomicity = 6;
+  optional bytes expected_version = 7;
+  uint64 operation_id = 8;
+}
+
+message VfsCopyRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 source = 3;
+  ProviderPathV2 target = 4;
+  VfsCollisionPolicyV2 collision = 5;
+  optional bytes expected_version = 6;
+  uint64 operation_id = 7;
+}
+
+message VfsWatchRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  VfsWatchDepthV2 depth = 4;
+  optional uint64 resume_after_sequence = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsEventV2 {
+  ProviderPathV2 path = 1;
+  oneof kind {
+    bool created = 2;
+    bool modified = 3;
+    bool removed = 4;
+    ProviderPathV2 renamed_from = 5;
+    ProviderPathV2 overflow_rescan_root = 6;
+  }
+}
+
+message VfsEventBatchV2 {
+  uint64 first_sequence = 1;
+  uint64 last_sequence = 2;
+  repeated VfsEventV2 events = 3;
+}
+
+message VfsWatchResponseV2 {
+  VfsEventBatchV2 batch = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsCancelOperationRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 operation_id = 3;
+}

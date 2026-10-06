@@ -13,6 +13,7 @@ import "image.proto";
 import "lsp.proto";
 import "task.proto";
 import "toolchain.proto";
+import "vfs.proto";
 import "worktree.proto";
 
 // Looking for a number? Search "// current max"
@@ -392,7 +393,35 @@ message Envelope {
     ExecuteLspCommand execute_lsp_command = 460;
     ExecuteLspCommandResponse execute_lsp_command_response = 461;
     GetTerminalShell get_terminal_shell = 462;
-    GetTerminalShellResponse get_terminal_shell_response = 463; // current max
+    GetTerminalShellResponse get_terminal_shell_response = 463;
+    VfsNegotiateRequestV2 vfs_negotiate_request_v2 = 464;
+    VfsNegotiateResponseV2 vfs_negotiate_response_v2 = 465;
+    VfsStatRequestV2 vfs_stat_request_v2 = 466;
+    VfsStatResponseV2 vfs_stat_response_v2 = 467;
+    VfsReadDirectoryRequestV2 vfs_read_directory_request_v2 = 468;
+    VfsReadDirectoryResponseV2 vfs_read_directory_response_v2 = 469;
+    VfsOpenRequestV2 vfs_open_request_v2 = 470;
+    VfsOpenResponseV2 vfs_open_response_v2 = 471;
+    VfsCloseHandleRequestV2 vfs_close_handle_request_v2 = 472;
+    VfsOperationResponseV2 vfs_operation_response_v2 = 473;
+    VfsRenewHandleRequestV2 vfs_renew_handle_request_v2 = 474;
+    VfsRenewHandleResponseV2 vfs_renew_handle_response_v2 = 475;
+    VfsFileLengthRequestV2 vfs_file_length_request_v2 = 476;
+    VfsFileLengthResponseV2 vfs_file_length_response_v2 = 477;
+    VfsReadAtRequestV2 vfs_read_at_request_v2 = 478;
+    VfsReadAtResponseV2 vfs_read_at_response_v2 = 479;
+    VfsWriteAtRequestV2 vfs_write_at_request_v2 = 480;
+    VfsWriteAtResponseV2 vfs_write_at_response_v2 = 481;
+    VfsSetLengthRequestV2 vfs_set_length_request_v2 = 482;
+    VfsHandleOperationRequestV2 vfs_handle_operation_request_v2 = 483;
+    VfsCreateDirectoryRequestV2 vfs_create_directory_request_v2 = 484;
+    VfsRemoveRequestV2 vfs_remove_request_v2 = 485;
+    VfsRemoveResponseV2 vfs_remove_response_v2 = 486;
+    VfsRenameRequestV2 vfs_rename_request_v2 = 487;
+    VfsCopyRequestV2 vfs_copy_request_v2 = 488;
+    VfsWatchRequestV2 vfs_watch_request_v2 = 489;
+    VfsWatchResponseV2 vfs_watch_response_v2 = 490;
+    VfsCancelOperationRequestV2 vfs_cancel_operation_request_v2 = 491; // current max
   }
 
   reserved 87 to 88;
