@@ -1295,7 +1295,7 @@ impl Project {
                 DapStore::new_local(
                     client.http_client(),
                     node.clone(),
-                    fs.clone(),
+                    native_execution_context.clone(),
                     environment.clone(),
                     toolchain_store.read(cx).as_language_toolchain_store(),
                     worktree_store.clone(),
@@ -1336,6 +1336,7 @@ impl Project {
                     worktree_store.clone(),
                     toolchain_store.read(cx).as_language_toolchain_store(),
                     environment.clone(),
+                    native_execution_context.clone(),
                     git_store.clone(),
                     cx,
                 )
@@ -2029,7 +2030,7 @@ impl Project {
 
     #[inline]
     pub fn supports_terminal(&self, _cx: &App) -> bool {
-        self.is_local() || self.is_via_remote_server()
+        self.native_execution_context.is_some() || self.remote_client.is_some()
     }
 
     #[inline]

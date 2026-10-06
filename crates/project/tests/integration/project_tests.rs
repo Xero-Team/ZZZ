@@ -431,6 +431,43 @@ async fn test_lsp_workspace_edit_rejects_read_only_resource(cx: &mut gpui::TestA
 }
 
 #[gpui::test]
+async fn test_local_task_context_uses_native_execution_host(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "main.rs": "fn main() {}",
+        }),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/root").as_ref()], cx).await;
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/root/main.rs"), cx)
+        })
+        .await
+        .expect("buffer should open");
+    let anchor = buffer.read_with(cx, |buffer, _| buffer.anchor_before(0));
+    let location = language::Location {
+        buffer,
+        range: anchor..anchor,
+    };
+    let task_context = project
+        .update(cx, |project, cx| {
+            project.task_store().update(cx, |task_store, cx| {
+                task_store.task_context_for_location(task::TaskVariables::default(), location, cx)
+            })
+        })
+        .await
+        .expect("task context should resolve")
+        .expect("local task context should exist");
+
+    assert_eq!(task_context.cwd.as_deref(), Some(Path::new(path!("/root"))));
+}
+
+#[gpui::test]
 async fn test_block_via_channel(cx: &mut gpui::TestAppContext) {
     cx.executor().allow_parking();
 

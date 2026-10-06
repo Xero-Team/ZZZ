@@ -14,6 +14,7 @@ use gpui::{AppContext as _, Entity, SharedString, TestAppContext};
 use http_client::{BlockedHttpClient, FakeHttpClient};
 use language::{
     Buffer, FakeLspAdapter, LanguageConfig, LanguageMatcher, LanguageRegistry, LineEnding,
+    Location,
     language_settings::{AllLanguageSettings, LanguageSettings},
 };
 use lsp::{
@@ -907,6 +908,7 @@ async fn test_remote_lsp_workspace_file_operation_runs_on_server(
         path!("/code"),
         json!({
             "project": {
+                "README.md": "remote task context",
                 "src": {
                     "lib.rs": "fn one() -> usize { 1 }",
                 },
@@ -963,6 +965,33 @@ async fn test_remote_lsp_workspace_file_operation_runs_on_server(
         .expect("remote worktree should open")
         .0
         .read_with(cx, |worktree, _| worktree.id());
+    let task_buffer = project
+        .update(cx, |project, cx| {
+            project.open_buffer((worktree_id, rel_path("README.md")), cx)
+        })
+        .await
+        .expect("remote task buffer should open");
+    let task_anchor = task_buffer.read_with(cx, |buffer, _| buffer.anchor_before(0));
+    let task_context = project
+        .update(cx, |project, cx| {
+            project.task_store().update(cx, |task_store, cx| {
+                task_store.task_context_for_location(
+                    task::TaskVariables::default(),
+                    Location {
+                        buffer: task_buffer,
+                        range: task_anchor..task_anchor,
+                    },
+                    cx,
+                )
+            })
+        })
+        .await
+        .expect("remote task context request should succeed")
+        .expect("remote task context should exist");
+    assert_eq!(
+        task_context.cwd.as_deref(),
+        Some(Path::new(path!("/code/project")))
+    );
     let (buffer, _handle) = project
         .update(cx, |project, cx| {
             project.open_buffer_with_lsp((worktree_id, rel_path("src/lib.rs")), cx)

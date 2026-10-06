@@ -159,7 +159,7 @@ impl HeadlessProject {
             let mut dap_store = DapStore::new_local(
                 http_client.clone(),
                 node_runtime.clone(),
-                fs.clone(),
+                native_execution_context.clone(),
                 environment.clone(),
                 toolchain_store.read(cx).as_language_toolchain_store(),
                 worktree_store.clone(),
@@ -199,6 +199,7 @@ impl HeadlessProject {
                 worktree_store.clone(),
                 toolchain_store.read(cx).as_language_toolchain_store(),
                 environment.clone(),
+                native_execution_context.clone(),
                 git_store.clone(),
                 cx,
             );

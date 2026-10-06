@@ -68,7 +68,12 @@ impl Project {
         spawn_task: SpawnInTerminal,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Terminal>>> {
-        let is_via_remote = self.remote_client.is_some();
+        if self.native_execution_context.is_none() && self.remote_client.is_none() {
+            return Task::ready(Err(anyhow::anyhow!(
+                "terminal execution is unavailable without an execution host"
+            )));
+        }
+        let is_via_remote = self.native_execution_context.is_none();
 
         let path: Option<Arc<Path>> = if let Some(cwd) = &spawn_task.cwd {
             if is_via_remote {
@@ -319,7 +324,12 @@ impl Project {
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Terminal>>> {
         let path = cwd.map(|p| Arc::from(&*p));
-        let is_via_remote = !force_local && self.remote_client.is_some();
+        if !force_local && self.native_execution_context.is_none() && self.remote_client.is_none() {
+            return Task::ready(Err(anyhow::anyhow!(
+                "terminal execution is unavailable without an execution host"
+            )));
+        }
+        let is_via_remote = !force_local && self.native_execution_context.is_none();
 
         let mut settings_location = None;
         if let Some(path) = path.as_ref()

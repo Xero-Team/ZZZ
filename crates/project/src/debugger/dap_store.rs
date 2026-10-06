@@ -9,6 +9,7 @@ use remote::Interactive;
 use crate::{
     InlayHint, InlayHintLabel, ProjectEnvironment, ResolveState,
     debugger::session::SessionQuirks,
+    native_execution::NativeExecutionContext,
     project_settings::{DapBinary, ProjectSettings},
     worktree_store::WorktreeStore,
 };
@@ -76,7 +77,7 @@ enum DapStoreMode {
 }
 
 pub struct LocalDapStore {
-    fs: Arc<dyn Fs>,
+    native_execution_context: NativeExecutionContext,
     node_runtime: NodeRuntime,
     http_client: Arc<dyn HttpClient>,
     environment: Entity<ProjectEnvironment>,
@@ -135,7 +136,7 @@ impl DapStore {
     pub fn new_local(
         http_client: Arc<dyn HttpClient>,
         node_runtime: NodeRuntime,
-        fs: Arc<dyn Fs>,
+        native_execution_context: NativeExecutionContext,
         environment: Entity<ProjectEnvironment>,
         toolchain_store: Arc<dyn LanguageToolchainStore>,
         worktree_store: Entity<WorktreeStore>,
@@ -143,8 +144,9 @@ impl DapStore {
         is_headless: bool,
         cx: &mut Context<Self>,
     ) -> Self {
+        let fs = native_execution_context.file_system().clone();
         let mode = DapStoreMode::Local(LocalDapStore {
-            fs: fs.clone(),
+            native_execution_context,
             environment,
             http_client,
             node_runtime,
@@ -585,7 +587,7 @@ impl DapStore {
 
         Arc::new(
             DapAdapterDelegate::new(
-                local_store.fs.clone(),
+                local_store.native_execution_context.file_system().clone(),
                 worktree.read(cx).snapshot(),
                 console,
                 local_store.node_runtime.clone(),

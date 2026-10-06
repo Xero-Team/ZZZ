@@ -19,7 +19,7 @@ use util::ResultExt;
 
 use crate::{
     BasicContextProvider, Inventory, ProjectEnvironment, buffer_store::BufferStore,
-    git_store::GitStore, worktree_store::WorktreeStore,
+    git_store::GitStore, native_execution::NativeExecutionContext, worktree_store::WorktreeStore,
 };
 
 // platform-dependent warning
@@ -41,6 +41,7 @@ enum StoreMode {
     Local {
         downstream_client: Option<(AnyProtoClient, u64)>,
         environment: Entity<ProjectEnvironment>,
+        native_execution_context: NativeExecutionContext,
     },
     Remote {
         upstream_client: AnyProtoClient,
@@ -164,6 +165,7 @@ impl TaskStore {
         worktree_store: Entity<WorktreeStore>,
         toolchain_store: Arc<dyn LanguageToolchainStore>,
         environment: Entity<ProjectEnvironment>,
+        native_execution_context: NativeExecutionContext,
         git_store: Entity<GitStore>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -171,6 +173,7 @@ impl TaskStore {
             mode: StoreMode::Local {
                 downstream_client: None,
                 environment,
+                native_execution_context,
             },
             task_inventory: Inventory::new(cx),
             buffer_store,
@@ -210,11 +213,16 @@ impl TaskStore {
     ) -> Task<anyhow::Result<Option<TaskContext>>> {
         match self {
             TaskStore::Functional(state) => match &state.mode {
-                StoreMode::Local { environment, .. } => local_task_context_for_location(
+                StoreMode::Local {
+                    environment,
+                    native_execution_context,
+                    ..
+                } => local_task_context_for_location(
                     state.worktree_store.clone(),
                     state.git_store.clone(),
                     state.toolchain_store.clone(),
                     environment.clone(),
+                    native_execution_context.clone(),
                     captured_variables,
                     location,
                     cx,
@@ -312,6 +320,7 @@ fn local_task_context_for_location(
     git_store: Entity<GitStore>,
     toolchain_store: Arc<dyn LanguageToolchainStore>,
     environment: Entity<ProjectEnvironment>,
+    native_execution_context: NativeExecutionContext,
     captured_variables: TaskVariables,
     location: Location,
     cx: &App,
@@ -320,7 +329,7 @@ fn local_task_context_for_location(
     let worktree_abs_path = worktree_id
         .and_then(|worktree_id| worktree_store.read(cx).worktree_for_id(worktree_id, cx))
         .and_then(|worktree| worktree.read(cx).root_dir());
-    let fs = worktree_store.read(cx).fs();
+    let fs = Some(native_execution_context.file_system().clone());
 
     cx.spawn(async move |cx| {
         let project_env = environment
