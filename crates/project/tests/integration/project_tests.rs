@@ -121,6 +121,30 @@ fn test_project_path_v2_wire_round_trip_and_mismatch_rejection() {
     assert!(ProjectPath::from_proto(mismatched).is_err());
 }
 
+#[test]
+fn test_persisted_provider_path_precedes_legacy_media_path() {
+    let provider_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::PortableUtf8,
+        [b"media".as_slice(), b"correct.mp3".as_slice()],
+    )
+    .expect("provider path fixture should be valid");
+    let vfs_path = vfs::VfsPath::new(vfs::MountId::new(9), provider_path);
+    let encoded = serialize_persisted_provider_path(Some(&vfs_path))
+        .expect("exact provider path should serialize");
+
+    let restored =
+        restore_persisted_rel_path(rel_path("media/wrong.mp3").into(), Some(encoded.as_slice()))
+            .expect("exact provider path should restore");
+    assert_eq!(restored.as_ref(), rel_path("media/correct.mp3"));
+
+    let legacy = restore_persisted_rel_path(rel_path("media/legacy.mp3").into(), None)
+        .expect("legacy path should remain supported");
+    assert_eq!(legacy.as_ref(), rel_path("media/legacy.mp3"));
+    assert!(
+        restore_persisted_rel_path(rel_path("media/legacy.mp3").into(), Some(b"invalid")).is_err()
+    );
+}
+
 #[gpui::test]
 async fn test_block_via_channel(cx: &mut gpui::TestAppContext) {
     cx.executor().allow_parking();

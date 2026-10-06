@@ -42,8 +42,13 @@ impl SerializableItem for PdfView {
             let worktree_task = project.update(cx, |project, cx| {
                 project.find_or_create_worktree(record.path.clone(), false, cx)
             });
-            let (worktree, relative_path) = worktree_task.await.context("PDF path not found")?;
+            let (worktree, legacy_relative_path) =
+                worktree_task.await.context("PDF path not found")?;
             let worktree_id = worktree.read_with(cx, |worktree, _cx| worktree.id());
+            let relative_path = project::restore_persisted_rel_path(
+                legacy_relative_path,
+                record.provider_path.as_deref(),
+            )?;
 
             let project_path = ProjectPath {
                 worktree_id,
@@ -77,14 +82,24 @@ impl SerializableItem for PdfView {
     ) -> Option<Task<anyhow::Result<()>>> {
         let workspace_id = workspace.database_id()?;
         let path = self.abs_path(cx)?;
+        let provider_path =
+            project::serialize_persisted_provider_path(self.pdf_item.read(cx).vfs_path.as_ref());
         let page = self.current_page() as i64;
         let zoom = self.zoom();
         let zoom_mode = self.zoom_mode_key().to_owned();
         let db = PdfViewerDb::global(cx);
 
         Some(cx.background_spawn(async move {
-            db.save_pdf(item_id, workspace_id, path, page, zoom_mode, zoom)
-                .await
+            db.save_pdf(
+                item_id,
+                workspace_id,
+                path,
+                provider_path,
+                page,
+                zoom_mode,
+                zoom,
+            )
+            .await
         }))
     }
 

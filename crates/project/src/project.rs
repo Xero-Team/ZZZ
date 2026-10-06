@@ -102,6 +102,7 @@ use node_runtime::NodeRuntime;
 use parking_lot::Mutex;
 pub use prettier_store::PrettierStore;
 use project_settings::{ProjectSettings, SettingsObserver, SettingsObserverEvent};
+use proto::Message as _;
 #[cfg(target_os = "windows")]
 use remote::wsl_path_to_windows_path;
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
@@ -443,6 +444,23 @@ impl ProjectResourceIdentity {
     pub fn new(resource_id: Option<vfs::ResourceId>, path: ProjectPath) -> Self {
         resource_id.map_or(Self::Path(path), Self::Resource)
     }
+}
+
+pub fn serialize_persisted_provider_path(vfs_path: Option<&vfs::VfsPath>) -> Option<Vec<u8>> {
+    vfs_path
+        .map(|path| proto::ProviderPathV2::from_provider_path(path.provider_path()).encode_to_vec())
+}
+
+pub fn restore_persisted_rel_path(
+    legacy_path: Arc<RelPath>,
+    provider_path: Option<&[u8]>,
+) -> Result<Arc<RelPath>> {
+    let Some(provider_path) = provider_path else {
+        return Ok(legacy_path);
+    };
+    let provider_path = proto::ProviderPathV2::decode(provider_path)?.to_provider_path()?;
+    let relative_path = provider_path_to_legacy_utf8(&provider_path)?;
+    RelPath::from_proto(&relative_path)
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

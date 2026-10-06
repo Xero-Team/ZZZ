@@ -33,15 +33,20 @@ impl SerializableItem for AudioView {
     ) -> Task<anyhow::Result<Entity<Self>>> {
         let db = AudioViewerDb::global(cx);
         window.spawn(cx, async move |cx| {
-            let audio_path = db
-                .get_audio_path(item_id, workspace_id)?
+            let record = db
+                .get_audio(item_id, workspace_id)?
                 .context("no audio path found for item")?;
 
             let worktree_task = project.update(cx, |project, cx| {
-                project.find_or_create_worktree(audio_path.clone(), false, cx)
+                project.find_or_create_worktree(record.path.clone(), false, cx)
             });
-            let (worktree, relative_path) = worktree_task.await.context("audio path not found")?;
+            let (worktree, legacy_relative_path) =
+                worktree_task.await.context("audio path not found")?;
             let worktree_id = worktree.read_with(cx, |worktree, _cx| worktree.id());
+            let relative_path = project::restore_persisted_rel_path(
+                legacy_relative_path,
+                record.provider_path.as_deref(),
+            )?;
 
             let project_path = ProjectPath {
                 worktree_id,
@@ -72,17 +77,16 @@ impl SerializableItem for AudioView {
         cx: &mut Context<Self>,
     ) -> Option<Task<anyhow::Result<()>>> {
         let workspace_id = workspace.database_id()?;
-        let path = self
-            .project
-            .read(cx)
-            .absolutize(&self.project_path(cx), cx)?;
+        let project_path = self.project_path(cx);
+        let path = self.project.read(cx).absolutize(&project_path, cx)?;
+        let provider_path =
+            project::serialize_persisted_provider_path(self.audio_item.read(cx).vfs_path.as_ref());
         let db = AudioViewerDb::global(cx);
 
-        Some(
-            cx.background_spawn(
-                async move { db.save_audio_path(item_id, workspace_id, path).await },
-            ),
-        )
+        Some(cx.background_spawn(async move {
+            db.save_audio_path(item_id, workspace_id, path, provider_path)
+                .await
+        }))
     }
 
     fn should_serialize(&self, event: &Self::Event) -> bool {
