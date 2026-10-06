@@ -490,6 +490,7 @@ async-dispatcher = "0.1"
 async-fs = "2.2"
 async-io = "2.6.0"
 async-lock = "3.4"
+event-listener = "5.4.2"
 # Vendored from https://github.com/routerify/async-pipe-rs @ 14aed755ea9fb016a63498fa8c0ec479757fa5f6
 async-pipe = { path = "vendor/async-pipe" }
 async-recursion = "1.2.0"

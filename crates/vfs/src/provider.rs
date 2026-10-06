@@ -1,5 +1,6 @@
 use crate::{EntryName, NativePath, ProviderPath};
 use async_trait::async_trait;
+use event_listener::Event;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -300,16 +301,34 @@ impl Error for VfsError {
 
 pub type VfsResult<T> = Result<T, VfsError>;
 
+#[derive(Default)]
+struct CancellationState {
+    cancelled: AtomicBool,
+    event: Event,
+}
+
 #[derive(Clone, Default)]
-pub struct CancellationToken(Arc<AtomicBool>);
+pub struct CancellationToken(Arc<CancellationState>);
 
 impl CancellationToken {
     pub fn cancel(&self) {
-        self.0.store(true, Ordering::Release);
+        if !self.0.cancelled.swap(true, Ordering::AcqRel) {
+            self.0.event.notify(usize::MAX);
+        }
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.0.load(Ordering::Acquire)
+        self.0.cancelled.load(Ordering::Acquire)
+    }
+
+    pub async fn cancelled(&self) {
+        loop {
+            let listener = self.0.event.listen();
+            if self.is_cancelled() {
+                return;
+            }
+            listener.await;
+        }
     }
 
     pub fn check(&self, operation: VfsOperation, provider: &ProviderId) -> VfsResult<()> {

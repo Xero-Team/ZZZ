@@ -18,6 +18,7 @@ test-support = []
 [dependencies]
 async-lock.workspace = true
 async-trait.workspace = true
+event-listener.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
