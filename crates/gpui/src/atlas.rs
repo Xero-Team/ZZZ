@@ -15,20 +15,31 @@ pub enum AtlasKey {
 }
 
 impl AtlasKey {
-    /// Returns the texture kind for this atlas key.
-    pub fn texture_kind(&self) -> AtlasTextureKind {
+    /// Returns the lifecycle and budget class for this atlas key.
+    pub fn content_kind(&self) -> AtlasContentKind {
         match self {
             AtlasKey::Glyph(params) => {
                 if params.is_emoji {
-                    AtlasTextureKind::Polychrome
+                    AtlasContentKind::GlyphColor
                 } else if params.subpixel_rendering {
-                    AtlasTextureKind::Subpixel
+                    AtlasContentKind::GlyphSubpixel
                 } else {
-                    AtlasTextureKind::Monochrome
+                    AtlasContentKind::GlyphAlpha
                 }
             }
-            AtlasKey::Svg(_) => AtlasTextureKind::Monochrome,
-            AtlasKey::Image(_) => AtlasTextureKind::Polychrome,
+            AtlasKey::Svg(_) => AtlasContentKind::SvgMask,
+            AtlasKey::Image(_) => AtlasContentKind::Image,
+        }
+    }
+
+    /// Returns the texture kind for this atlas key.
+    pub fn texture_kind(&self) -> AtlasTextureKind {
+        match self.content_kind() {
+            AtlasContentKind::GlyphAlpha | AtlasContentKind::SvgMask => {
+                AtlasTextureKind::Monochrome
+            }
+            AtlasContentKind::GlyphSubpixel => AtlasTextureKind::Subpixel,
+            AtlasContentKind::GlyphColor | AtlasContentKind::Image => AtlasTextureKind::Polychrome,
         }
     }
 }
@@ -48,6 +59,88 @@ impl From<RenderSvgParams> for AtlasKey {
 impl From<RenderImageParams> for AtlasKey {
     fn from(params: RenderImageParams) -> Self {
         Self::Image(params)
+    }
+}
+
+/// Classifies atlas content by lifecycle and retained-cache policy.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum AtlasContentKind {
+    /// Grayscale glyph coverage that is tinted at paint time.
+    GlyphAlpha,
+    /// LCD/subpixel glyph coverage.
+    GlyphSubpixel,
+    /// Glyph pixels that already contain their final color.
+    GlyphColor,
+    /// Grayscale SVG coverage that is tinted at paint time.
+    SvgMask,
+    /// Ordinary image pixels, including animated image frames.
+    Image,
+}
+
+impl AtlasContentKind {
+    /// Number of content classes.
+    pub const COUNT: usize = 5;
+    const ALL: [Self; Self::COUNT] = [
+        Self::GlyphAlpha,
+        Self::GlyphSubpixel,
+        Self::GlyphColor,
+        Self::SvgMask,
+        Self::Image,
+    ];
+
+    fn index(self) -> usize {
+        match self {
+            Self::GlyphAlpha => 0,
+            Self::GlyphSubpixel => 1,
+            Self::GlyphColor => 2,
+            Self::SvgMask => 3,
+            Self::Image => 4,
+        }
+    }
+}
+
+/// Retained-cache budgets and page sizing for an atlas instance.
+#[derive(Clone, Copy, Debug)]
+pub struct AtlasPolicy {
+    page_size: Size<DevicePixels>,
+    retained_bytes: [usize; AtlasContentKind::COUNT],
+}
+
+impl Default for AtlasPolicy {
+    fn default() -> Self {
+        const MEBIBYTE: usize = 1024 * 1024;
+        Self {
+            page_size: DEFAULT_ATLAS_SIZE,
+            retained_bytes: [
+                16 * MEBIBYTE,
+                32 * MEBIBYTE,
+                32 * MEBIBYTE,
+                8 * MEBIBYTE,
+                64 * MEBIBYTE,
+            ],
+        }
+    }
+}
+
+impl AtlasPolicy {
+    /// Returns the default page dimensions used for non-oversized entries.
+    pub fn page_size(&self) -> Size<DevicePixels> {
+        self.page_size
+    }
+
+    /// Sets the page dimensions used for non-oversized entries.
+    pub fn set_page_size(&mut self, page_size: Size<DevicePixels>) {
+        self.page_size = page_size;
+    }
+
+    /// Returns the retained-cache budget for one content class.
+    pub fn retained_budget(&self, content_kind: AtlasContentKind) -> usize {
+        self.retained_bytes[content_kind.index()]
+    }
+
+    /// Sets the retained-cache budget for one content class.
+    pub fn set_retained_budget(&mut self, content_kind: AtlasContentKind, retained_bytes: usize) {
+        self.retained_bytes[content_kind.index()] = retained_bytes;
     }
 }
 
@@ -109,6 +202,29 @@ pub struct AtlasSnapshot {
     /// Resident bytes required by the current completed-frame working set.
     pub current_frame_working_set_bytes: usize,
     /// Number of frames whose working set or misses exceeded retained budgets.
+    pub budget_pressure_frames: u64,
+    /// Per-content lifecycle and budget diagnostics.
+    pub content: [AtlasContentSnapshot; AtlasContentKind::COUNT],
+}
+
+/// Point-in-time diagnostics for one atlas content class.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AtlasContentSnapshot {
+    /// Number of resident texture pages owned by this content class.
+    pub page_count: usize,
+    /// Resident GPU bytes owned by this content class.
+    pub resident_bytes: usize,
+    /// Addressable entries owned by this content class.
+    pub entry_count: usize,
+    /// Configured retained-cache budget in bytes.
+    pub retained_budget_bytes: usize,
+    /// Completed-frame working-set floor in resident page bytes.
+    pub working_set_bytes: usize,
+    /// Entries automatically retired by budget maintenance.
+    pub evictions: u64,
+    /// Whole-page compactions scheduled for this content class.
+    pub compactions: u64,
+    /// Frames where this content class exceeded its retained budget.
     pub budget_pressure_frames: u64,
 }
 
@@ -208,6 +324,7 @@ const DEFAULT_ATLAS_SIZE: Size<DevicePixels> = Size {
 pub struct AtlasTextureDescriptor {
     pub texture_id: AtlasTextureId,
     pub size: Size<DevicePixels>,
+    pub content_kind: AtlasContentKind,
     pub kind: AtlasTextureKind,
 }
 
@@ -236,7 +353,7 @@ pub trait AtlasBackend {
 
 #[derive(Clone, Copy)]
 struct AtlasConfiguration {
-    default_page_size: Size<DevicePixels>,
+    policy: AtlasPolicy,
     max_texture_size: Size<DevicePixels>,
 }
 
@@ -247,6 +364,7 @@ struct AtlasEntry {
 
 struct AtlasPage {
     texture_id: AtlasTextureId,
+    content_kind: AtlasContentKind,
     size: Size<DevicePixels>,
     allocator: etagere::BucketedAtlasAllocator,
     entry_ids: FxHashSet<TileId>,
@@ -286,17 +404,13 @@ struct AtlasState<Backend> {
 }
 
 impl<Backend: AtlasBackend> AtlasState<Backend> {
-    fn new(
-        backend: Backend,
-        default_page_size: Size<DevicePixels>,
-        max_texture_size: Size<DevicePixels>,
-    ) -> Self {
+    fn new(backend: Backend, policy: AtlasPolicy, max_texture_size: Size<DevicePixels>) -> Self {
         Self {
             tile_ids_by_key: FxHashMap::default(),
             entries_by_tile_id: FxHashMap::default(),
             pages: Vec::new(),
             configuration: AtlasConfiguration {
-                default_page_size,
+                policy,
                 max_texture_size,
             },
             next_texture_id: 0,
@@ -343,8 +457,9 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             return Ok(entry.tile);
         }
 
-        let kind = key.texture_kind();
-        let (page_index, allocation) = self.allocate_region(kind, size)?;
+        let content_kind = key.content_kind();
+        let texture_kind = key.texture_kind();
+        let (page_index, allocation) = self.allocate_region(content_kind, texture_kind, size)?;
         let tile_id = match self.allocate_tile_id() {
             Ok(tile_id) => tile_id,
             Err(error) => {
@@ -386,7 +501,8 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
 
     fn allocate_region(
         &mut self,
-        kind: AtlasTextureKind,
+        content_kind: AtlasContentKind,
+        texture_kind: AtlasTextureKind,
         size: Size<DevicePixels>,
     ) -> Result<(usize, etagere::Allocation)> {
         anyhow::ensure!(
@@ -405,7 +521,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
 
         for page_index in (0..self.pages.len()).rev() {
             let page = &mut self.pages[page_index];
-            if page.texture_id.kind != kind {
+            if page.content_kind != content_kind || page.texture_id.kind != texture_kind {
                 continue;
             }
             if let Some(allocation) = page.allocator.allocate(device_size_to_etagere(size)) {
@@ -414,28 +530,32 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             }
         }
 
-        self.create_page(kind, size)
+        self.create_page(content_kind, texture_kind, size)
     }
 
     fn create_page(
         &mut self,
-        kind: AtlasTextureKind,
+        content_kind: AtlasContentKind,
+        texture_kind: AtlasTextureKind,
         minimum_size: Size<DevicePixels>,
     ) -> Result<(usize, etagere::Allocation)> {
         let default_page_size = self
             .configuration
-            .default_page_size
+            .policy
+            .page_size
             .min(&self.configuration.max_texture_size);
         let page_size = minimum_size.max(&default_page_size);
-        let texture_id = self.allocate_texture_id(kind)?;
+        let texture_id = self.allocate_texture_id(texture_kind)?;
         self.backend.create_texture(AtlasTextureDescriptor {
             texture_id,
             size: page_size,
-            kind,
+            content_kind,
+            kind: texture_kind,
         })?;
 
         let mut page = AtlasPage {
             texture_id,
+            content_kind,
             size: page_size,
             allocator: etagere::BucketedAtlasAllocator::new(device_size_to_etagere(page_size)),
             entry_ids: FxHashSet::default(),
@@ -608,11 +728,29 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         snapshot.allocations = self.allocations;
         snapshot.removals = self.removals;
         snapshot.retirements = self.retirements;
+        for content_kind in AtlasContentKind::ALL {
+            snapshot.content[content_kind.index()].retained_budget_bytes =
+                self.configuration.policy.retained_budget(content_kind);
+        }
+        for key in self.tile_ids_by_key.keys() {
+            snapshot.content[key.content_kind().index()].entry_count += 1;
+        }
         if self.backend.stores_texture_pages() {
             snapshot.page_count = self.pages.len();
-            snapshot.resident_bytes = self.pages.iter().fold(0usize, |total, page| {
-                total.saturating_add(page.resident_bytes())
-            });
+            for page in &self.pages {
+                let resident_bytes = page.resident_bytes();
+                let content = &mut snapshot.content[page.content_kind.index()];
+                content.page_count += 1;
+                content.resident_bytes = content.resident_bytes.saturating_add(resident_bytes);
+                snapshot.resident_bytes = snapshot.resident_bytes.saturating_add(resident_bytes);
+                if self.completed_usage.contains_texture(page.texture_id) {
+                    content.working_set_bytes =
+                        content.working_set_bytes.saturating_add(resident_bytes);
+                    snapshot.current_frame_working_set_bytes = snapshot
+                        .current_frame_working_set_bytes
+                        .saturating_add(resident_bytes);
+                }
+            }
         } else {
             snapshot.page_count = 0;
             snapshot.resident_bytes = 0;
@@ -628,21 +766,28 @@ pub struct Atlas<Backend> {
 
 impl<Backend: AtlasBackend> Atlas<Backend> {
     pub fn new(backend: Backend, max_texture_size: Size<DevicePixels>) -> Self {
-        Self::with_page_size(backend, DEFAULT_ATLAS_SIZE, max_texture_size)
+        Self::with_policy(backend, max_texture_size, AtlasPolicy::default())
     }
 
+    pub fn with_policy(
+        backend: Backend,
+        max_texture_size: Size<DevicePixels>,
+        policy: AtlasPolicy,
+    ) -> Self {
+        Self {
+            state: Mutex::new(AtlasState::new(backend, policy, max_texture_size)),
+        }
+    }
+
+    #[cfg(test)]
     fn with_page_size(
         backend: Backend,
         default_page_size: Size<DevicePixels>,
         max_texture_size: Size<DevicePixels>,
     ) -> Self {
-        Self {
-            state: Mutex::new(AtlasState::new(
-                backend,
-                default_page_size,
-                max_texture_size,
-            )),
-        }
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(default_page_size);
+        Self::with_policy(backend, max_texture_size, policy)
     }
 
     pub fn get_or_insert_with<'a>(
@@ -943,6 +1088,21 @@ mod tests {
         })
     }
 
+    fn glyph_key(glyph_id: u32, is_emoji: bool, subpixel_rendering: bool) -> AtlasKey {
+        AtlasKey::Glyph(RenderGlyphParams {
+            font_id: crate::FontId(0),
+            glyph_id: crate::GlyphId(glyph_id),
+            font_size: crate::px(16.0),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
+            is_emoji,
+            subpixel_rendering,
+            dilation: 0,
+        })
+    }
+
     fn build_tile() -> Result<Option<(Size<DevicePixels>, Cow<'static, [u8]>)>> {
         Ok(Some((TILE_SIZE, Cow::Borrowed(&[0, 0, 0, 255]))))
     }
@@ -1001,18 +1161,13 @@ mod tests {
             Some(tile)
         );
         assert!(atlas.contains(&key));
-        assert_eq!(
-            atlas.snapshot(),
-            AtlasSnapshot {
-                page_count: 1,
-                resident_bytes: 16,
-                entry_count: 1,
-                hits: 1,
-                misses: 5,
-                allocations: 1,
-                ..AtlasSnapshot::default()
-            }
-        );
+        let snapshot = atlas.snapshot();
+        assert_eq!(snapshot.page_count, 1);
+        assert_eq!(snapshot.resident_bytes, 16);
+        assert_eq!(snapshot.entry_count, 1);
+        assert_eq!(snapshot.hits, 1);
+        assert_eq!(snapshot.misses, 5);
+        assert_eq!(snapshot.allocations, 1);
         Ok(())
     }
 
@@ -1211,6 +1366,51 @@ mod tests {
         let snapshot = atlas.snapshot();
         assert_eq!(snapshot.page_count, 2);
         assert_eq!(snapshot.resident_bytes, 20);
+        Ok(())
+    }
+
+    #[test]
+    fn content_classes_with_the_same_texture_format_use_separate_pages() -> Result<()> {
+        let atlas = atlas();
+        atlas
+            .get_or_insert_with(image_key(1), &mut build_tile)?
+            .context("image tile should exist")?;
+        atlas
+            .get_or_insert_with(glyph_key(1, true, false), &mut build_tile)?
+            .context("color glyph tile should exist")?;
+        atlas
+            .get_or_insert_with(
+                AtlasKey::Svg(RenderSvgParams {
+                    path: "mask.svg".into(),
+                    size: TILE_SIZE,
+                }),
+                &mut || Ok(Some((TILE_SIZE, Cow::Borrowed(&[255])))),
+            )?
+            .context("SVG mask tile should exist")?;
+        atlas
+            .get_or_insert_with(glyph_key(2, false, false), &mut || {
+                Ok(Some((TILE_SIZE, Cow::Borrowed(&[255]))))
+            })?
+            .context("alpha glyph tile should exist")?;
+
+        let snapshot = atlas.snapshot();
+        assert_eq!(snapshot.page_count, 4);
+        assert_eq!(
+            snapshot.content[AtlasContentKind::Image.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphColor.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::SvgMask.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphAlpha.index()].page_count,
+            1
+        );
         Ok(())
     }
 
