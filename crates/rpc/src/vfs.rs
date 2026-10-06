@@ -141,13 +141,19 @@ impl VfsService {
         provider: Arc<dyn VfsProvider>,
     ) -> VfsResult<MountId> {
         let snapshot = VfsSnapshot::mount(provider, SnapshotBudgets::default())?;
+        Ok(self.register_snapshot(worktree_id, snapshot))
+    }
+
+    pub fn register_snapshot(&self, worktree_id: u64, snapshot: VfsSnapshot) -> MountId {
+        let mut mounts_by_worktree = self.inner.mounts_by_worktree.lock();
+        if let Some(existing) = mounts_by_worktree.get(&worktree_id) {
+            return existing.registry().mount_id();
+        }
         let mount_id = snapshot.registry().mount_id();
-        self.inner
-            .mounts_by_worktree
-            .lock()
-            .insert(worktree_id, snapshot.clone());
+        mounts_by_worktree.insert(worktree_id, snapshot.clone());
+        drop(mounts_by_worktree);
         self.inner.mounts_by_id.lock().insert(mount_id, snapshot);
-        Ok(mount_id)
+        mount_id
     }
 
     pub fn release_all_handles(&self) {
@@ -660,6 +666,27 @@ impl VfsService {
                 error: Some(VfsErrorV2::from_vfs_error(&error)),
             },
         }
+    }
+
+    pub async fn close_handle(&self, request: VfsCloseHandleRequestV2) -> VfsOperationResponseV2 {
+        let result =
+            required_mount_id(request.mount_id.as_ref(), VfsOperation::Open).and_then(|mount_id| {
+                let mut handles = self.inner.handles.lock();
+                let belongs_to_mount = handles
+                    .get(&request.handle_id)
+                    .is_some_and(|handle| handle.mount_id == mount_id);
+                if belongs_to_mount {
+                    handles.remove(&request.handle_id);
+                    Ok(())
+                } else {
+                    Err(service_error(
+                        VfsErrorCode::NotFound,
+                        VfsOperation::Open,
+                        "remote VFS handle is closed or belongs to another mount",
+                    ))
+                }
+            });
+        operation_response(result)
     }
 
     pub async fn cancel_operation(

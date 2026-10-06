@@ -718,7 +718,24 @@ entity_messages!(
     FindSearchCandidatesChunk,
     FindSearchCandidatesCancelled,
     DownloadFileByPath,
-    GetRemoteProfilingData
+    GetRemoteProfilingData,
+    VfsNegotiateRequestV2,
+    VfsStatRequestV2,
+    VfsReadDirectoryRequestV2,
+    VfsOpenRequestV2,
+    VfsCloseHandleRequestV2,
+    VfsRenewHandleRequestV2,
+    VfsFileLengthRequestV2,
+    VfsReadAtRequestV2,
+    VfsWriteAtRequestV2,
+    VfsSetLengthRequestV2,
+    VfsHandleOperationRequestV2,
+    VfsCreateDirectoryRequestV2,
+    VfsRemoveRequestV2,
+    VfsRenameRequestV2,
+    VfsCopyRequestV2,
+    VfsWatchRequestV2,
+    VfsCancelOperationRequestV2
 );
 
 impl From<Timestamp> for SystemTime {

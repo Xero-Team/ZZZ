@@ -106,7 +106,7 @@ use project_settings::{ProjectSettings, SettingsObserver, SettingsObserverEvent}
 use remote::wsl_path_to_windows_path;
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
 use rpc::{
-    AnyProtoClient, ErrorCode,
+    AnyProtoClient, ErrorCode, VfsService,
     proto::{LanguageServerPromptResponse, REMOTE_SERVER_PROJECT_ID},
 };
 use search::{SearchInputKind, SearchQuery, SearchResult};
@@ -185,6 +185,19 @@ impl Default for LocalProjectFlags {
     }
 }
 
+macro_rules! vfs_project_request_handler {
+    ($name:ident, $request:ty, $response:ty, $service_method:ident) => {
+        async fn $name(
+            this: Entity<Self>,
+            envelope: TypedEnvelope<$request>,
+            cx: AsyncApp,
+        ) -> Result<$response> {
+            let service = this.read_with(&cx, |this, _| this.vfs_service.clone());
+            Ok(service.$service_method(envelope.payload).await)
+        }
+    };
+}
+
 pub trait ProjectItem: 'static {
     fn try_open(
         project: &Entity<Project>,
@@ -250,6 +263,7 @@ pub struct Project {
     agent_location: Option<AgentLocation>,
     downloading_files: Arc<Mutex<HashMap<u64, DownloadingFile>>>,
     last_worktree_paths: WorktreePaths,
+    vfs_service: VfsService,
 }
 
 enum DownloadDestination {
@@ -1145,6 +1159,23 @@ impl Project {
         ToolchainStore::init(&client);
         DapStore::init(&client, cx);
         BreakpointStore::init(&client);
+        client.add_entity_request_handler(Self::handle_vfs_negotiate);
+        client.add_entity_request_handler(Self::handle_vfs_stat);
+        client.add_entity_request_handler(Self::handle_vfs_read_directory);
+        client.add_entity_request_handler(Self::handle_vfs_open);
+        client.add_entity_request_handler(Self::handle_vfs_close_handle);
+        client.add_entity_request_handler(Self::handle_vfs_renew_handle);
+        client.add_entity_request_handler(Self::handle_vfs_file_length);
+        client.add_entity_request_handler(Self::handle_vfs_read_at);
+        client.add_entity_request_handler(Self::handle_vfs_write_at);
+        client.add_entity_request_handler(Self::handle_vfs_set_length);
+        client.add_entity_request_handler(Self::handle_vfs_handle_operation);
+        client.add_entity_request_handler(Self::handle_vfs_create_directory);
+        client.add_entity_request_handler(Self::handle_vfs_remove);
+        client.add_entity_request_handler(Self::handle_vfs_rename);
+        client.add_entity_request_handler(Self::handle_vfs_copy);
+        client.add_entity_stream_request_handler(Self::handle_vfs_watch);
+        client.add_entity_request_handler(Self::handle_vfs_cancel_operation);
         context_server_store::init(cx);
     }
 
@@ -1348,6 +1379,7 @@ impl Project {
                 agent_location: None,
                 downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
+                vfs_service: VfsService::default(),
             }
         })
     }
@@ -1588,6 +1620,7 @@ impl Project {
                 agent_location: None,
                 downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
+                vfs_service: VfsService::default(),
             };
 
             // remote server -> local machine handlers
@@ -4573,6 +4606,130 @@ impl Project {
     }
 
     // RPC message handlers
+
+    async fn handle_vfs_negotiate(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::VfsNegotiateRequestV2>,
+        cx: AsyncApp,
+    ) -> Result<proto::VfsNegotiateResponseV2> {
+        let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
+        let (service, snapshot) = this.read_with(&cx, |this, cx| {
+            let snapshot = this
+                .worktree_for_id(worktree_id, cx)
+                .and_then(|worktree| worktree.read(cx).vfs_snapshot());
+            (this.vfs_service.clone(), snapshot)
+        });
+        if let Some(snapshot) = snapshot {
+            service.register_snapshot(worktree_id.to_proto(), snapshot);
+        }
+        Ok(service.negotiate(envelope.payload).await)
+    }
+
+    vfs_project_request_handler!(
+        handle_vfs_stat,
+        proto::VfsStatRequestV2,
+        proto::VfsStatResponseV2,
+        stat
+    );
+    vfs_project_request_handler!(
+        handle_vfs_read_directory,
+        proto::VfsReadDirectoryRequestV2,
+        proto::VfsReadDirectoryResponseV2,
+        read_directory
+    );
+    vfs_project_request_handler!(
+        handle_vfs_open,
+        proto::VfsOpenRequestV2,
+        proto::VfsOpenResponseV2,
+        open
+    );
+    vfs_project_request_handler!(
+        handle_vfs_close_handle,
+        proto::VfsCloseHandleRequestV2,
+        proto::VfsOperationResponseV2,
+        close_handle
+    );
+    vfs_project_request_handler!(
+        handle_vfs_renew_handle,
+        proto::VfsRenewHandleRequestV2,
+        proto::VfsRenewHandleResponseV2,
+        renew_handle
+    );
+    vfs_project_request_handler!(
+        handle_vfs_file_length,
+        proto::VfsFileLengthRequestV2,
+        proto::VfsFileLengthResponseV2,
+        file_length
+    );
+    vfs_project_request_handler!(
+        handle_vfs_read_at,
+        proto::VfsReadAtRequestV2,
+        proto::VfsReadAtResponseV2,
+        read_at
+    );
+    vfs_project_request_handler!(
+        handle_vfs_write_at,
+        proto::VfsWriteAtRequestV2,
+        proto::VfsWriteAtResponseV2,
+        write_at
+    );
+    vfs_project_request_handler!(
+        handle_vfs_set_length,
+        proto::VfsSetLengthRequestV2,
+        proto::VfsOperationResponseV2,
+        set_length
+    );
+    vfs_project_request_handler!(
+        handle_vfs_handle_operation,
+        proto::VfsHandleOperationRequestV2,
+        proto::VfsOperationResponseV2,
+        handle_operation
+    );
+    vfs_project_request_handler!(
+        handle_vfs_create_directory,
+        proto::VfsCreateDirectoryRequestV2,
+        proto::VfsOperationResponseV2,
+        create_directory
+    );
+    vfs_project_request_handler!(
+        handle_vfs_remove,
+        proto::VfsRemoveRequestV2,
+        proto::VfsRemoveResponseV2,
+        remove
+    );
+    vfs_project_request_handler!(
+        handle_vfs_rename,
+        proto::VfsRenameRequestV2,
+        proto::VfsOperationResponseV2,
+        rename
+    );
+    vfs_project_request_handler!(
+        handle_vfs_copy,
+        proto::VfsCopyRequestV2,
+        proto::VfsOperationResponseV2,
+        copy
+    );
+    vfs_project_request_handler!(
+        handle_vfs_cancel_operation,
+        proto::VfsCancelOperationRequestV2,
+        proto::VfsOperationResponseV2,
+        cancel_operation
+    );
+
+    async fn handle_vfs_watch(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::VfsWatchRequestV2>,
+        cx: AsyncApp,
+    ) -> Result<futures::stream::BoxStream<'static, Result<proto::VfsWatchResponseV2>>> {
+        let service = this.read_with(&cx, |this, _| this.vfs_service.clone());
+        let stream = service
+            .watch(envelope.payload)
+            .await
+            .map_err(anyhow::Error::new)?;
+        Ok(Box::pin(
+            stream.map(|response| response.map_err(anyhow::Error::new)),
+        ))
+    }
 
     async fn handle_update_project(
         this: Entity<Self>,

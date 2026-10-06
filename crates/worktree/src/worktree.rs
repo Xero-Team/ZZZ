@@ -17,6 +17,7 @@ use futures::{
         mpsc::{self, UnboundedSender},
         oneshot,
     },
+    future::Shared,
     select_biased, stream,
     task::Poll,
 };
@@ -43,7 +44,7 @@ use postage::{
     watch,
 };
 use rpc::{
-    AnyProtoClient,
+    AnyProtoClient, ProtoVfsTransport, RemoteProviderProxy,
     proto::{self, split_worktree_update},
 };
 pub use settings::WorktreeId;
@@ -175,6 +176,7 @@ pub struct RemoteWorktree {
     background_snapshot: Arc<Mutex<(Snapshot, Vec<proto::UpdateWorktree>)>>,
     project_id: u64,
     client: AnyProtoClient,
+    vfs_provider: RemoteVfsProviderTask,
     file_scan_inclusions: PathMatcher,
     updates_tx: Option<UnboundedSender<proto::UpdateWorktree>>,
     update_observer: Option<mpsc::UnboundedSender<proto::UpdateWorktree>>,
@@ -184,6 +186,8 @@ pub struct RemoteWorktree {
     disconnected: bool,
     received_initial_update: bool,
 }
+
+pub type RemoteVfsProviderTask = Shared<Task<Result<Arc<dyn VfsProvider>, Arc<anyhow::Error>>>>;
 
 #[derive(Clone)]
 pub struct Snapshot {
@@ -650,8 +654,24 @@ impl Worktree {
             });
 
             let settings = WorktreeSettings::get(settings_location, cx).clone();
+            let vfs_provider = cx
+                .background_spawn({
+                    let client = client.clone();
+                    async move {
+                        RemoteProviderProxy::connect(
+                            project_id,
+                            worktree_id.to_proto(),
+                            Arc::new(ProtoVfsTransport::new(client)),
+                        )
+                        .await
+                        .map(|provider| Arc::new(provider) as Arc<dyn VfsProvider>)
+                        .map_err(|error| Arc::new(anyhow::Error::new(error)))
+                    }
+                })
+                .shared();
             let worktree = RemoteWorktree {
                 client,
+                vfs_provider,
                 project_id,
                 replica_id,
                 snapshot,
@@ -800,6 +820,15 @@ impl Worktree {
         } else {
             None
         }
+    }
+
+    pub fn vfs_snapshot(&self) -> Option<VfsSnapshot> {
+        self.as_local()?.vfs_snapshot.clone()
+    }
+
+    pub fn remote_vfs_provider(&self) -> Option<RemoteVfsProviderTask> {
+        self.as_remote()
+            .map(|worktree| worktree.vfs_provider.clone())
     }
 
     pub fn is_local(&self) -> bool {
