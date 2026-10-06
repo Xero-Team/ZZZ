@@ -337,6 +337,25 @@ message VfsStatResponseV2 {
   VfsErrorV2 error = 2;
 }
 
+message VfsStatManyRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  repeated ProviderPathV2 paths = 3;
+  uint64 operation_id = 4;
+  bool follow_symbolic_link = 5;
+}
+
+message VfsStatManyItemV2 {
+  ProviderPathV2 path = 1;
+  VfsEntryMetadataV2 metadata = 2;
+  VfsErrorV2 error = 3;
+}
+
+message VfsStatManyResponseV2 {
+  repeated VfsStatManyItemV2 items = 1;
+  VfsErrorV2 error = 2;
+}
+
 message VfsReadDirectoryRequestV2 {
   uint64 project_id = 1;
   MountIdV2 mount_id = 2;
@@ -373,6 +392,12 @@ message VfsCloseHandleRequestV2 {
   MountIdV2 mount_id = 2;
   uint64 handle_id = 3;
   uint64 operation_id = 4;
+}
+
+message VfsReleaseHandleV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  uint64 handle_id = 3;
 }
 
 message VfsRenewHandleRequestV2 {

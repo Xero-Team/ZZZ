@@ -330,6 +330,9 @@ messages!(
     (VfsWatchRequestV2, Background),
     (VfsWatchResponseV2, Background),
     (VfsCancelOperationRequestV2, Background),
+    (VfsStatManyRequestV2, Background),
+    (VfsStatManyResponseV2, Background),
+    (VfsReleaseHandleV2, Background),
 );
 
 request_messages!(
@@ -521,6 +524,7 @@ request_messages!(
     (VfsCopyRequestV2, VfsOperationResponseV2),
     (VfsWatchRequestV2, VfsWatchResponseV2),
     (VfsCancelOperationRequestV2, VfsOperationResponseV2),
+    (VfsStatManyRequestV2, VfsStatManyResponseV2),
 );
 
 lsp_messages!(
@@ -735,7 +739,9 @@ entity_messages!(
     VfsRenameRequestV2,
     VfsCopyRequestV2,
     VfsWatchRequestV2,
-    VfsCancelOperationRequestV2
+    VfsCancelOperationRequestV2,
+    VfsStatManyRequestV2,
+    VfsReleaseHandleV2
 );
 
 impl From<Timestamp> for SystemTime {

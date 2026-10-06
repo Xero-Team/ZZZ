@@ -11,10 +11,12 @@ use std::{
 };
 use typed_path::{WindowsComponent, WindowsPath, WindowsPrefix};
 
+mod manager;
 mod memory_provider;
 mod provider;
 mod snapshot;
 
+pub use manager::*;
 pub use memory_provider::*;
 pub use provider::*;
 pub use snapshot::*;

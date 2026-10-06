@@ -44,7 +44,7 @@ use postage::{
     watch,
 };
 use rpc::{
-    AnyProtoClient, ProtoVfsTransport, RemoteProviderProxy,
+    AnyProtoClient, ProtoVfsTransport, RemoteProviderProxy, VfsAuthorizer,
     proto::{self, split_worktree_update},
 };
 pub use settings::WorktreeId;
@@ -65,7 +65,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicUsize, Ordering::SeqCst},
     },
     time::{Duration, Instant, UNIX_EPOCH},
@@ -79,14 +79,15 @@ use util::{
 };
 use vfs::{
     CaseSensitivity as VfsCaseSensitivity, CompatibilityPathError,
-    EntryMetadata as VfsEntryMetadata, SnapshotBudgets, VfsProvider, VfsSnapshot,
-    provider_path_from_legacy_utf8, provider_path_to_legacy_utf8,
+    EntryMetadata as VfsEntryMetadata, SnapshotBudgets, VfsError, VfsErrorCode, VfsProvider,
+    VfsSnapshot, provider_path_from_legacy_utf8, provider_path_to_legacy_utf8,
 };
 pub use worktree_settings::WorktreeSettings;
 
 use crate::ignore::IgnoreKind;
 
 pub const FS_WATCH_LATENCY: Duration = Duration::from_millis(100);
+const REMOTE_VFS_RECONNECT_DELAY: Duration = Duration::from_millis(100);
 
 /// How often the background scanner verifies that the worktree root still
 /// exists at its recorded path. Native watchers report the root itself being
@@ -157,8 +158,14 @@ pub struct LocalWorktree {
     next_entry_id: Arc<AtomicUsize>,
     settings: WorktreeSettings,
     share_private_files: bool,
+    vfs_authorization_policy: Arc<Mutex<VfsAuthorizationPolicy>>,
     scanning_enabled: bool,
     force_defer_watch: bool,
+}
+
+struct VfsAuthorizationPolicy {
+    settings: WorktreeSettings,
+    share_private_files: bool,
 }
 
 pub struct PathPrefixScanRequest {
@@ -176,7 +183,7 @@ pub struct RemoteWorktree {
     background_snapshot: Arc<Mutex<(Snapshot, Vec<proto::UpdateWorktree>)>>,
     project_id: u64,
     client: AnyProtoClient,
-    vfs_provider: RemoteVfsProviderTask,
+    vfs_provider: OnceLock<RemoteVfsProviderTask>,
     file_scan_inclusions: PathMatcher,
     updates_tx: Option<UnboundedSender<proto::UpdateWorktree>>,
     update_observer: Option<mpsc::UnboundedSender<proto::UpdateWorktree>>,
@@ -558,10 +565,15 @@ impl Worktree {
             });
 
             let settings = WorktreeSettings::get(settings_location, cx).clone();
+            let vfs_authorization_policy = Arc::new(Mutex::new(VfsAuthorizationPolicy {
+                settings: settings.clone(),
+                share_private_files: false,
+            }));
             cx.observe_global::<SettingsStore>(move |this, cx| {
                 if let Self::Local(this) = this {
                     let settings = WorktreeSettings::get(settings_location, cx).clone();
                     if this.settings != settings {
+                        this.vfs_authorization_policy.lock().settings = settings.clone();
                         this.settings = settings;
                         this.restart_background_scanners(cx);
                     }
@@ -597,6 +609,7 @@ impl Worktree {
             let (path_prefixes_to_scan_tx, path_prefixes_to_scan_rx) = async_channel::unbounded();
             let mut worktree = LocalWorktree {
                 share_private_files,
+                vfs_authorization_policy,
                 next_entry_id,
                 snapshot,
                 is_scanning: watch::channel_with(true),
@@ -654,24 +667,9 @@ impl Worktree {
             });
 
             let settings = WorktreeSettings::get(settings_location, cx).clone();
-            let vfs_provider = cx
-                .background_spawn({
-                    let client = client.clone();
-                    async move {
-                        RemoteProviderProxy::connect(
-                            project_id,
-                            worktree_id.to_proto(),
-                            Arc::new(ProtoVfsTransport::new(client)),
-                        )
-                        .await
-                        .map(|provider| Arc::new(provider) as Arc<dyn VfsProvider>)
-                        .map_err(|error| Arc::new(anyhow::Error::new(error)))
-                    }
-                })
-                .shared();
             let worktree = RemoteWorktree {
                 client,
-                vfs_provider,
+                vfs_provider: OnceLock::new(),
                 project_id,
                 replica_id,
                 snapshot,
@@ -826,9 +824,89 @@ impl Worktree {
         self.as_local()?.vfs_snapshot.clone()
     }
 
-    pub fn remote_vfs_provider(&self) -> Option<RemoteVfsProviderTask> {
-        self.as_remote()
-            .map(|worktree| worktree.vfs_provider.clone())
+    pub fn vfs_authorizer(&self) -> Option<VfsAuthorizer> {
+        let worktree = self.as_local()?;
+        let authorization_policy = worktree.vfs_authorization_policy.clone();
+        let provider_id = worktree
+            .vfs_snapshot
+            .as_ref()?
+            .provider()
+            .descriptor()
+            .id
+            .clone();
+        Some(Arc::new(move |provider_path, operation| {
+            let relative_path = match provider_path_to_legacy_utf8(provider_path) {
+                Ok(path) => RelPath::from_proto(&path).map_err(|error| {
+                    VfsError::new(VfsErrorCode::InvalidPath, operation, provider_id.clone())
+                        .with_path(provider_path.clone())
+                        .with_detail(error.to_string())
+                })?,
+                Err(CompatibilityPathError::UnrepresentableComponent { .. }) => return Ok(()),
+                Err(error) => {
+                    return Err(VfsError::new(
+                        VfsErrorCode::InvalidPath,
+                        operation,
+                        provider_id.clone(),
+                    )
+                    .with_path(provider_path.clone())
+                    .with_detail(error.to_string()));
+                }
+            };
+            let authorization_policy = authorization_policy.lock();
+            if !authorization_policy.share_private_files
+                && authorization_policy
+                    .settings
+                    .is_path_private(&relative_path)
+            {
+                return Err(VfsError::new(
+                    VfsErrorCode::PermissionDenied,
+                    operation,
+                    provider_id.clone(),
+                )
+                .with_path(provider_path.clone())
+                .with_detail("path is private to the remote worktree"));
+            }
+            Ok(())
+        }))
+    }
+
+    pub fn remote_vfs_provider(&self, cx: &App) -> Option<RemoteVfsProviderTask> {
+        let worktree = self.as_remote()?;
+        Some(
+            worktree
+                .vfs_provider
+                .get_or_init(|| {
+                    cx.background_spawn({
+                        let client = worktree.client.clone();
+                        let executor = cx.background_executor().clone();
+                        let project_id = worktree.project_id;
+                        let worktree_id = worktree.snapshot.id();
+                        async move {
+                            loop {
+                                match RemoteProviderProxy::connect(
+                                    project_id,
+                                    worktree_id.to_proto(),
+                                    Arc::new(ProtoVfsTransport::new(client.clone())),
+                                )
+                                .await
+                                {
+                                    Ok(provider) => {
+                                        return Ok(Arc::new(provider) as Arc<dyn VfsProvider>);
+                                    }
+                                    Err(error) if error.code() == VfsErrorCode::Disconnected => {
+                                        executor.timer(REMOTE_VFS_RECONNECT_DELAY).await;
+                                    }
+                                    Err(error) => {
+                                        return Err(Arc::new(anyhow::Error::new(error)));
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .shared()
+                })
+                .clone(),
+        )
     }
 
     pub fn is_local(&self) -> bool {
@@ -2229,6 +2307,7 @@ impl LocalWorktree {
 
     pub fn share_private_files(&mut self, cx: &Context<Worktree>) {
         self.share_private_files = true;
+        self.vfs_authorization_policy.lock().share_private_files = true;
         self.restart_background_scanners(cx);
     }
 

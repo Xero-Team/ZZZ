@@ -14324,6 +14324,7 @@ dependencies = [
  "parking_lot",
  "proto",
  "serde",
+ "sha2 0.11.0",
  "tracing",
  "util",
  "vfs",

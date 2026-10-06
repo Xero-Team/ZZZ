@@ -264,6 +264,7 @@ pub struct Project {
     downloading_files: Arc<Mutex<HashMap<u64, DownloadingFile>>>,
     last_worktree_paths: WorktreePaths,
     vfs_service: VfsService,
+    _vfs_lease_reaper: Task<()>,
 }
 
 enum DownloadDestination {
@@ -1161,9 +1162,11 @@ impl Project {
         BreakpointStore::init(&client);
         client.add_entity_request_handler(Self::handle_vfs_negotiate);
         client.add_entity_request_handler(Self::handle_vfs_stat);
+        client.add_entity_request_handler(Self::handle_vfs_stat_many);
         client.add_entity_request_handler(Self::handle_vfs_read_directory);
         client.add_entity_request_handler(Self::handle_vfs_open);
         client.add_entity_request_handler(Self::handle_vfs_close_handle);
+        client.add_entity_message_handler(Self::handle_vfs_release_handle);
         client.add_entity_request_handler(Self::handle_vfs_renew_handle);
         client.add_entity_request_handler(Self::handle_vfs_file_length);
         client.add_entity_request_handler(Self::handle_vfs_read_at);
@@ -1335,6 +1338,18 @@ impl Project {
 
             cx.subscribe(&lsp_store, Self::on_lsp_store_event).detach();
 
+            let vfs_service = VfsService::default();
+            let vfs_lease_reaper = cx.background_spawn({
+                let executor = cx.background_executor().clone();
+                let vfs_service = vfs_service.clone();
+                async move {
+                    loop {
+                        executor.timer(vfs_service.handle_lease()).await;
+                        vfs_service.prune_expired_handles();
+                    }
+                }
+            });
+
             Self {
                 buffer_ordered_messages_tx: tx,
                 collaborators: Default::default(),
@@ -1379,7 +1394,8 @@ impl Project {
                 agent_location: None,
                 downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
-                vfs_service: VfsService::default(),
+                vfs_service,
+                _vfs_lease_reaper: vfs_lease_reaper,
             }
         })
     }
@@ -1621,6 +1637,7 @@ impl Project {
                 downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
                 vfs_service: VfsService::default(),
+                _vfs_lease_reaper: Task::ready(()),
             };
 
             // remote server -> local machine handlers
@@ -4613,14 +4630,17 @@ impl Project {
         cx: AsyncApp,
     ) -> Result<proto::VfsNegotiateResponseV2> {
         let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-        let (service, snapshot) = this.read_with(&cx, |this, cx| {
-            let snapshot = this
-                .worktree_for_id(worktree_id, cx)
-                .and_then(|worktree| worktree.read(cx).vfs_snapshot());
-            (this.vfs_service.clone(), snapshot)
+        let (service, mount) = this.read_with(&cx, |this, cx| {
+            let mount = this.worktree_for_id(worktree_id, cx).and_then(|worktree| {
+                let worktree = worktree.read(cx);
+                worktree.vfs_snapshot().zip(worktree.vfs_authorizer())
+            });
+            (this.vfs_service.clone(), mount)
         });
-        if let Some(snapshot) = snapshot {
-            service.register_snapshot(worktree_id.to_proto(), snapshot);
+        if let Some((snapshot, authorizer)) = mount {
+            service
+                .register_snapshot_with_authorizer(worktree_id.to_proto(), snapshot, authorizer)
+                .map_err(anyhow::Error::new)?;
         }
         Ok(service.negotiate(envelope.payload).await)
     }
@@ -4630,6 +4650,12 @@ impl Project {
         proto::VfsStatRequestV2,
         proto::VfsStatResponseV2,
         stat
+    );
+    vfs_project_request_handler!(
+        handle_vfs_stat_many,
+        proto::VfsStatManyRequestV2,
+        proto::VfsStatManyResponseV2,
+        stat_many
     );
     vfs_project_request_handler!(
         handle_vfs_read_directory,
@@ -4649,6 +4675,16 @@ impl Project {
         proto::VfsOperationResponseV2,
         close_handle
     );
+
+    async fn handle_vfs_release_handle(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::VfsReleaseHandleV2>,
+        cx: AsyncApp,
+    ) -> Result<()> {
+        let service = this.read_with(&cx, |this, _| this.vfs_service.clone());
+        service.release_handle(envelope.payload);
+        Ok(())
+    }
     vfs_project_request_handler!(
         handle_vfs_renew_handle,
         proto::VfsRenewHandleRequestV2,

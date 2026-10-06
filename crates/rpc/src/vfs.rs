@@ -2,7 +2,6 @@ use anyhow::Result as TransportResult;
 use async_trait::async_trait;
 use futures::{StreamExt as _, stream::BoxStream};
 use parking_lot::Mutex;
-use proto::Message as _;
 use proto::{
     MountIdV2, ProviderPathV2, VfsCancelOperationRequestV2, VfsCloseHandleRequestV2,
     VfsCopyRequestV2, VfsCreateDirectoryRequestV2, VfsDirectoryEntryV2, VfsErrorV2,
@@ -10,10 +9,12 @@ use proto::{
     VfsHandleOperationRequestV2, VfsNegotiateRequestV2, VfsNegotiateResponseV2, VfsOpenRequestV2,
     VfsOpenResponseV2, VfsOperationResponseV2, VfsProviderCapabilitiesV2, VfsProviderDescriptorV2,
     VfsReadAtRequestV2, VfsReadAtResponseV2, VfsReadDirectoryRequestV2, VfsReadDirectoryResponseV2,
-    VfsRemoveRequestV2, VfsRemoveResponseV2, VfsRenameRequestV2, VfsRenewHandleRequestV2,
-    VfsRenewHandleResponseV2, VfsSetLengthRequestV2, VfsStatRequestV2, VfsStatResponseV2,
+    VfsReleaseHandleV2, VfsRemoveRequestV2, VfsRemoveResponseV2, VfsRenameRequestV2,
+    VfsRenewHandleRequestV2, VfsRenewHandleResponseV2, VfsSetLengthRequestV2, VfsStatManyItemV2,
+    VfsStatManyRequestV2, VfsStatManyResponseV2, VfsStatRequestV2, VfsStatResponseV2,
     VfsWatchRequestV2, VfsWatchResponseV2, VfsWriteAtRequestV2, VfsWriteAtResponseV2,
 };
+use sha2::{Digest as _, Sha256};
 use std::{
     collections::{BTreeMap, VecDeque},
     future::Future,
@@ -29,13 +30,16 @@ use vfs::{
     DirPageRequest, EventBatch, MountId, OpenOptions, OperationContext, OperationId,
     ProviderCapabilities, ProviderDescriptor, ProviderId, ProviderPath, RemoveOptions,
     RemoveOutcome, RemovedEntryCount, RenameOptions, SnapshotBudgets, StatOptions,
-    SymbolicLinkMode, VfsError, VfsErrorCode, VfsFile, VfsOperation, VfsProvider, VfsResult,
-    VfsSnapshot, VfsVersion, WatchRequest, WriteAtOptions,
+    SymbolicLinkMode, VfsError, VfsErrorCode, VfsFile, VfsManager, VfsOperation, VfsProvider,
+    VfsResult, VfsSnapshot, VfsVersion, WatchRequest, WriteAtOptions,
 };
 
 pub const REMOTE_VFS_PROTOCOL_VERSION: u32 = 1;
 const DEFAULT_HANDLE_LEASE: Duration = Duration::from_secs(30);
 const DEFAULT_RESULT_JOURNAL_CAPACITY: usize = 4_096;
+const MAXIMUM_CONTROL_MESSAGE_BYTES: usize = 8 * 1_024 * 1_024;
+
+pub type VfsAuthorizer = Arc<dyn Fn(&ProviderPath, VfsOperation) -> VfsResult<()> + Send + Sync>;
 
 #[async_trait]
 pub trait RemoteVfsTransport: Send + Sync {
@@ -44,6 +48,10 @@ pub trait RemoteVfsTransport: Send + Sync {
         request: VfsNegotiateRequestV2,
     ) -> TransportResult<VfsNegotiateResponseV2>;
     async fn stat(&self, request: VfsStatRequestV2) -> TransportResult<VfsStatResponseV2>;
+    async fn stat_many(
+        &self,
+        request: VfsStatManyRequestV2,
+    ) -> TransportResult<VfsStatManyResponseV2>;
     async fn read_directory(
         &self,
         request: VfsReadDirectoryRequestV2,
@@ -83,7 +91,7 @@ pub trait RemoteVfsTransport: Send + Sync {
         &self,
         request: VfsWatchRequestV2,
     ) -> TransportResult<BoxStream<'static, TransportResult<VfsWatchResponseV2>>>;
-    fn release_handle(&self, request: VfsCloseHandleRequestV2);
+    fn release_handle(&self, request: VfsReleaseHandleV2);
 }
 
 #[derive(Clone)]
@@ -93,12 +101,14 @@ pub struct VfsService {
 
 struct VfsServiceState {
     mounts_by_worktree: Mutex<BTreeMap<u64, VfsSnapshot>>,
-    mounts_by_id: Mutex<BTreeMap<MountId, VfsSnapshot>>,
+    manager: VfsManager,
+    authorizers_by_mount: Mutex<BTreeMap<MountId, VfsAuthorizer>>,
     handles: Mutex<BTreeMap<u64, ServiceHandle>>,
     operations: Arc<Mutex<BTreeMap<(MountId, OperationId), CancellationToken>>>,
     result_journal: Mutex<ResultJournal>,
     next_handle_id: AtomicU64,
     handle_lease: Duration,
+    capability_extensions: Arc<[proto::VfsCapabilityExtensionV2]>,
 }
 
 struct ResultJournal {
@@ -108,7 +118,7 @@ struct ResultJournal {
 }
 
 struct JournalRecord {
-    request_fingerprint: Vec<u8>,
+    request_fingerprint: [u8; 32],
     response: JournalResponse,
 }
 
@@ -151,13 +161,13 @@ impl ResultJournal {
     fn replay<Value: JournalValue>(
         &self,
         key: &(MountId, OperationId),
-        request_fingerprint: &[u8],
+        request_fingerprint: &[u8; 32],
         operation: VfsOperation,
     ) -> VfsResult<Option<Value>> {
         let Some(record) = self.entries.get(key) else {
             return Ok(None);
         };
-        if record.request_fingerprint != request_fingerprint {
+        if record.request_fingerprint != *request_fingerprint {
             return Err(service_error(
                 VfsErrorCode::Conflict,
                 operation,
@@ -181,7 +191,7 @@ impl ResultJournal {
     fn record<Value: JournalValue>(
         &mut self,
         key: (MountId, OperationId),
-        request_fingerprint: Vec<u8>,
+        request_fingerprint: [u8; 32],
         value: Value,
     ) {
         if self.entries.contains_key(&key) {
@@ -206,14 +216,14 @@ impl ResultJournal {
     fn replay_operation(
         &self,
         key: &(MountId, OperationId),
-        request_fingerprint: &[u8],
+        request_fingerprint: &[u8; 32],
         kind: &'static str,
         operation: VfsOperation,
     ) -> VfsResult<Option<VfsOperationResponseV2>> {
         let Some(record) = self.entries.get(key) else {
             return Ok(None);
         };
-        if record.request_fingerprint != request_fingerprint {
+        if record.request_fingerprint != *request_fingerprint {
             return Err(service_error(
                 VfsErrorCode::Conflict,
                 operation,
@@ -238,7 +248,7 @@ impl ResultJournal {
     fn record_operation(
         &mut self,
         key: (MountId, OperationId),
-        request_fingerprint: Vec<u8>,
+        request_fingerprint: [u8; 32],
         kind: &'static str,
         response: VfsOperationResponseV2,
     ) {
@@ -315,10 +325,18 @@ impl Default for VfsService {
 
 impl VfsService {
     pub fn new(handle_lease: Duration) -> Self {
+        Self::with_capability_extensions(handle_lease, Arc::from([]))
+    }
+
+    pub fn with_capability_extensions(
+        handle_lease: Duration,
+        capability_extensions: Arc<[proto::VfsCapabilityExtensionV2]>,
+    ) -> Self {
         Self {
             inner: Arc::new(VfsServiceState {
                 mounts_by_worktree: Mutex::new(BTreeMap::new()),
-                mounts_by_id: Mutex::new(BTreeMap::new()),
+                manager: VfsManager::default(),
+                authorizers_by_mount: Mutex::new(BTreeMap::new()),
                 handles: Mutex::new(BTreeMap::new()),
                 operations: Arc::new(Mutex::new(BTreeMap::new())),
                 result_journal: Mutex::new(ResultJournal {
@@ -328,6 +346,7 @@ impl VfsService {
                 }),
                 next_handle_id: AtomicU64::new(1),
                 handle_lease,
+                capability_extensions,
             }),
         }
     }
@@ -338,19 +357,37 @@ impl VfsService {
         provider: Arc<dyn VfsProvider>,
     ) -> VfsResult<MountId> {
         let snapshot = VfsSnapshot::mount(provider, SnapshotBudgets::default())?;
-        Ok(self.register_snapshot(worktree_id, snapshot))
+        self.register_snapshot(worktree_id, snapshot)
     }
 
-    pub fn register_snapshot(&self, worktree_id: u64, snapshot: VfsSnapshot) -> MountId {
+    pub fn register_snapshot(&self, worktree_id: u64, snapshot: VfsSnapshot) -> VfsResult<MountId> {
+        self.register_snapshot_with_authorizer(worktree_id, snapshot, Arc::new(|_, _| Ok(())))
+    }
+
+    pub fn register_snapshot_with_authorizer(
+        &self,
+        worktree_id: u64,
+        snapshot: VfsSnapshot,
+        authorizer: VfsAuthorizer,
+    ) -> VfsResult<MountId> {
         let mut mounts_by_worktree = self.inner.mounts_by_worktree.lock();
         if let Some(existing) = mounts_by_worktree.get(&worktree_id) {
-            return existing.registry().mount_id();
+            let mount_id = existing.registry().mount_id();
+            self.inner
+                .authorizers_by_mount
+                .lock()
+                .insert(mount_id, authorizer);
+            return Ok(mount_id);
         }
         let mount_id = snapshot.registry().mount_id();
-        mounts_by_worktree.insert(worktree_id, snapshot.clone());
+        self.inner.manager.register(snapshot.clone())?;
+        self.inner
+            .authorizers_by_mount
+            .lock()
+            .insert(mount_id, authorizer.clone());
+        mounts_by_worktree.insert(worktree_id, snapshot);
         drop(mounts_by_worktree);
-        self.inner.mounts_by_id.lock().insert(mount_id, snapshot);
-        mount_id
+        Ok(mount_id)
     }
 
     pub fn release_all_handles(&self) {
@@ -360,6 +397,10 @@ impl VfsService {
     pub fn open_handle_count(&self) -> usize {
         self.prune_expired_handles();
         self.inner.handles.lock().len()
+    }
+
+    pub fn handle_lease(&self) -> Duration {
+        self.inner.handle_lease
     }
 
     pub async fn negotiate(&self, request: VfsNegotiateRequestV2) -> VfsNegotiateResponseV2 {
@@ -395,15 +436,17 @@ impl VfsService {
                 "client does not support the provider path encoding",
             ));
         }
+        let mut capabilities = VfsProviderCapabilitiesV2::from_provider_capabilities(
+            &snapshot.provider().capabilities(),
+        );
+        capabilities.extensions = self.inner.capability_extensions.to_vec();
         VfsNegotiateResponseV2 {
             protocol_version: REMOTE_VFS_PROTOCOL_VERSION,
             mount_id: Some(MountIdV2::from_mount_id(snapshot.registry().mount_id())),
             descriptor: Some(VfsProviderDescriptorV2::from_provider_descriptor(
                 descriptor,
             )),
-            capabilities: Some(VfsProviderCapabilitiesV2::from_provider_capabilities(
-                &snapshot.provider().capabilities(),
-            )),
+            capabilities: Some(capabilities),
             error: None,
         }
     }
@@ -434,6 +477,7 @@ impl VfsService {
     async fn stat_inner(&self, request: VfsStatRequestV2) -> VfsResult<vfs::EntryMetadata> {
         let (snapshot, mount_id) = self.snapshot(request.mount_id.as_ref(), VfsOperation::Stat)?;
         let path = required_path(request.path.as_ref(), VfsOperation::Stat)?;
+        self.authorize(mount_id, &path, VfsOperation::Stat)?;
         let operation = self.operation(mount_id, request.operation_id, VfsOperation::Stat)?;
         snapshot
             .provider()
@@ -451,6 +495,124 @@ impl VfsService {
             .await
     }
 
+    pub async fn stat_many(&self, request: VfsStatManyRequestV2) -> VfsStatManyResponseV2 {
+        if proto::Message::encoded_len(&request) > MAXIMUM_CONTROL_MESSAGE_BYTES {
+            return VfsStatManyResponseV2 {
+                items: Vec::new(),
+                error: Some(VfsErrorV2::from_vfs_error(&service_error(
+                    VfsErrorCode::TooLarge,
+                    VfsOperation::Stat,
+                    "stat-many request exceeds the control-message limit",
+                ))),
+            };
+        }
+        let result = async {
+            let (snapshot, mount_id) =
+                self.snapshot(request.mount_id.as_ref(), VfsOperation::Stat)?;
+            if request.paths.len()
+                > snapshot
+                    .provider()
+                    .capabilities()
+                    .limits
+                    .maximum_stat_batch
+                    .get() as usize
+            {
+                return Err(service_error(
+                    VfsErrorCode::TooLarge,
+                    VfsOperation::Stat,
+                    "stat-many request exceeds the negotiated batch limit",
+                ));
+            }
+            let operation = self.operation(mount_id, request.operation_id, VfsOperation::Stat)?;
+            let mut items = Vec::with_capacity(request.paths.len());
+            for wire_path in request.paths {
+                let path = match wire_path.to_provider_path() {
+                    Ok(path) => path,
+                    Err(error) => {
+                        items.push(VfsStatManyItemV2 {
+                            path: Some(wire_path),
+                            metadata: None,
+                            error: Some(VfsErrorV2::from_vfs_error(&wire_error(
+                                VfsOperation::Stat,
+                                error,
+                            ))),
+                        });
+                        continue;
+                    }
+                };
+                let item_result = self
+                    .authorize(mount_id, &path, VfsOperation::Stat)
+                    .and_then(|()| {
+                        operation
+                            .context
+                            .cancellation
+                            .check(VfsOperation::Stat, &snapshot.provider().descriptor().id)
+                    });
+                let metadata = match item_result {
+                    Ok(()) => {
+                        snapshot
+                            .provider()
+                            .stat(
+                                &path,
+                                StatOptions {
+                                    symbolic_link_mode: if request.follow_symbolic_link {
+                                        SymbolicLinkMode::Follow
+                                    } else {
+                                        SymbolicLinkMode::DoNotFollow
+                                    },
+                                    context: operation.context.clone(),
+                                },
+                            )
+                            .await
+                    }
+                    Err(error) => Err(error),
+                };
+                let (metadata, error) = match metadata {
+                    Ok(metadata) => match proto::VfsEntryMetadataV2::from_entry_metadata(&metadata)
+                    {
+                        Ok(metadata) => (Some(metadata), None),
+                        Err(error) => (
+                            None,
+                            Some(VfsErrorV2::from_vfs_error(&wire_error(
+                                VfsOperation::Stat,
+                                error,
+                            ))),
+                        ),
+                    },
+                    Err(error) => (None, Some(VfsErrorV2::from_vfs_error(&error))),
+                };
+                items.push(VfsStatManyItemV2 {
+                    path: Some(ProviderPathV2::from_provider_path(&path)),
+                    metadata,
+                    error,
+                });
+            }
+            Ok(items)
+        }
+        .await;
+        match result {
+            Ok(items) => {
+                let response = VfsStatManyResponseV2 { items, error: None };
+                if proto::Message::encoded_len(&response) > MAXIMUM_CONTROL_MESSAGE_BYTES {
+                    VfsStatManyResponseV2 {
+                        items: Vec::new(),
+                        error: Some(VfsErrorV2::from_vfs_error(&service_error(
+                            VfsErrorCode::TooLarge,
+                            VfsOperation::Stat,
+                            "stat-many response exceeds the control-message limit",
+                        ))),
+                    }
+                } else {
+                    response
+                }
+            }
+            Err(error) => VfsStatManyResponseV2 {
+                items: Vec::new(),
+                error: Some(VfsErrorV2::from_vfs_error(&error)),
+            },
+        }
+    }
+
     pub async fn read_directory(
         &self,
         request: VfsReadDirectoryRequestV2,
@@ -463,11 +625,22 @@ impl VfsService {
                     .map(VfsDirectoryEntryV2::from_dir_entry)
                     .collect::<Result<Vec<_>, _>>();
                 match entries {
-                    Ok(entries) => VfsReadDirectoryResponseV2 {
-                        entries,
-                        next_cursor: page.next_cursor.map(|cursor| cursor.as_bytes().to_vec()),
-                        error: None,
-                    },
+                    Ok(entries) => {
+                        let response = VfsReadDirectoryResponseV2 {
+                            entries,
+                            next_cursor: page.next_cursor.map(|cursor| cursor.as_bytes().to_vec()),
+                            error: None,
+                        };
+                        if proto::Message::encoded_len(&response) > MAXIMUM_CONTROL_MESSAGE_BYTES {
+                            directory_error(service_error(
+                                VfsErrorCode::TooLarge,
+                                VfsOperation::ReadDirectory,
+                                "directory response exceeds the control-message limit",
+                            ))
+                        } else {
+                            response
+                        }
+                    }
                     Err(error) => directory_error(wire_error(VfsOperation::ReadDirectory, error)),
                 }
             }
@@ -479,6 +652,7 @@ impl VfsService {
         let (snapshot, mount_id) =
             self.snapshot(request.mount_id.as_ref(), VfsOperation::ReadDirectory)?;
         let path = required_path(request.path.as_ref(), VfsOperation::ReadDirectory)?;
+        self.authorize(mount_id, &path, VfsOperation::ReadDirectory)?;
         let limit = NonZeroU32::new(request.limit).ok_or_else(|| {
             service_error(
                 VfsErrorCode::InvalidArgument,
@@ -502,7 +676,7 @@ impl VfsService {
     }
 
     pub async fn open(&self, request: VfsOpenRequestV2) -> VfsOpenResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -554,6 +728,7 @@ impl VfsService {
     async fn open_inner(&self, request: VfsOpenRequestV2) -> VfsResult<u64> {
         let (snapshot, mount_id) = self.snapshot(request.mount_id.as_ref(), VfsOperation::Open)?;
         let path = required_path(request.path.as_ref(), VfsOperation::Open)?;
+        self.authorize(mount_id, &path, VfsOperation::Open)?;
         let operation = self.operation(mount_id, request.operation_id, VfsOperation::Open)?;
         self.prune_expired_handles();
         if self.inner.handles.lock().len()
@@ -655,7 +830,7 @@ impl VfsService {
     }
 
     pub async fn write_at(&self, request: VfsWriteAtRequestV2) -> VfsWriteAtResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -744,7 +919,7 @@ impl VfsService {
     }
 
     pub async fn set_length(&self, request: VfsSetLengthRequestV2) -> VfsOperationResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -826,7 +1001,7 @@ impl VfsService {
         &self,
         request: VfsCreateDirectoryRequestV2,
     ) -> VfsOperationResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -849,6 +1024,7 @@ impl VfsService {
             let (snapshot, mount_id) =
                 self.snapshot(request.mount_id.as_ref(), VfsOperation::CreateDirectory)?;
             let path = required_path(request.path.as_ref(), VfsOperation::CreateDirectory)?;
+            self.authorize(mount_id, &path, VfsOperation::CreateDirectory)?;
             let operation = self.operation(
                 mount_id,
                 request.operation_id,
@@ -881,7 +1057,7 @@ impl VfsService {
     }
 
     pub async fn remove(&self, request: VfsRemoveRequestV2) -> VfsRemoveResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -913,6 +1089,7 @@ impl VfsService {
             let (snapshot, mount_id) =
                 self.snapshot(request.mount_id.as_ref(), VfsOperation::Remove)?;
             let path = required_path(request.path.as_ref(), VfsOperation::Remove)?;
+            self.authorize(mount_id, &path, VfsOperation::Remove)?;
             let operation = self.operation(mount_id, request.operation_id, VfsOperation::Remove)?;
             snapshot
                 .provider()
@@ -949,7 +1126,7 @@ impl VfsService {
     }
 
     pub async fn rename(&self, request: VfsRenameRequestV2) -> VfsOperationResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -973,6 +1150,8 @@ impl VfsService {
                 self.snapshot(request.mount_id.as_ref(), VfsOperation::Rename)?;
             let source = required_path(request.source.as_ref(), VfsOperation::Rename)?;
             let target = required_path(request.target.as_ref(), VfsOperation::Rename)?;
+            self.authorize(mount_id, &source, VfsOperation::Rename)?;
+            self.authorize(mount_id, &target, VfsOperation::Rename)?;
             let operation = self.operation(mount_id, request.operation_id, VfsOperation::Rename)?;
             snapshot
                 .provider()
@@ -1002,7 +1181,7 @@ impl VfsService {
     }
 
     pub async fn copy(&self, request: VfsCopyRequestV2) -> VfsOperationResponseV2 {
-        let request_fingerprint = request.encode_to_vec();
+        let request_fingerprint = request_fingerprint(&request);
         let journal_key = match mutation_key(
             request.mount_id.as_ref(),
             request.operation_id,
@@ -1026,6 +1205,8 @@ impl VfsService {
                 self.snapshot(request.mount_id.as_ref(), VfsOperation::Copy)?;
             let source = required_path(request.source.as_ref(), VfsOperation::Copy)?;
             let target = required_path(request.target.as_ref(), VfsOperation::Copy)?;
+            self.authorize(mount_id, &source, VfsOperation::Copy)?;
+            self.authorize(mount_id, &target, VfsOperation::Copy)?;
             let operation = self.operation(mount_id, request.operation_id, VfsOperation::Copy)?;
             snapshot
                 .provider()
@@ -1116,6 +1297,7 @@ impl VfsService {
     ) -> VfsResult<BoxStream<'static, VfsResult<VfsWatchResponseV2>>> {
         let (snapshot, mount_id) = self.snapshot(request.mount_id.as_ref(), VfsOperation::Watch)?;
         let path = required_path(request.path.as_ref(), VfsOperation::Watch)?;
+        self.authorize(mount_id, &path, VfsOperation::Watch)?;
         let operation = self.operation(mount_id, request.operation_id, VfsOperation::Watch)?;
         let stream = snapshot
             .provider()
@@ -1140,7 +1322,7 @@ impl VfsService {
         })))
     }
 
-    pub fn release_handle(&self, request: VfsCloseHandleRequestV2) {
+    pub fn release_handle(&self, request: VfsReleaseHandleV2) {
         let Some(mount_id) = request.mount_id.as_ref().map(MountIdV2::to_mount_id) else {
             return;
         };
@@ -1163,8 +1345,24 @@ impl VfsService {
     }
 
     fn mount(&self, mount_id: MountId, operation: VfsOperation) -> VfsResult<VfsSnapshot> {
-        self.inner
-            .mounts_by_id
+        self.inner.manager.snapshot(mount_id).map_err(|error| {
+            service_error(
+                error.code(),
+                operation,
+                "remote VFS mount is not registered",
+            )
+        })
+    }
+
+    fn authorize(
+        &self,
+        mount_id: MountId,
+        path: &ProviderPath,
+        operation: VfsOperation,
+    ) -> VfsResult<()> {
+        let authorizer = self
+            .inner
+            .authorizers_by_mount
             .lock()
             .get(&mount_id)
             .cloned()
@@ -1172,9 +1370,10 @@ impl VfsService {
                 service_error(
                     VfsErrorCode::NotFound,
                     operation,
-                    "remote VFS mount is not registered",
+                    "remote VFS mount authorization is not registered",
                 )
-            })
+            })?;
+        authorizer(path, operation)
     }
 
     fn operation(
@@ -1235,7 +1434,7 @@ impl VfsService {
         Ok(handle.file.clone())
     }
 
-    fn prune_expired_handles(&self) {
+    pub fn prune_expired_handles(&self) {
         let now = Instant::now();
         self.inner
             .handles
@@ -1285,6 +1484,13 @@ impl RemoteVfsTransport for LoopbackVfsTransport {
 
     async fn stat(&self, request: VfsStatRequestV2) -> TransportResult<VfsStatResponseV2> {
         Ok(self.service.stat(request).await)
+    }
+
+    async fn stat_many(
+        &self,
+        request: VfsStatManyRequestV2,
+    ) -> TransportResult<VfsStatManyResponseV2> {
+        Ok(self.service.stat_many(request).await)
     }
 
     async fn read_directory(
@@ -1377,7 +1583,7 @@ impl RemoteVfsTransport for LoopbackVfsTransport {
         ))
     }
 
-    fn release_handle(&self, request: VfsCloseHandleRequestV2) {
+    fn release_handle(&self, request: VfsReleaseHandleV2) {
         self.service.release_handle(request);
     }
 }
@@ -1406,6 +1612,13 @@ impl RemoteVfsTransport for ProtoVfsTransport {
     }
 
     async fn stat(&self, request: VfsStatRequestV2) -> TransportResult<VfsStatResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn stat_many(
+        &self,
+        request: VfsStatManyRequestV2,
+    ) -> TransportResult<VfsStatManyResponseV2> {
         self.client.request(request).await
     }
 
@@ -1493,7 +1706,7 @@ impl RemoteVfsTransport for ProtoVfsTransport {
         Ok(Box::pin(stream))
     }
 
-    fn release_handle(&self, request: VfsCloseHandleRequestV2) {
+    fn release_handle(&self, request: VfsReleaseHandleV2) {
         if let Err(error) = self.client.send(request) {
             tracing::debug!(%error, "failed to release remote VFS handle");
         }
@@ -1506,6 +1719,7 @@ pub struct RemoteProviderProxy {
     mount_id: MountId,
     descriptor: ProviderDescriptor,
     capabilities: ProviderCapabilities,
+    capability_extensions: Arc<[proto::VfsCapabilityExtensionV2]>,
     transport: Arc<dyn RemoteVfsTransport>,
 }
 
@@ -1529,7 +1743,7 @@ impl RemoteProviderProxy {
             })
             .await
             .map_err(|error| transport_error(VfsOperation::Stat, error))?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Stat)?;
         if response.protocol_version != REMOTE_VFS_PROTOCOL_VERSION {
             return Err(proxy_error(
                 VfsErrorCode::Unsupported,
@@ -1548,19 +1762,91 @@ impl RemoteProviderProxy {
             .ok_or_else(|| missing_response_field(VfsOperation::Stat, "provider descriptor"))?
             .to_provider_descriptor()
             .map_err(|error| wire_error(VfsOperation::Stat, error))?;
-        let capabilities = response
+        let wire_capabilities = response
             .capabilities
             .as_ref()
-            .ok_or_else(|| missing_response_field(VfsOperation::Stat, "provider capabilities"))?
+            .ok_or_else(|| missing_response_field(VfsOperation::Stat, "provider capabilities"))?;
+        let mut capabilities = wire_capabilities
             .to_provider_capabilities()
             .map_err(|error| wire_error(VfsOperation::Stat, error))?;
+        capabilities.mutations.idempotency = vfs::SupportLevel::Native;
+        capabilities.links.native_path = vfs::SupportLevel::Unsupported;
         Ok(Self {
             project_id,
             mount_id,
             descriptor,
             capabilities,
+            capability_extensions: wire_capabilities.extensions.clone().into(),
             transport,
         })
+    }
+
+    pub fn capability_extensions(&self) -> &[proto::VfsCapabilityExtensionV2] {
+        &self.capability_extensions
+    }
+
+    pub async fn stat_many(
+        &self,
+        paths: &[ProviderPath],
+        options: StatOptions,
+    ) -> VfsResult<Vec<VfsResult<vfs::EntryMetadata>>> {
+        let response = cancellable_transport_request(
+            &self.transport,
+            self.project_id,
+            self.mount_id,
+            &options.context,
+            VfsOperation::Stat,
+            self.transport.stat_many(VfsStatManyRequestV2 {
+                project_id: self.project_id,
+                mount_id: self.mount(),
+                paths: paths
+                    .iter()
+                    .map(ProviderPathV2::from_provider_path)
+                    .collect(),
+                operation_id: options.context.operation_id.get(),
+                follow_symbolic_link: options.symbolic_link_mode == SymbolicLinkMode::Follow,
+            }),
+        )
+        .await?;
+        response_error(response.error, VfsOperation::Stat)?;
+        if response.items.len() != paths.len() {
+            return Err(missing_response_field(
+                VfsOperation::Stat,
+                "one stat-many result per requested path",
+            ));
+        }
+        Ok(response
+            .items
+            .into_iter()
+            .zip(paths)
+            .map(|(item, expected_path)| {
+                let response_path = item
+                    .path
+                    .as_ref()
+                    .ok_or_else(|| missing_response_field(VfsOperation::Stat, "stat-many path"))?
+                    .to_provider_path()
+                    .map_err(|error| wire_error(VfsOperation::Stat, error))?;
+                if &response_path != expected_path {
+                    return Err(proxy_error(
+                        VfsErrorCode::CorruptData,
+                        VfsOperation::Stat,
+                        "stat-many response path does not match the request order",
+                    ));
+                }
+                if let Some(error) = item.error {
+                    return Err(error
+                        .to_vfs_error()
+                        .map_err(|error| wire_error(VfsOperation::Stat, error))?);
+                }
+                item.metadata
+                    .as_ref()
+                    .ok_or_else(|| {
+                        missing_response_field(VfsOperation::Stat, "stat-many metadata")
+                    })?
+                    .to_entry_metadata()
+                    .map_err(|error| wire_error(VfsOperation::Stat, error))
+            })
+            .collect())
     }
 
     fn mount(&self) -> Option<MountIdV2> {
@@ -1606,7 +1892,7 @@ impl VfsProvider for RemoteProviderProxy {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Stat)?;
         response
             .metadata
             .as_ref()
@@ -1636,7 +1922,7 @@ impl VfsProvider for RemoteProviderProxy {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::ReadDirectory)?;
         Ok(DirPage {
             entries: response
                 .entries
@@ -1672,7 +1958,7 @@ impl VfsProvider for RemoteProviderProxy {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Open)?;
         if response.handle_id == 0 {
             return Err(missing_response_field(VfsOperation::Open, "handle ID"));
         }
@@ -1702,7 +1988,7 @@ impl VfsProvider for RemoteProviderProxy {
                 }),
         )
         .await?;
-        response_error(response.error)
+        response_error(response.error, VfsOperation::CreateDirectory)
     }
 
     async fn remove(
@@ -1728,7 +2014,7 @@ impl VfsProvider for RemoteProviderProxy {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Remove)?;
         Ok(RemoveOutcome {
             removed_entries: response
                 .removed_entries
@@ -1762,7 +2048,7 @@ impl VfsProvider for RemoteProviderProxy {
             }),
         )
         .await?;
-        response_error(response.error)
+        response_error(response.error, VfsOperation::Rename)
     }
 
     async fn copy(
@@ -1790,7 +2076,7 @@ impl VfsProvider for RemoteProviderProxy {
             }),
         )
         .await?;
-        response_error(response.error)
+        response_error(response.error, VfsOperation::Copy)
     }
 
     async fn watch(
@@ -1809,16 +2095,60 @@ impl VfsProvider for RemoteProviderProxy {
             })
             .await
             .map_err(|error| transport_error(VfsOperation::Watch, error))?;
-        Ok(Box::pin(stream.map(|response| {
-            let response = response.map_err(|error| transport_error(VfsOperation::Watch, error))?;
-            response_error(response.error)?;
-            response
-                .batch
-                .as_ref()
-                .ok_or_else(|| missing_response_field(VfsOperation::Watch, "event batch"))?
-                .to_event_batch()
-                .map_err(|error| wire_error(VfsOperation::Watch, error))
-        })))
+        let transport = self.transport.clone();
+        let project_id = self.project_id;
+        let mount_id = self.mount_id;
+        let context = request.context;
+        Ok(Box::pin(futures::stream::unfold(
+            (stream, transport, context, false),
+            move |(mut stream, transport, context, finished)| async move {
+                if finished {
+                    return None;
+                }
+                let next_response = Box::pin(stream.next());
+                let cancellation = context.cancellation.clone();
+                let cancelled = Box::pin(cancellation.cancelled());
+                match futures::future::select(next_response, cancelled).await {
+                    futures::future::Either::Left((Some(response), _)) => {
+                        let response = response
+                            .map_err(|error| transport_error(VfsOperation::Watch, error))
+                            .and_then(|response| {
+                                response_error(response.error, VfsOperation::Watch)?;
+                                response
+                                    .batch
+                                    .as_ref()
+                                    .ok_or_else(|| {
+                                        missing_response_field(VfsOperation::Watch, "event batch")
+                                    })?
+                                    .to_event_batch()
+                                    .map_err(|error| wire_error(VfsOperation::Watch, error))
+                            });
+                        Some((response, (stream, transport, context, false)))
+                    }
+                    futures::future::Either::Left((None, _)) => None,
+                    futures::future::Either::Right(((), _)) => {
+                        if let Err(error) = transport
+                            .cancel_operation(VfsCancelOperationRequestV2 {
+                                project_id,
+                                mount_id: Some(MountIdV2::from_mount_id(mount_id)),
+                                operation_id: context.operation_id.get(),
+                            })
+                            .await
+                        {
+                            tracing::debug!(%error, "failed to cancel remote VFS watch");
+                        }
+                        Some((
+                            Err(proxy_error(
+                                VfsErrorCode::Cancelled,
+                                VfsOperation::Watch,
+                                "remote VFS watch was cancelled",
+                            )),
+                            (stream, transport, context, true),
+                        ))
+                    }
+                }
+            },
+        )))
     }
 }
 
@@ -1832,11 +2162,10 @@ struct RemoteVfsFile {
 
 impl Drop for RemoteVfsFile {
     fn drop(&mut self) {
-        self.transport.release_handle(VfsCloseHandleRequestV2 {
+        self.transport.release_handle(VfsReleaseHandleV2 {
             project_id: self.project_id,
             mount_id: Some(MountIdV2::from_mount_id(self.mount_id)),
             handle_id: self.handle_id,
-            operation_id: 0,
         });
     }
 }
@@ -1861,7 +2190,7 @@ impl VfsFile for RemoteVfsFile {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Read)?;
         Ok(response.length)
     }
 
@@ -1897,7 +2226,7 @@ impl VfsFile for RemoteVfsFile {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Read)?;
         if response.data.len() > buffer.len() {
             return Err(proxy_error(
                 VfsErrorCode::CorruptData,
@@ -1941,7 +2270,7 @@ impl VfsFile for RemoteVfsFile {
             }),
         )
         .await?;
-        response_error(response.error)?;
+        response_error(response.error, VfsOperation::Write)?;
         Ok(response.written as usize)
     }
 
@@ -1964,7 +2293,7 @@ impl VfsFile for RemoteVfsFile {
             }),
         )
         .await?;
-        response_error(response.error)
+        response_error(response.error, VfsOperation::SetLength)
     }
 
     async fn flush(&self, context: OperationContext) -> VfsResult<()> {
@@ -2009,7 +2338,7 @@ impl RemoteVfsFile {
                 }),
         )
         .await?;
-        response_error(response.error)
+        response_error(response.error, operation)
     }
 }
 
@@ -2032,6 +2361,10 @@ fn mutation_key(
         required_mount_id(mount_id, operation)?,
         OperationId::new(operation_id),
     ))
+}
+
+fn request_fingerprint<MessageType: proto::Message>(request: &MessageType) -> [u8; 32] {
+    Sha256::digest(request.encode_to_vec()).into()
 }
 
 fn required_path(
@@ -2113,11 +2446,11 @@ where
     }
 }
 
-fn response_error(error: Option<VfsErrorV2>) -> VfsResult<()> {
+fn response_error(error: Option<VfsErrorV2>, operation: VfsOperation) -> VfsResult<()> {
     match error {
         Some(error) => Err(error
             .to_vfs_error()
-            .map_err(|error| wire_error(VfsOperation::Stat, error))?),
+            .map_err(|error| wire_error(operation, error))?),
         None => Ok(()),
     }
 }
@@ -2158,6 +2491,7 @@ fn proxy_error(
 mod tests {
     use super::*;
     use futures::executor::block_on;
+    use proto::Message as _;
     use std::{collections::BTreeSet, num::NonZeroUsize};
     use vfs::{
         MemoryProvider, WatchDepth,
@@ -2342,6 +2676,53 @@ mod tests {
     }
 
     #[test]
+    fn active_remote_watch_observes_cancellation() {
+        let result = block_on(async {
+            let service = VfsService::default();
+            service.register_provider(
+                31,
+                Arc::new(MemoryProvider::new(
+                    "loopback-watch-cancellation",
+                    vfs::PathEncoding::PortableUtf8,
+                )),
+            )?;
+            let proxy =
+                RemoteProviderProxy::connect(0, 31, Arc::new(LoopbackVfsTransport::new(service)))
+                    .await?;
+            let cancellation = CancellationToken::default();
+            let mut watch = proxy
+                .watch(WatchRequest {
+                    path: ProviderPath::root(vfs::PathEncoding::PortableUtf8),
+                    depth: WatchDepth::Recursive,
+                    resume_after_sequence: None,
+                    context: OperationContext {
+                        operation_id: OperationId::new(92),
+                        cancellation: cancellation.clone(),
+                    },
+                })
+                .await?;
+            cancellation.cancel();
+            let cancelled = watch.next().await;
+            if !cancelled
+                .as_ref()
+                .and_then(|result| result.as_ref().err())
+                .is_some_and(|error| error.code() == VfsErrorCode::Cancelled)
+            {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Watch,
+                    "active remote watch did not observe cancellation",
+                ));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(
+            result.is_ok(),
+            "active watch cancellation test failed: {result:?}"
+        );
+    }
+
+    #[test]
     fn response_loss_retry_replays_the_committed_mutation() {
         let result = block_on(async {
             let provider = Arc::new(MemoryProvider::new(
@@ -2373,7 +2754,7 @@ mod tests {
                 FrameFault {
                     direction: TransportDirection::ClientToServer,
                     sequence: 0,
-                    delay: Duration::ZERO,
+                    delay: Duration::from_millis(2),
                     maximum_chunk_size: Some(maximum_chunk_size),
                     outcome: FrameOutcome::Deliver,
                 },
@@ -2396,6 +2777,19 @@ mod tests {
                     VfsErrorCode::Internal,
                     VfsOperation::CreateDirectory,
                     "request was not fragmented by the fault transport",
+                ));
+            }
+            if !first_request_events.first().is_some_and(|event| {
+                matches!(
+                    event,
+                    TransportEvent::Chunk { delay, .. }
+                        if *delay == Duration::from_millis(2)
+                )
+            }) {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::CreateDirectory,
+                    "fault transport did not preserve the injected latency",
                 ));
             }
             let first_request = VfsCreateDirectoryRequestV2::decode(first_request_bytes.as_slice())
@@ -2435,7 +2829,7 @@ mod tests {
             )
             .map_err(anyhow::Error::new)
             .map_err(|error| transport_error(VfsOperation::CreateDirectory, error))?;
-            response_error(retry_response.error)?;
+            response_error(retry_response.error, VfsOperation::CreateDirectory)?;
             provider.stat(&path, StatOptions::default()).await?;
             if faults.remaining_fault_count() != 0 {
                 return Err(service_error(
@@ -2598,6 +2992,167 @@ mod tests {
             result.is_ok(),
             "remote watch resume test failed: {result:?}"
         );
+    }
+
+    #[test]
+    fn remote_service_revalidates_mount_path_authorization() {
+        let result = block_on(async {
+            let provider = Arc::new(MemoryProvider::new(
+                "loopback-authorization",
+                vfs::PathEncoding::PortableUtf8,
+            ));
+            let private_path = ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"private".as_slice()],
+            )
+            .map_err(|error| wire_error(VfsOperation::Stat, error.into()))?;
+            provider
+                .create_dir(&private_path, CreateDirOptions::default())
+                .await?;
+            let snapshot = VfsSnapshot::mount(provider, SnapshotBudgets::default())?;
+            let service = VfsService::default();
+            service.register_snapshot_with_authorizer(
+                19,
+                snapshot.clone(),
+                Arc::new(|path, operation| {
+                    if path
+                        .file_name()
+                        .is_some_and(|name| name.as_bytes() == b"private")
+                    {
+                        Err(service_error(
+                            VfsErrorCode::PermissionDenied,
+                            operation,
+                            "fixture path is private",
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                }),
+            )?;
+            let proxy = RemoteProviderProxy::connect(
+                0,
+                19,
+                Arc::new(LoopbackVfsTransport::new(service.clone())),
+            )
+            .await?;
+            let denied = proxy.stat(&private_path, StatOptions::default()).await;
+            if !denied
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.code() == VfsErrorCode::PermissionDenied)
+            {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Stat,
+                    "remote service did not enforce its mount authorizer",
+                ));
+            }
+            service.register_snapshot_with_authorizer(19, snapshot, Arc::new(|_, _| Ok(())))?;
+            proxy.stat(&private_path, StatOptions::default()).await?;
+            Ok::<_, VfsError>(())
+        });
+        assert!(
+            result.is_ok(),
+            "remote authorization test failed: {result:?}"
+        );
+    }
+
+    #[test]
+    fn negotiation_preserves_unknown_capability_extensions() {
+        let result = block_on(async {
+            let extension = proto::VfsCapabilityExtensionV2 {
+                id: 77,
+                payload: b"future-capability".to_vec(),
+            };
+            let service = VfsService::with_capability_extensions(
+                DEFAULT_HANDLE_LEASE,
+                vec![extension.clone()].into(),
+            );
+            service.register_provider(
+                23,
+                Arc::new(MemoryProvider::new(
+                    "loopback-capability-extension",
+                    vfs::PathEncoding::PortableUtf8,
+                )),
+            )?;
+            let proxy =
+                RemoteProviderProxy::connect(0, 23, Arc::new(LoopbackVfsTransport::new(service)))
+                    .await?;
+            if proxy.capability_extensions() != [extension] {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Stat,
+                    "unknown capability extension was not preserved",
+                ));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(
+            result.is_ok(),
+            "capability extension negotiation failed: {result:?}"
+        );
+    }
+
+    #[test]
+    fn remote_stat_many_preserves_per_path_results_and_batch_limits() {
+        let result = block_on(async {
+            let service = VfsService::default();
+            service.register_provider(
+                29,
+                Arc::new(MemoryProvider::new(
+                    "loopback-stat-many",
+                    vfs::PathEncoding::PortableUtf8,
+                )),
+            )?;
+            let proxy =
+                RemoteProviderProxy::connect(0, 29, Arc::new(LoopbackVfsTransport::new(service)))
+                    .await?;
+            let existing = ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"existing".as_slice()],
+            )
+            .map_err(|error| wire_error(VfsOperation::Stat, error.into()))?;
+            let missing = ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"missing".as_slice()],
+            )
+            .map_err(|error| wire_error(VfsOperation::Stat, error.into()))?;
+            proxy
+                .create_dir(&existing, CreateDirOptions::default())
+                .await?;
+            let results = proxy
+                .stat_many(&[existing, missing], StatOptions::default())
+                .await?;
+            if results.len() != 2
+                || results.first().is_none_or(Result::is_err)
+                || !results
+                    .get(1)
+                    .and_then(|result| result.as_ref().err())
+                    .is_some_and(|error| error.code() == VfsErrorCode::NotFound)
+            {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Stat,
+                    "stat-many did not preserve per-path results",
+                ));
+            }
+            let root = ProviderPath::root(vfs::PathEncoding::PortableUtf8);
+            let oversized = vec![root; 4_097];
+            let oversized_result = proxy.stat_many(&oversized, StatOptions::default()).await;
+            if !oversized_result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.code() == VfsErrorCode::TooLarge)
+            {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Stat,
+                    "stat-many batch limit was not enforced",
+                ));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(result.is_ok(), "remote stat-many test failed: {result:?}");
     }
 
     fn delivered_frame_bytes(events: &[TransportEvent]) -> VfsResult<Vec<u8>> {
