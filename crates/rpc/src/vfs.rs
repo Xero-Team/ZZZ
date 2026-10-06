@@ -953,6 +953,124 @@ impl RemoteVfsTransport for LoopbackVfsTransport {
     }
 }
 
+#[cfg(feature = "gpui")]
+#[derive(Clone)]
+pub struct ProtoVfsTransport {
+    client: crate::AnyProtoClient,
+}
+
+#[cfg(feature = "gpui")]
+impl ProtoVfsTransport {
+    pub fn new(client: crate::AnyProtoClient) -> Self {
+        Self { client }
+    }
+}
+
+#[cfg(feature = "gpui")]
+#[async_trait]
+impl RemoteVfsTransport for ProtoVfsTransport {
+    async fn negotiate(
+        &self,
+        request: VfsNegotiateRequestV2,
+    ) -> TransportResult<VfsNegotiateResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn stat(&self, request: VfsStatRequestV2) -> TransportResult<VfsStatResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn read_directory(
+        &self,
+        request: VfsReadDirectoryRequestV2,
+    ) -> TransportResult<VfsReadDirectoryResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn open(&self, request: VfsOpenRequestV2) -> TransportResult<VfsOpenResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn file_length(
+        &self,
+        request: VfsFileLengthRequestV2,
+    ) -> TransportResult<VfsFileLengthResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn read_at(&self, request: VfsReadAtRequestV2) -> TransportResult<VfsReadAtResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn write_at(
+        &self,
+        request: VfsWriteAtRequestV2,
+    ) -> TransportResult<VfsWriteAtResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn set_length(
+        &self,
+        request: VfsSetLengthRequestV2,
+    ) -> TransportResult<VfsOperationResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn handle_operation(
+        &self,
+        request: VfsHandleOperationRequestV2,
+    ) -> TransportResult<VfsOperationResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn create_directory(
+        &self,
+        request: VfsCreateDirectoryRequestV2,
+    ) -> TransportResult<VfsOperationResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn remove(&self, request: VfsRemoveRequestV2) -> TransportResult<VfsRemoveResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn rename(&self, request: VfsRenameRequestV2) -> TransportResult<VfsOperationResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn copy(&self, request: VfsCopyRequestV2) -> TransportResult<VfsOperationResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn renew_handle(
+        &self,
+        request: VfsRenewHandleRequestV2,
+    ) -> TransportResult<VfsRenewHandleResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn cancel_operation(
+        &self,
+        request: VfsCancelOperationRequestV2,
+    ) -> TransportResult<VfsOperationResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn watch(
+        &self,
+        request: VfsWatchRequestV2,
+    ) -> TransportResult<BoxStream<'static, TransportResult<VfsWatchResponseV2>>> {
+        let stream = self.client.request_stream(request).await?;
+        Ok(Box::pin(stream))
+    }
+
+    fn release_handle(&self, request: VfsCloseHandleRequestV2) {
+        if let Err(error) = self.client.send(request) {
+            tracing::debug!(%error, "failed to release remote VFS handle");
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct RemoteProviderProxy {
     project_id: u64,

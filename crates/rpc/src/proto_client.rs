@@ -229,18 +229,22 @@ impl AnyProtoClient {
     pub fn request_stream<T: RequestMessage>(
         &self,
         request: T,
-    ) -> impl Future<Output = Result<impl Stream<Item = Result<T::Response>>>> + use<'_, T> {
+    ) -> BoxFuture<'static, Result<futures::stream::BoxStream<'static, Result<T::Response>>>> {
         let envelope = request.into_envelope(0, None, None);
-        let response = self.0.client.request_stream(envelope, T::NAME);
+        let client = self.0.client.clone();
+        let response = client.request_stream(envelope, T::NAME);
         async move {
             let response = response.await?;
-            Ok(response.map(|response| {
-                response.and_then(|response| {
-                    T::Response::from_envelope(response)
-                        .context("received response of the wrong type")
+            Ok(response
+                .map(|response| {
+                    response.and_then(|response| {
+                        T::Response::from_envelope(response)
+                            .context("received response of the wrong type")
+                    })
                 })
-            }))
+                .boxed())
         }
+        .boxed()
     }
 
     pub fn send<T: EnvelopedMessage>(&self, request: T) -> Result<()> {
