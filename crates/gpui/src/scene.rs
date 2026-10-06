@@ -5,8 +5,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AtlasTextureId, AtlasTile, Background, Bounds, ContentMask, Corners, Edges, Hsla, Pixels,
-    Point, Radians, ScaledPixels, Size, bounds_tree::BoundsTree, point,
+    AtlasTextureId, AtlasTile, AtlasUsage, Background, Bounds, ContentMask, Corners, Edges, Hsla,
+    Pixels, Point, Radians, ScaledPixels, Size, bounds_tree::BoundsTree, point,
 };
 use std::{
     fmt::Debug,
@@ -42,6 +42,7 @@ pub struct Scene {
     pub(crate) paint_operations: Vec<PaintOperation>,
     primitive_bounds: BoundsTree<ScaledPixels>,
     layer_stack: Vec<DrawOrder>,
+    atlas_usage: AtlasUsage,
     pub shadows: Vec<Shadow>,
     pub quads: Vec<Quad>,
     pub paths: Vec<Path<ScaledPixels>>,
@@ -58,6 +59,7 @@ impl Scene {
         self.paint_operations.clear();
         self.primitive_bounds.clear();
         self.layer_stack.clear();
+        self.atlas_usage.clear();
         self.paths.clear();
         self.shadows.clear();
         self.quads.clear();
@@ -119,14 +121,17 @@ impl Scene {
             }
             Primitive::MonochromeSprite(sprite) => {
                 sprite.order = order;
+                self.atlas_usage.insert(sprite.tile);
                 self.monochrome_sprites.push(*sprite);
             }
             Primitive::SubpixelSprite(sprite) => {
                 sprite.order = order;
+                self.atlas_usage.insert(sprite.tile);
                 self.subpixel_sprites.push(*sprite);
             }
             Primitive::PolychromeSprite(sprite) => {
                 sprite.order = order;
+                self.atlas_usage.insert(sprite.tile);
                 self.polychrome_sprites.push(*sprite);
             }
             Primitive::Surface(surface) => {
@@ -160,6 +165,11 @@ impl Scene {
         self.polychrome_sprites
             .sort_by_key(|sprite| (sprite.order, sprite.tile.tile_id));
         self.surfaces.sort_by_key(|surface| surface.order);
+    }
+
+    /// Returns the distinct atlas resources referenced by visible sprites.
+    pub fn atlas_usage(&self) -> &AtlasUsage {
+        &self.atlas_usage
     }
 
     #[cfg_attr(
@@ -954,5 +964,71 @@ impl PathVertex<Pixels> {
             st_position: self.st_position,
             content_mask: self.content_mask.scale(factor),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AtlasTextureKind, DevicePixels, TileId};
+
+    fn tile(texture_index: u32, tile_index: u32) -> AtlasTile {
+        AtlasTile {
+            texture_id: AtlasTextureId {
+                index: texture_index,
+                kind: AtlasTextureKind::Monochrome,
+            },
+            tile_id: TileId(tile_index),
+            padding: 0,
+            bounds: Bounds {
+                origin: Point::default(),
+                size: Size {
+                    width: DevicePixels(1),
+                    height: DevicePixels(1),
+                },
+            },
+        }
+    }
+
+    fn sprite(tile: AtlasTile) -> MonochromeSprite {
+        let bounds = Bounds {
+            origin: Point::default(),
+            size: Size {
+                width: ScaledPixels(1.0),
+                height: ScaledPixels(1.0),
+            },
+        };
+        MonochromeSprite {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask: ContentMask { bounds },
+            color: Hsla::default(),
+            tile,
+            transformation: TransformationMatrix::unit(),
+        }
+    }
+
+    #[test]
+    fn atlas_usage_survives_replay_and_clears_with_the_scene() {
+        let first_tile = tile(1, 10);
+        let second_tile = tile(1, 11);
+        let mut scene = Scene::default();
+        scene.insert_primitive(sprite(first_tile));
+        scene.insert_primitive(sprite(second_tile));
+        scene.insert_primitive(sprite(first_tile));
+
+        assert_eq!(scene.atlas_usage().texture_count(), 1);
+        assert_eq!(scene.atlas_usage().tile_count(), 2);
+        assert!(scene.atlas_usage().contains_texture(first_tile.texture_id));
+        assert!(scene.atlas_usage().contains_tile(first_tile.tile_id));
+        assert!(scene.atlas_usage().contains_tile(second_tile.tile_id));
+
+        let mut replayed = Scene::default();
+        replayed.replay(0..scene.len(), &scene);
+        assert_eq!(replayed.atlas_usage(), scene.atlas_usage());
+
+        replayed.clear();
+        assert!(replayed.atlas_usage().is_empty());
     }
 }

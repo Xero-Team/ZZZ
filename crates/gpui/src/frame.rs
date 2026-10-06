@@ -660,6 +660,7 @@ pub(crate) struct DeferredDraw {
 }
 
 pub(crate) struct Frame {
+    pub(crate) atlas_epoch: crate::AtlasEpoch,
     pub(crate) focus: Option<FocusId>,
     pub(crate) window_active: bool,
     pub(crate) element_states: FxHashMap<(GlobalElementId, TypeId), ElementStateBox>,
@@ -724,6 +725,7 @@ pub(crate) struct PaintIndex {
 )]
 pub(crate) struct BuiltFrame<'a> {
     pub(crate) scene: &'a Scene,
+    pub(crate) atlas_epoch: crate::AtlasEpoch,
     pub(crate) interaction: InteractionSnapshot<'a>,
     pub(crate) text_input: TextInputSnapshot,
     pub(crate) accessibility: AccessibilityUpdate,
@@ -790,6 +792,7 @@ impl<'a> BuiltFrame<'a> {
     ) -> Self {
         Self {
             scene: &frame.scene,
+            atlas_epoch: frame.atlas_epoch,
             interaction: InteractionSnapshot {
                 hitboxes: &frame.hitboxes,
                 dispatch_tree: &frame.dispatch_tree,
@@ -820,6 +823,7 @@ impl Frame {
 
     pub(crate) fn new(dispatch_tree: DispatchTree) -> Self {
         Frame {
+            atlas_epoch: crate::AtlasEpoch::default(),
             focus: None,
             window_active: false,
             element_states: FxHashMap::default(),
@@ -854,6 +858,7 @@ impl Frame {
     }
 
     pub(crate) fn clear(&mut self) {
+        self.atlas_epoch = crate::AtlasEpoch::default();
         self.element_states.clear();
         self.accessed_element_states.clear();
         self.mouse_listeners.clear();

@@ -2,7 +2,7 @@ use crate::{
     Bounds, DevicePixels, Point, RenderGlyphParams, RenderImageParams, RenderSvgParams, Size,
 };
 use anyhow::Result;
-use collections::FxHashMap;
+use collections::{FxHashMap, FxHashSet};
 use parking_lot::Mutex;
 use std::borrow::Cow;
 
@@ -106,6 +106,72 @@ pub struct AtlasSnapshot {
     pub current_frame_working_set_bytes: usize,
     /// Number of frames whose working set or misses exceeded retained budgets.
     pub budget_pressure_frames: u64,
+}
+
+/// A monotonically increasing atlas content generation.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct AtlasEpoch(u64);
+
+impl AtlasEpoch {
+    /// Returns the numeric generation for diagnostics and tests.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// A monotonically increasing identifier for an atlas frame build.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct AtlasFrameId(u64);
+
+impl AtlasFrameId {
+    /// Returns the numeric identifier for diagnostics and tests.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// Atlas resources referenced by one completed scene.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AtlasUsage {
+    texture_ids: FxHashSet<AtlasTextureId>,
+    tile_ids: FxHashSet<TileId>,
+}
+
+impl AtlasUsage {
+    pub(crate) fn insert(&mut self, tile: AtlasTile) {
+        self.texture_ids.insert(tile.texture_id);
+        self.tile_ids.insert(tile.tile_id);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.texture_ids.clear();
+        self.tile_ids.clear();
+    }
+
+    /// Returns whether the scene references the given texture page.
+    pub fn contains_texture(&self, texture_id: AtlasTextureId) -> bool {
+        self.texture_ids.contains(&texture_id)
+    }
+
+    /// Returns whether the scene references the given tile.
+    pub fn contains_tile(&self, tile_id: TileId) -> bool {
+        self.tile_ids.contains(&tile_id)
+    }
+
+    /// Returns the number of distinct texture pages referenced by the scene.
+    pub fn texture_count(&self) -> usize {
+        self.texture_ids.len()
+    }
+
+    /// Returns the number of distinct tiles referenced by the scene.
+    pub fn tile_count(&self) -> usize {
+        self.tile_ids.len()
+    }
+
+    /// Returns whether the scene references no atlas resources.
+    pub fn is_empty(&self) -> bool {
+        self.tile_ids.is_empty()
+    }
 }
 
 const DEFAULT_ATLAS_SIZE: Size<DevicePixels> = Size {
@@ -610,7 +676,7 @@ pub enum AtlasTextureKind {
     Subpixel = 2,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 #[expect(missing_docs)]
 pub struct TileId(pub u32);
