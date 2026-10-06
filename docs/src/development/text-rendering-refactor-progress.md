@@ -170,7 +170,32 @@ re-export，再集中 page allocator 和 lock 外 builder。
 
 状态：`IN PROGRESS`
 
-尚未修改代码。按 2A/2B 分为可独立回退的 domain move 与 allocator policy 提取。
+2A 状态：`COMPLETE`
+
+- 新建单一逻辑组件 `crates/gpui/src/atlas.rs`，迁入 key、tile、texture kind、snapshot、
+  state、backend contract、headless atlas、texture list 和 atlas unit tests。
+- `gpui.rs` 从 crate root re-export atlas domain；现有 `gpui::AtlasTile`、
+  `gpui::PlatformAtlas` 等公共路径保持不变，WGPU、Metal、DirectX consumer 无需修改。
+- `platform.rs` 不再定义 atlas 类型或持有 atlas-only imports。
+
+验证：
+
+| 命令或检查                                                                          | 结果   | 说明                                  |
+| ----------------------------------------------------------------------------------- | ------ | ------------------------------------- |
+| `cargo test --locked -p gpui atlas::tests`                                          | `PASS` | 2 moved unit tests                    |
+| `cargo check --locked -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`           | `PASS` | root re-export consumers compile      |
+| `cargo test --locked -p gpui`                                                       | `PASS` | 234 unit + 1 integration，0 failed    |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer` | `PASS` | 3 passed，1 explicit baseline ignored |
+| `./script/clippy -p gpui`                                                           | `PASS` | all-target/all-feature + philosophy   |
+| `cargo fmt --all -- --check`                                                        | `PASS` | workspace Rust formatting             |
+
+2A 提交：`ed5f4d49cb5569e7885c7ad315006a72caa8d3dc`（signed）。
+
+2B 状态：`IN PROGRESS`
+
+下一步把 `BucketedAtlasAllocator`、page size、page/entry metadata 和 monotonic identity
+集中到公共 core；三个 backend 仅保留 GPU texture storage/upload/resource lookup，并把 miss
+builder 移出 atlas lock 后 double-check insert。
 
 ### 阶段 3–9
 
