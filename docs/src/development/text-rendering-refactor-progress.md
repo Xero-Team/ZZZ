@@ -116,7 +116,7 @@ TEXT-001 结果：`PASS`
 固定。当前实现的一次 cold workload 会为 9,502 entries 发出 9,502 次 upload；该数据是
 TEXT-010 的对照基线，不代表阶段 8 必须保留 batching。
 
-提交：待阶段 0 signed commit 后回填。
+提交：`8f773b777d5af8829fc20efb5b3f53cf2e0f90ac`（signed）。
 
 下一步：进入阶段 1，以 integer subpixel tick 和 `div_euclid`/`rem_euclid` 修复正负
 glyph origin 分解，并完成 TEXT-002 unit 与 headless pixel coverage。
