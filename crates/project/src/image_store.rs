@@ -247,6 +247,14 @@ impl ProjectItem for ImageItem {
         self.file.entry_id
     }
 
+    fn resource_id(&self, _: &App) -> Option<vfs::ResourceId> {
+        self.file.resource_id
+    }
+
+    fn vfs_path(&self, _: &App) -> Option<vfs::VfsPath> {
+        self.file.vfs_path.clone()
+    }
+
     fn project_path(&self, cx: &App) -> Option<ProjectPath> {
         Some(self.project_path(cx))
     }

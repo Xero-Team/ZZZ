@@ -1406,9 +1406,17 @@ impl Pane {
         project_path: ProjectPath,
         cx: &App,
     ) -> Option<Box<dyn ItemHandle>> {
+        let resource_id = self.project.upgrade().and_then(|project| {
+            project
+                .read(cx)
+                .vfs_identity_for_project_path(&project_path, cx)
+                .0
+        });
         self.items.iter().find_map(move |item| {
+            let matches_resource = resource_id.is_some() && item.resource_id(cx) == resource_id;
+            let matches_path = item.project_path(cx).as_slice() == [project_path.clone()];
             if item.buffer_kind(cx) == ItemBufferKind::Singleton
-                && (item.project_path(cx).as_slice() == [project_path.clone()])
+                && (matches_resource || matches_path)
             {
                 Some(item.boxed_clone())
             } else {

@@ -207,6 +207,12 @@ pub trait ProjectItem: 'static {
     where
         Self: Sized;
     fn entry_id(&self, cx: &App) -> Option<ProjectEntryId>;
+    fn resource_id(&self, _cx: &App) -> Option<vfs::ResourceId> {
+        None
+    }
+    fn vfs_path(&self, _cx: &App) -> Option<vfs::VfsPath> {
+        None
+    }
     fn project_path(&self, cx: &App) -> Option<ProjectPath>;
     fn is_dirty(&self) -> bool;
 }
@@ -4478,6 +4484,17 @@ impl Project {
         self.worktree_store.read(cx).entry_for_path(path, cx)
     }
 
+    pub fn vfs_identity_for_project_path(
+        &self,
+        path: &ProjectPath,
+        cx: &App,
+    ) -> (Option<vfs::ResourceId>, Option<vfs::VfsPath>) {
+        let Some(worktree) = self.worktree_for_id(path.worktree_id, cx) else {
+            return (None, None);
+        };
+        worktree::File::vfs_identity_for_path(&path.path, &worktree, cx)
+    }
+
     pub fn path_for_entry(&self, entry_id: ProjectEntryId, cx: &App) -> Option<ProjectPath> {
         let worktree = self.worktree_for_entry(entry_id, cx)?;
         let worktree = worktree.read(cx);
@@ -5973,6 +5990,14 @@ impl ProjectItem for Buffer {
 
     fn entry_id(&self, _cx: &App) -> Option<ProjectEntryId> {
         File::from_dyn(self.file()).and_then(|file| file.project_entry_id())
+    }
+
+    fn resource_id(&self, _cx: &App) -> Option<vfs::ResourceId> {
+        self.file().and_then(|file| file.resource_id())
+    }
+
+    fn vfs_path(&self, _cx: &App) -> Option<vfs::VfsPath> {
+        self.file().and_then(|file| file.vfs_path().cloned())
     }
 
     fn project_path(&self, cx: &App) -> Option<ProjectPath> {

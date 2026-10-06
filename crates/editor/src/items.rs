@@ -31,7 +31,7 @@ use project::{
     search::SearchQuery,
 };
 use rope::TextSummary;
-use rpc::proto::{self, update_view};
+use rpc::proto::{self, Message as _, update_view};
 use settings::Settings;
 use std::{
     any::{Any, TypeId},
@@ -1289,6 +1289,7 @@ impl SerializableItem for Editor {
                 } else {
                     SerializedEditor {
                         abs_path: serialized_editor.abs_path,
+                        vfs_path: serialized_editor.vfs_path,
                         contents: None,
                         language: None,
                         mtime: None,
@@ -1362,12 +1363,20 @@ impl SerializableItem for Editor {
             }),
             SerializedEditor {
                 abs_path: Some(abs_path),
+                vfs_path,
                 contents,
                 mtime,
                 ..
             } => {
                 let opened_buffer = project.update(cx, |project, cx| {
-                    let (worktree, path) = project.find_worktree(&abs_path, cx)?;
+                    let (worktree, legacy_path) = project.find_worktree(&abs_path, cx)?;
+                    let path = vfs_path
+                        .as_deref()
+                        .and_then(|path| proto::ProviderPathV2::decode(path).log_err())
+                        .and_then(|path| path.to_provider_path().log_err())
+                        .and_then(|path| vfs::provider_path_to_legacy_utf8(&path).log_err())
+                        .and_then(|path| RelPath::from_proto(&path).log_err())
+                        .unwrap_or(legacy_path);
                     let project_path = ProjectPath {
                         worktree_id: worktree.read(cx).id(),
                         path,
@@ -1495,6 +1504,13 @@ impl SerializableItem for Editor {
                     project.read(cx).absolute_path(&project_path, cx)
                 })
         });
+        let vfs_path = buffer
+            .read(cx)
+            .file()
+            .and_then(|file| file.vfs_path())
+            .map(|path| {
+                proto::ProviderPathV2::from_provider_path(path.provider_path()).encode_to_vec()
+            });
 
         let is_dirty = buffer.read(cx).is_dirty();
         let mtime = buffer.read(cx).saved_mtime();
@@ -1522,6 +1538,7 @@ impl SerializableItem for Editor {
 
                 let editor = SerializedEditor {
                     abs_path,
+                    vfs_path,
                     contents,
                     language,
                     mtime,
@@ -2673,6 +2690,7 @@ mod tests {
 
             let serialized_editor = SerializedEditor {
                 abs_path: Some(PathBuf::from(path!("/file.rs"))),
+                vfs_path: None,
                 contents: Some("fn main() {}".to_string()),
                 language: Some("Rust".to_string()),
                 mtime: Some(mtime),
@@ -2710,6 +2728,7 @@ mod tests {
             let item_id = 5678 as ItemId;
             let serialized_editor = SerializedEditor {
                 abs_path: Some(PathBuf::from(path!("/file.rs"))),
+                vfs_path: None,
                 contents: None,
                 language: None,
                 mtime: None,
@@ -2753,6 +2772,7 @@ mod tests {
             let item_id = 9012 as ItemId;
             let serialized_editor = SerializedEditor {
                 abs_path: None,
+                vfs_path: None,
                 contents: Some("hello".to_string()),
                 language: Some("Rust".to_string()),
                 mtime: None,
@@ -2796,6 +2816,7 @@ mod tests {
             let old_mtime = MTime::from_seconds_and_nanos(0, 50);
             let serialized_editor = SerializedEditor {
                 abs_path: Some(PathBuf::from(path!("/file.rs"))),
+                vfs_path: None,
                 contents: Some("fn main() {}".to_string()),
                 language: Some("Rust".to_string()),
                 mtime: Some(old_mtime),
@@ -2830,6 +2851,7 @@ mod tests {
             let item_id = 10000 as ItemId;
             let serialized_editor = SerializedEditor {
                 abs_path: None,
+                vfs_path: None,
                 contents: None,
                 language: None,
                 mtime: None,
@@ -2884,6 +2906,7 @@ mod tests {
             // Simulate serialized state: file with unsaved changes
             let serialized_editor = SerializedEditor {
                 abs_path: Some(PathBuf::from(path!("/standalone.rs"))),
+                vfs_path: None,
                 contents: Some("modified content".to_string()),
                 language: Some("Rust".to_string()),
                 mtime: Some(mtime),
@@ -3010,6 +3033,7 @@ mod tests {
 
         let serialized_editor = SerializedEditor {
             abs_path: Some(PathBuf::from(path!("/outside/settings.json"))),
+            vfs_path: None,
             contents: None,
             language: None,
             mtime: None,

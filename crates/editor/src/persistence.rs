@@ -20,6 +20,7 @@ use workspace::{ItemId, WorkspaceDb, WorkspaceId};
 #[derive(Clone, Debug, PartialEq, Default)]
 pub(crate) struct SerializedEditor {
     pub(crate) abs_path: Option<PathBuf>,
+    pub(crate) vfs_path: Option<Vec<u8>>,
     pub(crate) contents: Option<String>,
     pub(crate) language: Option<String>,
     pub(crate) mtime: Option<MTime>,
@@ -27,7 +28,7 @@ pub(crate) struct SerializedEditor {
 
 impl StaticColumnCount for SerializedEditor {
     fn column_count() -> usize {
-        6
+        7
     }
 }
 
@@ -41,6 +42,7 @@ impl Bind for SerializedEditor {
                 .map(|p| p.to_string_lossy().into_owned()),
             start_index,
         )?;
+        let start_index = statement.bind(&self.vfs_path, start_index)?;
         let start_index = statement.bind(&self.contents, start_index)?;
         let start_index = statement.bind(&self.language, start_index)?;
 
@@ -64,6 +66,8 @@ impl Column for SerializedEditor {
             Column::column(statement, start_index)?;
         let (_abs_path, start_index): (Option<PathBuf>, i32) =
             Column::column(statement, start_index)?;
+        let (vfs_path, start_index): (Option<Vec<u8>>, i32) =
+            Column::column(statement, start_index)?;
         let (contents, start_index): (Option<String>, i32) =
             Column::column(statement, start_index)?;
         let (language, start_index): (Option<String>, i32) =
@@ -79,6 +83,7 @@ impl Column for SerializedEditor {
 
         let editor = Self {
             abs_path,
+            vfs_path,
             contents,
             language,
             mtime,
@@ -97,6 +102,7 @@ impl Domain for EditorDb {
     //   item_id: usize,
     //   workspace_id: usize,
     //   path: Option<PathBuf>,
+    //   vfs_path: Option<Vec<u8>>,
     //   scroll_top_row: usize,
     //   scroll_vertical_offset: f32,
     //   scroll_horizontal_offset: f32,
@@ -220,6 +226,9 @@ impl Domain for EditorDb {
                 PRIMARY KEY(workspace_id, path, start)
             );
         ),
+        sql! (
+            ALTER TABLE editors ADD COLUMN vfs_path BLOB;
+        ),
     ];
 }
 
@@ -233,7 +242,7 @@ const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 impl EditorDb {
     query! {
         pub fn get_serialized_editor(item_id: ItemId, workspace_id: WorkspaceId) -> Result<Option<SerializedEditor>> {
-            SELECT path, buffer_path, contents, language, mtime_seconds, mtime_nanos FROM editors
+            SELECT path, buffer_path, vfs_path, contents, language, mtime_seconds, mtime_nanos FROM editors
             WHERE item_id = ? AND workspace_id = ?
         }
     }
@@ -241,18 +250,19 @@ impl EditorDb {
     query! {
         pub async fn save_serialized_editor(item_id: ItemId, workspace_id: WorkspaceId, serialized_editor: SerializedEditor) -> Result<()> {
             INSERT INTO editors
-                (item_id, workspace_id, path, buffer_path, contents, language, mtime_seconds, mtime_nanos)
+                (item_id, workspace_id, path, buffer_path, vfs_path, contents, language, mtime_seconds, mtime_nanos)
             VALUES
-                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ON CONFLICT DO UPDATE SET
                 item_id = ?1,
                 workspace_id = ?2,
                 path = ?3,
                 buffer_path = ?4,
-                contents = ?5,
-                language = ?6,
-                mtime_seconds = ?7,
-                mtime_nanos = ?8
+                vfs_path = ?5,
+                contents = ?6,
+                language = ?7,
+                mtime_seconds = ?8,
+                mtime_nanos = ?9
         }
     }
 
@@ -419,6 +429,7 @@ mod tests {
 
         let serialized_editor = SerializedEditor {
             abs_path: Some(PathBuf::from("testing.txt")),
+            vfs_path: Some(vec![0, 1, 2, 0xff]),
             contents: None,
             language: None,
             mtime: None,
@@ -438,6 +449,7 @@ mod tests {
         // Now update contents and language
         let serialized_editor = SerializedEditor {
             abs_path: Some(PathBuf::from("testing.txt")),
+            vfs_path: None,
             contents: Some("Test".to_owned()),
             language: Some("Go".to_owned()),
             mtime: None,
@@ -457,6 +469,7 @@ mod tests {
         // Now set all the fields to NULL
         let serialized_editor = SerializedEditor {
             abs_path: None,
+            vfs_path: None,
             contents: None,
             language: None,
             mtime: None,
@@ -476,6 +489,7 @@ mod tests {
         // Storing and retrieving mtime
         let serialized_editor = SerializedEditor {
             abs_path: None,
+            vfs_path: None,
             contents: None,
             language: None,
             mtime: Some(MTime::from_seconds_and_nanos(100, 42)),

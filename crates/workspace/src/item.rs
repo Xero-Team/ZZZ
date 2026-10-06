@@ -487,6 +487,8 @@ pub trait ItemHandle: 'static + Send {
         cx: &App,
     ) -> AnyElement;
     fn project_path(&self, cx: &App) -> Option<ProjectPath>;
+    fn resource_id(&self, cx: &App) -> Option<vfs::ResourceId>;
+    fn vfs_path(&self, cx: &App) -> Option<vfs::VfsPath>;
     fn project_entry_ids(&self, cx: &App) -> SmallVec<[ProjectEntryId; 3]>;
     fn project_paths(&self, cx: &App) -> SmallVec<[ProjectPath; 3]>;
     fn project_item_model_ids(&self, cx: &App) -> SmallVec<[EntityId; 3]>;
@@ -659,6 +661,28 @@ impl<T: Item> ItemHandle for Entity<T> {
         if this.buffer_kind(cx) == ItemBufferKind::Singleton {
             this.for_each_project_item(cx, &mut |_, item| {
                 result = item.project_path(cx);
+            });
+        }
+        result
+    }
+
+    fn resource_id(&self, cx: &App) -> Option<vfs::ResourceId> {
+        let this = self.read(cx);
+        let mut result = None;
+        if this.buffer_kind(cx) == ItemBufferKind::Singleton {
+            this.for_each_project_item(cx, &mut |_, item| {
+                result = item.resource_id(cx);
+            });
+        }
+        result
+    }
+
+    fn vfs_path(&self, cx: &App) -> Option<vfs::VfsPath> {
+        let this = self.read(cx);
+        let mut result = None;
+        if this.buffer_kind(cx) == ItemBufferKind::Singleton {
+            this.for_each_project_item(cx, &mut |_, item| {
+                result = item.vfs_path(cx);
             });
         }
         result
