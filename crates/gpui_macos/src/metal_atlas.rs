@@ -2,8 +2,9 @@ use anyhow::{Context as _, Result};
 use collections::FxHashMap;
 use derive_more::{Deref, DerefMut};
 use gpui::{
-    Atlas, AtlasBackend, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor, AtlasTextureId,
-    AtlasTextureKind, AtlasTile, AtlasUpload, DevicePixels, PlatformAtlas, Size,
+    Atlas, AtlasBackend, AtlasEpoch, AtlasFrame, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor,
+    AtlasTextureId, AtlasTextureKind, AtlasTile, AtlasUpload, AtlasUsage, DevicePixels,
+    PlatformAtlas, Size,
 };
 use metal::Device;
 use std::borrow::Cow;
@@ -61,6 +62,18 @@ impl PlatformAtlas for MetalAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.0.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.0.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.0.current_epoch()
     }
 
     fn snapshot(&self) -> AtlasSnapshot {
@@ -200,6 +213,19 @@ mod tests {
             .expect("callback returns Some")
     }
 
+    fn usage(tiles: impl IntoIterator<Item = AtlasTile>) -> AtlasUsage {
+        let mut usage = AtlasUsage::default();
+        for tile in tiles {
+            usage.insert(tile);
+        }
+        usage
+    }
+
+    fn complete_frame(atlas: &MetalAtlas, tiles: impl IntoIterator<Item = AtlasTile>) {
+        let frame = atlas.begin_frame();
+        atlas.finish_frame(frame, &usage(tiles));
+    }
+
     #[test]
     fn test_remove_clears_stale_keys_from_tiles_by_key() {
         let Some(atlas) = create_atlas() else {
@@ -221,24 +247,25 @@ mod tests {
 
         assert_eq!(tile_a.texture_id, tile_b.texture_id);
         assert_eq!(tile_b.texture_id, tile_c.texture_id);
+        complete_frame(&atlas, [tile_a, tile_b, tile_c]);
 
-        // Remove A: texture still has B and C, so it stays.
-        // The key for A must be removed from tiles_by_key.
+        // Removal requests remain pending until the next frame boundary.
         atlas.remove(&key_a);
-
-        // Remove B: texture still has C.
         atlas.remove(&key_b);
-
-        // Remove C: texture becomes unreferenced and is deleted.
         atlas.remove(&key_c);
+        let frame = atlas.begin_frame();
+        assert!(atlas.metal_texture(tile_a.texture_id).is_some());
 
-        // Re-inserting A must allocate a fresh tile on a new texture,
-        // NOT return a stale tile referencing the deleted texture.
+        // Re-inserting A must allocate a fresh tile identity without reusing
+        // the retired region still referenced by the previous scene.
         let tile_a2 = insert_tile(&atlas, key_a, small);
-        assert_ne!(tile_a.texture_id, tile_a2.texture_id);
         assert_ne!(tile_a.tile_id, tile_a2.tile_id);
+        assert_ne!(
+            (tile_a.texture_id, tile_a.bounds),
+            (tile_a2.texture_id, tile_a2.bounds)
+        );
+        atlas.finish_frame(frame, &usage([tile_a2]));
 
-        // The texture must actually exist — this would panic before the fix.
         assert!(atlas.metal_texture(tile_a2.texture_id).is_some());
     }
 
@@ -258,10 +285,12 @@ mod tests {
             },
         );
         assert!(atlas.metal_texture(tile.texture_id).is_some());
+        complete_frame(&atlas, [tile]);
 
-        // A scene built before the removal may still carry `tile`; looking its
-        // texture up must report the gap instead of panicking.
         atlas.remove(&key);
+        let frame = atlas.begin_frame();
+        assert!(atlas.metal_texture(tile.texture_id).is_some());
+        atlas.finish_frame(frame, &AtlasUsage::default());
         assert!(atlas.metal_texture(tile.texture_id).is_none());
     }
 
@@ -287,11 +316,14 @@ mod tests {
         let keeper_tile = insert_tile(&atlas, keeper_key, small);
         let tile_a = insert_tile(&atlas, big_key_a.clone(), big);
         assert_eq!(keeper_tile.texture_id, tile_a.texture_id);
+        complete_frame(&atlas, [keeper_tile, tile_a]);
 
         atlas.remove(&big_key_a);
+        let frame = atlas.begin_frame();
         let tile_b = insert_tile(&atlas, big_key_b, big);
-        assert_eq!(tile_b.texture_id, keeper_tile.texture_id);
+        assert_ne!(tile_b.texture_id, keeper_tile.texture_id);
         assert_ne!(tile_b.tile_id, tile_a.tile_id);
+        atlas.finish_frame(frame, &usage([keeper_tile, tile_b]));
     }
 
     #[test]

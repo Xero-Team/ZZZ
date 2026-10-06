@@ -1,8 +1,9 @@
 use anyhow::{Context as _, Result};
 use collections::FxHashMap;
 use gpui::{
-    Atlas, AtlasBackend, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor, AtlasTextureId,
-    AtlasTextureKind, AtlasTile, AtlasUpload, DevicePixels, PlatformAtlas, Size,
+    Atlas, AtlasBackend, AtlasEpoch, AtlasFrame, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor,
+    AtlasTextureId, AtlasTextureKind, AtlasTile, AtlasUpload, AtlasUsage, DevicePixels,
+    PlatformAtlas, Size,
 };
 use windows::Win32::Graphics::{
     Direct3D11::{
@@ -86,6 +87,18 @@ impl PlatformAtlas for DirectXAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.0.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.0.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.0.current_epoch()
     }
 
     fn snapshot(&self) -> AtlasSnapshot {
@@ -261,6 +274,19 @@ mod tests {
             .expect("callback returns Some")
     }
 
+    fn usage(tiles: impl IntoIterator<Item = AtlasTile>) -> AtlasUsage {
+        let mut usage = AtlasUsage::default();
+        for tile in tiles {
+            usage.insert(tile);
+        }
+        usage
+    }
+
+    fn complete_frame(atlas: &DirectXAtlas, tiles: impl IntoIterator<Item = AtlasTile>) {
+        let frame = atlas.begin_frame();
+        atlas.finish_frame(frame, &usage(tiles));
+    }
+
     #[test]
     fn test_remove_deallocates_tile_space_for_reuse() {
         let Some(atlas) = create_atlas() else {
@@ -283,11 +309,14 @@ mod tests {
         let keeper_tile = insert_tile(&atlas, keeper_key, small);
         let tile_a = insert_tile(&atlas, big_key_a.clone(), big);
         assert_eq!(keeper_tile.texture_id, tile_a.texture_id);
+        complete_frame(&atlas, [keeper_tile, tile_a]);
 
         atlas.remove(&big_key_a);
+        let frame = atlas.begin_frame();
 
         let tile_b = insert_tile(&atlas, big_key_b, big);
-        assert_eq!(tile_b.texture_id, keeper_tile.texture_id);
+        assert_ne!(tile_b.texture_id, keeper_tile.texture_id);
         assert_ne!(tile_b.tile_id, tile_a.tile_id);
+        atlas.finish_frame(frame, &usage([keeper_tile, tile_b]));
     }
 }

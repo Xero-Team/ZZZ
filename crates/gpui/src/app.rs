@@ -2577,12 +2577,12 @@ impl App {
     pub fn drop_image(&mut self, image: Arc<RenderImage>, current_window: Option<&mut Window>) {
         // remove the texture from all other windows
         for window in self.windows.values_mut().flatten() {
-            _ = window.drop_image(image.clone());
+            window.drop_image(image.clone()).log_err();
         }
 
         // remove the texture from the current window
         if let Some(window) = current_window {
-            _ = window.drop_image(image);
+            window.drop_image(image).log_err();
         }
     }
 

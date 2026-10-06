@@ -2440,6 +2440,10 @@ impl Window {
     /// the contents of the new [`Scene`], use [`Self::present`].
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+        let atlas_frame = self.sprite_atlas.begin_frame();
+        if self.interaction.rendered_frame.atlas_epoch != atlas_frame.epoch() {
+            self.force_refresh();
+        }
         #[cfg(feature = "frame-diagnostics")]
         let draw_start = Instant::now();
         #[cfg(feature = "frame-diagnostics")]
@@ -2487,6 +2491,9 @@ impl Window {
         self.interaction
             .next_frame
             .finish(&mut self.interaction.rendered_frame);
+        self.interaction.next_frame.atlas_epoch = self
+            .sprite_atlas
+            .finish_frame(atlas_frame, self.interaction.next_frame.scene.atlas_usage());
 
         self.invalidator.set_phase(DrawPhase::Focus);
         let previous_focus_path = self.interaction.rendered_frame.focus_path();
@@ -4219,13 +4226,18 @@ impl Window {
 
     /// Removes an image from the sprite atlas.
     pub fn drop_image(&mut self, data: Arc<RenderImage>) -> Result<()> {
+        let mut requested_removal = false;
         for frame_index in 0..data.frame_count() {
             let params = RenderImageParams {
                 image_id: data.id,
                 frame_index,
             };
 
-            self.sprite_atlas.remove(&params.clone().into());
+            self.sprite_atlas.remove(&params.into());
+            requested_removal = true;
+        }
+        if requested_removal {
+            self.force_refresh();
         }
 
         Ok(())
@@ -6056,14 +6068,14 @@ mod tests {
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
-        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
-        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
+        IntoElement, ParentElement as _, Pixels, Render, RenderImage, RequestFrameOptions,
+        Styled as _, TestAppContext, Window, WindowAppearance, canvas, div, px, size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
     #[cfg(feature = "frame-diagnostics")]
     use std::ops::Range;
-    use std::{cell::Cell, rc::Rc};
+    use std::{cell::Cell, rc::Rc, sync::Arc};
 
     struct RootView {
         explicit_size: bool,
@@ -6232,9 +6244,83 @@ mod tests {
     struct DiagnosticsPanel;
 
     #[cfg(feature = "frame-diagnostics")]
+    struct AtlasCachedPanel {
+        image: Arc<RenderImage>,
+        render_count: Rc<Cell<usize>>,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct AtlasCachedRoot {
+        panel: Entity<AtlasCachedPanel>,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct DropImageDuringPaintView {
+        image: Arc<RenderImage>,
+        render_count: Rc<Cell<usize>>,
+        drop_on_paint: Rc<Cell<bool>>,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
     impl Render for DiagnosticsPanel {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             div().size_full().child("cached panel")
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for AtlasCachedPanel {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            let image = self.image.clone();
+            canvas(
+                |bounds, _, _| bounds,
+                move |bounds, image_bounds, window, _| {
+                    window
+                        .paint_image(bounds, image_bounds, Default::default(), image, 0, false)
+                        .expect("test image should paint");
+                },
+            )
+            .size_full()
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for AtlasCachedRoot {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .size_full()
+                .child(AnyView::from(self.panel.clone()).cached(StyleRefinement::default()))
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for DropImageDuringPaintView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            let image = self.image.clone();
+            let drop_on_paint = self.drop_on_paint.clone();
+            canvas(
+                |bounds, _, _| bounds,
+                move |bounds, image_bounds, window, _| {
+                    window
+                        .paint_image(
+                            bounds,
+                            image_bounds,
+                            Default::default(),
+                            image.clone(),
+                            0,
+                            false,
+                        )
+                        .expect("test image should paint");
+                    if drop_on_paint.replace(false) {
+                        window
+                            .drop_image(image)
+                            .expect("image removal should queue during paint");
+                    }
+                },
+            )
+            .size_full()
         }
     }
 
@@ -6505,6 +6591,7 @@ mod tests {
             window.draw(cx).clear();
 
             let expected_scene = &window.interaction.rendered_frame.scene;
+            let expected_atlas_epoch = window.interaction.rendered_frame.atlas_epoch;
             let expected_hitbox_count = window.interaction.rendered_frame.hitboxes.len();
             let expected_dispatch_node_count =
                 window.interaction.rendered_frame.dispatch_tree.len();
@@ -6521,6 +6608,7 @@ mod tests {
 
             let built_frame = window.interaction.built_frame(&window.text_input);
             assert!(std::ptr::eq(built_frame.scene, expected_scene));
+            assert_eq!(built_frame.atlas_epoch, expected_atlas_epoch);
             assert_eq!(
                 built_frame.interaction.hitboxes.len(),
                 expected_hitbox_count
@@ -6793,6 +6881,209 @@ mod tests {
                     && timing.input == Some(FrameInputProvenance::Keyboard)
                     && timing.input_to_present.is_some()
         )));
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn atlas_epoch_change_bypasses_cached_paint_replay(cx: &mut TestAppContext) {
+        let frame = image::Frame::new(image::ImageBuffer::from_pixel(
+            1,
+            1,
+            image::Rgba([0, 0, 255, 255]),
+        ));
+        let image = Arc::new(RenderImage::new(smallvec::SmallVec::from_elem(frame, 1)));
+        let render_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let image = image.clone();
+            let render_count = render_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AtlasCachedPanel {
+                    image,
+                    render_count,
+                });
+                AtlasCachedRoot { panel }
+            }
+        });
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw_and_present_for_test(cx);
+        })
+        .expect("atlas cache window should remain open");
+        assert_eq!(render_count.get(), 1);
+        let test_window = cx.test_window(handle);
+
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("atlas cache window should remain open");
+        collector.snapshot();
+
+        window
+            .update(cx, |_, _, cx| cx.notify())
+            .expect("atlas cache root should remain alive");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(render_count.get(), 1);
+        assert!(collector.snapshot().events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Phase(timing) if timing.phase == FramePhase::PaintCacheReplay
+        )));
+
+        cx.update_window(handle, move |_, window, _| window.drop_image(image))
+            .expect("atlas cache window should remain open")
+            .expect("image removal should succeed");
+        collector.snapshot();
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        cx.update_window(handle, |_, window, _| {
+            assert_eq!(
+                window.interaction.rendered_frame.atlas_epoch,
+                window.sprite_atlas.current_epoch()
+            );
+        })
+        .expect("atlas cache window should remain open");
+
+        assert_eq!(render_count.get(), 2);
+        let final_snapshot = collector.snapshot();
+        assert!(!final_snapshot.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Phase(timing) if timing.phase == FramePhase::PaintCacheReplay
+        )));
+        cx.update_window(handle, |_, window, _| {
+            let epoch = window.interaction.rendered_frame.atlas_epoch;
+            window.present_for_test();
+            assert_eq!(window.interaction.rendered_frame.atlas_epoch, epoch);
+        })
+        .expect("atlas cache window should remain open");
+        assert_eq!(render_count.get(), 2);
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn dropping_an_image_refreshes_each_window_at_its_own_epoch(cx: &mut TestAppContext) {
+        let frame = image::Frame::new(image::ImageBuffer::from_pixel(
+            1,
+            1,
+            image::Rgba([0, 255, 0, 255]),
+        ));
+        let image = Arc::new(RenderImage::new(smallvec::SmallVec::from_elem(frame, 1)));
+        let first_render_count = Rc::new(Cell::new(0));
+        let second_render_count = Rc::new(Cell::new(0));
+
+        let first_window = cx.add_window({
+            let image = image.clone();
+            let render_count = first_render_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AtlasCachedPanel {
+                    image,
+                    render_count,
+                });
+                AtlasCachedRoot { panel }
+            }
+        });
+        let second_window = cx.add_window({
+            let image = image.clone();
+            let render_count = second_render_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AtlasCachedPanel {
+                    image,
+                    render_count,
+                });
+                AtlasCachedRoot { panel }
+            }
+        });
+        let first_handle: AnyWindowHandle = first_window.into();
+        let second_handle: AnyWindowHandle = second_window.into();
+        for handle in [first_handle, second_handle] {
+            cx.update_window(handle, |_, window, cx| {
+                window.draw_and_present_for_test(cx);
+            })
+            .expect("atlas cache window should remain open");
+        }
+        assert_eq!(first_render_count.get(), 1);
+        assert_eq!(second_render_count.get(), 1);
+        for handle in [first_handle, second_handle] {
+            cx.update_window(handle, |_, window, _| {
+                let key = crate::RenderImageParams {
+                    image_id: image.id,
+                    frame_index: 0,
+                };
+                window
+                    .sprite_atlas
+                    .get_or_insert_with(key.into(), &mut || {
+                        Ok(Some((
+                            crate::size(crate::DevicePixels(1), crate::DevicePixels(1)),
+                            std::borrow::Cow::Borrowed(&[0, 255, 0, 255]),
+                        )))
+                    })
+                    .expect("test image should enter each atlas")
+                    .expect("test image builder should return a tile");
+                assert_eq!(window.sprite_atlas.snapshot().entry_count, 1);
+            })
+            .expect("atlas cache window should remain open");
+        }
+
+        let first_test_window = cx.test_window(first_handle);
+        let second_test_window = cx.test_window(second_handle);
+        let first_wake_count = first_test_window.frame_wake_count();
+        let second_wake_count = second_test_window.frame_wake_count();
+        cx.update(|cx| cx.drop_image(image, None));
+        assert!(first_test_window.frame_wake_count() > first_wake_count);
+        assert!(second_test_window.frame_wake_count() > second_wake_count);
+
+        first_test_window.simulate_frame_request(RequestFrameOptions::default());
+        second_test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(first_render_count.get(), 2);
+        assert_eq!(second_render_count.get(), 2);
+        for handle in [first_handle, second_handle] {
+            cx.update_window(handle, |_, window, _| {
+                assert_ne!(
+                    window.interaction.rendered_frame.atlas_epoch,
+                    crate::AtlasEpoch::default()
+                );
+                assert_eq!(
+                    window.interaction.rendered_frame.atlas_epoch,
+                    window.sprite_atlas.current_epoch()
+                );
+            })
+            .expect("atlas cache window should remain open");
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn image_removal_during_paint_schedules_the_retirement_frame(cx: &mut TestAppContext) {
+        let frame = image::Frame::new(image::ImageBuffer::from_pixel(
+            1,
+            1,
+            image::Rgba([255, 0, 0, 255]),
+        ));
+        let image = Arc::new(RenderImage::new(smallvec::SmallVec::from_elem(frame, 1)));
+        let render_count = Rc::new(Cell::new(0));
+        let drop_on_paint = Rc::new(Cell::new(true));
+        let window = cx.add_window({
+            let render_count = render_count.clone();
+            let drop_on_paint = drop_on_paint.clone();
+            move |_, _| DropImageDuringPaintView {
+                image,
+                render_count,
+                drop_on_paint,
+            }
+        });
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw_and_present_for_test(cx);
+        })
+        .expect("atlas retirement window should remain open");
+        assert!(!drop_on_paint.get());
+        assert!(render_count.get() >= 2);
+        cx.update_window(handle, |_, window, _| {
+            assert_ne!(
+                window.interaction.rendered_frame.atlas_epoch,
+                crate::AtlasEpoch::default()
+            );
+            assert_eq!(window.sprite_atlas.snapshot().entry_count, 1);
+        })
+        .expect("atlas retirement window should remain open");
     }
 
     #[cfg(feature = "frame-diagnostics")]

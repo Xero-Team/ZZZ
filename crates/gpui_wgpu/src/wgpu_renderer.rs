@@ -1082,7 +1082,7 @@ impl WgpuRenderer {
         frame_view: &wgpu::TextureView,
         readback: Option<ReadbackCopy<'_>>,
     ) -> Option<wgpu::SubmissionIndex> {
-        self.atlas.before_frame();
+        self.atlas.flush_uploads();
         self.ensure_intermediate_textures();
 
         let gamma_params = GammaParams {

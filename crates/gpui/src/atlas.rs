@@ -53,13 +53,17 @@ impl From<RenderImageParams> for AtlasKey {
 
 #[expect(missing_docs)]
 pub trait PlatformAtlas {
-    /// The builder runs with the atlas locked and must not re-enter the same atlas.
+    /// The builder runs without the atlas lock. Concurrent misses may invoke it
+    /// more than once, but insertion double-checks before creating residency.
     fn get_or_insert_with<'a>(
         &self,
         key: AtlasKey,
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>>;
     fn remove(&self, key: &AtlasKey);
+    fn begin_frame(&self) -> AtlasFrame;
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch;
+    fn current_epoch(&self) -> AtlasEpoch;
 
     /// Returns a point-in-time view of atlas residency and activity.
     fn snapshot(&self) -> AtlasSnapshot {
@@ -130,6 +134,25 @@ impl AtlasFrameId {
     }
 }
 
+/// Identifies one in-progress atlas frame and the epoch it observes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AtlasFrame {
+    id: AtlasFrameId,
+    epoch: AtlasEpoch,
+}
+
+impl AtlasFrame {
+    /// Returns this frame's monotonic identifier.
+    pub fn id(self) -> AtlasFrameId {
+        self.id
+    }
+
+    /// Returns the atlas epoch observed before frame construction.
+    pub fn epoch(self) -> AtlasEpoch {
+        self.epoch
+    }
+}
+
 /// Atlas resources referenced by one completed scene.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AtlasUsage {
@@ -138,7 +161,8 @@ pub struct AtlasUsage {
 }
 
 impl AtlasUsage {
-    pub(crate) fn insert(&mut self, tile: AtlasTile) {
+    /// Records one visible tile and its texture page.
+    pub fn insert(&mut self, tile: AtlasTile) {
         self.texture_ids.insert(tile.texture_id);
         self.tile_ids.insert(tile.tile_id);
     }
@@ -218,14 +242,15 @@ struct AtlasConfiguration {
 
 struct AtlasEntry {
     tile: AtlasTile,
-    allocation_id: etagere::AllocId,
+    retired: bool,
 }
 
 struct AtlasPage {
     texture_id: AtlasTextureId,
     size: Size<DevicePixels>,
     allocator: etagere::BucketedAtlasAllocator,
-    live_entry_count: usize,
+    entry_ids: FxHashSet<TileId>,
+    active_entry_count: usize,
 }
 
 impl AtlasPage {
@@ -241,15 +266,22 @@ impl AtlasPage {
 }
 
 struct AtlasState<Backend> {
-    entries_by_key: FxHashMap<AtlasKey, AtlasEntry>,
+    tile_ids_by_key: FxHashMap<AtlasKey, TileId>,
+    entries_by_tile_id: FxHashMap<TileId, AtlasEntry>,
     pages: Vec<AtlasPage>,
     configuration: AtlasConfiguration,
     next_texture_id: u32,
     next_tile_id: u32,
+    next_frame_id: u64,
+    epoch: AtlasEpoch,
+    active_frame: Option<AtlasFrame>,
+    completed_usage: AtlasUsage,
+    pending_removals: FxHashSet<AtlasKey>,
     hits: u64,
     misses: u64,
     allocations: u64,
     removals: u64,
+    retirements: u64,
     backend: Backend,
 }
 
@@ -260,7 +292,8 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         max_texture_size: Size<DevicePixels>,
     ) -> Self {
         Self {
-            entries_by_key: FxHashMap::default(),
+            tile_ids_by_key: FxHashMap::default(),
+            entries_by_tile_id: FxHashMap::default(),
             pages: Vec::new(),
             configuration: AtlasConfiguration {
                 default_page_size,
@@ -268,16 +301,26 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             },
             next_texture_id: 0,
             next_tile_id: 0,
+            next_frame_id: 0,
+            epoch: AtlasEpoch::default(),
+            active_frame: None,
+            completed_usage: AtlasUsage::default(),
+            pending_removals: FxHashSet::default(),
             hits: 0,
             misses: 0,
             allocations: 0,
             removals: 0,
+            retirements: 0,
             backend,
         }
     }
 
     fn lookup(&mut self, key: &AtlasKey) -> Option<AtlasTile> {
-        if let Some(entry) = self.entries_by_key.get(key) {
+        if let Some(entry) = self
+            .tile_ids_by_key
+            .get(key)
+            .and_then(|tile_id| self.entries_by_tile_id.get(tile_id))
+        {
             self.hits = self.hits.saturating_add(1);
             Some(entry.tile)
         } else {
@@ -292,7 +335,11 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         size: Size<DevicePixels>,
         bytes: &[u8],
     ) -> Result<AtlasTile> {
-        if let Some(entry) = self.entries_by_key.get(&key) {
+        if let Some(entry) = self
+            .tile_ids_by_key
+            .get(&key)
+            .and_then(|tile_id| self.entries_by_tile_id.get(tile_id))
+        {
             return Ok(entry.tile);
         }
 
@@ -324,11 +371,13 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             return Err(error);
         }
 
-        self.entries_by_key.insert(
-            key,
+        self.pages[page_index].entry_ids.insert(tile.tile_id);
+        self.tile_ids_by_key.insert(key, tile.tile_id);
+        self.entries_by_tile_id.insert(
+            tile.tile_id,
             AtlasEntry {
                 tile,
-                allocation_id: allocation.id,
+                retired: false,
             },
         );
         self.allocations = self.allocations.saturating_add(1);
@@ -360,7 +409,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                 continue;
             }
             if let Some(allocation) = page.allocator.allocate(device_size_to_etagere(size)) {
-                page.live_entry_count += 1;
+                page.active_entry_count += 1;
                 return Ok((page_index, allocation));
             }
         }
@@ -389,7 +438,8 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             texture_id,
             size: page_size,
             allocator: etagere::BucketedAtlasAllocator::new(device_size_to_etagere(page_size)),
-            live_entry_count: 0,
+            entry_ids: FxHashSet::default(),
+            active_entry_count: 0,
         };
         let Some(allocation) = page
             .allocator
@@ -398,7 +448,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             self.backend.destroy_texture(texture_id);
             anyhow::bail!("new atlas page could not allocate its requested entry");
         };
-        page.live_entry_count = 1;
+        page.active_entry_count = 1;
         self.pages.push(page);
         Ok((self.pages.len() - 1, allocation))
     }
@@ -424,55 +474,140 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
     fn rollback_allocation(&mut self, page_index: usize, allocation_id: etagere::AllocId) {
         let page = &mut self.pages[page_index];
         page.allocator.deallocate(allocation_id);
-        page.live_entry_count -= 1;
-        if page.live_entry_count == 0 {
+        page.active_entry_count -= 1;
+        if page.active_entry_count == 0 && page.entry_ids.is_empty() {
             let page = self.pages.remove(page_index);
             self.backend.destroy_texture(page.texture_id);
         }
     }
 
-    fn remove(&mut self, key: &AtlasKey) {
-        let Some(entry) = self.entries_by_key.remove(key) else {
-            return;
-        };
-        self.removals = self.removals.saturating_add(1);
+    fn request_remove(&mut self, key: &AtlasKey) {
+        if self.tile_ids_by_key.contains_key(key) {
+            self.pending_removals.insert(key.clone());
+        }
+    }
 
-        let Some(page_index) = self
-            .pages
-            .iter()
-            .position(|page| page.texture_id == entry.tile.texture_id)
-        else {
-            log::error!(
-                "atlas entry {:?} refers to a missing texture page",
-                entry.tile.tile_id
-            );
-            return;
+    fn begin_frame(&mut self) -> AtlasFrame {
+        debug_assert!(
+            self.active_frame.is_none(),
+            "an atlas frame must finish before another begins"
+        );
+        self.apply_pending_removals();
+        let id = AtlasFrameId(self.next_frame_id);
+        self.next_frame_id = self
+            .next_frame_id
+            .checked_add(1)
+            .expect("invariant: atlas frame ID space is exhausted");
+        let frame = AtlasFrame {
+            id,
+            epoch: self.epoch,
         };
-        let page = &mut self.pages[page_index];
-        page.allocator.deallocate(entry.allocation_id);
-        page.live_entry_count -= 1;
-        if page.live_entry_count == 0 {
+        self.active_frame = Some(frame);
+        frame
+    }
+
+    fn finish_frame(&mut self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        debug_assert_eq!(
+            self.active_frame,
+            Some(frame),
+            "atlas frame token must match the active build"
+        );
+        debug_assert_eq!(
+            frame.epoch, self.epoch,
+            "atlas epoch cannot change while a frame is being built"
+        );
+        self.active_frame = None;
+        self.completed_usage = usage.clone();
+        self.destroy_unreferenced_retired_pages();
+        self.epoch
+    }
+
+    fn apply_pending_removals(&mut self) {
+        let pending_removals = std::mem::take(&mut self.pending_removals);
+        let mut changed = false;
+        for key in pending_removals {
+            let Some(tile_id) = self.tile_ids_by_key.remove(&key) else {
+                continue;
+            };
+            let Some(entry) = self.entries_by_tile_id.get_mut(&tile_id) else {
+                log::error!("atlas key referred to missing tile {tile_id:?}");
+                continue;
+            };
+            if entry.retired {
+                continue;
+            }
+            entry.retired = true;
+            let texture_id = entry.tile.texture_id;
+            let Some(page) = self
+                .pages
+                .iter_mut()
+                .find(|page| page.texture_id == texture_id)
+            else {
+                log::error!("atlas tile {tile_id:?} referred to a missing page");
+                continue;
+            };
+            page.active_entry_count -= 1;
+            self.removals = self.removals.saturating_add(1);
+            self.retirements = self.retirements.saturating_add(1);
+            changed = true;
+        }
+        if changed {
+            self.advance_epoch();
+        }
+    }
+
+    fn destroy_unreferenced_retired_pages(&mut self) {
+        for page_index in (0..self.pages.len()).rev() {
+            let page = &self.pages[page_index];
+            if page.active_entry_count > 0 || self.completed_usage.contains_texture(page.texture_id)
+            {
+                continue;
+            }
             let page = self.pages.remove(page_index);
+            for tile_id in page.entry_ids {
+                self.entries_by_tile_id.remove(&tile_id);
+            }
             self.backend.destroy_texture(page.texture_id);
         }
     }
 
     fn clear(&mut self) {
+        debug_assert!(
+            self.active_frame.is_none(),
+            "atlas resources cannot be cleared during frame construction"
+        );
+        let removed_entries = self.tile_ids_by_key.len();
         self.removals = self
             .removals
-            .saturating_add(u64::try_from(self.entries_by_key.len()).unwrap_or(u64::MAX));
-        self.entries_by_key.clear();
+            .saturating_add(u64::try_from(removed_entries).unwrap_or(u64::MAX));
+        self.retirements = self
+            .retirements
+            .saturating_add(u64::try_from(removed_entries).unwrap_or(u64::MAX));
+        self.tile_ids_by_key.clear();
+        self.entries_by_tile_id.clear();
         self.pages.clear();
+        self.pending_removals.clear();
+        self.completed_usage.clear();
         self.backend.clear_textures();
+        self.advance_epoch();
+    }
+
+    fn advance_epoch(&mut self) {
+        self.epoch.0 = self
+            .epoch
+            .0
+            .checked_add(1)
+            .expect("invariant: atlas epoch space is exhausted");
     }
 
     fn snapshot(&self) -> AtlasSnapshot {
         let mut snapshot = self.backend.snapshot();
-        snapshot.entry_count = self.entries_by_key.len();
+        snapshot.entry_count = self.tile_ids_by_key.len();
         snapshot.hits = self.hits;
         snapshot.misses = self.misses;
         snapshot.allocations = self.allocations;
         snapshot.removals = self.removals;
+        snapshot.retirements = self.retirements;
         if self.backend.stores_texture_pages() {
             snapshot.page_count = self.pages.len();
             snapshot.resident_bytes = self.pages.iter().fold(0usize, |total, page| {
@@ -527,7 +662,19 @@ impl<Backend: AtlasBackend> Atlas<Backend> {
     }
 
     pub fn remove(&self, key: &AtlasKey) {
-        self.state.lock().remove(key);
+        self.state.lock().request_remove(key);
+    }
+
+    pub fn begin_frame(&self) -> AtlasFrame {
+        self.state.lock().begin_frame()
+    }
+
+    pub fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.state.lock().finish_frame(frame, usage)
+    }
+
+    pub fn current_epoch(&self) -> AtlasEpoch {
+        self.state.lock().epoch
     }
 
     pub fn snapshot(&self) -> AtlasSnapshot {
@@ -559,7 +706,7 @@ impl<Backend: AtlasBackend> Atlas<Backend> {
 
     #[cfg(test)]
     fn contains(&self, key: &AtlasKey) -> bool {
-        self.state.lock().entries_by_key.contains_key(key)
+        self.state.lock().tile_ids_by_key.contains_key(key)
     }
 }
 
@@ -574,6 +721,18 @@ impl<Backend: AtlasBackend> PlatformAtlas for Atlas<Backend> {
 
     fn remove(&self, key: &AtlasKey) {
         self.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.current_epoch()
     }
 
     fn snapshot(&self) -> AtlasSnapshot {
@@ -628,6 +787,18 @@ impl PlatformAtlas for HeadlessAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.0.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.0.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.0.current_epoch()
     }
 
     fn snapshot(&self) -> AtlasSnapshot {
@@ -776,6 +947,22 @@ mod tests {
         Ok(Some((TILE_SIZE, Cow::Borrowed(&[0, 0, 0, 255]))))
     }
 
+    fn usage(tiles: impl IntoIterator<Item = AtlasTile>) -> AtlasUsage {
+        let mut usage = AtlasUsage::default();
+        for tile in tiles {
+            usage.insert(tile);
+        }
+        usage
+    }
+
+    fn complete_frame(
+        atlas: &Atlas<RecordingAtlasBackend>,
+        tiles: impl IntoIterator<Item = AtlasTile>,
+    ) -> AtlasEpoch {
+        let frame = atlas.begin_frame();
+        atlas.finish_frame(frame, &usage(tiles))
+    }
+
     #[test]
     fn only_successful_inserts_are_cached() -> Result<()> {
         let atlas = atlas();
@@ -896,12 +1083,20 @@ mod tests {
         let first = atlas
             .get_or_insert_with(first_key.clone(), &mut build_tile)?
             .context("first tile should exist")?;
+        assert_eq!(complete_frame(&atlas, [first]), AtlasEpoch::default());
         atlas.remove(&first_key);
+        assert!(atlas.contains(&first_key));
+        let replacement_frame = atlas.begin_frame();
+        assert_ne!(replacement_frame.epoch(), AtlasEpoch::default());
+        assert!(!atlas.contains(&first_key));
+        assert!(atlas.with_backend(|backend| backend.textures.contains(&first.texture_id)));
         let second = atlas
             .get_or_insert_with(second_key, &mut build_tile)?
             .context("second tile should exist")?;
         assert_ne!(first.texture_id, second.texture_id);
         assert_ne!(first.tile_id, second.tile_id);
+        atlas.finish_frame(replacement_frame, &usage([second]));
+        assert!(!atlas.with_backend(|backend| backend.textures.contains(&first.texture_id)));
 
         atlas.clear();
         let third = atlas
@@ -920,24 +1115,80 @@ mod tests {
         let atlas = atlas();
         let key = image_key(1);
         let other_key = image_key(2);
-        atlas
+        let tile = atlas
             .get_or_insert_with(key.clone(), &mut build_tile)?
             .context("builder should produce a tile")?;
-        atlas
+        let other_tile = atlas
             .get_or_insert_with(other_key.clone(), &mut build_tile)?
             .context("builder should produce another tile")?;
+        complete_frame(&atlas, [tile, other_tile]);
 
         atlas.remove(&key);
         atlas.remove(&key);
+        assert!(atlas.contains(&key));
+        let frame = atlas.begin_frame();
         assert!(!atlas.contains(&key));
         assert!(atlas.contains(&other_key));
         assert_eq!(atlas.snapshot().page_count, 1);
+        assert_eq!(atlas.snapshot().retirements, 1);
+        atlas.finish_frame(frame, &usage([other_tile]));
 
         atlas.clear();
         assert!(!atlas.contains(&other_key));
         assert_eq!(atlas.snapshot().page_count, 0);
         assert_eq!(atlas.snapshot().removals, 2);
         assert_eq!(atlas.with_backend(|backend| backend.clear_calls), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn removal_during_frame_build_is_deferred_to_the_next_boundary() -> Result<()> {
+        let atlas = atlas();
+        let key = image_key(1);
+        let tile = atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)?
+            .context("tile should exist")?;
+        complete_frame(&atlas, [tile]);
+
+        let frame = atlas.begin_frame();
+        let frame_epoch = frame.epoch();
+        atlas.remove(&key);
+        assert!(atlas.contains(&key));
+        assert_eq!(atlas.current_epoch(), frame_epoch);
+        atlas.finish_frame(frame, &usage([tile]));
+
+        let next_frame = atlas.begin_frame();
+        assert_ne!(next_frame.epoch(), frame_epoch);
+        assert!(!atlas.contains(&key));
+        atlas.finish_frame(next_frame, &AtlasUsage::default());
+        Ok(())
+    }
+
+    #[test]
+    fn retired_suballocations_remain_tombstones() -> Result<()> {
+        let atlas = atlas();
+        let retired_key = image_key(1);
+        let keeper_key = image_key(2);
+        let replacement_key = image_key(3);
+        let retired = atlas
+            .get_or_insert_with(retired_key.clone(), &mut build_tile)?
+            .context("retired tile should exist")?;
+        let keeper = atlas
+            .get_or_insert_with(keeper_key, &mut build_tile)?
+            .context("keeper tile should exist")?;
+        complete_frame(&atlas, [retired, keeper]);
+
+        atlas.remove(&retired_key);
+        let frame = atlas.begin_frame();
+        let replacement = atlas
+            .get_or_insert_with(replacement_key, &mut build_tile)?
+            .context("replacement tile should exist")?;
+        assert_ne!(replacement.tile_id, retired.tile_id);
+        assert_ne!(
+            (replacement.texture_id, replacement.bounds),
+            (retired.texture_id, retired.bounds)
+        );
+        atlas.finish_frame(frame, &usage([keeper, replacement]));
         Ok(())
     }
 

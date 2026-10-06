@@ -88,6 +88,134 @@ fn tile(renderer: &WgpuHeadlessRenderer, key: AtlasKey, bytes: Vec<u8>) -> Atlas
         .expect("atlas insert should produce a tile")
 }
 
+fn image_tile(
+    atlas: &Arc<dyn PlatformAtlas>,
+    key: AtlasKey,
+    size: Size<DevicePixels>,
+    bgra: [u8; 4],
+) -> anyhow::Result<AtlasTile> {
+    let pixel_count = (size.width.0 as usize).saturating_mul(size.height.0 as usize);
+    atlas
+        .get_or_insert_with(key, &mut || {
+            Ok(Some((
+                size,
+                Cow::Owned((0..pixel_count).flat_map(|_| bgra).collect()),
+            )))
+        })?
+        .ok_or_else(|| anyhow::anyhow!("image builder returned no tile"))
+}
+
+fn image_scene(tile: AtlasTile) -> Scene {
+    let sprite_bounds = bounds(0.0, 0.0, 8.0, 8.0, 1.0);
+    let mut scene = Scene::default();
+    scene.insert_primitive(PolychromeSprite {
+        order: 0,
+        pad: 0,
+        grayscale: PaddedBool32::from(false),
+        opacity: 1.0,
+        bounds: sprite_bounds,
+        content_mask: ContentMask {
+            bounds: sprite_bounds,
+        },
+        corner_radii: Corners::default(),
+        tile,
+    });
+    scene.finish();
+    scene
+}
+
+fn assert_pixel(image: &image::RgbaImage, expected: [u8; 4]) {
+    assert_eq!(image.get_pixel(4, 4).0, expected);
+}
+
+fn assert_retired_tile_case(
+    renderer: &mut WgpuHeadlessRenderer,
+    case_name: &str,
+    image_size: Size<DevicePixels>,
+    first_image_id: usize,
+    old_content_survives_page_retirement: bool,
+) -> anyhow::Result<()> {
+    let atlas = renderer.sprite_atlas();
+    let first_key = AtlasKey::Image(RenderImageParams {
+        image_id: ImageId(first_image_id),
+        frame_index: 0,
+    });
+    let second_key = AtlasKey::Image(RenderImageParams {
+        image_id: ImageId(first_image_id + 1),
+        frame_index: 0,
+    });
+
+    let first_frame = atlas.begin_frame();
+    let first_tile = image_tile(&atlas, first_key.clone(), image_size, [0, 0, 255, 255])?;
+    let first_scene = image_scene(first_tile);
+    atlas.finish_frame(first_frame, first_scene.atlas_usage());
+    assert_pixel(
+        &renderer.render_scene_to_image(
+            &first_scene,
+            Size {
+                width: DevicePixels(8),
+                height: DevicePixels(8),
+            },
+        )?,
+        [255, 0, 0, 255],
+    );
+
+    atlas.remove(&first_key);
+    let replacement_frame = atlas.begin_frame();
+    let second_tile = image_tile(&atlas, second_key, image_size, [255, 0, 0, 255])?;
+    assert_ne!(first_tile.tile_id, second_tile.tile_id);
+    assert_ne!(
+        (first_tile.texture_id, first_tile.bounds),
+        (second_tile.texture_id, second_tile.bounds)
+    );
+    let second_scene = image_scene(second_tile);
+
+    let old_before_finish = renderer.render_scene_to_image(
+        &first_scene,
+        Size {
+            width: DevicePixels(8),
+            height: DevicePixels(8),
+        },
+    )?;
+    assert_pixel(&old_before_finish, [255, 0, 0, 255]);
+    atlas.finish_frame(replacement_frame, second_scene.atlas_usage());
+
+    let old_after_finish = renderer.render_scene_to_image(
+        &first_scene,
+        Size {
+            width: DevicePixels(8),
+            height: DevicePixels(8),
+        },
+    )?;
+    assert_pixel(
+        &old_after_finish,
+        if old_content_survives_page_retirement {
+            [255, 0, 0, 255]
+        } else {
+            [0, 0, 0, 0]
+        },
+    );
+    let replacement = renderer.render_scene_to_image(
+        &second_scene,
+        Size {
+            width: DevicePixels(8),
+            height: DevicePixels(8),
+        },
+    )?;
+    assert_pixel(&replacement, [0, 0, 255, 255]);
+
+    save_named_output(
+        &old_before_finish,
+        &format!("text-003-{case_name}-old-before-finish"),
+    );
+    save_named_output(
+        &old_after_finish,
+        &format!("text-003-{case_name}-old-after-finish"),
+    );
+    save_named_output(&replacement, &format!("text-003-{case_name}-replacement"));
+    Ok(())
+}
+
 fn primitive_scene(renderer: &WgpuHeadlessRenderer, scale: f32) -> Scene {
     let green: Hsla = gpui::rgb(0x00ff00).into();
     let red: Hsla = gpui::rgb(0xff0000).into();
@@ -631,6 +759,39 @@ fn negative_subpixel_glyph_origin_matches_positive_phase_after_one_pixel_shift()
 -> anyhow::Result<()> {
     assert_negative_subpixel_phase(false)?;
     assert_negative_subpixel_phase(true)
+}
+
+#[test]
+fn retired_tiles_never_sample_replacement_content() -> anyhow::Result<()> {
+    for force_fallback_adapter in [false, true] {
+        let adapter = if force_fallback_adapter {
+            "fallback"
+        } else {
+            "hardware"
+        };
+        let mut renderer = WgpuHeadlessRenderer::new_with_fallback(force_fallback_adapter)?;
+        assert_retired_tile_case(
+            &mut renderer,
+            &format!("{adapter}-suballocation"),
+            Size {
+                width: DevicePixels(8),
+                height: DevicePixels(8),
+            },
+            10,
+            true,
+        )?;
+        assert_retired_tile_case(
+            &mut renderer,
+            &format!("{adapter}-page"),
+            Size {
+                width: DevicePixels(1024),
+                height: DevicePixels(1024),
+            },
+            20,
+            false,
+        )?;
+    }
+    Ok(())
 }
 
 #[test]

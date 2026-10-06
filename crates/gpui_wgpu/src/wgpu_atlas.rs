@@ -1,8 +1,9 @@
 use anyhow::{Context as _, Result};
 use collections::FxHashMap;
 use gpui::{
-    Atlas, AtlasBackend, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor, AtlasTextureId,
-    AtlasTextureKind, AtlasTile, AtlasUpload, Bounds, DevicePixels, PlatformAtlas, Size,
+    Atlas, AtlasBackend, AtlasEpoch, AtlasFrame, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor,
+    AtlasTextureId, AtlasTextureKind, AtlasTile, AtlasUpload, AtlasUsage, Bounds, DevicePixels,
+    PlatformAtlas, Size,
 };
 use std::{borrow::Cow, sync::Arc};
 
@@ -62,7 +63,7 @@ impl WgpuAtlas {
         )
     }
 
-    pub fn before_frame(&self) {
+    pub fn flush_uploads(&self) {
         self.0.update_backend(WgpuAtlasTextures::flush_uploads);
     }
 
@@ -114,6 +115,18 @@ impl PlatformAtlas for WgpuAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.0.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.0.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.0.current_epoch()
     }
 
     fn snapshot(&self) -> AtlasSnapshot {
@@ -308,8 +321,21 @@ mod tests {
         })
     }
 
+    fn usage(tiles: impl IntoIterator<Item = AtlasTile>) -> AtlasUsage {
+        let mut usage = AtlasUsage::default();
+        for tile in tiles {
+            usage.insert(tile);
+        }
+        usage
+    }
+
+    fn complete_frame(atlas: &WgpuAtlas, tiles: impl IntoIterator<Item = AtlasTile>) {
+        let frame = atlas.begin_frame();
+        atlas.finish_frame(frame, &usage(tiles));
+    }
+
     #[test]
-    fn before_frame_skips_uploads_for_removed_texture() -> anyhow::Result<()> {
+    fn flush_uploads_skips_uploads_for_retired_texture() -> anyhow::Result<()> {
         let (device, queue) = test_device_and_queue()?;
 
         let atlas = WgpuAtlas::new(device, queue, wgpu::TextureFormat::Bgra8Unorm);
@@ -324,11 +350,14 @@ mod tests {
         let mut build = || Ok(Some((size, Cow::Owned(vec![0, 0, 0, 255]))));
 
         // Regression test: before the fix, this panicked in flush_uploads
-        atlas
+        let tile = atlas
             .get_or_insert_with(key.clone(), &mut build)?
             .expect("tile should be created");
+        complete_frame(&atlas, [tile]);
         atlas.remove(&key);
-        atlas.before_frame();
+        let frame = atlas.begin_frame();
+        atlas.finish_frame(frame, &AtlasUsage::default());
+        atlas.flush_uploads();
         Ok(())
     }
 
@@ -359,7 +388,7 @@ mod tests {
         assert_eq!(pending.pending_upload_bytes, 4);
         assert_eq!(pending.upload_calls, 0);
 
-        atlas.before_frame();
+        atlas.flush_uploads();
         let uploaded = atlas.snapshot();
         assert_eq!(uploaded.pending_uploads, 0);
         assert_eq!(uploaded.pending_upload_bytes, 0);
@@ -373,7 +402,16 @@ mod tests {
             .expect("cached tile should remain present");
         assert_eq!(atlas.snapshot().hits, 1);
 
+        complete_frame(
+            &atlas,
+            [atlas
+                .get_or_insert_with(key.clone(), &mut build)?
+                .context("cached tile should remain present")?],
+        );
         atlas.remove(&key);
+        let frame = atlas.begin_frame();
+        assert_eq!(atlas.snapshot().page_count, 1);
+        atlas.finish_frame(frame, &AtlasUsage::default());
         let removed = atlas.snapshot();
         assert_eq!(removed.page_count, 0);
         assert_eq!(removed.resident_bytes, 0);
@@ -405,7 +443,9 @@ mod tests {
             .context("first tile should be created")?;
         assert!(atlas.get_texture_info(first.texture_id).is_some());
 
+        let epoch_before_clear = atlas.current_epoch();
         atlas.clear();
+        assert_ne!(atlas.current_epoch(), epoch_before_clear);
         assert!(atlas.get_texture_info(first.texture_id).is_none());
         let second = atlas
             .get_or_insert_with(second_key, &mut build)?
@@ -417,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_deallocates_tile_space_for_reuse() -> anyhow::Result<()> {
+    fn remove_keeps_tile_space_as_a_tombstone() -> anyhow::Result<()> {
         let (device, queue) = test_device_and_queue()?;
         let atlas = WgpuAtlas::new(device, queue, wgpu::TextureFormat::Bgra8Unorm);
 
@@ -453,11 +493,14 @@ mod tests {
         let keeper_tile = insert(keeper_key, small);
         let tile_a = insert(big_key_a.clone(), big);
         assert_eq!(keeper_tile.texture_id, tile_a.texture_id);
+        complete_frame(&atlas, [keeper_tile, tile_a]);
 
         atlas.remove(&big_key_a);
+        let frame = atlas.begin_frame();
         let tile_b = insert(big_key_b, big);
-        assert_eq!(tile_b.texture_id, keeper_tile.texture_id);
+        assert_ne!(tile_b.texture_id, keeper_tile.texture_id);
         assert_ne!(tile_b.tile_id, tile_a.tile_id);
+        atlas.finish_frame(frame, &usage([keeper_tile, tile_b]));
         Ok(())
     }
 
