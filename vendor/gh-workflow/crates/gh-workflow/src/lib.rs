@@ -1,5 +1,11 @@
 extern crate proc_macro;
 
+macro_rules! merge_option_fields {
+    ($target:ident, $source:ident, $($field:ident),+ $(,)?) => {
+        $(merge::option::overwrite_none(&mut $target.$field, $source.$field);)+
+    };
+}
+
 mod artifacts;
 mod cargo;
 mod concurrency;
