@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 2 进行中                              |
+| 当前阶段      | 阶段 3 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -168,7 +168,7 @@ re-export，再集中 page allocator 和 lock 外 builder。
 
 ### 阶段 2：抽离 atlas domain 和公共 allocator
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 2A 状态：`COMPLETE`
 
@@ -191,13 +191,62 @@ re-export，再集中 page allocator 和 lock 外 builder。
 
 2A 提交：`ed5f4d49cb5569e7885c7ad315006a72caa8d3dc`（signed）。
 
-2B 状态：`IN PROGRESS`
+2B 状态：`COMPLETE`
 
-下一步把 `BucketedAtlasAllocator`、page size、page/entry metadata 和 monotonic identity
-集中到公共 core；三个 backend 仅保留 GPU texture storage/upload/resource lookup，并把 miss
-builder 移出 atlas lock 后 double-check insert。
+- 公共 `Atlas<Backend>` 现在唯一拥有 `BucketedAtlasAllocator`、page size、page/entry
+  metadata、resident-page byte accounting、key lookup 和 allocation rollback。
+- `AtlasTextureId` 与 `TileId` 在 atlas 实例生命周期内分别单调分配，不从 texture slot
+  或 etagere `AllocId` 派生；remove、clear 和 device reset 后均不复用，溢出返回显式
+  error 并回滚 allocation。
+- WGPU、Metal、DirectX backend 使用 monotonic ID keyed storage，只实现 texture
+  create/upload/destroy/clear 和 renderer resource lookup；backend crate 已删除 etagere
+  dependency、free list 和 live-key counter。
+- atlas miss 先在锁内查询，释放锁执行 raster/image builder，再重新加锁 double-check；
+  concurrent miss 可以重复构建 bytes，但只产生一个 resident entry 和一次 upload。
+- upload 或 ID allocation 失败会回滚 suballocation；oversized entry 不创建空 texture。
+- clear/device reset 清空 resource lookup，但保留 ID counters，因此旧 texture identity
+  不会解析到新 resource。
 
-### 阶段 3–9
+验证：
+
+| 命令或检查                                                                                       | 结果              | 说明                                                                         |
+| ------------------------------------------------------------------------------------------------ | ----------------- | ---------------------------------------------------------------------------- |
+| `cargo test --locked -p gpui atlas::tests`                                                       | `PASS`            | 8 allocator/rollback/concurrency/identity/bounds tests                       |
+| `cargo test --locked -p gpui`                                                                    | `PASS`            | 239 unit + 1 integration，0 failed                                           |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                       | `PASS`            | 16 unit passed、1 ignored；3 headless passed、1 runner ignored               |
+| `cargo check --locked -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                        | `PASS`            | 当前 host package graph                                                      |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                        | `PASS`            | Metal atlas 与 tests cross-compile；仅既有 vendor warnings                   |
+| isolated `cargo check --target x86_64-pc-windows-gnu --tests --offline` for `directx_atlas.rs`   | `PASS`            | `.tmp/text-rendering-refactor/windows-crosscheck/`                           |
+| full `cargo check --locked -p gpui_windows --target x86_64-pc-windows-gnu --no-default-features` | `FAIL (baseline)` | 首先缺少 `async-std/unstable`；启用后暴露既有 `windows-core 0.62/0.100` 冲突 |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                             | `PASS`            | all-target/all-feature release clippy + philosophy                           |
+| `cargo fmt --all -- --check`                                                                     | `PASS`            | workspace Rust formatting                                                    |
+| backend allocator-policy search                                                                  | `PASS`            | backend 中无 etagere、free-list 或 live-key policy                           |
+
+阶段 2 TEXT-001 复跑：`PASS`。hardware 与 fallback 仍为 9 pages、34,603,008
+resident bytes、9,502 entries、21,503,356 uploaded bytes 和 9,502 upload calls，证明
+allocator 集中化没有改变 baseline residency/upload semantics。
+
+原始 artifact：
+
+- `.tmp/text-rendering-refactor/phase-2/text-001-hardware.json`，SHA-256
+  `44914c05eadb40a9b3b44f238118cc5a43979c02b4d05e4f7183ca60451ec35d`
+- `.tmp/text-rendering-refactor/phase-2/text-001-fallback.json`，SHA-256
+  `77c78f6856c02acbecd48c3fb2342747857f3e40979a02899bc7064cb1c600e3`
+
+2B 提交：`c84404c1e8b59e596fd548a1d3d8bd00a2f6b6e4`（signed）。
+
+下一步：阶段 3 增加 `AtlasEpoch`、`AtlasFrameId`、pending removal、retirement 和
+completed-frame usage；remove 不再 deallocate，epoch mismatch 必须禁用 cached paint
+replay。
+
+### 阶段 3：frame-aware identity 和 retirement
+
+状态：`IN PROGRESS`
+
+尚未修改代码。先固定 Scene atlas usage 与 completed-frame epoch contract，再把 explicit
+remove 和 device clear 接到同一 retirement/full-refresh path。
+
+### 阶段 4–9
 
 状态：`NOT STARTED`
 
