@@ -2524,6 +2524,59 @@ mod tests {
     }
 
     #[test]
+    fn loopback_remote_provider_loads_media_bytes() {
+        let result = block_on(async {
+            let provider = Arc::new(MemoryProvider::new(
+                "loopback-media",
+                vfs::PathEncoding::PortableUtf8,
+            ));
+            let path = ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"image.png".as_slice()],
+            )
+            .map_err(|error| {
+                VfsError::new(
+                    VfsErrorCode::InvalidPath,
+                    VfsOperation::Read,
+                    ProviderId::new("loopback-media-test"),
+                )
+                .with_detail(error.to_string())
+            })?;
+            let expected = b"\x89PNG\r\n\x1a\nprovider-media";
+            let file = provider
+                .open(
+                    &path,
+                    vfs::OpenOptions {
+                        access: vfs::FileAccess::ReadWrite,
+                        create: vfs::CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: vfs::OperationContext::default(),
+                    },
+                )
+                .await?;
+            file.write_at(0, expected, vfs::WriteAtOptions::default())
+                .await?;
+
+            let service = VfsService::default();
+            service.register_provider(8, provider)?;
+            let proxy =
+                RemoteProviderProxy::connect(0, 8, Arc::new(LoopbackVfsTransport::new(service)))
+                    .await?;
+            let loaded =
+                vfs::load_provider_bytes(&proxy, &path, vfs::OperationContext::default()).await?;
+            if loaded.bytes != expected || loaded.metadata.size != expected.len() as u64 {
+                return Err(VfsError::new(
+                    VfsErrorCode::CorruptData,
+                    VfsOperation::Read,
+                    ProviderId::new("loopback-media-test"),
+                ));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(result.is_ok(), "loopback media load failed: {result:?}");
+    }
+
+    #[test]
     fn remote_handle_drop_releases_the_server_handle() {
         let result = block_on(async {
             let service = VfsService::default();

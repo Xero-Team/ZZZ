@@ -195,7 +195,7 @@ pub struct RemoteWorktree {
     received_initial_update: bool,
 }
 
-pub type RemoteVfsProviderTask = Shared<Task<Result<Arc<dyn VfsProvider>, Arc<anyhow::Error>>>>;
+pub type RemoteVfsProviderTask = Shared<Task<Result<Arc<dyn VfsProvider>, Arc<VfsError>>>>;
 
 #[derive(Clone)]
 pub struct Snapshot {
@@ -900,7 +900,7 @@ impl Worktree {
                                         executor.timer(REMOTE_VFS_RECONNECT_DELAY).await;
                                     }
                                     Err(error) => {
-                                        return Err(Arc::new(anyhow::Error::new(error)));
+                                        return Err(Arc::new(error));
                                     }
                                 }
                             }
@@ -1048,8 +1048,33 @@ impl Worktree {
     ) -> Task<Result<LoadedBinaryFile>> {
         match self {
             Worktree::Local(this) => this.load_binary_file(path, cx),
-            Worktree::Remote(_) => {
-                Task::ready(Err(anyhow!("remote worktrees can't yet load binary files")))
+            Worktree::Remote(remote_worktree) => {
+                let Some(provider_task) = self.remote_vfs_provider(cx) else {
+                    return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
+                };
+                let Some(entry) = remote_worktree.entry_for_path(path).cloned() else {
+                    return Task::ready(Err(anyhow!("no worktree entry for {path:?}")));
+                };
+                let path = Arc::<RelPath>::from(path);
+                let worktree = cx.weak_entity();
+                cx.background_spawn(async move {
+                    let provider = provider_task.await.map_err(anyhow::Error::new)?;
+                    let provider_path = provider_path_from_legacy_utf8(
+                        path.as_unix_str(),
+                        provider.descriptor().path_encoding,
+                    )?;
+                    let loaded = vfs::load_provider_bytes(
+                        provider.as_ref(),
+                        &provider_path,
+                        vfs::OperationContext::default(),
+                    )
+                    .await?;
+                    let worktree = worktree.upgrade().context("worktree was dropped")?;
+                    Ok(LoadedBinaryFile {
+                        file: File::for_entry(entry, worktree, None),
+                        content: loaded.bytes,
+                    })
+                })
             }
         }
     }

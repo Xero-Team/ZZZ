@@ -156,6 +156,12 @@ pub struct VfsSnapshot {
     range_cache: Arc<Mutex<RangeCacheState>>,
 }
 
+#[derive(Debug)]
+pub struct LoadedProviderBytes {
+    pub bytes: Vec<u8>,
+    pub metadata: EntryMetadata,
+}
+
 impl ResourceRegistry {
     pub fn new(mount_id: MountId, root_path: ProviderPath, budgets: SnapshotBudgets) -> Self {
         let root_id = ResourceId::new(mount_id, 1, 0);
@@ -647,87 +653,10 @@ impl VfsSnapshot {
         path: &ProviderPath,
         context: OperationContext,
     ) -> VfsResult<Vec<u8>> {
-        let metadata = self
-            .provider
-            .stat(
-                path,
-                StatOptions {
-                    context: context.clone(),
-                    ..StatOptions::default()
-                },
-            )
-            .await?;
-        if metadata_is_directory(&metadata) {
-            return Err(self.provider_error(VfsErrorCode::IsDirectory, VfsOperation::Read, path));
-        }
-        let source_version = metadata.content_version.clone();
-        self.registry.intern_metadata(path.clone(), metadata)?;
-        let file = self
-            .provider
-            .open(
-                path,
-                OpenOptions {
-                    access: FileAccess::Read,
-                    create: CreateDisposition::OpenExisting,
-                    expected_version: None,
-                    context: context.clone(),
-                },
-            )
-            .await?;
-        let length = file.len(context.clone()).await?;
-        let length = usize::try_from(length).map_err(|error| {
-            self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
-                .with_source(error)
-        })?;
-        let maximum_range_size = usize::try_from(
-            self.provider.capabilities().limits.maximum_range_size.get(),
-        )
-        .map_err(|error| {
-            self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
-                .with_source(error)
-        })?;
-        let mut bytes = vec![0; length];
-        let mut total_read = 0;
-        while total_read < bytes.len() {
-            let end = total_read
-                .saturating_add(maximum_range_size)
-                .min(bytes.len());
-            let offset = u64::try_from(total_read).map_err(|error| {
-                self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
-                    .with_source(error)
-            })?;
-            let read = file
-                .read_at(offset, &mut bytes[total_read..end], context.clone())
-                .await?;
-            if read == 0 {
-                break;
-            }
-            total_read = total_read.checked_add(read).ok_or_else(|| {
-                self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
-            })?;
-            if total_read > end {
-                return Err(self
-                    .provider_error(VfsErrorCode::CorruptData, VfsOperation::Read, path)
-                    .with_detail("provider returned more bytes than requested"));
-            }
-        }
-        bytes.truncate(total_read);
-        let current_metadata = self
-            .provider
-            .stat(
-                path,
-                StatOptions {
-                    context,
-                    ..StatOptions::default()
-                },
-            )
-            .await?;
-        if current_metadata.content_version != source_version {
-            return Err(self.provider_error(VfsErrorCode::StaleVersion, VfsOperation::Read, path));
-        }
+        let loaded = load_provider_bytes(self.provider.as_ref(), path, context).await?;
         self.registry
-            .intern_metadata(path.clone(), current_metadata)?;
-        Ok(bytes)
+            .intern_metadata(path.clone(), loaded.metadata)?;
+        Ok(loaded.bytes)
     }
 
     fn provider_error(
@@ -937,6 +866,85 @@ impl VfsSnapshot {
         }
         rescan_roots
     }
+}
+
+pub async fn load_provider_bytes(
+    provider: &dyn VfsProvider,
+    path: &ProviderPath,
+    context: OperationContext,
+) -> VfsResult<LoadedProviderBytes> {
+    let provider_error = |code| {
+        VfsError::new(code, VfsOperation::Read, provider.descriptor().id.clone())
+            .with_path(path.clone())
+    };
+    let metadata = provider
+        .stat(
+            path,
+            StatOptions {
+                context: context.clone(),
+                ..StatOptions::default()
+            },
+        )
+        .await?;
+    if metadata_is_directory(&metadata) {
+        return Err(provider_error(VfsErrorCode::IsDirectory));
+    }
+    let source_version = metadata.content_version.clone();
+    let file = provider
+        .open(
+            path,
+            OpenOptions {
+                access: FileAccess::Read,
+                create: CreateDisposition::OpenExisting,
+                expected_version: None,
+                context: context.clone(),
+            },
+        )
+        .await?;
+    let length = usize::try_from(file.len(context.clone()).await?)
+        .map_err(|error| provider_error(VfsErrorCode::TooLarge).with_source(error))?;
+    let maximum_range_size =
+        usize::try_from(provider.capabilities().limits.maximum_range_size.get())
+            .map_err(|error| provider_error(VfsErrorCode::TooLarge).with_source(error))?;
+    let mut bytes = vec![0; length];
+    let mut total_read = 0;
+    while total_read < bytes.len() {
+        let end = total_read
+            .saturating_add(maximum_range_size)
+            .min(bytes.len());
+        let offset = u64::try_from(total_read)
+            .map_err(|error| provider_error(VfsErrorCode::TooLarge).with_source(error))?;
+        let read = file
+            .read_at(offset, &mut bytes[total_read..end], context.clone())
+            .await?;
+        if read == 0 {
+            break;
+        }
+        total_read = total_read
+            .checked_add(read)
+            .ok_or_else(|| provider_error(VfsErrorCode::TooLarge))?;
+        if total_read > end {
+            return Err(provider_error(VfsErrorCode::CorruptData)
+                .with_detail("provider returned more bytes than requested"));
+        }
+    }
+    bytes.truncate(total_read);
+    let current_metadata = provider
+        .stat(
+            path,
+            StatOptions {
+                context,
+                ..StatOptions::default()
+            },
+        )
+        .await?;
+    if current_metadata.content_version != source_version {
+        return Err(provider_error(VfsErrorCode::StaleVersion));
+    }
+    Ok(LoadedProviderBytes {
+        bytes,
+        metadata: current_metadata,
+    })
 }
 
 fn coalesce_delta_changes(delta: &mut SnapshotDelta) {
