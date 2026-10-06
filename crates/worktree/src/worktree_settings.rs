@@ -5,6 +5,7 @@ use util::{
     paths::{PathMatcher, PathStyle},
     rel_path::RelPath,
 };
+use vfs::{NativePath, NativePathRoot, ProviderPath};
 
 #[derive(Clone, PartialEq, Eq, RegisterSetting)]
 pub struct WorktreeSettings {
@@ -24,8 +25,17 @@ pub struct WorktreeSettings {
 
 impl WorktreeSettings {
     pub fn is_path_private(&self, path: &RelPath) -> bool {
+        self.is_std_path_private(path.as_std_path())
+    }
+
+    pub fn is_provider_path_private(&self, path: &ProviderPath) -> Result<bool, vfs::PathError> {
+        let path = NativePath::new(NativePathRoot::Relative, path.clone())?.to_local_path_buf()?;
+        Ok(self.is_std_path_private(&path))
+    }
+
+    fn is_std_path_private(&self, path: &Path) -> bool {
         path.ancestors()
-            .any(|ancestor| self.private_files.is_match(ancestor))
+            .any(|ancestor| self.private_files.is_match_std_path(ancestor))
     }
 
     pub fn is_path_excluded(&self, path: &RelPath) -> bool {

@@ -838,28 +838,16 @@ impl Worktree {
             .id
             .clone();
         Some(Arc::new(move |provider_path, operation| {
-            let relative_path = match provider_path_to_legacy_utf8(provider_path) {
-                Ok(path) => RelPath::from_proto(&path).map_err(|error| {
-                    VfsError::new(VfsErrorCode::InvalidPath, operation, provider_id.clone())
-                        .with_path(provider_path.clone())
-                        .with_detail(error.to_string())
-                })?,
-                Err(CompatibilityPathError::UnrepresentableComponent { .. }) => return Ok(()),
-                Err(error) => {
-                    return Err(VfsError::new(
-                        VfsErrorCode::InvalidPath,
-                        operation,
-                        provider_id.clone(),
-                    )
-                    .with_path(provider_path.clone())
-                    .with_detail(error.to_string()));
-                }
-            };
             let authorization_policy = authorization_policy.lock();
             if !authorization_policy.share_private_files
                 && authorization_policy
                     .settings
-                    .is_path_private(&relative_path)
+                    .is_provider_path_private(provider_path)
+                    .map_err(|error| {
+                        VfsError::new(VfsErrorCode::InvalidPath, operation, provider_id.clone())
+                            .with_path(provider_path.clone())
+                            .with_source(error)
+                    })?
             {
                 return Err(VfsError::new(
                     VfsErrorCode::PermissionDenied,
