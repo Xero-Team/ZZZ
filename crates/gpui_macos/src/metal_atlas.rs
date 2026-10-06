@@ -2,8 +2,8 @@ use anyhow::{Context as _, Result};
 use derive_more::{Deref, DerefMut};
 use etagere::BucketedAtlasAllocator;
 use gpui::{
-    AtlasBackend, AtlasKey, AtlasState, AtlasTextureId, AtlasTextureKind, AtlasTextureList,
-    AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
+    AtlasBackend, AtlasKey, AtlasSnapshot, AtlasState, AtlasTextureId, AtlasTextureKind,
+    AtlasTextureList, AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
 };
 use metal::Device;
 use parking_lot::Mutex;
@@ -18,6 +18,8 @@ impl MetalAtlas {
             is_apple_gpu,
             monochrome_textures: Default::default(),
             polychrome_textures: Default::default(),
+            upload_calls: 0,
+            uploaded_bytes: 0,
         })))
     }
 
@@ -35,6 +37,8 @@ struct MetalAtlasTextures {
     is_apple_gpu: bool,
     monochrome_textures: AtlasTextureList<MetalAtlasTexture>,
     polychrome_textures: AtlasTextureList<MetalAtlasTexture>,
+    upload_calls: u64,
+    uploaded_bytes: u64,
 }
 
 impl PlatformAtlas for MetalAtlas {
@@ -48,6 +52,10 @@ impl PlatformAtlas for MetalAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.lock().remove(key);
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        self.0.lock().snapshot()
     }
 }
 
@@ -63,6 +71,10 @@ impl AtlasBackend for MetalAtlasTextures {
             .texture(tile.texture_id)
             .context("allocated tile refers to a missing texture")?;
         texture.upload(tile.bounds, bytes);
+        self.upload_calls = self.upload_calls.saturating_add(1);
+        self.uploaded_bytes = self
+            .uploaded_bytes
+            .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
         Ok(tile)
     }
 
@@ -92,6 +104,23 @@ impl AtlasBackend for MetalAtlasTextures {
                 *texture_slot = Some(texture);
             }
         }
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        let mut snapshot = AtlasSnapshot {
+            upload_calls: self.upload_calls,
+            uploaded_bytes: self.uploaded_bytes,
+            ..AtlasSnapshot::default()
+        };
+        for texture_list in [&self.monochrome_textures, &self.polychrome_textures] {
+            for texture in texture_list.iter() {
+                snapshot.page_count += 1;
+                snapshot.resident_bytes = snapshot
+                    .resident_bytes
+                    .saturating_add(texture.resident_bytes());
+            }
+        }
+        snapshot
     }
 }
 
@@ -248,6 +277,13 @@ impl MetalAtlasTexture {
             RGBA8Unorm | BGRA8Unorm => 4,
             _ => unimplemented!(),
         }
+    }
+
+    fn resident_bytes(&self) -> usize {
+        let size = self.allocator.size();
+        (size.width.max(0) as usize)
+            .saturating_mul(size.height.max(0) as usize)
+            .saturating_mul(usize::from(self.bytes_per_pixel()))
     }
 
     fn decrement_ref_count(&mut self) {

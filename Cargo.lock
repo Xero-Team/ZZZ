@@ -6574,6 +6574,7 @@ dependencies = [
  "pollster 1.0.1",
  "profiling",
  "raw-window-handle",
+ "serde_json",
  "smallvec",
  "swash",
  "unicode-bidi",

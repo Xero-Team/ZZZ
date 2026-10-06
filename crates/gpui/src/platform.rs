@@ -1315,6 +1315,52 @@ pub trait PlatformAtlas {
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>>;
     fn remove(&self, key: &AtlasKey);
+
+    /// Returns a point-in-time view of atlas residency and activity.
+    fn snapshot(&self) -> AtlasSnapshot {
+        AtlasSnapshot::default()
+    }
+}
+
+/// A point-in-time view of sprite atlas residency and cumulative activity.
+///
+/// Page and byte fields are gauges at the instant of the snapshot. Hit, miss,
+/// allocation, upload, removal, retirement, eviction, compaction, and pressure
+/// fields are cumulative counts for the lifetime of the atlas instance.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AtlasSnapshot {
+    /// Number of resident GPU texture pages.
+    pub page_count: usize,
+    /// Bytes reserved by resident GPU texture pages, including unused space.
+    pub resident_bytes: usize,
+    /// Number of keys currently addressable through the atlas lookup table.
+    pub entry_count: usize,
+    /// Number of successful key lookups.
+    pub hits: u64,
+    /// Number of key lookups that required invoking the miss builder.
+    pub misses: u64,
+    /// Number of successful resident entry allocations.
+    pub allocations: u64,
+    /// Number of uploads waiting for backend submission.
+    pub pending_uploads: usize,
+    /// Bytes held by uploads waiting for backend submission.
+    pub pending_upload_bytes: usize,
+    /// Number of backend upload calls issued.
+    pub upload_calls: u64,
+    /// Bytes submitted through backend upload calls.
+    pub uploaded_bytes: u64,
+    /// Number of entries removed from key lookup by remove or clear operations.
+    pub removals: u64,
+    /// Number of entries or pages moved into retirement.
+    pub retirements: u64,
+    /// Number of entries or pages evicted by cache policy.
+    pub evictions: u64,
+    /// Number of completed whole-page compactions.
+    pub compactions: u64,
+    /// Resident bytes required by the current completed-frame working set.
+    pub current_frame_working_set_bytes: usize,
+    /// Number of frames whose working set or misses exceeded retained budgets.
+    pub budget_pressure_frames: u64,
 }
 
 #[doc(hidden)]
@@ -1327,11 +1373,19 @@ pub trait AtlasBackend {
     ) -> Result<AtlasTile>;
 
     fn remove(&mut self, tile: AtlasTile);
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        AtlasSnapshot::default()
+    }
 }
 
 #[doc(hidden)]
 pub struct AtlasState<Backend> {
     tiles_by_key: FxHashMap<AtlasKey, AtlasTile>,
+    hits: u64,
+    misses: u64,
+    allocations: u64,
+    removals: u64,
     pub backend: Backend,
 }
 
@@ -1339,6 +1393,10 @@ impl<Backend> AtlasState<Backend> {
     pub fn new(backend: Backend) -> Self {
         Self {
             tiles_by_key: FxHashMap::default(),
+            hits: 0,
+            misses: 0,
+            allocations: 0,
+            removals: 0,
             backend,
         }
     }
@@ -1348,6 +1406,9 @@ impl<Backend> AtlasState<Backend> {
     }
 
     pub fn clear(&mut self, reset_backend: impl FnOnce(&mut Backend)) {
+        self.removals = self
+            .removals
+            .saturating_add(u64::try_from(self.tiles_by_key.len()).unwrap_or(u64::MAX));
         self.tiles_by_key.clear();
         reset_backend(&mut self.backend);
     }
@@ -1366,8 +1427,12 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>> {
         match self.tiles_by_key.entry(key) {
-            Entry::Occupied(entry) => Ok(Some(*entry.get())),
+            Entry::Occupied(entry) => {
+                self.hits = self.hits.saturating_add(1);
+                Ok(Some(*entry.get()))
+            }
             Entry::Vacant(entry) => {
+                self.misses = self.misses.saturating_add(1);
                 profiling::scope!("new tile");
                 let Some((size, bytes)) = build()? else {
                     return Ok(None);
@@ -1376,6 +1441,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                     .backend
                     .insert(entry.key().texture_kind(), size, &bytes)?;
                 entry.insert(tile);
+                self.allocations = self.allocations.saturating_add(1);
                 Ok(Some(tile))
             }
         }
@@ -1383,7 +1449,19 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
 
     pub fn remove(&mut self, key: &AtlasKey) {
         if let Some(tile) = self.tiles_by_key.remove(key) {
+            self.removals = self.removals.saturating_add(1);
             self.backend.remove(tile);
+        }
+    }
+
+    pub fn snapshot(&self) -> AtlasSnapshot {
+        AtlasSnapshot {
+            entry_count: self.tiles_by_key.len(),
+            hits: self.hits,
+            misses: self.misses,
+            allocations: self.allocations,
+            removals: self.removals,
+            ..self.backend.snapshot()
         }
     }
 }
@@ -1440,6 +1518,10 @@ impl PlatformAtlas for HeadlessAtlas {
     fn remove(&self, key: &AtlasKey) {
         self.0.lock().remove(key);
     }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        self.0.lock().snapshot()
+    }
 }
 
 #[doc(hidden)]
@@ -1466,6 +1548,10 @@ impl<T> ops::Index<usize> for AtlasTextureList<T> {
 }
 
 impl<T> AtlasTextureList<T> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> {
+        self.textures.iter().flatten()
+    }
+
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut T> {
         self.textures.iter_mut().flatten()
     }
@@ -2934,6 +3020,16 @@ mod atlas_tests {
         );
         assert!(state.contains(&key));
         assert_eq!(state.backend.insert_calls, 2);
+        assert_eq!(
+            state.snapshot(),
+            AtlasSnapshot {
+                entry_count: 1,
+                hits: 1,
+                misses: 4,
+                allocations: 1,
+                ..AtlasSnapshot::default()
+            }
+        );
         Ok(())
     }
 
@@ -2960,6 +3056,7 @@ mod atlas_tests {
         assert_eq!(reset_calls, 1);
         assert!(!state.contains(&other_key));
         assert_eq!(state.backend.removed_tiles, vec![tile]);
+        assert_eq!(state.snapshot().removals, 2);
         Ok(())
     }
 }

@@ -9,8 +9,8 @@ use windows::Win32::Graphics::{
 };
 
 use gpui::{
-    AtlasBackend, AtlasKey, AtlasState, AtlasTextureId, AtlasTextureKind, AtlasTextureList,
-    AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
+    AtlasBackend, AtlasKey, AtlasSnapshot, AtlasState, AtlasTextureId, AtlasTextureKind,
+    AtlasTextureList, AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
 };
 
 pub(crate) struct DirectXAtlas(Mutex<AtlasState<DirectXAtlasTextures>>);
@@ -21,6 +21,8 @@ struct DirectXAtlasTextures {
     monochrome_textures: AtlasTextureList<DirectXAtlasTexture>,
     polychrome_textures: AtlasTextureList<DirectXAtlasTexture>,
     subpixel_textures: AtlasTextureList<DirectXAtlasTexture>,
+    upload_calls: u64,
+    uploaded_bytes: u64,
 }
 
 struct DirectXAtlasTexture {
@@ -40,6 +42,8 @@ impl DirectXAtlas {
             monochrome_textures: Default::default(),
             polychrome_textures: Default::default(),
             subpixel_textures: Default::default(),
+            upload_calls: 0,
+            uploaded_bytes: 0,
         })))
     }
 
@@ -86,6 +90,10 @@ impl PlatformAtlas for DirectXAtlas {
     fn remove(&self, key: &AtlasKey) {
         self.0.lock().remove(key);
     }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        self.0.lock().snapshot()
+    }
 }
 
 impl AtlasBackend for DirectXAtlasTextures {
@@ -101,7 +109,12 @@ impl AtlasBackend for DirectXAtlasTextures {
         let texture = self
             .texture(tile.texture_id)
             .ok_or_else(|| anyhow::anyhow!("allocated tile refers to a missing texture"))?;
-        texture.upload(&self.device_context, tile.bounds, bytes);
+        if texture.upload(&self.device_context, tile.bounds, bytes) {
+            self.upload_calls = self.upload_calls.saturating_add(1);
+            self.uploaded_bytes = self
+                .uploaded_bytes
+                .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        }
         Ok(tile)
     }
 
@@ -127,6 +140,27 @@ impl AtlasBackend for DirectXAtlasTextures {
                 *texture_slot = Some(texture);
             }
         }
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        let mut snapshot = AtlasSnapshot {
+            upload_calls: self.upload_calls,
+            uploaded_bytes: self.uploaded_bytes,
+            ..AtlasSnapshot::default()
+        };
+        for texture_list in [
+            &self.monochrome_textures,
+            &self.subpixel_textures,
+            &self.polychrome_textures,
+        ] {
+            for texture in texture_list.iter() {
+                snapshot.page_count += 1;
+                snapshot.resident_bytes = snapshot
+                    .resident_bytes
+                    .saturating_add(texture.resident_bytes());
+            }
+        }
+        snapshot
     }
 }
 
@@ -289,7 +323,7 @@ impl DirectXAtlasTexture {
         device_context: &ID3D11DeviceContext,
         bounds: Bounds<DevicePixels>,
         bytes: &[u8],
-    ) {
+    ) -> bool {
         // `UpdateSubresource` reads `row_pitch * height` bytes from `bytes`
         // based on the `D3D11_BOX` below. A shorter source slice would let the
         // driver read past the end of the allocation, so skip that upload.
@@ -304,7 +338,7 @@ impl DirectXAtlasTexture {
                 bounds.size.height.0,
                 expected,
             );
-            return;
+            return false;
         }
         unsafe {
             device_context.UpdateSubresource(
@@ -323,6 +357,14 @@ impl DirectXAtlasTexture {
                 0,
             );
         }
+        true
+    }
+
+    fn resident_bytes(&self) -> usize {
+        let size = self.allocator.size();
+        (size.width.max(0) as usize)
+            .saturating_mul(size.height.max(0) as usize)
+            .saturating_mul(self.bytes_per_pixel as usize)
     }
 
     fn decrement_ref_count(&mut self) {

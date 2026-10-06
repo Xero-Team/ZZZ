@@ -1,12 +1,14 @@
 #![cfg(feature = "test-support")]
 
 use gpui::{
-    AtlasKey, AtlasTile, Bounds, ContentMask, Corners, DevicePixels, Edges, Hsla, ImageId,
-    MonochromeSprite, PaddedBool32, PathBuilder, PlatformHeadlessRenderer, Point, PolychromeSprite,
-    Quad, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow, Size, Underline,
+    AtlasKey, AtlasSnapshot, AtlasTile, Bounds, ContentMask, Corners, DevicePixels, Edges, FontRun,
+    FontStyle, FontWeight, Hsla, ImageId, IsZero as _, MonochromeSprite, PaddedBool32, PathBuilder,
+    PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad,
+    RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow, Size,
+    Underline, font, px,
 };
-use gpui_wgpu::WgpuHeadlessRenderer;
-use std::borrow::Cow;
+use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
+use std::{borrow::Cow, collections::HashSet, path::Path, sync::Arc, time::Instant};
 
 const RUNS: usize = 100;
 
@@ -188,6 +190,288 @@ fn save_output(image: &image::RgbaImage, adapter: &str, scale: f32) {
         .expect("headless debug image should save");
 }
 
+fn snapshot_json(snapshot: AtlasSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "page_count": snapshot.page_count,
+        "resident_bytes": snapshot.resident_bytes,
+        "entry_count": snapshot.entry_count,
+        "hits": snapshot.hits,
+        "misses": snapshot.misses,
+        "allocations": snapshot.allocations,
+        "pending_uploads": snapshot.pending_uploads,
+        "pending_upload_bytes": snapshot.pending_upload_bytes,
+        "upload_calls": snapshot.upload_calls,
+        "uploaded_bytes": snapshot.uploaded_bytes,
+        "removals": snapshot.removals,
+        "retirements": snapshot.retirements,
+        "evictions": snapshot.evictions,
+        "compactions": snapshot.compactions,
+        "current_frame_working_set_bytes": snapshot.current_frame_working_set_bytes,
+        "budget_pressure_frames": snapshot.budget_pressure_frames,
+    })
+}
+
+fn percentile(samples: &[u64], percentile: usize) -> u64 {
+    let mut samples = samples.to_vec();
+    samples.sort_unstable();
+    let index = (samples.len() - 1) * percentile / 100;
+    samples[index]
+}
+
+fn insert_shaped_text(
+    text_system: &CosmicTextSystem,
+    atlas: &Arc<dyn PlatformAtlas>,
+    text: &str,
+    font_size: f32,
+    scale_factor: f32,
+    unique_keys: &mut HashSet<AtlasKey>,
+    keys_in_order: &mut Vec<AtlasKey>,
+) -> anyhow::Result<()> {
+    let font_id = text_system.font_id(&font("Lilex"))?;
+    let runs = [FontRun {
+        len: text.len(),
+        font_id,
+        font_style: FontStyle::Normal,
+        font_weight: FontWeight::NORMAL,
+    }];
+    let layout = text_system.layout_line(text, px(font_size), &runs);
+
+    for run in &layout.runs {
+        for (glyph_index, glyph) in run.glyphs.iter().enumerate() {
+            let params = RenderGlyphParams {
+                font_id: run.font_id,
+                glyph_id: glyph.id,
+                font_size: layout.font_size,
+                subpixel_variant: Point::new((glyph_index % 4) as u8, 0),
+                scale_factor,
+                synthetic_italic: run.synthetic_italic,
+                synthetic_bold: run.synthetic_bold,
+                is_emoji: glyph.is_emoji,
+                subpixel_rendering: !glyph.is_emoji,
+                dilation: 0,
+            };
+            let key = AtlasKey::from(params.clone());
+            if !unique_keys.insert(key.clone()) {
+                atlas
+                    .get_or_insert_with(key, &mut || {
+                        anyhow::bail!("a repeated glyph key must hit the atlas")
+                    })?
+                    .ok_or_else(|| anyhow::anyhow!("a repeated glyph key disappeared"))?;
+                continue;
+            }
+
+            let raster_bounds = text_system.glyph_raster_bounds(&params)?;
+            if raster_bounds.is_zero() {
+                unique_keys.remove(&key);
+                continue;
+            }
+            atlas
+                .get_or_insert_with(key.clone(), &mut || {
+                    let (size, bytes) = text_system.rasterize_glyph(&params, raster_bounds)?;
+                    Ok(Some((size, Cow::Owned(bytes))))
+                })?
+                .ok_or_else(|| anyhow::anyhow!("glyph builder returned no atlas tile"))?;
+            keys_in_order.push(key);
+        }
+    }
+    Ok(())
+}
+
+fn insert_fixed_assets(
+    atlas: &Arc<dyn PlatformAtlas>,
+    unique_keys: &mut HashSet<AtlasKey>,
+    keys_in_order: &mut Vec<AtlasKey>,
+) -> anyhow::Result<()> {
+    let size = Size {
+        width: DevicePixels(64),
+        height: DevicePixels(64),
+    };
+    for asset_index in 0..8 {
+        let svg_key = AtlasKey::Svg(RenderSvgParams {
+            path: format!("text-atlas-baseline-{asset_index}.svg").into(),
+            size,
+        });
+        atlas
+            .get_or_insert_with(svg_key.clone(), &mut || {
+                Ok(Some((size, Cow::Owned(vec![asset_index as u8; 64 * 64]))))
+            })?
+            .ok_or_else(|| anyhow::anyhow!("SVG builder returned no atlas tile"))?;
+        unique_keys.insert(svg_key.clone());
+        keys_in_order.push(svg_key);
+
+        let image_key = AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(asset_index + 1),
+            frame_index: asset_index,
+        });
+        atlas
+            .get_or_insert_with(image_key.clone(), &mut || {
+                Ok(Some((
+                    size,
+                    Cow::Owned(vec![asset_index as u8; 64 * 64 * 4]),
+                )))
+            })?
+            .ok_or_else(|| anyhow::anyhow!("image builder returned no atlas tile"))?;
+        unique_keys.insert(image_key.clone());
+        keys_in_order.push(image_key);
+    }
+    Ok(())
+}
+
+fn run_text_atlas_baseline(
+    force_fallback_adapter: bool,
+    output_directory: &Path,
+) -> anyhow::Result<()> {
+    const SEED: u64 = 0x5A5A_5445_5854_2026;
+    const CJK_SCROLL_GLYPHS: u32 = 1024;
+    const CJK_CHUNK_GLYPHS: usize = 64;
+
+    let mut renderer = WgpuHeadlessRenderer::new_with_fallback(force_fallback_adapter)?;
+    let gpu_specs = renderer.gpu_specs();
+    anyhow::ensure!(
+        gpu_specs.is_software_emulated == force_fallback_adapter,
+        "requested fallback={force_fallback_adapter}, selected {}",
+        gpu_specs.device_name
+    );
+    let atlas = renderer.sprite_atlas();
+    let text_system = CosmicTextSystem::new("Noto Sans");
+    text_system.add_fonts(vec![
+        Cow::Borrowed(include_bytes!(
+            "../../../assets/fonts/lilex/Lilex-Regular.ttf"
+        )),
+        Cow::Borrowed(include_bytes!(
+            "../../../assets/fonts/openmoji/openmoji.ttf"
+        )),
+    ])?;
+
+    let mixed_text = "office affine A\u{0301} 中文测试 مرحبا بالعالم 👩‍💻🌈";
+    let cjk_characters = (0..CJK_SCROLL_GLYPHS)
+        .filter_map(|offset| char::from_u32(0x4E00 + offset))
+        .collect::<Vec<_>>();
+    let mut unique_keys = HashSet::new();
+    let mut keys_in_order = Vec::new();
+    let mut cold_group_nanoseconds = Vec::new();
+
+    for font_size in [14.0, 16.0, 20.0] {
+        for scale_factor in [1.0, 1.25, 2.0] {
+            let started = Instant::now();
+            insert_shaped_text(
+                &text_system,
+                &atlas,
+                mixed_text,
+                font_size,
+                scale_factor,
+                &mut unique_keys,
+                &mut keys_in_order,
+            )?;
+            cold_group_nanoseconds
+                .push(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX));
+
+            for characters in cjk_characters.chunks(CJK_CHUNK_GLYPHS) {
+                let text = characters.iter().collect::<String>();
+                let started = Instant::now();
+                insert_shaped_text(
+                    &text_system,
+                    &atlas,
+                    &text,
+                    font_size,
+                    scale_factor,
+                    &mut unique_keys,
+                    &mut keys_in_order,
+                )?;
+                cold_group_nanoseconds
+                    .push(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX));
+            }
+        }
+    }
+    insert_fixed_assets(&atlas, &mut unique_keys, &mut keys_in_order)?;
+
+    let before_flush = atlas.snapshot();
+    let warm_started = Instant::now();
+    for key in &keys_in_order {
+        atlas
+            .get_or_insert_with(key.clone(), &mut || {
+                anyhow::bail!("warm atlas lookup must not invoke the builder")
+            })?
+            .ok_or_else(|| anyhow::anyhow!("warm atlas key disappeared"))?;
+    }
+    let warm_lookup_nanoseconds =
+        u64::try_from(warm_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+
+    let mut empty_scene = Scene::default();
+    empty_scene.finish();
+    let flush_started = Instant::now();
+    renderer.render_scene_to_image(
+        &empty_scene,
+        Size {
+            width: DevicePixels(1),
+            height: DevicePixels(1),
+        },
+    )?;
+    let upload_flush_nanoseconds =
+        u64::try_from(flush_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    let after_flush = atlas.snapshot();
+
+    anyhow::ensure!(
+        before_flush.entry_count > 0,
+        "workload produced no atlas entries"
+    );
+    anyhow::ensure!(
+        before_flush.page_count >= 3,
+        "workload did not cover every texture kind"
+    );
+    anyhow::ensure!(
+        before_flush.pending_uploads == before_flush.allocations as usize,
+        "every cold allocation should have exactly one pending upload"
+    );
+    anyhow::ensure!(after_flush.pending_uploads == 0, "uploads were not flushed");
+    anyhow::ensure!(
+        after_flush.upload_calls == before_flush.pending_uploads as u64,
+        "the baseline backend should issue one upload call per pending entry"
+    );
+
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    let artifact = serde_json::json!({
+        "experiment": "TEXT-001",
+        "seed": SEED,
+        "adapter": adapter,
+        "gpu": {
+            "device_name": gpu_specs.device_name,
+            "driver_name": gpu_specs.driver_name,
+            "driver_info": gpu_specs.driver_info,
+            "is_software_emulated": gpu_specs.is_software_emulated,
+        },
+        "workload": {
+            "mixed_text": mixed_text,
+            "cjk_scroll_glyphs": CJK_SCROLL_GLYPHS,
+            "cjk_chunk_glyphs": CJK_CHUNK_GLYPHS,
+            "font_sizes_px": [14.0, 16.0, 20.0],
+            "scale_factors": [1.0, 1.25, 2.0],
+            "svg_entries": 8,
+            "image_frames": 8,
+            "unique_keys": keys_in_order.len(),
+        },
+        "timing_nanoseconds": {
+            "cold_groups": cold_group_nanoseconds,
+            "cold_group_p50": percentile(&cold_group_nanoseconds, 50),
+            "cold_group_p95": percentile(&cold_group_nanoseconds, 95),
+            "warm_all_keys": warm_lookup_nanoseconds,
+            "upload_flush_and_empty_frame": upload_flush_nanoseconds,
+        },
+        "before_flush": snapshot_json(before_flush),
+        "after_flush": snapshot_json(after_flush),
+    });
+
+    std::fs::create_dir_all(output_directory)?;
+    let artifact_path = output_directory.join(format!("text-001-{adapter}.json"));
+    std::fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
+    println!("{}", serde_json::to_string_pretty(&artifact)?);
+    Ok(())
+}
+
 #[test]
 fn hardware_adapter_renders_primitive_corpus() {
     let mut renderer = WgpuHeadlessRenderer::new().expect("hardware headless renderer");
@@ -233,4 +517,18 @@ fn fallback_adapter_renders_primitive_corpus() {
             }
         }
     }
+}
+
+#[test]
+#[ignore = "phase-0 baseline runner writes explicit diagnostics artifacts"]
+fn text_atlas_baseline_runner() -> anyhow::Result<()> {
+    let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("GPUI_TEXT_ATLAS_OUTPUT_DIR must be set"))?;
+    anyhow::ensure!(
+        output_directory.is_absolute(),
+        "GPUI_TEXT_ATLAS_OUTPUT_DIR must be an absolute path"
+    );
+    run_text_atlas_baseline(false, &output_directory)?;
+    run_text_atlas_baseline(true, &output_directory)
 }

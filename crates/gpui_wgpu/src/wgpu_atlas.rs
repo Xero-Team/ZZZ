@@ -1,8 +1,8 @@
 use anyhow::{Context as _, Result};
 use etagere::{BucketedAtlasAllocator, size2};
 use gpui::{
-    AtlasBackend, AtlasKey, AtlasState, AtlasTextureId, AtlasTextureKind, AtlasTextureList,
-    AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
+    AtlasBackend, AtlasKey, AtlasSnapshot, AtlasState, AtlasTextureId, AtlasTextureKind,
+    AtlasTextureList, AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
 };
 use parking_lot::Mutex;
 use std::{borrow::Cow, ops, sync::Arc};
@@ -35,6 +35,8 @@ struct WgpuAtlasTextures {
     color_texture_format: wgpu::TextureFormat,
     storage: WgpuAtlasStorage,
     pending_uploads: Vec<PendingUpload>,
+    upload_calls: u64,
+    uploaded_bytes: u64,
 }
 
 pub struct WgpuTextureInfo {
@@ -55,6 +57,8 @@ impl WgpuAtlas {
             color_texture_format,
             storage: WgpuAtlasStorage::default(),
             pending_uploads: Vec::new(),
+            upload_calls: 0,
+            uploaded_bytes: 0,
         })))
     }
 
@@ -117,6 +121,10 @@ impl PlatformAtlas for WgpuAtlas {
     fn remove(&self, key: &AtlasKey) {
         self.0.lock().remove(key);
     }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        self.0.lock().snapshot()
+    }
 }
 
 impl AtlasBackend for WgpuAtlasTextures {
@@ -150,6 +158,35 @@ impl AtlasBackend for WgpuAtlasTextures {
                 *texture_slot = Some(texture);
             }
         }
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        let mut snapshot = AtlasSnapshot {
+            pending_uploads: self.pending_uploads.len(),
+            pending_upload_bytes: self
+                .pending_uploads
+                .iter()
+                .map(|upload| upload.data.len())
+                .sum(),
+            upload_calls: self.upload_calls,
+            uploaded_bytes: self.uploaded_bytes,
+            ..AtlasSnapshot::default()
+        };
+
+        for texture_list in [
+            &self.storage.monochrome_textures,
+            &self.storage.subpixel_textures,
+            &self.storage.polychrome_textures,
+        ] {
+            for texture in texture_list.iter() {
+                snapshot.page_count += 1;
+                snapshot.resident_bytes = snapshot
+                    .resident_bytes
+                    .saturating_add(texture.resident_bytes());
+            }
+        }
+
+        snapshot
     }
 }
 
@@ -285,6 +322,10 @@ impl WgpuAtlasTextures {
                     depth_or_array_layers: 1,
                 },
             );
+            self.upload_calls = self.upload_calls.saturating_add(1);
+            self.uploaded_bytes = self
+                .uploaded_bytes
+                .saturating_add(u64::try_from(upload.data.len()).unwrap_or(u64::MAX));
         }
     }
 }
@@ -357,6 +398,13 @@ impl WgpuAtlasTexture {
             wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm => 4,
             _ => 4,
         }
+    }
+
+    fn resident_bytes(&self) -> usize {
+        let size = self.allocator.size();
+        (size.width.max(0) as usize)
+            .saturating_mul(size.height.max(0) as usize)
+            .saturating_mul(usize::from(self.bytes_per_pixel()))
     }
 
     fn decrement_ref_count(&mut self) {
@@ -443,6 +491,56 @@ mod tests {
             .expect("tile should be created");
         atlas.remove(&key);
         atlas.before_frame();
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_tracks_residency_and_uploads() -> anyhow::Result<()> {
+        let (device, queue) = test_device_and_queue()?;
+        let atlas = WgpuAtlas::new(device, queue, wgpu::TextureFormat::Bgra8Unorm);
+        let key = AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(1),
+            frame_index: 0,
+        });
+        let size = Size {
+            width: DevicePixels(1),
+            height: DevicePixels(1),
+        };
+        let mut build = || Ok(Some((size, Cow::Owned(vec![0, 0, 0, 255]))));
+
+        atlas
+            .get_or_insert_with(key.clone(), &mut build)?
+            .expect("tile should be created");
+        let pending = atlas.snapshot();
+        assert_eq!(pending.page_count, 1);
+        assert_eq!(pending.resident_bytes, 1024 * 1024 * 4);
+        assert_eq!(pending.entry_count, 1);
+        assert_eq!(pending.misses, 1);
+        assert_eq!(pending.allocations, 1);
+        assert_eq!(pending.pending_uploads, 1);
+        assert_eq!(pending.pending_upload_bytes, 4);
+        assert_eq!(pending.upload_calls, 0);
+
+        atlas.before_frame();
+        let uploaded = atlas.snapshot();
+        assert_eq!(uploaded.pending_uploads, 0);
+        assert_eq!(uploaded.pending_upload_bytes, 0);
+        assert_eq!(uploaded.upload_calls, 1);
+        assert_eq!(uploaded.uploaded_bytes, 4);
+
+        atlas
+            .get_or_insert_with(key.clone(), &mut || {
+                anyhow::bail!("cache hit must not invoke the builder")
+            })?
+            .expect("cached tile should remain present");
+        assert_eq!(atlas.snapshot().hits, 1);
+
+        atlas.remove(&key);
+        let removed = atlas.snapshot();
+        assert_eq!(removed.page_count, 0);
+        assert_eq!(removed.resident_bytes, 0);
+        assert_eq!(removed.entry_count, 0);
+        assert_eq!(removed.removals, 1);
         Ok(())
     }
 
