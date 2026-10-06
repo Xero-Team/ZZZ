@@ -86,6 +86,7 @@ gpui = { workspace = true, features = ["windows-manifest"] }
 [dev-dependencies]
 action_log.workspace = true
 agent = { workspace = true, features = ["test-support"] }
+async_zip.workspace = true
 client = { workspace = true, features = ["test-support"] }
 clock = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
@@ -104,6 +105,7 @@ lsp = { workspace = true, features = ["test-support"] }
 unindent.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+vfs = { workspace = true, features = ["test-support"] }
 zlog.workspace = true
 
 [build-dependencies]

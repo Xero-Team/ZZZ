@@ -12748,6 +12748,7 @@ dependencies = [
  "async-channel 2.5.0",
  "async-lock",
  "async-trait",
+ "async_zip",
  "base64 0.23.1",
  "buffer_diff",
  "circular-buffer",
@@ -13970,6 +13971,7 @@ dependencies = [
  "anyhow",
  "askpass",
  "async-channel 2.5.0",
+ "async_zip",
  "cargo_toml",
  "clap",
  "client",
@@ -14029,6 +14031,7 @@ dependencies = [
  "unindent",
  "util",
  "uuid",
+ "vfs",
  "watch",
  "windows 0.62.2",
  "worktree",
@@ -14324,6 +14327,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "async-tungstenite",
+ "async_zip",
  "collections",
  "futures 0.3.34",
  "gpui",
@@ -18943,8 +18947,11 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "vfs"
 version = "0.1.0"
 dependencies = [
+ "async-io",
  "async-lock",
  "async-trait",
+ "async_zip",
+ "binrw",
  "event-listener 5.4.2",
  "futures 0.3.34",
  "parking_lot",

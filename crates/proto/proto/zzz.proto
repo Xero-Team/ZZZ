@@ -424,7 +424,9 @@ message Envelope {
     VfsCancelOperationRequestV2 vfs_cancel_operation_request_v2 = 491;
     VfsStatManyRequestV2 vfs_stat_many_request_v2 = 492;
     VfsStatManyResponseV2 vfs_stat_many_response_v2 = 493;
-    VfsReleaseHandleV2 vfs_release_handle_v2 = 494; // current max
+    VfsReleaseHandleV2 vfs_release_handle_v2 = 494;
+    VfsMountArchiveRequestV2 vfs_mount_archive_request_v2 = 495;
+    VfsMountArchiveResponseV2 vfs_mount_archive_response_v2 = 496; // current max
   }
 
   reserved 87 to 88;

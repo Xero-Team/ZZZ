@@ -116,6 +116,7 @@ enum VfsErrorCodeV2 {
   VFS_ERROR_CODE_V2_CORRUPT_DATA = 17;
   VFS_ERROR_CODE_V2_WATCH_OVERFLOW = 18;
   VFS_ERROR_CODE_V2_INTERNAL = 19;
+  VFS_ERROR_CODE_V2_NAME_COLLISION = 20;
 }
 
 enum VfsOperationV2 {
@@ -317,6 +318,23 @@ message VfsNegotiateRequestV2 {
 }
 
 message VfsNegotiateResponseV2 {
+  uint32 protocol_version = 1;
+  MountIdV2 mount_id = 2;
+  VfsProviderDescriptorV2 descriptor = 3;
+  VfsProviderCapabilitiesV2 capabilities = 4;
+  VfsErrorV2 error = 5;
+}
+
+message VfsMountArchiveRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 source_mount_id = 2;
+  ProviderPathV2 source_path = 3;
+  bytes source_version = 4;
+  uint32 nested_depth = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsMountArchiveResponseV2 {
   uint32 protocol_version = 1;
   MountIdV2 mount_id = 2;
   VfsProviderDescriptorV2 descriptor = 3;

@@ -778,6 +778,7 @@ fn encode_error_code(code: VfsErrorCode) -> VfsErrorCodeV2 {
         VfsErrorCode::InvalidPath => VfsErrorCodeV2::InvalidPath,
         VfsErrorCode::InvalidArgument => VfsErrorCodeV2::InvalidArgument,
         VfsErrorCode::Conflict => VfsErrorCodeV2::Conflict,
+        VfsErrorCode::NameCollision => VfsErrorCodeV2::NameCollision,
         VfsErrorCode::StaleVersion => VfsErrorCodeV2::StaleVersion,
         VfsErrorCode::Disconnected => VfsErrorCodeV2::Disconnected,
         VfsErrorCode::Cancelled => VfsErrorCodeV2::Cancelled,
@@ -802,6 +803,7 @@ fn decode_error_code(code: i32) -> Result<VfsErrorCode, VfsWireError> {
         Ok(VfsErrorCodeV2::InvalidPath) => Ok(VfsErrorCode::InvalidPath),
         Ok(VfsErrorCodeV2::InvalidArgument) => Ok(VfsErrorCode::InvalidArgument),
         Ok(VfsErrorCodeV2::Conflict) => Ok(VfsErrorCode::Conflict),
+        Ok(VfsErrorCodeV2::NameCollision) => Ok(VfsErrorCode::NameCollision),
         Ok(VfsErrorCodeV2::StaleVersion) => Ok(VfsErrorCode::StaleVersion),
         Ok(VfsErrorCodeV2::Disconnected) => Ok(VfsErrorCode::Disconnected),
         Ok(VfsErrorCodeV2::Cancelled) => Ok(VfsErrorCode::Cancelled),
@@ -1270,6 +1272,19 @@ mod tests {
         assert_eq!(round_tripped_error.provider(), error.provider());
         assert_eq!(round_tripped_error.path(), error.path());
         assert_eq!(round_tripped_error.detail(), error.detail());
+
+        let collision = VfsError::new(
+            VfsErrorCode::NameCollision,
+            VfsOperation::Open,
+            ProviderId::new("archive-wire-provider"),
+        )
+        .with_path(path.clone());
+        let collision = VfsErrorV2::from_vfs_error(&collision).to_vfs_error();
+        assert!(
+            collision
+                .as_ref()
+                .is_ok_and(|error| error.code() == VfsErrorCode::NameCollision)
+        );
 
         let old_path =
             ProviderPath::from_byte_components(PathEncoding::PortableUtf8, [b"old.rs".as_slice()]);

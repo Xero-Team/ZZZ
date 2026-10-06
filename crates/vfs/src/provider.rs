@@ -170,6 +170,7 @@ pub enum VfsErrorCode {
     InvalidPath,
     InvalidArgument,
     Conflict,
+    NameCollision,
     StaleVersion,
     Disconnected,
     Cancelled,

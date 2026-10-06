@@ -1045,6 +1045,14 @@ impl BufferStore {
         Ok(())
     }
 
+    pub(crate) fn add_virtual_buffer(
+        &mut self,
+        buffer: Entity<Buffer>,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
+        self.add_buffer(buffer, cx)
+    }
+
     pub fn buffers(&self) -> impl '_ + Iterator<Item = Entity<Buffer>> {
         self.opened_buffers
             .values()

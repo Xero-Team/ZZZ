@@ -468,6 +468,163 @@ async fn test_local_task_context_uses_native_execution_host(cx: &mut gpui::TestA
 }
 
 #[gpui::test]
+async fn test_archive_members_open_as_read_only_buffers_and_bytes(cx: &mut gpui::TestAppContext) {
+    use async_zip::{
+        Compression, StringEncoding, ZipEntryBuilder, ZipString, base::write::ZipFileWriter,
+    };
+
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/root"), json!({})).await;
+    let mut archive_bytes = Vec::new();
+    let mut writer = ZipFileWriter::new(&mut archive_bytes);
+    writer
+        .write_entry_whole(
+            ZipEntryBuilder::new("src/main.rs".into(), Compression::Deflate),
+            b"fn main() {}\r\n",
+        )
+        .await
+        .expect("text archive member should write");
+    writer
+        .write_entry_whole(
+            ZipEntryBuilder::new("image.png".into(), Compression::Stored),
+            b"\x89PNG\r\n\x1a\narchive-image",
+        )
+        .await
+        .expect("image archive member should write");
+    writer
+        .write_entry_whole(
+            ZipEntryBuilder::new(
+                ZipString::new(b"raw-\xff.bin".to_vec(), StringEncoding::Raw),
+                Compression::Stored,
+            ),
+            b"raw-member",
+        )
+        .await
+        .expect("raw archive member should write");
+    writer.close().await.expect("archive fixture should close");
+    fs.insert_file(path!("/root/bundle.zip"), archive_bytes)
+        .await;
+
+    let project = Project::test(fs, [path!("/root").as_ref()], cx).await;
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(rust_lang());
+    let mut fake_servers = language_registry.register_fake_lsp("Rust", FakeLspAdapter::default());
+    let archive = project.update(cx, |project, cx| {
+        let worktree_id = project.worktrees(cx).next().unwrap().read(cx).id();
+        project.mount_archive(worktree_id, rel_path("bundle.zip").into(), 1, cx)
+    });
+    let archive = archive.await.expect("local archive should mount");
+    assert_eq!(
+        project::archive::archive_open_policy(Path::new("bundle.zip")),
+        project::archive::ArchiveOpenPolicy::Automatic
+    );
+    assert_eq!(
+        project::archive::archive_open_policy(Path::new("document.docx")),
+        project::archive::ArchiveOpenPolicy::ExplicitOnly
+    );
+    assert_eq!(
+        project::archive::archive_open_policy(Path::new("document.pdf")),
+        project::archive::ArchiveOpenPolicy::Unsupported
+    );
+    let root = vfs::ProviderPath::root(vfs::PathEncoding::UnixBytes);
+    let first_page = project
+        .update(cx, |project, cx| {
+            project.list_archive_directory_page(
+                archive.clone(),
+                root,
+                vfs::DirPageRequest {
+                    cursor: None,
+                    limit: NonZeroU32::MIN,
+                    context: vfs::OperationContext::default(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("archive directory page should list");
+    assert_eq!(first_page.entries.len(), 1);
+    assert!(first_page.next_cursor.is_some());
+    let text_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::UnixBytes,
+        [b"src".as_slice(), b"main.rs".as_slice()],
+    )
+    .expect("text archive path should be valid");
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_archive_text_member(
+                archive.clone(),
+                PathBuf::from(path!("/root/bundle.zip")),
+                text_path,
+                cx,
+            )
+        })
+        .await
+        .expect("archive text member should open");
+    cx.executor().run_until_parked();
+
+    buffer.read_with(cx, |buffer, _| {
+        assert!(buffer.read_only());
+        assert_eq!(buffer.text(), "fn main() {}\n");
+        assert_eq!(buffer.language().unwrap().name(), "Rust");
+        let file = buffer.file().expect("archive buffer should have a file");
+        assert!(!file.is_local());
+        assert!(file.resource_id().is_some());
+        assert_eq!(
+            file.vfs_path().unwrap().mount_id(),
+            archive.registry().mount_id()
+        );
+    });
+    assert!(
+        fake_servers.next().now_or_never().is_none(),
+        "archive buffers without native mapping must not start a language server"
+    );
+
+    let image_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::UnixBytes,
+        [b"image.png".as_slice()],
+    )
+    .expect("image archive path should be valid");
+    assert_eq!(
+        project
+            .update(cx, |project, cx| {
+                project.load_archive_member_bytes(archive.clone(), image_path, cx)
+            })
+            .await
+            .expect("image member bytes should load"),
+        b"\x89PNG\r\n\x1a\narchive-image"
+    );
+    let raw_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::UnixBytes,
+        [b"raw-\xff.bin".as_slice()],
+    )
+    .expect("raw archive path should be valid");
+    assert_eq!(
+        project
+            .update(cx, |project, cx| {
+                project.load_archive_member_bytes(archive.clone(), raw_path.clone(), cx)
+            })
+            .await
+            .expect("raw archive member bytes should load"),
+        b"raw-member"
+    );
+    assert!(
+        project
+            .update(cx, |project, cx| {
+                project.open_archive_text_member(
+                    archive,
+                    PathBuf::from(path!("/root/bundle.zip")),
+                    raw_path,
+                    cx,
+                )
+            })
+            .await
+            .is_err(),
+        "non-UTF-8 archive names must not be coerced through ProjectPath"
+    );
+}
+
+#[gpui::test]
 async fn test_block_via_channel(cx: &mut gpui::TestAppContext) {
     cx.executor().allow_parking();
 

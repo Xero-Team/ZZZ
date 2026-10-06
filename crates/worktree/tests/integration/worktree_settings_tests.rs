@@ -261,6 +261,21 @@ fn test_private_files_match_non_utf8_provider_paths() {
 }
 
 #[test]
+fn test_private_files_match_portable_provider_paths() {
+    let settings = settings_with_patterns("private_files", &["**/private/**"]);
+    let private_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::PortableUtf8,
+        [b"private".as_slice(), b"secret.txt".as_slice()],
+    )
+    .expect("portable provider path fixture should be valid");
+    assert!(
+        settings
+            .is_provider_path_private(&private_path)
+            .expect("portable private-path matching should succeed")
+    );
+}
+
+#[test]
 fn test_is_path_read_only_with_glob_patterns() {
     let settings = make_settings_with_read_only(&["**/generated/**", "**/*.gen.rs"]);
 

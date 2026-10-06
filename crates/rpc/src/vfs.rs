@@ -6,13 +6,14 @@ use proto::{
     MountIdV2, ProviderPathV2, VfsCancelOperationRequestV2, VfsCloseHandleRequestV2,
     VfsCopyRequestV2, VfsCreateDirectoryRequestV2, VfsDirectoryEntryV2, VfsErrorV2,
     VfsFileLengthRequestV2, VfsFileLengthResponseV2, VfsHandleOperationKindV2,
-    VfsHandleOperationRequestV2, VfsNegotiateRequestV2, VfsNegotiateResponseV2, VfsOpenRequestV2,
-    VfsOpenResponseV2, VfsOperationResponseV2, VfsProviderCapabilitiesV2, VfsProviderDescriptorV2,
-    VfsReadAtRequestV2, VfsReadAtResponseV2, VfsReadDirectoryRequestV2, VfsReadDirectoryResponseV2,
-    VfsReleaseHandleV2, VfsRemoveRequestV2, VfsRemoveResponseV2, VfsRenameRequestV2,
-    VfsRenewHandleRequestV2, VfsRenewHandleResponseV2, VfsSetLengthRequestV2, VfsStatManyItemV2,
-    VfsStatManyRequestV2, VfsStatManyResponseV2, VfsStatRequestV2, VfsStatResponseV2,
-    VfsWatchRequestV2, VfsWatchResponseV2, VfsWriteAtRequestV2, VfsWriteAtResponseV2,
+    VfsHandleOperationRequestV2, VfsMountArchiveRequestV2, VfsMountArchiveResponseV2,
+    VfsNegotiateRequestV2, VfsNegotiateResponseV2, VfsOpenRequestV2, VfsOpenResponseV2,
+    VfsOperationResponseV2, VfsProviderCapabilitiesV2, VfsProviderDescriptorV2, VfsReadAtRequestV2,
+    VfsReadAtResponseV2, VfsReadDirectoryRequestV2, VfsReadDirectoryResponseV2, VfsReleaseHandleV2,
+    VfsRemoveRequestV2, VfsRemoveResponseV2, VfsRenameRequestV2, VfsRenewHandleRequestV2,
+    VfsRenewHandleResponseV2, VfsSetLengthRequestV2, VfsStatManyItemV2, VfsStatManyRequestV2,
+    VfsStatManyResponseV2, VfsStatRequestV2, VfsStatResponseV2, VfsWatchRequestV2,
+    VfsWatchResponseV2, VfsWriteAtRequestV2, VfsWriteAtResponseV2,
 };
 use sha2::{Digest as _, Sha256};
 use std::{
@@ -26,18 +27,19 @@ use std::{
     time::{Duration, Instant},
 };
 use vfs::{
-    CancellationToken, CopyOptions, CreateDirOptions, CreateParents, DirCursor, DirPage,
-    DirPageRequest, EventBatch, MountId, OpenOptions, OperationContext, OperationId,
-    ProviderCapabilities, ProviderDescriptor, ProviderId, ProviderPath, RemoveOptions,
-    RemoveOutcome, RemovedEntryCount, RenameOptions, SnapshotBudgets, StatOptions,
-    SymbolicLinkMode, VfsError, VfsErrorCode, VfsFile, VfsManager, VfsOperation, VfsProvider,
-    VfsResult, VfsSnapshot, VfsVersion, WatchRequest, WriteAtOptions,
+    ArchiveLimits, ArchiveProvider, CancellationToken, CopyOptions, CreateDirOptions,
+    CreateParents, DirCursor, DirPage, DirPageRequest, EntryKind, EventBatch, MountId, OpenOptions,
+    OperationContext, OperationId, ProviderCapabilities, ProviderDescriptor, ProviderId,
+    ProviderPath, RemoveOptions, RemoveOutcome, RemovedEntryCount, RenameOptions, SnapshotBudgets,
+    StatOptions, SymbolicLinkMode, VfsError, VfsErrorCode, VfsFile, VfsManager, VfsOperation,
+    VfsProvider, VfsResult, VfsSnapshot, VfsVersion, WatchRequest, WriteAtOptions,
 };
 
 pub const REMOTE_VFS_PROTOCOL_VERSION: u32 = 1;
 const DEFAULT_HANDLE_LEASE: Duration = Duration::from_secs(30);
 const DEFAULT_RESULT_JOURNAL_CAPACITY: usize = 4_096;
 const MAXIMUM_CONTROL_MESSAGE_BYTES: usize = 8 * 1_024 * 1_024;
+const MAXIMUM_ARCHIVE_MOUNTS: usize = 128;
 
 pub type VfsAuthorizer = Arc<dyn Fn(&ProviderPath, VfsOperation) -> VfsResult<()> + Send + Sync>;
 
@@ -47,6 +49,10 @@ pub trait RemoteVfsTransport: Send + Sync {
         &self,
         request: VfsNegotiateRequestV2,
     ) -> TransportResult<VfsNegotiateResponseV2>;
+    async fn mount_archive(
+        &self,
+        request: VfsMountArchiveRequestV2,
+    ) -> TransportResult<VfsMountArchiveResponseV2>;
     async fn stat(&self, request: VfsStatRequestV2) -> TransportResult<VfsStatResponseV2>;
     async fn stat_many(
         &self,
@@ -101,6 +107,7 @@ pub struct VfsService {
 
 struct VfsServiceState {
     mounts_by_worktree: Mutex<BTreeMap<u64, VfsSnapshot>>,
+    archive_mounts: Mutex<BTreeMap<ArchiveMountKey, VfsSnapshot>>,
     manager: VfsManager,
     authorizers_by_mount: Mutex<BTreeMap<MountId, VfsAuthorizer>>,
     handles: Mutex<BTreeMap<u64, ServiceHandle>>,
@@ -109,6 +116,14 @@ struct VfsServiceState {
     next_handle_id: AtomicU64,
     handle_lease: Duration,
     capability_extensions: Arc<[proto::VfsCapabilityExtensionV2]>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct ArchiveMountKey {
+    source_mount_id: MountId,
+    source_path: ProviderPath,
+    source_version: VfsVersion,
+    nested_depth: u8,
 }
 
 struct ResultJournal {
@@ -141,6 +156,7 @@ trait JournalValue: Clone {
 
 struct ServiceHandle {
     mount_id: MountId,
+    path: ProviderPath,
     file: Arc<dyn VfsFile>,
     expires_at: Instant,
 }
@@ -335,6 +351,7 @@ impl VfsService {
         Self {
             inner: Arc::new(VfsServiceState {
                 mounts_by_worktree: Mutex::new(BTreeMap::new()),
+                archive_mounts: Mutex::new(BTreeMap::new()),
                 manager: VfsManager::default(),
                 authorizers_by_mount: Mutex::new(BTreeMap::new()),
                 handles: Mutex::new(BTreeMap::new()),
@@ -449,6 +466,206 @@ impl VfsService {
             capabilities: Some(capabilities),
             error: None,
         }
+    }
+
+    pub async fn mount_archive(
+        &self,
+        request: VfsMountArchiveRequestV2,
+    ) -> VfsMountArchiveResponseV2 {
+        match self.mount_archive_inner(request).await {
+            Ok(snapshot) => self.archive_mount_response(&snapshot),
+            Err(error) => archive_mount_error(error),
+        }
+    }
+
+    async fn mount_archive_inner(
+        &self,
+        request: VfsMountArchiveRequestV2,
+    ) -> VfsResult<VfsSnapshot> {
+        let source_mount_id =
+            required_mount_id(request.source_mount_id.as_ref(), VfsOperation::Open)?;
+        let source_path = request
+            .source_path
+            .as_ref()
+            .ok_or_else(|| {
+                service_error(
+                    VfsErrorCode::InvalidArgument,
+                    VfsOperation::Open,
+                    "archive mount request is missing its source path",
+                )
+            })?
+            .to_provider_path()
+            .map_err(|error| wire_error(VfsOperation::Open, error))?;
+        let source_authorizer = self
+            .inner
+            .authorizers_by_mount
+            .lock()
+            .get(&source_mount_id)
+            .cloned()
+            .ok_or_else(|| {
+                service_error(
+                    VfsErrorCode::NotFound,
+                    VfsOperation::Open,
+                    "archive source mount authorization is not registered",
+                )
+            })?;
+        let nested_depth = u8::try_from(request.nested_depth).map_err(|_| {
+            service_error(
+                VfsErrorCode::TooLarge,
+                VfsOperation::Open,
+                "archive nesting depth exceeds the protocol range",
+            )
+        })?;
+        self.authorize(source_mount_id, &source_path, VfsOperation::Open)?;
+        let source_snapshot = self.mount(source_mount_id, VfsOperation::Open)?;
+        let operation =
+            self.operation(source_mount_id, request.operation_id, VfsOperation::Open)?;
+        let source_version = VfsVersion::new(request.source_version);
+        let metadata = source_snapshot
+            .provider()
+            .stat(
+                &source_path,
+                StatOptions {
+                    symbolic_link_mode: SymbolicLinkMode::DoNotFollow,
+                    context: operation.context.clone(),
+                },
+            )
+            .await?;
+        if metadata.kind != EntryKind::File {
+            return Err(service_error(
+                VfsErrorCode::InvalidArgument,
+                VfsOperation::Open,
+                "archive source is not a regular file",
+            )
+            .with_path(source_path));
+        }
+        if metadata.content_version != source_version {
+            return Err(service_error(
+                VfsErrorCode::StaleVersion,
+                VfsOperation::Open,
+                "archive source version changed before mount",
+            )
+            .with_path(source_path));
+        }
+        let key = ArchiveMountKey {
+            source_mount_id,
+            source_path: source_path.clone(),
+            source_version: source_version.clone(),
+            nested_depth,
+        };
+        if let Some(snapshot) = self.inner.archive_mounts.lock().get(&key).cloned() {
+            return Ok(snapshot);
+        }
+
+        let stale_keys = self
+            .inner
+            .archive_mounts
+            .lock()
+            .keys()
+            .filter(|existing| {
+                existing.source_mount_id == source_mount_id
+                    && existing.source_path == source_path
+                    && existing.nested_depth == nested_depth
+                    && existing.source_version != source_version
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for stale_key in stale_keys {
+            let stale_snapshot = self.inner.archive_mounts.lock().remove(&stale_key);
+            if let Some(stale_snapshot) = stale_snapshot {
+                self.remove_registered_mount(stale_snapshot.registry().mount_id())?;
+            }
+        }
+        if self.inner.archive_mounts.lock().len() >= MAXIMUM_ARCHIVE_MOUNTS {
+            return Err(service_error(
+                VfsErrorCode::Quota,
+                VfsOperation::Open,
+                "remote archive mount limit reached",
+            ));
+        }
+
+        let provider = ArchiveProvider::mount_from_provider(
+            format!("archive-{}-{}", source_mount_id.get(), request.operation_id),
+            source_snapshot.provider().clone(),
+            source_path.clone(),
+            nested_depth,
+            ArchiveLimits::default(),
+            operation.context.clone(),
+        )
+        .await?;
+        if provider.source_version() != &source_version {
+            return Err(service_error(
+                VfsErrorCode::StaleVersion,
+                VfsOperation::Open,
+                "archive source version changed during mount",
+            ));
+        }
+        let snapshot = VfsSnapshot::mount(Arc::new(provider), SnapshotBudgets::default())?;
+        self.inner.manager.register(snapshot.clone())?;
+        self.inner.authorizers_by_mount.lock().insert(
+            snapshot.registry().mount_id(),
+            Arc::new(move |_, _| source_authorizer(&source_path, VfsOperation::Open)),
+        );
+
+        let mut archive_mounts = self.inner.archive_mounts.lock();
+        if let Some(existing) = archive_mounts.get(&key).cloned() {
+            drop(archive_mounts);
+            self.remove_registered_mount(snapshot.registry().mount_id())?;
+            return Ok(existing);
+        }
+        archive_mounts.insert(key, snapshot.clone());
+        Ok(snapshot)
+    }
+
+    fn archive_mount_response(&self, snapshot: &VfsSnapshot) -> VfsMountArchiveResponseV2 {
+        let mut capabilities = VfsProviderCapabilitiesV2::from_provider_capabilities(
+            &snapshot.provider().capabilities(),
+        );
+        capabilities.extensions = self.inner.capability_extensions.to_vec();
+        VfsMountArchiveResponseV2 {
+            protocol_version: REMOTE_VFS_PROTOCOL_VERSION,
+            mount_id: Some(MountIdV2::from_mount_id(snapshot.registry().mount_id())),
+            descriptor: Some(VfsProviderDescriptorV2::from_provider_descriptor(
+                snapshot.provider().descriptor(),
+            )),
+            capabilities: Some(capabilities),
+            error: None,
+        }
+    }
+
+    fn remove_registered_mount(&self, mount_id: MountId) -> VfsResult<()> {
+        self.inner.manager.unmount(mount_id)?;
+        self.inner.authorizers_by_mount.lock().remove(&mount_id);
+        self.inner
+            .handles
+            .lock()
+            .retain(|_, handle| handle.mount_id != mount_id);
+        let cancellations = {
+            let mut operations = self.inner.operations.lock();
+            let keys = operations
+                .keys()
+                .filter(|(operation_mount_id, _)| *operation_mount_id == mount_id)
+                .copied()
+                .collect::<Vec<_>>();
+            keys.into_iter()
+                .filter_map(|key| operations.remove(&key))
+                .collect::<Vec<_>>()
+        };
+        for cancellation in cancellations {
+            cancellation.cancel();
+        }
+        let mut journal = self.inner.result_journal.lock();
+        journal
+            .entries
+            .retain(|(operation_mount_id, _), _| *operation_mount_id != mount_id);
+        journal
+            .insertion_order
+            .retain(|(operation_mount_id, _)| *operation_mount_id != mount_id);
+        Ok(())
+    }
+
+    pub fn archive_mount_count(&self) -> usize {
+        self.inner.archive_mounts.lock().len()
     }
 
     pub async fn stat(&self, request: VfsStatRequestV2) -> VfsStatResponseV2 {
@@ -764,6 +981,7 @@ impl VfsService {
             handle_id,
             ServiceHandle {
                 mount_id,
+                path,
                 file,
                 expires_at: Instant::now() + self.inner.handle_lease,
             },
@@ -1415,23 +1633,27 @@ impl VfsService {
         operation: VfsOperation,
     ) -> VfsResult<Arc<dyn VfsFile>> {
         self.prune_expired_handles();
-        let mut handles = self.inner.handles.lock();
-        let handle = handles.get_mut(&handle_id).ok_or_else(|| {
-            service_error(
-                VfsErrorCode::NotFound,
-                operation,
-                "remote VFS handle is closed or expired",
-            )
-        })?;
-        if handle.mount_id != mount_id {
-            return Err(service_error(
-                VfsErrorCode::PermissionDenied,
-                operation,
-                "remote VFS handle belongs to another mount",
-            ));
-        }
-        handle.expires_at = Instant::now() + self.inner.handle_lease;
-        Ok(handle.file.clone())
+        let (path, file) = {
+            let mut handles = self.inner.handles.lock();
+            let handle = handles.get_mut(&handle_id).ok_or_else(|| {
+                service_error(
+                    VfsErrorCode::NotFound,
+                    operation,
+                    "remote VFS handle is closed or expired",
+                )
+            })?;
+            if handle.mount_id != mount_id {
+                return Err(service_error(
+                    VfsErrorCode::PermissionDenied,
+                    operation,
+                    "remote VFS handle belongs to another mount",
+                ));
+            }
+            handle.expires_at = Instant::now() + self.inner.handle_lease;
+            (handle.path.clone(), handle.file.clone())
+        };
+        self.authorize(mount_id, &path, operation)?;
+        Ok(file)
     }
 
     pub fn prune_expired_handles(&self) {
@@ -1465,11 +1687,25 @@ impl VfsService {
 #[derive(Clone)]
 pub struct LoopbackVfsTransport {
     service: VfsService,
+    read_at_requests: Arc<AtomicU64>,
+    requested_read_bytes: Arc<AtomicU64>,
 }
 
 impl LoopbackVfsTransport {
     pub fn new(service: VfsService) -> Self {
-        Self { service }
+        Self {
+            service,
+            read_at_requests: Arc::new(AtomicU64::new(0)),
+            requested_read_bytes: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub fn read_at_request_count(&self) -> u64 {
+        self.read_at_requests.load(Ordering::Relaxed)
+    }
+
+    pub fn requested_read_bytes(&self) -> u64 {
+        self.requested_read_bytes.load(Ordering::Relaxed)
     }
 }
 
@@ -1480,6 +1716,13 @@ impl RemoteVfsTransport for LoopbackVfsTransport {
         request: VfsNegotiateRequestV2,
     ) -> TransportResult<VfsNegotiateResponseV2> {
         Ok(self.service.negotiate(request).await)
+    }
+
+    async fn mount_archive(
+        &self,
+        request: VfsMountArchiveRequestV2,
+    ) -> TransportResult<VfsMountArchiveResponseV2> {
+        Ok(self.service.mount_archive(request).await)
     }
 
     async fn stat(&self, request: VfsStatRequestV2) -> TransportResult<VfsStatResponseV2> {
@@ -1512,6 +1755,9 @@ impl RemoteVfsTransport for LoopbackVfsTransport {
     }
 
     async fn read_at(&self, request: VfsReadAtRequestV2) -> TransportResult<VfsReadAtResponseV2> {
+        self.read_at_requests.fetch_add(1, Ordering::Relaxed);
+        self.requested_read_bytes
+            .fetch_add(u64::from(request.length), Ordering::Relaxed);
         Ok(self.service.read_at(request).await)
     }
 
@@ -1608,6 +1854,13 @@ impl RemoteVfsTransport for ProtoVfsTransport {
         &self,
         request: VfsNegotiateRequestV2,
     ) -> TransportResult<VfsNegotiateResponseV2> {
+        self.client.request(request).await
+    }
+
+    async fn mount_archive(
+        &self,
+        request: VfsMountArchiveRequestV2,
+    ) -> TransportResult<VfsMountArchiveResponseV2> {
         self.client.request(request).await
     }
 
@@ -1743,33 +1996,96 @@ impl RemoteProviderProxy {
             })
             .await
             .map_err(|error| transport_error(VfsOperation::Stat, error))?;
-        response_error(response.error, VfsOperation::Stat)?;
-        if response.protocol_version != REMOTE_VFS_PROTOCOL_VERSION {
+        Self::from_mount_response(
+            project_id,
+            response.protocol_version,
+            response.mount_id,
+            response.descriptor,
+            response.capabilities,
+            response.error,
+            transport,
+            VfsOperation::Stat,
+        )
+    }
+
+    pub async fn mount_archive(
+        &self,
+        source_path: &ProviderPath,
+        source_version: VfsVersion,
+        nested_depth: u8,
+        context: OperationContext,
+    ) -> VfsResult<Self> {
+        let response = cancellable_transport_request(
+            &self.transport,
+            self.project_id,
+            self.mount_id,
+            &context,
+            VfsOperation::Open,
+            self.transport.mount_archive(VfsMountArchiveRequestV2 {
+                project_id: self.project_id,
+                source_mount_id: self.mount(),
+                source_path: Some(ProviderPathV2::from_provider_path(source_path)),
+                source_version: source_version.as_bytes().to_vec(),
+                nested_depth: u32::from(nested_depth),
+                operation_id: context.operation_id.get(),
+            }),
+        )
+        .await?;
+        Self::from_mount_response(
+            self.project_id,
+            response.protocol_version,
+            response.mount_id,
+            response.descriptor,
+            response.capabilities,
+            response.error,
+            self.transport.clone(),
+            VfsOperation::Open,
+        )
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn from_mount_response(
+        project_id: u64,
+        protocol_version: u32,
+        mount_id: Option<MountIdV2>,
+        descriptor: Option<VfsProviderDescriptorV2>,
+        capabilities: Option<VfsProviderCapabilitiesV2>,
+        error: Option<VfsErrorV2>,
+        transport: Arc<dyn RemoteVfsTransport>,
+        operation: VfsOperation,
+    ) -> VfsResult<Self> {
+        response_error(error, operation)?;
+        if protocol_version != REMOTE_VFS_PROTOCOL_VERSION {
             return Err(proxy_error(
                 VfsErrorCode::Unsupported,
-                VfsOperation::Stat,
+                operation,
                 "server selected an unsupported VFS protocol version",
             ));
         }
-        let mount_id = response
-            .mount_id
+        let mount_id = mount_id
             .as_ref()
-            .ok_or_else(|| missing_response_field(VfsOperation::Stat, "mount ID"))?
+            .ok_or_else(|| missing_response_field(operation, "mount ID"))?
             .to_mount_id();
-        let descriptor = response
-            .descriptor
+        let descriptor = descriptor
             .as_ref()
-            .ok_or_else(|| missing_response_field(VfsOperation::Stat, "provider descriptor"))?
+            .ok_or_else(|| missing_response_field(operation, "provider descriptor"))?
             .to_provider_descriptor()
-            .map_err(|error| wire_error(VfsOperation::Stat, error))?;
-        let wire_capabilities = response
-            .capabilities
+            .map_err(|error| wire_error(operation, error))?;
+        let wire_capabilities = capabilities
             .as_ref()
-            .ok_or_else(|| missing_response_field(VfsOperation::Stat, "provider capabilities"))?;
+            .ok_or_else(|| missing_response_field(operation, "provider capabilities"))?;
         let mut capabilities = wire_capabilities
             .to_provider_capabilities()
-            .map_err(|error| wire_error(VfsOperation::Stat, error))?;
-        capabilities.mutations.idempotency = vfs::SupportLevel::Native;
+            .map_err(|error| wire_error(operation, error))?;
+        let has_mutation = capabilities.mutations.create_directory.is_supported()
+            || capabilities.mutations.remove.is_supported()
+            || capabilities.mutations.rename.is_supported()
+            || capabilities.mutations.copy.is_supported();
+        capabilities.mutations.idempotency = if has_mutation {
+            vfs::SupportLevel::Native
+        } else {
+            vfs::SupportLevel::Unsupported
+        };
         capabilities.links.native_path = vfs::SupportLevel::Unsupported;
         Ok(Self {
             project_id,
@@ -2398,6 +2714,16 @@ fn negotiation_error(error: VfsError) -> VfsNegotiateResponseV2 {
     }
 }
 
+fn archive_mount_error(error: VfsError) -> VfsMountArchiveResponseV2 {
+    VfsMountArchiveResponseV2 {
+        protocol_version: 0,
+        mount_id: None,
+        descriptor: None,
+        capabilities: None,
+        error: Some(VfsErrorV2::from_vfs_error(&error)),
+    }
+}
+
 fn directory_error(error: VfsError) -> VfsReadDirectoryResponseV2 {
     VfsReadDirectoryResponseV2 {
         entries: Vec::new(),
@@ -2490,16 +2816,63 @@ fn proxy_error(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_zip::{Compression, ZipEntryBuilder, base::write::ZipFileWriter};
     use futures::executor::block_on;
     use proto::Message as _;
-    use std::{collections::BTreeSet, num::NonZeroUsize};
+    use std::{
+        collections::BTreeSet,
+        num::NonZeroUsize,
+        sync::atomic::{AtomicBool, Ordering as AtomicOrdering},
+    };
     use vfs::{
-        MemoryProvider, WatchDepth,
+        ArchiveLimits, ArchiveProvider, MemoryProvider, WatchDepth,
         test_support::{
             FaultInjectingTransport, FrameFault, FrameOutcome, TransportDirection, TransportEvent,
             run_provider_conformance,
         },
     };
+
+    async fn zip_fixture(member_contents: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let mut writer = ZipFileWriter::new(&mut bytes);
+        writer
+            .write_entry_whole(
+                ZipEntryBuilder::new("dir/member.txt".into(), Compression::Deflate),
+                member_contents,
+            )
+            .await
+            .expect("archive member fixture should write");
+        writer
+            .write_entry_whole(
+                ZipEntryBuilder::new("padding.bin".into(), Compression::Stored),
+                &vec![0x5a; 2 * 1024 * 1024],
+            )
+            .await
+            .expect("archive padding fixture should write");
+        writer.close().await.expect("archive fixture should close");
+        bytes
+    }
+
+    async fn read_provider_bytes(
+        provider: &dyn VfsProvider,
+        path: &ProviderPath,
+    ) -> VfsResult<Vec<u8>> {
+        let file = provider.open(path, OpenOptions::default()).await?;
+        let length =
+            usize::try_from(file.len(OperationContext::default()).await?).map_err(|_| {
+                VfsError::new(
+                    VfsErrorCode::TooLarge,
+                    VfsOperation::Read,
+                    ProviderId::new("archive-parity-test"),
+                )
+            })?;
+        let mut bytes = vec![0; length];
+        let read = file
+            .read_at(0, &mut bytes, OperationContext::default())
+            .await?;
+        bytes.truncate(read);
+        Ok(bytes)
+    }
 
     #[test]
     fn loopback_remote_provider_passes_shared_conformance() {
@@ -2574,6 +2947,198 @@ mod tests {
             Ok::<_, VfsError>(())
         });
         assert!(result.is_ok(), "loopback media load failed: {result:?}");
+    }
+
+    #[test]
+    fn loopback_remote_archive_mount_is_data_local_and_matches_local_tree() {
+        let result = block_on(async {
+            let source_provider = Arc::new(MemoryProvider::new(
+                "archive-source",
+                vfs::PathEncoding::PortableUtf8,
+            ));
+            let source_path = ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"bundle.zip".as_slice()],
+            )
+            .map_err(|error| {
+                VfsError::new(
+                    VfsErrorCode::InvalidPath,
+                    VfsOperation::Open,
+                    ProviderId::new("archive-parity-test"),
+                )
+                .with_detail(error.to_string())
+            })?;
+            let initial_archive = zip_fixture(b"remote archive member").await;
+            let source_file = source_provider
+                .open(
+                    &source_path,
+                    OpenOptions {
+                        access: vfs::FileAccess::ReadWrite,
+                        create: vfs::CreateDisposition::CreateNew,
+                        ..OpenOptions::default()
+                    },
+                )
+                .await?;
+            source_file
+                .write_at(0, &initial_archive, WriteAtOptions::default())
+                .await?;
+            let source_metadata = source_provider
+                .stat(&source_path, StatOptions::default())
+                .await?;
+
+            let local_source = source_provider
+                .open(&source_path, OpenOptions::default())
+                .await?;
+            let local_archive = ArchiveProvider::mount(
+                "local-archive",
+                local_source,
+                source_metadata.content_version.clone(),
+                1,
+                ArchiveLimits::default(),
+                OperationContext::default(),
+            )
+            .await?;
+
+            let service = VfsService::default();
+            let source_snapshot =
+                VfsSnapshot::mount(source_provider.clone(), SnapshotBudgets::default())?;
+            let source_authorized = Arc::new(AtomicBool::new(true));
+            service.register_snapshot_with_authorizer(23, source_snapshot, {
+                let source_authorized = source_authorized.clone();
+                Arc::new(move |path, operation| {
+                    if source_authorized.load(AtomicOrdering::Acquire) {
+                        Ok(())
+                    } else {
+                        Err(VfsError::new(
+                            VfsErrorCode::PermissionDenied,
+                            operation,
+                            ProviderId::new("archive-source-policy"),
+                        )
+                        .with_path(path.clone()))
+                    }
+                })
+            })?;
+            let transport = Arc::new(LoopbackVfsTransport::new(service.clone()));
+            let source_proxy = RemoteProviderProxy::connect(0, 23, transport.clone()).await?;
+            let remote_archive = source_proxy
+                .mount_archive(
+                    &source_path,
+                    source_metadata.content_version.clone(),
+                    1,
+                    OperationContext::default(),
+                )
+                .await?;
+            let root = ProviderPath::root(vfs::PathEncoding::UnixBytes);
+            let local_root = local_archive
+                .read_dir(&root, DirPageRequest::default())
+                .await?;
+            let remote_root = remote_archive
+                .read_dir(&root, DirPageRequest::default())
+                .await?;
+            assert_eq!(
+                local_root
+                    .entries
+                    .iter()
+                    .map(|entry| entry.path.clone())
+                    .collect::<BTreeSet<_>>(),
+                remote_root
+                    .entries
+                    .iter()
+                    .map(|entry| entry.path.clone())
+                    .collect::<BTreeSet<_>>()
+            );
+            assert_eq!(transport.read_at_request_count(), 0);
+            assert_eq!(transport.requested_read_bytes(), 0);
+
+            let member_path = ProviderPath::from_byte_components(
+                vfs::PathEncoding::UnixBytes,
+                [b"dir".as_slice(), b"member.txt".as_slice()],
+            )
+            .map_err(|error| {
+                VfsError::new(
+                    VfsErrorCode::InvalidPath,
+                    VfsOperation::Open,
+                    ProviderId::new("archive-parity-test"),
+                )
+                .with_detail(error.to_string())
+            })?;
+            let local_bytes = read_provider_bytes(&local_archive, &member_path).await?;
+            let remote_bytes = read_provider_bytes(&remote_archive, &member_path).await?;
+            assert_eq!(local_bytes, remote_bytes);
+            assert_eq!(remote_bytes, b"remote archive member");
+            assert!(
+                transport.requested_read_bytes()
+                    < u64::try_from(initial_archive.len()).unwrap_or(u64::MAX),
+                "remote member read must not transfer the whole archive"
+            );
+            let held_member = remote_archive
+                .open(&member_path, OpenOptions::default())
+                .await?;
+            source_authorized.store(false, AtomicOrdering::Release);
+            assert_eq!(
+                remote_archive
+                    .stat(&root, StatOptions::default())
+                    .await
+                    .expect_err("child archive mount should revalidate source authorization")
+                    .code(),
+                VfsErrorCode::PermissionDenied
+            );
+            let mut held_byte = [0; 1];
+            assert_eq!(
+                held_member
+                    .read_at(0, &mut held_byte, OperationContext::default())
+                    .await
+                    .expect_err("open archive handle should revalidate source authorization")
+                    .code(),
+                VfsErrorCode::PermissionDenied
+            );
+            source_authorized.store(true, AtomicOrdering::Release);
+
+            let replacement_archive = zip_fixture(b"replacement").await;
+            source_file
+                .set_len(
+                    u64::try_from(replacement_archive.len()).unwrap_or(u64::MAX),
+                    WriteAtOptions::default(),
+                )
+                .await?;
+            source_file
+                .write_at(0, &replacement_archive, WriteAtOptions::default())
+                .await?;
+            let replacement_metadata = source_provider
+                .stat(&source_path, StatOptions::default())
+                .await?;
+            assert_eq!(
+                remote_archive
+                    .stat(&root, StatOptions::default())
+                    .await
+                    .expect_err("changed archive source should mark the child mount stale")
+                    .code(),
+                VfsErrorCode::StaleVersion
+            );
+            let replacement = source_proxy
+                .mount_archive(
+                    &source_path,
+                    replacement_metadata.content_version,
+                    1,
+                    OperationContext::default(),
+                )
+                .await?;
+            assert_eq!(service.archive_mount_count(), 1);
+            assert_eq!(
+                remote_archive
+                    .stat(&root, StatOptions::default())
+                    .await
+                    .expect_err("stale archive mount should be invalidated")
+                    .code(),
+                VfsErrorCode::NotFound
+            );
+            assert_eq!(
+                read_provider_bytes(&replacement, &member_path).await?,
+                b"replacement"
+            );
+            VfsResult::Ok(())
+        });
+        assert!(result.is_ok(), "remote archive parity failed: {result:?}");
     }
 
     #[test]
@@ -3062,6 +3627,24 @@ mod tests {
             provider
                 .create_dir(&private_path, CreateDirOptions::default())
                 .await?;
+            let public_path = ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"public.txt".as_slice()],
+            )
+            .map_err(|error| wire_error(VfsOperation::Open, error.into()))?;
+            let public_file = provider
+                .open(
+                    &public_path,
+                    OpenOptions {
+                        access: vfs::FileAccess::ReadWrite,
+                        create: vfs::CreateDisposition::CreateNew,
+                        ..OpenOptions::default()
+                    },
+                )
+                .await?;
+            public_file
+                .write_at(0, b"public", WriteAtOptions::default())
+                .await?;
             let snapshot = VfsSnapshot::mount(provider, SnapshotBudgets::default())?;
             let service = VfsService::default();
             service.register_snapshot_with_authorizer(
@@ -3100,8 +3683,38 @@ mod tests {
                     "remote service did not enforce its mount authorizer",
                 ));
             }
+            let open_file = proxy.open(&public_path, OpenOptions::default()).await?;
+            service.register_snapshot_with_authorizer(
+                19,
+                snapshot.clone(),
+                Arc::new(|path, operation| {
+                    Err(service_error(
+                        VfsErrorCode::PermissionDenied,
+                        operation,
+                        format!("fixture revoked access to {}", path.display()),
+                    ))
+                }),
+            )?;
+            let mut byte = [0; 1];
+            let denied_read = open_file
+                .read_at(0, &mut byte, OperationContext::default())
+                .await;
+            if !denied_read
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.code() == VfsErrorCode::PermissionDenied)
+            {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Read,
+                    "remote handle did not revalidate its path authorization",
+                ));
+            }
             service.register_snapshot_with_authorizer(19, snapshot, Arc::new(|_, _| Ok(())))?;
             proxy.stat(&private_path, StatOptions::default()).await?;
+            open_file
+                .read_at(0, &mut byte, OperationContext::default())
+                .await?;
             Ok::<_, VfsError>(())
         });
         assert!(

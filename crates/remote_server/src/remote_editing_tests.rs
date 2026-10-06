@@ -1059,6 +1059,84 @@ async fn test_remote_lsp_workspace_file_operation_runs_on_server(
 }
 
 #[gpui::test]
+async fn test_remote_archive_mount_is_data_local(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    use async_zip::{Compression, ZipEntryBuilder, base::write::ZipFileWriter};
+
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(path!("/code"), json!({ "project": {} }))
+        .await;
+    let mut archive_bytes = Vec::new();
+    let mut writer = ZipFileWriter::new(&mut archive_bytes);
+    writer
+        .write_entry_whole(
+            ZipEntryBuilder::new("dir/member.txt".into(), Compression::Deflate),
+            b"remote archive member",
+        )
+        .await
+        .expect("remote archive fixture should write");
+    writer
+        .write_entry_whole(
+            ZipEntryBuilder::new("padding.bin".into(), Compression::Stored),
+            &vec![0x42; 1024 * 1024],
+        )
+        .await
+        .expect("remote archive padding should write");
+    writer
+        .close()
+        .await
+        .expect("remote archive fixture should close");
+    fs.insert_file(path!("/code/project/bundle.zip"), archive_bytes)
+        .await;
+
+    let (project, _headless) = init_test(&fs, cx, server_cx).await;
+    let worktree_id = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/code/project"), true, cx)
+        })
+        .await
+        .expect("remote archive worktree should open")
+        .0
+        .read_with(cx, |worktree, _| worktree.id());
+    let archive = project
+        .update(cx, |project, cx| {
+            project.mount_archive(worktree_id, rel_path("bundle.zip").into(), 1, cx)
+        })
+        .await
+        .unwrap_or_else(|error| {
+            panic!("remote archive should mount on the server host: {error:#?}")
+        });
+    let root = vfs::ProviderPath::root(vfs::PathEncoding::UnixBytes);
+    archive
+        .load_directory(&root)
+        .await
+        .expect("remote archive root should list");
+    assert_eq!(
+        archive
+            .registry()
+            .children(&root)
+            .into_iter()
+            .map(|record| record.path.display())
+            .collect::<Vec<_>>(),
+        vec!["dir", "padding.bin"]
+    );
+    let member = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::UnixBytes,
+        [b"dir".as_slice(), b"member.txt".as_slice()],
+    )
+    .expect("remote archive member path should be valid");
+    assert_eq!(
+        archive
+            .load_bytes(&member, vfs::OperationContext::default())
+            .await
+            .expect("remote archive member should load"),
+        b"remote archive member"
+    );
+}
+
+#[gpui::test]
 async fn test_remote_cancel_language_server_work(
     cx: &mut TestAppContext,
     server_cx: &mut TestAppContext,

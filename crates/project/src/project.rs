@@ -1,5 +1,6 @@
 pub mod agent_registry_store;
 pub mod agent_server_store;
+pub mod archive;
 pub mod bookmark_store;
 pub mod buffer_store;
 pub mod color_extractor;
@@ -1205,6 +1206,7 @@ impl Project {
         DapStore::init(&client, cx);
         BreakpointStore::init(&client);
         client.add_entity_request_handler(Self::handle_vfs_negotiate);
+        client.add_entity_request_handler(Self::handle_vfs_mount_archive);
         client.add_entity_request_handler(Self::handle_vfs_stat);
         client.add_entity_request_handler(Self::handle_vfs_stat_many);
         client.add_entity_request_handler(Self::handle_vfs_read_directory);
@@ -2657,6 +2659,21 @@ impl Project {
             worktree.load_binary_file(path.as_ref(), cx)
         });
         cx.spawn(async move |_this, _cx| Ok(load.await?.content))
+    }
+
+    pub fn mount_archive(
+        &mut self,
+        worktree_id: WorktreeId,
+        path: Arc<RelPath>,
+        nested_depth: u8,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<vfs::VfsSnapshot>> {
+        let Some(worktree) = self.worktree_for_id(worktree_id, cx) else {
+            return Task::ready(Err(anyhow!("no such worktree")));
+        };
+        worktree.update(cx, |worktree, cx| {
+            worktree.mount_archive(path.as_ref(), nested_depth, cx)
+        })
     }
 
     /// Materializes a resource without a native path into a temporary local file
@@ -4732,6 +4749,13 @@ impl Project {
         }
         Ok(service.negotiate(envelope.payload).await)
     }
+
+    vfs_project_request_handler!(
+        handle_vfs_mount_archive,
+        proto::VfsMountArchiveRequestV2,
+        proto::VfsMountArchiveResponseV2,
+        mount_archive
+    );
 
     vfs_project_request_handler!(
         handle_vfs_stat,

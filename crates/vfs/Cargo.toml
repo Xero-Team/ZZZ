@@ -16,8 +16,11 @@ doctest = false
 test-support = []
 
 [dependencies]
+async-io.workspace = true
 async-lock.workspace = true
 async-trait.workspace = true
+async_zip.workspace = true
+binrw.workspace = true
 event-listener.workspace = true
 futures.workspace = true
 parking_lot.workspace = true

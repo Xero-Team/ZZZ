@@ -196,7 +196,7 @@ pub struct RemoteWorktree {
     received_initial_update: bool,
 }
 
-pub type RemoteVfsProviderTask = Shared<Task<Result<Arc<dyn VfsProvider>, Arc<VfsError>>>>;
+pub type RemoteVfsProviderTask = Shared<Task<Result<Arc<RemoteProviderProxy>, Arc<VfsError>>>>;
 
 #[derive(Clone)]
 pub struct Snapshot {
@@ -915,7 +915,7 @@ impl Worktree {
                                 .await
                                 {
                                     Ok(provider) => {
-                                        return Ok(Arc::new(provider) as Arc<dyn VfsProvider>);
+                                        return Ok(Arc::new(provider));
                                     }
                                     Err(error) if error.code() == VfsErrorCode::Disconnected => {
                                         executor.timer(REMOTE_VFS_RECONNECT_DELAY).await;
@@ -1146,6 +1146,66 @@ impl Worktree {
                         provider.descriptor().path_encoding,
                     )?;
                     provider_path_is_file(provider.as_ref(), &provider_path).await
+                })
+            }
+        }
+    }
+
+    pub fn mount_archive(
+        &self,
+        path: &RelPath,
+        nested_depth: u8,
+        cx: &Context<Worktree>,
+    ) -> Task<Result<VfsSnapshot>> {
+        match self {
+            Worktree::Local(local_worktree) => {
+                let Some(snapshot) = local_worktree.vfs_snapshot.clone() else {
+                    return Task::ready(Err(anyhow!("local VFS provider is unavailable")));
+                };
+                let provider = snapshot.provider().clone();
+                let provider_path = provider_path_from_legacy_utf8(
+                    path.as_unix_str(),
+                    provider.descriptor().path_encoding,
+                );
+                cx.background_spawn(async move {
+                    let provider_path = provider_path?;
+                    let archive = vfs::ArchiveProvider::mount_from_provider(
+                        format!("archive-local-{}", snapshot.registry().mount_id().get()),
+                        provider,
+                        provider_path,
+                        nested_depth,
+                        vfs::ArchiveLimits::default(),
+                        vfs::OperationContext::default(),
+                    )
+                    .await?;
+                    VfsSnapshot::mount(Arc::new(archive), SnapshotBudgets::default())
+                        .map_err(Into::into)
+                })
+            }
+            Worktree::Remote(_) => {
+                let Some(provider_task) = self.remote_vfs_provider(cx) else {
+                    return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
+                };
+                let path = path.to_owned();
+                cx.background_spawn(async move {
+                    let provider = provider_task.await.map_err(anyhow::Error::new)?;
+                    let provider_path = provider_path_from_legacy_utf8(
+                        path.as_unix_str(),
+                        provider.descriptor().path_encoding,
+                    )?;
+                    let metadata = provider
+                        .stat(&provider_path, vfs::StatOptions::default())
+                        .await?;
+                    let archive = provider
+                        .mount_archive(
+                            &provider_path,
+                            metadata.content_version,
+                            nested_depth,
+                            vfs::OperationContext::default(),
+                        )
+                        .await?;
+                    VfsSnapshot::mount(Arc::new(archive), SnapshotBudgets::default())
+                        .map_err(Into::into)
                 })
             }
         }
