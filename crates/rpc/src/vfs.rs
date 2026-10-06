@@ -468,6 +468,7 @@ impl VfsService {
         }
     }
 
+    /// Requests a child archive mount on the same host as this source provider.
     pub async fn mount_archive(
         &self,
         request: VfsMountArchiveRequestV2,
@@ -634,6 +635,21 @@ impl VfsService {
     }
 
     fn remove_registered_mount(&self, mount_id: MountId) -> VfsResult<()> {
+        let child_snapshots = {
+            let mut archive_mounts = self.inner.archive_mounts.lock();
+            let child_keys = archive_mounts
+                .keys()
+                .filter(|key| key.source_mount_id == mount_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            child_keys
+                .into_iter()
+                .filter_map(|key| archive_mounts.remove(&key))
+                .collect::<Vec<_>>()
+        };
+        for child_snapshot in child_snapshots {
+            self.remove_registered_mount(child_snapshot.registry().mount_id())?;
+        }
         self.inner.manager.unmount(mount_id)?;
         self.inner.authorizers_by_mount.lock().remove(&mount_id);
         self.inner
@@ -2008,6 +2024,7 @@ impl RemoteProviderProxy {
         )
     }
 
+    /// Mounts an archive child provider on the remote execution host.
     pub async fn mount_archive(
         &self,
         source_path: &ProviderPath,
@@ -2833,6 +2850,19 @@ mod tests {
     };
 
     async fn zip_fixture(member_contents: &[u8]) -> Vec<u8> {
+        let mut nested_bytes = Vec::new();
+        let mut nested_writer = ZipFileWriter::new(&mut nested_bytes);
+        nested_writer
+            .write_entry_whole(
+                ZipEntryBuilder::new("nested.txt".into(), Compression::Stored),
+                b"nested member",
+            )
+            .await
+            .expect("nested archive fixture should write");
+        nested_writer
+            .close()
+            .await
+            .expect("nested archive fixture should close");
         let mut bytes = Vec::new();
         let mut writer = ZipFileWriter::new(&mut bytes);
         writer
@@ -2849,6 +2879,13 @@ mod tests {
             )
             .await
             .expect("archive padding fixture should write");
+        writer
+            .write_entry_whole(
+                ZipEntryBuilder::new("nested.zip".into(), Compression::Stored),
+                &nested_bytes,
+            )
+            .await
+            .expect("nested archive payload should write");
         writer.close().await.expect("archive fixture should close");
         bytes
     }
@@ -3071,6 +3108,61 @@ mod tests {
                     < u64::try_from(initial_archive.len()).unwrap_or(u64::MAX),
                 "remote member read must not transfer the whole archive"
             );
+            let nested_path = ProviderPath::from_byte_components(
+                vfs::PathEncoding::UnixBytes,
+                [b"nested.zip".as_slice()],
+            )
+            .map_err(|error| {
+                VfsError::new(
+                    VfsErrorCode::InvalidPath,
+                    VfsOperation::Open,
+                    ProviderId::new("archive-parity-test"),
+                )
+                .with_detail(error.to_string())
+            })?;
+            let nested_metadata = remote_archive
+                .stat(&nested_path, StatOptions::default())
+                .await?;
+            let nested_archive = remote_archive
+                .mount_archive(
+                    &nested_path,
+                    nested_metadata.content_version.clone(),
+                    2,
+                    OperationContext::default(),
+                )
+                .await?;
+            let nested_member = ProviderPath::from_byte_components(
+                vfs::PathEncoding::UnixBytes,
+                [b"nested.txt".as_slice()],
+            )
+            .map_err(|error| {
+                VfsError::new(
+                    VfsErrorCode::InvalidPath,
+                    VfsOperation::Open,
+                    ProviderId::new("archive-parity-test"),
+                )
+                .with_detail(error.to_string())
+            })?;
+            assert_eq!(
+                read_provider_bytes(&nested_archive, &nested_member).await?,
+                b"nested member"
+            );
+            let Err(nested_depth_error) = remote_archive
+                .mount_archive(
+                    &nested_path,
+                    nested_metadata.content_version,
+                    5,
+                    OperationContext::default(),
+                )
+                .await
+            else {
+                return Err(service_error(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Open,
+                    "nested archive depth limit did not reject",
+                ));
+            };
+            assert_eq!(nested_depth_error.code(), VfsErrorCode::TooLarge);
             let held_member = remote_archive
                 .open(&member_path, OpenOptions::default())
                 .await?;

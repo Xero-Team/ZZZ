@@ -36,14 +36,23 @@ const MEMBER_READ_CHUNK_SIZE: usize = 64 * 1024;
 const MAXIMUM_MEMBER_RANGE_SIZE: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
+/// Resource and time limits applied while indexing and reading an archive.
 pub struct ArchiveLimits {
+    /// Maximum number of central-directory records.
     pub maximum_entry_count: u64,
+    /// Maximum exact byte length of one path component.
     pub maximum_name_bytes: usize,
+    /// Maximum central-directory byte length.
     pub maximum_central_directory_bytes: u64,
+    /// Maximum uncompressed size of one member.
     pub maximum_uncompressed_member_bytes: u64,
+    /// Maximum sum of declared uncompressed member sizes.
     pub maximum_total_uncompressed_bytes: u64,
+    /// Maximum declared uncompressed-to-compressed size ratio.
     pub maximum_compression_ratio: u64,
+    /// Maximum caller-managed nesting depth.
     pub maximum_nested_depth: u8,
+    /// Wall-clock deadline for one index or member read operation.
     pub operation_deadline: Duration,
 }
 
@@ -63,6 +72,7 @@ impl Default for ArchiveLimits {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// One preserved central-directory record for an exact archive path.
 pub struct ArchiveRecordMetadata {
     pub entry_index: usize,
     pub path: ProviderPath,
@@ -135,6 +145,7 @@ impl ArchiveNode {
 }
 
 #[derive(Clone)]
+/// Read-only ZIP/Zip64 provider backed by positioned reads from another VFS file.
 pub struct ArchiveProvider {
     descriptor: ProviderDescriptor,
     source: Arc<dyn VfsFile>,
@@ -176,6 +187,7 @@ impl ArchiveVersionProbe for ProviderArchiveVersionProbe {
 }
 
 impl ArchiveProvider {
+    /// Mounts a positioned file when the caller already owns source-version checks.
     pub async fn mount(
         id: impl Into<Arc<str>>,
         source: Arc<dyn VfsFile>,
@@ -196,6 +208,8 @@ impl ArchiveProvider {
         .await
     }
 
+    /// Mounts an archive from a provider path and rejects operations after its
+    /// source content version changes.
     pub async fn mount_from_provider(
         id: impl Into<Arc<str>>,
         source_provider: Arc<dyn VfsProvider>,

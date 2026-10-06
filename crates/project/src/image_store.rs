@@ -728,7 +728,7 @@ fn reload_image_items(
     })
 }
 
-fn create_gpui_image(content: Vec<u8>) -> anyhow::Result<Arc<gpui::Image>> {
+pub(crate) fn create_gpui_image(content: Vec<u8>) -> anyhow::Result<Arc<gpui::Image>> {
     let format = image::guess_format(&content)?;
 
     Ok(Arc::new(gpui::Image::from_bytes(

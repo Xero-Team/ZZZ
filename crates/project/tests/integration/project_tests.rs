@@ -476,6 +476,11 @@ async fn test_archive_members_open_as_read_only_buffers_and_bytes(cx: &mut gpui:
     init_test(cx);
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/root"), json!({})).await;
+    let mut image_cursor = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgba8(1, 1)
+        .write_to(&mut image_cursor, image::ImageFormat::Png)
+        .expect("image archive fixture should encode");
+    let image_bytes = image_cursor.into_inner();
     let mut archive_bytes = Vec::new();
     let mut writer = ZipFileWriter::new(&mut archive_bytes);
     writer
@@ -488,7 +493,7 @@ async fn test_archive_members_open_as_read_only_buffers_and_bytes(cx: &mut gpui:
     writer
         .write_entry_whole(
             ZipEntryBuilder::new("image.png".into(), Compression::Stored),
-            b"\x89PNG\r\n\x1a\narchive-image",
+            &image_bytes,
         )
         .await
         .expect("image archive member should write");
@@ -575,6 +580,20 @@ async fn test_archive_members_open_as_read_only_buffers_and_bytes(cx: &mut gpui:
             archive.registry().mount_id()
         );
     });
+    let archive_resource_id = buffer
+        .read_with(cx, |buffer, _| {
+            buffer.file().and_then(|file| file.resource_id())
+        })
+        .expect("archive buffer should carry resource identity");
+    assert_eq!(
+        project.read_with(cx, |project, cx| {
+            project
+                .buffer_store()
+                .read(cx)
+                .get_by_resource(archive_resource_id)
+        }),
+        Some(buffer.clone())
+    );
     assert!(
         fake_servers.next().now_or_never().is_none(),
         "archive buffers without native mapping must not start a language server"
@@ -585,15 +604,15 @@ async fn test_archive_members_open_as_read_only_buffers_and_bytes(cx: &mut gpui:
         [b"image.png".as_slice()],
     )
     .expect("image archive path should be valid");
-    assert_eq!(
-        project
-            .update(cx, |project, cx| {
-                project.load_archive_member_bytes(archive.clone(), image_path, cx)
-            })
-            .await
-            .expect("image member bytes should load"),
-        b"\x89PNG\r\n\x1a\narchive-image"
-    );
+    let (image, image_metadata) = project
+        .update(cx, |project, cx| {
+            project.load_archive_image(archive.clone(), image_path, cx)
+        })
+        .await
+        .expect("image member should render from bytes");
+    assert_eq!(image_metadata.width, 1);
+    assert_eq!(image_metadata.height, 1);
+    assert_eq!(image.bytes().len(), image_bytes.len());
     let raw_path = vfs::ProviderPath::from_byte_components(
         vfs::PathEncoding::UnixBytes,
         [b"raw-\xff.bin".as_slice()],

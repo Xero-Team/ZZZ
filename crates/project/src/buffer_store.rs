@@ -961,9 +961,7 @@ impl BufferStore {
         cx.spawn(async move |this, cx| {
             task.await?;
             this.update(cx, |this, cx| {
-                if let Some(resource_id) =
-                    File::from_dyn(old_file.as_ref()).and_then(|file| file.resource_id)
-                {
+                if let Some(resource_id) = old_file.as_ref().and_then(|file| file.resource_id()) {
                     this.resource_to_buffer_id.remove(&resource_id);
                 }
                 old_file.clone().and_then(|file| {
@@ -981,14 +979,10 @@ impl BufferStore {
     fn add_buffer(&mut self, buffer_entity: Entity<Buffer>, cx: &mut Context<Self>) -> Result<()> {
         let buffer = buffer_entity.read(cx);
         let remote_id = buffer.remote_id();
-        let (path, resource_id) = File::from_dyn(buffer.file()).map_or((None, None), |file| {
-            (
-                Some(ProjectPath {
-                    path: file.path.clone(),
-                    worktree_id: file.worktree_id(cx),
-                }),
-                file.resource_id,
-            )
+        let resource_id = buffer.file().and_then(|file| file.resource_id());
+        let path = File::from_dyn(buffer.file()).map(|file| ProjectPath {
+            path: file.path.clone(),
+            worktree_id: file.worktree_id(cx),
         });
         let is_remote = buffer.replica_id().is_remote();
         let open_buffer = OpenBuffer::Complete {

@@ -13,6 +13,10 @@ use crate::{OperationContext, VfsFile, VfsResult};
 type ReadFuture = Pin<Box<dyn Future<Output = (u64, Vec<u8>, VfsResult<usize>)> + Send>>;
 type LengthFuture = Pin<Box<dyn Future<Output = VfsResult<u64>> + Send>>;
 
+/// Sequential `AsyncRead`/`AsyncSeek` adapter over positioned `VfsFile` I/O.
+///
+/// Each cursor owns only its logical position, so multiple cursors over one
+/// file never share or race a backend cursor.
 pub struct VfsFileCursor {
     file: Arc<dyn VfsFile>,
     position: u64,
@@ -22,6 +26,7 @@ pub struct VfsFileCursor {
 }
 
 impl VfsFileCursor {
+    /// Creates a cursor at offset zero using the supplied cancellation context.
     pub fn new(file: Arc<dyn VfsFile>, operation_context: OperationContext) -> Self {
         Self {
             file,
@@ -32,6 +37,7 @@ impl VfsFileCursor {
         }
     }
 
+    /// Returns the cursor's next read offset.
     pub fn position(&self) -> u64 {
         self.position
     }

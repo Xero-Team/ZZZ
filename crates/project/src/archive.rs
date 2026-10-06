@@ -13,14 +13,17 @@ use vfs::{ProviderPath, ResourceId, VfsPath, VfsSnapshot, provider_path_to_legac
 use worktree::WorktreeId;
 
 use crate::Project;
+use crate::image_store::{ImageItem, ImageMetadata, create_gpui_image};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Whether a file type opens as an archive automatically or only by explicit action.
 pub enum ArchiveOpenPolicy {
     Automatic,
     ExplicitOnly,
     Unsupported,
 }
 
+/// Classifies ZIP-compatible extensions without overriding dedicated document viewers.
 pub fn archive_open_policy(path: &Path) -> ArchiveOpenPolicy {
     let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
         return ArchiveOpenPolicy::Unsupported;
@@ -143,6 +146,22 @@ impl Project {
                 .load_bytes(&member_path, vfs::OperationContext::default())
                 .await
                 .map_err(Into::into)
+        })
+    }
+
+    pub fn load_archive_image(
+        &mut self,
+        archive: VfsSnapshot,
+        member_path: ProviderPath,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<(Arc<gpui::Image>, ImageMetadata)>> {
+        cx.background_spawn(async move {
+            let bytes = archive
+                .load_bytes(&member_path, vfs::OperationContext::default())
+                .await?;
+            let metadata = ImageItem::compute_metadata_from_bytes(&bytes)?;
+            let image = create_gpui_image(bytes)?;
+            Ok((image, metadata))
         })
     }
 
