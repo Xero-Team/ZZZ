@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 1 进行中                              |
+| 当前阶段      | 阶段 2 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -123,12 +123,56 @@ glyph origin 分解，并完成 TEXT-002 unit 与 headless pixel coverage。
 
 ### 阶段 1：修复 subpixel quantization
 
+状态：`COMPLETE`
+
+已完成：
+
+- 增加纯 `QuantizedGlyphCoordinate { integer, variant }` 和
+  `quantize_glyph_coordinate`。先把 device coordinate 量化为 integer tick，再使用
+  `div_euclid`/`rem_euclid` 分解，负坐标不会再把负 `fract()` 饱和为 variant 0。
+- `paint_glyph` 的 x/y 都使用同一 helper；`SUBPIXEL_VARIANTS_Y = 1` 仍走同一路径。
+- `paint_emoji` 使用同一 helper 的单 variant 模式，保留原 integer pixel alignment。
+- unit tests 覆盖 -2.0 到 2.0 的全部 quarter-pixel tick、正负 tie、tie 邻域、整数、
+  1.0/1.25/2.0 scale 和 variant 范围。
+- 真实 headless pixel test 通过 `HeadlessAppContext → Window::paint_glyph →
+CosmicTextSystem → WgpuHeadlessRenderer` 运行。device origin `-0.25` 与 `+0.75`
+  使用同一 variant 3，输出在平移一个 device pixel 后逐像素完全相同。
+
+TEXT-002：`PASS`
+
+| 命令或检查                                                                                                                                                                                   | 结果   | 说明                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------- |
+| `cargo test --locked -p gpui glyph_coordinate_quantization`                                                                                                                                  | `PASS` | 2 unit tests                                            |
+| `GPUI_HEADLESS_OUTPUT_DIR=... cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer negative_subpixel_glyph_origin_matches_positive_phase_after_one_pixel_shift` | `PASS` | RADV hardware 与 llvmpipe fallback 逐像素相位检查       |
+| `cargo test --locked -p gpui`                                                                                                                                                                | `PASS` | 234 unit + 1 integration，0 failed                      |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                                                                                                          | `PASS` | 3 passed，TEXT-001 runner 1 ignored                     |
+| `cargo check --locked -p gpui --target x86_64-apple-darwin`                                                                                                                                  | `PASS` | generic Window quantization cross-target compile        |
+| `./script/clippy -p gpui -p gpui_wgpu`                                                                                                                                                       | `PASS` | all-target/all-feature release clippy + philosophy gate |
+| `cargo fmt --all -- --check`                                                                                                                                                                 | `PASS` | workspace Rust formatting                               |
+
+原始 pixel artifact：
+
+- `.tmp/text-rendering-refactor/phase-1/text-002-hardware-negative.png`，SHA-256
+  `0dbd262a2cec5677669ce119b2612644dd6ebef8405525a3c4ca49cdb62f719f`
+- `.tmp/text-rendering-refactor/phase-1/text-002-hardware-positive.png`，SHA-256
+  `1f6c261137865c9e131bb8e0a0be4f56c62366fbfb2a9beea34a17561775ef81`
+- `.tmp/text-rendering-refactor/phase-1/text-002-fallback-negative.png`，SHA-256
+  `a8fef174d500a8ae14f38f2624c03dd06d7030f30249164d5a5d95d79c80a225`
+- `.tmp/text-rendering-refactor/phase-1/text-002-fallback-positive.png`，SHA-256
+  `6b1ca1fb84252669271065d8bd229b39073adc0b4131fcf05378b970edeb4338`
+
+提交：待阶段 1 signed commit 后回填。
+
+下一步：进入阶段 2，先把 atlas domain 从 `platform.rs` 移到 `atlas.rs` 且保持 root
+re-export，再集中 page allocator 和 lock 外 builder。
+
+### 阶段 2：抽离 atlas domain 和公共 allocator
+
 状态：`IN PROGRESS`
 
-尚未修改代码。下一步先抽取纯量化函数和边界 tests，再把 `paint_glyph` 与
-`paint_emoji` 接到共同坐标分解边界。
+尚未修改代码。按 2A/2B 分为可独立回退的 domain move 与 allocator policy 提取。
 
-### 阶段 2–9
+### 阶段 3–9
 
 状态：`NOT STARTED`
 

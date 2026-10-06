@@ -74,6 +74,27 @@ use crate::profiler::{
     FrameTiming,
 };
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct QuantizedGlyphCoordinate {
+    integer: i32,
+    variant: u8,
+}
+
+fn quantize_glyph_coordinate(
+    device_coordinate: f32,
+    subpixel_variants: u8,
+) -> QuantizedGlyphCoordinate {
+    debug_assert!(device_coordinate.is_finite());
+    debug_assert!(subpixel_variants > 0);
+
+    let subpixel_variants = i32::from(subpixel_variants);
+    let tick = round_half_toward_zero(device_coordinate * subpixel_variants as f32) as i32;
+    QuantizedGlyphCoordinate {
+        integer: tick.div_euclid(subpixel_variants),
+        variant: tick.rem_euclid(subpixel_variants) as u8,
+    }
+}
+
 /// Default window size used when no explicit size is provided.
 pub const DEFAULT_WINDOW_SIZE: Size<Pixels> = size(px(1536.), px(1095.));
 
@@ -3842,16 +3863,12 @@ impl Window {
         let glyph_origin = origin.scale(scale_factor);
 
         let quantized_origin = Point::new(
-            round_half_toward_zero(glyph_origin.x.0 * SUBPIXEL_VARIANTS_X as f32)
-                / SUBPIXEL_VARIANTS_X as f32,
-            round_half_toward_zero(glyph_origin.y.0 * SUBPIXEL_VARIANTS_Y as f32)
-                / SUBPIXEL_VARIANTS_Y as f32,
+            quantize_glyph_coordinate(glyph_origin.x.0, SUBPIXEL_VARIANTS_X),
+            quantize_glyph_coordinate(glyph_origin.y.0, SUBPIXEL_VARIANTS_Y),
         );
-        let subpixel_variant = Point::new(
-            (quantized_origin.x.fract() * SUBPIXEL_VARIANTS_X as f32) as u8,
-            (quantized_origin.y.fract() * SUBPIXEL_VARIANTS_Y as f32) as u8,
-        );
-        let integer_origin = quantized_origin.map(|c| ScaledPixels(c.trunc()));
+        let subpixel_variant = quantized_origin.map(|coordinate| coordinate.variant);
+        let integer_origin =
+            quantized_origin.map(|coordinate| ScaledPixels(coordinate.integer as f32));
         let subpixel_rendering = self.should_use_subpixel_rendering(font_id, font_size);
         let dilation = self.text_system().glyph_dilation_for_color(color);
         let params = RenderGlyphParams {
@@ -3951,7 +3968,9 @@ impl Window {
 
         let scale_factor = self.scale_factor();
         let glyph_origin = origin.scale(scale_factor);
-        let integer_origin = glyph_origin.map(|c| ScaledPixels(round_half_toward_zero(c.0)));
+        let integer_origin = glyph_origin.map(|coordinate| {
+            ScaledPixels(quantize_glyph_coordinate(coordinate.0, 1).integer as f32)
+        });
         let params = RenderGlyphParams {
             font_id,
             glyph_id,
@@ -6052,6 +6071,127 @@ mod tests {
     }
 
     struct EmptyView;
+
+    fn reconstructed_coordinate(
+        coordinate: super::QuantizedGlyphCoordinate,
+        subpixel_variants: u8,
+    ) -> f32 {
+        coordinate.integer as f32 + f32::from(coordinate.variant) / f32::from(subpixel_variants)
+    }
+
+    #[test]
+    fn glyph_coordinate_quantization_uses_euclidean_subpixel_ticks() {
+        for tick in -8..=8 {
+            let device_coordinate = tick as f32 / f32::from(crate::SUBPIXEL_VARIANTS_X);
+            let quantized =
+                super::quantize_glyph_coordinate(device_coordinate, crate::SUBPIXEL_VARIANTS_X);
+            assert_eq!(
+                reconstructed_coordinate(quantized, crate::SUBPIXEL_VARIANTS_X),
+                device_coordinate
+            );
+            assert!(quantized.variant < crate::SUBPIXEL_VARIANTS_X);
+        }
+
+        assert_eq!(
+            super::quantize_glyph_coordinate(-0.25, crate::SUBPIXEL_VARIANTS_X),
+            super::QuantizedGlyphCoordinate {
+                integer: -1,
+                variant: 3,
+            }
+        );
+        assert_eq!(
+            super::quantize_glyph_coordinate(0.75, crate::SUBPIXEL_VARIANTS_X),
+            super::QuantizedGlyphCoordinate {
+                integer: 0,
+                variant: 3,
+            }
+        );
+    }
+
+    #[test]
+    fn glyph_coordinate_quantization_preserves_ties_scale_and_integer_alignment() {
+        for (device_coordinate, expected) in [
+            (
+                -0.1251,
+                super::QuantizedGlyphCoordinate {
+                    integer: -1,
+                    variant: 3,
+                },
+            ),
+            (
+                -0.125,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                -0.1249,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                0.1249,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                0.125,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                0.1251,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 1,
+                },
+            ),
+        ] {
+            assert_eq!(
+                super::quantize_glyph_coordinate(device_coordinate, crate::SUBPIXEL_VARIANTS_X,),
+                expected
+            );
+        }
+
+        for integer in -16..=16 {
+            assert_eq!(
+                super::quantize_glyph_coordinate(integer as f32, crate::SUBPIXEL_VARIANTS_X),
+                super::QuantizedGlyphCoordinate {
+                    integer,
+                    variant: 0,
+                }
+            );
+            assert_eq!(
+                super::quantize_glyph_coordinate(integer as f32, crate::SUBPIXEL_VARIANTS_Y),
+                super::QuantizedGlyphCoordinate {
+                    integer,
+                    variant: 0,
+                }
+            );
+        }
+
+        for scale_factor in [1.0, 1.25, 2.0] {
+            for logical_coordinate in [-2.0, -0.2, -0.125, 0.0, 0.125, 0.2, 2.0] {
+                let device_coordinate = logical_coordinate * scale_factor;
+                let quantized =
+                    super::quantize_glyph_coordinate(device_coordinate, crate::SUBPIXEL_VARIANTS_X);
+                let expected = crate::util::round_half_toward_zero(
+                    device_coordinate * f32::from(crate::SUBPIXEL_VARIANTS_X),
+                ) / f32::from(crate::SUBPIXEL_VARIANTS_X);
+                assert_eq!(
+                    reconstructed_coordinate(quantized, crate::SUBPIXEL_VARIANTS_X),
+                    expected
+                );
+            }
+        }
+    }
 
     impl Render for EmptyView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {

@@ -1,16 +1,50 @@
 #![cfg(feature = "test-support")]
 
 use gpui::{
-    AtlasKey, AtlasSnapshot, AtlasTile, Bounds, ContentMask, Corners, DevicePixels, Edges, FontRun,
-    FontStyle, FontWeight, Hsla, ImageId, IsZero as _, MonochromeSprite, PaddedBool32, PathBuilder,
-    PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad,
-    RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow, Size,
-    Underline, font, px,
+    AnyWindowHandle, AppContext as _, AtlasKey, AtlasSnapshot, AtlasTile, Bounds, ContentMask,
+    Context, Corners, DevicePixels, Edges, FontId, FontRun, FontStyle, FontWeight, GlyphId,
+    HeadlessAppContext, Hsla, ImageId, IntoElement, IsZero as _, MonochromeSprite, PaddedBool32,
+    PathBuilder, PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point,
+    PolychromeSprite, Quad, Render, RenderGlyphParams, RenderImageParams, RenderSvgParams,
+    ScaledPixels, Scene, Shadow, Size, Styled as _, Underline, Window, canvas, font, point, px,
+    size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
 use std::{borrow::Cow, collections::HashSet, path::Path, sync::Arc, time::Instant};
 
 const RUNS: usize = 100;
+
+struct GlyphAtOriginView {
+    device_origin_x: f32,
+    font_id: FontId,
+    glyph_id: GlyphId,
+}
+
+impl Render for GlyphAtOriginView {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let device_origin_x = self.device_origin_x;
+        let font_id = self.font_id;
+        let glyph_id = self.glyph_id;
+        canvas(
+            |_, _, _| (),
+            move |_, _, window, _| {
+                let origin_x = px(device_origin_x / window.scale_factor());
+                window
+                    .paint_glyph(
+                        point(origin_x, px(20.0)),
+                        font_id,
+                        glyph_id,
+                        px(20.0),
+                        gpui::rgb(0xffffff).into(),
+                        Default::default(),
+                        Default::default(),
+                    )
+                    .expect("test glyph should paint");
+            },
+        )
+        .size_full()
+    }
+}
 
 fn target(scale: f32) -> Size<DevicePixels> {
     Size {
@@ -188,6 +222,79 @@ fn save_output(image: &image::RgbaImage, adapter: &str, scale: f32) {
     image
         .save(std::path::Path::new(&directory).join(format!("{adapter}-{scale:.0}x.png")))
         .expect("headless debug image should save");
+}
+
+fn save_named_output(image: &image::RgbaImage, name: &str) {
+    let Ok(directory) = std::env::var("GPUI_HEADLESS_OUTPUT_DIR") else {
+        return;
+    };
+    std::fs::create_dir_all(&directory).expect("headless output directory should be created");
+    image
+        .save(std::path::Path::new(&directory).join(format!("{name}.png")))
+        .expect("headless debug image should save");
+}
+
+fn render_glyph_at_device_x(
+    force_fallback_adapter: bool,
+    device_origin_x: f32,
+) -> anyhow::Result<image::RgbaImage> {
+    let platform_text_system = Arc::new(CosmicTextSystem::new_without_system_fonts("Lilex"));
+    platform_text_system.add_fonts(vec![Cow::Borrowed(include_bytes!(
+        "../../../assets/fonts/lilex/Lilex-Regular.ttf"
+    ))])?;
+    let font_id = platform_text_system.font_id(&font("Lilex"))?;
+    let glyph_id = platform_text_system
+        .glyph_for_char(font_id, 'M')
+        .ok_or_else(|| anyhow::anyhow!("Lilex must contain M"))?;
+
+    let mut context =
+        HeadlessAppContext::with_platform(platform_text_system, Arc::new(()), move || {
+            Some(Box::new(
+                WgpuHeadlessRenderer::new_with_fallback(force_fallback_adapter)
+                    .expect("WGPU headless renderer should initialize"),
+            ))
+        });
+    let window = context.open_window(size(px(32.0), px(32.0)), move |_, cx| {
+        cx.new(|_| GlyphAtOriginView {
+            device_origin_x,
+            font_id,
+            glyph_id,
+        })
+    })?;
+    let window_handle: AnyWindowHandle = window.into();
+    context.update_window(window_handle, |_, window, cx| {
+        window.draw(cx).clear();
+    })?;
+    context.capture_screenshot(window_handle)
+}
+
+fn assert_negative_subpixel_phase(force_fallback_adapter: bool) -> anyhow::Result<()> {
+    let negative = render_glyph_at_device_x(force_fallback_adapter, -0.25)?;
+    let positive = render_glyph_at_device_x(force_fallback_adapter, 0.75)?;
+    assert_eq!(negative.dimensions(), positive.dimensions());
+
+    let mut visible_pixels = 0usize;
+    for y in 0..negative.height() {
+        for x in 0..negative.width() - 1 {
+            let negative_pixel = negative.get_pixel(x, y);
+            let shifted_positive_pixel = positive.get_pixel(x + 1, y);
+            assert_eq!(
+                negative_pixel, shifted_positive_pixel,
+                "glyph phases diverged at ({x}, {y})"
+            );
+            visible_pixels += usize::from(negative_pixel.0[3] > 0);
+        }
+    }
+    assert!(visible_pixels > 0, "glyph must produce visible coverage");
+
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    save_named_output(&negative, &format!("text-002-{adapter}-negative"));
+    save_named_output(&positive, &format!("text-002-{adapter}-positive"));
+    Ok(())
 }
 
 fn snapshot_json(snapshot: AtlasSnapshot) -> serde_json::Value {
@@ -517,6 +624,13 @@ fn fallback_adapter_renders_primitive_corpus() {
             }
         }
     }
+}
+
+#[test]
+fn negative_subpixel_glyph_origin_matches_positive_phase_after_one_pixel_shift()
+-> anyhow::Result<()> {
+    assert_negative_subpixel_phase(false)?;
+    assert_negative_subpixel_phase(true)
 }
 
 #[test]
