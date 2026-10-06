@@ -29,6 +29,7 @@ ADR 修改，不能在实现中隐式漂移。
 | Writes              | `expected_version` 与明确 atomicity；未知提交状态不能盲目重放                   |
 | LSP/native          | `LspPathMapper` 与 `NativeExecutionContext` 是显式 capability boundary          |
 | Archive             | data-local、只读、range-based，并执行固定资源与安全上限                         |
+| Composition         | Subtree/ReadOnly/Cache 必做；当前 overlay 因缺少 crash-safe transaction 被拒绝  |
 
 ## Exact path wire format {#exact-path-wire-format}
 
@@ -245,6 +246,34 @@ reverse-edit policy。
 Duplicate exact names 保留原始 record，但 provider lookup 返回 `NameCollision`，不能静默
 选择第一个或最后一个。Archive version 由 outer resource version 与 provider format
 version 共同组成；外层变化使 child mount stale。
+
+## Composition wrappers and overlay decision {#composition-and-overlay}
+
+`SubtreeProvider` 把 wrapper root 精确映射到 inner prefix，并固定 prefix 的 stable file
+key。每次 operation 和已打开 handle 的 I/O 都重新验证 root identity 与路径 component；
+wrapper 不跟随 symlink，也不暴露 host-native path。Root replacement 返回
+`StaleVersion`，`..`、absolute replacement 和 prefix 外 entry 不进入公开 identity。
+
+`ReadOnlyProvider` 保留 read/list/watch 能力，但把全部 write、mutation、permissions、trash
+和 native-path capability 降为 `Unsupported`。任何 provider mutation 或 `VfsFile`
+write/set-length/flush/sync 返回 typed `ReadOnly`。
+
+`CacheProvider` 的 range key 固定为
+`(mount, exact path, offset, length, source version)`。默认 range LRU 上限为 128 MiB 和
+4,096 entries；cache hit 与 inner read 前后都复核 source version，读取期间发生版本变化时
+返回 `StaleVersion`，不会把新字节挂到旧版本 key。任何可能部分成功的 mutation 都清空
+cache。
+
+Overlay specification 冻结为：upper 优先；directory listing 合并 upper/lower；durable
+whiteout 隐藏 lower entry；lower-only mutation 必须 copy-up；跨层 rename 必须把 target
+publish 与 source whiteout 作为一个 crash-consistent commit；任一 source disconnect 转成
+rooted `Overflow` 并重新建立 watcher ordering。
+
+当前 `VfsProvider` 没有 durable whiteout primitive 或 atomic multi-path commit。Model test
+证明 lower-only rename 在 copy-up 后、whiteout 前崩溃会同时暴露 source 与 target。因此
+Phase 8 的 `OverlayProvider` 决策为 `REJECTED`，不保留 prototype。只有新的 transaction
+contract 能同时证明 whiteout durability、cross-layer rename atomicity 和 watcher recovery
+时才重新评估。
 
 ## Compatibility policy {#compatibility-policy}
 
