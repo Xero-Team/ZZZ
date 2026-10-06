@@ -5319,6 +5319,7 @@ dependencies = [
  "ui",
  "ui_input",
  "util",
+ "vfs",
  "workspace",
  "zlog",
  "zzz_actions",

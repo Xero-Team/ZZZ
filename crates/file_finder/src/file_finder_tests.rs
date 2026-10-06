@@ -1,4 +1,8 @@
-use std::{future::IntoFuture, path::Path, time::Duration};
+use std::{
+    future::IntoFuture,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use super::*;
 use editor::{Editor, SelectionEffects};
@@ -76,7 +80,7 @@ fn test_path_elision() {
 #[test]
 fn test_custom_project_search_ordering_in_file_finder() {
     let mut file_finder_sorted_output = vec![
-        ProjectPanelOrdMatch(PathMatch {
+        ProjectPanelOrdMatch::without_resource(PathMatch {
             score: 0.5,
             positions: Vec::new(),
             worktree_id: 0,
@@ -85,7 +89,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
             distance_to_relative_ancestor: 0,
             is_dir: false,
         }),
-        ProjectPanelOrdMatch(PathMatch {
+        ProjectPanelOrdMatch::without_resource(PathMatch {
             score: 1.0,
             positions: Vec::new(),
             worktree_id: 0,
@@ -94,7 +98,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
             distance_to_relative_ancestor: 0,
             is_dir: false,
         }),
-        ProjectPanelOrdMatch(PathMatch {
+        ProjectPanelOrdMatch::without_resource(PathMatch {
             score: 1.0,
             positions: Vec::new(),
             worktree_id: 0,
@@ -103,7 +107,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
             distance_to_relative_ancestor: 0,
             is_dir: false,
         }),
-        ProjectPanelOrdMatch(PathMatch {
+        ProjectPanelOrdMatch::without_resource(PathMatch {
             score: 0.5,
             positions: Vec::new(),
             worktree_id: 0,
@@ -112,7 +116,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
             distance_to_relative_ancestor: 0,
             is_dir: false,
         }),
-        ProjectPanelOrdMatch(PathMatch {
+        ProjectPanelOrdMatch::without_resource(PathMatch {
             score: 1.0,
             positions: Vec::new(),
             worktree_id: 0,
@@ -127,7 +131,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
     assert_eq!(
         file_finder_sorted_output,
         vec![
-            ProjectPanelOrdMatch(PathMatch {
+            ProjectPanelOrdMatch::without_resource(PathMatch {
                 score: 1.0,
                 positions: Vec::new(),
                 worktree_id: 0,
@@ -136,7 +140,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
                 distance_to_relative_ancestor: 0,
                 is_dir: false,
             }),
-            ProjectPanelOrdMatch(PathMatch {
+            ProjectPanelOrdMatch::without_resource(PathMatch {
                 score: 1.0,
                 positions: Vec::new(),
                 worktree_id: 0,
@@ -145,7 +149,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
                 distance_to_relative_ancestor: 0,
                 is_dir: false,
             }),
-            ProjectPanelOrdMatch(PathMatch {
+            ProjectPanelOrdMatch::without_resource(PathMatch {
                 score: 1.0,
                 positions: Vec::new(),
                 worktree_id: 0,
@@ -154,7 +158,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
                 distance_to_relative_ancestor: 0,
                 is_dir: false,
             }),
-            ProjectPanelOrdMatch(PathMatch {
+            ProjectPanelOrdMatch::without_resource(PathMatch {
                 score: 0.5,
                 positions: Vec::new(),
                 worktree_id: 0,
@@ -163,7 +167,7 @@ fn test_custom_project_search_ordering_in_file_finder() {
                 distance_to_relative_ancestor: 0,
                 is_dir: false,
             }),
-            ProjectPanelOrdMatch(PathMatch {
+            ProjectPanelOrdMatch::without_resource(PathMatch {
                 score: 0.5,
                 positions: Vec::new(),
                 worktree_id: 0,
@@ -174,6 +178,46 @@ fn test_custom_project_search_ordering_in_file_finder() {
             }),
         ]
     );
+}
+
+#[test]
+fn test_file_finder_deduplicates_renamed_resource() {
+    let worktree_id = WorktreeId::from_usize(1);
+    let resource_id = ResourceId::new(vfs::MountId::new(1), 2, 0);
+    let history_match = Match::History {
+        path: FoundPath::new(
+            ProjectPath {
+                worktree_id,
+                path: rel_path("old.rs").into(),
+            },
+            PathBuf::from("/root/old.rs"),
+        )
+        .with_resource_id(Some(resource_id)),
+        panel_match: None,
+    };
+    let renamed_match = Match::Search(ProjectPanelOrdMatch(
+        PathMatch {
+            score: 1.0,
+            positions: Vec::new(),
+            worktree_id: worktree_id.to_usize(),
+            path: rel_path("renamed.rs").into(),
+            path_prefix: RelPath::empty_arc(),
+            distance_to_relative_ancestor: 0,
+            is_dir: false,
+        },
+        Some(resource_id),
+    ));
+
+    let selected_history =
+        SelectedMatch::new(history_match.clone()).expect("history match should be selectable");
+    assert!(selected_history == renamed_match);
+
+    let mut matches = Matches {
+        matches: vec![history_match],
+        ..Default::default()
+    };
+    matches.remove_resource_duplicate(&renamed_match);
+    assert!(matches.matches.is_empty());
 }
 
 #[gpui::test]
@@ -970,8 +1014,8 @@ async fn test_matching_cancellation(cx: &mut TestAppContext) {
             true, // did-cancel
             query.clone(),
             vec![
-                ProjectPanelOrdMatch(matches[1].clone()),
-                ProjectPanelOrdMatch(matches[3].clone()),
+                ProjectPanelOrdMatch::without_resource(matches[1].clone()),
+                ProjectPanelOrdMatch::without_resource(matches[3].clone()),
             ],
             cx,
         );
@@ -983,9 +1027,9 @@ async fn test_matching_cancellation(cx: &mut TestAppContext) {
             true, // did-cancel
             query.clone(),
             vec![
-                ProjectPanelOrdMatch(matches[0].clone()),
-                ProjectPanelOrdMatch(matches[2].clone()),
-                ProjectPanelOrdMatch(matches[3].clone()),
+                ProjectPanelOrdMatch::without_resource(matches[0].clone()),
+                ProjectPanelOrdMatch::without_resource(matches[2].clone()),
+                ProjectPanelOrdMatch::without_resource(matches[3].clone()),
             ],
             cx,
         );

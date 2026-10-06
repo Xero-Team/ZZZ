@@ -6,7 +6,7 @@ mod multi_select_tests;
 use futures::future::join_all;
 pub use open_path_prompt::OpenPathDelegate;
 
-use collections::HashMap;
+use collections::{HashMap, HashSet};
 use editor::Editor;
 use file_icons::FileIcons;
 use fuzzy_nucleo::{PathMatch, PathMatchCandidate};
@@ -48,6 +48,7 @@ use util::{
     post_inc,
     rel_path::RelPath,
 };
+use vfs::ResourceId;
 use workspace::{
     MAX_RECENT_SELECTIONS, ModalView, OpenOptions, OpenVisible, SplitDirection, Workspace,
     item::PreviewTabsSettings, notifications::NotifyResultExt, pane,
@@ -136,19 +137,22 @@ impl FileFinder {
 
         let currently_opened_path = workspace.active_item(cx).and_then(|item| {
             let project_path = item.project_path(cx)?;
+            let resource_id = item.resource_id(cx);
             let abs_path = project
                 .worktree_for_id(project_path.worktree_id, cx)?
                 .read(cx)
                 .absolutize(&project_path.path);
-            Some(FoundPath::new(project_path, abs_path))
+            Some(FoundPath::new(project_path, abs_path).with_resource_id(resource_id))
         });
 
         let history_items = workspace
             .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
             .into_iter()
             .filter_map(|(project_path, abs_path)| {
-                if project.entry_for_path(&project_path, cx).is_some() {
-                    return Some(Task::ready(Some(FoundPath::new(project_path, abs_path?))));
+                if let Some(entry) = project.entry_for_path(&project_path, cx) {
+                    return Some(Task::ready(Some(
+                        FoundPath::new(project_path, abs_path?).with_resource_id(entry.resource_id),
+                    )));
                 }
                 let abs_path = abs_path?;
                 if project.is_local() {
@@ -487,8 +491,27 @@ pub struct FileFinderDelegate {
 /// In the file finder, we would prefer to have the max element with the highest score and the earliest alphanumerical path, e.g:
 /// `[{ score: 0.5, path = "/a/b" }, {score: 0.5, path = "c/d" }]`
 /// as the files are shown in the project panel lists.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ProjectPanelOrdMatch(PathMatch);
+#[derive(Debug, Clone)]
+struct ProjectPanelOrdMatch(PathMatch, Option<ResourceId>);
+
+impl ProjectPanelOrdMatch {
+    fn resource_id(&self) -> Option<ResourceId> {
+        self.1
+    }
+
+    #[cfg(test)]
+    fn without_resource(path_match: PathMatch) -> Self {
+        Self(path_match, None)
+    }
+}
+
+impl PartialEq for ProjectPanelOrdMatch {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for ProjectPanelOrdMatch {}
 
 impl Ord for ProjectPanelOrdMatch {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
@@ -541,7 +564,7 @@ impl Match {
     fn abs_path(&self, project: &Entity<Project>, cx: &App) -> Option<PathBuf> {
         match self {
             Match::History { path, .. } => Some(path.absolute.clone()),
-            Match::Search(ProjectPanelOrdMatch(path_match)) => Some(
+            Match::Search(ProjectPanelOrdMatch(path_match, _)) => Some(
                 project
                     .read(cx)
                     .worktree_for_id(WorktreeId::from_usize(path_match.worktree_id), cx)?
@@ -556,6 +579,14 @@ impl Match {
         match self {
             Match::History { panel_match, .. } => panel_match.as_ref(),
             Match::Search(panel_match) => Some(panel_match),
+            Match::CreateNew(_) => None,
+        }
+    }
+
+    fn resource_id(&self) -> Option<ResourceId> {
+        match self {
+            Match::History { path, .. } => path.resource_id,
+            Match::Search(panel_match) => panel_match.resource_id(),
             Match::CreateNew(_) => None,
         }
     }
@@ -584,6 +615,11 @@ impl Eq for SelectedMatch {}
 
 impl PartialEq<Match> for SelectedMatch {
     fn eq(&self, other: &Match) -> bool {
+        match (self.0.resource_id(), other.resource_id()) {
+            (Some(left), Some(right)) => return left == right,
+            (Some(_), None) | (None, Some(_)) => return false,
+            (None, None) => {}
+        }
         match (&self.0, other) {
             (Match::History { path: a, .. }, Match::History { path: b, .. }) => {
                 a.project == b.project
@@ -607,6 +643,13 @@ impl Matches {
 
     fn get(&self, index: usize) -> Option<&Match> {
         self.matches.get(index)
+    }
+
+    fn remove_resource_duplicate(&mut self, new_match: &Match) {
+        if let Some(resource_id) = new_match.resource_id() {
+            self.matches
+                .retain(|existing| existing.resource_id() != Some(resource_id));
+        }
     }
 
     fn position(
@@ -671,12 +714,19 @@ impl Matches {
             query,
             path_style,
         );
+        let history_resource_ids = new_history_matches
+            .values()
+            .filter_map(Match::resource_id)
+            .collect::<HashSet<_>>();
         let new_search_matches: Vec<Match> = new_search_matches
             .filter(|path_match| {
-                !new_history_matches.contains_key(&ProjectPath {
-                    path: path_match.0.path.clone(),
-                    worktree_id: WorktreeId::from_usize(path_match.0.worktree_id),
-                })
+                !path_match
+                    .resource_id()
+                    .is_some_and(|resource_id| history_resource_ids.contains(&resource_id))
+                    && !new_history_matches.contains_key(&ProjectPath {
+                        path: path_match.0.path.clone(),
+                        worktree_id: WorktreeId::from_usize(path_match.0.worktree_id),
+                    })
             })
             .map(Match::Search)
             .collect();
@@ -695,9 +745,10 @@ impl Matches {
         // It is possible that the new search matches' paths contain some of the old search matches' paths.
         // History matches' paths are unique, since store in a HashMap by path.
         // We build a sorted Vec<Match>, eliminating duplicate search matches.
-        // Search matches with the same paths should have equal `ProjectPanelOrdMatch`, so we should
-        // not have any duplicates after building the final list.
+        // Resource identity removes stale paths after a rename; path ordering remains the
+        // compatibility fallback for matches that do not yet carry an identity.
         for new_match in new_history_matches.into_values().chain(new_search_matches) {
+            self.remove_resource_duplicate(&new_match);
             match self.position(&new_match, currently_opened) {
                 Ok(_duplicate) => {}
                 Err(i) => {
@@ -852,7 +903,10 @@ fn matching_history_items<'a>(
                     project_path,
                     Match::History {
                         path: found_path.clone(),
-                        panel_match: Some(ProjectPanelOrdMatch(path_match)),
+                        panel_match: Some(ProjectPanelOrdMatch(
+                            path_match,
+                            found_path.resource_id,
+                        )),
                     },
                 ))
             }),
@@ -911,17 +965,47 @@ fn project_path_for_search_match(
     ProjectPath { worktree_id, path }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+fn resource_id_for_search_match(
+    project: &Entity<Project>,
+    path_match: &PathMatch,
+    cx: &App,
+) -> Option<ResourceId> {
+    let project_path = project_path_for_search_match(project, path_match, cx);
+    project
+        .read(cx)
+        .entry_for_path(&project_path, cx)
+        .and_then(|entry| entry.resource_id)
+}
+
+#[derive(Debug, Clone)]
 struct FoundPath {
     project: ProjectPath,
     absolute: PathBuf,
+    resource_id: Option<ResourceId>,
 }
 
 impl FoundPath {
     fn new(project: ProjectPath, absolute: PathBuf) -> Self {
-        Self { project, absolute }
+        Self {
+            project,
+            absolute,
+            resource_id: None,
+        }
+    }
+
+    fn with_resource_id(mut self, resource_id: Option<ResourceId>) -> Self {
+        self.resource_id = resource_id;
+        self
     }
 }
+
+impl PartialEq for FoundPath {
+    fn eq(&self, other: &Self) -> bool {
+        self.project == other.project && self.absolute == other.absolute
+    }
+}
+
+impl Eq for FoundPath {}
 
 pub enum Event {
     Selected(ProjectPath),
@@ -1147,12 +1231,21 @@ impl FileFinderDelegate {
                 &cancel_flag,
                 cx.background_executor().clone(),
             )
-            .await
-            .into_iter()
-            .map(ProjectPanelOrdMatch);
+            .await;
             let did_cancel = cancel_flag.load(atomic::Ordering::Acquire);
             picker
                 .update(cx, |picker, cx| {
+                    let matches = matches
+                        .into_iter()
+                        .map(|path_match| {
+                            let resource_id = resource_id_for_search_match(
+                                &picker.delegate.project,
+                                &path_match,
+                                cx,
+                            );
+                            ProjectPanelOrdMatch(path_match, resource_id)
+                        })
+                        .collect::<Vec<_>>();
                     picker
                         .delegate
                         .set_search_matches(search_id, did_cancel, query, matches, cx)
@@ -1489,15 +1582,22 @@ impl FileFinderDelegate {
             if abs_file_exists {
                 project.update(cx, |project, cx| {
                     if let Some((worktree, relative_path)) = project.find_worktree(query_path, cx) {
-                        path_matches.push(ProjectPanelOrdMatch(PathMatch {
-                            score: 1.0,
-                            positions: Vec::new(),
-                            worktree_id: worktree.read(cx).id().to_usize(),
-                            path: relative_path,
-                            path_prefix: RelPath::empty_arc(),
-                            is_dir: false, // File finder doesn't support directories
-                            distance_to_relative_ancestor: usize::MAX,
-                        }));
+                        let worktree = worktree.read(cx);
+                        let resource_id = worktree
+                            .entry_for_path(&relative_path)
+                            .and_then(|entry| entry.resource_id);
+                        path_matches.push(ProjectPanelOrdMatch(
+                            PathMatch {
+                                score: 1.0,
+                                positions: Vec::new(),
+                                worktree_id: worktree.id().to_usize(),
+                                path: relative_path,
+                                path_prefix: RelPath::empty_arc(),
+                                is_dir: false, // File finder doesn't support directories
+                                distance_to_relative_ancestor: usize::MAX,
+                            },
+                            resource_id,
+                        ));
                     }
                 });
             }
