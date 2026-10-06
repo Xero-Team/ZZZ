@@ -443,23 +443,19 @@ impl Search {
                 let gitignored_tracker = PathInclusionMatcher::new(query.clone());
                 let include_ignored = query.include_ignored();
                 for worktree in worktrees {
-                    let scan_complete = worktree.read_with(cx, |worktree, _| {
-                        worktree.as_local().map(|local| local.scan_complete())
-                    });
-                    if let Some(scan_complete) = scan_complete {
-                        let mut scan_complete = pin!(scan_complete);
-                        if scan_complete.as_mut().now_or_never().is_none() {
-                            _ = results_tx.send(SearchResult::WaitingForScan).await;
-                            scan_complete.await;
-                            _ = results_tx.send(SearchResult::Searching).await;
-                        }
+                    let scan_complete =
+                        worktree.read_with(cx, |worktree, _| worktree.scan_complete());
+                    let mut scan_complete = pin!(scan_complete);
+                    if scan_complete.as_mut().now_or_never().is_none() {
+                        _ = results_tx.send(SearchResult::WaitingForScan).await;
+                        scan_complete.await;
+                        _ = results_tx.send(SearchResult::Searching).await;
                     }
 
                     let (mut snapshot, worktree_settings) = worktree
-                        .read_with(cx, |this, _| {
-                            Some((this.snapshot(), this.as_local()?.settings()))
-                        })
-                        .context("The worktree is not local")?;
+                        .read_with(cx, |worktree, _| (worktree.snapshot(), worktree.settings()));
+                    let worktree_settings =
+                        worktree_settings.context("search settings are unavailable")?;
                     if query.include_ignored() {
                         // Pre-fetch all of the ignored directories as they're going to be searched.
                         let mut entries_to_refresh = vec![];
@@ -473,17 +469,14 @@ impl Search {
                                 entries_to_refresh.push(entry.path.clone());
                             }
                         }
-                        let barrier = worktree.update(cx, |this, _| {
-                            let local = this.as_local_mut()?;
-                            let barrier = entries_to_refresh
+                        let barriers = worktree.read_with(cx, |worktree, _| {
+                            entries_to_refresh
                                 .into_iter()
-                                .map(|path| local.add_path_prefix_to_scan(path).into_future())
-                                .collect::<Vec<_>>();
-                            Some(barrier)
+                                .filter_map(|path| worktree.request_path_prefix_scan(path))
+                                .map(|barrier| barrier.into_future())
+                                .collect::<Vec<_>>()
                         });
-                        if let Some(barriers) = barrier {
-                            futures::future::join_all(barriers).await;
-                        }
+                        futures::future::join_all(barriers).await;
                         snapshot = worktree.read_with(cx, |this, _| this.snapshot());
                     }
                     let tx = tx.clone();

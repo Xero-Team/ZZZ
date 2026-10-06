@@ -132,10 +132,10 @@ impl FileFinder {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Task<()> {
-        let project = workspace.project().read(cx);
-        let fs = project.fs();
+        let project = workspace.project().clone();
 
         let currently_opened_path = workspace.active_item(cx).and_then(|item| {
+            let project = project.read(cx);
             let project_path = item.project_path(cx)?;
             let resource_id = item.resource_id(cx);
             let abs_path = project
@@ -149,24 +149,33 @@ impl FileFinder {
             .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
             .into_iter()
             .filter_map(|(project_path, abs_path)| {
-                if let Some(entry) = project.entry_for_path(&project_path, cx) {
-                    return Some(Task::ready(Some(
-                        FoundPath::new(project_path, abs_path?).with_resource_id(entry.resource_id),
-                    )));
-                }
+                let worktree = {
+                    let project_read = project.read(cx);
+                    if let Some(entry) = project_read.entry_for_path(&project_path, cx) {
+                        return Some(Task::ready(Some(
+                            FoundPath::new(project_path, abs_path?)
+                                .with_resource_id(entry.resource_id),
+                        )));
+                    }
+                    project_read.worktree_for_id(project_path.worktree_id, cx)
+                };
                 let abs_path = abs_path?;
-                if project.is_local() {
-                    let fs = fs.clone();
-                    Some(cx.background_spawn(async move {
-                        if fs.is_file(&abs_path).await {
+                let Some(worktree) = worktree else {
+                    return Some(Task::ready(Some(FoundPath::new(project_path, abs_path))));
+                };
+                let path = project_path.path.clone();
+                let path_is_file =
+                    worktree.update(cx, |worktree, cx| worktree.path_is_file(&path, cx));
+                Some(
+                    cx.spawn(async move |_workspace, _cx| match path_is_file.await {
+                        Ok(true) => Some(FoundPath::new(project_path, abs_path)),
+                        Ok(false) => None,
+                        Err(error) => {
+                            zlog::debug!("checking file finder history path: {error:#}");
                             Some(FoundPath::new(project_path, abs_path))
-                        } else {
-                            None
                         }
-                    }))
-                } else {
-                    Some(Task::ready(Some(FoundPath::new(project_path, abs_path))))
-                }
+                    }),
+                )
             })
             .collect::<Vec<_>>();
         cx.spawn_in(window, async move |workspace, cx| {
@@ -174,7 +183,7 @@ impl FileFinder {
 
             workspace
                 .update_in(cx, |workspace, window, cx| {
-                    let project = workspace.project().clone();
+                    let project = project.clone();
                     let weak_workspace = cx.entity().downgrade();
                     workspace.toggle_modal(window, cx, |window, cx| {
                         let delegate = FileFinderDelegate::new(
@@ -1970,13 +1979,7 @@ impl PickerDelegate for FileFinderDelegate {
                 self.matches.push_new_matches(
                     project.worktree_store(),
                     cx,
-                    self.history_items.iter().filter(|history_item| {
-                        project
-                            .worktree_for_id(history_item.project.worktree_id, cx)
-                            .is_some()
-                            || project.is_local()
-                            || project.is_via_remote_server()
-                    }),
+                    self.history_items.iter(),
                     self.currently_opened_path.as_ref(),
                     None,
                     std::iter::empty(),

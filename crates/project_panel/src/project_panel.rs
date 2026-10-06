@@ -1144,6 +1144,7 @@ impl ProjectPanel {
             let is_dir = entry.is_dir();
             let is_foldable = auto_fold_dirs && self.is_foldable(entry, worktree);
             let is_unfoldable = auto_fold_dirs && self.is_unfoldable(entry, worktree);
+            let supports_trash = worktree.supports_trash_restore();
             let is_read_only = project.is_read_only(cx);
             let is_remote = project.is_remote();
             let is_local = project.is_local() || project.is_via_wsl_with_host_interop(cx);
@@ -1361,7 +1362,7 @@ impl ProjectPanel {
                                 Box::new(Rename),
                             )
                         })
-                        .when(!is_root && !is_remote, |menu| {
+                        .when(!is_root && supports_trash, |menu| {
                             menu.action(
                                 tr(cx, "project_panel.delete.trash", "Trash"),
                                 Box::new(Trash { skip_prompt: false }),
@@ -7357,6 +7358,9 @@ impl Render for ProjectPanel {
         };
 
         let is_local = project.is_local();
+        let supports_trash = project
+            .visible_worktrees(cx)
+            .any(|worktree| worktree.read(cx).supports_trash_restore());
 
         if has_worktree {
             let item_count = self
@@ -7502,9 +7506,7 @@ impl Render for ProjectPanel {
                         .on_action(cx.listener(Self::restore_file))
                         .on_action(cx.listener(Self::add_to_gitignore))
                         .on_action(cx.listener(Self::add_to_git_info_exclude))
-                        .when(!project.is_remote(), |el| {
-                            el.on_action(cx.listener(Self::trash))
-                        })
+                        .when(supports_trash, |el| el.on_action(cx.listener(Self::trash)))
                 })
                 .when(
                     project.is_local() || project.is_via_wsl_with_host_interop(cx),

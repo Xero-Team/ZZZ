@@ -3257,8 +3257,7 @@ impl Workspace {
     pub fn worktree_scans_complete(&self, cx: &App) -> impl Future<Output = ()> + 'static + use<> {
         let futures = self
             .worktrees(cx)
-            .filter_map(|worktree| worktree.read(cx).as_local())
-            .map(|worktree| worktree.scan_complete())
+            .map(|worktree| worktree.read_with(cx, |worktree, _| worktree.scan_complete()))
             .collect::<Vec<_>>();
         async move {
             for future in futures {

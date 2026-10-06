@@ -1114,6 +1114,68 @@ impl Worktree {
         }
     }
 
+    pub fn path_is_file(&self, path: &RelPath, cx: &Context<Worktree>) -> Task<Result<bool>> {
+        match self {
+            Worktree::Local(local_worktree) => {
+                if let Some(snapshot) = &local_worktree.vfs_snapshot {
+                    let provider = snapshot.provider().clone();
+                    let provider_path = provider_path_from_legacy_utf8(
+                        path.as_unix_str(),
+                        provider.descriptor().path_encoding,
+                    );
+                    return match provider_path {
+                        Ok(provider_path) => cx.background_spawn(async move {
+                            provider_path_is_file(provider.as_ref(), &provider_path).await
+                        }),
+                        Err(error) => Task::ready(Err(error.into())),
+                    };
+                }
+                let fs = local_worktree.fs.clone();
+                let abs_path = local_worktree.absolutize(path);
+                cx.background_spawn(async move { Ok(fs.is_file(&abs_path).await) })
+            }
+            Worktree::Remote(_) => {
+                let Some(provider_task) = self.remote_vfs_provider(cx) else {
+                    return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
+                };
+                let path = path.to_owned();
+                cx.background_spawn(async move {
+                    let provider = provider_task.await.map_err(anyhow::Error::new)?;
+                    let provider_path = provider_path_from_legacy_utf8(
+                        path.as_unix_str(),
+                        provider.descriptor().path_encoding,
+                    )?;
+                    provider_path_is_file(provider.as_ref(), &provider_path).await
+                })
+            }
+        }
+    }
+
+    pub fn scan_complete(&self) -> futures::future::BoxFuture<'static, ()> {
+        match self {
+            Worktree::Local(worktree) => worktree.scan_complete().boxed(),
+            Worktree::Remote(_) => futures::future::ready(()).boxed(),
+        }
+    }
+
+    pub fn settings(&self) -> Option<WorktreeSettings> {
+        match self {
+            Worktree::Local(worktree) => Some(worktree.settings()),
+            Worktree::Remote(_) => None,
+        }
+    }
+
+    pub fn supports_trash_restore(&self) -> bool {
+        matches!(self, Worktree::Local(_))
+    }
+
+    pub fn request_path_prefix_scan(&self, path: Arc<RelPath>) -> Option<barrier::Receiver> {
+        match self {
+            Worktree::Local(worktree) => Some(worktree.add_path_prefix_to_scan(path)),
+            Worktree::Remote(_) => None,
+        }
+    }
+
     pub fn write_file(
         &self,
         path: Arc<RelPath>,
@@ -2458,6 +2520,17 @@ fn native_path_from_legacy(
         vfs::NativePath::from_unix_bytes(path.as_bytes())
     } else {
         vfs::NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())
+    }
+}
+
+async fn provider_path_is_file(
+    provider: &dyn VfsProvider,
+    path: &vfs::ProviderPath,
+) -> Result<bool> {
+    match provider.stat(path, vfs::StatOptions::default()).await {
+        Ok(metadata) => Ok(metadata.kind == vfs::EntryKind::File),
+        Err(error) if error.code() == VfsErrorCode::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
     }
 }
 
