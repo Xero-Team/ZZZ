@@ -272,19 +272,9 @@ pub struct Project {
     settings_observer: Entity<SettingsObserver>,
     toolchain_store: Option<Entity<ToolchainStore>>,
     agent_location: Option<AgentLocation>,
-    downloading_files: Arc<Mutex<HashMap<u64, DownloadingFile>>>,
     last_worktree_paths: WorktreePaths,
     vfs_service: VfsService,
     _vfs_lease_reaper: Task<()>,
-}
-
-/// Process-wide counter for remote file-transfer ids.
-static NEXT_DOWNLOAD_FILE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-
-struct DownloadingFile {
-    destination_path: PathBuf,
-    chunks: Vec<u8>,
-    total_size: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -484,24 +474,18 @@ impl ProjectPath {
 
     pub fn from_proto(path: proto::ProjectPath) -> Result<Self> {
         let worktree_id = WorktreeId::from_proto(path.worktree_id);
-        let relative_path = if let Some(vfs_path) = path.vfs_path {
-            let vfs_path = vfs_path.to_vfs_path()?;
-            anyhow::ensure!(
-                vfs_path.mount_id().get() == path.worktree_id,
-                "VFS mount ID does not match legacy worktree ID"
-            );
-            let relative_path = provider_path_to_legacy_utf8(vfs_path.provider_path())?;
-            anyhow::ensure!(
-                relative_path == path.path,
-                "VFS path does not match legacy project path"
-            );
-            RelPath::from_proto(&relative_path)?
-        } else {
-            RelPath::from_proto(&path.path)?
-        };
+        let vfs_path = path
+            .vfs_path
+            .context("project path is missing exact VFS identity")?;
+        let vfs_path = vfs_path.to_vfs_path()?;
+        anyhow::ensure!(
+            vfs_path.mount_id().get() == path.worktree_id,
+            "VFS mount ID does not match worktree ID"
+        );
+        let relative_path = provider_path_to_legacy_utf8(vfs_path.provider_path())?;
         Ok(Self {
             worktree_id,
-            path: relative_path,
+            path: RelPath::from_proto(&relative_path)?,
         })
     }
 
@@ -512,7 +496,6 @@ impl ProjectPath {
         let vfs_path = CoreVfsPath::new(MountId::new(worktree_id), provider_path);
         Ok(proto::ProjectPath {
             worktree_id,
-            path,
             vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
         })
     }
@@ -1191,10 +1174,8 @@ impl Project {
         client.add_entity_request_handler(Self::handle_open_new_buffer);
         client.add_entity_message_handler(Self::handle_create_buffer_for_peer);
         client.add_entity_message_handler(Self::handle_toggle_lsp_logs);
-        client.add_entity_message_handler(Self::handle_create_image_for_peer);
         client.add_entity_request_handler(Self::handle_find_search_candidates_chunk);
         client.add_entity_message_handler(Self::handle_find_search_candidates_cancel);
-        client.add_entity_message_handler(Self::handle_create_file_for_peer);
 
         WorktreeStore::init(&client);
         BufferStore::init(&client);
@@ -1442,7 +1423,6 @@ impl Project {
                 toolchain_store: Some(toolchain_store),
 
                 agent_location: None,
-                downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
                 vfs_service,
                 _vfs_lease_reaper: vfs_lease_reaper,
@@ -1678,7 +1658,6 @@ impl Project {
 
                 toolchain_store: Some(toolchain_store),
                 agent_location: None,
-                downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
                 vfs_service: VfsService::default(),
                 _vfs_lease_reaper: Task::ready(()),
@@ -1696,8 +1675,6 @@ impl Project {
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.agent_server_store);
 
             remote_proto.add_entity_message_handler(Self::handle_create_buffer_for_peer);
-            remote_proto.add_entity_message_handler(Self::handle_create_image_for_peer);
-            remote_proto.add_entity_message_handler(Self::handle_create_file_for_peer);
             remote_proto.add_entity_message_handler(Self::handle_update_worktree);
             remote_proto.add_entity_message_handler(Self::handle_update_project);
             remote_proto.add_entity_message_handler(Self::handle_toast);
@@ -2642,7 +2619,14 @@ impl Project {
         destination_path: PathBuf,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.start_download(worktree_id, path, destination_path, cx)
+        let read = self.read_file_bytes(worktree_id, path, cx);
+        cx.spawn(async move |_this, cx| {
+            let bytes = read.await?;
+            cx.background_spawn(async move {
+                std::fs::write(destination_path, bytes).map_err(Into::into)
+            })
+            .await
+        })
     }
 
     /// Reads a worktree resource through its local or remote VFS provider.
@@ -2697,56 +2681,6 @@ impl Project {
                 anyhow::Ok((path, temp_path))
             })
             .await
-        })
-    }
-
-    /// Registers a remote file transfer under a fresh id and starts its
-    /// `DownloadFileByPath` request. Chunks are delivered to `destination` by the
-    /// project's update handler. A failed request drops its registration so
-    /// `downloading_files` does not leak an entry.
-    fn start_download(
-        &mut self,
-        worktree_id: WorktreeId,
-        path: Arc<RelPath>,
-        destination_path: PathBuf,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        let Some(remote_client) = &self.remote_client else {
-            return Task::ready(Err(anyhow!("not a remote project")));
-        };
-        let proto_client = remote_client.read(cx).proto_client();
-        // For SSH remote projects, use REMOTE_SERVER_PROJECT_ID instead of
-        // remote_id() because SSH projects have client_state: Local but still
-        // need to communicate with the remote server.
-        let project_id = self.remote_id().unwrap_or(REMOTE_SERVER_PROJECT_ID);
-        let downloading_files = self.downloading_files.clone();
-        let path_str = path.to_proto();
-        let file_id = NEXT_DOWNLOAD_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        // Register before sending the request: the update handler looks the
-        // entry up by file id and an empty file finishes from the State message,
-        // which can arrive before this task is scheduled.
-        downloading_files.lock().insert(
-            file_id,
-            DownloadingFile {
-                destination_path,
-                chunks: Vec::new(),
-                total_size: 0,
-            },
-        );
-
-        cx.spawn(async move |_this, _cx| {
-            let request = proto_client.request(proto::DownloadFileByPath {
-                project_id,
-                worktree_id: worktree_id.to_proto(),
-                path: path_str,
-                file_id,
-            });
-            if let Err(error) = request.await {
-                downloading_files.lock().remove(&file_id);
-                return Err(error);
-            }
-            Ok(())
         })
     }
 
@@ -5367,129 +5301,6 @@ impl Project {
             })
             .detach_and_log_err(cx);
         buffer.read(cx).remote_id()
-    }
-
-    async fn handle_create_image_for_peer(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::CreateImageForPeer>,
-        mut cx: AsyncApp,
-    ) -> Result<()> {
-        this.update(&mut cx, |this, cx| {
-            this.image_store.update(cx, |image_store, cx| {
-                image_store.handle_create_image_for_peer(envelope, cx)
-            })
-        })
-    }
-
-    async fn handle_create_file_for_peer(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::CreateFileForPeer>,
-        mut cx: AsyncApp,
-    ) -> Result<()> {
-        use proto::create_file_for_peer::Variant;
-        log::debug!("handle_create_file_for_peer: received message");
-
-        let downloading_files: Arc<Mutex<HashMap<u64, DownloadingFile>>> =
-            this.update(&mut cx, |this, _| this.downloading_files.clone());
-
-        match &envelope.payload.variant {
-            Some(Variant::State(state)) => {
-                log::debug!(
-                    "handle_create_file_for_peer: got State: id={}, content_size={}",
-                    state.id,
-                    state.content_size
-                );
-
-                let empty_file_destination: Option<PathBuf> = {
-                    let mut files = downloading_files.lock();
-                    if let Some(file_entry) = files.get_mut(&state.id) {
-                        file_entry.total_size = state.content_size;
-                    } else {
-                        log::warn!(
-                            "handle_create_file_for_peer: file_id={} not found in downloading_files",
-                            state.id
-                        );
-                    }
-
-                    if state.content_size == 0 {
-                        // No chunks will arrive for an empty file; finish it now.
-                        files.remove(&state.id).map(|entry| entry.destination_path)
-                    } else {
-                        None
-                    }
-                };
-
-                if let Some(destination) = empty_file_destination {
-                    log::debug!("handle_create_file_for_peer: finishing empty file");
-                    Self::finish_download(destination, Vec::new()).await;
-                }
-            }
-            Some(Variant::Chunk(chunk)) => {
-                log::debug!(
-                    "handle_create_file_for_peer: got Chunk: file_id={}, data_len={}",
-                    chunk.file_id,
-                    chunk.data.len()
-                );
-
-                // Extract data while holding the lock, then release it before await
-                let completed: Option<(PathBuf, Vec<u8>)> = {
-                    let mut files = downloading_files.lock();
-                    match files.get_mut(&chunk.file_id) {
-                        Some(file_entry) => {
-                            file_entry.chunks.extend_from_slice(&chunk.data);
-                            log::debug!(
-                                "handle_create_file_for_peer: accumulated {} bytes, total_size={}",
-                                file_entry.chunks.len(),
-                                file_entry.total_size
-                            );
-
-                            if file_entry.chunks.len() as u64 >= file_entry.total_size
-                                && file_entry.total_size > 0
-                            {
-                                let content = std::mem::take(&mut file_entry.chunks);
-                                files
-                                    .remove(&chunk.file_id)
-                                    .map(|entry| (entry.destination_path, content))
-                            } else {
-                                None
-                            }
-                        }
-                        None => None,
-                    }
-                }; // MutexGuard is dropped here
-
-                // Perform the write / hand-off outside the lock
-                if let Some((destination, content)) = completed {
-                    Self::finish_download(destination, content).await;
-                    log::debug!(
-                        "handle_create_file_for_peer: removed completed download entry {}",
-                        chunk.file_id
-                    );
-                }
-            }
-            None => {
-                log::warn!("handle_create_file_for_peer: got None variant");
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn finish_download(destination_path: PathBuf, content: Vec<u8>) {
-        log::debug!(
-            "handle_create_file_for_peer: writing {} bytes to {:?}",
-            content.len(),
-            destination_path
-        );
-        match smol::fs::write(&destination_path, &content).await {
-            Ok(_) => log::info!(
-                "handle_create_file_for_peer: successfully wrote file to {:?}",
-                destination_path
-            ),
-            Err(error) => {
-                log::error!("handle_create_file_for_peer: failed to write file: {error:?}")
-            }
-        }
     }
 
     pub fn worktree_metadata_protos(&self, cx: &App) -> Vec<proto::WorktreeMetadata> {

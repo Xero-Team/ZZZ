@@ -11,13 +11,13 @@ use gpui::{
 pub use image::ImageFormat;
 use image::{ExtendedColorType, GenericImageView, ImageReader};
 use language::{DiskState, File};
-use rpc::{ErrorExt as _, TypedEnvelope, proto};
+use rpc::ErrorExt as _;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::Arc;
 use util::{ResultExt, rel_path::RelPath};
 use vfs::ResourceId;
-use worktree::{LoadedBinaryFile, PathChange, Worktree, WorktreeId};
+use worktree::{LoadedBinaryFile, PathChange, Worktree};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub struct ImageId(NonZeroU64);
@@ -271,18 +271,7 @@ impl ProjectItem for ImageItem {
     }
 }
 
-struct RemoteImageStore {
-    loading_remote_images_by_id: HashMap<ImageId, LoadingRemoteImage>,
-}
-
-struct LoadingRemoteImage {
-    state: proto::ImageState,
-    chunks: Vec<Vec<u8>>,
-    received_size: u64,
-}
-
 pub struct ImageStore {
-    remote_compatibility_store: Option<Entity<RemoteImageStore>>,
     opened_images: HashMap<ImageId, WeakEntity<ImageItem>>,
     resource_to_image_id: HashMap<ResourceId, ImageId>,
     image_ids_by_path: HashMap<ProjectPath, ImageId>,
@@ -298,21 +287,14 @@ pub struct ImageStore {
 
 impl ImageStore {
     pub fn local(worktree_store: Entity<WorktreeStore>, cx: &mut Context<Self>) -> Self {
-        Self::new(worktree_store, None, cx)
+        Self::new(worktree_store, cx)
     }
 
     pub fn remote(worktree_store: Entity<WorktreeStore>, cx: &mut Context<Self>) -> Self {
-        let remote_compatibility_store = cx.new(|_| RemoteImageStore {
-            loading_remote_images_by_id: Default::default(),
-        });
-        Self::new(worktree_store, Some(remote_compatibility_store), cx)
+        Self::new(worktree_store, cx)
     }
 
-    fn new(
-        worktree_store: Entity<WorktreeStore>,
-        remote_compatibility_store: Option<Entity<RemoteImageStore>>,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    fn new(worktree_store: Entity<WorktreeStore>, cx: &mut Context<Self>) -> Self {
         let worktree_subscription =
             cx.subscribe(&worktree_store, |this: &mut ImageStore, _, event, cx| {
                 if let WorktreeStoreEvent::WorktreeAdded(worktree) = event {
@@ -320,7 +302,6 @@ impl ImageStore {
                 }
             });
         Self {
-            remote_compatibility_store,
             opened_images: Default::default(),
             resource_to_image_id: Default::default(),
             image_ids_by_path: Default::default(),
@@ -463,24 +444,6 @@ impl ImageStore {
         }
     }
 
-    pub fn handle_create_image_for_peer(
-        &mut self,
-        envelope: TypedEnvelope<proto::CreateImageForPeer>,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
-        if let Some(remote) = self.remote_compatibility_store.as_ref() {
-            let worktree_store = self.worktree_store.clone();
-            let image = remote.update(cx, |remote, cx| {
-                remote.handle_create_image_for_peer(envelope, &worktree_store, cx)
-            })?;
-            if let Some(image) = image {
-                self.add_image(image, cx);
-            }
-        }
-
-        Ok(())
-    }
-
     fn subscribe_to_worktree(&mut self, worktree: &Entity<Worktree>, cx: &mut Context<Self>) {
         cx.subscribe(worktree, |this, worktree, event, cx| {
             if let worktree::Event::UpdatedEntries(changes) = event {
@@ -606,88 +569,6 @@ impl ImageStore {
             .retain(|_, indexed_image_id| *indexed_image_id != image_id);
         self.resource_to_image_id
             .retain(|_, indexed_image_id| *indexed_image_id != image_id);
-    }
-}
-
-impl RemoteImageStore {
-    pub fn handle_create_image_for_peer(
-        &mut self,
-        envelope: TypedEnvelope<proto::CreateImageForPeer>,
-        worktree_store: &Entity<WorktreeStore>,
-        cx: &mut Context<Self>,
-    ) -> Result<Option<Entity<ImageItem>>> {
-        use proto::create_image_for_peer::Variant;
-        match envelope.payload.variant {
-            Some(Variant::State(state)) => {
-                let image_id =
-                    ImageId::from(NonZeroU64::new(state.id).context("invalid image id")?);
-
-                self.loading_remote_images_by_id.insert(
-                    image_id,
-                    LoadingRemoteImage {
-                        state,
-                        chunks: Vec::new(),
-                        received_size: 0,
-                    },
-                );
-                Ok(None)
-            }
-            Some(Variant::Chunk(chunk)) => {
-                let image_id =
-                    ImageId::from(NonZeroU64::new(chunk.image_id).context("invalid image id")?);
-
-                let loading = self
-                    .loading_remote_images_by_id
-                    .get_mut(&image_id)
-                    .context("received chunk for unknown image")?;
-
-                loading.received_size += chunk.data.len() as u64;
-                loading.chunks.push(chunk.data);
-
-                if loading.received_size == loading.state.content_size {
-                    let loading = self
-                        .loading_remote_images_by_id
-                        .remove(&image_id)
-                        .expect("entry should be present");
-
-                    let mut content = Vec::with_capacity(loading.received_size as usize);
-                    for chunk_data in loading.chunks {
-                        content.extend_from_slice(&chunk_data);
-                    }
-
-                    let image_metadata = ImageItem::compute_metadata_from_bytes(&content).log_err();
-                    let image = create_gpui_image(content)?;
-
-                    let proto_file = loading.state.file.context("missing file in image state")?;
-                    let worktree_id = WorktreeId::from_proto(proto_file.worktree_id);
-                    let worktree = worktree_store
-                        .read(cx)
-                        .worktree_for_id(worktree_id, cx)
-                        .context("worktree not found")?;
-
-                    let file = Arc::new(
-                        worktree::File::from_proto(proto_file, worktree, cx)
-                            .context("invalid file in image state")?,
-                    );
-
-                    let entity = cx.new(|_cx| ImageItem {
-                        id: image_id,
-                        file,
-                        image,
-                        image_metadata,
-                        reload_task: None,
-                    });
-
-                    Ok(Some(entity))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => {
-                log::warn!("Received CreateImageForPeer with no variant");
-                Ok(None)
-            }
-        }
     }
 }
 

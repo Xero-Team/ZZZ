@@ -100,7 +100,7 @@ use util::{
 use worktree::WorktreeModelHandle as _;
 
 #[test]
-fn test_project_path_v2_wire_round_trip_and_mismatch_rejection() {
+fn test_project_path_exact_wire_round_trip_and_missing_identity_rejection() {
     let original = ProjectPath {
         worktree_id: WorktreeId::from_proto(9),
         path: rel_path("src/main.rs").into(),
@@ -116,9 +116,9 @@ fn test_project_path_v2_wire_round_trip_and_mismatch_rejection() {
     };
     assert_eq!(round_tripped, original);
 
-    let mut mismatched = serialized;
-    mismatched.path = String::from("different.rs");
-    assert!(ProjectPath::from_proto(mismatched).is_err());
+    let mut missing_identity = serialized;
+    missing_identity.vfs_path = None;
+    assert!(ProjectPath::from_proto(missing_identity).is_err());
 }
 
 #[test]

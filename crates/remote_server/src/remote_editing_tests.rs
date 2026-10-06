@@ -89,6 +89,22 @@ async fn test_basic_remote_editing(cx: &mut TestAppContext, server_cx: &mut Test
         );
     });
 
+    let download_directory = tempfile::tempdir().unwrap();
+    let downloaded_path = download_directory.path().join("README.md");
+    project
+        .update(cx, |project, cx| {
+            project.download_file(
+                worktree_id,
+                rel_path("README.md").into(),
+                downloaded_path.clone(),
+                cx,
+            )
+        })
+        .await
+        .unwrap();
+    let downloaded_contents = std::fs::read_to_string(downloaded_path).unwrap();
+    assert_eq!(downloaded_contents, "# project 1");
+
     // The user opens a buffer in the remote worktree. The buffer's
     // contents are loaded from the remote filesystem.
     let buffer = project
