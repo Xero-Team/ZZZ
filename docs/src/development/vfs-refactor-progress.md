@@ -14,30 +14,30 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `ce1038a9e709dcd861f1a94fd011e81a7dfedbf8`
+  `82df2b06e340037da7096ff5d7c432616cf9d707`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 4`
 - Last completed phase: `Phase 3`
 - Blocking issue: `None`
-- Next action: 为 `RemoteProviderProxy` 接入 actual `AnyProtoClient` transport 和
-  Project/remote-server handlers；增加 mutation result journal、active cancellation race、
-  packet fragmentation/disconnect/reconnect fault tests，并完成 `VFS-EXP-007`/008。
+- Next action: 在 Project/remote server 注册 VFS request/stream handlers，并从远程
+  Worktree 建立 `RemoteProviderProxy`；随后增加 mutation result journal、active
+  cancellation race、packet fragmentation/disconnect/reconnect fault tests。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit                     | Validation | Notes                     |
-| ----- | ---------------------------------- | ----------- | -------------------------- | ---------- | ------------------------- |
-| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470`               | PASS       | VFS-EXP-001 PASS          |
-| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75`               | PASS       | VFS-EXP-002 PASS          |
-| 2     | Provider、LocalProvider、职责拆分  | PASS        | `9b344ee943`, `96a761f5be` | PASS       | VFS-EXP-003/004/005 PASS  |
-| 3     | Snapshot、ResourceId、Worktree     | PASS        | `9514700ac9`               | PASS       | VFS-EXP-006 PASS          |
-| 4     | RemoteProviderProxy 与 VFS RPC     | IN PROGRESS | `a5d4bbc219`, `ce1038a9e7` | PARTIAL    | loopback conformance PASS |
-| 5     | Consumer 迁移                      | NOT STARTED | -                          | -          | -                         |
-| 6     | LSP/Git/native execution           | NOT STARTED | -                          | -          | -                         |
-| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -                          | -          | -                         |
-| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -                          | -          | -                         |
-| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -                          | -          | -                         |
-| 10    | 收敛与最终验证                     | NOT STARTED | -                          | -          | -                         |
+| Phase | Result                             | Status      | Commit                                   | Validation | Notes                     |
+| ----- | ---------------------------------- | ----------- | ---------------------------------------- | ---------- | ------------------------- |
+| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470`                             | PASS       | VFS-EXP-001 PASS          |
+| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75`                             | PASS       | VFS-EXP-002 PASS          |
+| 2     | Provider、LocalProvider、职责拆分  | PASS        | `9b344ee943`, `96a761f5be`               | PASS       | VFS-EXP-003/004/005 PASS  |
+| 3     | Snapshot、ResourceId、Worktree     | PASS        | `9514700ac9`                             | PASS       | VFS-EXP-006 PASS          |
+| 4     | RemoteProviderProxy 与 VFS RPC     | IN PROGRESS | `a5d4bbc219`, `ce1038a9e7`, `82df2b06e3` | PARTIAL    | loopback conformance PASS |
+| 5     | Consumer 迁移                      | NOT STARTED | -                                        | -          | -                         |
+| 6     | LSP/Git/native execution           | NOT STARTED | -                                        | -          | -                         |
+| 7     | ArchiveProvider 与 ZIP             | NOT STARTED | -                                        | -          | -                         |
+| 8     | Composition layers 与 overlay 决策 | NOT STARTED | -                                        | -          | -                         |
+| 9     | Cross-provider 与旧模型移除        | NOT STARTED | -                                        | -          | -                         |
+| 10    | 收敛与最终验证                     | NOT STARTED | -                                        | -          | -                         |
 
 ## Baseline {#baseline}
 
@@ -214,6 +214,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-06 | 4A    | `buf lint crates/proto/proto` and `buf format --diff --exit-code crates/proto/proto`                                                          | -        | NOT RUN: `buf` unavailable                                                                                                                | Tool unavailable; prost build and proto tests PASS                      |
 | 2026-10-06 | 4B    | `cargo test --locked -p rpc`                                                                                                                  | 0        | PASS: 8 tests including shared provider conformance through loopback `RemoteProviderProxy` and handle release                             | No                                                                      |
 | 2026-10-06 | 4B    | `./script/clippy -p rpc -p proto -p vfs`                                                                                                      | 0        | PASS; philosophy gate also PASS                                                                                                           | No                                                                      |
+| 2026-10-06 | 4C    | `cargo check --locked -p rpc --all-features` and `cargo test --locked -p rpc`                                                                 | 0 each   | PASS: actual `AnyProtoClient` unary/stream transport compiles; 8 rpc tests pass                                                           | No                                                                      |
+| 2026-10-06 | 4C    | `./script/clippy -p rpc`                                                                                                                      | 0        | PASS; philosophy gate also PASS                                                                                                           | No                                                                      |
 
 ## 提交记录 {#commit-log}
 
@@ -226,6 +228,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `9514700ac90fa990d35bf53590ad4e96aa1c55a9` | 3     | Lazy `VfsSnapshot`/`ResourceRegistry`, stable identity, bounded caches and Worktree scanner integration               | VFS-EXP-006, VFS/fs/Worktree/Workspace checks, cross-target VFS, clippy and code-smell review PASS; baseline failures unchanged | Remove snapshot-backed Worktree enumeration and the snapshot module while retaining Phase 2 providers |
 | `a5d4bbc219df84129525058b316ef80d31bc6d40` | 4A    | Versioned remote VFS schema for negotiation, capabilities, handles, positioned I/O, mutations, watch and cancellation | Proto round trips, cross-target checks and clippy PASS; buf NOT RUN                                                             | Remove VFS envelope variants and wire conversions without changing the loopback service               |
 | `ce1038a9e709dcd861f1a94fd011e81a7dfedbf8` | 4B    | Loopback VFS service and `RemoteProviderProxy` with leased positioned handles and typed errors                        | Shared provider conformance, handle lifecycle, rpc/proto/vfs clippy PASS                                                        | Remove rpc VFS service/proxy while retaining the Phase 4A protocol contract                           |
+| `82df2b06e340037da7096ff5d7c432616cf9d707` | 4C    | `AnyProtoClient` unary/stream transport for `RemoteProviderProxy`                                                     | rpc all-feature check, tests and clippy PASS                                                                                    | Remove the protobuf transport while retaining the loopback service/proxy                              |
 
 ## 平台 QA {#platform-qa}
 
@@ -245,7 +248,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Next action {#next-action}
 
-为 `RemoteProviderProxy` 接入 actual `AnyProtoClient` transport 和
-Project/remote-server handlers；增加 mutation result journal、active cancellation race、
+在 Project/remote server 注册 VFS request/stream handlers，并从远程 Worktree 建立
+`RemoteProviderProxy`；随后增加 mutation result journal、active cancellation race、
 packet fragmentation/disconnect/reconnect fault tests，并完成 `VFS-EXP-007`/
 `VFS-EXP-008`。
