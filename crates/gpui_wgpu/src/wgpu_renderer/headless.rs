@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gpui::{DevicePixels, PlatformAtlas, PlatformHeadlessRenderer, Scene, Size};
+use gpui::{AtlasPolicy, DevicePixels, PlatformAtlas, PlatformHeadlessRenderer, Scene, Size};
 
 use crate::WgpuContext;
 
@@ -75,13 +75,22 @@ impl WgpuHeadlessRenderer {
 
     /// Creates a renderer, optionally forcing WGPU's fallback adapter.
     pub fn new_with_fallback(force_fallback_adapter: bool) -> anyhow::Result<Self> {
+        Self::new_with_atlas_policy(force_fallback_adapter, AtlasPolicy::default())
+    }
+
+    /// Creates a renderer with an injected atlas policy for deterministic tests.
+    pub fn new_with_atlas_policy(
+        force_fallback_adapter: bool,
+        policy: AtlasPolicy,
+    ) -> anyhow::Result<Self> {
         let context = WgpuContext::new_headless(force_fallback_adapter)?;
-        let renderer = WgpuRenderer::new_headless(
+        let renderer = WgpuRenderer::new_headless_with_policy(
             &context,
             Size {
                 width: DevicePixels(1),
                 height: DevicePixels(1),
             },
+            policy,
         )?;
         Ok(Self {
             renderer,

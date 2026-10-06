@@ -1,9 +1,9 @@
 use anyhow::{Context as _, Result};
 use collections::FxHashMap;
 use gpui::{
-    Atlas, AtlasBackend, AtlasEpoch, AtlasFrame, AtlasKey, AtlasSnapshot, AtlasTextureDescriptor,
-    AtlasTextureId, AtlasTextureKind, AtlasTile, AtlasUpload, AtlasUsage, Bounds, DevicePixels,
-    PlatformAtlas, Size,
+    Atlas, AtlasBackend, AtlasEpoch, AtlasFrame, AtlasKey, AtlasPolicy, AtlasSnapshot,
+    AtlasTextureDescriptor, AtlasTextureId, AtlasTextureKind, AtlasTile, AtlasUpload, AtlasUsage,
+    Bounds, DevicePixels, PlatformAtlas, Size,
 };
 use std::{borrow::Cow, sync::Arc};
 
@@ -37,8 +37,17 @@ impl WgpuAtlas {
         queue: Arc<wgpu::Queue>,
         color_texture_format: wgpu::TextureFormat,
     ) -> Self {
+        Self::new_with_policy(device, queue, color_texture_format, AtlasPolicy::default())
+    }
+
+    pub fn new_with_policy(
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+        color_texture_format: wgpu::TextureFormat,
+        policy: AtlasPolicy,
+    ) -> Self {
         let max_texture_size = DevicePixels(device.limits().max_texture_dimension_2d as i32);
-        Self(Atlas::new(
+        Self(Atlas::with_policy(
             WgpuAtlasTextures {
                 device,
                 queue,
@@ -52,6 +61,7 @@ impl WgpuAtlas {
                 width: max_texture_size,
                 height: max_texture_size,
             },
+            policy,
         ))
     }
 
@@ -60,6 +70,15 @@ impl WgpuAtlas {
             context.device.clone(),
             context.queue.clone(),
             context.color_texture_format(),
+        )
+    }
+
+    pub fn from_context_with_policy(context: &WgpuContext, policy: AtlasPolicy) -> Self {
+        Self::new_with_policy(
+            context.device.clone(),
+            context.queue.clone(),
+            context.color_texture_format(),
+            policy,
         )
     }
 

@@ -109,6 +109,9 @@ pub struct AtlasPolicy {
 impl Default for AtlasPolicy {
     fn default() -> Self {
         const MEBIBYTE: usize = 1024 * 1024;
+        // TEXT-001 uses 28 MiB of subpixel pages, 1 MiB of SVG pages, and
+        // 4 MiB of image pages. These defaults retain that workload with page
+        // headroom while preventing image churn from consuming glyph budgets.
         Self {
             page_size: DEFAULT_ATLAS_SIZE,
             retained_bytes: [
@@ -205,6 +208,13 @@ pub struct AtlasSnapshot {
     pub budget_pressure_frames: u64,
     /// Per-content lifecycle and budget diagnostics.
     pub content: [AtlasContentSnapshot; AtlasContentKind::COUNT],
+}
+
+impl AtlasSnapshot {
+    /// Returns diagnostics for one content class.
+    pub fn content(&self, content_kind: AtlasContentKind) -> AtlasContentSnapshot {
+        self.content[content_kind.index()]
+    }
 }
 
 /// Point-in-time diagnostics for one atlas content class.
@@ -358,8 +368,16 @@ struct AtlasConfiguration {
 }
 
 struct AtlasEntry {
+    key: AtlasKey,
     tile: AtlasTile,
-    retired: bool,
+    retirement: Option<AtlasRetirement>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AtlasRetirement {
+    Explicit,
+    Eviction,
+    Compaction,
 }
 
 struct AtlasPage {
@@ -369,6 +387,7 @@ struct AtlasPage {
     allocator: etagere::BucketedAtlasAllocator,
     entry_ids: FxHashSet<TileId>,
     active_entry_count: usize,
+    last_used_frame: AtlasFrameId,
 }
 
 impl AtlasPage {
@@ -400,6 +419,10 @@ struct AtlasState<Backend> {
     allocations: u64,
     removals: u64,
     retirements: u64,
+    evictions_by_content: [u64; AtlasContentKind::COUNT],
+    compactions_by_content: [u64; AtlasContentKind::COUNT],
+    budget_pressure_by_content: [u64; AtlasContentKind::COUNT],
+    budget_pressure_frames: u64,
     backend: Backend,
 }
 
@@ -425,6 +448,10 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             allocations: 0,
             removals: 0,
             retirements: 0,
+            evictions_by_content: [0; AtlasContentKind::COUNT],
+            compactions_by_content: [0; AtlasContentKind::COUNT],
+            budget_pressure_by_content: [0; AtlasContentKind::COUNT],
+            budget_pressure_frames: 0,
             backend,
         }
     }
@@ -487,12 +514,13 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         }
 
         self.pages[page_index].entry_ids.insert(tile.tile_id);
-        self.tile_ids_by_key.insert(key, tile.tile_id);
+        self.tile_ids_by_key.insert(key.clone(), tile.tile_id);
         self.entries_by_tile_id.insert(
             tile.tile_id,
             AtlasEntry {
+                key,
                 tile,
-                retired: false,
+                retirement: None,
             },
         );
         self.allocations = self.allocations.saturating_add(1);
@@ -560,6 +588,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             allocator: etagere::BucketedAtlasAllocator::new(device_size_to_etagere(page_size)),
             entry_ids: FxHashSet::default(),
             active_entry_count: 0,
+            last_used_frame: self.active_frame.map(|frame| frame.id).unwrap_or_default(),
         };
         let Some(allocation) = page
             .allocator
@@ -612,7 +641,11 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             self.active_frame.is_none(),
             "an atlas frame must finish before another begins"
         );
-        self.apply_pending_removals();
+        let invalidated = self.apply_pending_removals() | self.maintain_budgets();
+        self.destroy_unreferenced_retired_pages();
+        if invalidated {
+            self.advance_epoch();
+        }
         let id = AtlasFrameId(self.next_frame_id);
         self.next_frame_id = self
             .next_frame_id
@@ -637,43 +670,216 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             "atlas epoch cannot change while a frame is being built"
         );
         self.active_frame = None;
+        for page in &mut self.pages {
+            if usage.contains_texture(page.texture_id) {
+                page.last_used_frame = frame.id;
+            }
+        }
         self.completed_usage = usage.clone();
+        self.record_budget_pressure();
+        // Entries absent from the just-completed Scene cannot be reached by its
+        // cached paint ranges, so retiring them here does not invalidate that frame.
+        self.retire_cold_entries_after_frame();
         self.destroy_unreferenced_retired_pages();
         self.epoch
     }
 
-    fn apply_pending_removals(&mut self) {
+    fn apply_pending_removals(&mut self) -> bool {
         let pending_removals = std::mem::take(&mut self.pending_removals);
         let mut changed = false;
         for key in pending_removals {
-            let Some(tile_id) = self.tile_ids_by_key.remove(&key) else {
+            let Some(tile_id) = self.tile_ids_by_key.get(&key).copied() else {
                 continue;
             };
-            let Some(entry) = self.entries_by_tile_id.get_mut(&tile_id) else {
-                log::error!("atlas key referred to missing tile {tile_id:?}");
-                continue;
-            };
-            if entry.retired {
+            changed |= self.retire_entry(tile_id, AtlasRetirement::Explicit);
+        }
+        changed
+    }
+
+    fn maintain_budgets(&mut self) -> bool {
+        if !self.backend.stores_texture_pages() {
+            return false;
+        }
+
+        let mut changed = false;
+        let mut compaction_scheduled = false;
+        for content_kind in AtlasContentKind::ALL {
+            let budget = self.configuration.policy.retained_budget(content_kind);
+            if self.content_resident_bytes(content_kind) <= budget {
                 continue;
             }
-            entry.retired = true;
-            let texture_id = entry.tile.texture_id;
-            let Some(page) = self
+
+            changed |= self.retire_cold_entries(content_kind);
+            self.destroy_unreferenced_retired_pages();
+
+            if compaction_scheduled || self.content_resident_bytes(content_kind) <= budget {
+                continue;
+            }
+            let sparse_page = self
                 .pages
-                .iter_mut()
-                .find(|page| page.texture_id == texture_id)
-            else {
-                log::error!("atlas tile {tile_id:?} referred to a missing page");
+                .iter()
+                .filter(|page| {
+                    page.content_kind == content_kind
+                        && page.active_entry_count > 0
+                        && page.entry_ids.len() > page.active_entry_count
+                        && self.completed_usage.contains_texture(page.texture_id)
+                })
+                .min_by_key(|page| (page.active_entry_count, page.last_used_frame))
+                .map(|page| page.texture_id);
+            let Some(texture_id) = sparse_page else {
                 continue;
             };
-            page.active_entry_count -= 1;
-            self.removals = self.removals.saturating_add(1);
-            self.retirements = self.retirements.saturating_add(1);
-            changed = true;
+            let active_entries = self
+                .pages
+                .iter()
+                .find(|page| page.texture_id == texture_id)
+                .map(|page| {
+                    page.entry_ids
+                        .iter()
+                        .filter_map(|tile_id| {
+                            self.entries_by_tile_id
+                                .get(tile_id)
+                                .is_some_and(|entry| entry.retirement.is_none())
+                                .then_some(*tile_id)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            for tile_id in active_entries {
+                changed |= self.retire_entry(tile_id, AtlasRetirement::Compaction);
+            }
+            self.compactions_by_content[content_kind.index()] =
+                self.compactions_by_content[content_kind.index()].saturating_add(1);
+            compaction_scheduled = true;
         }
-        if changed {
-            self.advance_epoch();
+        changed
+    }
+
+    fn record_budget_pressure(&mut self) {
+        if !self.backend.stores_texture_pages() {
+            return;
         }
+        let mut pressure = false;
+        for content_kind in AtlasContentKind::ALL {
+            if self.content_resident_bytes(content_kind)
+                > self.configuration.policy.retained_budget(content_kind)
+            {
+                self.budget_pressure_by_content[content_kind.index()] =
+                    self.budget_pressure_by_content[content_kind.index()].saturating_add(1);
+                pressure = true;
+            }
+        }
+        if pressure {
+            self.budget_pressure_frames = self.budget_pressure_frames.saturating_add(1);
+        }
+    }
+
+    fn retire_cold_entries_after_frame(&mut self) {
+        if !self.backend.stores_texture_pages() {
+            return;
+        }
+        for content_kind in AtlasContentKind::ALL {
+            if self.content_resident_bytes(content_kind)
+                > self.configuration.policy.retained_budget(content_kind)
+            {
+                self.retire_cold_entries(content_kind);
+            }
+        }
+    }
+
+    fn retire_cold_entries(&mut self, content_kind: AtlasContentKind) -> bool {
+        let mut changed = false;
+        let mut pages = self
+            .pages
+            .iter()
+            .filter(|page| page.content_kind == content_kind)
+            .map(|page| (page.last_used_frame, page.texture_id))
+            .collect::<Vec<_>>();
+        pages.sort_unstable_by_key(|(last_used_frame, _)| *last_used_frame);
+        for (_, texture_id) in pages {
+            let cold_entries = self
+                .pages
+                .iter()
+                .find(|page| page.texture_id == texture_id)
+                .map(|page| {
+                    page.entry_ids
+                        .iter()
+                        .filter_map(|tile_id| {
+                            self.entries_by_tile_id.get(tile_id).and_then(|entry| {
+                                (entry.retirement.is_none()
+                                    && !self.completed_usage.contains_tile(*tile_id))
+                                .then_some(*tile_id)
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            for tile_id in cold_entries {
+                changed |= self.retire_entry(tile_id, AtlasRetirement::Eviction);
+            }
+        }
+        changed
+    }
+
+    fn retire_entry(&mut self, tile_id: TileId, retirement: AtlasRetirement) -> bool {
+        let Some(entry) = self.entries_by_tile_id.get_mut(&tile_id) else {
+            log::error!("atlas key referred to missing tile {tile_id:?}");
+            return false;
+        };
+        if entry.retirement.is_some() {
+            return false;
+        }
+        entry.retirement = Some(retirement);
+        let key = entry.key.clone();
+        let texture_id = entry.tile.texture_id;
+        let content_kind = key.content_kind();
+        self.tile_ids_by_key.remove(&key);
+        let Some(page) = self
+            .pages
+            .iter_mut()
+            .find(|page| page.texture_id == texture_id)
+        else {
+            log::error!("atlas tile {tile_id:?} referred to a missing page");
+            return false;
+        };
+        page.active_entry_count -= 1;
+        self.removals = self.removals.saturating_add(1);
+        self.retirements = self.retirements.saturating_add(1);
+        if retirement != AtlasRetirement::Explicit {
+            self.evictions_by_content[content_kind.index()] =
+                self.evictions_by_content[content_kind.index()].saturating_add(1);
+        }
+        true
+    }
+
+    fn restore_compaction_entry(&mut self, key: &AtlasKey) -> Option<AtlasTile> {
+        let tile_id = self
+            .entries_by_tile_id
+            .iter()
+            .filter_map(|(tile_id, entry)| {
+                (entry.key == *key && entry.retirement == Some(AtlasRetirement::Compaction))
+                    .then_some(*tile_id)
+            })
+            .max()?;
+        let entry = self.entries_by_tile_id.get_mut(&tile_id)?;
+        entry.retirement = None;
+        let tile = entry.tile;
+        self.tile_ids_by_key.insert(key.clone(), tile_id);
+        let page = self
+            .pages
+            .iter_mut()
+            .find(|page| page.texture_id == tile.texture_id)?;
+        page.active_entry_count += 1;
+        Some(tile)
+    }
+
+    fn content_resident_bytes(&self, content_kind: AtlasContentKind) -> usize {
+        self.pages
+            .iter()
+            .filter(|page| page.content_kind == content_kind)
+            .fold(0usize, |total, page| {
+                total.saturating_add(page.resident_bytes())
+            })
     }
 
     fn destroy_unreferenced_retired_pages(&mut self) {
@@ -728,9 +934,15 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         snapshot.allocations = self.allocations;
         snapshot.removals = self.removals;
         snapshot.retirements = self.retirements;
+        snapshot.budget_pressure_frames = self.budget_pressure_frames;
         for content_kind in AtlasContentKind::ALL {
-            snapshot.content[content_kind.index()].retained_budget_bytes =
-                self.configuration.policy.retained_budget(content_kind);
+            let content = &mut snapshot.content[content_kind.index()];
+            content.retained_budget_bytes = self.configuration.policy.retained_budget(content_kind);
+            content.evictions = self.evictions_by_content[content_kind.index()];
+            content.compactions = self.compactions_by_content[content_kind.index()];
+            content.budget_pressure_frames = self.budget_pressure_by_content[content_kind.index()];
+            snapshot.evictions = snapshot.evictions.saturating_add(content.evictions);
+            snapshot.compactions = snapshot.compactions.saturating_add(content.compactions);
         }
         for key in self.tile_ids_by_key.keys() {
             snapshot.content[key.content_kind().index()].entry_count += 1;
@@ -800,10 +1012,24 @@ impl<Backend: AtlasBackend> Atlas<Backend> {
         }
 
         profiling::scope!("new tile");
-        let Some((size, bytes)) = build()? else {
+        let built = match build() {
+            Ok(built) => built,
+            Err(error) => {
+                self.state.lock().restore_compaction_entry(&key);
+                return Err(error);
+            }
+        };
+        let Some((size, bytes)) = built else {
             return Ok(None);
         };
-        self.state.lock().insert_or_get(key, size, &bytes).map(Some)
+        let mut state = self.state.lock();
+        match state.insert_or_get(key.clone(), size, &bytes) {
+            Ok(tile) => Ok(Some(tile)),
+            Err(error) => {
+                state.restore_compaction_entry(&key);
+                Err(error)
+            }
+        }
     }
 
     pub fn remove(&self, key: &AtlasKey) {
@@ -1079,6 +1305,16 @@ mod tests {
 
     fn atlas() -> Atlas<RecordingAtlasBackend> {
         Atlas::with_page_size(RecordingAtlasBackend::default(), PAGE_SIZE, PAGE_SIZE)
+    }
+
+    fn atlas_with_budget(
+        content_kind: AtlasContentKind,
+        retained_budget: usize,
+    ) -> Atlas<RecordingAtlasBackend> {
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(PAGE_SIZE);
+        policy.set_retained_budget(content_kind, retained_budget);
+        Atlas::with_policy(RecordingAtlasBackend::default(), PAGE_SIZE, policy)
     }
 
     fn image_key(image_id: usize) -> AtlasKey {
@@ -1411,6 +1647,182 @@ mod tests {
             snapshot.content[AtlasContentKind::GlyphAlpha.index()].page_count,
             1
         );
+        Ok(())
+    }
+
+    #[test]
+    fn budget_pressure_is_isolated_by_content_class() -> Result<()> {
+        let atlas = atlas_with_budget(AtlasContentKind::Image, 0);
+        let frame = atlas.begin_frame();
+        let image_key = image_key(1);
+        let image = atlas
+            .get_or_insert_with(image_key, &mut build_tile)?
+            .context("image tile should exist")?;
+        let glyph_key = glyph_key(1, false, false);
+        let glyph = atlas
+            .get_or_insert_with(glyph_key.clone(), &mut || {
+                Ok(Some((TILE_SIZE, Cow::Borrowed(&[255]))))
+            })?
+            .context("glyph tile should exist")?;
+        atlas.finish_frame(frame, &usage([glyph]));
+
+        let maintenance_frame = atlas.begin_frame();
+        let snapshot = atlas.snapshot();
+        assert_eq!(
+            snapshot.content[AtlasContentKind::Image.index()].page_count,
+            0
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::Image.index()].evictions,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphAlpha.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphAlpha.index()].evictions,
+            0
+        );
+        assert_eq!(
+            atlas.get_or_insert_with(glyph_key, &mut || {
+                anyhow::bail!("glyph class must remain resident")
+            })?,
+            Some(glyph)
+        );
+        atlas.finish_frame(maintenance_frame, &usage([glyph]));
+        assert_ne!(image.tile_id, glyph.tile_id);
+        Ok(())
+    }
+
+    #[test]
+    fn working_set_over_budget_remains_complete() -> Result<()> {
+        let atlas = atlas_with_budget(AtlasContentKind::Image, 0);
+        let frame = atlas.begin_frame();
+        let key = image_key(1);
+        let tile = atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)?
+            .context("working-set tile should exist")?;
+        atlas.finish_frame(frame, &usage([tile]));
+
+        let maintenance_frame = atlas.begin_frame();
+        let snapshot = atlas.snapshot();
+        let image = snapshot.content[AtlasContentKind::Image.index()];
+        assert_eq!(image.page_count, 1);
+        assert_eq!(image.resident_bytes, 16);
+        assert_eq!(image.working_set_bytes, 16);
+        assert_eq!(image.evictions, 0);
+        assert_eq!(image.budget_pressure_frames, 1);
+        assert_eq!(snapshot.budget_pressure_frames, 1);
+        assert_eq!(
+            atlas.get_or_insert_with(key, &mut || {
+                anyhow::bail!("working-set tile must not be evicted")
+            })?,
+            Some(tile)
+        );
+        atlas.finish_frame(maintenance_frame, &usage([tile]));
+        Ok(())
+    }
+
+    #[test]
+    fn sparse_page_compaction_rehomes_hot_entries() -> Result<()> {
+        let page_size = Size {
+            width: DevicePixels(16),
+            height: DevicePixels(16),
+        };
+        let page_bytes = 16 * 16 * 4;
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(page_size);
+        policy.set_retained_budget(AtlasContentKind::Image, page_bytes);
+        let atlas = Atlas::with_policy(RecordingAtlasBackend::default(), page_size, policy);
+        let frame = atlas.begin_frame();
+        let mut keys = Vec::new();
+        let mut tiles = Vec::new();
+        let mut second_texture_id = None;
+        for image_id in 0..1024 {
+            let key = image_key(image_id);
+            let tile = atlas
+                .get_or_insert_with(key.clone(), &mut build_tile)?
+                .context("compaction tile should exist")?;
+            keys.push(key);
+            tiles.push(tile);
+            if tile.texture_id != tiles[0].texture_id {
+                second_texture_id = Some(tile.texture_id);
+                break;
+            }
+        }
+        second_texture_id.context("workload should fill the first page")?;
+        assert!(tiles.len() > 2);
+        assert_eq!(atlas.snapshot().page_count, 2);
+        let second_page_tile = *tiles.last().context("second-page tile should exist")?;
+        atlas.finish_frame(frame, &usage([tiles[0], second_page_tile]));
+
+        let maintenance_frame = atlas.begin_frame();
+        let during_compaction = atlas.snapshot();
+        let image = during_compaction.content[AtlasContentKind::Image.index()];
+        assert_eq!(image.page_count, 2);
+        assert_eq!(image.compactions, 1);
+        assert!(image.evictions >= 2);
+        assert_eq!(during_compaction.entry_count, 1);
+
+        let rehomed = atlas
+            .get_or_insert_with(keys[0].clone(), &mut build_tile)?
+            .context("hot tile should be rehomed")?;
+        assert_ne!(rehomed.tile_id, tiles[0].tile_id);
+        assert_ne!(
+            (rehomed.texture_id, rehomed.bounds),
+            (tiles[0].texture_id, tiles[0].bounds)
+        );
+        atlas.finish_frame(maintenance_frame, &usage([rehomed, second_page_tile]));
+
+        let compacted = atlas.snapshot();
+        let image = compacted.content[AtlasContentKind::Image.index()];
+        assert_eq!(image.page_count, 1);
+        assert_eq!(image.resident_bytes, page_bytes);
+        assert_eq!(image.working_set_bytes, page_bytes);
+        assert_eq!(compacted.entry_count, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn failed_compaction_raster_restores_the_previous_entry() -> Result<()> {
+        let page_size = Size {
+            width: DevicePixels(16),
+            height: DevicePixels(16),
+        };
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(page_size);
+        policy.set_retained_budget(AtlasContentKind::Image, 16 * 16 * 4);
+        let atlas = Atlas::with_policy(RecordingAtlasBackend::default(), page_size, policy);
+        let frame = atlas.begin_frame();
+        let mut keys = Vec::new();
+        let mut tiles = Vec::new();
+        for image_id in 0..1024 {
+            let key = image_key(image_id);
+            let tile = atlas
+                .get_or_insert_with(key.clone(), &mut build_tile)?
+                .context("compaction tile should exist")?;
+            keys.push(key);
+            tiles.push(tile);
+            if tile.texture_id != tiles[0].texture_id {
+                break;
+            }
+        }
+        let second_page_tile = *tiles.last().context("second-page tile should exist")?;
+        atlas.finish_frame(frame, &usage([tiles[0], second_page_tile]));
+
+        let maintenance_frame = atlas.begin_frame();
+        atlas
+            .get_or_insert_with(keys[0].clone(), &mut || anyhow::bail!("raster failed"))
+            .expect_err("compaction raster error should propagate");
+        assert_eq!(
+            atlas.get_or_insert_with(keys[0].clone(), &mut || {
+                anyhow::bail!("restored compaction entry should hit")
+            })?,
+            Some(tiles[0])
+        );
+        assert_eq!(atlas.snapshot().entry_count, 2);
+        atlas.finish_frame(maintenance_frame, &usage([tiles[0], second_page_tile]));
         Ok(())
     }
 

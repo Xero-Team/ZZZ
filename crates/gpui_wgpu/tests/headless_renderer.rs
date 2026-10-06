@@ -1,12 +1,14 @@
 #![cfg(feature = "test-support")]
 
+use anyhow::Context as _;
 use gpui::{
-    AnyWindowHandle, AppContext as _, AtlasKey, AtlasSnapshot, AtlasTile, Bounds, ContentMask,
-    Context, Corners, DevicePixels, Edges, FontId, FontRun, FontStyle, FontWeight, GlyphId,
-    HeadlessAppContext, Hsla, ImageId, IntoElement, IsZero as _, MonochromeSprite, PaddedBool32,
-    PathBuilder, PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point,
-    PolychromeSprite, Quad, Render, RenderGlyphParams, RenderImageParams, RenderSvgParams,
-    ScaledPixels, Scene, Shadow, Size, Styled as _, Underline, Window, canvas, font, point, px,
+    AnyWindowHandle, AppContext as _, AtlasContentKind, AtlasKey, AtlasPolicy, AtlasSnapshot,
+    AtlasTextureKind, AtlasTile, AtlasUsage, Bounds, ContentMask, Context, Corners, DevicePixels,
+    Edges, FontId, FontRun, FontStyle, FontWeight, GlyphId, HeadlessAppContext, Hsla, ImageId,
+    IntoElement, IsZero as _, MonochromeSprite, PaddedBool32, PathBuilder, PlatformAtlas,
+    PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad, Render,
+    RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow, Size,
+    Styled as _, SubpixelSprite, TransformationMatrix, Underline, Window, canvas, font, point, px,
     size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
@@ -213,6 +215,110 @@ fn assert_retired_tile_case(
         &format!("text-003-{case_name}-old-after-finish"),
     );
     save_named_output(&replacement, &format!("text-003-{case_name}-replacement"));
+    Ok(())
+}
+
+fn assert_working_set_over_budget(force_fallback_adapter: bool) -> anyhow::Result<()> {
+    let mut policy = AtlasPolicy::default();
+    policy.set_page_size(Size {
+        width: DevicePixels(8),
+        height: DevicePixels(8),
+    });
+    policy.set_retained_budget(AtlasContentKind::Image, 0);
+    let mut renderer = WgpuHeadlessRenderer::new_with_atlas_policy(force_fallback_adapter, policy)?;
+    let atlas = renderer.sprite_atlas();
+    let frame = atlas.begin_frame();
+    let colors = [
+        [0, 0, 255, 255],
+        [0, 255, 0, 255],
+        [255, 0, 0, 255],
+        [0, 255, 255, 255],
+    ];
+    let mut tiles = Vec::new();
+    for (image_id, color) in colors.into_iter().enumerate() {
+        tiles.push(image_tile(
+            &atlas,
+            AtlasKey::Image(RenderImageParams {
+                image_id: ImageId(100 + image_id),
+                frame_index: 0,
+            }),
+            Size {
+                width: DevicePixels(8),
+                height: DevicePixels(8),
+            },
+            color,
+        )?);
+    }
+
+    let full_bounds = bounds(0.0, 0.0, 16.0, 16.0, 1.0);
+    let mut scene = Scene::default();
+    for (index, tile) in tiles.iter().copied().enumerate() {
+        scene.insert_primitive(PolychromeSprite {
+            order: 0,
+            pad: 0,
+            grayscale: PaddedBool32::from(false),
+            opacity: 1.0,
+            bounds: bounds(
+                (index % 2) as f32 * 8.0,
+                (index / 2) as f32 * 8.0,
+                8.0,
+                8.0,
+                1.0,
+            ),
+            content_mask: ContentMask {
+                bounds: full_bounds,
+            },
+            corner_radii: Corners::default(),
+            tile,
+        });
+    }
+    scene.finish();
+    atlas.finish_frame(frame, scene.atlas_usage());
+
+    let maintenance_frame = atlas.begin_frame();
+    let snapshot = atlas.snapshot();
+    let image = snapshot.content(AtlasContentKind::Image);
+    assert_eq!(image.retained_budget_bytes, 0);
+    assert_eq!(image.page_count, 4);
+    assert_eq!(image.working_set_bytes, 4 * 8 * 8 * 4);
+    assert_eq!(image.evictions, 0);
+    assert_eq!(image.budget_pressure_frames, 1);
+    assert_eq!(snapshot.entry_count, 4);
+    atlas.finish_frame(maintenance_frame, scene.atlas_usage());
+
+    let image = renderer.render_scene_to_image(
+        &scene,
+        Size {
+            width: DevicePixels(16),
+            height: DevicePixels(16),
+        },
+    )?;
+    assert_eq!(image.get_pixel(4, 4).0, [255, 0, 0, 255]);
+    assert_eq!(image.get_pixel(12, 4).0, [0, 255, 0, 255]);
+    assert_eq!(image.get_pixel(4, 12).0, [0, 0, 255, 255]);
+    assert_eq!(image.get_pixel(12, 12).0, [255, 255, 0, 255]);
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    save_named_output(&image, &format!("text-005-{adapter}"));
+    if let Ok(output_directory) = std::env::var("GPUI_HEADLESS_OUTPUT_DIR") {
+        let artifact = serde_json::json!({
+            "experiment": "TEXT-005",
+            "adapter": adapter,
+            "policy": {
+                "page_size": [8, 8],
+                "retained_image_budget_bytes": 0,
+            },
+            "visible_tiles": tiles.len(),
+            "snapshot": snapshot_json(snapshot),
+        });
+        std::fs::write(
+            std::path::Path::new(&output_directory).join(format!("text-005-{adapter}.json")),
+            serde_json::to_vec_pretty(&artifact)?,
+        )?;
+    }
     Ok(())
 }
 
@@ -426,6 +532,19 @@ fn assert_negative_subpixel_phase(force_fallback_adapter: bool) -> anyhow::Resul
 }
 
 fn snapshot_json(snapshot: AtlasSnapshot) -> serde_json::Value {
+    let content = |content_kind| {
+        let content = snapshot.content(content_kind);
+        serde_json::json!({
+            "page_count": content.page_count,
+            "resident_bytes": content.resident_bytes,
+            "entry_count": content.entry_count,
+            "retained_budget_bytes": content.retained_budget_bytes,
+            "working_set_bytes": content.working_set_bytes,
+            "evictions": content.evictions,
+            "compactions": content.compactions,
+            "budget_pressure_frames": content.budget_pressure_frames,
+        })
+    };
     serde_json::json!({
         "page_count": snapshot.page_count,
         "resident_bytes": snapshot.resident_bytes,
@@ -443,6 +562,13 @@ fn snapshot_json(snapshot: AtlasSnapshot) -> serde_json::Value {
         "compactions": snapshot.compactions,
         "current_frame_working_set_bytes": snapshot.current_frame_working_set_bytes,
         "budget_pressure_frames": snapshot.budget_pressure_frames,
+        "content": {
+            "glyph_alpha": content(AtlasContentKind::GlyphAlpha),
+            "glyph_subpixel": content(AtlasContentKind::GlyphSubpixel),
+            "glyph_color": content(AtlasContentKind::GlyphColor),
+            "svg_mask": content(AtlasContentKind::SvgMask),
+            "image": content(AtlasContentKind::Image),
+        },
     })
 }
 
@@ -453,6 +579,11 @@ fn percentile(samples: &[u64], percentile: usize) -> u64 {
     samples[index]
 }
 
+struct InsertedText {
+    usage: AtlasUsage,
+    tiles: Vec<AtlasTile>,
+}
+
 fn insert_shaped_text(
     text_system: &CosmicTextSystem,
     atlas: &Arc<dyn PlatformAtlas>,
@@ -461,7 +592,7 @@ fn insert_shaped_text(
     scale_factor: f32,
     unique_keys: &mut HashSet<AtlasKey>,
     keys_in_order: &mut Vec<AtlasKey>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<InsertedText> {
     let font_id = text_system.font_id(&font("Lilex"))?;
     let runs = [FontRun {
         len: text.len(),
@@ -470,6 +601,8 @@ fn insert_shaped_text(
         font_weight: FontWeight::NORMAL,
     }];
     let layout = text_system.layout_line(text, px(font_size), &runs);
+    let mut usage = AtlasUsage::default();
+    let mut tiles = Vec::new();
 
     for run in &layout.runs {
         for (glyph_index, glyph) in run.glyphs.iter().enumerate() {
@@ -486,30 +619,101 @@ fn insert_shaped_text(
                 dilation: 0,
             };
             let key = AtlasKey::from(params.clone());
-            if !unique_keys.insert(key.clone()) {
-                atlas
-                    .get_or_insert_with(key, &mut || {
-                        anyhow::bail!("a repeated glyph key must hit the atlas")
-                    })?
-                    .ok_or_else(|| anyhow::anyhow!("a repeated glyph key disappeared"))?;
+            let Some(tile) = atlas.get_or_insert_with(key.clone(), &mut || {
+                let raster_bounds = text_system.glyph_raster_bounds(&params)?;
+                if raster_bounds.is_zero() {
+                    return Ok(None);
+                }
+                let (size, bytes) = text_system.rasterize_glyph(&params, raster_bounds)?;
+                Ok(Some((size, Cow::Owned(bytes))))
+            })?
+            else {
                 continue;
+            };
+            usage.insert(tile);
+            tiles.push(tile);
+            if unique_keys.insert(key.clone()) {
+                keys_in_order.push(key);
             }
-
-            let raster_bounds = text_system.glyph_raster_bounds(&params)?;
-            if raster_bounds.is_zero() {
-                unique_keys.remove(&key);
-                continue;
-            }
-            atlas
-                .get_or_insert_with(key.clone(), &mut || {
-                    let (size, bytes) = text_system.rasterize_glyph(&params, raster_bounds)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .ok_or_else(|| anyhow::anyhow!("glyph builder returned no atlas tile"))?;
-            keys_in_order.push(key);
         }
     }
-    Ok(())
+    Ok(InsertedText { usage, tiles })
+}
+
+fn glyph_grid_scene(tiles: &[AtlasTile]) -> (Scene, Size<DevicePixels>) {
+    const COLUMNS: usize = 16;
+    const CELL_SIZE: f32 = 8.0;
+    let rows = tiles.len().div_ceil(COLUMNS).max(1);
+    let target_size = Size {
+        width: DevicePixels((COLUMNS as f32 * CELL_SIZE) as i32),
+        height: DevicePixels((rows as f32 * CELL_SIZE) as i32),
+    };
+    let full_bounds = bounds(
+        0.0,
+        0.0,
+        target_size.width.0 as f32,
+        target_size.height.0 as f32,
+        1.0,
+    );
+    let mut scene = Scene::default();
+    for (index, tile) in tiles.iter().copied().enumerate() {
+        let sprite_bounds = bounds(
+            (index % COLUMNS) as f32 * CELL_SIZE,
+            (index / COLUMNS) as f32 * CELL_SIZE,
+            CELL_SIZE,
+            CELL_SIZE,
+            1.0,
+        );
+        let content_mask = ContentMask {
+            bounds: full_bounds,
+        };
+        match tile.texture_id.kind {
+            AtlasTextureKind::Monochrome => scene.insert_primitive(MonochromeSprite {
+                order: 0,
+                pad: 0,
+                bounds: sprite_bounds,
+                content_mask,
+                color: gpui::rgb(0xffffff).into(),
+                tile,
+                transformation: TransformationMatrix::unit(),
+            }),
+            AtlasTextureKind::Subpixel => scene.insert_primitive(SubpixelSprite {
+                order: 0,
+                pad: 0,
+                bounds: sprite_bounds,
+                content_mask,
+                color: gpui::rgb(0xffffff).into(),
+                tile,
+                transformation: TransformationMatrix::unit(),
+            }),
+            AtlasTextureKind::Polychrome => scene.insert_primitive(PolychromeSprite {
+                order: 0,
+                pad: 0,
+                grayscale: PaddedBool32::from(false),
+                opacity: 1.0,
+                bounds: sprite_bounds,
+                content_mask,
+                corner_radii: Corners::default(),
+                tile,
+            }),
+        }
+    }
+    scene.finish();
+    (scene, target_size)
+}
+
+fn assert_glyph_grid_has_no_empty_cells(image: &image::RgbaImage, tile_count: usize) {
+    const COLUMNS: usize = 16;
+    const CELL_SIZE: u32 = 8;
+    for index in 0..tile_count {
+        let origin_x = (index % COLUMNS) as u32 * CELL_SIZE;
+        let origin_y = (index / COLUMNS) as u32 * CELL_SIZE;
+        let has_coverage = (origin_y..origin_y + CELL_SIZE).any(|y| {
+            (origin_x..origin_x + CELL_SIZE)
+                .any(|x| image.get_pixel(x, y).0.iter().any(|channel| *channel > 0))
+        });
+        assert!(has_coverage, "glyph cell {index} rendered no coverage");
+    }
 }
 
 fn insert_fixed_assets(
@@ -707,6 +911,348 @@ fn run_text_atlas_baseline(
     Ok(())
 }
 
+fn run_text_atlas_budget(
+    force_fallback_adapter: bool,
+    output_directory: &Path,
+) -> anyhow::Result<()> {
+    const CJK_GLYPHS: u32 = 10_000;
+    const GLYPHS_PER_FRAME: usize = 128;
+    const PAGE_EDGE: i32 = 256;
+    const RETAINED_PAGES: usize = 4;
+
+    let page_size = Size {
+        width: DevicePixels(PAGE_EDGE),
+        height: DevicePixels(PAGE_EDGE),
+    };
+    let page_bytes = PAGE_EDGE as usize * PAGE_EDGE as usize * 4;
+    let retained_budget = RETAINED_PAGES * page_bytes;
+    let mut policy = AtlasPolicy::default();
+    policy.set_page_size(page_size);
+    policy.set_retained_budget(AtlasContentKind::GlyphSubpixel, retained_budget);
+    let mut renderer = WgpuHeadlessRenderer::new_with_atlas_policy(force_fallback_adapter, policy)?;
+    let gpu_specs = renderer.gpu_specs();
+    let atlas = renderer.sprite_atlas();
+    let text_system = CosmicTextSystem::new("Noto Sans");
+    text_system.add_fonts(vec![Cow::Borrowed(include_bytes!(
+        "../../../assets/fonts/lilex/Lilex-Regular.ttf"
+    ))])?;
+    let cjk_characters = (0..CJK_GLYPHS)
+        .filter_map(|offset| char::from_u32(0x4E00 + offset))
+        .collect::<Vec<_>>();
+    anyhow::ensure!(
+        cjk_characters.len() == CJK_GLYPHS as usize,
+        "CJK workload range must contain 10000 scalar values"
+    );
+
+    let mut unique_keys = HashSet::new();
+    let mut keys_in_order = Vec::new();
+    let mut frame_nanoseconds = Vec::new();
+    let mut resident_samples = Vec::new();
+    let mut maximum_resident_bytes = 0usize;
+    let mut maximum_working_set_bytes = 0usize;
+    let mut frame_count = 0usize;
+    for font_size in [14.0, 16.0, 20.0] {
+        for scale_factor in [1.0, 1.25, 2.0] {
+            for characters in cjk_characters.chunks(GLYPHS_PER_FRAME) {
+                let text = characters.iter().collect::<String>();
+                let frame_started = Instant::now();
+                let frame = atlas.begin_frame();
+                let inserted = insert_shaped_text(
+                    &text_system,
+                    &atlas,
+                    &text,
+                    font_size,
+                    scale_factor,
+                    &mut unique_keys,
+                    &mut keys_in_order,
+                )?;
+                let (scene, target_size) = glyph_grid_scene(&inserted.tiles);
+                atlas.finish_frame(frame, &inserted.usage);
+                let image = renderer.render_scene_to_image(&scene, target_size)?;
+                assert_glyph_grid_has_no_empty_cells(&image, inserted.tiles.len());
+
+                let snapshot = atlas.snapshot();
+                let glyphs = snapshot.content(AtlasContentKind::GlyphSubpixel);
+                let allowed_resident_bytes = retained_budget
+                    .max(glyphs.working_set_bytes)
+                    .saturating_add(page_bytes);
+                anyhow::ensure!(
+                    glyphs.resident_bytes <= allowed_resident_bytes,
+                    "resident glyph bytes {} exceeded allowed {}",
+                    glyphs.resident_bytes,
+                    allowed_resident_bytes
+                );
+                maximum_resident_bytes = maximum_resident_bytes.max(glyphs.resident_bytes);
+                maximum_working_set_bytes = maximum_working_set_bytes.max(glyphs.working_set_bytes);
+                resident_samples.push(glyphs.resident_bytes);
+                frame_nanoseconds
+                    .push(u64::try_from(frame_started.elapsed().as_nanos()).unwrap_or(u64::MAX));
+                frame_count += 1;
+            }
+        }
+    }
+
+    let final_frame = atlas.begin_frame();
+    atlas.finish_frame(final_frame, &AtlasUsage::default());
+    let final_snapshot = atlas.snapshot();
+    let final_glyphs = final_snapshot.content(AtlasContentKind::GlyphSubpixel);
+    anyhow::ensure!(
+        final_glyphs.evictions > 0,
+        "budget workload must evict cold glyphs"
+    );
+    anyhow::ensure!(
+        final_glyphs.resident_bytes <= retained_budget.saturating_add(page_bytes),
+        "final retained glyph bytes did not converge"
+    );
+
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    let artifact = serde_json::json!({
+        "experiment": "TEXT-004",
+        "adapter": adapter,
+        "gpu": {
+            "device_name": gpu_specs.device_name,
+            "driver_name": gpu_specs.driver_name,
+            "driver_info": gpu_specs.driver_info,
+            "is_software_emulated": gpu_specs.is_software_emulated,
+        },
+        "workload": {
+            "unique_cjk_scalars": CJK_GLYPHS,
+            "glyphs_per_frame": GLYPHS_PER_FRAME,
+            "font_sizes_px": [14.0, 16.0, 20.0],
+            "scale_factors": [1.0, 1.25, 2.0],
+            "frames": frame_count,
+            "unique_atlas_keys": unique_keys.len(),
+        },
+        "policy": {
+            "page_size": [PAGE_EDGE, PAGE_EDGE],
+            "page_bytes": page_bytes,
+            "retained_budget_bytes": retained_budget,
+        },
+        "result": {
+            "maximum_resident_bytes": maximum_resident_bytes,
+            "maximum_working_set_bytes": maximum_working_set_bytes,
+            "resident_plateau_tail": resident_samples.iter().rev().take(32).copied().collect::<Vec<_>>(),
+            "frame_p50_nanoseconds": percentile(&frame_nanoseconds, 50),
+            "frame_p95_nanoseconds": percentile(&frame_nanoseconds, 95),
+            "frame_p99_nanoseconds": percentile(&frame_nanoseconds, 99),
+            "final_snapshot": snapshot_json(final_snapshot),
+        },
+    });
+    std::fs::create_dir_all(output_directory)?;
+    let artifact_path = output_directory.join(format!("text-004-{adapter}.json"));
+    std::fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
+    println!("{}", serde_json::to_string_pretty(&artifact)?);
+    Ok(())
+}
+
+fn run_text_atlas_content_isolation(
+    force_fallback_adapter: bool,
+    output_directory: &Path,
+) -> anyhow::Result<()> {
+    const FRAMES: usize = 128;
+    let page_size = Size {
+        width: DevicePixels(64),
+        height: DevicePixels(64),
+    };
+    let monochrome_page_bytes = 64 * 64;
+    let color_page_bytes = 64 * 64 * 4;
+    let mut policy = AtlasPolicy::default();
+    policy.set_page_size(page_size);
+    policy.set_retained_budget(AtlasContentKind::GlyphSubpixel, 4 * color_page_bytes);
+    policy.set_retained_budget(AtlasContentKind::SvgMask, monochrome_page_bytes);
+    policy.set_retained_budget(AtlasContentKind::Image, color_page_bytes);
+    let mut renderer = WgpuHeadlessRenderer::new_with_atlas_policy(force_fallback_adapter, policy)?;
+    let gpu_specs = renderer.gpu_specs();
+    let atlas = renderer.sprite_atlas();
+    let text_system = CosmicTextSystem::new("Noto Sans");
+    text_system.add_fonts(vec![Cow::Borrowed(include_bytes!(
+        "../../../assets/fonts/lilex/Lilex-Regular.ttf"
+    ))])?;
+    let mut unique_keys = HashSet::new();
+    let mut keys_in_order = Vec::new();
+    let mut image_eviction_samples = Vec::new();
+    let mut svg_eviction_samples = Vec::new();
+    let mut final_image = None;
+
+    for frame_index in 0..FRAMES {
+        let frame = atlas.begin_frame();
+        let inserted = insert_shaped_text(
+            &text_system,
+            &atlas,
+            "缓存隔离 Cache",
+            16.0,
+            1.0,
+            &mut unique_keys,
+            &mut keys_in_order,
+        )?;
+        let glyph_tile = *inserted
+            .tiles
+            .first()
+            .context("mixed workload must produce a glyph tile")?;
+        let svg_size = Size {
+            width: DevicePixels(32),
+            height: DevicePixels(32),
+        };
+        let svg_tile = atlas
+            .get_or_insert_with(
+                AtlasKey::Svg(RenderSvgParams {
+                    path: format!("content-isolation-{frame_index}.svg").into(),
+                    size: svg_size,
+                }),
+                &mut || Ok(Some((svg_size, Cow::Owned(vec![255; 32 * 32])))),
+            )?
+            .context("SVG tile should exist")?;
+        let image_frame_tile = image_tile(
+            &atlas,
+            AtlasKey::Image(RenderImageParams {
+                image_id: ImageId(300),
+                frame_index,
+            }),
+            svg_size,
+            [0, 0, 255, 255],
+        )?;
+        let large_image = image_tile(
+            &atlas,
+            AtlasKey::Image(RenderImageParams {
+                image_id: ImageId(1000 + frame_index),
+                frame_index: 0,
+            }),
+            Size {
+                width: DevicePixels(128),
+                height: DevicePixels(128),
+            },
+            [255, 0, 0, 255],
+        )?;
+        assert_ne!(large_image.texture_id, image_frame_tile.texture_id);
+
+        let mut usage = inserted.usage;
+        usage.insert(svg_tile);
+        usage.insert(image_frame_tile);
+        atlas.finish_frame(frame, &usage);
+
+        let full_bounds = bounds(0.0, 0.0, 24.0, 8.0, 1.0);
+        let mut scene = Scene::default();
+        scene.insert_primitive(SubpixelSprite {
+            order: 0,
+            pad: 0,
+            bounds: bounds(0.0, 0.0, 8.0, 8.0, 1.0),
+            content_mask: ContentMask {
+                bounds: full_bounds,
+            },
+            color: gpui::rgb(0xffffff).into(),
+            tile: glyph_tile,
+            transformation: TransformationMatrix::unit(),
+        });
+        scene.insert_primitive(MonochromeSprite {
+            order: 0,
+            pad: 0,
+            bounds: bounds(8.0, 0.0, 8.0, 8.0, 1.0),
+            content_mask: ContentMask {
+                bounds: full_bounds,
+            },
+            color: gpui::rgb(0xffffff).into(),
+            tile: svg_tile,
+            transformation: TransformationMatrix::unit(),
+        });
+        scene.insert_primitive(PolychromeSprite {
+            order: 0,
+            pad: 0,
+            grayscale: PaddedBool32::from(false),
+            opacity: 1.0,
+            bounds: bounds(16.0, 0.0, 8.0, 8.0, 1.0),
+            content_mask: ContentMask {
+                bounds: full_bounds,
+            },
+            corner_radii: Corners::default(),
+            tile: image_frame_tile,
+        });
+        scene.finish();
+        let image = renderer.render_scene_to_image(
+            &scene,
+            Size {
+                width: DevicePixels(24),
+                height: DevicePixels(8),
+            },
+        )?;
+        assert_glyph_grid_has_no_empty_cells(&image, 1);
+        assert_eq!(image.get_pixel(12, 4).0, [255, 255, 255, 255]);
+        assert_eq!(image.get_pixel(20, 4).0, [255, 0, 0, 255]);
+        final_image = Some(image);
+
+        let snapshot = atlas.snapshot();
+        let glyphs = snapshot.content(AtlasContentKind::GlyphSubpixel);
+        let images = snapshot.content(AtlasContentKind::Image);
+        let svg_masks = snapshot.content(AtlasContentKind::SvgMask);
+        anyhow::ensure!(glyphs.evictions == 0, "image churn evicted glyph entries");
+        anyhow::ensure!(
+            glyphs.resident_bytes <= glyphs.retained_budget_bytes,
+            "glyph class exceeded its independent budget"
+        );
+        anyhow::ensure!(
+            images.resident_bytes
+                <= images
+                    .retained_budget_bytes
+                    .max(images.working_set_bytes)
+                    .saturating_add(color_page_bytes),
+            "image class did not converge independently"
+        );
+        image_eviction_samples.push(images.evictions);
+        svg_eviction_samples.push(svg_masks.evictions);
+    }
+
+    let final_frame = atlas.begin_frame();
+    atlas.finish_frame(final_frame, &AtlasUsage::default());
+    let final_snapshot = atlas.snapshot();
+    anyhow::ensure!(
+        final_snapshot.content(AtlasContentKind::Image).evictions > 0,
+        "image churn must trigger image-class eviction"
+    );
+    anyhow::ensure!(
+        final_snapshot.content(AtlasContentKind::SvgMask).evictions > 0,
+        "SVG churn must trigger SVG-class eviction"
+    );
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    let artifact = serde_json::json!({
+        "experiment": "TEXT-006",
+        "adapter": adapter,
+        "gpu": {
+            "device_name": gpu_specs.device_name,
+            "driver_name": gpu_specs.driver_name,
+            "driver_info": gpu_specs.driver_info,
+            "is_software_emulated": gpu_specs.is_software_emulated,
+        },
+        "workload": {
+            "frames": FRAMES,
+            "animated_image_frames": FRAMES,
+            "large_image_size": [128, 128],
+            "svg_entries": FRAMES,
+            "glyph_text": "缓存隔离 Cache",
+        },
+        "result": {
+            "image_eviction_tail": image_eviction_samples.iter().rev().take(16).copied().collect::<Vec<_>>(),
+            "svg_eviction_tail": svg_eviction_samples.iter().rev().take(16).copied().collect::<Vec<_>>(),
+            "final_snapshot": snapshot_json(final_snapshot),
+        },
+    });
+    std::fs::create_dir_all(output_directory)?;
+    std::fs::write(
+        output_directory.join(format!("text-006-{adapter}.json")),
+        serde_json::to_vec_pretty(&artifact)?,
+    )?;
+    let final_image = final_image.context("mixed workload must render an image")?;
+    final_image.save(output_directory.join(format!("text-006-{adapter}.png")))?;
+    println!("{}", serde_json::to_string_pretty(&artifact)?);
+    Ok(())
+}
+
 #[test]
 fn hardware_adapter_renders_primitive_corpus() {
     let mut renderer = WgpuHeadlessRenderer::new().expect("hardware headless renderer");
@@ -795,6 +1341,12 @@ fn retired_tiles_never_sample_replacement_content() -> anyhow::Result<()> {
 }
 
 #[test]
+fn working_set_over_budget_renders_without_missing_tiles() -> anyhow::Result<()> {
+    assert_working_set_over_budget(false)?;
+    assert_working_set_over_budget(true)
+}
+
+#[test]
 #[ignore = "phase-0 baseline runner writes explicit diagnostics artifacts"]
 fn text_atlas_baseline_runner() -> anyhow::Result<()> {
     let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
@@ -806,4 +1358,32 @@ fn text_atlas_baseline_runner() -> anyhow::Result<()> {
     );
     run_text_atlas_baseline(false, &output_directory)?;
     run_text_atlas_baseline(true, &output_directory)
+}
+
+#[test]
+#[ignore = "phase-4 CJK budget runner writes explicit diagnostics artifacts"]
+fn text_atlas_budget_runner() -> anyhow::Result<()> {
+    let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("GPUI_TEXT_ATLAS_OUTPUT_DIR must be set"))?;
+    anyhow::ensure!(
+        output_directory.is_absolute(),
+        "GPUI_TEXT_ATLAS_OUTPUT_DIR must be an absolute path"
+    );
+    run_text_atlas_budget(false, &output_directory)?;
+    run_text_atlas_budget(true, &output_directory)
+}
+
+#[test]
+#[ignore = "phase-4 content isolation runner writes explicit diagnostics artifacts"]
+fn text_atlas_content_isolation_runner() -> anyhow::Result<()> {
+    let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("GPUI_TEXT_ATLAS_OUTPUT_DIR must be set"))?;
+    anyhow::ensure!(
+        output_directory.is_absolute(),
+        "GPUI_TEXT_ATLAS_OUTPUT_DIR must be an absolute path"
+    );
+    run_text_atlas_content_isolation(false, &output_directory)?;
+    run_text_atlas_content_isolation(true, &output_directory)
 }

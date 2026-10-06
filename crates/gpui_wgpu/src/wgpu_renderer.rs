@@ -1,4 +1,6 @@
 use crate::{CompositorGpuHint, WgpuAtlas, WgpuContext};
+#[cfg(all(feature = "test-support", not(target_family = "wasm")))]
+use gpui::AtlasPolicy;
 use gpui::{
     AtlasTextureId, DevicePixels, GpuSpecs, MonochromeSprite, Path, PolychromeSprite,
     PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size, SubpixelSprite, Underline,
@@ -83,7 +85,11 @@ impl WgpuRenderer {
     }
 
     #[cfg(all(feature = "test-support", not(target_family = "wasm")))]
-    fn new_headless(context: &WgpuContext, size: Size<DevicePixels>) -> anyhow::Result<Self> {
+    fn new_headless_with_policy(
+        context: &WgpuContext,
+        size: Size<DevicePixels>,
+        policy: AtlasPolicy,
+    ) -> anyhow::Result<Self> {
         Self::new_internal(
             None,
             context,
@@ -94,7 +100,7 @@ impl WgpuRenderer {
                 preferred_present_mode: None,
             },
             None,
-            Arc::new(WgpuAtlas::from_context(context)),
+            Arc::new(WgpuAtlas::from_context_with_policy(context, policy)),
         )
     }
 
