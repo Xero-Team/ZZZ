@@ -817,7 +817,7 @@ impl Inventory {
                     }
                 });
             }
-            TaskSettingsLocation::Worktree(location) => {
+            TaskSettingsLocation::Worktree(ref location) => {
                 let new_templates = new_templates.collect::<Vec<_>>();
                 if new_templates.is_empty() {
                     if let Some(worktree_tasks) =

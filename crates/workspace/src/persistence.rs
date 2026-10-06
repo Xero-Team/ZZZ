@@ -24,7 +24,7 @@ use project::{
     ProjectGroupKey,
     bookmark_store::SerializedBookmark,
     debugger::breakpoint_store::{BreakpointState, SourceBreakpoint},
-    trusted_worktrees::{DbTrustedPaths, RemoteHostLocation},
+    trusted_worktrees::{DbTrustedPaths, RemoteHostLocation, TrustedPath},
 };
 
 use language::{LanguageName, Toolchain, ToolchainScope};
@@ -1081,6 +1081,9 @@ impl Domain for WorkspaceDb {
                 path TEXT PRIMARY KEY NOT NULL,
                 timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             ) STRICT;
+        ),
+        sql!(
+            ALTER TABLE trusted_worktrees ADD COLUMN absolute_path_v2 BLOB;
         ),
     ];
 
@@ -2637,30 +2640,38 @@ impl WorkspaceDb {
 
     pub(crate) async fn save_trusted_worktrees(
         &self,
-        trusted_worktrees: HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>>,
+        trusted_worktrees: HashMap<Option<RemoteHostLocation>, HashSet<TrustedPath>>,
     ) -> anyhow::Result<()> {
         use anyhow::Context as _;
         use db::sqlez::statement::Statement;
         use itertools::Itertools as _;
 
-        self.clear_trusted_worktrees()
-            .await
-            .context("clearing previous trust state")?;
-
         let trusted_worktrees = trusted_worktrees
             .into_iter()
             .flat_map(|(host, abs_paths)| {
-                abs_paths
-                    .into_iter()
-                    .map(move |abs_path| (Some(abs_path), host.clone()))
+                abs_paths.into_iter().map(move |trusted_path| {
+                    let native_path = trusted_path
+                        .native_path()
+                        .map(serde_json::to_vec)
+                        .transpose();
+                    (
+                        trusted_path.display_path().to_path_buf(),
+                        native_path,
+                        host.clone(),
+                    )
+                })
             })
-            .collect::<Vec<_>>();
+            .map(|(display_path, native_path, host)| Ok((Some(display_path), native_path?, host)))
+            .collect::<Result<Vec<_>>>()?;
+        self.clear_trusted_worktrees()
+            .await
+            .context("clearing previous trust state")?;
         let mut first_worktree;
         let mut last_worktree = 0_usize;
-        for (count, placeholders) in std::iter::once("(?, ?, ?)")
+        for (count, placeholders) in std::iter::once("(?, ?, ?, ?)")
             .cycle()
             .take(trusted_worktrees.len())
-            .chunks(MAX_QUERY_PLACEHOLDERS / 3)
+            .chunks(MAX_QUERY_PLACEHOLDERS / 4)
             .into_iter()
             .map(|chunk| {
                 let mut count = 0;
@@ -2676,7 +2687,7 @@ impl WorkspaceDb {
             first_worktree = last_worktree;
             last_worktree = last_worktree + count;
             let query = format!(
-                r#"INSERT INTO trusted_worktrees(absolute_path, user_name, host_name)
+                r#"INSERT INTO trusted_worktrees(absolute_path, absolute_path_v2, user_name, host_name)
 VALUES {placeholders};"#
             );
 
@@ -2684,12 +2695,13 @@ VALUES {placeholders};"#
             self.write(move |conn| {
                 let mut statement = Statement::prepare(conn, query)?;
                 let mut next_index = 1;
-                for (abs_path, host) in trusted_worktrees {
+                for (abs_path, native_path, host) in trusted_worktrees {
                     let abs_path = abs_path.as_ref().map(|abs_path| abs_path.to_string_lossy());
                     next_index = statement.bind(
                         &abs_path.as_ref().map(|abs_path| abs_path.as_ref()),
                         next_index,
                     )?;
+                    next_index = statement.bind(&native_path, next_index)?;
                     next_index = statement.bind(
                         &host
                             .as_ref()
@@ -2710,34 +2722,42 @@ VALUES {placeholders};"#
     }
 
     pub fn fetch_trusted_worktrees(&self) -> Result<DbTrustedPaths> {
-        let trusted_worktrees = self.trusted_worktrees()?;
-        Ok(trusted_worktrees
-            .into_iter()
-            .filter_map(|(abs_path, user_name, host_name)| {
-                let db_host = match (user_name, host_name) {
-                    (None, Some(host_name)) => Some(RemoteHostLocation {
-                        user_name: None,
-                        host_identifier: SharedString::new(host_name),
-                    }),
-                    (Some(user_name), Some(host_name)) => Some(RemoteHostLocation {
-                        user_name: Some(SharedString::new(user_name)),
-                        host_identifier: SharedString::new(host_name),
-                    }),
-                    _ => None,
-                };
-                Some((db_host, abs_path?))
-            })
-            .fold(HashMap::default(), |mut acc, (remote_host, abs_path)| {
-                acc.entry(remote_host)
-                    .or_insert_with(HashSet::default)
-                    .insert(abs_path);
-                acc
-            }))
+        let mut trusted_paths = DbTrustedPaths::default();
+        for (abs_path, native_path, user_name, host_name) in self.trusted_worktrees()? {
+            let remote_host = match (user_name, host_name) {
+                (None, Some(host_name)) => Some(RemoteHostLocation {
+                    user_name: None,
+                    host_identifier: SharedString::new(host_name),
+                }),
+                (Some(user_name), Some(host_name)) => Some(RemoteHostLocation {
+                    user_name: Some(SharedString::new(user_name)),
+                    host_identifier: SharedString::new(host_name),
+                }),
+                _ => None,
+            };
+            let Some(abs_path) = abs_path else {
+                continue;
+            };
+            let native_path = native_path
+                .as_deref()
+                .map(serde_json::from_slice)
+                .transpose()
+                .context("decoding exact trusted worktree path")?;
+            let display_path = native_path
+                .as_ref()
+                .and_then(|path: &vfs::NativePath| path.to_local_path_buf().ok())
+                .unwrap_or(abs_path);
+            trusted_paths
+                .entry(remote_host)
+                .or_default()
+                .insert(TrustedPath::new(display_path, native_path));
+        }
+        Ok(trusted_paths)
     }
 
     query! {
-        fn trusted_worktrees() -> Result<Vec<(Option<PathBuf>, Option<String>, Option<String>)>> {
-            SELECT absolute_path, user_name, host_name
+        fn trusted_worktrees() -> Result<Vec<(Option<PathBuf>, Option<Vec<u8>>, Option<String>, Option<String>)>> {
+            SELECT absolute_path, absolute_path_v2, user_name, host_name
             FROM trusted_worktrees
         }
     }
@@ -2948,6 +2968,28 @@ mod tests {
             "After removing a workspace, the serialized active_workspace_id should match \
              the remaining active workspace's database id"
         );
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    async fn test_trusted_worktree_exact_path_roundtrip() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt as _;
+
+        let db = WorkspaceDb::open_test_db("test_trusted_worktree_exact_path_roundtrip").await;
+        let path = PathBuf::from(OsString::from_vec(b"/project/non-utf8-\xff".to_vec()));
+        let trusted_path = TrustedPath::from_legacy_path(path, util::paths::PathStyle::local())
+            .expect("trusted path fixture should be valid");
+        let expected = HashMap::from_iter([(None, HashSet::from_iter([trusted_path]))]);
+
+        db.save_trusted_worktrees(expected.clone())
+            .await
+            .expect("trusted paths should save");
+
+        let actual = db
+            .fetch_trusted_worktrees()
+            .expect("trusted paths should load");
+        assert_eq!(actual, expected);
     }
 
     #[gpui::test]

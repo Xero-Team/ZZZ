@@ -3,7 +3,6 @@
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use collections::{HashMap, HashSet};
@@ -12,7 +11,7 @@ use i18n::tr;
 
 use project::{
     WorktreeId,
-    trusted_worktrees::{PathTrust, RemoteHostLocation, TrustedWorktrees},
+    trusted_worktrees::{PathTrust, RemoteHostLocation, TrustedPath, TrustedWorktrees},
     worktree_store::WorktreeStore,
 };
 use smallvec::SmallVec;
@@ -74,7 +73,7 @@ impl TrustScopeValidationError {
 
 #[derive(Debug, PartialEq, Eq)]
 struct RestrictedPath {
-    abs_path: Arc<Path>,
+    trusted_path: TrustedPath,
     is_file: bool,
     host: Option<RemoteHostLocation>,
 }
@@ -167,9 +166,12 @@ impl Render for SecurityModal {
                                         self.restricted_paths.values().filter_map(
                                             |restricted_path| {
                                                 let abs_path = if restricted_path.is_file {
-                                                    restricted_path.abs_path.parent()
+                                                    restricted_path
+                                                        .trusted_path
+                                                        .display_path()
+                                                        .parent()
                                                 } else {
-                                                    Some(restricted_path.abs_path.as_ref())
+                                                    Some(restricted_path.trusted_path.display_path())
                                                 }?;
                                                 let label = match &restricted_path.host {
                                                     Some(remote_host) => {
@@ -388,6 +390,8 @@ impl SecurityModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let remote_host = remote_host.map(Into::into);
+        let home_dir = remote_host.is_none().then(std::env::home_dir).flatten();
         let trust_path_input = cx.new(|cx| {
             let placeholder = tr(
                 cx,
@@ -398,12 +402,12 @@ impl SecurityModal {
         });
         let mut this = Self {
             worktree_store,
-            remote_host: remote_host.map(|host| host.into()),
+            remote_host,
             restricted_paths: HashMap::default(),
             focus_handle: cx.focus_handle(),
             project_list_scroll_handle: ScrollHandle::new(),
             trust_parents: false,
-            home_dir: std::env::home_dir(),
+            home_dir,
             trusted: None,
             trust_path_input,
             trust_path_error: None,
@@ -411,7 +415,11 @@ impl SecurityModal {
         this.refresh_restricted_paths(cx);
 
         if let Some(project) = this.single_trustable_path() {
-            let default_scope = project.parent().unwrap_or(project.as_ref()).to_path_buf();
+            let default_scope = project
+                .parent()
+                .unwrap_or(project)
+                .display_path()
+                .to_path_buf();
             this.trust_path_input.update(cx, |field, cx| {
                 field.set_text(&default_scope.to_string_lossy(), window, cx);
             });
@@ -429,7 +437,7 @@ impl SecurityModal {
                 has_restricted_files |= restricted_path.is_file;
                 !restricted_path.is_file
             })
-            .filter_map(|restricted_path| restricted_path.abs_path.parent())
+            .filter_map(|restricted_path| restricted_path.trusted_path.display_path().parent())
             .collect::<SmallVec<[_; 2]>>();
         match available_parents.len() {
             0 => {
@@ -477,7 +485,7 @@ impl SecurityModal {
         }
     }
 
-    fn edited_trust_scope(&self, cx: &App) -> Result<Option<PathBuf>, SharedString> {
+    fn edited_trust_scope(&self, cx: &App) -> Result<Option<TrustedPath>, SharedString> {
         if !self.trust_parents {
             return Ok(None);
         }
@@ -528,9 +536,10 @@ impl SecurityModal {
                                 if restricted_paths.is_file {
                                     None
                                 } else {
-                                    let parent_abs_path =
-                                        restricted_paths.abs_path.parent()?.to_owned();
-                                    Some(PathTrust::AbsPath(parent_abs_path))
+                                    restricted_paths
+                                        .trusted_path
+                                        .parent()
+                                        .map(PathTrust::AbsPath)
                                 }
                             },
                         ));
@@ -548,12 +557,12 @@ impl SecurityModal {
         cx.emit(DismissEvent);
     }
 
-    fn single_trustable_path(&self) -> Option<Arc<Path>> {
+    fn single_trustable_path(&self) -> Option<TrustedPath> {
         let mut projects = self
             .restricted_paths
             .values()
             .filter(|restricted_path| !restricted_path.is_file)
-            .map(|restricted_path| restricted_path.abs_path.clone());
+            .map(|restricted_path| restricted_path.trusted_path.clone());
         let only = projects.next()?;
         projects.next().is_none().then_some(only)
     }
@@ -570,7 +579,7 @@ impl SecurityModal {
                         Some((
                             worktree_id,
                             RestrictedPath {
-                                abs_path,
+                                trusted_path: abs_path,
                                 is_file: worktree.read(cx).is_single_file(),
                                 host: self.remote_host.clone(),
                             },
@@ -599,10 +608,10 @@ impl SecurityModal {
 
 fn validate_trust_scope(
     typed: &str,
-    project: &Path,
+    project: &TrustedPath,
     home_dir: Option<&Path>,
     path_style: PathStyle,
-) -> Result<PathBuf, TrustScopeValidationError> {
+) -> Result<TrustedPath, TrustScopeValidationError> {
     let trimmed = typed.trim();
     if trimmed.is_empty() {
         return Err(TrustScopeValidationError::Empty);
@@ -615,7 +624,12 @@ fn validate_trust_scope(
         ),
         _ => PathBuf::from(trimmed),
     };
-    if !util::paths::is_absolute(&expanded.to_string_lossy(), path_style) {
+    let expanded = TrustedPath::from_legacy_path(expanded, path_style)
+        .map_err(|_| TrustScopeValidationError::NotAbsolute)?;
+    if !expanded
+        .native_path()
+        .is_some_and(vfs::NativePath::is_absolute)
+    {
         return Err(TrustScopeValidationError::NotAbsolute);
     }
 
@@ -628,8 +642,20 @@ fn validate_trust_scope(
 
 #[cfg(test)]
 mod tests {
-    use super::{PathStyle, TrustScopeValidationError, validate_trust_scope};
+    use super::{PathStyle, TrustScopeValidationError, TrustedPath, validate_trust_scope};
     use std::path::{Path, PathBuf};
+
+    fn validate_trust_scope_display(
+        typed: &str,
+        project: &Path,
+        home_dir: Option<&Path>,
+        path_style: PathStyle,
+    ) -> Result<PathBuf, TrustScopeValidationError> {
+        let project = TrustedPath::from_legacy_path(project.to_path_buf(), path_style)
+            .expect("project path fixture should be valid");
+        validate_trust_scope(typed, &project, home_dir, path_style)
+            .map(|path| path.display_path().to_path_buf())
+    }
 
     fn sample_home_dir() -> PathBuf {
         if cfg!(windows) {
@@ -649,7 +675,7 @@ mod tests {
         let project_dir = sample_project_dir();
         let scope = home_dir.join("projects");
         let style = PathStyle::local();
-        let result = validate_trust_scope(
+        let result = validate_trust_scope_display(
             scope.to_string_lossy().as_ref(),
             &project_dir,
             Some(&home_dir),
@@ -665,10 +691,15 @@ mod tests {
         let project_dir = sample_project_dir();
         let style = PathStyle::local();
         let home_relative_scope = format!("~{}projects", style.primary_separator());
-        let ok = validate_trust_scope(&home_relative_scope, &project_dir, Some(&home_dir), style);
+        let ok = validate_trust_scope_display(
+            &home_relative_scope,
+            &project_dir,
+            Some(&home_dir),
+            style,
+        );
         assert_eq!(ok, Ok(home_dir.join("projects")));
 
-        let err = validate_trust_scope(
+        let err = validate_trust_scope_display(
             home_dir.join("elsewhere").to_string_lossy().as_ref(),
             &project_dir,
             Some(&home_dir),
@@ -683,18 +714,40 @@ mod tests {
         let home = Path::new("/Users/me");
         let style = PathStyle::Posix;
         assert_eq!(
-            validate_trust_scope("/Users/me/dev/delta/wt", project, None, style).unwrap(),
+            validate_trust_scope_display("/Users/me/dev/delta/wt", project, None, style).unwrap(),
             PathBuf::from("/Users/me/dev/delta/wt"),
         );
         assert_eq!(
-            validate_trust_scope("~/dev/delta/wt", project, Some(home), style).unwrap(),
+            validate_trust_scope_display("~/dev/delta/wt", project, Some(home), style).unwrap(),
             PathBuf::from("/Users/me/dev/delta/wt"),
         );
         assert_eq!(
-            validate_trust_scope("/Users/me/dev/delta/wt/t1", project, None, style).unwrap(),
+            validate_trust_scope_display("/Users/me/dev/delta/wt/t1", project, None, style)
+                .unwrap(),
             PathBuf::from("/Users/me/dev/delta/wt/t1"),
         );
-        assert!(validate_trust_scope("/Users/me/dev", project, None, style).is_ok());
+        assert!(validate_trust_scope_display("/Users/me/dev", project, None, style).is_ok());
+    }
+
+    #[test]
+    fn validate_trust_scope_accepts_remote_windows_paths_cross_platform() {
+        let project = Path::new(r"C:\Users\me\dev\delta\wt\t1");
+        let style = PathStyle::Windows;
+        assert_eq!(
+            validate_trust_scope_display(r"C:\Users\me\dev\delta\wt", project, None, style,)
+                .expect("Windows ancestor should be accepted"),
+            PathBuf::from(r"C:\Users\me\dev\delta\wt"),
+        );
+
+        let trusted_project = TrustedPath::from_legacy_path(project.to_path_buf(), style)
+            .expect("Windows project path should be valid");
+        assert_eq!(
+            trusted_project
+                .parent()
+                .expect("Windows project should have a parent")
+                .display_path(),
+            Path::new(r"C:\Users\me\dev\delta\wt"),
+        );
     }
 
     #[test]
@@ -702,19 +755,19 @@ mod tests {
         let project = Path::new("/Users/me/dev/delta/wt/t1");
         let style = PathStyle::Posix;
         assert_eq!(
-            validate_trust_scope("/Users/other", project, None, style),
+            validate_trust_scope_display("/Users/other", project, None, style),
             Err(TrustScopeValidationError::NotAncestor)
         );
         assert_eq!(
-            validate_trust_scope("relative/path", project, None, style),
+            validate_trust_scope_display("relative/path", project, None, style),
             Err(TrustScopeValidationError::NotAbsolute)
         );
         assert_eq!(
-            validate_trust_scope("   ", project, None, style),
+            validate_trust_scope_display("   ", project, None, style),
             Err(TrustScopeValidationError::Empty)
         );
         assert_eq!(
-            validate_trust_scope("/Users/me/dev/delta/wt/t1/sub", project, None, style),
+            validate_trust_scope_display("/Users/me/dev/delta/wt/t1/sub", project, None, style,),
             Err(TrustScopeValidationError::NotAncestor)
         );
     }
@@ -725,7 +778,7 @@ mod tests {
         let project = Path::new("/Users/me/dev/wt/t1");
         let style = PathStyle::Posix;
         assert_eq!(
-            validate_trust_scope("~", project, Some(home), style).unwrap(),
+            validate_trust_scope_display("~", project, Some(home), style).unwrap(),
             PathBuf::from("/Users/me"),
         );
     }

@@ -293,6 +293,7 @@ impl LspAdapter for EsLintLspAdapter {
                 SettingsLocation {
                     worktree_id: delegate.worktree_id(),
                     path: &file_path,
+                    vfs_path: None,
                 },
                 &Self::SERVER_NAME,
                 cx,

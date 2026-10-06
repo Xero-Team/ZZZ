@@ -1353,6 +1353,7 @@ mod tests {
                         TaskSettingsLocation::Worktree(SettingsLocation {
                             worktree_id,
                             path: rel_path(".zzz"),
+                            vfs_path: None,
                         }),
                         Some(hook_tasks_json),
                     )

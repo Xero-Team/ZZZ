@@ -1075,6 +1075,7 @@ impl ContextServerStore {
             let location = SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
+                vfs_path: worktree.read(cx).vfs_path_for_path(RelPath::empty()),
             };
             for (id, settings) in &ProjectSettings::get(Some(location), cx).context_servers {
                 merged
@@ -1098,6 +1099,11 @@ impl ContextServerStore {
             worktree_id.map(|worktree_id| SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
+                vfs_path: self
+                    .worktree_store
+                    .read(cx)
+                    .worktree_for_id(worktree_id, cx)
+                    .and_then(|worktree| worktree.read(cx).vfs_path_for_path(RelPath::empty())),
             }),
             cx,
         )

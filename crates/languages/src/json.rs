@@ -287,6 +287,7 @@ impl LspAdapter for JsonLspAdapter {
                 Some(SettingsLocation {
                     worktree_id: delegate.worktree_id(),
                     path: path_in_worktree.as_ref(),
+                    vfs_path: None,
                 }),
                 cx,
             );

@@ -181,6 +181,7 @@ struct ScanRequest {
 
 pub struct RemoteWorktree {
     snapshot: Snapshot,
+    native_abs_path: Option<vfs::NativePath>,
     background_snapshot: Arc<Mutex<(Snapshot, Vec<proto::UpdateWorktree>)>>,
     project_id: u64,
     client: AnyProtoClient,
@@ -564,16 +565,22 @@ impl Worktree {
             let settings_location = Some(SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
+                vfs_path: vfs_snapshot.as_ref().map(|vfs_snapshot| {
+                    VfsPath::new(
+                        vfs_snapshot.registry().mount_id(),
+                        vfs::ProviderPath::root(vfs_snapshot.provider().descriptor().path_encoding),
+                    )
+                }),
             });
 
-            let settings = WorktreeSettings::get(settings_location, cx).clone();
+            let settings = WorktreeSettings::get(settings_location.clone(), cx).clone();
             let vfs_authorization_policy = Arc::new(Mutex::new(VfsAuthorizationPolicy {
                 settings: settings.clone(),
                 share_private_files: false,
             }));
             cx.observe_global::<SettingsStore>(move |this, cx| {
                 if let Self::Local(this) = this {
-                    let settings = WorktreeSettings::get(settings_location, cx).clone();
+                    let settings = WorktreeSettings::get(settings_location.clone(), cx).clone();
                     if this.settings != settings {
                         this.vfs_authorization_policy.lock().settings = settings.clone();
                         this.settings = settings;
@@ -643,6 +650,14 @@ impl Worktree {
         cx: &mut App,
     ) -> Entity<Self> {
         cx.new(|cx: &mut Context<Self>| {
+            let native_abs_path = worktree
+                .abs_path_v2
+                .as_ref()
+                .map(proto::NativePathV2::to_native_path)
+                .transpose()
+                .log_err()
+                .flatten()
+                .or_else(|| native_path_from_legacy(&worktree.abs_path, path_style).log_err());
             let mut snapshot = Snapshot::new(
                 WorktreeId::from_proto(worktree.id),
                 RelPath::from_proto(&worktree.root_name).unwrap_or_else(|_| RelPath::empty_arc()),
@@ -667,12 +682,14 @@ impl Worktree {
             let settings_location = Some(SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
+                vfs_path: None,
             });
 
             let settings = WorktreeSettings::get(settings_location, cx).clone();
             let worktree = RemoteWorktree {
                 client,
                 vfs_provider: OnceLock::new(),
+                native_abs_path,
                 project_id,
                 replica_id,
                 snapshot,
@@ -827,6 +844,22 @@ impl Worktree {
         self.as_local()?.vfs_snapshot.clone()
     }
 
+    pub fn vfs_path_for_path(&self, path: &RelPath) -> Option<VfsPath> {
+        if let Some(vfs_path) = self
+            .entry_for_path(path)
+            .and_then(|entry| entry.vfs_path.clone())
+        {
+            return Some(vfs_path);
+        }
+        let snapshot = self.vfs_snapshot()?;
+        let provider_path = provider_path_from_legacy_utf8(
+            path.as_unix_str(),
+            snapshot.provider().descriptor().path_encoding,
+        )
+        .ok()?;
+        Some(VfsPath::new(snapshot.registry().mount_id(), provider_path))
+    }
+
     pub fn vfs_authorizer(&self) -> Option<VfsAuthorizer> {
         let worktree = self.as_local()?;
         let authorization_policy = worktree.vfs_authorization_policy.clone();
@@ -912,6 +945,7 @@ impl Worktree {
         SettingsLocation {
             worktree_id: self.id(),
             path: RelPath::empty(),
+            vfs_path: self.vfs_path_for_path(RelPath::empty()),
         }
     }
 
@@ -939,6 +973,19 @@ impl Worktree {
                 .root_repo_common_dir()
                 .map(|p| p.to_string_lossy().into_owned()),
             root_repo_is_linked_worktree: self.root_repo_is_linked_worktree(),
+            abs_path_v2: self
+                .native_abs_path()
+                .as_ref()
+                .map(proto::NativePathV2::from_native_path),
+        }
+    }
+
+    pub fn native_abs_path(&self) -> Option<vfs::NativePath> {
+        match self {
+            Worktree::Local(worktree) => {
+                vfs::NativePath::from_local_path(worktree.snapshot.abs_path()).log_err()
+            }
+            Worktree::Remote(worktree) => worktree.native_abs_path.clone(),
         }
     }
 
@@ -2400,6 +2447,17 @@ impl LocalWorktree {
             .values()
             .map(|entry| entry.work_directory_abs_path.clone())
             .collect::<Vec<_>>()
+    }
+}
+
+fn native_path_from_legacy(
+    path: &str,
+    path_style: PathStyle,
+) -> Result<vfs::NativePath, vfs::PathError> {
+    if path_style.is_posix() {
+        vfs::NativePath::from_unix_bytes(path.as_bytes())
+    } else {
+        vfs::NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())
     }
 }
 

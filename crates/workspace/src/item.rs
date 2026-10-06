@@ -694,6 +694,7 @@ impl<T: Item> ItemHandle for Entity<T> {
                 Some(SettingsLocation {
                     worktree_id: project_path.worktree_id,
                     path: &project_path.path,
+                    vfs_path: self.vfs_path(cx),
                 }),
                 cx,
             )

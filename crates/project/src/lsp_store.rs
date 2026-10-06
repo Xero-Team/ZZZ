@@ -465,6 +465,7 @@ impl LocalLspStore {
 
         let worktree_id = worktree.id();
         let worktree_abs_path = worktree.abs_path();
+        let worktree_vfs_path = worktree.vfs_path_for_path(RelPath::empty());
         let toolchain = key.toolchain.clone();
         let override_options = settings.initialization_options.clone();
 
@@ -581,11 +582,13 @@ impl LocalLspStore {
             let settings_location = SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
+                vfs_path: worktree_vfs_path,
             };
-            let augments_syntax_tokens = AllLanguageSettings::get(Some(settings_location), cx)
-                .language(Some(settings_location), Some(&language_name), cx)
-                .semantic_tokens
-                .use_tree_sitter();
+            let augments_syntax_tokens =
+                AllLanguageSettings::get(Some(settings_location.clone()), cx)
+                    .language(Some(settings_location), Some(&language_name), cx)
+                    .semantic_tokens
+                    .use_tree_sitter();
             cx.spawn(async move |cx| {
                 let result = async {
                     let language_server = pending_server.await?;
@@ -15384,6 +15387,7 @@ pub fn language_server_settings<'a>(
         SettingsLocation {
             worktree_id: delegate.worktree_id(),
             path: RelPath::empty(),
+            vfs_path: None,
         },
         language,
         cx,

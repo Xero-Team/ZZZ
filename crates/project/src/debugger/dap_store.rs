@@ -258,6 +258,7 @@ impl DapStore {
                 let settings_location = SettingsLocation {
                     worktree_id: worktree.read(cx).id(),
                     path: RelPath::empty(),
+                    vfs_path: worktree.read(cx).vfs_path_for_path(RelPath::empty()),
                 };
                 let dap_settings = ProjectSettings::get(Some(settings_location), cx)
                     .dap

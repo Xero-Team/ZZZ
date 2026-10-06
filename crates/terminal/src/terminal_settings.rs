@@ -244,6 +244,7 @@ mod tests {
             .get::<TerminalSettings>(path.map(|path| SettingsLocation {
                 worktree_id: WorktreeId::from_usize(1),
                 path: rel_path(path),
+                vfs_path: None,
             }))
             .path_hyperlink_regexes
     }

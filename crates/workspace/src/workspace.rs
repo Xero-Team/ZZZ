@@ -3971,6 +3971,7 @@ impl Workspace {
                 let settings_location = SettingsLocation {
                     worktree_id: path.worktree_id,
                     path: &path.path,
+                    vfs_path: worktree.read(cx).vfs_path_for_path(&path.path),
                 };
                 if WorktreeSettings::get(Some(settings_location), cx).is_path_read_only(&path.path)
                 {

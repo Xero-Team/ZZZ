@@ -451,12 +451,13 @@ impl ExtensionImports for WasmState {
                     .map(|(path, location)| ::settings::SettingsLocation {
                         worktree_id: WorktreeId::from_proto(location.worktree_id),
                         path,
+                        vfs_path: None,
                     });
 
                 cx.update(|cx| match category.as_str() {
                     "language" => {
                         let key = key.map(|k| LanguageName::new(&k));
-                        let settings = AllLanguageSettings::get(location, cx).language(
+                        let settings = AllLanguageSettings::get(location.clone(), cx).language(
                             location,
                             key.as_ref(),
                             cx,

@@ -15223,6 +15223,7 @@ dependencies = [
  "smallvec",
  "unindent",
  "util",
+ "vfs",
  "zlog",
 ]
 

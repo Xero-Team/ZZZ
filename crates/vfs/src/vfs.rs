@@ -599,6 +599,28 @@ impl NativePath {
         &self.path
     }
 
+    pub fn is_absolute(&self) -> bool {
+        match self.root {
+            NativePathRoot::Relative | NativePathRoot::WindowsRootRelative => false,
+            NativePathRoot::WindowsDrive { form, .. } => form.is_absolute(),
+            NativePathRoot::Posix
+            | NativePathRoot::WindowsUnc { .. }
+            | NativePathRoot::WindowsDevice { .. }
+            | NativePathRoot::WindowsVerbatim { .. } => true,
+        }
+    }
+
+    pub fn parent(&self) -> Option<Self> {
+        Some(Self {
+            root: self.root.clone(),
+            path: self.path.parent()?,
+        })
+    }
+
+    pub fn starts_with(&self, prefix: &Self) -> bool {
+        self.root == prefix.root && self.path.starts_with(&prefix.path)
+    }
+
     pub fn from_unix_bytes(bytes: &[u8]) -> Result<Self, PathError> {
         let (root, relative_bytes) = match bytes.strip_prefix(b"/") {
             Some(relative_bytes) => (NativePathRoot::Posix, relative_bytes),

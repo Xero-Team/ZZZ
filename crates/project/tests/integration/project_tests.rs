@@ -15834,6 +15834,7 @@ mod disable_ai_settings_tests {
         let settings_location = SettingsLocation {
             worktree_id,
             path: project_path.as_ref(),
+            vfs_path: None,
         };
 
         // Test: Project-level disable_ai=true should disable AI for files in that project
@@ -15850,7 +15851,7 @@ mod disable_ai_settings_tests {
         });
 
         cx.update(|cx| {
-            let settings = DisableAiSettings::get(Some(settings_location), cx);
+            let settings = DisableAiSettings::get(Some(settings_location.clone()), cx);
             assert!(
                 settings.disable_ai,
                 "Project-level disable_ai=true should disable AI for files in that project"
@@ -15876,7 +15877,7 @@ mod disable_ai_settings_tests {
         });
 
         cx.update(|cx| {
-            let settings = DisableAiSettings::get(Some(settings_location), cx);
+            let settings = DisableAiSettings::get(Some(settings_location.clone()), cx);
             assert!(
                 !settings.disable_ai,
                 "Project-level disable_ai=false should allow AI"
@@ -15904,7 +15905,7 @@ mod disable_ai_settings_tests {
         });
 
         cx.update(|cx| {
-            let settings = DisableAiSettings::get(Some(settings_location), cx);
+            let settings = DisableAiSettings::get(Some(settings_location.clone()), cx);
             assert!(
                 settings.disable_ai,
                 "Project-level false cannot override user-level true (SaturatingBool)"

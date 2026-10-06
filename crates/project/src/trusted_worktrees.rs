@@ -39,6 +39,7 @@
 //! To ease trusting multiple directory worktrees at once, it's possible to trust a parent directory of a certain directory worktree opened in ZZZ.
 //! Trusting a directory means trusting all its subdirectories as well, including all current and potential directory worktrees.
 
+use anyhow::{Context as _, Result};
 use client::ProjectId;
 use collections::{HashMap, HashSet};
 use gpui::{
@@ -47,11 +48,9 @@ use gpui::{
 use remote::RemoteConnectionOptions;
 use rpc::{AnyProtoClient, proto};
 use settings::{Settings as _, WorktreeId};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 use util::{ResultExt as _, debug_panic};
+use vfs::NativePath;
 
 use crate::{project_settings::ProjectSettings, worktree_store::WorktreeStore};
 
@@ -185,33 +184,146 @@ pub enum PathTrust {
     Worktree(WorktreeId),
     /// A path that may be another worktree yet not loaded into any workspace (hence, without any `WorktreeId`),
     /// or a parent path coming out of the security modal.
-    AbsPath(PathBuf),
+    AbsPath(TrustedPath),
 }
 
 impl PathTrust {
-    fn to_proto(&self) -> proto::PathTrust {
+    pub fn abs_path(path: PathBuf, path_style: util::paths::PathStyle) -> Result<Self> {
+        Ok(Self::AbsPath(TrustedPath::from_legacy_path(
+            path, path_style,
+        )?))
+    }
+
+    pub fn to_proto(&self) -> proto::PathTrust {
         match self {
             Self::Worktree(worktree_id) => proto::PathTrust {
                 content: Some(proto::path_trust::Content::WorktreeId(
                     worktree_id.to_proto(),
                 )),
+                abs_path_v2: None,
             },
-            Self::AbsPath(path_buf) => proto::PathTrust {
-                content: Some(proto::path_trust::Content::AbsPath(
-                    path_buf.to_string_lossy().to_string(),
-                )),
-            },
+            Self::AbsPath(path) => {
+                // Older peers require the string field; the exact sidecar is authoritative.
+                let legacy_abs_path = path.display_path.to_string_lossy().to_string();
+                proto::PathTrust {
+                    content: Some(proto::path_trust::Content::AbsPath(legacy_abs_path)),
+                    abs_path_v2: path
+                        .native_path
+                        .as_ref()
+                        .map(proto::NativePathV2::from_native_path),
+                }
+            }
         }
     }
 
-    pub fn from_proto(proto: proto::PathTrust) -> Option<Self> {
-        Some(match proto.content? {
+    pub fn from_proto(proto: proto::PathTrust, path_style: util::paths::PathStyle) -> Result<Self> {
+        Ok(match proto.content.context("missing path trust content")? {
             proto::path_trust::Content::WorktreeId(id) => {
                 Self::Worktree(WorktreeId::from_proto(id))
             }
-            proto::path_trust::Content::AbsPath(path) => Self::AbsPath(PathBuf::from(path)),
+            proto::path_trust::Content::AbsPath(path) => {
+                let legacy_display_path = PathBuf::from(path);
+                let trusted_path = if let Some(native_path) = proto.abs_path_v2 {
+                    let native_path = native_path.to_native_path()?;
+                    let display_path = native_path
+                        .to_local_path_buf()
+                        .unwrap_or(legacy_display_path);
+                    TrustedPath::new(display_path, Some(native_path))
+                } else {
+                    TrustedPath::from_legacy_path(legacy_display_path, path_style)?
+                };
+                Self::AbsPath(trusted_path)
+            }
         })
     }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TrustedPath {
+    display_path: PathBuf,
+    native_path: Option<NativePath>,
+}
+
+impl TrustedPath {
+    pub fn new(display_path: PathBuf, native_path: Option<NativePath>) -> Self {
+        Self {
+            display_path,
+            native_path,
+        }
+    }
+
+    pub fn from_legacy_path(
+        display_path: PathBuf,
+        path_style: util::paths::PathStyle,
+    ) -> Result<Self> {
+        let native_path = if path_style == util::paths::PathStyle::local() {
+            NativePath::from_local_path(&display_path)?
+        } else {
+            let path = display_path
+                .to_str()
+                .context("legacy remote trust path is not Unicode")?;
+            if path_style.is_posix() {
+                NativePath::from_unix_bytes(path.as_bytes())?
+            } else {
+                NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())?
+            }
+        };
+        Ok(Self::new(display_path, Some(native_path)))
+    }
+
+    pub fn display_path(&self) -> &Path {
+        &self.display_path
+    }
+
+    pub fn native_path(&self) -> Option<&NativePath> {
+        self.native_path.as_ref()
+    }
+
+    pub fn parent(&self) -> Option<Self> {
+        let native_path = self.native_path.as_ref().and_then(NativePath::parent);
+        if self.native_path.is_some() && native_path.is_none() {
+            return None;
+        }
+        let display_path = match self
+            .native_path
+            .as_ref()
+            .map(|path| path.provider_path().encoding())
+        {
+            Some(vfs::PathEncoding::WindowsWtf8) => windows_display_parent(&self.display_path)?,
+            _ => self.display_path.parent()?.to_path_buf(),
+        };
+        Some(Self {
+            display_path,
+            native_path,
+        })
+    }
+
+    pub fn starts_with(&self, prefix: &Self) -> bool {
+        match (&self.native_path, &prefix.native_path) {
+            (Some(path), Some(prefix)) => path.starts_with(prefix),
+            _ => self.display_path.starts_with(&prefix.display_path),
+        }
+    }
+
+    fn same_path(&self, other: &Self) -> bool {
+        match (&self.native_path, &other.native_path) {
+            (Some(path), Some(other)) => path == other,
+            _ => self.display_path == other.display_path,
+        }
+    }
+}
+
+fn windows_display_parent(path: &Path) -> Option<PathBuf> {
+    let path = path.to_str()?.trim_end_matches(['\\', '/']);
+    let separator_index = path.rfind(['\\', '/'])?;
+    let parent_end = if separator_index == 2 && path.as_bytes().get(1) == Some(&b':') {
+        separator_index + 1
+    } else if separator_index == 0 {
+        1
+    } else {
+        separator_index
+    };
+    Some(PathBuf::from(path.get(..parent_end)?))
 }
 
 /// A change of trust on a certain host.
@@ -224,7 +336,7 @@ pub enum TrustedWorktreesEvent {
 impl EventEmitter<TrustedWorktreesEvent> for TrustedWorktreesStore {}
 
 type TrustedPaths = HashMap<WeakEntity<WorktreeStore>, HashSet<PathTrust>>;
-pub type DbTrustedPaths = HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>>;
+pub type DbTrustedPaths = HashMap<Option<RemoteHostLocation>, HashSet<TrustedPath>>;
 
 impl TrustedWorktreesStore {
     fn new(db_trusted_paths: DbTrustedPaths) -> Self {
@@ -302,17 +414,20 @@ impl TrustedWorktreesStore {
                         if worktree.read(cx).is_single_file() {
                             new_trusted_single_file_worktrees.insert(*worktree_id);
                         } else {
-                            new_trusted_other_worktrees
-                                .insert((worktree.read(cx).abs_path(), *worktree_id));
+                            new_trusted_other_worktrees.insert((
+                                trusted_path_for_worktree(&worktree.read(cx)),
+                                *worktree_id,
+                            ));
                         }
                     }
                 }
                 PathTrust::AbsPath(abs_path) => {
                     debug_assert!(
-                        util::paths::is_absolute(
-                            &abs_path.to_string_lossy(),
-                            worktree_store.read(cx).path_style()
-                        ),
+                        abs_path.native_path().is_some_and(NativePath::is_absolute)
+                            || util::paths::is_absolute(
+                                &abs_path.display_path().to_string_lossy(),
+                                worktree_store.read(cx).path_style()
+                            ),
                         "Cannot trust non-absolute path {abs_path:?} on path style {style:?}",
                         style = worktree_store.read(cx).path_style()
                     );
@@ -322,8 +437,7 @@ impl TrustedWorktreesStore {
                         if is_file {
                             new_trusted_single_file_worktrees.insert(worktree_id);
                         } else {
-                            new_trusted_other_worktrees
-                                .insert((Arc::from(abs_path.as_path()), worktree_id));
+                            new_trusted_other_worktrees.insert((abs_path.clone(), worktree_id));
                         }
                     }
                     new_trusted_abs_paths.insert(abs_path.clone());
@@ -331,10 +445,10 @@ impl TrustedWorktreesStore {
             }
         }
 
-        new_trusted_other_worktrees.retain(|(worktree_abs_path, _)| {
+        new_trusted_other_worktrees.retain(|(worktree_path, _)| {
             new_trusted_abs_paths
                 .iter()
-                .all(|new_trusted_path| !worktree_abs_path.starts_with(new_trusted_path))
+                .all(|new_trusted_path| !worktree_path.starts_with(new_trusted_path))
         });
         if !new_trusted_other_worktrees.is_empty() {
             new_trusted_single_file_worktrees.clear();
@@ -358,7 +472,7 @@ impl TrustedWorktreesStore {
                         return false;
                     }
 
-                    let restricted_worktree_path = worktree.read(cx).abs_path();
+                    let restricted_worktree_path = trusted_path_for_worktree(&worktree.read(cx));
                     let retain = (!is_file || new_trusted_other_worktrees.is_empty())
                         && new_trusted_abs_paths.iter().all(|new_trusted_path| {
                             !restricted_worktree_path.starts_with(new_trusted_path)
@@ -466,10 +580,13 @@ impl TrustedWorktreesStore {
         let Some(worktree) = worktree_store.read(cx).worktree_for_id(worktree_id, cx) else {
             return false;
         };
-        let worktree_path = worktree.read(cx).abs_path();
+        let worktree_path = trusted_path_for_worktree(&worktree.read(cx));
         // ZZZ opened an "internal" directory: e.g. a tmp dir for `keymap_editor.rs` needs.
         if !worktree.read(cx).is_visible() {
-            log::debug!("Skipping worktree trust checks for not visible {worktree_path:?}");
+            log::debug!(
+                "Skipping worktree trust checks for not visible {:?}",
+                worktree_path.display_path()
+            );
             return true;
         }
 
@@ -501,7 +618,7 @@ impl TrustedWorktreesStore {
                         .worktree_for_id(*worktree_id, cx)
                         .is_some_and(|worktree| {
                             let worktree = worktree.read(cx);
-                            worktree_path.starts_with(&worktree.abs_path())
+                            worktree_path.starts_with(&trusted_path_for_worktree(worktree))
                                 || (is_file && !worktree.is_single_file())
                         }),
                     PathTrust::AbsPath(trusted_path) => {
@@ -518,7 +635,7 @@ impl TrustedWorktreesStore {
             .entry(weak_worktree_store.clone())
             .or_default()
             .insert(worktree_id);
-        log::info!("Worktree {worktree_path:?} is not trusted");
+        log::info!("Worktree {:?} is not trusted", worktree_path.display_path());
         if let Some(store_data) = self.worktree_stores.get(&weak_worktree_store) {
             if let Some((downstream_client, downstream_project_id)) = &store_data.downstream_client
             {
@@ -550,7 +667,7 @@ impl TrustedWorktreesStore {
         &self,
         worktree_store: &Entity<WorktreeStore>,
         cx: &App,
-    ) -> HashSet<(WorktreeId, Arc<Path>)> {
+    ) -> HashSet<(WorktreeId, TrustedPath)> {
         let mut single_file_paths = HashSet::default();
 
         let other_paths = self
@@ -563,12 +680,12 @@ impl TrustedWorktreesStore {
                     .read(cx)
                     .worktree_for_id(restricted_worktree_id, cx)?;
                 let worktree = worktree.read(cx);
-                let abs_path = worktree.abs_path();
+                let trusted_path = trusted_path_for_worktree(worktree);
                 if worktree.is_single_file() {
-                    single_file_paths.insert((restricted_worktree_id, abs_path));
+                    single_file_paths.insert((restricted_worktree_id, trusted_path));
                     None
                 } else {
-                    Some((restricted_worktree_id, abs_path))
+                    Some((restricted_worktree_id, trusted_path))
                 }
             })
             .collect::<HashSet<_>>();
@@ -599,7 +716,7 @@ impl TrustedWorktreesStore {
 
     pub fn schedule_serialization<S>(&mut self, cx: &mut Context<Self>, serialize: S)
     where
-        S: FnOnce(HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>>, &App) -> Task<()>
+        S: FnOnce(HashMap<Option<RemoteHostLocation>, HashSet<TrustedPath>>, &App) -> Task<()>
             + 'static,
     {
         self.worktree_trust_serialization = serialize(self.trusted_paths_for_serialization(cx), cx);
@@ -608,7 +725,7 @@ impl TrustedWorktreesStore {
     fn trusted_paths_for_serialization(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>> {
+    ) -> HashMap<Option<RemoteHostLocation>, HashSet<TrustedPath>> {
         let new_trusted_paths = self
             .trusted_paths
             .iter()
@@ -622,7 +739,7 @@ impl TrustedWorktreesStore {
                             .and_then(|worktree_store| {
                                 worktree_store.read(cx).worktree_for_id(*worktree_id, cx)
                             })
-                            .map(|worktree| worktree.read(cx).abs_path().to_path_buf()),
+                            .map(|worktree| trusted_path_for_worktree(&worktree.read(cx))),
                         PathTrust::AbsPath(abs_path) => Some(abs_path.clone()),
                     })
                     .collect::<HashSet<_>>();
@@ -690,13 +807,20 @@ impl TrustedWorktreesStore {
 
 fn find_worktree_in_store(
     worktree_store: &WorktreeStore,
-    abs_path: &Path,
+    trusted_path: &TrustedPath,
     cx: &App,
 ) -> Option<(WorktreeId, bool)> {
-    let (worktree, path_in_worktree) = worktree_store.find_worktree(&abs_path, cx)?;
-    if path_in_worktree.is_empty() {
-        Some((worktree.read(cx).id(), worktree.read(cx).is_single_file()))
-    } else {
-        None
-    }
+    worktree_store.worktrees().find_map(|worktree| {
+        let worktree = worktree.read(cx);
+        trusted_path_for_worktree(worktree)
+            .same_path(trusted_path)
+            .then(|| (worktree.id(), worktree.is_single_file()))
+    })
+}
+
+fn trusted_path_for_worktree(worktree: &worktree::Worktree) -> TrustedPath {
+    TrustedPath::new(
+        worktree.abs_path().to_path_buf(),
+        worktree.native_abs_path(),
+    )
 }

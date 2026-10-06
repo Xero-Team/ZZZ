@@ -49,6 +49,7 @@ message AddWorktreeResponse {
   string canonicalized_path = 2;
   optional string root_repo_common_dir = 3;
   bool root_repo_is_linked_worktree = 4;
+  NativePathV2 canonicalized_path_v2 = 5;
 }
 
 message RemoveWorktree {
@@ -73,6 +74,7 @@ message WorktreeMetadata {
   string abs_path = 4;
   optional string root_repo_common_dir = 5;
   bool root_repo_is_linked_worktree = 6;
+  NativePathV2 abs_path_v2 = 7;
 }
 
 message ProjectPath {
@@ -183,6 +185,8 @@ message PathTrust {
     uint64 worktree_id = 2;
     string abs_path = 3;
   }
+
+  NativePathV2 abs_path_v2 = 4;
 
   reserved 1;
 }

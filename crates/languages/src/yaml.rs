@@ -147,10 +147,11 @@ impl LspAdapter for YamlLspAdapter {
         let location = SettingsLocation {
             worktree_id: delegate.worktree_id(),
             path: RelPath::empty(),
+            vfs_path: None,
         };
 
         let tab_size = cx.update(|cx| {
-            AllLanguageSettings::get(Some(location), cx)
+            AllLanguageSettings::get(Some(location.clone()), cx)
                 .language(Some(location), Some(&"YAML".into()), cx)
                 .tab_size
         });

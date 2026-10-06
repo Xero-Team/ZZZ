@@ -4,7 +4,7 @@ use collections::HashSet;
 use gpui::{Entity, TestAppContext};
 use serde_json::json;
 use settings::SettingsStore;
-use util::path;
+use util::{path, paths::PathStyle};
 
 use crate::{FakeFs, Project};
 
@@ -31,6 +31,26 @@ fn init_trust_global(
         track_worktree_trust(worktree_store, None, None, None, cx);
         TrustedWorktrees::try_get_global(cx).expect("global should be set")
     })
+}
+
+#[cfg(unix)]
+#[test]
+fn test_path_trust_wire_preserves_non_utf8_native_path() {
+    use rpc::proto::{self, Message as _};
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt as _;
+
+    let path = PathBuf::from(OsString::from_vec(b"/project/non-utf8-\xff".to_vec()));
+    let trust = PathTrust::abs_path(path, PathStyle::Posix)
+        .expect("native trust path fixture should be valid");
+    let wire = trust.to_proto();
+    assert!(wire.abs_path_v2.is_some());
+    let wire = proto::PathTrust::decode(wire.encode_to_vec().as_slice())
+        .expect("path trust protobuf should round-trip");
+
+    let decoded =
+        PathTrust::from_proto(wire, PathStyle::Posix).expect("exact trust path should decode");
+    assert_eq!(decoded, trust);
 }
 
 #[gpui::test]
@@ -518,7 +538,11 @@ async fn test_parent_path_trust_enables_single_file(cx: &mut TestAppContext) {
     trusted_worktrees.update(cx, |store, cx| {
         store.trust(
             &worktree_store,
-            HashSet::from_iter([PathTrust::AbsPath(PathBuf::from(path!("/project")))]),
+            HashSet::from_iter([PathTrust::abs_path(
+                PathBuf::from(path!("/project")),
+                PathStyle::local(),
+            )
+            .expect("trusted path fixture should be valid")]),
             cx,
         );
     });
@@ -583,7 +607,11 @@ async fn test_abs_path_trust_covers_multiple_worktrees(cx: &mut TestAppContext) 
     trusted_worktrees.update(cx, |store, cx| {
         store.trust(
             &worktree_store,
-            HashSet::from_iter([PathTrust::AbsPath(PathBuf::from(path!("/root")))]),
+            HashSet::from_iter([PathTrust::abs_path(
+                PathBuf::from(path!("/root")),
+                PathStyle::local(),
+            )
+            .expect("trusted path fixture should be valid")]),
             cx,
         );
     });

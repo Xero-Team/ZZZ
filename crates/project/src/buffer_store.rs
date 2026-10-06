@@ -1890,9 +1890,11 @@ fn apply_initial_line_ending(buffer: &mut Buffer, cx: &mut Context<Buffer>) {
     let location = buffer.file().map(|file| settings::SettingsLocation {
         worktree_id: file.worktree_id(cx),
         path: file.path().as_ref(),
+        vfs_path: file.vfs_path().cloned(),
     });
     let language = buffer.language().map(|l| l.name());
-    let settings = AllLanguageSettings::get(location, cx).language(location, language.as_ref(), cx);
+    let settings =
+        AllLanguageSettings::get(location.clone(), cx).language(location, language.as_ref(), cx);
     let desired = match settings.line_ending {
         LineEndingSetting::Detect => return,
         LineEndingSetting::PreferLf | LineEndingSetting::EnforceLf => LineEnding::Unix,

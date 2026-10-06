@@ -200,6 +200,7 @@ async fn test_task_list_sorting(cx: &mut TestAppContext) {
     let local_worktree_location = SettingsLocation {
         worktree_id,
         path: rel_path("foo"),
+        vfs_path: None,
     };
     inventory.update(cx, |inventory, _| {
         inventory
@@ -494,6 +495,7 @@ async fn test_inventory_static_task_filters(cx: &mut TestAppContext) {
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id: worktree_1,
                     path: rel_path(".zzz"),
+                    vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(
                     worktree_1_tasks.iter().map(|(_, name)| name.as_str()),
@@ -505,6 +507,7 @@ async fn test_inventory_static_task_filters(cx: &mut TestAppContext) {
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id: worktree_2,
                     path: rel_path(".zzz"),
+                    vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(
                     worktree_2_tasks.iter().map(|(_, name)| name.as_str()),
@@ -572,6 +575,7 @@ async fn test_zzz_tasks_take_precedence_over_vscode(cx: &mut TestAppContext) {
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id,
                     path: rel_path(".vscode"),
+                    vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(["vscode_task"])),
             )
@@ -589,6 +593,7 @@ async fn test_zzz_tasks_take_precedence_over_vscode(cx: &mut TestAppContext) {
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id,
                     path: rel_path(".zzz"),
+                    vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(["zzz_task"])),
             )

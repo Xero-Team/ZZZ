@@ -89,9 +89,10 @@ impl Project {
             settings_location = Some(SettingsLocation {
                 worktree_id: worktree.read(cx).id(),
                 path: RelPath::empty(),
+                vfs_path: worktree.read(cx).vfs_path_for_path(RelPath::empty()),
             });
         }
-        let settings = TerminalSettings::get(settings_location, cx).clone();
+        let settings = TerminalSettings::get(settings_location.clone(), cx).clone();
         let detect_venv = settings.detect_venv.as_option().is_some();
 
         let (completion_tx, completion_rx) = bounded(1);
@@ -327,9 +328,10 @@ impl Project {
             settings_location = Some(SettingsLocation {
                 worktree_id: worktree.read(cx).id(),
                 path: RelPath::empty(),
+                vfs_path: worktree.read(cx).vfs_path_for_path(RelPath::empty()),
             });
         }
-        let settings = TerminalSettings::get(settings_location, cx).clone();
+        let settings = TerminalSettings::get(settings_location.clone(), cx).clone();
         let detect_venv = settings.detect_venv.as_option().is_some();
         let local_path = if is_via_remote { None } else { path.clone() };
 
@@ -544,6 +546,7 @@ impl Project {
             settings_location = Some(SettingsLocation {
                 worktree_id: worktree.read(cx).id(),
                 path: RelPath::empty(),
+                vfs_path: worktree.read(cx).vfs_path_for_path(RelPath::empty()),
             });
         }
         TerminalSettings::get(settings_location, cx)

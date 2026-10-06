@@ -901,9 +901,17 @@ impl SettingsObserver {
                                     {
                                         let path =
                                             LocalSettingsPath::InWorktree(directory_path.clone());
+                                        let vfs_path = settings_observer
+                                            .worktree_store
+                                            .read(cx)
+                                            .worktree_for_id(worktree_id, cx)
+                                            .and_then(|worktree| {
+                                                worktree.read(cx).vfs_path_for_path(&directory_path)
+                                            });
                                         apply_local_settings(
                                             worktree_id,
                                             path.clone(),
+                                            vfs_path,
                                             LocalSettingsKind::Settings,
                                             &settings_contents,
                                             cx,
@@ -1386,6 +1394,7 @@ impl SettingsObserver {
                         apply_local_settings(
                             worktree_id,
                             LocalSettingsPath::InWorktree(directory.clone()),
+                            worktree.read(cx).vfs_path_for_path(directory),
                             kind,
                             &file_content,
                             cx,
@@ -1404,6 +1413,7 @@ impl SettingsObserver {
                             TaskSettingsLocation::Worktree(SettingsLocation {
                                 worktree_id,
                                 path: directory.as_ref(),
+                                vfs_path: worktree.read(cx).vfs_path_for_path(directory),
                             }),
                             file_content.as_deref(),
                             cx,
@@ -1433,6 +1443,7 @@ impl SettingsObserver {
                             TaskSettingsLocation::Worktree(SettingsLocation {
                                 worktree_id,
                                 path: directory.as_ref(),
+                                vfs_path: worktree.read(cx).vfs_path_for_path(directory),
                             }),
                             file_content.as_deref(),
                             cx,
@@ -1459,7 +1470,20 @@ impl SettingsObserver {
                     }
                 }
                 (directory, LocalSettingsKind::Editorconfig) => {
-                    apply_local_settings(worktree_id, directory.clone(), kind, &file_content, cx);
+                    let vfs_path = match directory {
+                        LocalSettingsPath::InWorktree(path) => {
+                            worktree.read(cx).vfs_path_for_path(path)
+                        }
+                        LocalSettingsPath::OutsideWorktree(_) => None,
+                    };
+                    apply_local_settings(
+                        worktree_id,
+                        directory.clone(),
+                        vfs_path,
+                        kind,
+                        &file_content,
+                        cx,
+                    );
                 }
                 (LocalSettingsPath::OutsideWorktree(path), kind) => {
                     log::error!(
@@ -1603,13 +1627,20 @@ impl SettingsObserver {
 fn apply_local_settings(
     worktree_id: WorktreeId,
     path: LocalSettingsPath,
+    vfs_path: Option<vfs::VfsPath>,
     kind: LocalSettingsKind,
     file_content: &Option<String>,
     cx: &mut Context<'_, SettingsObserver>,
 ) {
     cx.update_global::<SettingsStore, _>(|store, cx| {
-        let result =
-            store.set_local_settings(worktree_id, path.clone(), kind, file_content.as_deref(), cx);
+        let result = store.set_local_settings_with_vfs_path(
+            worktree_id,
+            path.clone(),
+            vfs_path,
+            kind,
+            file_content.as_deref(),
+            cx,
+        );
 
         match result {
             Err(InvalidSettingsError::LocalSettings { path, message }) => {

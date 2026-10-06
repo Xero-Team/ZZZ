@@ -31,7 +31,7 @@ use util::{
     rel_path::{RelPath, rel_path},
     test::TempTree,
 };
-use vfs::{MountId, PathEncoding, ProviderPath, ResourceId, VfsErrorCode, VfsPath};
+use vfs::{MountId, NativePath, PathEncoding, ProviderPath, ResourceId, VfsErrorCode, VfsPath};
 
 #[gpui::test]
 async fn test_traversal(cx: &mut TestAppContext) {
@@ -6354,6 +6354,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 abs_path: "/home/user/project".to_string(),
                 root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
+                abs_path_v2: None,
             },
             client,
             PathStyle::Posix,
@@ -6438,6 +6439,8 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
     });
+    let native_abs_path = NativePath::from_unix_bytes(b"/home/user/non-utf8-\xff")
+        .expect("native path fixture should be valid");
     let worktree = cx.update(|cx| {
         Worktree::remote(
             1,
@@ -6449,12 +6452,17 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
                 abs_path: "/home/user/project".to_owned(),
                 root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
+                abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_abs_path)),
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::Posix,
             cx,
         )
     });
+    assert_eq!(
+        worktree.read_with(cx, |worktree, _| worktree.native_abs_path()),
+        Some(native_abs_path)
+    );
     let provider_path = ProviderPath::from_byte_components(
         PathEncoding::PortableUtf8,
         [b"identity.txt".as_slice()],
@@ -6507,6 +6515,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 abs_path: "/home/user/project".to_owned(),
                 root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
+                abs_path_v2: None,
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::Posix,
@@ -6659,6 +6668,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 abs_path: "/home/user/project".to_string(),
                 root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
+                abs_path_v2: None,
             },
             client,
             PathStyle::Posix,
@@ -6761,6 +6771,7 @@ async fn test_remote_worktree_root_repo_metadata_cleared_only_by_completed_scan(
                 abs_path: "/home/user/monty/feature-a".to_string(),
                 root_repo_common_dir: Some("/home/user/monty/.bare".to_string()),
                 root_repo_is_linked_worktree: true,
+                abs_path_v2: None,
             },
             client,
             PathStyle::Posix,
@@ -6877,6 +6888,7 @@ async fn test_remote_worktree_update_entries_carry_changed_paths(cx: &mut TestAp
                 abs_path: path!("/root").to_string(),
                 root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
+                abs_path_v2: None,
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::local(),

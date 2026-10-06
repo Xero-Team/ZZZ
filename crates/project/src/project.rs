@@ -1149,6 +1149,7 @@ impl DisableAiSettings {
         let location = file.map(|f| settings::SettingsLocation {
             worktree_id: f.worktree_id(cx),
             path: f.path().as_ref(),
+            vfs_path: f.vfs_path().cloned(),
         });
         Self::get(location, cx).disable_ai
     }
@@ -1862,6 +1863,10 @@ impl Project {
                 abs_path: abs_path.to_owned(),
                 root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
+                abs_path_v2: vfs::NativePath::from_unix_bytes(abs_path.as_bytes())
+                    .ok()
+                    .as_ref()
+                    .map(proto::NativePathV2::from_native_path),
             },
             client,
             PathStyle::Posix,
@@ -5007,17 +5012,15 @@ impl Project {
         let trusted_worktrees = cx
             .update(|cx| TrustedWorktrees::try_get_global(cx))
             .context("missing trusted worktrees")?;
+        let path_style = this.read_with(&cx, |this, cx| this.worktree_store.read(cx).path_style());
+        let trusted_paths = envelope
+            .payload
+            .trusted_paths
+            .into_iter()
+            .map(|proto_path| PathTrust::from_proto(proto_path, path_style))
+            .collect::<Result<HashSet<_>>>()?;
         trusted_worktrees.update(&mut cx, |trusted_worktrees, cx| {
-            trusted_worktrees.trust(
-                &this.read(cx).worktree_store(),
-                envelope
-                    .payload
-                    .trusted_paths
-                    .into_iter()
-                    .filter_map(|proto_path| PathTrust::from_proto(proto_path))
-                    .collect(),
-                cx,
-            );
+            trusted_worktrees.trust(&this.read(cx).worktree_store(), trusted_paths, cx);
         });
         Ok(proto::Ack {})
     }
@@ -5947,6 +5950,7 @@ impl<'a> From<&'a ProjectPath> for SettingsLocation<'a> {
         SettingsLocation {
             worktree_id: val.worktree_id,
             path: val.path.as_ref(),
+            vfs_path: None,
         }
     }
 }

@@ -118,10 +118,11 @@ pub struct RegisteredSetting {
 
 inventory::collect!(RegisteredSetting);
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SettingsLocation<'a> {
     pub worktree_id: WorktreeId,
     pub path: &'a RelPath,
+    pub vfs_path: Option<vfs::VfsPath>,
 }
 
 pub struct SettingsStore {
@@ -140,6 +141,7 @@ pub struct SettingsStore {
     last_user_settings_content: Option<String>,
     last_global_settings_content: Option<String>,
     local_settings: BTreeMap<(WorktreeId, Arc<RelPath>), SettingsContent>,
+    local_settings_vfs_paths: HashMap<(WorktreeId, Arc<RelPath>), vfs::VfsPath>,
     pub editorconfig_store: Entity<EditorconfigStore>,
 
     _settings_files_watcher: Option<Task<()>>,
@@ -237,7 +239,7 @@ pub struct SettingValue<T> {
     #[doc(hidden)]
     pub global_value: Option<T>,
     #[doc(hidden)]
-    pub local_values: Vec<(WorktreeId, Arc<RelPath>, T)>,
+    pub local_values: Vec<(WorktreeId, Arc<RelPath>, Option<vfs::VfsPath>, T)>,
 }
 
 #[doc(hidden)]
@@ -249,7 +251,13 @@ pub trait AnySettingValue: 'static + Send + Sync {
     fn value_for_path(&self, path: Option<SettingsLocation>) -> &dyn Any;
     fn all_local_values(&self) -> Vec<(WorktreeId, Arc<RelPath>, &dyn Any)>;
     fn set_global_value(&mut self, value: Box<dyn Any>);
-    fn set_local_value(&mut self, root_id: WorktreeId, path: Arc<RelPath>, value: Box<dyn Any>);
+    fn set_local_value(
+        &mut self,
+        root_id: WorktreeId,
+        path: Arc<RelPath>,
+        vfs_path: Option<vfs::VfsPath>,
+        value: Box<dyn Any>,
+    );
     fn clear_local_values(&mut self, root_id: WorktreeId);
 }
 
@@ -294,6 +302,7 @@ impl SettingsStore {
             last_user_settings_content: None,
             last_global_settings_content: None,
             local_settings: BTreeMap::default(),
+            local_settings_vfs_paths: HashMap::default(),
             editorconfig_store: cx.new(|_| EditorconfigStore::default()),
             _settings_files_watcher: None,
             setting_file_updates_tx,
@@ -1043,6 +1052,18 @@ impl SettingsStore {
         settings_content: Option<&str>,
         cx: &mut App,
     ) -> std::result::Result<(), InvalidSettingsError> {
+        self.set_local_settings_with_vfs_path(root_id, path, None, kind, settings_content, cx)
+    }
+
+    pub fn set_local_settings_with_vfs_path(
+        &mut self,
+        root_id: WorktreeId,
+        path: LocalSettingsPath,
+        vfs_path: Option<vfs::VfsPath>,
+        kind: LocalSettingsKind,
+        settings_content: Option<&str>,
+        cx: &mut App,
+    ) -> std::result::Result<(), InvalidSettingsError> {
         let content = settings_content
             .map(|content| content.trim())
             .filter(|content| !content.is_empty());
@@ -1068,6 +1089,8 @@ impl SettingsStore {
                 });
             }
             (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Settings, None) => {
+                self.local_settings_vfs_paths
+                    .remove(&(root_id, directory_path.clone()));
                 zzz_settings_changed = self
                     .local_settings
                     .remove(&(root_id, directory_path.clone()))
@@ -1094,7 +1117,13 @@ impl SettingsStore {
                     }),
                 }?;
                 if let Some(new_settings) = new_settings {
-                    match self.local_settings.entry((root_id, directory_path)) {
+                    let key = (root_id, directory_path);
+                    if let Some(vfs_path) = vfs_path {
+                        self.local_settings_vfs_paths.insert(key.clone(), vfs_path);
+                    } else {
+                        self.local_settings_vfs_paths.remove(&key);
+                    }
+                    match self.local_settings.entry(key) {
                         btree_map::Entry::Vacant(v) => {
                             v.insert(SettingsContent {
                                 project: new_settings,
@@ -1155,6 +1184,8 @@ impl SettingsStore {
     /// Add or remove a set of local settings via a JSON string.
     pub fn clear_local_settings(&mut self, root_id: WorktreeId, cx: &mut App) -> Result<()> {
         self.local_settings
+            .retain(|(worktree_id, _), _| worktree_id != &root_id);
+        self.local_settings_vfs_paths
             .retain(|(worktree_id, _), _| worktree_id != &root_id);
 
         self.editorconfig_store
@@ -1444,7 +1475,11 @@ impl SettingsStore {
                         .last()
                         .expect("collection should not be empty"),
                 );
-                setting_value.set_local_value(*root_id, directory_path.clone(), value);
+                let vfs_path = self
+                    .local_settings_vfs_paths
+                    .get(&(*root_id, directory_path.clone()))
+                    .cloned();
+                setting_value.set_local_value(*root_id, directory_path.clone(), vfs_path, value);
             }
         }
     }
@@ -1606,14 +1641,45 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
     fn all_local_values(&self) -> Vec<(WorktreeId, Arc<RelPath>, &dyn Any)> {
         self.local_values
             .iter()
-            .map(|(id, path, value)| (*id, path.clone(), value as _))
+            .map(|(id, path, _, value)| (*id, path.clone(), value as _))
             .collect()
     }
 
     fn value_for_path(&self, path: Option<SettingsLocation>) -> &dyn Any {
-        if let Some(SettingsLocation { worktree_id, path }) = path {
-            for (settings_root_id, settings_path, value) in self.local_values.iter().rev() {
-                if worktree_id == *settings_root_id && path.starts_with(settings_path) {
+        if let Some(SettingsLocation {
+            worktree_id,
+            path,
+            vfs_path,
+        }) = path
+        {
+            if let Some(vfs_path) = vfs_path.as_ref() {
+                if let Some((_, _, _, value)) = self
+                    .local_values
+                    .iter()
+                    .filter(|(_, _, settings_vfs_path, _)| {
+                        settings_vfs_path.as_ref().is_some_and(|settings_vfs_path| {
+                            vfs_path.mount_id() == settings_vfs_path.mount_id()
+                                && vfs_path
+                                    .provider_path()
+                                    .starts_with(settings_vfs_path.provider_path())
+                        })
+                    })
+                    .max_by_key(|(_, _, settings_vfs_path, _)| {
+                        settings_vfs_path
+                            .as_ref()
+                            .map_or(0, |path| path.provider_path().component_count())
+                    })
+                {
+                    return value;
+                }
+            }
+            for (settings_root_id, settings_path, settings_vfs_path, value) in
+                self.local_values.iter().rev()
+            {
+                if (vfs_path.is_none() || settings_vfs_path.is_none())
+                    && worktree_id == *settings_root_id
+                    && path.starts_with(settings_path)
+                {
                     return value;
                 }
             }
@@ -1628,20 +1694,28 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
         self.global_value = Some(*value.downcast().expect("downcast should succeed"));
     }
 
-    fn set_local_value(&mut self, root_id: WorktreeId, path: Arc<RelPath>, value: Box<dyn Any>) {
+    fn set_local_value(
+        &mut self,
+        root_id: WorktreeId,
+        path: Arc<RelPath>,
+        vfs_path: Option<vfs::VfsPath>,
+        value: Box<dyn Any>,
+    ) {
         let value = *value.downcast().expect("downcast should succeed");
         match self
             .local_values
-            .binary_search_by_key(&(root_id, &path), |e| (e.0, &e.1))
+            .binary_search_by_key(&(root_id, &path), |entry| (entry.0, &entry.1))
         {
-            Ok(ix) => self.local_values[ix].2 = value,
-            Err(ix) => self.local_values.insert(ix, (root_id, path, value)),
+            Ok(index) => self.local_values[index] = (root_id, path, vfs_path, value),
+            Err(index) => self
+                .local_values
+                .insert(index, (root_id, path, vfs_path, value)),
         }
     }
 
     fn clear_local_values(&mut self, root_id: WorktreeId) {
         self.local_values
-            .retain(|(worktree_id, _, _)| *worktree_id != root_id);
+            .retain(|(worktree_id, _, _, _)| *worktree_id != root_id);
     }
 }
 
@@ -1901,6 +1975,7 @@ mod tests {
             store.get::<DefaultLanguageSettings>(Some(SettingsLocation {
                 worktree_id: WorktreeId::from_usize(1),
                 path: rel_path("root1/something"),
+                vfs_path: None,
             })),
             &DefaultLanguageSettings {
                 preferred_line_length: 80,
@@ -1911,6 +1986,7 @@ mod tests {
             store.get::<DefaultLanguageSettings>(Some(SettingsLocation {
                 worktree_id: WorktreeId::from_usize(1),
                 path: rel_path("root1/subdir/something"),
+                vfs_path: None,
             })),
             &DefaultLanguageSettings {
                 preferred_line_length: 50,
@@ -1921,6 +1997,7 @@ mod tests {
             store.get::<DefaultLanguageSettings>(Some(SettingsLocation {
                 worktree_id: WorktreeId::from_usize(1),
                 path: rel_path("root2/something"),
+                vfs_path: None,
             })),
             &DefaultLanguageSettings {
                 preferred_line_length: 80,
@@ -1930,10 +2007,93 @@ mod tests {
         assert_eq!(
             store.get::<AutoUpdateSetting>(Some(SettingsLocation {
                 worktree_id: WorktreeId::from_usize(1),
-                path: rel_path("root2/something")
+                path: rel_path("root2/something"),
+                vfs_path: None,
             })),
             &AutoUpdateSetting { auto_update: false }
         );
+    }
+
+    #[gpui::test]
+    fn test_settings_location_prefers_exact_vfs_path(cx: &mut App) {
+        let mut store = SettingsStore::new(cx, &default_settings());
+        store.register_setting::<DefaultLanguageSettings>();
+
+        let provider_path = |component: &[u8]| {
+            vfs::ProviderPath::from_byte_components(vfs::PathEncoding::PortableUtf8, [component])
+                .expect("provider path fixture should be valid")
+        };
+        let first_root = vfs::VfsPath::new(vfs::MountId::new(11), provider_path(b"scope"));
+        let second_root = vfs::VfsPath::new(vfs::MountId::new(12), provider_path(b"scope"));
+        let nested_root = first_root
+            .join_component(
+                vfs::ExactComponent::new(vfs::PathEncoding::PortableUtf8, b"nested".to_vec())
+                    .expect("nested component should be valid"),
+            )
+            .expect("nested VFS path should be valid");
+        store
+            .set_local_settings_with_vfs_path(
+                WorktreeId::from_usize(1),
+                LocalSettingsPath::InWorktree(rel_path("legacy-one").into()),
+                Some(first_root.clone()),
+                LocalSettingsKind::Settings,
+                Some(r#"{ "tab_size": 5 }"#),
+                cx,
+            )
+            .expect("first local settings should load");
+        store
+            .set_local_settings_with_vfs_path(
+                WorktreeId::from_usize(2),
+                LocalSettingsPath::InWorktree(rel_path("legacy-two").into()),
+                Some(second_root),
+                LocalSettingsKind::Settings,
+                Some(r#"{ "tab_size": 9 }"#),
+                cx,
+            )
+            .expect("second local settings should load");
+        store
+            .set_local_settings_with_vfs_path(
+                WorktreeId::from_usize(1),
+                LocalSettingsPath::InWorktree(rel_path("legacy-one/nested").into()),
+                Some(nested_root.clone()),
+                LocalSettingsKind::Settings,
+                Some(r#"{ "tab_size": 7 }"#),
+                cx,
+            )
+            .expect("nested local settings should load");
+
+        let child = first_root
+            .join_component(
+                vfs::ExactComponent::new(vfs::PathEncoding::PortableUtf8, b"child".to_vec())
+                    .expect("child component should be valid"),
+            )
+            .expect("child VFS path should be valid");
+        let settings = store.get::<DefaultLanguageSettings>(Some(SettingsLocation {
+            worktree_id: WorktreeId::from_usize(2),
+            path: rel_path("legacy-two/child"),
+            vfs_path: Some(child),
+        }));
+        assert_eq!(settings.tab_size.get(), 5);
+
+        let nested_child = nested_root
+            .join_component(
+                vfs::ExactComponent::new(vfs::PathEncoding::PortableUtf8, b"child".to_vec())
+                    .expect("nested child component should be valid"),
+            )
+            .expect("nested child VFS path should be valid");
+        let settings = store.get::<DefaultLanguageSettings>(Some(SettingsLocation {
+            worktree_id: WorktreeId::from_usize(2),
+            path: rel_path("legacy-two/child"),
+            vfs_path: Some(nested_child),
+        }));
+        assert_eq!(settings.tab_size.get(), 7);
+
+        let settings = store.get::<DefaultLanguageSettings>(Some(SettingsLocation {
+            worktree_id: WorktreeId::from_usize(1),
+            path: rel_path("legacy-one/child"),
+            vfs_path: None,
+        }));
+        assert_eq!(settings.tab_size.get(), 5);
     }
 
     #[gpui::test]

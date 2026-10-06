@@ -37,6 +37,7 @@ settings_json.workspace = true
 settings_macros.workspace = true
 smallvec.workspace = true
 util.workspace = true
+vfs.workspace = true
 zlog.workspace = true
 
 [dev-dependencies]

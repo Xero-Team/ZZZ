@@ -20095,6 +20095,7 @@ impl Editor {
                             Some(SettingsLocation {
                                 worktree_id: file.worktree_id(cx),
                                 path: file.path().as_ref(),
+                                vfs_path: file.vfs_path().cloned(),
                             }),
                             cx,
                         )

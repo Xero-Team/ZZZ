@@ -570,6 +570,10 @@ impl HeadlessProject {
                     .root_repo_common_dir()
                     .map(|p| p.to_string_lossy().into_owned()),
                 root_repo_is_linked_worktree: worktree.root_repo_is_linked_worktree(),
+                canonicalized_path_v2: worktree
+                    .native_abs_path()
+                    .as_ref()
+                    .map(proto::NativePathV2::from_native_path),
             }
         });
 
@@ -716,17 +720,16 @@ impl HeadlessProject {
             .update(|cx| TrustedWorktrees::try_get_global(cx))
             .context("missing trusted worktrees")?;
         let worktree_store = this.read_with(&cx, |project, _| project.worktree_store.clone());
+        let path_style =
+            worktree_store.read_with(&cx, |worktree_store, _| worktree_store.path_style());
+        let trusted_paths = envelope
+            .payload
+            .trusted_paths
+            .into_iter()
+            .map(|path| PathTrust::from_proto(path, path_style))
+            .collect::<Result<HashSet<_>>>()?;
         trusted_worktrees.update(&mut cx, |trusted_worktrees, cx| {
-            trusted_worktrees.trust(
-                &worktree_store,
-                envelope
-                    .payload
-                    .trusted_paths
-                    .into_iter()
-                    .filter_map(PathTrust::from_proto)
-                    .collect(),
-                cx,
-            );
+            trusted_worktrees.trust(&worktree_store, trusted_paths, cx);
         });
         Ok(proto::Ack {})
     }
@@ -1366,7 +1369,7 @@ impl HeadlessProject {
     }
 
     async fn handle_get_terminal_shell(
-        _this: Entity<Self>,
+        this: Entity<Self>,
         envelope: TypedEnvelope<proto::GetTerminalShell>,
         cx: AsyncApp,
     ) -> Result<proto::GetTerminalShellResponse> {
@@ -1375,6 +1378,12 @@ impl HeadlessProject {
             let settings_location = worktree_id.map(|worktree_id| SettingsLocation {
                 worktree_id,
                 path: RelPath::empty(),
+                vfs_path: this
+                    .read(cx)
+                    .worktree_store
+                    .read(cx)
+                    .worktree_for_id(worktree_id, cx)
+                    .and_then(|worktree| worktree.read(cx).vfs_path_for_path(RelPath::empty())),
             });
             TerminalSettings::get(settings_location, cx).shell.clone()
         });

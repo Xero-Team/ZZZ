@@ -241,9 +241,16 @@ impl LanguageServerTree {
         let settings_location = SettingsLocation {
             worktree_id: manifest_location.worktree_id,
             path: &manifest_location.path,
+            vfs_path: self
+                .manifest_tree
+                .read(cx)
+                .worktree_store
+                .read(cx)
+                .worktree_for_id(manifest_location.worktree_id, cx)
+                .and_then(|worktree| worktree.read(cx).vfs_path_for_path(&manifest_location.path)),
         };
-        let settings = AllLanguageSettings::get(Some(settings_location), cx).language(
-            Some(settings_location),
+        let settings = AllLanguageSettings::get(Some(settings_location.clone()), cx).language(
+            Some(settings_location.clone()),
             Some(language_name),
             cx,
         );
@@ -277,7 +284,7 @@ impl LanguageServerTree {
                     None
                 }?;
                 let adapter_settings = crate::lsp_store::language_server_settings_for(
-                    settings_location,
+                    settings_location.clone(),
                     &adapter.name,
                     cx,
                 )

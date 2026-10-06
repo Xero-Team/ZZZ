@@ -31,6 +31,7 @@ pub fn all_language_settings<'a>(
     let location = file.map(|f| SettingsLocation {
         worktree_id: f.worktree_id(cx),
         path: f.path().as_ref(),
+        vfs_path: f.vfs_path().cloned(),
     });
     AllLanguageSettings::get(location, cx)
 }
@@ -288,6 +289,7 @@ impl LanguageSettings {
         let location = buffer.file().map(|f| SettingsLocation {
             worktree_id: f.worktree_id(cx),
             path: f.path().as_ref(),
+            vfs_path: f.vfs_path().cloned(),
         });
 
         let language = if let Some(offset) = offset {
@@ -296,7 +298,7 @@ impl LanguageSettings {
             buffer.language()
         };
 
-        let mut settings = AllLanguageSettings::get(location, cx).language(
+        let mut settings = AllLanguageSettings::get(location.clone(), cx).language(
             location,
             language.map(|l| l.name()).as_ref(),
             cx,
@@ -320,8 +322,9 @@ impl LanguageSettings {
         let location = buffer.file().map(|f| SettingsLocation {
             worktree_id: f.worktree_id(cx),
             path: f.path().as_ref(),
+            vfs_path: f.vfs_path().cloned(),
         });
-        let all = AllLanguageSettings::get(location, cx);
+        let all = AllLanguageSettings::get(location.clone(), cx);
         let mut settings = if override_language.is_none() {
             all.language(location, buffer.language().map(|l| l.name()).as_ref(), cx)
         } else {

@@ -845,6 +845,7 @@ impl WorktreeStore {
                         abs_path: response.canonicalized_path,
                         root_repo_common_dir: response.root_repo_common_dir,
                         root_repo_is_linked_worktree: response.root_repo_is_linked_worktree,
+                        abs_path_v2: response.canonicalized_path_v2,
                     },
                     client,
                     path_style,
@@ -1144,19 +1145,7 @@ impl WorktreeStore {
 
     pub fn worktree_metadata_protos(&self, cx: &App) -> Vec<proto::WorktreeMetadata> {
         self.worktrees()
-            .map(|worktree| {
-                let worktree = worktree.read(cx);
-                proto::WorktreeMetadata {
-                    id: worktree.id().to_proto(),
-                    root_name: worktree.root_name_str().to_owned(),
-                    visible: worktree.is_visible(),
-                    abs_path: worktree.abs_path().to_string_lossy().into_owned(),
-                    root_repo_common_dir: worktree
-                        .root_repo_common_dir()
-                        .map(|p| p.to_string_lossy().into_owned()),
-                    root_repo_is_linked_worktree: worktree.root_repo_is_linked_worktree(),
-                }
-            })
+            .map(|worktree| worktree.read(cx).metadata_proto())
             .collect()
     }
 
