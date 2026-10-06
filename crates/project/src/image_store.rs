@@ -807,20 +807,11 @@ impl LocalImageStore {
                 .or_else(|| snapshot.entry_for_path(old_file.path.as_ref()));
 
             let new_file = if let Some(entry) = snapshot_entry {
-                worktree::File {
-                    disk_state: match entry.mtime {
-                        Some(mtime) => DiskState::Present {
-                            mtime,
-                            size: entry.size,
-                        },
-                        None => old_file.disk_state,
-                    },
-                    is_local: true,
-                    entry_id: Some(entry.id),
-                    path: entry.path.clone(),
-                    worktree: worktree.clone(),
-                    is_private: entry.is_private,
+                let mut file = worktree::File::from_entry(entry.clone(), worktree.clone(), cx);
+                if entry.mtime.is_none() {
+                    file.disk_state = old_file.disk_state;
                 }
+                file
             } else {
                 worktree::File {
                     disk_state: DiskState::Deleted,
@@ -829,6 +820,8 @@ impl LocalImageStore {
                     path: old_file.path.clone(),
                     worktree: worktree.clone(),
                     is_private: old_file.is_private,
+                    resource_id: old_file.resource_id,
+                    vfs_path: old_file.vfs_path.clone(),
                 }
             };
 

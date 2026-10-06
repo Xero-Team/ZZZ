@@ -37,6 +37,7 @@ pub struct BufferStore {
     worktree_store: Entity<WorktreeStore>,
     opened_buffers: HashMap<BufferId, OpenBuffer>,
     path_to_buffer_id: HashMap<ProjectPath, BufferId>,
+    resource_to_buffer_id: HashMap<vfs::ResourceId, BufferId>,
     downstream_client: Option<(AnyProtoClient, u64)>,
     shared_buffers: HashMap<proto::PeerId, HashMap<BufferId, SharedBuffer>>,
     non_searchable_buffers: HashSet<BufferId>,
@@ -517,21 +518,12 @@ impl LocalBufferStore {
                 .and_then(|entry_id| snapshot.entry_for_id(entry_id))
                 .or_else(|| snapshot.entry_for_path(old_file.path.as_ref()));
 
-            let new_file = if let Some(entry) = snapshot_entry {
-                File {
-                    disk_state: match entry.mtime {
-                        Some(mtime) => DiskState::Present {
-                            mtime,
-                            size: entry.size,
-                        },
-                        None => old_file.disk_state,
-                    },
-                    is_local: true,
-                    entry_id: Some(entry.id),
-                    path: entry.path.clone(),
-                    worktree: worktree.clone(),
-                    is_private: entry.is_private,
+            let mut new_file = if let Some(entry) = snapshot_entry {
+                let mut file = File::from_entry(entry.clone(), worktree.clone(), cx);
+                if entry.mtime.is_none() {
+                    file.disk_state = old_file.disk_state;
                 }
+                file
             } else {
                 File {
                     disk_state: DiskState::Deleted,
@@ -540,8 +532,17 @@ impl LocalBufferStore {
                     path: old_file.path.clone(),
                     worktree: worktree.clone(),
                     is_private: old_file.is_private,
+                    resource_id: old_file.resource_id,
+                    vfs_path: old_file.vfs_path.clone(),
                 }
             };
+
+            if new_file.entry_id == old_file.entry_id
+                && new_file.path != old_file.path
+                && old_file.resource_id.is_some()
+            {
+                new_file.resource_id = old_file.resource_id;
+            }
 
             if new_file == *old_file {
                 return None;
@@ -564,6 +565,16 @@ impl LocalBufferStore {
                     buffer: cx.entity(),
                     old_file: buffer.file().cloned(),
                 });
+            }
+            if new_file.resource_id != old_file.resource_id {
+                if let Some(resource_id) = old_file.resource_id
+                    && this.resource_to_buffer_id.get(&resource_id) == Some(&buffer_id)
+                {
+                    this.resource_to_buffer_id.remove(&resource_id);
+                }
+                if let Some(resource_id) = new_file.resource_id {
+                    this.resource_to_buffer_id.insert(resource_id, buffer_id);
+                }
             }
             let local = this.as_local_mut()?;
             if new_file.entry_id != old_file.entry_id {
@@ -660,6 +671,7 @@ impl LocalBufferStore {
                 Err(error) if is_not_found_error(&error) => cx.new(|cx| {
                     let buffer_id = BufferId::from(cx.entity_id().as_non_zero_u64());
                     let text_buffer = text::Buffer::new(ReplicaId::LOCAL, buffer_id, "");
+                    let (resource_id, vfs_path) = File::vfs_identity_for_path(&path, &worktree, cx);
                     let mut buffer = Buffer::build(
                         text_buffer,
                         Some(Arc::new(File {
@@ -669,6 +681,8 @@ impl LocalBufferStore {
                             entry_id: None,
                             is_local: true,
                             is_private: false,
+                            resource_id,
+                            vfs_path,
                         })),
                         Capability::ReadWrite,
                     );
@@ -790,6 +804,7 @@ impl BufferStore {
             downstream_client: None,
             opened_buffers: Default::default(),
             path_to_buffer_id: Default::default(),
+            resource_to_buffer_id: Default::default(),
             shared_buffers: Default::default(),
             loading_buffers: Default::default(),
             non_searchable_buffers: Default::default(),
@@ -815,6 +830,7 @@ impl BufferStore {
             downstream_client: None,
             opened_buffers: Default::default(),
             path_to_buffer_id: Default::default(),
+            resource_to_buffer_id: Default::default(),
             loading_buffers: Default::default(),
             shared_buffers: Default::default(),
             non_searchable_buffers: Default::default(),
@@ -853,18 +869,24 @@ impl BufferStore {
         if let Some(buffer) = self.get_by_path(&project_path) {
             return Task::ready(Ok(buffer));
         }
+        let Some(worktree) = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(project_path.worktree_id, cx)
+        else {
+            return Task::ready(Err(anyhow!("no such worktree")));
+        };
+        if let (Some(resource_id), _) =
+            File::vfs_identity_for_path(&project_path.path, &worktree, cx)
+            && let Some(buffer) = self.get_by_resource(resource_id)
+        {
+            return Task::ready(Ok(buffer));
+        }
 
         let task = match self.loading_buffers.entry(project_path.clone()) {
             hash_map::Entry::Occupied(e) => e.get().clone(),
             hash_map::Entry::Vacant(entry) => {
                 let path = project_path.path.clone();
-                let Some(worktree) = self
-                    .worktree_store
-                    .read(cx)
-                    .worktree_for_id(project_path.worktree_id, cx)
-                else {
-                    return Task::ready(Err(anyhow!("no such worktree")));
-                };
                 let load_buffer = match &self.state {
                     BufferStoreState::Local(this) => this.open_buffer(path, worktree, cx),
                     BufferStoreState::Remote(this) => this.open_buffer(path, worktree, cx),
@@ -939,6 +961,11 @@ impl BufferStore {
         cx.spawn(async move |this, cx| {
             task.await?;
             this.update(cx, |this, cx| {
+                if let Some(resource_id) =
+                    File::from_dyn(old_file.as_ref()).and_then(|file| file.resource_id)
+                {
+                    this.resource_to_buffer_id.remove(&resource_id);
+                }
                 old_file.clone().and_then(|file| {
                     this.path_to_buffer_id.remove(&ProjectPath {
                         worktree_id: file.worktree_id(cx),
@@ -954,9 +981,14 @@ impl BufferStore {
     fn add_buffer(&mut self, buffer_entity: Entity<Buffer>, cx: &mut Context<Self>) -> Result<()> {
         let buffer = buffer_entity.read(cx);
         let remote_id = buffer.remote_id();
-        let path = File::from_dyn(buffer.file()).map(|file| ProjectPath {
-            path: file.path.clone(),
-            worktree_id: file.worktree_id(cx),
+        let (path, resource_id) = File::from_dyn(buffer.file()).map_or((None, None), |file| {
+            (
+                Some(ProjectPath {
+                    path: file.path.clone(),
+                    worktree_id: file.worktree_id(cx),
+                }),
+                file.resource_id,
+            )
         });
         let is_remote = buffer.replica_id().is_remote();
         let open_buffer = OpenBuffer::Complete {
@@ -967,8 +999,14 @@ impl BufferStore {
         buffer_entity.update(cx, move |_, cx| {
             cx.on_release(move |buffer, cx| {
                 handle
-                    .update(cx, |_, cx| {
-                        cx.emit(BufferStoreEvent::BufferDropped(buffer.remote_id()))
+                    .update(cx, |this, cx| {
+                        let buffer_id = buffer.remote_id();
+                        this.opened_buffers.remove(&buffer_id);
+                        this.path_to_buffer_id
+                            .retain(|_, indexed_buffer_id| *indexed_buffer_id != buffer_id);
+                        this.resource_to_buffer_id
+                            .retain(|_, indexed_buffer_id| *indexed_buffer_id != buffer_id);
+                        cx.emit(BufferStoreEvent::BufferDropped(buffer_id));
                     })
                     .ok();
             })
@@ -997,6 +1035,9 @@ impl BufferStore {
 
         if let Some(path) = path {
             self.path_to_buffer_id.insert(path, remote_id);
+        }
+        if let Some(resource_id) = resource_id {
+            self.resource_to_buffer_id.insert(resource_id, remote_id);
         }
 
         cx.subscribe(&buffer_entity, Self::on_buffer_event).detach();
@@ -1038,6 +1079,12 @@ impl BufferStore {
     pub fn get_by_path(&self, path: &ProjectPath) -> Option<Entity<Buffer>> {
         self.path_to_buffer_id
             .get(path)
+            .and_then(|buffer_id| self.get(*buffer_id))
+    }
+
+    pub fn get_by_resource(&self, resource_id: vfs::ResourceId) -> Option<Entity<Buffer>> {
+        self.resource_to_buffer_id
+            .get(&resource_id)
             .and_then(|buffer_id| self.get(*buffer_id))
     }
 
@@ -1113,6 +1160,9 @@ impl BufferStore {
         let file = File::from_dyn(buffer.read(cx).file())?;
 
         let remote_id = buffer.read(cx).remote_id();
+        if let Some(resource_id) = file.resource_id {
+            self.resource_to_buffer_id.insert(resource_id, remote_id);
+        }
         if let Some(entry_id) = file.entry_id {
             if let Some(local) = self.as_local_mut() {
                 match local.local_buffer_ids_by_entry_id.get(&entry_id) {
@@ -1339,11 +1389,24 @@ impl BufferStore {
                     .worktree_for_id(WorktreeId::from_proto(file.worktree_id), cx)
                     .context("no such worktree")?;
                 let file = File::from_proto(file, worktree, cx)?;
+                let new_resource_id = file.resource_id;
                 let old_file = buffer.update(cx, |buffer, cx| {
                     let old_file = buffer.file().cloned();
+                    let old_resource_id =
+                        File::from_dyn(old_file.as_ref()).and_then(|file| file.resource_id);
                     let new_path = file.path.clone();
 
                     buffer.file_updated(Arc::new(file), cx);
+                    if old_resource_id != new_resource_id {
+                        if let Some(resource_id) = old_resource_id
+                            && this.resource_to_buffer_id.get(&resource_id) == Some(&buffer_id)
+                        {
+                            this.resource_to_buffer_id.remove(&resource_id);
+                        }
+                        if let Some(resource_id) = new_resource_id {
+                            this.resource_to_buffer_id.insert(resource_id, buffer_id);
+                        }
+                    }
                     if old_file.as_ref().is_none_or(|old| {
                         if *old.path() == new_path {
                             return false;

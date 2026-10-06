@@ -31,6 +31,7 @@ use util::{
     rel_path::{RelPath, rel_path},
     test::TempTree,
 };
+use vfs::{MountId, PathEncoding, ProviderPath, ResourceId, VfsErrorCode, VfsPath};
 
 #[gpui::test]
 async fn test_traversal(cx: &mut TestAppContext) {
@@ -1505,6 +1506,44 @@ async fn test_write_file(cx: &mut TestAppContext) {
         assert!(!tracked.is_ignored);
         assert!(ignored.is_ignored);
     });
+}
+
+#[gpui::test]
+async fn test_write_file_rejects_stale_vfs_version(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree("/root", json!({ "file.txt": "original" }))
+        .await;
+    let worktree = build_worktree(fs.clone(), "/root", cx).await;
+    worktree
+        .update(cx, |worktree, cx| {
+            worktree.load_file(rel_path("file.txt"), cx)
+        })
+        .await
+        .unwrap();
+    fs.write(Path::new("/root/file.txt"), b"external-change")
+        .await
+        .unwrap();
+    let result = worktree
+        .update(cx, |worktree, cx| {
+            worktree.write_file(
+                rel_path("file.txt").into(),
+                "local-change".into(),
+                text::LineEnding::Unix,
+                encoding_rs::UTF_8,
+                false,
+                cx,
+            )
+        })
+        .await;
+    assert!(
+        result
+            .as_ref()
+            .err()
+            .and_then(|error| error.downcast_ref::<vfs::VfsError>())
+            .is_some_and(|error| error.code() == VfsErrorCode::StaleVersion),
+        "stale VFS write was not rejected: {result:?}"
+    );
 }
 
 #[gpui::test]
@@ -5732,6 +5771,42 @@ async fn build_worktree(fs: Arc<FakeFs>, root: &str, cx: &mut TestAppContext) ->
     tree
 }
 
+#[gpui::test]
+async fn test_loaded_file_carries_vfs_identity(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree("/root", json!({ "identity.txt": "contents" }))
+        .await;
+    let tree = build_worktree(fs, "/root", cx).await;
+    let loaded = tree
+        .update(cx, |tree, cx| tree.load_file(rel_path("identity.txt"), cx))
+        .await;
+    let loaded = match loaded {
+        Ok(loaded) => loaded,
+        Err(error) => panic!("failed to load VFS identity fixture: {error:?}"),
+    };
+    let Some(resource_id) = loaded.file.resource_id else {
+        panic!("loaded file is missing its resource identity");
+    };
+    let Some(vfs_path) = loaded.file.vfs_path.as_ref() else {
+        panic!("loaded file is missing its VFS path");
+    };
+    assert_eq!(resource_id.mount_id(), vfs_path.mount_id());
+    let wire = cx.read(|cx| language::File::to_proto(loaded.file.as_ref(), cx));
+    assert_eq!(
+        wire.resource_id
+            .as_ref()
+            .and_then(|resource_id| resource_id.to_resource_id().ok()),
+        Some(resource_id)
+    );
+    assert_eq!(
+        wire.vfs_path
+            .as_ref()
+            .and_then(|path| path.to_vfs_path().ok()),
+        Some(vfs_path.clone())
+    );
+}
+
 async fn wait_for_condition(
     cx: &mut TestAppContext,
     mut condition: impl FnMut(&mut TestAppContext) -> bool,
@@ -6330,6 +6405,64 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
         fired.contains(&"UpdatedRootRepoCommonDir"),
         "UpdatedRootRepoCommonDir should fire after first remote update even when \
          root_repo_common_dir is None, to signal that repo state is now known"
+    );
+}
+
+#[gpui::test]
+async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        let settings_store = SettingsStore::test(cx);
+        cx.set_global(settings_store);
+    });
+    let worktree = cx.update(|cx| {
+        Worktree::remote(
+            1,
+            clock::ReplicaId::new(1),
+            proto::WorktreeMetadata {
+                id: 1,
+                root_name: "project".to_owned(),
+                visible: true,
+                abs_path: "/home/user/project".to_owned(),
+                root_repo_common_dir: None,
+                root_repo_is_linked_worktree: false,
+            },
+            AnyProtoClient::new(NoopProtoClient::new()),
+            PathStyle::Posix,
+            cx,
+        )
+    });
+    let provider_path = ProviderPath::from_byte_components(
+        PathEncoding::PortableUtf8,
+        [b"identity.txt".as_slice()],
+    );
+    let Ok(provider_path) = provider_path else {
+        panic!("test provider path must be valid: {provider_path:?}");
+    };
+    let mount_id = MountId::new(42);
+    let resource_id = ResourceId::new(mount_id, 7, 0);
+    let vfs_path = VfsPath::new(mount_id, provider_path);
+    let wire_file = proto::File {
+        worktree_id: 1,
+        entry_id: Some(9),
+        path: "identity.txt".to_owned(),
+        mtime: None,
+        is_deleted: false,
+        is_historic: false,
+        vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
+        resource_id: Some(proto::ResourceIdV2::from_resource_id(resource_id)),
+    };
+    let file = cx.read(|cx| worktree::File::from_proto(wire_file.clone(), worktree.clone(), cx));
+    let Ok(file) = file else {
+        panic!("remote file identity must decode: {file:?}");
+    };
+    assert_eq!(file.resource_id, Some(resource_id));
+    assert_eq!(file.vfs_path, Some(vfs_path));
+
+    let mut mismatched = wire_file;
+    mismatched.path = "different.txt".to_owned();
+    assert!(
+        cx.read(|cx| worktree::File::from_proto(mismatched, worktree, cx))
+            .is_err()
     );
 }
 

@@ -8728,6 +8728,7 @@ dependencies = [
  "unicase",
  "unindent",
  "util",
+ "vfs",
  "watch",
  "zlog",
  "ztracing",

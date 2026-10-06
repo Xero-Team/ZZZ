@@ -79,8 +79,9 @@ use util::{
 };
 use vfs::{
     CaseSensitivity as VfsCaseSensitivity, CompatibilityPathError,
-    EntryMetadata as VfsEntryMetadata, SnapshotBudgets, VfsError, VfsErrorCode, VfsProvider,
-    VfsSnapshot, provider_path_from_legacy_utf8, provider_path_to_legacy_utf8,
+    EntryMetadata as VfsEntryMetadata, ResourceId, SnapshotBudgets, VfsError, VfsErrorCode,
+    VfsPath, VfsProvider, VfsSnapshot, provider_path_from_legacy_utf8,
+    provider_path_to_legacy_utf8,
 };
 pub use worktree_settings::WorktreeSettings;
 
@@ -981,7 +982,12 @@ impl Worktree {
 
     pub fn root_file(&self, cx: &Context<Self>) -> Option<Arc<File>> {
         let entry = self.root_entry()?;
-        Some(File::for_entry(entry.clone(), cx.entity()))
+        let vfs_snapshot = self.vfs_snapshot();
+        Some(File::for_entry(
+            entry.clone(),
+            cx.entity(),
+            vfs_snapshot.as_ref(),
+        ))
     }
 
     pub fn observe_updates<F, Fut>(&mut self, project_id: u64, cx: &Context<Worktree>, callback: F)
@@ -1700,14 +1706,30 @@ impl LocalWorktree {
         let fs = self.fs.clone();
         let entry = self.refresh_entry(path.clone(), None, cx);
         let is_private = self.is_path_private(&path);
+        let vfs_snapshot = self.vfs_snapshot.clone();
+        let provider_path = vfs_snapshot.as_ref().and_then(|snapshot| {
+            provider_path_from_legacy_utf8(
+                path.as_unix_str(),
+                snapshot.provider().descriptor().path_encoding,
+            )
+            .ok()
+        });
 
         let worktree = cx.weak_entity();
         cx.background_spawn(async move {
-            let content = fs.load_bytes(&abs_path).await?;
+            let content = if let (Some(vfs_snapshot), Some(provider_path)) =
+                (vfs_snapshot.as_ref(), provider_path.as_ref())
+            {
+                vfs_snapshot
+                    .load_bytes(provider_path, vfs::OperationContext::default())
+                    .await?
+            } else {
+                fs.load_bytes(&abs_path).await?
+            };
 
             let worktree = worktree.upgrade().context("worktree was dropped")?;
             let file = if let Some(entry) = entry.await? {
-                File::for_entry(entry, worktree)
+                File::for_entry(entry, worktree, vfs_snapshot.as_ref())
             } else {
                 let metadata = fs
                     .metadata(&abs_path)
@@ -1716,6 +1738,7 @@ impl LocalWorktree {
                     .with_context(|| {
                         format!("Excluded file {abs_path:?} got removed during loading")
                     })?;
+                let (resource_id, vfs_path) = vfs_identity(&path, vfs_snapshot.as_ref());
                 Arc::new(File {
                     entry_id: None,
                     worktree,
@@ -1726,6 +1749,8 @@ impl LocalWorktree {
                     },
                     is_local: true,
                     is_private,
+                    resource_id,
+                    vfs_path,
                 })
             };
 
@@ -1740,6 +1765,14 @@ impl LocalWorktree {
         let fs = self.fs.clone();
         let entry = self.refresh_entry(path.clone(), None, cx);
         let is_private = self.is_path_private(path.as_ref());
+        let vfs_snapshot = self.vfs_snapshot.clone();
+        let provider_path = vfs_snapshot.as_ref().and_then(|snapshot| {
+            provider_path_from_legacy_utf8(
+                path.as_unix_str(),
+                snapshot.provider().descriptor().path_encoding,
+            )
+            .ok()
+        });
 
         let this = cx.weak_entity();
         cx.background_spawn(async move {
@@ -1750,23 +1783,52 @@ impl LocalWorktree {
             //       5GB seems to be more reasonable, peaking at ~16GB, while 6GB jumps up to >24GB which seems like a
             //       reasonable limit
             const FILE_SIZE_MAX: u64 = 6 * 1024 * 1024 * 1024; // 6GB
-            let metadata = fs.metadata(&abs_path).await?;
-            if let Some(metadata) = metadata.as_ref()
-                && metadata.is_dir
-            {
-                anyhow::bail!("Cannot load directories as files: {abs_path:?}");
-            }
-            if let Some(metadata) = metadata.as_ref()
-                && metadata.len >= FILE_SIZE_MAX
-            {
-                anyhow::bail!("File is too large to load");
-            }
-            let (text, encoding, has_bom) = decode_file_text(fs.as_ref(), &abs_path).await?;
-            let is_writable = metadata.is_some_and(|metadata| metadata.is_writable);
+            let (text, encoding, has_bom, is_writable) =
+                if let (Some(vfs_snapshot), Some(provider_path)) =
+                    (vfs_snapshot.as_ref(), provider_path.as_ref())
+                {
+                    let metadata = vfs_snapshot
+                        .provider()
+                        .stat(provider_path, vfs::StatOptions::default())
+                        .await?;
+                    anyhow::ensure!(
+                        metadata.kind != vfs::EntryKind::Directory
+                            && !(metadata.kind == vfs::EntryKind::SymbolicLink
+                                && metadata.symbolic_link_target_kind
+                                    == Some(vfs::EntryKind::Directory)),
+                        "Cannot load directories as files: {abs_path:?}"
+                    );
+                    anyhow::ensure!(metadata.size < FILE_SIZE_MAX, "File is too large to load");
+                    let bytes = vfs_snapshot
+                        .load_bytes(provider_path, vfs::OperationContext::default())
+                        .await?;
+                    let (text, encoding, has_bom) = decode_file_bytes(bytes)?;
+                    (text, encoding, has_bom, metadata.permissions.writable)
+                } else {
+                    let metadata = fs.metadata(&abs_path).await?;
+                    if let Some(metadata) = metadata.as_ref()
+                        && metadata.is_dir
+                    {
+                        anyhow::bail!("Cannot load directories as files: {abs_path:?}");
+                    }
+                    if let Some(metadata) = metadata.as_ref()
+                        && metadata.len >= FILE_SIZE_MAX
+                    {
+                        anyhow::bail!("File is too large to load");
+                    }
+                    let (text, encoding, has_bom) =
+                        decode_file_text(fs.as_ref(), &abs_path).await?;
+                    (
+                        text,
+                        encoding,
+                        has_bom,
+                        metadata.is_some_and(|metadata| metadata.is_writable),
+                    )
+                };
 
             let worktree = this.upgrade().context("worktree was dropped")?;
             let file = if let Some(entry) = entry.await? {
-                File::for_entry(entry, worktree)
+                File::for_entry(entry, worktree, vfs_snapshot.as_ref())
             } else {
                 let metadata = fs
                     .metadata(&abs_path)
@@ -1775,6 +1837,7 @@ impl LocalWorktree {
                     .with_context(|| {
                         format!("Excluded file {abs_path:?} got removed during loading")
                     })?;
+                let (resource_id, vfs_path) = vfs_identity(&path, vfs_snapshot.as_ref());
                 Arc::new(File {
                     entry_id: None,
                     worktree,
@@ -1785,6 +1848,8 @@ impl LocalWorktree {
                     },
                     is_local: true,
                     is_private,
+                    resource_id,
+                    vfs_path,
                 })
             };
 
@@ -1888,70 +1953,45 @@ impl LocalWorktree {
         let fs = self.fs.clone();
         let is_private = self.is_path_private(&path);
         let abs_path = self.absolutize(&path);
+        let vfs_snapshot = self.vfs_snapshot.clone();
+        let vfs_write = vfs_snapshot.as_ref().and_then(|snapshot| {
+            let provider_path = provider_path_from_legacy_utf8(
+                path.as_unix_str(),
+                snapshot.provider().descriptor().path_encoding,
+            )
+            .ok()?;
+            let expected_version = snapshot
+                .registry()
+                .id_for_path(&provider_path)
+                .and_then(|resource_id| snapshot.registry().record(resource_id))
+                .and_then(|record| record.metadata)
+                .map(|metadata| metadata.content_version);
+            Some((snapshot.clone(), provider_path, expected_version))
+        });
 
         let write = cx.background_spawn({
             let fs = fs.clone();
             let abs_path = abs_path.clone();
             async move {
+                if let Some((snapshot, provider_path, expected_version)) = vfs_write {
+                    return write_rope_to_vfs(
+                        &snapshot,
+                        &provider_path,
+                        text,
+                        line_ending,
+                        encoding,
+                        has_bom,
+                        expected_version,
+                    )
+                    .await;
+                }
                 // For UTF-8, use the optimized `fs.save` which writes Rope chunks directly to disk
                 // without allocating a contiguous string.
                 if encoding == encoding_rs::UTF_8 && !has_bom {
                     return fs.save(&abs_path, &text, line_ending).await;
                 }
 
-                // For legacy encodings (e.g. Shift-JIS), we fall back to converting the entire Rope
-                // to a String/Bytes in memory before writing.
-                //
-                // Note: This is inefficient for very large files compared to the streaming approach above,
-                // but supporting streaming writes for arbitrary encodings would require a significant
-                // refactor of the `fs` crate to expose a Writer interface.
-                let text_string = text.to_string();
-                let normalized_text = match line_ending {
-                    LineEnding::Unix => text_string,
-                    LineEnding::Windows => text_string.replace('\n', "\r\n"),
-                };
-
-                // Create the byte vector manually for UTF-16 encodings because encoding_rs encodes to UTF-8 by default (per WHATWG standards),
-                //  which is not what we want for saving files.
-                let bytes = if encoding == encoding_rs::UTF_16BE {
-                    let mut data = Vec::with_capacity(normalized_text.len() * 2 + 2);
-                    if has_bom {
-                        data.extend_from_slice(&[0xFE, 0xFF]); // BOM
-                    }
-                    let utf16be_bytes =
-                        normalized_text.encode_utf16().flat_map(|u| u.to_be_bytes());
-                    data.extend(utf16be_bytes);
-                    data.into()
-                } else if encoding == encoding_rs::UTF_16LE {
-                    let mut data = Vec::with_capacity(normalized_text.len() * 2 + 2);
-                    if has_bom {
-                        data.extend_from_slice(&[0xFF, 0xFE]); // BOM
-                    }
-                    let utf16le_bytes =
-                        normalized_text.encode_utf16().flat_map(|u| u.to_le_bytes());
-                    data.extend(utf16le_bytes);
-                    data.into()
-                } else {
-                    // For other encodings (Shift-JIS, UTF-8 with BOM, etc.), delegate to encoding_rs.
-                    let bom_bytes = if has_bom {
-                        if encoding == encoding_rs::UTF_8 {
-                            vec![0xEF, 0xBB, 0xBF]
-                        } else {
-                            vec![]
-                        }
-                    } else {
-                        vec![]
-                    };
-                    let (cow, _, _) = encoding.encode(&normalized_text);
-                    if bom_bytes.is_empty() {
-                        cow
-                    } else {
-                        let mut bytes = bom_bytes;
-                        bytes.extend_from_slice(&cow);
-                        bytes.into()
-                    }
-                };
-
+                let bytes = encode_rope_bytes(text, line_ending, encoding, has_bom);
                 fs.write(&abs_path, &bytes).await
             }
         });
@@ -1967,7 +2007,7 @@ impl LocalWorktree {
                 .await?;
             let worktree = this.upgrade().context("worktree dropped")?;
             if let Some(entry) = entry {
-                Ok(File::for_entry(entry, worktree))
+                Ok(File::for_entry(entry, worktree, vfs_snapshot.as_ref()))
             } else {
                 let metadata = fs
                     .metadata(&abs_path)
@@ -1978,6 +2018,7 @@ impl LocalWorktree {
                     .with_context(|| {
                         format!("Excluded buffer {path:?} got removed during saving")
                     })?;
+                let (resource_id, vfs_path) = vfs_identity(&path, vfs_snapshot.as_ref());
                 Ok(Arc::new(File {
                     worktree,
                     path,
@@ -1988,6 +2029,8 @@ impl LocalWorktree {
                     entry_id: None,
                     is_local: true,
                     is_private,
+                    resource_id,
+                    vfs_path,
                 }))
             }
         })
@@ -3865,9 +3908,19 @@ pub struct File {
     pub entry_id: Option<ProjectEntryId>,
     pub is_local: bool,
     pub is_private: bool,
+    pub resource_id: Option<ResourceId>,
+    pub vfs_path: Option<VfsPath>,
 }
 
 impl language::File for File {
+    fn resource_id(&self) -> Option<ResourceId> {
+        self.resource_id
+    }
+
+    fn vfs_path(&self) -> Option<&VfsPath> {
+        self.vfs_path.as_ref()
+    }
+
     fn as_local(&self) -> Option<&dyn language::LocalFile> {
         if self.is_local { Some(self) } else { None }
     }
@@ -3904,6 +3957,13 @@ impl language::File for File {
             mtime: self.disk_state.mtime().map(|time| time.into()),
             is_deleted: self.disk_state.is_deleted(),
             is_historic: matches!(self.disk_state, DiskState::Historic { .. }),
+            vfs_path: self
+                .vfs_path
+                .as_ref()
+                .map(rpc::proto::VfsPathV2::from_vfs_path),
+            resource_id: self
+                .resource_id
+                .map(rpc::proto::ResourceIdV2::from_resource_id),
         }
     }
 
@@ -3931,9 +3991,22 @@ impl language::LocalFile for File {
             .read(cx)
             .as_local()
             .expect("should be a local instance");
-        let abs_path = worktree.absolutize(&self.path);
-        let fs = worktree.fs.clone();
-        cx.background_spawn(async move { fs.load(&abs_path).await })
+        let vfs_snapshot = worktree.vfs_snapshot.clone();
+        let provider_path = self
+            .vfs_path
+            .as_ref()
+            .map(|path| path.provider_path().clone());
+        let fallback = (worktree.fs.clone(), worktree.absolutize(&self.path));
+        cx.background_spawn(async move {
+            if let (Some(vfs_snapshot), Some(provider_path)) = (vfs_snapshot, provider_path) {
+                return Ok(String::from_utf8(
+                    vfs_snapshot
+                        .load_bytes(&provider_path, vfs::OperationContext::default())
+                        .await?,
+                )?);
+            }
+            fallback.0.load(&fallback.1).await
+        })
     }
 
     fn load_bytes(&self, cx: &App) -> Task<Result<Vec<u8>>> {
@@ -3942,15 +4015,76 @@ impl language::LocalFile for File {
             .read(cx)
             .as_local()
             .expect("should be a local instance");
-        let abs_path = worktree.absolutize(&self.path);
-        let fs = worktree.fs.clone();
-        cx.background_spawn(async move { fs.load_bytes(&abs_path).await })
+        let vfs_snapshot = worktree.vfs_snapshot.clone();
+        let provider_path = self
+            .vfs_path
+            .as_ref()
+            .map(|path| path.provider_path().clone());
+        let fallback = (worktree.fs.clone(), worktree.absolutize(&self.path));
+        cx.background_spawn(async move {
+            if let (Some(vfs_snapshot), Some(provider_path)) = (vfs_snapshot, provider_path) {
+                return vfs_snapshot
+                    .load_bytes(&provider_path, vfs::OperationContext::default())
+                    .await
+                    .map_err(Into::into);
+            }
+            fallback.0.load_bytes(&fallback.1).await
+        })
     }
 }
 
+fn vfs_identity(
+    path: &RelPath,
+    snapshot: Option<&VfsSnapshot>,
+) -> (Option<ResourceId>, Option<VfsPath>) {
+    let Some(snapshot) = snapshot else {
+        return (None, None);
+    };
+    let Ok(provider_path) = provider_path_from_legacy_utf8(
+        path.as_unix_str(),
+        snapshot.provider().descriptor().path_encoding,
+    ) else {
+        return (None, None);
+    };
+    let resource_id = snapshot.registry().id_for_path(&provider_path);
+    let vfs_path = VfsPath::new(snapshot.registry().mount_id(), provider_path);
+    (resource_id, Some(vfs_path))
+}
+
 impl File {
-    pub fn for_entry(entry: Entry, worktree: Entity<Worktree>) -> Arc<Self> {
-        Arc::new(Self {
+    pub fn from_entry(entry: Entry, worktree: Entity<Worktree>, cx: &App) -> Self {
+        let vfs_snapshot = worktree.read(cx).vfs_snapshot();
+        Self::from_entry_with_snapshot(entry, worktree, vfs_snapshot.as_ref())
+    }
+
+    pub fn vfs_identity_for_path(
+        path: &RelPath,
+        worktree: &Entity<Worktree>,
+        cx: &App,
+    ) -> (Option<ResourceId>, Option<VfsPath>) {
+        let vfs_snapshot = worktree.read(cx).vfs_snapshot();
+        vfs_identity(path, vfs_snapshot.as_ref())
+    }
+
+    pub fn for_entry(
+        entry: Entry,
+        worktree: Entity<Worktree>,
+        vfs_snapshot: Option<&VfsSnapshot>,
+    ) -> Arc<Self> {
+        Arc::new(Self::from_entry_with_snapshot(
+            entry,
+            worktree,
+            vfs_snapshot,
+        ))
+    }
+
+    fn from_entry_with_snapshot(
+        entry: Entry,
+        worktree: Entity<Worktree>,
+        vfs_snapshot: Option<&VfsSnapshot>,
+    ) -> Self {
+        let (resource_id, vfs_path) = vfs_identity(&entry.path, vfs_snapshot);
+        Self {
             worktree,
             path: entry.path.clone(),
             disk_state: if let Some(mtime) = entry.mtime {
@@ -3962,9 +4096,11 @@ impl File {
                 DiskState::New
             },
             entry_id: Some(entry.id),
-            is_local: true,
+            is_local: vfs_snapshot.is_some(),
             is_private: entry.is_private,
-        })
+            resource_id,
+            vfs_path,
+        }
     }
 
     pub fn from_proto(
@@ -3978,6 +4114,30 @@ impl File {
             worktree_id.to_proto() == proto.worktree_id,
             "worktree id does not match file"
         );
+
+        let path = RelPath::from_proto(&proto.path).context("invalid path in file protobuf")?;
+        let vfs_path = proto
+            .vfs_path
+            .as_ref()
+            .map(rpc::proto::VfsPathV2::to_vfs_path)
+            .transpose()?;
+        if let Some(vfs_path) = &vfs_path {
+            anyhow::ensure!(
+                provider_path_to_legacy_utf8(vfs_path.provider_path())? == proto.path,
+                "VFS path does not match legacy file path"
+            );
+        }
+        let resource_id = proto
+            .resource_id
+            .as_ref()
+            .map(rpc::proto::ResourceIdV2::to_resource_id)
+            .transpose()?;
+        if let (Some(resource_id), Some(vfs_path)) = (resource_id, &vfs_path) {
+            anyhow::ensure!(
+                resource_id.mount_id() == vfs_path.mount_id(),
+                "resource ID mount does not match VFS path mount"
+            );
+        }
 
         let disk_state = if proto.is_historic {
             DiskState::Historic {
@@ -3993,11 +4153,13 @@ impl File {
 
         Ok(Self {
             worktree,
-            path: RelPath::from_proto(&proto.path).context("invalid path in file protobuf")?,
+            path,
             disk_state,
             entry_id: proto.entry_id.map(ProjectEntryId::from_proto),
             is_local: false,
             is_private: false,
+            resource_id,
+            vfs_path,
         })
     }
 
@@ -7329,6 +7491,124 @@ pub async fn decode_file_text(
         }
     }
     decode_byte_full(content, bom_encoding, byte_content)
+}
+
+pub fn decode_file_bytes(content: Vec<u8>) -> Result<(String, &'static Encoding, bool)> {
+    let prefix_length = content.len().min(FILE_ANALYSIS_BYTES);
+    let Some(prefix) = content.get(..prefix_length) else {
+        return Err(anyhow!("invalid file analysis range"));
+    };
+    let (bom_encoding, byte_content) = decode_byte_header(prefix);
+    anyhow::ensure!(
+        byte_content != ByteContent::Binary,
+        "Binary files are not supported"
+    );
+    decode_byte_full(content, bom_encoding, byte_content)
+}
+
+async fn write_rope_to_vfs(
+    snapshot: &VfsSnapshot,
+    path: &vfs::ProviderPath,
+    text: Rope,
+    line_ending: LineEnding,
+    encoding: &'static Encoding,
+    has_bom: bool,
+    expected_version: Option<vfs::VfsVersion>,
+) -> Result<()> {
+    let file = snapshot
+        .provider()
+        .open(
+            path,
+            vfs::OpenOptions {
+                access: vfs::FileAccess::ReadWrite,
+                create: vfs::CreateDisposition::OpenOrCreate,
+                expected_version,
+                context: vfs::OperationContext::default(),
+            },
+        )
+        .await?;
+    let mut offset = 0_u64;
+    if encoding == encoding_rs::UTF_8 {
+        if has_bom {
+            write_all_at(file.as_ref(), &mut offset, &[0xEF, 0xBB, 0xBF]).await?;
+        }
+        for chunk in text::chunks_with_line_ending(&text, line_ending) {
+            write_all_at(file.as_ref(), &mut offset, chunk.as_bytes()).await?;
+        }
+    } else {
+        let bytes = encode_rope_bytes(text, line_ending, encoding, has_bom);
+        write_all_at(file.as_ref(), &mut offset, &bytes).await?;
+    }
+    file.set_len(offset, vfs::WriteAtOptions::default()).await?;
+    file.flush(vfs::OperationContext::default()).await?;
+    file.sync(vfs::OperationContext::default()).await?;
+    snapshot.stat(path).await?;
+    Ok(())
+}
+
+async fn write_all_at(file: &dyn vfs::VfsFile, offset: &mut u64, bytes: &[u8]) -> Result<()> {
+    let mut written = 0;
+    while written < bytes.len() {
+        let remaining = bytes
+            .get(written..)
+            .context("VFS write range is outside the input")?;
+        let count = file
+            .write_at(
+                offset
+                    .checked_add(u64::try_from(written)?)
+                    .context("VFS write offset overflow")?,
+                remaining,
+                vfs::WriteAtOptions::default(),
+            )
+            .await?;
+        anyhow::ensure!(count > 0, "VFS write made no progress");
+        written = written
+            .checked_add(count)
+            .context("VFS write length overflow")?;
+        anyhow::ensure!(written <= bytes.len(), "VFS write exceeded input length");
+    }
+    *offset = offset
+        .checked_add(u64::try_from(bytes.len())?)
+        .context("VFS write offset overflow")?;
+    Ok(())
+}
+
+fn encode_rope_bytes(
+    text: Rope,
+    line_ending: LineEnding,
+    encoding: &'static Encoding,
+    has_bom: bool,
+) -> Vec<u8> {
+    let text_string = text.to_string();
+    let normalized_text = match line_ending {
+        LineEnding::Unix => text_string,
+        LineEnding::Windows => text_string.replace('\n', "\r\n"),
+    };
+    // encoding_rs follows WHATWG and does not emit UTF-16, so preserve the explicit endian format here.
+    if encoding == encoding_rs::UTF_16BE {
+        let mut data = Vec::with_capacity(normalized_text.len() * 2 + 2);
+        if has_bom {
+            data.extend_from_slice(&[0xFE, 0xFF]);
+        }
+        data.extend(normalized_text.encode_utf16().flat_map(u16::to_be_bytes));
+        data
+    } else if encoding == encoding_rs::UTF_16LE {
+        let mut data = Vec::with_capacity(normalized_text.len() * 2 + 2);
+        if has_bom {
+            data.extend_from_slice(&[0xFF, 0xFE]);
+        }
+        data.extend(normalized_text.encode_utf16().flat_map(u16::to_le_bytes));
+        data
+    } else {
+        let mut bytes = if has_bom && encoding == encoding_rs::UTF_8 {
+            vec![0xEF, 0xBB, 0xBF]
+        } else {
+            Vec::new()
+        };
+        let (encoded, _, _) = encoding.encode(&normalized_text);
+        bytes.extend_from_slice(&encoded);
+        bytes
+    }
 }
 
 pub fn decode_byte_header(prefix: &[u8]) -> (Option<&'static Encoding>, ByteContent) {

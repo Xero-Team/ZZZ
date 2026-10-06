@@ -642,6 +642,94 @@ impl VfsSnapshot {
         Ok(bytes)
     }
 
+    pub async fn load_bytes(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<Vec<u8>> {
+        let metadata = self
+            .provider
+            .stat(
+                path,
+                StatOptions {
+                    context: context.clone(),
+                    ..StatOptions::default()
+                },
+            )
+            .await?;
+        if metadata_is_directory(&metadata) {
+            return Err(self.provider_error(VfsErrorCode::IsDirectory, VfsOperation::Read, path));
+        }
+        let source_version = metadata.content_version.clone();
+        self.registry.intern_metadata(path.clone(), metadata)?;
+        let file = self
+            .provider
+            .open(
+                path,
+                OpenOptions {
+                    access: FileAccess::Read,
+                    create: CreateDisposition::OpenExisting,
+                    expected_version: None,
+                    context: context.clone(),
+                },
+            )
+            .await?;
+        let length = file.len(context.clone()).await?;
+        let length = usize::try_from(length).map_err(|error| {
+            self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
+                .with_source(error)
+        })?;
+        let maximum_range_size = usize::try_from(
+            self.provider.capabilities().limits.maximum_range_size.get(),
+        )
+        .map_err(|error| {
+            self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
+                .with_source(error)
+        })?;
+        let mut bytes = vec![0; length];
+        let mut total_read = 0;
+        while total_read < bytes.len() {
+            let end = total_read
+                .saturating_add(maximum_range_size)
+                .min(bytes.len());
+            let offset = u64::try_from(total_read).map_err(|error| {
+                self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
+                    .with_source(error)
+            })?;
+            let read = file
+                .read_at(offset, &mut bytes[total_read..end], context.clone())
+                .await?;
+            if read == 0 {
+                break;
+            }
+            total_read = total_read.checked_add(read).ok_or_else(|| {
+                self.provider_error(VfsErrorCode::TooLarge, VfsOperation::Read, path)
+            })?;
+            if total_read > end {
+                return Err(self
+                    .provider_error(VfsErrorCode::CorruptData, VfsOperation::Read, path)
+                    .with_detail("provider returned more bytes than requested"));
+            }
+        }
+        bytes.truncate(total_read);
+        let current_metadata = self
+            .provider
+            .stat(
+                path,
+                StatOptions {
+                    context,
+                    ..StatOptions::default()
+                },
+            )
+            .await?;
+        if current_metadata.content_version != source_version {
+            return Err(self.provider_error(VfsErrorCode::StaleVersion, VfsOperation::Read, path));
+        }
+        self.registry
+            .intern_metadata(path.clone(), current_metadata)?;
+        Ok(bytes)
+    }
+
     fn provider_error(
         &self,
         code: VfsErrorCode,
@@ -1613,6 +1701,54 @@ mod tests {
     }
 
     #[test]
+    fn whole_file_load_uses_bounded_positioned_reads() {
+        let result = block_on(async {
+            let provider = Arc::new(MemoryProvider::new(
+                "snapshot-whole-file",
+                crate::PathEncoding::PortableUtf8,
+            ));
+            let path = test_provider_path([b"large.bin".as_slice()]);
+            let file = provider
+                .open(
+                    &path,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await?;
+            let first_chunk = vec![0x5a; 1_024 * 1_024];
+            file.write_at(0, &first_chunk, WriteAtOptions::default())
+                .await?;
+            file.write_at(
+                first_chunk.len() as u64,
+                b"bounded-tail",
+                WriteAtOptions::default(),
+            )
+            .await?;
+            let snapshot = VfsSnapshot::new(MountId::new(24), provider, SnapshotBudgets::default());
+            let bytes = snapshot
+                .load_bytes(&path, OperationContext::default())
+                .await?;
+            if bytes.len() != first_chunk.len() + b"bounded-tail".len()
+                || bytes.get(..first_chunk.len()) != Some(first_chunk.as_slice())
+                || bytes.get(first_chunk.len()..) != Some(b"bounded-tail".as_slice())
+            {
+                return Err(VfsError::new(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Read,
+                    snapshot.provider().descriptor().id.clone(),
+                )
+                .with_detail("bounded whole-file load returned incorrect bytes"));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(result.is_ok(), "whole-file load failed: {result:?}");
+    }
+
+    #[test]
     fn reconciliation_preserves_renames_and_replaces_recreated_identity() {
         let result = block_on(async {
             let provider = Arc::new(MemoryProvider::new(
@@ -2002,6 +2138,74 @@ mod tests {
         assert!(
             result.is_ok(),
             "cross-directory rename reconciliation failed: {result:?}"
+        );
+    }
+
+    #[test]
+    fn directory_rename_preserves_materialized_descendant_identities() {
+        let result = block_on(async {
+            let provider = Arc::new(MemoryProvider::new(
+                "snapshot-directory-rename",
+                crate::PathEncoding::PortableUtf8,
+            ));
+            let root = ProviderPath::root(crate::PathEncoding::PortableUtf8);
+            let original_directory = test_provider_path([b"original".as_slice()]);
+            let renamed_directory = test_provider_path([b"renamed".as_slice()]);
+            let original_file = test_provider_path([b"original".as_slice(), b"file.rs".as_slice()]);
+            let renamed_file = test_provider_path([b"renamed".as_slice(), b"file.rs".as_slice()]);
+            provider
+                .create_dir(&original_directory, CreateDirOptions::default())
+                .await?;
+            provider
+                .open(
+                    &original_file,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await?;
+            let snapshot = VfsSnapshot::new(
+                MountId::new(25),
+                provider.clone(),
+                SnapshotBudgets::default(),
+            );
+            snapshot.load_directory(&root).await?;
+            snapshot.load_directory(&original_directory).await?;
+            let original_id = snapshot
+                .registry()
+                .id_for_path(&original_file)
+                .ok_or_else(|| {
+                    VfsError::new(
+                        VfsErrorCode::Internal,
+                        VfsOperation::Stat,
+                        provider.descriptor().id.clone(),
+                    )
+                })?;
+            provider
+                .rename(
+                    &original_directory,
+                    &renamed_directory,
+                    RenameOptions::default(),
+                )
+                .await?;
+            snapshot.load_directory(&root).await?;
+            snapshot.load_directory(&renamed_directory).await?;
+            if snapshot.registry().id_for_path(&renamed_file) != Some(original_id) {
+                return Err(VfsError::new(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Rename,
+                    provider.descriptor().id.clone(),
+                )
+                .with_detail("directory rename replaced a materialized descendant identity"));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(
+            result.is_ok(),
+            "directory rename reconciliation failed: {result:?}"
         );
     }
 

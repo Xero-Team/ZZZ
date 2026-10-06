@@ -70,6 +70,7 @@ tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter.workspace = true
 unicase = "2.9"
 util.workspace = true
+vfs.workspace = true
 watch.workspace = true
 zlog.workspace = true
 ztracing.workspace = true
