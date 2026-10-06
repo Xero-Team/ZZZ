@@ -23,6 +23,8 @@ fn load_linux_repo_snapshot() -> Vec<GitEntry> {
                 kind,
                 path: Arc::from(RelPath::unix(&(line.trim_end()[2..])).unwrap()),
                 id: ProjectEntryId::default(),
+                resource_id: None,
+                vfs_path: None,
                 size: 0,
                 inode: 0,
                 mtime: None,

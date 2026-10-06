@@ -590,7 +590,8 @@ impl Worktree {
                     ProjectEntryId::new(&next_entry_id),
                     snapshot.root_char_bag,
                     None,
-                );
+                )
+                .with_vfs_identity(vfs_snapshot.as_ref());
                 if metadata.is_dir {
                     if !scanning_enabled {
                         entry.kind = EntryKind::UnloadedDir;
@@ -4051,6 +4052,30 @@ fn vfs_identity(
     (resource_id, Some(vfs_path))
 }
 
+fn vfs_identity_from_proto(
+    legacy_path: &str,
+    vfs_path: Option<&proto::VfsPathV2>,
+    resource_id: Option<&proto::ResourceIdV2>,
+) -> Result<(Option<ResourceId>, Option<VfsPath>)> {
+    let vfs_path = vfs_path.map(proto::VfsPathV2::to_vfs_path).transpose()?;
+    if let Some(vfs_path) = &vfs_path {
+        anyhow::ensure!(
+            provider_path_to_legacy_utf8(vfs_path.provider_path())? == legacy_path,
+            "VFS path does not match legacy path"
+        );
+    }
+    let resource_id = resource_id
+        .map(proto::ResourceIdV2::to_resource_id)
+        .transpose()?;
+    if let (Some(resource_id), Some(vfs_path)) = (resource_id, &vfs_path) {
+        anyhow::ensure!(
+            resource_id.mount_id() == vfs_path.mount_id(),
+            "resource ID mount does not match VFS path mount"
+        );
+    }
+    Ok((resource_id, vfs_path))
+}
+
 impl File {
     pub fn from_entry(entry: Entry, worktree: Entity<Worktree>, cx: &App) -> Self {
         let vfs_snapshot = worktree.read(cx).vfs_snapshot();
@@ -4083,7 +4108,9 @@ impl File {
         worktree: Entity<Worktree>,
         vfs_snapshot: Option<&VfsSnapshot>,
     ) -> Self {
-        let (resource_id, vfs_path) = vfs_identity(&entry.path, vfs_snapshot);
+        let (snapshot_resource_id, snapshot_vfs_path) = vfs_identity(&entry.path, vfs_snapshot);
+        let resource_id = entry.resource_id.or(snapshot_resource_id);
+        let vfs_path = entry.vfs_path.clone().or(snapshot_vfs_path);
         Self {
             worktree,
             path: entry.path.clone(),
@@ -4116,28 +4143,11 @@ impl File {
         );
 
         let path = RelPath::from_proto(&proto.path).context("invalid path in file protobuf")?;
-        let vfs_path = proto
-            .vfs_path
-            .as_ref()
-            .map(rpc::proto::VfsPathV2::to_vfs_path)
-            .transpose()?;
-        if let Some(vfs_path) = &vfs_path {
-            anyhow::ensure!(
-                provider_path_to_legacy_utf8(vfs_path.provider_path())? == proto.path,
-                "VFS path does not match legacy file path"
-            );
-        }
-        let resource_id = proto
-            .resource_id
-            .as_ref()
-            .map(rpc::proto::ResourceIdV2::to_resource_id)
-            .transpose()?;
-        if let (Some(resource_id), Some(vfs_path)) = (resource_id, &vfs_path) {
-            anyhow::ensure!(
-                resource_id.mount_id() == vfs_path.mount_id(),
-                "resource ID mount does not match VFS path mount"
-            );
-        }
+        let (resource_id, vfs_path) = vfs_identity_from_proto(
+            &proto.path,
+            proto.vfs_path.as_ref(),
+            proto.resource_id.as_ref(),
+        )?;
 
         let disk_state = if proto.is_historic {
             DiskState::Historic {
@@ -4186,6 +4196,8 @@ impl File {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub id: ProjectEntryId,
+    pub resource_id: Option<ResourceId>,
+    pub vfs_path: Option<VfsPath>,
     pub kind: EntryKind,
     pub path: Arc<RelPath>,
     pub inode: u64,
@@ -4365,6 +4377,8 @@ impl Entry {
         let char_bag = char_bag_for_path(root_char_bag, &path);
         Self {
             id,
+            resource_id: None,
+            vfs_path: None,
             kind: if metadata.is_dir {
                 EntryKind::PendingDir
             } else {
@@ -4383,6 +4397,11 @@ impl Entry {
             char_bag,
             is_fifo: metadata.is_fifo,
         }
+    }
+
+    fn with_vfs_identity(mut self, vfs_snapshot: Option<&VfsSnapshot>) -> Self {
+        (self.resource_id, self.vfs_path) = vfs_identity(&self.path, vfs_snapshot);
+        self
     }
 
     pub fn is_created(&self) -> bool {
@@ -5776,7 +5795,8 @@ impl BackgroundScanner {
                 ProjectEntryId::new(&next_entry_id),
                 root_char_bag,
                 None,
-            );
+            )
+            .with_vfs_identity(self.vfs_snapshot.as_ref());
 
             if job.is_external {
                 child_entry.is_external = true;
@@ -6005,7 +6025,8 @@ impl BackgroundScanner {
                         } else {
                             None
                         },
-                    );
+                    )
+                    .with_vfs_identity(self.vfs_snapshot.as_ref());
 
                     let is_dir = fs_entry.is_dir();
                     fs_entry.is_ignored = ignore_stack.is_abs_path_ignored(&abs_path, is_dir);
@@ -7243,6 +7264,8 @@ impl<'a> From<&'a Entry> for proto::Entry {
                 .as_ref()
                 .map(|path| path.to_string_lossy().into_owned()),
             is_unloaded: entry.kind == EntryKind::UnloadedDir,
+            vfs_path: entry.vfs_path.as_ref().map(proto::VfsPathV2::from_vfs_path),
+            resource_id: entry.resource_id.map(proto::ResourceIdV2::from_resource_id),
         }
     }
 }
@@ -7265,10 +7288,17 @@ impl TryFrom<(&CharBag, &PathMatcher, proto::Entry)> for Entry {
 
         let path =
             RelPath::from_proto(&entry.path).context("invalid relative path in proto message")?;
+        let (resource_id, vfs_path) = vfs_identity_from_proto(
+            &entry.path,
+            entry.vfs_path.as_ref(),
+            entry.resource_id.as_ref(),
+        )?;
         let char_bag = char_bag_for_path(*root_char_bag, &path);
         let is_always_included = always_included.is_match(&path);
         Ok(Entry {
             id: ProjectEntryId::from_proto(entry.id),
+            resource_id,
+            vfs_path,
             kind,
             path,
             inode: entry.inode,

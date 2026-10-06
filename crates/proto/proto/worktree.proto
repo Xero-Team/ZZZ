@@ -34,6 +34,8 @@ message Entry {
   optional string canonical_path = 12;
   bool is_hidden = 13;
   bool is_unloaded = 14;
+  VfsPathV2 vfs_path = 15;
+  ResourceIdV2 resource_id = 16;
 }
 
 message AddWorktree {

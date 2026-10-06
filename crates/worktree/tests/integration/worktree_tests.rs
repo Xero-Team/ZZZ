@@ -5792,6 +5792,28 @@ async fn test_loaded_file_carries_vfs_identity(cx: &mut TestAppContext) {
         panic!("loaded file is missing its VFS path");
     };
     assert_eq!(resource_id.mount_id(), vfs_path.mount_id());
+    let wire_entry = tree.read_with(cx, |tree, _| {
+        let entry = tree
+            .entry_for_path(rel_path("identity.txt"))
+            .expect("identity fixture entry should be present");
+        assert_eq!(entry.resource_id, Some(resource_id));
+        assert_eq!(entry.vfs_path.as_ref(), Some(vfs_path));
+        proto::Entry::from(entry)
+    });
+    assert_eq!(
+        wire_entry
+            .resource_id
+            .as_ref()
+            .and_then(|resource_id| resource_id.to_resource_id().ok()),
+        Some(resource_id)
+    );
+    assert_eq!(
+        wire_entry
+            .vfs_path
+            .as_ref()
+            .and_then(|path| path.to_vfs_path().ok()),
+        Some(vfs_path.clone())
+    );
     let wire = cx.read(|cx| language::File::to_proto(loaded.file.as_ref(), cx));
     assert_eq!(
         wire.resource_id
@@ -6383,6 +6405,8 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                     size: None,
                     canonical_path: None,
                     is_unloaded: false,
+                    vfs_path: None,
+                    resource_id: None,
                 }],
                 removed_entries: vec![],
                 scan_id: 1,
@@ -6467,6 +6491,122 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        let settings_store = SettingsStore::test(cx);
+        cx.set_global(settings_store);
+    });
+    let worktree = cx.update(|cx| {
+        Worktree::remote(
+            1,
+            clock::ReplicaId::new(1),
+            proto::WorktreeMetadata {
+                id: 1,
+                root_name: "project".to_owned(),
+                visible: true,
+                abs_path: "/home/user/project".to_owned(),
+                root_repo_common_dir: None,
+                root_repo_is_linked_worktree: false,
+            },
+            AnyProtoClient::new(NoopProtoClient::new()),
+            PathStyle::Posix,
+            cx,
+        )
+    });
+    let provider_path = ProviderPath::from_byte_components(
+        PathEncoding::PortableUtf8,
+        [b"identity.txt".as_slice()],
+    );
+    let Ok(provider_path) = provider_path else {
+        panic!("test provider path must be valid: {provider_path:?}");
+    };
+    let mount_id = MountId::new(42);
+    let resource_id = ResourceId::new(mount_id, 7, 0);
+    let vfs_path = VfsPath::new(mount_id, provider_path);
+    let wire_entry = proto::Entry {
+        id: 9,
+        is_dir: false,
+        path: "identity.txt".to_owned(),
+        inode: 1,
+        mtime: None,
+        is_ignored: false,
+        is_external: false,
+        is_fifo: false,
+        size: Some(8),
+        canonical_path: None,
+        is_hidden: false,
+        is_unloaded: false,
+        vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
+        resource_id: Some(proto::ResourceIdV2::from_resource_id(resource_id)),
+    };
+
+    worktree.update(cx, |worktree, _cx| {
+        worktree
+            .as_remote()
+            .expect("remote fixture should remain remote")
+            .update_from_remote(proto::UpdateWorktree {
+                project_id: 1,
+                worktree_id: 1,
+                abs_path: "/home/user/project".to_owned(),
+                root_name: "project".to_owned(),
+                updated_entries: vec![wire_entry.clone()],
+                removed_entries: Vec::new(),
+                scan_id: 1,
+                is_last_update: true,
+                updated_repositories: Vec::new(),
+                removed_repositories: Vec::new(),
+                root_repo_common_dir: None,
+                root_repo_is_linked_worktree: false,
+            });
+    });
+    cx.run_until_parked();
+
+    worktree.read_with(cx, |worktree, _cx| {
+        let entry = worktree
+            .entry_for_path(rel_path("identity.txt"))
+            .expect("remote identity entry should decode");
+        assert_eq!(entry.resource_id, Some(resource_id));
+        assert_eq!(entry.vfs_path, Some(vfs_path.clone()));
+    });
+    let entry = worktree.read_with(cx, |worktree, _cx| {
+        worktree
+            .entry_for_path(rel_path("identity.txt"))
+            .expect("remote identity entry should remain present")
+            .clone()
+    });
+    let file = cx.read(|cx| worktree::File::from_entry(entry, worktree.clone(), cx));
+    assert_eq!(file.resource_id, Some(resource_id));
+    assert_eq!(file.vfs_path, Some(vfs_path));
+
+    let mut mismatched_entry = wire_entry;
+    mismatched_entry.path = "different.txt".to_owned();
+    worktree.update(cx, |worktree, _cx| {
+        worktree
+            .as_remote()
+            .expect("remote fixture should remain remote")
+            .update_from_remote(proto::UpdateWorktree {
+                project_id: 1,
+                worktree_id: 1,
+                abs_path: "/home/user/project".to_owned(),
+                root_name: "project".to_owned(),
+                updated_entries: vec![mismatched_entry],
+                removed_entries: Vec::new(),
+                scan_id: 2,
+                is_last_update: true,
+                updated_repositories: Vec::new(),
+                removed_repositories: Vec::new(),
+                root_repo_common_dir: None,
+                root_repo_is_linked_worktree: false,
+            });
+    });
+    cx.run_until_parked();
+
+    worktree.read_with(cx, |worktree, _cx| {
+        assert!(worktree.entry_for_path(rel_path("different.txt")).is_none());
+    });
+}
+
+#[gpui::test]
 async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arrives(
     cx: &mut TestAppContext,
 ) {
@@ -6536,6 +6676,8 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                     size: None,
                     canonical_path: None,
                     is_unloaded: false,
+                    vfs_path: None,
+                    resource_id: None,
                 }],
                 removed_entries: vec![],
                 scan_id: 1,

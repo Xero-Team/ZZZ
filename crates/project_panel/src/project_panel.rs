@@ -4622,6 +4622,8 @@ impl ProjectPanel {
         GitEntry {
             entry: Entry {
                 id: NEW_ENTRY_ID,
+                resource_id: None,
+                vfs_path: None,
                 kind: new_entry_kind,
                 path: parent_entry
                     .path
