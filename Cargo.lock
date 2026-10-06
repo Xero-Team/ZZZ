@@ -1286,6 +1286,7 @@ dependencies = [
  "theme_settings",
  "ui",
  "util",
+ "vfs",
  "workspace",
 ]
 
@@ -11536,6 +11537,7 @@ dependencies = [
  "ui",
  "ui_input",
  "util",
+ "vfs",
  "workspace",
  "zpdf",
 ]
@@ -18981,6 +18983,7 @@ dependencies = [
  "theme_settings",
  "ui",
  "util",
+ "vfs",
  "video",
  "workspace",
 ]

@@ -325,7 +325,7 @@ impl VideoView {
 
             let (path, staged_file) = if let Some(local_path) = local_path {
                 (local_path, None)
-            } else if !project.read_with(cx, |project, _cx| project.is_local()) {
+            } else {
                 let staged = project
                     .update(cx, |project, cx| {
                         project.stage_file_to_temp(
@@ -342,16 +342,6 @@ impl VideoView {
                         return;
                     }
                 }
-            } else {
-                let message = cx.update(|cx| {
-                    tr(
-                        cx,
-                        "video_viewer.error.not_local",
-                        "Video file is not available locally",
-                    )
-                });
-                Self::set_error(&this, message, cx);
-                return;
             };
 
             let opened = cx

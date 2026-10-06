@@ -32,6 +32,7 @@ tempfile.workspace = true
 theme_settings.workspace = true
 ui.workspace = true
 util.workspace = true
+vfs.workspace = true
 video.workspace = true
 workspace.workspace = true
 

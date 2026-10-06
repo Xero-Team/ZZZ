@@ -335,22 +335,15 @@ impl PdfView {
             let item = pdf_item.read(cx);
             (item.path.clone(), item.worktree_id)
         };
-        let local_abs_path =
-            project
-                .read(cx)
-                .worktree_for_id(worktree_id, cx)
-                .and_then(|worktree| {
-                    worktree
-                        .read(cx)
-                        .as_local()
-                        .map(|local| local.abs_path().join(relative_path.as_std_path()))
-                });
-        // Remote and SSH worktrees have no local absolute path; fetch the file
-        // through the project's remote file-transfer RPC instead.
-        let remote_read_task = (!project.read(cx).is_local()).then(|| {
-            project.update(cx, |project, cx| {
-                project.read_file_bytes(worktree_id, relative_path.clone(), cx)
-            })
+        let display_path = project
+            .read(cx)
+            .worktree_for_id(worktree_id, cx)
+            .map_or_else(
+                || PathBuf::from(relative_path.as_std_path()),
+                |worktree| worktree.read(cx).absolutize(&relative_path),
+            );
+        let read_task = project.update(cx, |project, cx| {
+            project.read_file_bytes(worktree_id, relative_path, cx)
         });
         let resolve_path_error = tr(
             cx,
@@ -359,22 +352,10 @@ impl PdfView {
         );
 
         cx.spawn_in(window, async move |this, cx| {
-            let load_result = if let Some(abs_path) = local_abs_path {
-                cx.background_spawn(async move {
-                    let data = std::fs::read(&abs_path)
-                        .with_context(|| format!("reading {abs_path:?}"))?;
-                    anyhow::Ok((abs_path, Arc::<[u8]>::from(data)))
-                })
+            let load_result = read_task
                 .await
-            } else {
-                let display_path = PathBuf::from(relative_path.as_std_path());
-                match remote_read_task {
-                    Some(task) => task
-                        .await
-                        .map(|data| (display_path, Arc::<[u8]>::from(data))),
-                    None => Err(anyhow::anyhow!(resolve_path_error)),
-                }
-            };
+                .map(|data| (display_path, Arc::<[u8]>::from(data)))
+                .context(resolve_path_error);
 
             let (abs_path, data) = match load_result {
                 Ok(loaded) => loaded,

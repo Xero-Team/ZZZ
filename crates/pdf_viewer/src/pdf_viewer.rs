@@ -74,6 +74,8 @@ pub struct PdfItem {
     path: Arc<RelPath>,
     worktree_id: WorktreeId,
     entry_id: Option<ProjectEntryId>,
+    resource_id: Option<vfs::ResourceId>,
+    vfs_path: Option<vfs::VfsPath>,
 }
 
 impl PdfItem {
@@ -99,29 +101,32 @@ impl project::ProjectItem for PdfItem {
         let path = path.clone();
         let project = project.clone();
         Some(cx.spawn(async move |cx| {
-            let entry_id = project.update(cx, |project, cx| {
-                let worktree_id = path.worktree_id;
-                let worktree = project
-                    .worktree_for_id(worktree_id, cx)
-                    .with_context(|| format!("worktree {worktree_id:?} not found"))?;
-                anyhow::Ok(
-                    worktree
-                        .read(cx)
-                        .entry_for_path(&path.path)
-                        .map(|entry| entry.id),
-                )
+            let identity = project.update(cx, |project, cx| {
+                project
+                    .entry_identity_for_project_path(&path, cx)
+                    .with_context(|| format!("worktree {:?} not found", path.worktree_id))
             })?;
 
             anyhow::Ok(cx.new(|_cx| PdfItem {
                 path: path.path.clone(),
                 worktree_id: path.worktree_id,
-                entry_id,
+                entry_id: identity.entry_id,
+                resource_id: identity.resource_id,
+                vfs_path: identity.vfs_path,
             }))
         }))
     }
 
     fn entry_id(&self, _cx: &App) -> Option<ProjectEntryId> {
         self.entry_id
+    }
+
+    fn resource_id(&self, _cx: &App) -> Option<vfs::ResourceId> {
+        self.resource_id
+    }
+
+    fn vfs_path(&self, _cx: &App) -> Option<vfs::VfsPath> {
+        self.vfs_path.clone()
     }
 
     fn project_path(&self, _cx: &App) -> Option<ProjectPath> {
