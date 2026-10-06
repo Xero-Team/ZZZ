@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 3 进行中                              |
+| 当前阶段      | 阶段 4 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -241,12 +241,71 @@ replay。
 
 ### 阶段 3：frame-aware identity 和 retirement
 
+状态：`COMPLETE`
+
+- 增加 `AtlasEpoch`、`AtlasFrameId`、`AtlasFrame` 和 `AtlasUsage`。`Scene` 在 visible
+  sprite insert、cached replay 和 clear 中维护去重的 tile/page usage；`Frame` 与
+  `BuiltFrame` 保存 completed-frame epoch。
+- `Window::draw` 在 build 前调用 atlas `begin_frame`，epoch mismatch 时 `force_refresh()`；
+  completed Scene finish 后调用 `finish_frame` 并记录 epoch。cached paint replay 在 epoch
+  变化的 frame 为零，epoch 不变时继续命中。
+- `remove` 只进入 pending removal；下一 frame boundary 才从 key lookup 移除、标记
+  tombstone、推进 epoch。frame build 中到达的 remove 留到下一 boundary，epoch 不会在
+  build 中变化。
+- retired suballocation 不调用 allocator deallocate。只在 page 没有 active entry 且新
+  completed usage 不引用该 page 时整页销毁；partial page 的 retired pixels 保持原内容，
+  不会被 replacement upload 覆盖。
+- atlas clear/device reset 清空 resource lookup、推进 epoch 并保留 monotonic ID counters；
+  WGPU upload flush 与 atlas frame boundary 使用不同方法名和职责。
+- `Window::drop_image` 无论是否在 draw 中调用都会请求下一 full refresh；`App::drop_image`
+  不再静默丢弃 Result，并为每个 window 独立排队 removal/refresh。
+
+必须序列覆盖：
+
+- A completed frame → remove A → old content remains valid until next completed usage。
+- remove A → insert same-size B：suballocation identity/bounds 不复用，旧 Scene 仍为 A。
+- fully retired page → new page uses new texture ID；旧 Scene lookup becomes empty, never B。
+- remove during paint → next retirement frame is scheduled。
+- image removal across two windows → each window advances its own epoch and full repaints。
+- repeated present after completed refresh → no extra build and epoch remains unchanged。
+- clear/device recovery → epoch advances and old texture ID cannot resolve to new resource。
+
+TEXT-003：`PASS`
+
+| 命令或检查                                                                                     | 结果   | 说明                                                           |
+| ---------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------- |
+| `cargo test --locked -p gpui --features frame-diagnostics`                                     | `PASS` | 250 unit + 1 integration，含 replay/multi-window/during-paint  |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                     | `PASS` | 17 unit passed、1 ignored；4 headless passed、1 runner ignored |
+| `GPUI_HEADLESS_OUTPUT_DIR=... cargo test ... retired_tiles_never_sample_replacement_content`   | `PASS` | RADV + llvmpipe；suballocation 与 full-page ABA pixel matrix   |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                      | `PASS` | Metal lifecycle/tests cross-compile；仅既有 vendor warnings    |
+| isolated `cargo check --target x86_64-pc-windows-gnu --tests --offline` for `directx_atlas.rs` | `PASS` | DirectX lifecycle/tests cross-compile                          |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                           | `PASS` | all-target/all-feature release clippy + philosophy             |
+| `cargo fmt --all -- --check`                                                                   | `PASS` | workspace Rust formatting                                      |
+
+TEXT-003 artifacts 位于 `.tmp/text-rendering-refactor/phase-3/`，hardware/fallback
+结果逐像素一致：
+
+- retired suballocation old content：SHA-256
+  `79220e9e48837f320e832da4691dea438fb254b1af412698c2bef0cbb159d57e`
+- fully retired page old lookup after finish（transparent）：SHA-256
+  `61b8acd53d0cab4840ac206d821a1b150c826f9feaa3dc6c075ad4308d1f4d56`
+- replacement content：SHA-256
+  `fd818a5e929cddefd9264d2615b0b684e2075253c23e3910f72897071e757e01`
+
+提交：completed-frame usage `55736706bf44bebb225d438111dba3de4c012118`；
+epoch/retirement/cache invalidation `0e2ddebaceee7fa0d5486211b74d3cfcd85b9160`（均 signed）。
+
+下一步：阶段 4 引入 `AtlasContentKind`、独立 retained-cache budget、working-set floor、
+LRU page retirement 和 whole-page compaction，并完成 TEXT-004/005/006。
+
+### 阶段 4：content-class budget、LRU 和 compaction
+
 状态：`IN PROGRESS`
 
-尚未修改代码。先固定 Scene atlas usage 与 completed-frame epoch contract，再把 explicit
-remove 和 device clear 接到同一 retirement/full-refresh path。
+尚未修改代码。先把 content lifecycle 与 texture format 分离并增加 test-injected small
+budgets，再接 working-set floor 和 compaction。
 
-### 阶段 4–9
+### 阶段 5–9
 
 状态：`NOT STARTED`
 
