@@ -18,6 +18,7 @@ mod manager;
 mod memory_provider;
 mod provider;
 mod snapshot;
+mod transfer;
 
 pub use archive_provider::*;
 pub use composition_provider::*;
@@ -26,6 +27,7 @@ pub use manager::*;
 pub use memory_provider::*;
 pub use provider::*;
 pub use snapshot::*;
+pub use transfer::*;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
