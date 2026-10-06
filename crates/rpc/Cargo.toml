@@ -19,6 +19,7 @@ test-support = ["collections/test-support", "gpui/test-support", "proto/test-sup
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 async-tungstenite.workspace = true
 collections.workspace = true
 futures.workspace = true
@@ -28,10 +29,12 @@ proto.workspace = true
 serde.workspace = true
 tracing = { version = "0.1.44", features = ["log"] }
 util.workspace = true
+vfs.workspace = true
 zstd.workspace = true
 
 [dev-dependencies]
 collections = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 proto = { workspace = true, features = ["test-support"] }
+vfs = { workspace = true, features = ["test-support"] }
 zlog.workspace = true

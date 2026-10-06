@@ -14316,6 +14316,7 @@ name = "rpc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "async-tungstenite",
  "collections",
  "futures 0.3.34",
@@ -14325,6 +14326,7 @@ dependencies = [
  "serde",
  "tracing",
  "util",
+ "vfs",
  "zlog",
  "zstd",
 ]
