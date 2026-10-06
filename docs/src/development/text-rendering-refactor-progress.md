@@ -161,7 +161,7 @@ TEXT-002：`PASS`
 - `.tmp/text-rendering-refactor/phase-1/text-002-fallback-positive.png`，SHA-256
   `6b1ca1fb84252669271065d8bd229b39073adc0b4131fcf05378b970edeb4338`
 
-提交：待阶段 1 signed commit 后回填。
+提交：`c5dab076987e28d4af6d8824c27d993ceb97a0fd`（signed）。
 
 下一步：进入阶段 2，先把 atlas domain 从 `platform.rs` 移到 `atlas.rs` 且保持 root
 re-export，再集中 page allocator 和 lock 外 builder。
