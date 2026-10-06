@@ -6058,6 +6058,8 @@ pub fn outline(
 mod tests {
     #[cfg(feature = "accessibility")]
     use crate::AccessibilityUpdate;
+    #[cfg(feature = "frame-diagnostics")]
+    use crate::RenderImage;
     #[cfg(feature = "accessibility")]
     use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
@@ -6068,14 +6070,16 @@ mod tests {
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
-        IntoElement, ParentElement as _, Pixels, Render, RenderImage, RequestFrameOptions,
-        Styled as _, TestAppContext, Window, WindowAppearance, canvas, div, px, size,
+        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
+        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
     #[cfg(feature = "frame-diagnostics")]
     use std::ops::Range;
-    use std::{cell::Cell, rc::Rc, sync::Arc};
+    #[cfg(feature = "frame-diagnostics")]
+    use std::sync::Arc;
+    use std::{cell::Cell, rc::Rc};
 
     struct RootView {
         explicit_size: bool,
