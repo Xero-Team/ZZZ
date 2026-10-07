@@ -164,26 +164,81 @@ async fn test_real_fs_legacy_storage_conformance(
 }
 
 #[gpui::test]
-async fn test_legacy_fs_provider_conformance(executor: BackgroundExecutor) {
+async fn test_emulated_fs_provider_conformance(executor: BackgroundExecutor) {
     let filesystem: Arc<dyn Fs> = FakeFs::new(executor);
-    let provider: Arc<dyn VfsProvider> = Arc::new(LegacyFsProvider::new(
-        "legacy-fake",
-        Arc::<Path>::from(Path::new(path!("/vfs-provider"))),
-        filesystem.clone(),
-        CaseSensitivity::Sensitive,
-    ));
     let create_root = filesystem
         .create_dir(Path::new(path!("/vfs-provider")))
         .await;
     assert!(
         create_root.is_ok(),
-        "failed to create legacy provider root: {create_root:?}"
+        "failed to create filesystem provider root: {create_root:?}"
     );
+    let provider = EmulatedFsProvider::new(
+        "fake-fs",
+        Arc::<Path>::from(Path::new(path!("/vfs-provider"))),
+        filesystem.clone(),
+        CaseSensitivity::Sensitive,
+    );
+    let provider: Arc<dyn VfsProvider> = Arc::new(provider);
     let result = run_provider_conformance(provider).await;
     assert!(
         result.is_ok(),
-        "legacy provider conformance failed: {result:?}"
+        "filesystem provider conformance failed: {result:?}"
     );
+}
+
+#[cfg(unix)]
+#[gpui::test]
+async fn test_emulated_fs_provider_preserves_non_utf8_paths(executor: BackgroundExecutor) {
+    use std::os::unix::ffi::OsStringExt as _;
+
+    let filesystem = FakeFs::new(executor);
+    let root = Path::new(path!("/exact-fs-provider"));
+    let create_root = filesystem.create_dir(root).await;
+    assert!(create_root.is_ok(), "failed to create provider root");
+    let provider = EmulatedFsProvider::new(
+        "exact-fake-fs",
+        Arc::<Path>::from(root),
+        filesystem.clone(),
+        CaseSensitivity::Sensitive,
+    );
+    let path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"entry-\xff".as_slice()],
+    );
+    let path = match path {
+        Ok(path) => path,
+        Err(error) => panic!("non-UTF-8 provider path should be valid: {error:?}"),
+    };
+    let file = provider
+        .open(
+            &path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await;
+    let file = match file {
+        Ok(file) => file,
+        Err(error) => panic!("non-UTF-8 provider file should open: {error:?}"),
+    };
+    let write = file.write_at(0, b"exact", WriteAtOptions::default()).await;
+    let written = match write {
+        Ok(written) => written,
+        Err(error) => panic!("non-UTF-8 provider file should write: {error:?}"),
+    };
+    assert_eq!(written, 5);
+
+    let absolute_path = root.join(OsString::from_vec(b"entry-\xff".to_vec()));
+    let contents = filesystem.load_bytes(&absolute_path).await;
+    let contents = match contents {
+        Ok(contents) => contents,
+        Err(error) => panic!("non-UTF-8 provider file should load: {error:?}"),
+    };
+    assert_eq!(contents.as_slice(), b"exact");
 }
 
 #[gpui::test]
@@ -322,7 +377,7 @@ async fn test_local_provider_concurrent_positioned_io(
 }
 
 #[gpui::test]
-async fn test_local_provider_positioned_io_throughput_not_below_legacy(
+async fn test_local_provider_positioned_io_throughput_not_below_emulated(
     executor: BackgroundExecutor,
     cx: &mut TestAppContext,
 ) {
@@ -333,11 +388,14 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
     };
     let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
     let native_root = temporary_directory.path().join("native");
-    let legacy_root = temporary_directory.path().join("legacy");
+    let emulated_root = temporary_directory.path().join("emulated");
     let create_native_root = filesystem.create_dir(&native_root).await;
-    let create_legacy_root = filesystem.create_dir(&legacy_root).await;
+    let create_emulated_root = filesystem.create_dir(&emulated_root).await;
     assert!(create_native_root.is_ok(), "failed to create native root");
-    assert!(create_legacy_root.is_ok(), "failed to create legacy root");
+    assert!(
+        create_emulated_root.is_ok(),
+        "failed to create emulated root"
+    );
 
     let local_provider = LocalProvider::new(
         "local-throughput",
@@ -349,9 +407,9 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
         Ok(provider) => provider,
         Err(error) => panic!("failed to create local provider: {error:?}"),
     };
-    let legacy_provider = LegacyFsProvider::new(
-        "legacy-throughput",
-        Arc::<Path>::from(legacy_root),
+    let emulated_provider = EmulatedFsProvider::new(
+        "emulated-throughput",
+        Arc::<Path>::from(emulated_root),
         filesystem,
         CaseSensitivity::Sensitive,
     );
@@ -359,11 +417,11 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
         local_provider.descriptor().path_encoding,
         [b"throughput.bin".as_slice()],
     );
-    let legacy_path = ProviderPath::from_byte_components(
-        legacy_provider.descriptor().path_encoding,
+    let emulated_path = ProviderPath::from_byte_components(
+        emulated_provider.descriptor().path_encoding,
         [b"throughput.bin".as_slice()],
     );
-    let (Ok(local_path), Ok(legacy_path)) = (local_path, legacy_path) else {
+    let (Ok(local_path), Ok(emulated_path)) = (local_path, emulated_path) else {
         panic!("throughput fixture paths must be valid");
     };
     let local_file = local_provider
@@ -377,9 +435,9 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
             },
         )
         .await;
-    let legacy_file = legacy_provider
+    let emulated_file = emulated_provider
         .open(
-            &legacy_path,
+            &emulated_path,
             OpenOptions {
                 access: FileAccess::ReadWrite,
                 create: CreateDisposition::CreateNew,
@@ -392,16 +450,16 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
         Ok(file) => file,
         Err(error) => panic!("failed to open local throughput file: {error:?}"),
     };
-    let legacy_file = match legacy_file {
+    let emulated_file = match emulated_file {
         Ok(file) => file,
-        Err(error) => panic!("failed to open legacy throughput file: {error:?}"),
+        Err(error) => panic!("failed to open emulated throughput file: {error:?}"),
     };
 
     const BLOCK_COUNT: usize = 8;
     const BLOCK_SIZE: usize = 256 * 1_024;
-    let legacy_start = std::time::Instant::now();
-    let legacy_results = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
-        let file = legacy_file.clone();
+    let emulated_start = std::time::Instant::now();
+    let emulated_results = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
+        let file = emulated_file.clone();
         async move {
             let bytes = vec![block_index as u8; BLOCK_SIZE];
             file.write_at(
@@ -413,8 +471,8 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
         }
     }))
     .await;
-    let legacy_elapsed = legacy_start.elapsed();
-    assert!(legacy_results.iter().all(Result::is_ok));
+    let emulated_elapsed = emulated_start.elapsed();
+    assert!(emulated_results.iter().all(Result::is_ok));
 
     let local_start = std::time::Instant::now();
     let local_results = futures::future::join_all((0..BLOCK_COUNT).map(|block_index| {
@@ -434,16 +492,16 @@ async fn test_local_provider_positioned_io_throughput_not_below_legacy(
     assert!(local_results.iter().all(Result::is_ok));
 
     println!(
-        "legacy positioned emulation: {legacy_elapsed:?}; native positioned I/O: {local_elapsed:?}"
+        "filesystem-backed positioned emulation: {emulated_elapsed:?}; native positioned I/O: {local_elapsed:?}"
     );
     assert!(
-        local_elapsed.as_secs_f64() <= legacy_elapsed.as_secs_f64() * 1.10,
-        "native positioned I/O regressed by more than 10%: legacy={legacy_elapsed:?}, local={local_elapsed:?}"
+        local_elapsed.as_secs_f64() <= emulated_elapsed.as_secs_f64() * 1.10,
+        "native positioned I/O regressed by more than 10%: emulated={emulated_elapsed:?}, local={local_elapsed:?}"
     );
 }
 
 #[gpui::test]
-async fn test_legacy_provider_watch_sequence_rename_storm_and_overflow(
+async fn test_emulated_fs_provider_watch_sequence_rename_storm_and_overflow(
     executor: BackgroundExecutor,
 ) {
     let filesystem = FakeFs::new(executor);
@@ -451,8 +509,8 @@ async fn test_legacy_provider_watch_sequence_rename_storm_and_overflow(
         .create_dir(Path::new(path!("/watch-provider")))
         .await;
     assert!(create_root.is_ok(), "failed to create watch provider root");
-    let provider = LegacyFsProvider::new(
-        "legacy-watch",
+    let provider = EmulatedFsProvider::new(
+        "fake-watch",
         Arc::<Path>::from(Path::new(path!("/watch-provider"))),
         filesystem.clone(),
         CaseSensitivity::Sensitive,

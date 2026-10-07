@@ -484,7 +484,7 @@ impl Worktree {
         let fs_case_sensitive = fs.is_case_sensitive().await;
         let vfs_snapshot = if metadata.is_some() {
             let provider: Arc<dyn VfsProvider> = if fs.is_fake() {
-                Arc::new(fs::LegacyFsProvider::new(
+                Arc::new(fs::EmulatedFsProvider::new(
                     format!("worktree-{}", worktree_id.to_proto()),
                     abs_path.clone(),
                     fs.clone(),

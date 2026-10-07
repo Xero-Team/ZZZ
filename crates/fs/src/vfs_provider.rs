@@ -28,17 +28,10 @@ use vfs::{
     RemoveOutcome, RemovedEntryCount, RenameOptions, StatOptions, SupportLevel, SymbolicLinkMode,
     TrashCapabilities, VfsError, VfsErrorCode, VfsEvent, VfsEventKind, VfsFile, VfsOperation,
     VfsProvider, VfsResult, VfsVersion, WatchCapabilities, WatchDepth, WatchRequest,
-    WriteAtOptions, WriteCapabilities, provider_path_from_legacy_utf8,
-    provider_path_to_legacy_utf8,
+    WriteAtOptions, WriteCapabilities,
 };
 
 const WATCH_LATENCY: Duration = Duration::from_millis(10);
-
-#[derive(Clone, Copy)]
-enum FsProviderPathMode {
-    LegacyUtf8,
-    Native,
-}
 
 #[derive(Clone)]
 struct FsProviderCore {
@@ -46,13 +39,14 @@ struct FsProviderCore {
     root: Arc<Path>,
     canonical_root: Option<Arc<Path>>,
     filesystem: Arc<dyn Fs>,
-    path_mode: FsProviderPathMode,
     watch_sequence: Arc<AtomicU64>,
     mutation_lock: Arc<AsyncMutex<()>>,
 }
 
+/// Adapts test and simulated filesystems that cannot expose native positioned I/O.
+/// It preserves the backing `Fs` symlink semantics and is not an authority boundary.
 #[derive(Clone)]
-pub struct LegacyFsProvider {
+pub struct EmulatedFsProvider {
     core: FsProviderCore,
 }
 
@@ -61,7 +55,7 @@ pub struct LocalProvider {
     core: FsProviderCore,
 }
 
-impl LegacyFsProvider {
+impl EmulatedFsProvider {
     pub fn new(
         id: impl Into<Arc<str>>,
         root: impl Into<Arc<Path>>,
@@ -69,15 +63,7 @@ impl LegacyFsProvider {
         case_sensitivity: CaseSensitivity,
     ) -> Self {
         Self {
-            core: FsProviderCore::new(
-                id,
-                root,
-                None,
-                filesystem,
-                FsProviderPathMode::LegacyUtf8,
-                PathEncoding::PortableUtf8,
-                case_sensitivity,
-            ),
+            core: FsProviderCore::new(id, root, None, filesystem, case_sensitivity),
         }
     }
 }
@@ -105,8 +91,6 @@ impl LocalProvider {
                 root,
                 Some(canonical_root.into()),
                 filesystem,
-                FsProviderPathMode::Native,
-                local_path_encoding(),
                 case_sensitivity,
             ),
         })
@@ -119,8 +103,6 @@ impl FsProviderCore {
         root: impl Into<Arc<Path>>,
         canonical_root: Option<Arc<Path>>,
         filesystem: Arc<dyn Fs>,
-        path_mode: FsProviderPathMode,
-        path_encoding: PathEncoding,
         case_sensitivity: CaseSensitivity,
     ) -> Self {
         let id = id.into();
@@ -128,13 +110,12 @@ impl FsProviderCore {
             descriptor: Arc::new(ProviderDescriptor {
                 id: ProviderId::new(id.clone()),
                 display_name: id,
-                path_encoding,
+                path_encoding: local_path_encoding(),
                 case_sensitivity,
             }),
             root: root.into(),
             canonical_root,
             filesystem,
-            path_mode,
             watch_sequence: Arc::new(AtomicU64::new(0)),
             mutation_lock: Arc::new(AsyncMutex::new(())),
         }
@@ -165,22 +146,13 @@ impl FsProviderCore {
 
     fn absolute_path(&self, path: &ProviderPath, operation: VfsOperation) -> VfsResult<PathBuf> {
         self.validate_path(path, operation)?;
-        let relative = match self.path_mode {
-            FsProviderPathMode::LegacyUtf8 => {
-                PathBuf::from(provider_path_to_legacy_utf8(path).map_err(|error| {
-                    self.error(VfsErrorCode::InvalidPath, operation)
-                        .with_path(path.clone())
-                        .with_detail(error.to_string())
-                })?)
-            }
-            FsProviderPathMode::Native => NativePath::new(NativePathRoot::Relative, path.clone())
-                .and_then(|path| path.to_local_path_buf())
-                .map_err(|error| {
-                    self.error(VfsErrorCode::InvalidPath, operation)
-                        .with_path(path.clone())
-                        .with_detail(error.to_string())
-                })?,
-        };
+        let relative = NativePath::new(NativePathRoot::Relative, path.clone())
+            .and_then(|path| path.to_local_path_buf())
+            .map_err(|error| {
+                self.error(VfsErrorCode::InvalidPath, operation)
+                    .with_path(path.clone())
+                    .with_detail(error.to_string())
+            })?;
         Ok(self.root.join(relative))
     }
 
@@ -193,26 +165,12 @@ impl FsProviderCore {
             self.error(VfsErrorCode::InvalidPath, operation)
                 .with_detail(error.to_string())
         })?;
-        match self.path_mode {
-            FsProviderPathMode::LegacyUtf8 => {
-                let relative = relative.to_str().ok_or_else(|| {
-                    self.error(VfsErrorCode::InvalidPath, operation)
-                        .with_detail("legacy filesystem returned a non-UTF-8 path")
-                })?;
-                provider_path_from_legacy_utf8(relative, self.descriptor.path_encoding).map_err(
-                    |error| {
-                        self.error(VfsErrorCode::InvalidPath, operation)
-                            .with_detail(error.to_string())
-                    },
-                )
-            }
-            FsProviderPathMode::Native => NativePath::from_local_path(relative)
-                .map(|path| path.provider_path().clone())
-                .map_err(|error| {
-                    self.error(VfsErrorCode::InvalidPath, operation)
-                        .with_detail(error.to_string())
-                }),
-        }
+        NativePath::from_local_path(relative)
+            .map(|path| path.provider_path().clone())
+            .map_err(|error| {
+                self.error(VfsErrorCode::InvalidPath, operation)
+                    .with_detail(error.to_string())
+            })
     }
 
     fn visible_provider_path(
@@ -699,7 +657,7 @@ impl FsProviderCore {
 }
 
 #[async_trait]
-impl VfsProvider for LegacyFsProvider {
+impl VfsProvider for EmulatedFsProvider {
     fn descriptor(&self) -> &ProviderDescriptor {
         &self.core.descriptor
     }
@@ -784,7 +742,7 @@ impl VfsProvider for LegacyFsProvider {
                     .await?;
             }
         }
-        Ok(Arc::new(LegacyVfsFile {
+        Ok(Arc::new(EmulatedFsFile {
             provider: self.clone(),
             path: path.clone(),
             absolute_path,
@@ -967,15 +925,15 @@ impl VfsProvider for LocalProvider {
     }
 }
 
-struct LegacyVfsFile {
-    provider: LegacyFsProvider,
+struct EmulatedFsFile {
+    provider: EmulatedFsProvider,
     path: ProviderPath,
     absolute_path: PathBuf,
     access: FileAccess,
 }
 
 #[async_trait]
-impl VfsFile for LegacyVfsFile {
+impl VfsFile for EmulatedFsFile {
     async fn len(&self, context: OperationContext) -> VfsResult<u64> {
         context
             .cancellation

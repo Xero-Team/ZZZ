@@ -3,7 +3,7 @@ mod git_clone_progress;
 mod vfs_provider;
 
 pub use fs_watcher::requires_poll_watcher;
-pub use vfs_provider::{LegacyFsProvider, LocalProvider};
+pub use vfs_provider::{EmulatedFsProvider, LocalProvider};
 
 use parking_lot::Mutex;
 use std::ffi::OsString;
@@ -1501,7 +1501,7 @@ enum FakeFsEntry {
         inode: u64,
         mtime: MTime,
         len: u64,
-        entries: BTreeMap<String, FakeFsEntry>,
+        entries: BTreeMap<OsString, FakeFsEntry>,
         git_repo_state: Option<Arc<Mutex<FakeGitRepositoryState>>>,
     },
     Symlink {
@@ -1615,19 +1615,18 @@ impl FakeFsState {
                     Component::Normal(name) => {
                         let current_entry = *entry_stack.last()?;
                         if let FakeFsEntry::Dir { entries, .. } = current_entry {
-                            let name_str = name.to_str().expect("path should be valid UTF-8");
-                            let (canonical_name, entry) = if let Some(entry) = entries.get(name_str)
-                            {
-                                (name_str, entry)
-                            } else {
-                                if self.case_sensitive {
-                                    return None;
-                                }
-                                entries
-                                    .iter()
-                                    .find(|(key, _)| key.eq_ignore_ascii_case(name_str))
-                                    .map(|(key, entry)| (key.as_str(), entry))?
-                            };
+                            let (canonical_name, entry) =
+                                if let Some((key, entry)) = entries.get_key_value(name) {
+                                    (key.as_os_str(), entry)
+                                } else {
+                                    if self.case_sensitive {
+                                        return None;
+                                    }
+                                    entries
+                                        .iter()
+                                        .find(|(key, _)| key.as_os_str().eq_ignore_ascii_case(name))
+                                        .map(|(key, entry)| (key.as_os_str(), entry))?
+                                };
                             if (path_components.peek().is_some() || follow_symlink)
                                 && let FakeFsEntry::Symlink { target, .. } = entry
                             {
@@ -1676,8 +1675,7 @@ impl FakeFsState {
             match component {
                 Component::Normal(name) => {
                     if let FakeFsEntry::Dir { entries, .. } = entry {
-                        entry =
-                            entries.get_mut(name.to_str().expect("path should be valid UTF-8"))?;
+                        entry = entries.get_mut(name)?;
                     } else {
                         return None;
                     }
@@ -1708,7 +1706,7 @@ impl FakeFsState {
 
     fn write_path<Fn, T>(&mut self, path: &Path, callback: Fn) -> Result<T>
     where
-        Fn: FnOnce(btree_map::Entry<String, FakeFsEntry>) -> Result<T>,
+        Fn: FnOnce(btree_map::Entry<OsString, FakeFsEntry>) -> Result<T>,
     {
         let path = normalize_path(path);
         let filename = path.file_name().context("cannot overwrite the root")?;
@@ -1717,12 +1715,9 @@ impl FakeFsState {
             .expect("path should have the expected component");
 
         let parent = self.entry(parent_path)?;
-        let new_entry = parent.dir_entries(parent_path)?.entry(
-            filename
-                .to_str()
-                .expect("path should be valid UTF-8")
-                .into(),
-        );
+        let new_entry = parent
+            .dir_entries(parent_path)?
+            .entry(filename.to_os_string());
         callback(new_entry)
     }
 
@@ -2156,7 +2151,7 @@ impl FakeFs {
             else {
                 anyhow::bail!("gitfile points to a non-directory")
             };
-            let common_dir = if let Some(child) = entries.get("commondir") {
+            let common_dir = if let Some(child) = entries.get(OsStr::new("commondir")) {
                 let raw = std::str::from_utf8(child.file_content("commondir".as_ref())?)
                     .context("commondir content")?
                     .trim();
@@ -2746,12 +2741,9 @@ impl FakeFs {
 
         let mut state = self.state.lock();
         let parent_entry = state.entry(parent_path)?;
-        let entry = parent_entry.dir_entries(parent_path)?.entry(
-            base_name
-                .to_str()
-                .expect("path should be valid UTF-8")
-                .into(),
-        );
+        let entry = parent_entry
+            .dir_entries(parent_path)?
+            .entry(base_name.to_os_string());
 
         let removed = match entry {
             btree_map::Entry::Vacant(_) => {
@@ -2791,12 +2783,9 @@ impl FakeFs {
             .expect("path should have the expected component");
         let mut state = self.state.lock();
         let parent_entry = state.entry(parent_path)?;
-        let entry = parent_entry.dir_entries(parent_path)?.entry(
-            base_name
-                .to_str()
-                .expect("path should be valid UTF-8")
-                .into(),
-        );
+        let entry = parent_entry
+            .dir_entries(parent_path)?
+            .entry(base_name.to_os_string());
         let removed = match entry {
             btree_map::Entry::Vacant(_) => {
                 if !options.ignore_if_not_exists {
@@ -2839,7 +2828,7 @@ impl FakeFsEntry {
         }
     }
 
-    fn dir_entries(&mut self, path: &Path) -> Result<&mut BTreeMap<String, FakeFsEntry>> {
+    fn dir_entries(&mut self, path: &Path) -> Result<&mut BTreeMap<OsString, FakeFsEntry>> {
         if let Self::Dir { entries, .. } = self {
             Ok(entries)
         } else {
@@ -3160,14 +3149,8 @@ impl Fs for FakeFs {
         match result {
             Some(fake_entry) => {
                 let trashed_entry = TrashedEntry {
-                    id: base_name
-                        .to_str()
-                        .expect("path should be valid UTF-8")
-                        .into(),
-                    name: base_name
-                        .to_str()
-                        .expect("path should be valid UTF-8")
-                        .into(),
+                    id: base_name.to_os_string(),
+                    name: base_name.to_os_string(),
                     original_parent: parent_path.to_path_buf(),
                 };
 

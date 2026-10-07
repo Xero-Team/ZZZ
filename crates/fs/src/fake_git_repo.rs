@@ -1394,29 +1394,33 @@ impl GitRepository for FakeGitRepository {
                 entry: &FakeFsEntry,
                 prefix: String,
                 out: &mut std::collections::BTreeMap<String, String>,
-            ) {
+            ) -> Result<()> {
                 match entry {
                     FakeFsEntry::File { content, .. } => {
                         out.insert(prefix, String::from_utf8_lossy(content).into_owned());
                     }
                     FakeFsEntry::Dir { entries, .. } => {
                         for (name, child) in entries {
+                            let name = name
+                                .to_str()
+                                .context("checkpoint paths must be valid UTF-8")?;
                             let path = if prefix.is_empty() {
-                                name.clone()
+                                name.to_owned()
                             } else {
                                 format!("{prefix}/{name}")
                             };
-                            collect_files(child, path, out);
+                            collect_files(child, path, out)?;
                         }
                     }
                     FakeFsEntry::Symlink { .. } => {}
                 }
+                Ok(())
             }
 
             let mut base_files = std::collections::BTreeMap::new();
             let mut target_files = std::collections::BTreeMap::new();
-            collect_files(base, String::new(), &mut base_files);
-            collect_files(target, String::new(), &mut target_files);
+            collect_files(base, String::new(), &mut base_files)?;
+            collect_files(target, String::new(), &mut target_files)?;
 
             let all_paths: std::collections::BTreeSet<&String> =
                 base_files.keys().chain(target_files.keys()).collect();
