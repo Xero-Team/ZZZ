@@ -2105,6 +2105,28 @@ async fn test_remote_worktree_load_file_uses_vfs(
     assert!(loaded.file.resource_id.is_some());
     assert!(loaded.file.vfs_path.is_some());
     assert!(!loaded.file.is_local);
+
+    let saved = worktree
+        .update(cx, |worktree, cx| {
+            worktree.write_file(
+                rel_path("package.json").into(),
+                "{\"scripts\":{\"test\":\"cargo nextest run\"}}".into(),
+                LineEnding::Unix,
+                loaded.encoding,
+                loaded.has_bom,
+                cx,
+            )
+        })
+        .await
+        .expect("remote text file should save through VFS");
+    assert!(!saved.is_local);
+    assert!(saved.vfs_path.is_some());
+    assert_eq!(
+        fs.load(path!("/code/project/package.json").as_ref())
+            .await
+            .expect("remote file should remain readable"),
+        "{\"scripts\":{\"test\":\"cargo nextest run\"}}"
+    );
 }
 
 #[gpui::test]

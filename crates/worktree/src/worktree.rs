@@ -1362,8 +1362,56 @@ impl Worktree {
             Worktree::Local(this) => {
                 this.write_file(path, text, line_ending, encoding, has_bom, cx)
             }
-            Worktree::Remote(_) => {
-                Task::ready(Err(anyhow!("remote worktree can't yet write files")))
+            Worktree::Remote(remote_worktree) => {
+                let Some(provider_task) = self.remote_vfs_provider(cx) else {
+                    return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
+                };
+                let Some(entry) = remote_worktree.entry_for_path(&path).cloned() else {
+                    return Task::ready(Err(anyhow!("no worktree entry for {path:?}")));
+                };
+                let Some(provider_path) = entry
+                    .vfs_path
+                    .as_ref()
+                    .map(|vfs_path| vfs_path.provider_path().clone())
+                else {
+                    return Task::ready(Err(anyhow!(
+                        "worktree entry has no exact VFS path for {path:?}"
+                    )));
+                };
+                let worktree = cx.weak_entity();
+                cx.background_spawn(async move {
+                    let provider = provider_task.await.map_err(anyhow::Error::new)?;
+                    let metadata = provider
+                        .stat(&provider_path, vfs::StatOptions::default())
+                        .await?;
+                    anyhow::ensure!(
+                        metadata.kind != vfs::EntryKind::Directory
+                            && !(metadata.kind == vfs::EntryKind::SymbolicLink
+                                && metadata.symbolic_link_target_kind
+                                    == Some(vfs::EntryKind::Directory)),
+                        "Cannot save directories as files: {path:?}"
+                    );
+                    write_rope_to_provider(
+                        provider.as_ref(),
+                        &provider_path,
+                        text,
+                        line_ending,
+                        encoding,
+                        has_bom,
+                        Some(metadata.content_version),
+                    )
+                    .await?;
+                    let metadata = provider
+                        .stat(&provider_path, vfs::StatOptions::default())
+                        .await?;
+                    let mut entry = entry;
+                    entry.mtime = Some(MTime::from_system_time(
+                        metadata.modified_at.unwrap_or(UNIX_EPOCH),
+                    ));
+                    entry.size = metadata.size;
+                    let worktree = worktree.upgrade().context("worktree was dropped")?;
+                    Ok(File::for_entry(entry, worktree, None))
+                })
             }
         }
     }
@@ -7986,8 +8034,30 @@ async fn write_rope_to_vfs(
     has_bom: bool,
     expected_version: Option<vfs::VfsVersion>,
 ) -> Result<()> {
-    let file = snapshot
-        .provider()
+    write_rope_to_provider(
+        snapshot.provider().as_ref(),
+        path,
+        text,
+        line_ending,
+        encoding,
+        has_bom,
+        expected_version,
+    )
+    .await?;
+    snapshot.stat(path).await?;
+    Ok(())
+}
+
+async fn write_rope_to_provider(
+    provider: &dyn VfsProvider,
+    path: &vfs::ProviderPath,
+    text: Rope,
+    line_ending: LineEnding,
+    encoding: &'static Encoding,
+    has_bom: bool,
+    expected_version: Option<vfs::VfsVersion>,
+) -> Result<()> {
+    let file = provider
         .open(
             path,
             vfs::OpenOptions {
@@ -8013,7 +8083,6 @@ async fn write_rope_to_vfs(
     file.set_len(offset, vfs::WriteAtOptions::default()).await?;
     file.flush(vfs::OperationContext::default()).await?;
     file.sync(vfs::OperationContext::default()).await?;
-    snapshot.stat(path).await?;
     Ok(())
 }
 
