@@ -20,8 +20,9 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
 - Next action: media 和 editor persistence 已完成一次性 exact-sidecar migration，
-  `VFS-EXP-013` 已通过；继续审计 create/copy/scan 等普通 `Local`/`Remote` branch、
-  external/WIT `SettingsLocation` fallback 与 lazy remote provider task，并完成 Phase 9 全量验收。
+  `VFS-EXP-013` 已通过；将 external-local-to-remote copy 从 `CreateProjectEntry` payload
+  迁至 provider streaming，继续审计 create/scan branch、external/WIT `SettingsLocation`
+  fallback 与 lazy remote provider task，并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -487,12 +488,16 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Remaining work {#remaining-work}
 
+- Migrate external-local-to-remote copy from `CreateProjectEntry` whole-file payloads to the
+  positioned provider transfer path; preserve explicit entry-snapshot synchronization after the
+  data transfer commits.
 - Finish Phase 9 compatibility adapters and persistence policy.
 - Phase 10 convergence, documentation, platform runbooks and final validation.
 
 ## Next action {#next-action}
 
-继续 Phase 9 compatibility adapter 清理。审计 `SettingsLocation` legacy key 与 lazy remote
-provider task；普通 consumer dispatch 中只保留 scanner/native/OS process boundary。随后审计
-旧 persistence 的 migration/invalidation policy，执行 Phase 9 全量 regression matrix 和
-code-smell 审查。
+继续 Phase 9 external-local-to-remote copy 迁移：用 positioned provider streaming 取代
+`CreateProjectEntry` whole-file payload，并在提交后与 remote entry snapshot 同步。随后审计
+external/WIT `SettingsLocation` legacy fallback 与 lazy remote provider task；普通 consumer
+dispatch 中只保留 scanner/native/OS process boundary，最后执行 Phase 9 全量 regression
+matrix 和 code-smell 审查。
