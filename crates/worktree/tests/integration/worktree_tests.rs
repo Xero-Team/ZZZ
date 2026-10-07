@@ -6456,8 +6456,6 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 removed_entries: vec![],
                 scan_id: 1,
                 is_last_update: true,
-                updated_repositories: vec![],
-                removed_repositories: vec![],
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
@@ -6608,8 +6606,6 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 removed_entries: Vec::new(),
                 scan_id: 1,
                 is_last_update: true,
-                updated_repositories: Vec::new(),
-                removed_repositories: Vec::new(),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
@@ -6655,8 +6651,6 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 removed_entries: Vec::new(),
                 scan_id: 2,
                 is_last_update: true,
-                updated_repositories: Vec::new(),
-                removed_repositories: Vec::new(),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
@@ -6680,8 +6674,6 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 removed_entries: vec![9],
                 scan_id: 3,
                 is_last_update: true,
-                updated_repositories: Vec::new(),
-                removed_repositories: Vec::new(),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
@@ -6772,8 +6764,6 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 removed_entries: vec![],
                 scan_id: 1,
                 is_last_update: true,
-                updated_repositories: vec![],
-                removed_repositories: vec![],
                 root_repo_common_dir_v2: native_path_wire("/home/user/project/.git"),
                 root_repo_is_linked_worktree: false,
             });
@@ -6847,8 +6837,6 @@ async fn test_remote_worktree_root_repo_metadata_cleared_only_by_completed_scan(
         removed_entries: vec![],
         scan_id,
         is_last_update,
-        updated_repositories: vec![],
-        removed_repositories: vec![],
         root_repo_common_dir_v2: None,
         root_repo_is_linked_worktree: false,
     };

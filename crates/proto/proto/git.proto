@@ -2,6 +2,7 @@ syntax = "proto3";
 package zzz.messages;
 
 import "buffer.proto";
+import "vfs.proto";
 import "worktree.proto";
 
 message GitBranchesResponse {
@@ -60,8 +61,10 @@ message SetIndexText {
   uint64 project_id = 1;
   reserved 2;
   uint64 repository_id = 3;
-  string path = 4;
+  reserved 4;
+  reserved "path";
   optional string text = 5;
+  ProviderPathV2 path_v2 = 6;
 }
 
 message GetPermalinkToLine {
@@ -113,12 +116,13 @@ message UpdateGitBranch {
 message UpdateRepository {
   uint64 project_id = 1;
   uint64 id = 2;
-  string abs_path = 3;
+  reserved 3;
+  reserved "abs_path";
   repeated uint64 entry_ids = 4;
   optional Branch branch_summary = 5;
   repeated StatusEntry updated_statuses = 6;
-  repeated string removed_statuses = 7;
-  repeated string current_merge_conflicts = 8;
+  reserved 7, 8;
+  reserved "removed_statuses", "current_merge_conflicts";
   uint64 scan_id = 9;
   bool is_last_update = 10;
   optional GitCommitDetails head_commit_details = 11;
@@ -129,9 +133,14 @@ message UpdateRepository {
   reserved 16;
   repeated Worktree linked_worktrees = 17;
   repeated Branch branch_list = 18;
-  optional string repository_dir_abs_path = 19;
-  optional string common_dir_abs_path = 20;
+  reserved 19, 20;
+  reserved "repository_dir_abs_path", "common_dir_abs_path";
   optional string branch_list_error = 21;
+  NativePathV2 abs_path_v2 = 22;
+  repeated ProviderPathV2 removed_statuses_v2 = 23;
+  repeated ProviderPathV2 current_merge_conflicts_v2 = 24;
+  NativePathV2 repository_dir_abs_path_v2 = 25;
+  NativePathV2 common_dir_abs_path_v2 = 26;
 }
 
 message RemoveRepository {
@@ -240,14 +249,18 @@ message GitDiffResponse {
 
 message GitInit {
   uint64 project_id = 1;
-  string abs_path = 2;
+  reserved 2;
+  reserved "abs_path";
   string fallback_branch_name = 3;
+  NativePathV2 abs_path_v2 = 4;
 }
 
 message GitClone {
   uint64 project_id = 1;
-  string abs_path = 2;
+  reserved 2;
+  reserved "abs_path";
   string remote_repo = 3;
+  NativePathV2 abs_path_v2 = 4;
 }
 
 message GitCloneResponse {
@@ -291,10 +304,12 @@ message LoadCommitDiffResponse {
 }
 
 message CommitFile {
-  string path = 1;
+  reserved 1;
+  reserved "path";
   optional string old_text = 2;
   optional string new_text = 3;
   bool is_binary = 4;
+  ProviderPathV2 path_v2 = 5;
 }
 
 message GitReset {
@@ -314,17 +329,21 @@ message GitCheckoutFiles {
   reserved 2;
   uint64 repository_id = 3;
   string commit = 4;
-  repeated string paths = 5;
+  reserved 5;
+  reserved "paths";
+  repeated ProviderPathV2 paths_v2 = 6;
 }
 
 // Move to `git.proto` once collab's min version is >=0.171.0.
 message StatusEntry {
-  string repo_path = 1;
+  reserved 1;
+  reserved "repo_path";
   // Can be removed once collab's min version is >=0.171.0.
   GitStatus simple_status = 2;
   GitFileStatus status = 3;
   optional uint32 diff_stat_added = 4;
   optional uint32 diff_stat_deleted = 5;
+  ProviderPathV2 repo_path_v2 = 6;
 }
 
 message StashEntry {
@@ -339,21 +358,27 @@ message Stage {
   uint64 project_id = 1;
   reserved 2;
   uint64 repository_id = 3;
-  repeated string paths = 4;
+  reserved 4;
+  reserved "paths";
+  repeated ProviderPathV2 paths_v2 = 5;
 }
 
 message Unstage {
   uint64 project_id = 1;
   reserved 2;
   uint64 repository_id = 3;
-  repeated string paths = 4;
+  reserved 4;
+  reserved "paths";
+  repeated ProviderPathV2 paths_v2 = 5;
 }
 
 message Stash {
   uint64 project_id = 1;
   uint64 repository_id = 2;
-  repeated string paths = 3;
+  reserved 3;
+  reserved "paths";
   optional string message = 4;
+  repeated ProviderPathV2 paths_v2 = 5;
 }
 
 message StashPop {
@@ -479,7 +504,9 @@ message BlameEntry {
   optional string summary = 13;
   optional string previous = 14;
 
-  string filename = 15;
+  reserved 15;
+  reserved "filename";
+  ProviderPathV2 filename_v2 = 16;
 }
 
 message CommitMessage {
@@ -535,8 +562,10 @@ message TreeDiffStatus {
   }
 
   Status status = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
   optional string oid = 3;
+  ProviderPathV2 path_v2 = 4;
 }
 
 message GetBlobContent {
@@ -585,20 +614,24 @@ message GitWorktreesResponse {
 }
 
 message Worktree {
-  string path = 1;
+  reserved 1;
+  reserved "path";
   string ref_name = 2;
   string sha = 3;
   bool is_main = 4;
   bool is_bare = 5;
+  NativePathV2 path_v2 = 6;
 }
 
 message GitCreateWorktree {
   uint64 project_id = 1;
   uint64 repository_id = 2;
   string name = 3;
-  string directory = 4;
+  reserved 4;
+  reserved "directory";
   optional string commit = 5;
   bool use_existing_branch = 6;
+  NativePathV2 directory_v2 = 7;
 }
 
 message GitCreateCheckpoint {
@@ -658,21 +691,27 @@ message GitDiffCheckpointsResponse {
 message GitRemoveWorktree {
   uint64 project_id = 1;
   uint64 repository_id = 2;
-  string path = 3;
+  reserved 3;
+  reserved "path";
   bool force = 4;
+  NativePathV2 path_v2 = 5;
 }
 
 message GitRenameWorktree {
   uint64 project_id = 1;
   uint64 repository_id = 2;
-  string old_path = 3;
-  string new_path = 4;
+  reserved 3, 4;
+  reserved "old_path", "new_path";
+  NativePathV2 old_path_v2 = 5;
+  NativePathV2 new_path_v2 = 6;
 }
 
 message GitWorktreeCreatedAt {
   uint64 project_id = 1;
   uint64 repository_id = 2;
-  string worktree_path = 3;
+  reserved 3;
+  reserved "worktree_path";
+  NativePathV2 worktree_path_v2 = 4;
 }
 
 message GitWorktreeCreatedAtResponse {
@@ -719,11 +758,13 @@ message GetCommitDataResponse {
 message GitLogSourceAll {}
 
 message GitLogSource {
+  reserved 4;
+  reserved "path";
   oneof source {
     GitLogSourceAll all = 1;
     string branch = 2;
     string sha = 3;
-    string path = 4;
+    ProviderPathV2 path_v2 = 5;
   }
 }
 

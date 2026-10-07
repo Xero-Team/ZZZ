@@ -851,8 +851,6 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
                 removed_entries: vec![],
                 scan_id: 1,
                 is_last_update: true,
-                updated_repositories: vec![],
-                removed_repositories: vec![],
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });

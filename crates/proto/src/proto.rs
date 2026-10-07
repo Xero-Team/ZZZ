@@ -804,43 +804,7 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             .drain(..removed_entries_chunk_size)
             .collect();
 
-        let mut updated_repositories = Vec::new();
-        let mut limit = MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE;
-        while let Some(repo) = message.updated_repositories.first_mut() {
-            let updated_statuses_limit = cmp::min(repo.updated_statuses.len(), limit);
-            let removed_statuses_limit = cmp::min(repo.removed_statuses.len(), limit);
-
-            updated_repositories.push(RepositoryEntry {
-                repository_id: repo.repository_id,
-                branch_summary: repo.branch_summary.clone(),
-                updated_statuses: repo
-                    .updated_statuses
-                    .drain(..updated_statuses_limit)
-                    .collect(),
-                removed_statuses: repo
-                    .removed_statuses
-                    .drain(..removed_statuses_limit)
-                    .collect(),
-                current_merge_conflicts: repo.current_merge_conflicts.clone(),
-            });
-            if repo.removed_statuses.is_empty() && repo.updated_statuses.is_empty() {
-                message.updated_repositories.remove(0);
-            }
-            limit = limit.saturating_sub(removed_statuses_limit + updated_statuses_limit);
-            if limit == 0 {
-                break;
-            }
-        }
-
-        done = message.updated_entries.is_empty()
-            && message.removed_entries.is_empty()
-            && message.updated_repositories.is_empty();
-
-        let removed_repositories = if done {
-            mem::take(&mut message.removed_repositories)
-        } else {
-            Default::default()
-        };
+        done = message.updated_entries.is_empty() && message.removed_entries.is_empty();
 
         Some(UpdateWorktree {
             project_id: message.project_id,
@@ -853,8 +817,6 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             removed_entries,
             scan_id: message.scan_id,
             is_last_update: done && message.is_last_update,
-            updated_repositories,
-            removed_repositories,
         })
     })
 }
@@ -863,7 +825,9 @@ pub fn split_repository_update(
     mut update: UpdateRepository,
 ) -> impl Iterator<Item = UpdateRepository> {
     let mut updated_statuses_iter = mem::take(&mut update.updated_statuses).into_iter().fuse();
-    let mut removed_statuses_iter = mem::take(&mut update.removed_statuses).into_iter().fuse();
+    let mut removed_statuses_iter = mem::take(&mut update.removed_statuses_v2)
+        .into_iter()
+        .fuse();
     let branch_list = mem::take(&mut update.branch_list);
     let branch_list_error = update.branch_list_error.take();
     std::iter::from_fn({
@@ -873,16 +837,16 @@ pub fn split_repository_update(
                 .by_ref()
                 .take(MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE)
                 .collect::<Vec<_>>();
-            let removed_statuses = removed_statuses_iter
+            let removed_statuses_v2 = removed_statuses_iter
                 .by_ref()
                 .take(MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE)
                 .collect::<Vec<_>>();
-            if updated_statuses.is_empty() && removed_statuses.is_empty() {
+            if updated_statuses.is_empty() && removed_statuses_v2.is_empty() {
                 return None;
             }
             Some(UpdateRepository {
                 updated_statuses,
-                removed_statuses,
+                removed_statuses_v2,
                 branch_list: Vec::new(),
                 branch_list_error: None,
                 is_last_update: false,
@@ -892,7 +856,7 @@ pub fn split_repository_update(
     })
     .chain([UpdateRepository {
         updated_statuses: Vec::new(),
-        removed_statuses: Vec::new(),
+        removed_statuses_v2: Vec::new(),
         branch_list,
         branch_list_error,
         is_last_update: true,
@@ -1033,21 +997,6 @@ mod tests {
             removed_entries: vec![1, 2, 3],
             scan_id: 99,
             is_last_update: true,
-            updated_repositories: vec![RepositoryEntry {
-                repository_id: 5,
-                branch_summary: Some(Branch {
-                    ref_name: "refs/heads/main".into(),
-                    ..Default::default()
-                }),
-                updated_statuses: vec![
-                    StatusEntry::default(),
-                    StatusEntry::default(),
-                    StatusEntry::default(),
-                ],
-                removed_statuses: vec!["deleted.rs".into()],
-                current_merge_conflicts: vec!["conflict.rs".into()],
-            }],
-            removed_repositories: vec![21, 34],
         };
 
         let chunks = split_worktree_update(update).collect::<Vec<_>>();
@@ -1074,33 +1023,10 @@ mod tests {
         assert!(chunks[0].root_repo_is_linked_worktree);
         assert_eq!(chunks[0].updated_entries.len(), 2);
         assert_eq!(chunks[0].removed_entries, vec![1, 2]);
-        assert_eq!(chunks[0].updated_repositories.len(), 1);
-        assert_eq!(chunks[0].updated_repositories[0].repository_id, 5);
-        assert_eq!(
-            chunks[0].updated_repositories[0]
-                .branch_summary
-                .as_ref()
-                .map(|branch| branch.ref_name.as_str()),
-            Some("refs/heads/main")
-        );
-        assert_eq!(chunks[0].updated_repositories[0].updated_statuses.len(), 2);
-        assert_eq!(
-            chunks[0].updated_repositories[0].removed_statuses,
-            vec!["deleted.rs"]
-        );
-        assert!(chunks[0].removed_repositories.is_empty());
         assert!(!chunks[0].is_last_update);
 
         assert_eq!(chunks[1].updated_entries.len(), 1);
         assert_eq!(chunks[1].removed_entries, vec![3]);
-        assert_eq!(chunks[1].updated_repositories.len(), 1);
-        assert_eq!(chunks[1].updated_repositories[0].updated_statuses.len(), 1);
-        assert!(
-            chunks[1].updated_repositories[0]
-                .removed_statuses
-                .is_empty()
-        );
-        assert_eq!(chunks[1].removed_repositories, vec![21, 34]);
         assert!(chunks[1].is_last_update);
     }
 

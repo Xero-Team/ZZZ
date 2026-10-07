@@ -99,6 +99,58 @@ use worktree::{
 };
 use zeroize::Zeroize;
 
+fn repo_path_to_proto(path: &RepoPath) -> Result<proto::ProviderPathV2> {
+    let provider_path =
+        vfs::provider_path_from_legacy_utf8(path.as_unix_str(), vfs::PathEncoding::PortableUtf8)?;
+    Ok(proto::ProviderPathV2::from_provider_path(&provider_path))
+}
+
+fn repo_path_from_proto(path: Option<&proto::ProviderPathV2>) -> Result<RepoPath> {
+    let provider_path = path
+        .context("missing exact repository path")?
+        .to_provider_path()?;
+    let path = vfs::provider_path_to_legacy_utf8(&provider_path)?;
+    RepoPath::from_proto(&path)
+}
+
+fn native_path_to_proto(path: &Path) -> Result<proto::NativePathV2> {
+    let native_path = vfs::NativePath::from_local_path(path)?;
+    Ok(proto::NativePathV2::from_native_path(&native_path))
+}
+
+fn native_path_to_proto_for_style(
+    path: &Path,
+    path_style: PathStyle,
+) -> Result<proto::NativePathV2> {
+    let native_path = if path_style == PathStyle::local() {
+        vfs::NativePath::from_local_path(path)?
+    } else {
+        let path = path
+            .to_str()
+            .context("remote native path is not representable as Unicode")?;
+        if path_style.is_posix() {
+            vfs::NativePath::from_unix_bytes(path.as_bytes())?
+        } else {
+            vfs::NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())?
+        }
+    };
+    Ok(proto::NativePathV2::from_native_path(&native_path))
+}
+
+fn local_path_from_proto(path: Option<&proto::NativePathV2>) -> Result<PathBuf> {
+    path.context("missing exact native path")?
+        .to_native_path()?
+        .to_local_path_buf()
+        .map_err(Into::into)
+}
+
+fn display_path_from_proto(path: Option<&proto::NativePathV2>) -> Result<PathBuf> {
+    Ok(path
+        .context("missing exact native path")?
+        .to_native_path()?
+        .display_path_buf())
+}
+
 pub struct GitStore {
     state: GitStoreState,
     buffer_store: Entity<BufferStore>,
@@ -227,7 +279,8 @@ pub struct StatusEntry {
 }
 
 impl StatusEntry {
-    fn to_proto(&self) -> proto::StatusEntry {
+    fn to_proto(&self) -> Option<proto::StatusEntry> {
+        let repo_path_v2 = repo_path_to_proto(&self.repo_path).log_err()?;
         let simple_status = match self.status {
             FileStatus::Ignored | FileStatus::Untracked => proto::GitStatus::Added as i32,
             FileStatus::Unmerged { .. } => proto::GitStatus::Conflict as i32,
@@ -241,13 +294,13 @@ impl StatusEntry {
             }),
         };
 
-        proto::StatusEntry {
-            repo_path: self.repo_path.to_proto(),
+        Some(proto::StatusEntry {
             simple_status,
             status: Some(status_to_proto(self.status)),
             diff_stat_added: self.diff_stat.map(|ds| ds.added),
             diff_stat_deleted: self.diff_stat.map(|ds| ds.deleted),
-        }
+            repo_path_v2: Some(repo_path_v2),
+        })
     }
 }
 
@@ -255,7 +308,7 @@ impl TryFrom<proto::StatusEntry> for StatusEntry {
     type Error = anyhow::Error;
 
     fn try_from(value: proto::StatusEntry) -> Result<Self, Self::Error> {
-        let repo_path = RepoPath::from_proto(&value.repo_path).context("invalid repo path")?;
+        let repo_path = repo_path_from_proto(value.repo_path_v2.as_ref())?;
         let status = status_from_proto(value.simple_status, value.status)?;
         let diff_stat = match (value.diff_stat_added, value.diff_stat_deleted) {
             (Some(added), Some(deleted)) => Some(DiffStat { added, deleted }),
@@ -1469,7 +1522,7 @@ impl GitStore {
                             version: serialize_version(&version),
                         })
                         .await?;
-                    Ok(deserialize_blame_buffer_response(response))
+                    deserialize_blame_buffer_response(response)
                 }
             }
         })
@@ -2163,12 +2216,15 @@ impl GitStore {
             } => {
                 let client = upstream_client.clone();
                 let project_id = *project_id;
+                let path_style = self.worktree_store.read(cx).path_style();
                 cx.background_executor().spawn(async move {
+                    let abs_path_v2 = native_path_to_proto_for_style(&path, path_style)
+                        .context("cannot encode exact Git init path")?;
                     client
                         .request(proto::GitInit {
                             project_id,
-                            abs_path: path.to_string_lossy().into_owned(),
                             fallback_branch_name,
+                            abs_path_v2: Some(abs_path_v2),
                         })
                         .await?;
                     Ok(())
@@ -2198,14 +2254,20 @@ impl GitStore {
                 upstream_project_id,
                 ..
             } => {
-                let request = upstream_client.request(proto::GitClone {
-                    project_id: *upstream_project_id,
-                    abs_path: path.to_string_lossy().into_owned(),
-                    remote_repo: repo,
-                });
+                let upstream_client = upstream_client.clone();
+                let upstream_project_id = *upstream_project_id;
+                let path_style = self.worktree_store.read(cx).path_style();
 
                 cx.background_spawn(async move {
-                    let result = request.await?;
+                    let abs_path_v2 = native_path_to_proto_for_style(&path, path_style)
+                        .context("cannot encode exact Git clone path")?;
+                    let result = upstream_client
+                        .request(proto::GitClone {
+                            project_id: upstream_project_id,
+                            remote_repo: repo,
+                            abs_path_v2: Some(abs_path_v2),
+                        })
+                        .await?;
 
                     if result.success {
                         Ok(())
@@ -2249,13 +2311,17 @@ impl GitStore {
             let client = this.upstream_client().context("no upstream client")?;
 
             let repository_dir_abs_path: Option<Arc<Path>> = update
-                .repository_dir_abs_path
-                .as_deref()
-                .map(|p| Path::new(p).into());
+                .repository_dir_abs_path_v2
+                .as_ref()
+                .map(|path| display_path_from_proto(Some(path)).map(Arc::<Path>::from))
+                .transpose()?;
             let common_dir_abs_path: Option<Arc<Path>> = update
-                .common_dir_abs_path
-                .as_deref()
-                .map(|p| Path::new(p).into());
+                .common_dir_abs_path_v2
+                .as_ref()
+                .map(|path| display_path_from_proto(Some(path)).map(Arc::<Path>::from))
+                .transpose()?;
+            let work_directory_abs_path: Arc<Path> =
+                display_path_from_proto(update.abs_path_v2.as_ref())?.into();
 
             let mut repo_subscription = None;
             let blob_read_limiter = this.blob_read_limiter.clone();
@@ -2264,7 +2330,7 @@ impl GitStore {
                 let repo = cx.new(|cx| {
                     Repository::remote(
                         id,
-                        Path::new(&update.abs_path).into(),
+                        work_directory_abs_path.clone(),
                         repository_dir_abs_path.clone(),
                         common_dir_abs_path.clone(),
                         path_style,
@@ -2326,7 +2392,7 @@ impl GitStore {
         envelope: TypedEnvelope<proto::GitInit>,
         cx: AsyncApp,
     ) -> Result<proto::Ack> {
-        let path: Arc<Path> = PathBuf::from(envelope.payload.abs_path).into();
+        let path: Arc<Path> = local_path_from_proto(envelope.payload.abs_path_v2.as_ref())?.into();
         let name = envelope.payload.fallback_branch_name;
         cx.update(|cx| this.read(cx).git_init(path, name, cx))
             .await?;
@@ -2339,7 +2405,7 @@ impl GitStore {
         envelope: TypedEnvelope<proto::GitClone>,
         cx: AsyncApp,
     ) -> Result<proto::GitCloneResponse> {
-        let path: Arc<Path> = PathBuf::from(envelope.payload.abs_path).into();
+        let path: Arc<Path> = local_path_from_proto(envelope.payload.abs_path_v2.as_ref())?.into();
         let repo_name = envelope.payload.remote_repo;
         let result = cx
             .update(|cx| this.read(cx).git_clone(repo_name, path, cx))
@@ -2470,9 +2536,9 @@ impl GitStore {
 
         let entries = envelope
             .payload
-            .paths
+            .paths_v2
             .into_iter()
-            .map(|path| RepoPath::new(&path))
+            .map(|path| repo_path_from_proto(Some(&path)))
             .collect::<Result<Vec<_>>>()?;
 
         repository_handle
@@ -2493,9 +2559,9 @@ impl GitStore {
 
         let entries = envelope
             .payload
-            .paths
+            .paths_v2
             .into_iter()
-            .map(|path| RepoPath::new(&path))
+            .map(|path| repo_path_from_proto(Some(&path)))
             .collect::<Result<Vec<_>>>()?;
 
         repository_handle
@@ -2517,9 +2583,9 @@ impl GitStore {
 
         let entries = envelope
             .payload
-            .paths
+            .paths_v2
             .into_iter()
-            .map(|path| RepoPath::new(&path))
+            .map(|path| repo_path_from_proto(Some(&path)))
             .collect::<Result<Vec<_>>>()?;
         let message = envelope.payload.message;
 
@@ -2593,7 +2659,7 @@ impl GitStore {
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let repo_path = RepoPath::from_proto(&envelope.payload.path)?;
+        let repo_path = repo_path_from_proto(envelope.payload.path_v2.as_ref())?;
 
         repository_handle
             .update(&mut cx, |repository_handle, cx| {
@@ -2709,7 +2775,7 @@ impl GitStore {
             worktrees: worktrees
                 .into_iter()
                 .map(|worktree| worktree_to_proto(&worktree))
-                .collect::<Vec<_>>(),
+                .collect::<Result<Vec<_>>>()?,
         })
     }
 
@@ -2720,7 +2786,7 @@ impl GitStore {
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let directory = PathBuf::from(envelope.payload.directory);
+        let directory = local_path_from_proto(envelope.payload.directory_v2.as_ref())?;
         let name = envelope.payload.name;
         let commit = envelope.payload.commit;
         let use_existing_branch = envelope.payload.use_existing_branch;
@@ -2751,7 +2817,7 @@ impl GitStore {
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let path = PathBuf::from(envelope.payload.path);
+        let path = local_path_from_proto(envelope.payload.path_v2.as_ref())?;
         let force = envelope.payload.force;
 
         repository_handle
@@ -2770,8 +2836,8 @@ impl GitStore {
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let old_path = PathBuf::from(envelope.payload.old_path);
-        let new_path = PathBuf::from(envelope.payload.new_path);
+        let old_path = local_path_from_proto(envelope.payload.old_path_v2.as_ref())?;
+        let new_path = local_path_from_proto(envelope.payload.new_path_v2.as_ref())?;
 
         repository_handle
             .update(&mut cx, |repository_handle, _| {
@@ -2789,7 +2855,7 @@ impl GitStore {
     ) -> Result<proto::GitWorktreeCreatedAtResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let worktree_path = PathBuf::from(envelope.payload.worktree_path);
+        let worktree_path = local_path_from_proto(envelope.payload.worktree_path_v2.as_ref())?;
 
         let created_at = repository_handle
             .update(&mut cx, |repository_handle, _| {
@@ -3390,13 +3456,16 @@ impl GitStore {
             files: commit_diff
                 .files
                 .into_iter()
-                .map(|file| proto::CommitFile {
-                    path: file.path.to_proto(),
-                    old_text: file.old_text,
-                    new_text: file.new_text,
-                    is_binary: file.is_binary,
+                .map(|file| {
+                    let path_v2 = repo_path_to_proto(&file.path)?;
+                    Ok(proto::CommitFile {
+                        path_v2: Some(path_v2),
+                        old_text: file.old_text,
+                        new_text: file.new_text,
+                        is_binary: file.is_binary,
+                    })
                 })
-                .collect(),
+                .collect::<Result<Vec<_>>>()?,
         })
     }
 
@@ -3430,9 +3499,9 @@ impl GitStore {
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
         let paths = envelope
             .payload
-            .paths
+            .paths_v2
             .iter()
-            .map(|s| RepoPath::from_proto(s))
+            .map(|path| repo_path_from_proto(Some(path)))
             .collect::<Result<Vec<_>>>()?;
 
         repository_handle
@@ -3588,25 +3657,30 @@ impl GitStore {
             entries: diff
                 .entries
                 .into_iter()
-                .map(|(path, status)| proto::TreeDiffStatus {
-                    path: path.as_ref().to_proto(),
-                    status: match status {
-                        TreeDiffStatus::Added {} => proto::tree_diff_status::Status::Added.into(),
-                        TreeDiffStatus::Modified { .. } => {
-                            proto::tree_diff_status::Status::Modified.into()
-                        }
-                        TreeDiffStatus::Deleted { .. } => {
-                            proto::tree_diff_status::Status::Deleted.into()
-                        }
-                    },
-                    oid: match status {
-                        TreeDiffStatus::Deleted { old } | TreeDiffStatus::Modified { old } => {
-                            Some(old.to_string())
-                        }
-                        TreeDiffStatus::Added => None,
-                    },
+                .map(|(path, status)| {
+                    let path_v2 = repo_path_to_proto(&path)?;
+                    Ok(proto::TreeDiffStatus {
+                        path_v2: Some(path_v2),
+                        status: match status {
+                            TreeDiffStatus::Added {} => {
+                                proto::tree_diff_status::Status::Added.into()
+                            }
+                            TreeDiffStatus::Modified { .. } => {
+                                proto::tree_diff_status::Status::Modified.into()
+                            }
+                            TreeDiffStatus::Deleted { .. } => {
+                                proto::tree_diff_status::Status::Deleted.into()
+                            }
+                        },
+                        oid: match status {
+                            TreeDiffStatus::Deleted { old } | TreeDiffStatus::Modified { old } => {
+                                Some(old.to_string())
+                            }
+                            TreeDiffStatus::Added => None,
+                        },
+                    })
                 })
-                .collect(),
+                .collect::<Result<Vec<_>>>()?,
         })
     }
 
@@ -3751,7 +3825,7 @@ impl GitStore {
                 this.blame_buffer(&buffer, Some(version), cx)
             })
             .await?;
-        Ok(serialize_blame_buffer_response(blame))
+        serialize_blame_buffer_response(blame)
     }
 
     async fn handle_get_permalink_to_line(
@@ -4373,19 +4447,19 @@ impl RepositorySnapshot {
             updated_statuses: self
                 .statuses_by_path
                 .iter()
-                .map(|entry| entry.to_proto())
+                .filter_map(|entry| entry.to_proto())
                 .collect(),
-            removed_statuses: Default::default(),
-            current_merge_conflicts: self
+            removed_statuses_v2: Default::default(),
+            current_merge_conflicts_v2: self
                 .merge
                 .merge_heads_by_conflicted_path
                 .iter()
-                .map(|(repo_path, _)| repo_path.to_proto())
+                .filter_map(|(repo_path, _)| repo_path_to_proto(repo_path).log_err())
                 .collect(),
             merge_message: self.merge.message.as_ref().map(|msg| msg.to_string()),
             project_id,
             id: self.id.to_proto(),
-            abs_path: self.work_directory_abs_path.to_string_lossy().into_owned(),
+            abs_path_v2: native_path_to_proto(&self.work_directory_abs_path).log_err(),
             entry_ids: vec![self.id.to_proto()],
             scan_id: self.scan_id,
             is_last_update: true,
@@ -4397,21 +4471,20 @@ impl RepositorySnapshot {
                 .collect(),
             remote_upstream_url: self.remote_upstream_url.clone(),
             remote_origin_url: self.remote_origin_url.clone(),
-            repository_dir_abs_path: Some(
-                self.repository_dir_abs_path.to_string_lossy().into_owned(),
-            ),
-            common_dir_abs_path: Some(self.common_dir_abs_path.to_string_lossy().into_owned()),
+            repository_dir_abs_path_v2: native_path_to_proto(&self.repository_dir_abs_path)
+                .log_err(),
+            common_dir_abs_path_v2: native_path_to_proto(&self.common_dir_abs_path).log_err(),
             linked_worktrees: self
                 .linked_worktrees
                 .iter()
-                .map(worktree_to_proto)
+                .filter_map(|worktree| worktree_to_proto(worktree).log_err())
                 .collect(),
         }
     }
 
     fn build_update(&self, old: &Self, project_id: u64) -> proto::UpdateRepository {
         let mut updated_statuses: Vec<proto::StatusEntry> = Vec::new();
-        let mut removed_statuses: Vec<String> = Vec::new();
+        let mut removed_statuses = Vec::new();
 
         let mut new_statuses = self.statuses_by_path.iter();
         let mut old_statuses = old.statuses_by_path.iter();
@@ -4423,30 +4496,40 @@ impl RepositorySnapshot {
                 (Some(new_entry), Some(old_entry)) => {
                     match new_entry.repo_path.cmp(&old_entry.repo_path) {
                         Ordering::Less => {
-                            updated_statuses.push(new_entry.to_proto());
+                            if let Some(entry) = new_entry.to_proto() {
+                                updated_statuses.push(entry);
+                            }
                             current_new_entry = new_statuses.next();
                         }
                         Ordering::Equal => {
                             if new_entry.status != old_entry.status
                                 || new_entry.diff_stat != old_entry.diff_stat
                             {
-                                updated_statuses.push(new_entry.to_proto());
+                                if let Some(entry) = new_entry.to_proto() {
+                                    updated_statuses.push(entry);
+                                }
                             }
                             current_old_entry = old_statuses.next();
                             current_new_entry = new_statuses.next();
                         }
                         Ordering::Greater => {
-                            removed_statuses.push(old_entry.repo_path.to_proto());
+                            if let Some(path) = repo_path_to_proto(&old_entry.repo_path).log_err() {
+                                removed_statuses.push(path);
+                            }
                             current_old_entry = old_statuses.next();
                         }
                     }
                 }
                 (None, Some(old_entry)) => {
-                    removed_statuses.push(old_entry.repo_path.to_proto());
+                    if let Some(path) = repo_path_to_proto(&old_entry.repo_path).log_err() {
+                        removed_statuses.push(path);
+                    }
                     current_old_entry = old_statuses.next();
                 }
                 (Some(new_entry), None) => {
-                    updated_statuses.push(new_entry.to_proto());
+                    if let Some(entry) = new_entry.to_proto() {
+                        updated_statuses.push(entry);
+                    }
                     current_new_entry = new_statuses.next();
                 }
                 (None, None) => break,
@@ -4462,17 +4545,17 @@ impl RepositorySnapshot {
                 .map(|error| error.to_string()),
             head_commit_details: self.head_commit.as_ref().map(commit_details_to_proto),
             updated_statuses,
-            removed_statuses,
-            current_merge_conflicts: self
+            removed_statuses_v2: removed_statuses,
+            current_merge_conflicts_v2: self
                 .merge
                 .merge_heads_by_conflicted_path
                 .iter()
-                .map(|(path, _)| path.to_proto())
+                .filter_map(|(path, _)| repo_path_to_proto(path).log_err())
                 .collect(),
             merge_message: self.merge.message.as_ref().map(|msg| msg.to_string()),
             project_id,
             id: self.id.to_proto(),
-            abs_path: self.work_directory_abs_path.to_string_lossy().into_owned(),
+            abs_path_v2: native_path_to_proto(&self.work_directory_abs_path).log_err(),
             entry_ids: vec![],
             scan_id: self.scan_id,
             is_last_update: true,
@@ -4484,14 +4567,13 @@ impl RepositorySnapshot {
                 .collect(),
             remote_upstream_url: self.remote_upstream_url.clone(),
             remote_origin_url: self.remote_origin_url.clone(),
-            repository_dir_abs_path: Some(
-                self.repository_dir_abs_path.to_string_lossy().into_owned(),
-            ),
-            common_dir_abs_path: Some(self.common_dir_abs_path.to_string_lossy().into_owned()),
+            repository_dir_abs_path_v2: native_path_to_proto(&self.repository_dir_abs_path)
+                .log_err(),
+            common_dir_abs_path_v2: native_path_to_proto(&self.common_dir_abs_path).log_err(),
             linked_worktrees: self
                 .linked_worktrees
                 .iter()
-                .map(worktree_to_proto)
+                .filter_map(|worktree| worktree_to_proto(worktree).log_err())
                 .collect(),
         }
     }
@@ -5317,15 +5399,19 @@ impl Repository {
                                     project_id,
                                     client,
                                 }) => {
+                                    let paths_v2 = paths
+                                        .iter()
+                                        .map(|path| {
+                                            repo_path_to_proto(path)
+                                                .context("cannot encode exact checkout path")
+                                        })
+                                        .collect::<Result<Vec<_>>>()?;
                                     client
                                         .request(proto::GitCheckoutFiles {
                                             project_id: project_id.0,
                                             repository_id: id.to_proto(),
                                             commit,
-                                            paths: paths
-                                                .into_iter()
-                                                .map(|p| p.to_proto())
-                                                .collect(),
+                                            paths_v2,
                                         })
                                         .await?;
 
@@ -5425,7 +5511,7 @@ impl Repository {
                             .into_iter()
                             .map(|file| {
                                 Ok(CommitFile {
-                                    path: RepoPath::from_proto(&file.path)?,
+                                    path: repo_path_from_proto(file.path_v2.as_ref())?,
                                     old_text: file.old_text,
                                     new_text: file.new_text,
                                     is_binary: file.is_binary,
@@ -5658,12 +5744,14 @@ impl Repository {
             .update(cx, |repository, _| repository.id)
             .map_err(|err| SharedString::from(err.to_string()))?;
         let graph_data_key = (log_source.clone(), log_order);
+        let log_source_proto = log_source_to_proto(&log_source)
+            .map_err(|error| SharedString::from(error.to_string()))?;
         let mut response = remote
             .client
             .request_stream(proto::GetInitialGraphData {
                 project_id: remote.project_id.to_proto(),
                 repository_id: repository_id.to_proto(),
-                log_source: Some(log_source_to_proto(&log_source)),
+                log_source: Some(log_source_proto),
                 log_order: log_order_to_proto(log_order),
             })
             .await
@@ -6233,15 +6321,19 @@ impl Repository {
                                     project_id,
                                     client,
                                 }) => {
+                                    let paths_v2 = entries
+                                        .iter()
+                                        .map(|path| {
+                                            repo_path_to_proto(path)
+                                                .context("cannot encode exact staging path")
+                                        })
+                                        .collect::<Result<Vec<_>>>()?;
                                     if stage {
                                         client
                                             .request(proto::Stage {
                                                 project_id: project_id.0,
                                                 repository_id: id.to_proto(),
-                                                paths: entries
-                                                    .into_iter()
-                                                    .map(|repo_path| repo_path.to_proto())
-                                                    .collect(),
+                                                paths_v2,
                                             })
                                             .await
                                             .context("sending stage request")
@@ -6251,10 +6343,7 @@ impl Repository {
                                             .request(proto::Unstage {
                                                 project_id: project_id.0,
                                                 repository_id: id.to_proto(),
-                                                paths: entries
-                                                    .into_iter()
-                                                    .map(|repo_path| repo_path.to_proto())
-                                                    .collect(),
+                                                paths_v2,
                                             })
                                             .await
                                             .context("sending unstage request")
@@ -6389,14 +6478,18 @@ impl Repository {
                             ..
                         }) => backend.stash_paths(entries, message, environment).await,
                         RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
+                            let paths_v2 = entries
+                                .iter()
+                                .map(|path| {
+                                    repo_path_to_proto(path)
+                                        .context("cannot encode exact stash path")
+                                })
+                                .collect::<Result<Vec<_>>>()?;
                             client
                                 .request(proto::Stash {
                                     project_id: project_id.0,
                                     repository_id: id.to_proto(),
-                                    paths: entries
-                                        .into_iter()
-                                        .map(|repo_path| repo_path.to_proto())
-                                        .collect(),
+                                    paths_v2,
                                     message,
                                 })
                                 .await?;
@@ -6956,12 +7049,14 @@ impl Repository {
                             .await?;
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
+                        let path_v2 =
+                            repo_path_to_proto(&path).context("cannot encode exact index path")?;
                         client
                             .request(proto::SetIndexText {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
-                                path: path.to_proto(),
                                 text: content,
+                                path_v2: Some(path_v2),
                             })
                             .await?;
                     }
@@ -7188,7 +7283,7 @@ impl Repository {
                         .worktrees
                         .into_iter()
                         .map(|worktree| proto_to_worktree(&worktree))
-                        .collect();
+                        .collect::<Result<Vec<_>>>()?;
 
                     Ok(worktrees)
                 }
@@ -7201,17 +7296,21 @@ impl Repository {
         worktree_path: PathBuf,
     ) -> oneshot::Receiver<Result<Option<SystemTime>>> {
         let id = self.id;
+        let path_style = self.snapshot.path_style;
         self.send_job("worktree_created_at", None, move |repo, _cx| async move {
             match repo {
                 RepositoryState::Local(LocalRepositoryState { backend, .. }) => {
                     backend.worktree_created_at(worktree_path).await
                 }
                 RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
+                    let worktree_path_v2 =
+                        native_path_to_proto_for_style(&worktree_path, path_style)
+                            .context("cannot encode exact Git worktree path")?;
                     let response = client
                         .request(proto::GitWorktreeCreatedAt {
                             project_id: project_id.0,
                             repository_id: id.to_proto(),
-                            worktree_path: worktree_path.to_string_lossy().to_string(),
+                            worktree_path_v2: Some(worktree_path_v2),
                         })
                         .await?;
                     Ok(response.created_at.map(SystemTime::from))
@@ -7226,6 +7325,7 @@ impl Repository {
         path: PathBuf,
     ) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
+        let path_style = self.snapshot.path_style;
         let job_description = match target.branch_name() {
             Some(branch_name) => format!("git worktree add: {branch_name}"),
             None => "git worktree add (detached)".to_owned(),
@@ -7250,14 +7350,16 @@ impl Repository {
                             CreateWorktreeTarget::Detached { base_sha } => (None, base_sha, false),
                         };
 
+                        let directory_v2 = native_path_to_proto_for_style(&path, path_style)
+                            .context("cannot encode exact Git worktree directory")?;
                         client
                             .request(proto::GitCreateWorktree {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
                                 name: name.unwrap_or_default(),
-                                directory: path.to_string_lossy().to_string(),
                                 commit,
                                 use_existing_branch,
+                                directory_v2: Some(directory_v2),
                             })
                             .await?;
 
@@ -7496,6 +7598,7 @@ impl Repository {
 
     pub fn remove_worktree(&mut self, path: PathBuf, force: bool) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
+        let path_style = self.snapshot.path_style;
         let repository_anchor_path: Arc<Path> = self.linked_worktree_anchor_path().into();
         self.send_job(
             "remove_worktree",
@@ -7560,12 +7663,14 @@ impl Repository {
                         Ok(())
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
+                        let path_v2 = native_path_to_proto_for_style(&path, path_style)
+                            .context("cannot encode exact Git worktree removal path")?;
                         client
                             .request(proto::GitRemoveWorktree {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
-                                path: path.to_string_lossy().to_string(),
                                 force,
+                                path_v2: Some(path_v2),
                             })
                             .await?;
 
@@ -7582,6 +7687,7 @@ impl Repository {
         new_path: PathBuf,
     ) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
+        let path_style = self.snapshot.path_style;
         self.send_job(
             "rename_worktree",
             Some(format!("git worktree move: {}", old_path.display()).into()),
@@ -7591,12 +7697,16 @@ impl Repository {
                         backend.rename_worktree(old_path, new_path).await
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
+                        let old_path_v2 = native_path_to_proto_for_style(&old_path, path_style)
+                            .context("cannot encode exact old Git worktree path")?;
+                        let new_path_v2 = native_path_to_proto_for_style(&new_path, path_style)
+                            .context("cannot encode exact new Git worktree path")?;
                         client
                             .request(proto::GitRenameWorktree {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
-                                old_path: old_path.to_string_lossy().to_string(),
-                                new_path: new_path.to_string_lossy().to_string(),
+                                old_path_v2: Some(old_path_v2),
+                                new_path_v2: Some(new_path_v2),
                             })
                             .await?;
 
@@ -7678,9 +7788,7 @@ impl Repository {
                                 }
                             };
                             Some((
-                                RepoPath::from_rel_path(
-                                    &RelPath::from_proto(&entry.path).log_err()?,
-                                ),
+                                repo_path_from_proto(entry.path_v2.as_ref()).log_err()?,
                                 status,
                             ))
                         })
@@ -7936,12 +8044,13 @@ impl Repository {
         update: proto::UpdateRepository,
         cx: &mut Context<Self>,
     ) -> Result<()> {
-        if let Some(repository_dir_abs_path) = &update.repository_dir_abs_path {
+        if let Some(repository_dir_abs_path) = &update.repository_dir_abs_path_v2 {
             self.snapshot.repository_dir_abs_path =
-                Path::new(repository_dir_abs_path.as_str()).into();
+                display_path_from_proto(Some(repository_dir_abs_path))?.into();
         }
-        if let Some(common_dir_abs_path) = &update.common_dir_abs_path {
-            self.snapshot.common_dir_abs_path = Path::new(common_dir_abs_path.as_str()).into();
+        if let Some(common_dir_abs_path) = &update.common_dir_abs_path_v2 {
+            self.snapshot.common_dir_abs_path =
+                display_path_from_proto(Some(common_dir_abs_path))?.into();
         }
 
         let new_branch = update.branch_summary.as_ref().map(proto_to_branch);
@@ -7972,9 +8081,9 @@ impl Repository {
         // will track it and we will just get the updated conflicts
         let new_merge_heads = TreeMap::from_ordered_entries(
             update
-                .current_merge_conflicts
+                .current_merge_conflicts_v2
                 .into_iter()
-                .filter_map(|path| Some((RepoPath::from_proto(&path).ok()?, vec![]))),
+                .filter_map(|path| Some((repo_path_from_proto(Some(&path)).log_err()?, vec![]))),
         );
         let conflicts_changed =
             self.snapshot.merge.merge_heads_by_conflicted_path != new_merge_heads;
@@ -7995,7 +8104,8 @@ impl Repository {
             .linked_worktrees
             .iter()
             .map(proto_to_worktree)
-            .collect();
+            .collect::<Result<Vec<_>>>()?
+            .into();
         if *self.snapshot.linked_worktrees != *new_linked_worktrees {
             cx.emit(RepositoryEvent::GitWorktreeListChanged);
         }
@@ -8004,12 +8114,11 @@ impl Repository {
         self.snapshot.remote_origin_url = update.remote_origin_url;
 
         let edits = update
-            .removed_statuses
+            .removed_statuses_v2
             .into_iter()
             .filter_map(|path| {
-                Some(sum_tree::Edit::Remove(PathKey(
-                    RelPath::from_proto(&path).log_err()?,
-                )))
+                let path = repo_path_from_proto(Some(&path)).log_err()?;
+                Some(sum_tree::Edit::Remove(PathKey(path.as_ref().clone())))
             })
             .chain(
                 update
@@ -8879,34 +8988,39 @@ fn get_permalink_in_rust_registry_src(
     Ok(permalink)
 }
 
-fn serialize_blame_buffer_response(blame: Option<git::blame::Blame>) -> proto::BlameBufferResponse {
+fn serialize_blame_buffer_response(
+    blame: Option<git::blame::Blame>,
+) -> Result<proto::BlameBufferResponse> {
     let Some(blame) = blame else {
-        return proto::BlameBufferResponse {
+        return Ok(proto::BlameBufferResponse {
             blame_response: None,
-        };
+        });
     };
 
     let entries = blame
         .entries
         .into_iter()
-        .map(|entry| proto::BlameEntry {
-            sha: entry.sha.as_bytes().into(),
-            start_line: entry.range.start,
-            end_line: entry.range.end,
-            original_line_number: entry.original_line_number,
-            author: entry.author,
-            author_mail: entry.author_mail,
-            author_time: entry.author_time,
-            author_tz: entry.author_tz,
-            committer: entry.committer_name,
-            committer_mail: entry.committer_email,
-            committer_time: entry.committer_time,
-            committer_tz: entry.committer_tz,
-            summary: entry.summary,
-            previous: entry.previous,
-            filename: entry.filename,
+        .map(|entry| {
+            let filename = RepoPath::new(&entry.filename)?;
+            Ok(proto::BlameEntry {
+                sha: entry.sha.as_bytes().into(),
+                start_line: entry.range.start,
+                end_line: entry.range.end,
+                original_line_number: entry.original_line_number,
+                author: entry.author,
+                author_mail: entry.author_mail,
+                author_time: entry.author_time,
+                author_tz: entry.author_tz,
+                committer: entry.committer_name,
+                committer_mail: entry.committer_email,
+                committer_time: entry.committer_time,
+                committer_tz: entry.committer_tz,
+                summary: entry.summary,
+                previous: entry.previous,
+                filename_v2: Some(repo_path_to_proto(&filename)?),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
 
     let messages = blame
         .messages
@@ -8917,21 +9031,23 @@ fn serialize_blame_buffer_response(blame: Option<git::blame::Blame>) -> proto::B
         })
         .collect::<Vec<_>>();
 
-    proto::BlameBufferResponse {
+    Ok(proto::BlameBufferResponse {
         blame_response: Some(proto::blame_buffer_response::BlameResponse { entries, messages }),
-    }
+    })
 }
 
 fn deserialize_blame_buffer_response(
     response: proto::BlameBufferResponse,
-) -> Option<git::blame::Blame> {
-    let response = response.blame_response?;
+) -> Result<Option<git::blame::Blame>> {
+    let Some(response) = response.blame_response else {
+        return Ok(None);
+    };
     let entries = response
         .entries
         .into_iter()
-        .filter_map(|entry| {
-            Some(git::blame::BlameEntry {
-                sha: git::Oid::from_bytes(&entry.sha).ok()?,
+        .map(|entry| {
+            Ok(git::blame::BlameEntry {
+                sha: git::Oid::from_bytes(&entry.sha)?,
                 range: entry.start_line..entry.end_line,
                 original_line_number: entry.original_line_number,
                 committer_name: entry.committer,
@@ -8944,10 +9060,12 @@ fn deserialize_blame_buffer_response(
                 author_tz: entry.author_tz,
                 summary: entry.summary,
                 previous: entry.previous,
-                filename: entry.filename,
+                filename: repo_path_from_proto(entry.filename_v2.as_ref())?
+                    .as_unix_str()
+                    .to_owned(),
             })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
 
     let messages = response
         .messages
@@ -8955,22 +9073,24 @@ fn deserialize_blame_buffer_response(
         .filter_map(|message| Some((git::Oid::from_bytes(&message.oid).ok()?, message.message)))
         .collect::<HashMap<_, _>>();
 
-    Some(Blame {
+    Ok(Some(Blame {
         entries,
         messages,
         tag_names: Default::default(),
-    })
+    }))
 }
 
-fn log_source_to_proto(log_source: &LogSource) -> proto::GitLogSource {
-    proto::GitLogSource {
+fn log_source_to_proto(log_source: &LogSource) -> Result<proto::GitLogSource> {
+    Ok(proto::GitLogSource {
         source: Some(match log_source {
             LogSource::All => proto::git_log_source::Source::All(proto::GitLogSourceAll {}),
             LogSource::Branch(branch) => proto::git_log_source::Source::Branch(branch.to_string()),
             LogSource::Sha(sha) => proto::git_log_source::Source::Sha(sha.to_string()),
-            LogSource::Path(path) => proto::git_log_source::Source::Path(path.to_proto()),
+            LogSource::Path(path) => proto::git_log_source::Source::PathV2(
+                repo_path_to_proto(path).context("cannot encode exact Git log path")?,
+            ),
         }),
-    }
+    })
 }
 
 fn log_source_from_proto(log_source: proto::GitLogSource) -> Result<LogSource> {
@@ -8981,8 +9101,8 @@ fn log_source_from_proto(log_source: proto::GitLogSource) -> Result<LogSource> {
         proto::git_log_source::Source::All(_) => Ok(LogSource::All),
         proto::git_log_source::Source::Branch(branch) => Ok(LogSource::Branch(branch.into())),
         proto::git_log_source::Source::Sha(sha) => Ok(LogSource::Sha(Oid::from_str(&sha)?)),
-        proto::git_log_source::Source::Path(path) => {
-            Ok(LogSource::Path(RepoPath::from_proto(&path)?))
+        proto::git_log_source::Source::PathV2(path) => {
+            Ok(LogSource::Path(repo_path_from_proto(Some(&path))?))
         }
     }
 }
@@ -9105,9 +9225,9 @@ fn branch_to_proto(branch: &git::repository::Branch) -> proto::Branch {
     }
 }
 
-fn worktree_to_proto(worktree: &git::repository::Worktree) -> proto::Worktree {
-    proto::Worktree {
-        path: worktree.path.to_string_lossy().to_string(),
+fn worktree_to_proto(worktree: &git::repository::Worktree) -> Result<proto::Worktree> {
+    let path_v2 = native_path_to_proto(&worktree.path)?;
+    Ok(proto::Worktree {
         ref_name: worktree
             .ref_name
             .as_ref()
@@ -9116,12 +9236,13 @@ fn worktree_to_proto(worktree: &git::repository::Worktree) -> proto::Worktree {
         sha: worktree.sha.to_string(),
         is_main: worktree.is_main,
         is_bare: worktree.is_bare,
-    }
+        path_v2: Some(path_v2),
+    })
 }
 
-fn proto_to_worktree(proto: &proto::Worktree) -> git::repository::Worktree {
-    git::repository::Worktree {
-        path: PathBuf::from(proto.path.clone()),
+fn proto_to_worktree(proto: &proto::Worktree) -> Result<git::repository::Worktree> {
+    Ok(git::repository::Worktree {
+        path: display_path_from_proto(proto.path_v2.as_ref())?,
         ref_name: if proto.ref_name.is_empty() {
             None
         } else {
@@ -9130,7 +9251,7 @@ fn proto_to_worktree(proto: &proto::Worktree) -> git::repository::Worktree {
         sha: proto.sha.clone().into(),
         is_main: proto.is_main,
         is_bare: proto.is_bare,
-    }
+    })
 }
 
 fn proto_to_branch(proto: &proto::Branch) -> git::repository::Branch {
@@ -9251,6 +9372,47 @@ mod tests {
 
     fn repo_paths(paths: &[&str]) -> Vec<RepoPath> {
         paths.iter().map(repo_path).collect()
+    }
+
+    #[test]
+    fn git_repo_paths_require_exact_provider_wire() {
+        let path = repo_path("src/main.rs");
+        let wire = repo_path_to_proto(&path).expect("repository path should serialize");
+        assert_eq!(
+            repo_path_from_proto(Some(&wire)).expect("repository path should deserialize"),
+            path
+        );
+        assert!(repo_path_from_proto(None).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn git_native_paths_preserve_non_unicode_bytes() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+
+        let path = PathBuf::from(OsString::from_vec(b"/repo/worktree-\xff".to_vec()));
+        let wire = native_path_to_proto(&path).expect("native path should serialize");
+        let round_tripped = display_path_from_proto(Some(&wire))
+            .expect("native path should deserialize on the execution host");
+        assert_eq!(
+            round_tripped.as_os_str().as_bytes(),
+            path.as_os_str().as_bytes()
+        );
+    }
+
+    #[test]
+    fn git_remote_windows_paths_keep_windows_encoding() {
+        let path = Path::new(r"C:\repo\linked-worktree");
+        let wire = native_path_to_proto_for_style(path, PathStyle::Windows)
+            .expect("remote Windows path should serialize");
+        let native_path = wire
+            .to_native_path()
+            .expect("remote Windows path should deserialize");
+        assert_eq!(
+            native_path.to_windows_wide(),
+            Ok(r"C:\repo\linked-worktree".encode_utf16().collect())
+        );
     }
 
     #[test]

@@ -2974,8 +2974,6 @@ impl Snapshot {
             scan_id: self.scan_id as u64,
             is_last_update: self.completed_scan_id == self.scan_id,
             // Sent in separate messages.
-            updated_repositories: Vec::new(),
-            removed_repositories: Vec::new(),
         }
     }
 
@@ -3432,8 +3430,6 @@ impl LocalSnapshot {
             scan_id: self.scan_id as u64,
             is_last_update: self.completed_scan_id == self.scan_id,
             // Sent in separate messages.
-            updated_repositories: Vec::new(),
-            removed_repositories: Vec::new(),
         }
     }
 
