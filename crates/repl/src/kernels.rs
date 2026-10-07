@@ -268,7 +268,7 @@ pub enum KernelSpecification {
 #[derive(Debug, Clone)]
 pub struct SshRemoteKernelSpecification {
     pub name: String,
-    pub path: SharedString,
+    pub path: vfs::NativePath,
     pub kernelspec: JupyterKernelspec,
 }
 
@@ -347,7 +347,7 @@ impl KernelSpecification {
             Self::Jupyter(spec) => spec.path.to_string_lossy().into_owned(),
             Self::PythonEnv(spec) => spec.path.to_string_lossy().into_owned(),
             Self::JupyterServer(spec) => spec.url.clone(),
-            Self::SshRemote(spec) => spec.path.to_string(),
+            Self::SshRemote(spec) => spec.path.display(),
             Self::WslRemote(spec) => spec.distro.clone(),
         })
     }
@@ -531,9 +531,18 @@ pub fn python_env_kernel_specifications(
                     // `new_smol_command` runs locally. We need to run remotely if `is_remote`.
 
                     if is_remote {
+                        let python_path = match toolchain.execution_path_text() {
+                            Ok(python_path) => python_path,
+                            Err(error) => {
+                                log::error!(
+                                    "cannot represent remote Python toolchain path in a Jupyter kernelspec: {error}"
+                                );
+                                return None;
+                            }
+                        };
                         let default_kernelspec = JupyterKernelspec {
                             argv: vec![
-                                toolchain.path.to_string(),
+                                python_path,
                                 "-m".to_owned(),
                                 "ipykernel_launcher".to_owned(),
                                 "-f".to_owned(),
@@ -565,13 +574,28 @@ pub fn python_env_kernel_specifications(
                         return Some(KernelSpecification::SshRemote(
                             SshRemoteKernelSpecification {
                                 name: remote_kernel_label.replacen("{}", &toolchain.name, 1),
-                                path: toolchain.path.clone(),
+                                path: toolchain.native_path,
                                 kernelspec: default_kernelspec,
                             },
                         ));
                     }
 
-                    let python_path = toolchain.path.to_string();
+                    let python_path = match toolchain.execution_path() {
+                        Ok(python_path) => python_path,
+                        Err(error) => {
+                            log::error!("invalid local Python toolchain path: {error}");
+                            return None;
+                        }
+                    };
+                    let python_path_text = match toolchain.execution_path_text() {
+                        Ok(python_path) => python_path,
+                        Err(error) => {
+                            log::error!(
+                                "cannot represent local Python toolchain path in a Jupyter kernelspec: {error}"
+                            );
+                            return None;
+                        }
+                    };
                     let environment_kind = extract_environment_kind(&toolchain.as_json);
 
                     let has_ipykernel = util::command::new_command(&python_path)
@@ -581,7 +605,7 @@ pub fn python_env_kernel_specifications(
                         .is_ok_and(|output| output.status.success());
 
                     let mut env = HashMap::new();
-                    if let Some(python_bin_dir) = PathBuf::from(&python_path).parent() {
+                    if let Some(python_bin_dir) = python_path.parent() {
                         if let Some(path_var) = std::env::var_os("PATH") {
                             let mut paths = std::env::split_paths(&path_var).collect::<Vec<_>>();
                             paths.insert(0, python_bin_dir.to_path_buf());
@@ -596,7 +620,7 @@ pub fn python_env_kernel_specifications(
                     }
 
                     log::info!("Preparing Python kernel for toolchain: {}", toolchain.name);
-                    log::info!("Python path: {}", python_path);
+                    log::info!("Python path: {}", python_path.display());
                     if let Some(path) = env.get("PATH") {
                          log::info!("Kernel PATH: {}", path);
                     } else {
@@ -608,7 +632,7 @@ pub fn python_env_kernel_specifications(
 
                     let kernelspec = JupyterKernelspec {
                         argv: vec![
-                            python_path.clone(),
+                            python_path_text,
                             "-m".to_owned(),
                             "ipykernel_launcher".to_owned(),
                             "-f".to_owned(),

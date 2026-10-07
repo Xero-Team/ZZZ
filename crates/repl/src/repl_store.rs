@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use collections::{HashMap, HashSet};
 use command_palette_hooks::CommandPaletteFilter;
-use gpui::{App, Context, Entity, EntityId, Global, SharedString, Subscription, Task, prelude::*};
+use gpui::{App, Context, Entity, EntityId, Global, Subscription, Task, prelude::*};
 use jupyter_websocket_client::RemoteServer;
 use language::{Language, LanguageName};
 use project::{Fs, Project, ProjectPath, WorktreeId};
@@ -30,7 +30,7 @@ pub struct ReplStore {
     kernelspecs_initialized: bool,
     selected_kernel_for_worktree: HashMap<WorktreeId, KernelSpecification>,
     kernel_specifications_for_worktree: HashMap<WorktreeId, Vec<KernelSpecification>>,
-    active_python_toolchain_for_worktree: HashMap<WorktreeId, SharedString>,
+    active_python_toolchain_for_worktree: HashMap<WorktreeId, vfs::NativePath>,
     remote_worktrees: HashSet<WorktreeId>,
     fetching_python_kernelspecs: HashSet<WorktreeId>,
     _subscriptions: Vec<Subscription>,
@@ -191,7 +191,9 @@ impl ReplStore {
             let kernel_specifications =
                 kernel_specifications_res.context("getting python kernelspecs")?;
 
-            let active_toolchain_path = active_toolchain.await.map(|toolchain| toolchain.path);
+            let active_toolchain_path = active_toolchain
+                .await
+                .map(|toolchain| toolchain.native_path);
 
             this.update(cx, |this, cx| {
                 this.kernel_specifications_for_worktree
@@ -297,8 +299,25 @@ impl ReplStore {
             .insert(worktree_id, kernelspec);
     }
 
-    pub fn active_python_toolchain_path(&self, worktree_id: WorktreeId) -> Option<&SharedString> {
+    pub fn active_python_toolchain_path(
+        &self,
+        worktree_id: WorktreeId,
+    ) -> Option<&vfs::NativePath> {
         self.active_python_toolchain_for_worktree.get(&worktree_id)
+    }
+
+    fn kernel_matches_native_path(
+        specification: &KernelSpecification,
+        native_path: &vfs::NativePath,
+    ) -> bool {
+        match specification {
+            KernelSpecification::PythonEnv(specification) => {
+                vfs::NativePath::from_local_path(&specification.path)
+                    .is_ok_and(|path| &path == native_path)
+            }
+            KernelSpecification::SshRemote(specification) => &specification.path == native_path,
+            _ => false,
+        }
     }
 
     pub fn selected_kernel(&self, worktree_id: WorktreeId) -> Option<&KernelSpecification> {
@@ -311,7 +330,7 @@ impl ReplStore {
         spec: &KernelSpecification,
     ) -> bool {
         if let Some(active_path) = self.active_python_toolchain_path(worktree_id) {
-            spec.path().as_ref() == active_path.as_ref()
+            Self::kernel_matches_native_path(spec, active_path)
         } else {
             false
         }
@@ -336,7 +355,7 @@ impl ReplStore {
                 .find(|spec| {
                     spec.has_ipykernel()
                         && language_at_cursor.matches_kernel_language(spec.language().as_ref())
-                        && spec.path().as_ref() == active_path.as_ref()
+                        && Self::kernel_matches_native_path(spec, active_path)
                 })
                 .cloned();
             if recommended.is_some() {

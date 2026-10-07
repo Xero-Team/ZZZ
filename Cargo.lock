@@ -8754,6 +8754,7 @@ dependencies = [
  "toml 1.1.6+spec-1.1.0",
  "tree-sitter",
  "util",
+ "vfs",
 ]
 
 [[package]]
@@ -8950,6 +8951,7 @@ dependencies = [
  "unindent",
  "url",
  "util",
+ "vfs",
 ]
 
 [[package]]
@@ -14103,6 +14105,7 @@ dependencies = [
  "ui",
  "util",
  "uuid",
+ "vfs",
  "workspace",
  "zzz_actions",
 ]

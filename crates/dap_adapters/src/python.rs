@@ -273,15 +273,19 @@ impl PythonDebugAdapter {
         let result = self.base_venv_path
             .get_or_init(|| async {
                 let base_python = if let Some(toolchain) = toolchain {
-                    toolchain.path.to_string()
+                    toolchain
+                        .execution_path()
+                        .map_err(|error| format!("invalid Python toolchain path: {error}"))?
                 } else {
-                    Self::system_python_name(delegate).await.ok_or_else(|| {
-                        let mut message = "Could not find a Python installation".to_owned();
-                        if cfg!(windows){
-                            message.push_str(". Install Python from the Microsoft Store, or manually from https://www.python.org/downloads/windows.")
-                        }
-                        message
-                    })?
+                    PathBuf::from(
+                        Self::system_python_name(delegate).await.ok_or_else(|| {
+                            let mut message = "Could not find a Python installation".to_owned();
+                            if cfg!(windows){
+                                message.push_str(". Install Python from the Microsoft Store, or manually from https://www.python.org/downloads/windows.")
+                            }
+                            message
+                        })?,
+                    )
                 };
 
                 let debug_adapter_path = paths::debug_adapters_dir().join(Self::DEBUG_ADAPTER_NAME.as_ref());
@@ -300,7 +304,7 @@ impl PythonDebugAdapter {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     let debug_adapter_path = debug_adapter_path.display();
-                    return Err(format!("Failed to create base virtual environment with {base_python} in:\n{debug_adapter_path}\nstderr:\n{stderr}\nstdout:\n{stdout}\n"));
+                    return Err(format!("Failed to create base virtual environment with {} in:\n{debug_adapter_path}\nstderr:\n{stderr}\nstdout:\n{stdout}\n", base_python.display()));
                 }
 
                 const PYTHON_PATH: &str = if cfg!(target_os = "windows") {
@@ -911,6 +915,9 @@ impl DebugAdapter for PythonDebugAdapter {
             .await
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         if let Some(toolchain) = &toolchain {
+            let execution_path = toolchain.execution_path_text().context(
+                "Python toolchain path is not representable in the debug adapter protocol",
+            )?;
             return self
                 .get_installed_binary(
                     delegate,
@@ -918,7 +925,7 @@ impl DebugAdapter for PythonDebugAdapter {
                     None,
                     user_args,
                     user_env,
-                    Some(toolchain.path.to_string()),
+                    Some(execution_path),
                 )
                 .await;
         }

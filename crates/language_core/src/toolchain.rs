@@ -4,7 +4,10 @@
 //! which is a set of tools used to interact with the projects written in said language.
 //! For example, a Python project can have an associated virtual environment; a Rust project can have a toolchain override.
 
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use gpui_shared_string::SharedString;
 use util::rel_path::RelPath;
@@ -16,23 +19,54 @@ use crate::{LanguageName, ManifestName};
 pub struct Toolchain {
     /// User-facing label
     pub name: SharedString,
-    /// Absolute path
-    pub path: SharedString,
+    /// Exact absolute path on the execution host.
+    pub native_path: vfs::NativePath,
     pub language_name: LanguageName,
     /// Full toolchain data (including language-specific details)
     pub as_json: serde_json::Value,
+}
+
+impl Toolchain {
+    pub fn try_new(
+        name: SharedString,
+        native_path: vfs::NativePath,
+        language_name: LanguageName,
+        as_json: serde_json::Value,
+    ) -> Result<Self, vfs::PathError> {
+        if !native_path.is_absolute() {
+            return Err(vfs::PathError::AbsolutePathRequired);
+        }
+        Ok(Self {
+            name,
+            native_path,
+            language_name,
+            as_json,
+        })
+    }
+
+    pub fn execution_path(&self) -> Result<PathBuf, vfs::PathError> {
+        self.native_path.to_local_path_buf()
+    }
+
+    pub fn execution_path_text(&self) -> Result<String, vfs::NativePathTextError> {
+        self.native_path.to_unicode_string()
+    }
+
+    pub fn display_path(&self) -> String {
+        self.native_path.display()
+    }
 }
 
 impl std::hash::Hash for Toolchain {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let Self {
             name,
-            path,
+            native_path,
             language_name,
             as_json: _,
         } = self;
         name.hash(state);
-        path.hash(state);
+        native_path.hash(state);
         language_name.hash(state);
     }
 }
@@ -41,13 +75,17 @@ impl PartialEq for Toolchain {
     fn eq(&self, other: &Self) -> bool {
         let Self {
             name,
-            path,
+            native_path,
             language_name,
             as_json: _,
         } = self;
         // Do not use as_json for comparisons; it shouldn't impact equality, as it's not user-surfaced.
         // Thus, there could be multiple entries that look the same in the UI.
-        (name, path, language_name).eq(&(&other.name, &other.path, &other.language_name))
+        (name, native_path, language_name).eq(&(
+            &other.name,
+            &other.native_path,
+            &other.language_name,
+        ))
     }
 }
 
@@ -128,15 +166,16 @@ mod tests {
     use super::*;
 
     fn sample_toolchain(name: &str, path: &str) -> Toolchain {
-        Toolchain {
-            name: SharedString::new(name),
-            path: SharedString::new(path),
-            language_name: LanguageName::new("Rust"),
-            as_json: serde_json::json!({
+        Toolchain::try_new(
+            SharedString::new(name),
+            vfs::NativePath::from_unix_bytes(path.as_bytes()).unwrap(),
+            LanguageName::new("Rust"),
+            serde_json::json!({
                 "name": name,
                 "path": path,
             }),
-        }
+        )
+        .unwrap()
     }
 
     #[test]
@@ -146,6 +185,20 @@ mod tests {
         right.as_json = serde_json::json!({ "different": true });
 
         assert_eq!(left, right);
+    }
+
+    #[test]
+    fn toolchain_rejects_relative_native_path() {
+        let native_path = vfs::NativePath::from_unix_bytes(b"toolchains/stable").unwrap();
+        assert_eq!(
+            Toolchain::try_new(
+                SharedString::new_static("stable"),
+                native_path,
+                LanguageName::new("Rust"),
+                serde_json::Value::Null,
+            ),
+            Err(vfs::PathError::AbsolutePathRequired)
+        );
     }
 
     #[test]

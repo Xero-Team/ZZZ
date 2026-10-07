@@ -1908,7 +1908,13 @@ impl Workspace {
             let toolchains = db.toolchains(workspace_id).await?;
 
             for (toolchain, worktree_path, path) in toolchains {
-                let toolchain_path = PathBuf::from(toolchain.path.clone().to_string());
+                let toolchain_path = match toolchain.execution_path() {
+                    Ok(toolchain_path) => toolchain_path,
+                    Err(error) => {
+                        log::error!("cannot restore toolchain with invalid native path: {error}");
+                        continue;
+                    }
+                };
                 let Some(worktree_id) = project_handle.read_with(cx, |this, cx| {
                     this.find_worktree(&worktree_path, cx)
                         .and_then(|(worktree, rel_path)| {

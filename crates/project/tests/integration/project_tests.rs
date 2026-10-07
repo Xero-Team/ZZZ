@@ -15401,12 +15401,16 @@ fn python_lang(fs: Arc<dyn Fs>) -> Arc<Language> {
             for ancestor in ancestors {
                 let venv_path = worktree_root.join(ancestor.as_std_path()).join(".venv");
                 if self.0.is_dir(&venv_path).await {
-                    toolchains.push(Toolchain {
-                        name: SharedString::new_static("Python Venv"),
-                        path: venv_path.to_string_lossy().into_owned().into(),
-                        language_name: LanguageName(SharedString::new_static("Python")),
-                        as_json: serde_json::Value::Null,
-                    })
+                    toolchains.push(
+                        Toolchain::try_new(
+                            SharedString::new_static("Python Venv"),
+                            vfs::NativePath::from_local_path(&venv_path)
+                                .expect("test virtual environment path should be representable"),
+                            LanguageName(SharedString::new_static("Python")),
+                            serde_json::Value::Null,
+                        )
+                        .expect("absolute test toolchain path should be accepted"),
+                    )
                 }
             }
             ToolchainList {
@@ -15436,7 +15440,7 @@ fn python_lang(fs: Arc<dyn Fs>) -> Arc<Language> {
             _: ShellKind,
             _: &gpui::App,
         ) -> futures::future::BoxFuture<'static, Vec<String>> {
-            let toolchain_path = toolchain.path.to_string();
+            let toolchain_path = toolchain.display_path();
             Box::pin(async move { vec![format!("activate {toolchain_path}")] })
         }
     }

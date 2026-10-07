@@ -1099,6 +1099,34 @@ impl Domain for WorkspaceDb {
             DROP TABLE trusted_worktrees;
             ALTER TABLE trusted_worktrees_v2 RENAME TO trusted_worktrees;
         ),
+        sql!(
+            CREATE TABLE toolchains_v3 (
+                workspace_id INTEGER,
+                worktree_root_path TEXT NOT NULL,
+                language_name TEXT NOT NULL,
+                name TEXT NOT NULL,
+                path_v2 BLOB NOT NULL,
+                raw_json TEXT NOT NULL,
+                relative_worktree_path TEXT NOT NULL,
+                PRIMARY KEY (workspace_id, worktree_root_path, language_name, relative_worktree_path)
+            ) STRICT;
+            DROP TABLE toolchains;
+            ALTER TABLE toolchains_v3 RENAME TO toolchains;
+
+            CREATE TABLE user_toolchains_v3 (
+                remote_connection_id INTEGER,
+                workspace_id INTEGER NOT NULL,
+                worktree_root_path TEXT NOT NULL,
+                relative_worktree_path TEXT NOT NULL,
+                language_name TEXT NOT NULL,
+                name TEXT NOT NULL,
+                path_v2 BLOB NOT NULL,
+                raw_json TEXT NOT NULL,
+                PRIMARY KEY (workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path_v2, raw_json)
+            ) STRICT;
+            DROP TABLE user_toolchains;
+            ALTER TABLE user_toolchains_v3 RENAME TO user_toolchains;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -1460,12 +1488,12 @@ impl WorkspaceDb {
         workspace_id: WorkspaceId,
         remote_connection_id: Option<RemoteConnectionId>,
     ) -> BTreeMap<ToolchainScope, IndexSet<Toolchain>> {
-        type RowKind = (WorkspaceId, String, String, String, String, String, String);
+        type RowKind = (WorkspaceId, String, String, String, String, Vec<u8>, String);
 
         let toolchains: Vec<RowKind> = self
             .select_bound(sql! {
                 SELECT workspace_id, worktree_root_path, relative_worktree_path,
-                language_name, name, path, raw_json
+                language_name, name, path_v2, raw_json
                 FROM user_toolchains WHERE remote_connection_id IS ?1 AND (
                       workspace_id IN (0, ?2)
                 )
@@ -1515,11 +1543,16 @@ impl WorkspaceDb {
             let Ok(as_json) = serde_json::from_str(&raw_json) else {
                 continue;
             };
-            let toolchain = Toolchain {
-                name: SharedString::from(name),
-                path: SharedString::from(path),
-                language_name: LanguageName::from_proto(language_name),
+            let Ok(native_path) = serde_json::from_slice(&path) else {
+                continue;
+            };
+            let Ok(toolchain) = Toolchain::try_new(
+                SharedString::from(name),
+                native_path,
+                LanguageName::from_proto(language_name),
                 as_json,
+            ) else {
+                continue;
             };
             ret.entry(scope).or_default().insert(toolchain);
         }
@@ -1604,14 +1637,21 @@ impl WorkspaceDb {
 
                 for (scope, toolchains) in workspace.user_toolchains {
                     for toolchain in toolchains {
-                        let query = sql!(INSERT OR REPLACE INTO user_toolchains(remote_connection_id, workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8));
+                        let query = sql!(INSERT OR REPLACE INTO user_toolchains(remote_connection_id, workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path_v2, raw_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8));
                         let (workspace_id, worktree_root_path, relative_worktree_path) = match scope {
                             ToolchainScope::Subproject(ref worktree_root_path, ref path) => (Some(workspace.id), Some(worktree_root_path.to_string_lossy().into_owned()), Some(path.as_unix_str().to_owned())),
                             ToolchainScope::Project => (Some(workspace.id), None, None),
                             ToolchainScope::Global => (None, None, None),
                         };
+                        let native_path = match serde_json::to_vec(&toolchain.native_path) {
+                            Ok(native_path) => native_path,
+                            Err(error) => {
+                                log::error!("failed to encode toolchain path: {error}");
+                                continue;
+                            }
+                        };
                         let args = (remote_connection_id, workspace_id.unwrap_or(WorkspaceId(0)), worktree_root_path.unwrap_or_default(), relative_worktree_path.unwrap_or_default(),
-                        toolchain.language_name.as_ref().to_owned(), toolchain.name.to_string(), toolchain.path.to_string(), toolchain.as_json.to_string());
+                        toolchain.language_name.as_ref().to_owned(), toolchain.name.to_string(), native_path, toolchain.as_json.to_string());
                         if let Err(err) = conn.exec_bound(query)?(args) {
                             log::error!("{err}");
                         }
@@ -2585,26 +2625,28 @@ impl WorkspaceDb {
             let mut select = this
                 .select_bound(sql!(
                     SELECT
-                        name, path, worktree_root_path, relative_worktree_path, language_name, raw_json
+                        name, path_v2, worktree_root_path, relative_worktree_path, language_name, raw_json
                     FROM toolchains
                     WHERE workspace_id = ?
                 ))
                 .context("select toolchains")?;
 
-            let toolchain: Vec<(String, String, String, String, String, String)> =
+            let toolchain: Vec<(String, Vec<u8>, String, String, String, String)> =
                 select(workspace_id)?;
 
             Ok(toolchain
                 .into_iter()
                 .filter_map(
                     |(name, path, worktree_root_path, relative_worktree_path, language, json)| {
+                        let native_path = serde_json::from_slice(&path).log_err()?;
                         Some((
-                            Toolchain {
-                                name: name.into(),
-                                path: path.into(),
-                                language_name: LanguageName::new(&language),
-                                as_json: serde_json::Value::from_str(&json).ok()?,
-                            },
+                            Toolchain::try_new(
+                                name.into(),
+                                native_path,
+                                LanguageName::new(&language),
+                                serde_json::Value::from_str(&json).ok()?,
+                            )
+                            .log_err()?,
                            Arc::from(worktree_root_path.as_ref()),
                             RelPath::from_proto(&relative_worktree_path).log_err()?,
                         ))
@@ -2629,14 +2671,16 @@ impl WorkspaceDb {
         self.write(move |conn| {
             let mut insert = conn
                 .exec_bound(sql!(
-                    INSERT INTO toolchains(workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json) VALUES (?, ?, ?, ?, ?,  ?, ?)
+                    INSERT INTO toolchains(workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path_v2, raw_json) VALUES (?, ?, ?, ?, ?,  ?, ?)
                     ON CONFLICT DO
                     UPDATE SET
                         name = ?5,
-                        path = ?6,
+                        path_v2 = ?6,
                         raw_json = ?7
                 ))
                 .context("Preparing insertion")?;
+
+            let native_path = serde_json::to_vec(&toolchain.native_path)?;
 
             insert((
                 workspace_id,
@@ -2644,7 +2688,7 @@ impl WorkspaceDb {
                 relative_worktree_path.as_unix_str(),
                 toolchain.language_name.as_ref(),
                 toolchain.name.as_ref(),
-                toolchain.path.as_ref(),
+                native_path,
                 toolchain.as_json.to_string(),
             ))?;
 
@@ -2982,6 +3026,79 @@ mod tests {
             .fetch_trusted_worktrees()
             .expect("trusted paths should load");
         assert_eq!(actual, expected);
+    }
+
+    #[gpui::test]
+    async fn test_toolchain_exact_path_roundtrip() {
+        let db = WorkspaceDb::open_test_db("test_toolchain_exact_path_roundtrip").await;
+        let workspace_id = db.next_id().await.expect("workspace ID should allocate");
+        let native_path = vfs::NativePath::from_unix_bytes(b"/toolchains/python-\xff")
+            .expect("toolchain path fixture should be valid");
+        let expected = Toolchain::try_new(
+            "Python".into(),
+            native_path,
+            LanguageName::new_static("Python"),
+            serde_json::json!({ "kind": "venv" }),
+        )
+        .expect("absolute toolchain path should be accepted");
+
+        db.set_toolchain(
+            workspace_id,
+            Arc::from(Path::new("/project")),
+            RelPath::empty_arc(),
+            expected.clone(),
+        )
+        .await
+        .expect("toolchain should save");
+
+        let loaded = db
+            .toolchains(workspace_id)
+            .await
+            .expect("toolchain should load");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].0, expected);
+        assert_eq!(loaded[0].0.as_json, expected.as_json);
+    }
+
+    #[gpui::test]
+    async fn test_user_toolchain_exact_path_roundtrip() {
+        let db = WorkspaceDb::open_test_db("test_user_toolchain_exact_path_roundtrip").await;
+        let workspace_id = db.next_id().await.expect("workspace ID should allocate");
+        let native_path = vfs::NativePath::from_unix_bytes(b"/toolchains/custom-\xff")
+            .expect("toolchain path fixture should be valid");
+        let expected = Toolchain::try_new(
+            "Custom Python".into(),
+            native_path,
+            LanguageName::new_static("Python"),
+            serde_json::json!({ "kind": "custom" }),
+        )
+        .expect("absolute toolchain path should be accepted");
+        let scope = ToolchainScope::Project;
+        let workspace = SerializedWorkspace {
+            id: workspace_id,
+            paths: PathList::new(&["/project"]),
+            identity_paths: None,
+            location: SerializedWorkspaceLocation::Local,
+            center_group: Default::default(),
+            window_bounds: Default::default(),
+            display: Default::default(),
+            docks: Default::default(),
+            centered_layout: false,
+            bookmarks: Default::default(),
+            breakpoints: Default::default(),
+            session_id: None,
+            window_id: None,
+            user_toolchains: BTreeMap::from_iter([(
+                scope.clone(),
+                IndexSet::from_iter([expected.clone()]),
+            )]),
+            recent_navigation_history: Default::default(),
+        };
+
+        db.save_workspace(workspace).await;
+
+        let loaded = db.user_toolchains(workspace_id, None);
+        assert_eq!(loaded.get(&scope), Some(&IndexSet::from_iter([expected])));
     }
 
     #[gpui::test]

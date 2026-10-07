@@ -217,11 +217,18 @@ impl AddToolchainState {
     ) -> PathInputState {
         PathInputState::Resolving(cx.spawn_in(window, async move |this, cx| {
             _ = maybe!(async move {
-                let toolchain = project
-                    .update(cx, |this, cx| {
-                        this.resolve_toolchain(path.clone(), language_name, cx)
-                    })
-                    .await;
+                let toolchain = match project.read_with(cx, |project, cx| {
+                    project.native_path_for_execution(&path, cx)
+                }) {
+                    Ok(native_path) => {
+                        project
+                            .update(cx, |this, cx| {
+                                this.resolve_toolchain(native_path, language_name, cx)
+                            })
+                            .await
+                    }
+                    Err(error) => Err(error),
+                };
                 let Ok(toolchain) = toolchain else {
                     // Go back to the path input state
                     _ = this.update_in(cx, |this, window, cx| {
@@ -248,7 +255,7 @@ impl AddToolchainState {
                     return Err(anyhow::anyhow!("Failed to resolve toolchain"));
                 };
                 let resolved_toolchain_path = project.read_with(cx, |this, cx| {
-                    this.find_project_path(&toolchain.path.as_ref(), cx)
+                    this.find_project_path_for_native_path(&toolchain.native_path, cx)
                 });
 
                 // Suggest a default scope based on the applicability.
@@ -911,17 +918,16 @@ impl ToolchainSelectorDelegate {
             )),
         }
     }
-    fn relativize_path(
-        path: SharedString,
-        worktree_root: &Path,
-        path_style: PathStyle,
-    ) -> SharedString {
-        Path::new(&path.as_ref())
+    fn relativize_path(path: String, worktree_root: &Path, path_style: PathStyle) -> SharedString {
+        let relative_path = Path::new(path.as_str())
             .strip_prefix(&worktree_root)
             .ok()
-            .and_then(|suffix| suffix.to_str())
-            .map(|suffix| format!(".{}{suffix}", path_style.primary_separator()).into())
-            .unwrap_or(path)
+            .and_then(|suffix| suffix.to_str());
+        if let Some(relative_path) = relative_path {
+            format!(".{}{relative_path}", path_style.primary_separator()).into()
+        } else {
+            path.into()
+        }
     }
 }
 
@@ -1016,7 +1022,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                     .enumerate()
                     .map(|(index, (candidate, _))| {
                         let path = Self::relativize_path(
-                            candidate.path.clone(),
+                            candidate.display_path(),
                             &worktree_root_path,
                             path_style,
                         );
@@ -1035,7 +1041,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                     .enumerate()
                     .map(|(candidate_id, (toolchain, _))| {
                         let path = Self::relativize_path(
-                            toolchain.path.clone(),
+                            toolchain.display_path(),
                             &worktree_root_path,
                             path_style,
                         );
@@ -1080,7 +1086,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
         let label = toolchain.name.clone();
         let path_style = self.project.read(cx).path_style(cx);
         let path = Self::relativize_path(
-            toolchain.path.clone(),
+            toolchain.display_path(),
             &self.worktree_abs_path_root,
             path_style,
         );
@@ -1107,7 +1113,8 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                 .when_some(scope.as_ref(), |this, scope| {
                     let id: SharedString = format!(
                         "delete-custom-toolchain-{}-{}",
-                        toolchain.name, toolchain.path
+                        toolchain.name,
+                        toolchain.display_path()
                     )
                     .into();
                     let toolchain = toolchain.clone();

@@ -482,7 +482,9 @@ impl LspInstaller for TyLspAdapter {
         let ty_in_venv = if let Some(toolchain) = toolchain
             && toolchain.language_name.as_ref() == "Python"
         {
-            Path::new(toolchain.path.as_str())
+            toolchain
+                .execution_path()
+                .ok()?
                 .parent()
                 .map(|path| path.join("ty"))
         } else {
@@ -750,7 +752,7 @@ impl LspAdapter for PyrightLspAdapter {
                     .as_object_mut()
                     .expect("value should have the expected type");
 
-                let interpreter_path = toolchain.path.to_string();
+                let interpreter_path = toolchain.execution_path_text().ok();
                 if let Some(venv_dir) = &env.environment.prefix {
                     // Set venvPath and venv at the root level
                     // This matches the format of a pyrightconfig.json file
@@ -787,14 +789,16 @@ impl LspAdapter for PyrightLspAdapter {
                     .expect("value should have the expected type");
 
                 // Set both pythonPath and defaultInterpreterPath for compatibility
-                python.insert(
-                    "pythonPath".to_owned(),
-                    Value::String(interpreter_path.clone()),
-                );
-                python.insert(
-                    "defaultInterpreterPath".to_owned(),
-                    Value::String(interpreter_path),
-                );
+                if let Some(interpreter_path) = interpreter_path {
+                    python.insert(
+                        "pythonPath".to_owned(),
+                        Value::String(interpreter_path.clone()),
+                    );
+                    python.insert(
+                        "defaultInterpreterPath".to_owned(),
+                        Value::String(interpreter_path),
+                    );
+                }
             }
 
             normalize_pyright_analysis_configuration(&mut user_settings, "python");
@@ -954,13 +958,15 @@ impl ContextProvider for PythonContextProvider {
                     .and_then(|f| f.path().parent())
                     .map_or_else(|| RelPath::empty_arc(), Arc::from);
 
-                toolchains
+                match toolchains
                     .active_toolchain(worktree_id, file_path, "Python".into(), cx)
                     .await
-                    .map_or_else(
-                        || String::from("python3"),
-                        |toolchain| toolchain.path.to_string(),
-                    )
+                {
+                    Some(toolchain) => toolchain
+                        .execution_path_text()
+                        .context("Python toolchain path is not representable as task text")?,
+                    None => String::from("python3"),
+                }
             } else {
                 String::from("python3")
             };
@@ -1649,18 +1655,15 @@ async fn venv_to_toolchain(venv: PythonEnvironment, fs: &dyn Fs) -> Option<Toolc
         activation_scripts: Some(activation_scripts),
     };
 
-    Some(Toolchain {
-        name: name.into(),
-        path: data
-            .environment
-            .executable
-            .as_ref()?
-            .to_str()?
-            .to_owned()
-            .into(),
-        language_name: LanguageName::new_static("Python"),
-        as_json: serde_json::to_value(data).ok()?,
-    })
+    let native_path =
+        vfs::NativePath::from_local_path(data.environment.executable.as_ref()?).ok()?;
+    Toolchain::try_new(
+        name.into(),
+        native_path,
+        LanguageName::new_static("Python"),
+        serde_json::to_value(data).ok()?,
+    )
+    .ok()
 }
 
 async fn resolve_venv_activation_scripts(
@@ -1917,7 +1920,9 @@ impl LspAdapter for PyLspAdapter {
                     });
 
             // If user did not explicitly modify their python venv, use one from picker.
-            if let Some(toolchain) = toolchain {
+            if let Some(toolchain) = toolchain
+                && let Ok(execution_path) = toolchain.execution_path_text()
+            {
                 if !user_settings.is_object() {
                     user_settings = Value::Object(serde_json::Map::default());
                 }
@@ -1935,7 +1940,7 @@ impl LspAdapter for PyLspAdapter {
                         .as_object_mut()
                     {
                         jedi.entry("environment".to_owned())
-                            .or_insert_with(|| Value::String(toolchain.path.clone().into()));
+                            .or_insert_with(|| Value::String(execution_path.clone()));
                     }
                     if let Some(pylint) = python
                         .entry("pylsp_mypy")
@@ -1945,7 +1950,7 @@ impl LspAdapter for PyLspAdapter {
                         pylint.entry("overrides".to_owned()).or_insert_with(|| {
                             Value::Array(vec![
                                 Value::String("--python-executable".into()),
-                                Value::String(toolchain.path.into()),
+                                Value::String(execution_path),
                                 Value::String("--cache-dir=/dev/null".into()),
                                 Value::Bool(true),
                             ])
@@ -1991,13 +1996,14 @@ impl LspInstaller for PyLspAdapter {
             })
         } else {
             let toolchain = toolchain?;
-            let pylsp_path = Path::new(toolchain.path.as_ref()).parent()?.join("pylsp");
+            let execution_path = toolchain.execution_path().ok()?;
+            let pylsp_path = execution_path.parent()?.join("pylsp");
             if !pylsp_path.exists() {
                 return None;
             }
             delegate
                 .try_exec(LanguageServerBinary {
-                    path: toolchain.path.to_string().into(),
+                    path: execution_path.clone(),
                     arguments: vec![pylsp_path.clone().into(), "--version".into()],
                     env: None,
                 })
@@ -2007,7 +2013,7 @@ impl LspInstaller for PyLspAdapter {
                 })
                 .ok()?;
             Some(LanguageServerBinary {
-                path: toolchain.path.to_string().into(),
+                path: execution_path,
                 arguments: vec![pylsp_path.into()],
                 env: None,
             })
@@ -2201,7 +2207,7 @@ impl LspAdapter for BasedPyrightLspAdapter {
                     .as_object_mut()
                     .expect("value should have the expected type");
 
-                let interpreter_path = toolchain.path.to_string();
+                let interpreter_path = toolchain.execution_path_text().ok();
                 if let Some(venv_dir) = env.prefix {
                     // Set venvPath and venv at the root level
                     // This matches the format of a pyrightconfig.json file
@@ -2224,10 +2230,11 @@ impl LspAdapter for BasedPyrightLspAdapter {
                 }
 
                 // Set both pythonPath and defaultInterpreterPath for compatibility
-                if let Some(python) = object
-                    .entry("python")
-                    .or_insert(Value::Object(serde_json::Map::default()))
-                    .as_object_mut()
+                if let Some(interpreter_path) = interpreter_path
+                    && let Some(python) = object
+                        .entry("python")
+                        .or_insert(Value::Object(serde_json::Map::default()))
+                        .as_object_mut()
                 {
                     python.insert(
                         "pythonPath".to_owned(),
@@ -2609,7 +2616,9 @@ impl LspInstaller for RuffLspAdapter {
         let ruff_in_venv = if let Some(toolchain) = toolchain
             && toolchain.language_name.as_ref() == "Python"
         {
-            Path::new(toolchain.path.as_str())
+            toolchain
+                .execution_path()
+                .ok()?
                 .parent()
                 .map(|path| path.join("ruff"))
         } else {
@@ -2957,12 +2966,13 @@ mod tests {
             },
         });
 
-        let toolchain = Toolchain {
-            name: "test".into(),
-            path: "/tmp/conda".into(),
-            language_name: LanguageName::new_static("Python"),
-            as_json: data,
-        };
+        let toolchain = Toolchain::try_new(
+            "test".into(),
+            vfs::NativePath::from_unix_bytes(b"/tmp/conda").unwrap(),
+            LanguageName::new_static("Python"),
+            data,
+        )
+        .unwrap();
 
         let script = cx
             .update(|cx| provider.activation_script(&toolchain, ShellKind::Posix, cx))
@@ -3026,12 +3036,13 @@ mod tests {
             },
         });
 
-        let toolchain = Toolchain {
-            name: "test".into(),
-            path: "/tmp/conda".into(),
-            language_name: LanguageName::new_static("Python"),
-            as_json: data,
-        };
+        let toolchain = Toolchain::try_new(
+            "test".into(),
+            vfs::NativePath::from_unix_bytes(b"/tmp/conda").unwrap(),
+            LanguageName::new_static("Python"),
+            data,
+        )
+        .unwrap();
 
         let script = cx
             .update(|cx| provider.activation_script(&toolchain, ShellKind::Posix, cx))
@@ -3094,12 +3105,13 @@ mod tests {
             },
         });
 
-        let toolchain = Toolchain {
-            name: "test".into(),
-            path: "/tmp/conda".into(),
-            language_name: LanguageName::new_static("Python"),
-            as_json: data,
-        };
+        let toolchain = Toolchain::try_new(
+            "test".into(),
+            vfs::NativePath::from_unix_bytes(b"/tmp/conda").unwrap(),
+            LanguageName::new_static("Python"),
+            data,
+        )
+        .unwrap();
 
         let script = cx
             .update(|cx| provider.activation_script(&toolchain, ShellKind::Posix, cx))

@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::{Context as _, Result, bail};
 
@@ -48,8 +48,54 @@ pub struct Toolchains {
     pub root_path: Arc<RelPath>,
     pub user_toolchains: BTreeMap<ToolchainScope, IndexSet<Toolchain>>,
 }
+
+fn toolchain_to_proto(toolchain: &Toolchain) -> proto::Toolchain {
+    proto::Toolchain {
+        name: toolchain.name.to_string(),
+        raw_json: toolchain.as_json.to_string(),
+        path_v2: Some(proto::NativePathV2::from_native_path(
+            &toolchain.native_path,
+        )),
+    }
+}
+
+fn toolchain_from_proto(
+    toolchain: proto::Toolchain,
+    language_name: LanguageName,
+) -> Result<Toolchain> {
+    let native_path = toolchain
+        .path_v2
+        .as_ref()
+        .context("toolchain is missing its exact native path")?
+        .to_native_path()?;
+    Ok(Toolchain::try_new(
+        toolchain.name.into(),
+        native_path,
+        language_name,
+        serde_json::Value::from_str(&toolchain.raw_json)?,
+    )?)
+}
+
 impl EventEmitter<ToolchainStoreEvent> for ToolchainStore {}
 impl ToolchainStore {
+    fn project_path_from_proto(
+        &self,
+        worktree_id: WorktreeId,
+        path: Option<&proto::VfsPathV2>,
+        cx: &App,
+    ) -> Result<ProjectPath> {
+        let worktree = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(worktree_id, cx)
+            .context("toolchain worktree not found")?;
+        let path = path.context("toolchain request is missing its exact worktree path")?;
+        let path = worktree
+            .read(cx)
+            .relative_path_from_vfs_path(&path.to_vfs_path()?)?;
+        Ok(ProjectPath { worktree_id, path })
+    }
+
     pub fn init(client: &AnyProtoClient) {
         client.add_entity_request_handler(Self::handle_activate_toolchain);
         client.add_entity_request_handler(Self::handle_list_toolchains);
@@ -88,7 +134,11 @@ impl ToolchainStore {
         client: AnyProtoClient,
         cx: &mut Context<Self>,
     ) -> Self {
-        let entity = cx.new(|_| RemoteToolchainStore { client, project_id });
+        let entity = cx.new(|_| RemoteToolchainStore {
+            client,
+            project_id,
+            worktree_store: worktree_store.clone(),
+        });
         let _sub = cx.subscribe(&entity, |_, _, e: &ToolchainStoreEvent, cx| {
             cx.emit(e.clone())
         });
@@ -151,17 +201,17 @@ impl ToolchainStore {
 
     pub(crate) fn resolve_toolchain(
         &self,
-        abs_path: PathBuf,
+        native_path: vfs::NativePath,
         language_name: LanguageName,
         cx: &mut Context<Self>,
     ) -> Task<Result<Toolchain>> {
-        debug_assert!(abs_path.is_absolute());
+        debug_assert!(native_path.is_absolute());
         match &self.mode {
             ToolchainStoreInner::Local(local) => local.update(cx, |this, cx| {
-                this.resolve_toolchain(abs_path, language_name, cx)
+                this.resolve_toolchain(native_path, language_name, cx)
             }),
             ToolchainStoreInner::Remote(remote) => remote.update(cx, |this, cx| {
-                this.resolve_toolchain(abs_path, language_name, cx)
+                this.resolve_toolchain(native_path, language_name, cx)
             }),
         }
     }
@@ -253,21 +303,11 @@ impl ToolchainStore {
             let Some(toolchain) = envelope.payload.toolchain else {
                 bail!("Missing `toolchain` in payload");
             };
-            let toolchain = Toolchain {
-                name: toolchain.name.into(),
-                // todo(windows)
-                // Do we need to convert path to native string?
-                path: toolchain.path.into(),
-                as_json: serde_json::Value::from_str(&toolchain.raw_json)?,
-                language_name,
-            };
+            let toolchain = toolchain_from_proto(toolchain, language_name)?;
             let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-            let path = if let Some(path) = envelope.payload.path {
-                RelPath::from_proto(&path)?
-            } else {
-                RelPath::empty_arc()
-            };
-            Ok(this.activate_toolchain(ProjectPath { worktree_id, path }, toolchain, cx))
+            let project_path =
+                this.project_path_from_proto(worktree_id, envelope.payload.path_v2.as_ref(), cx)?;
+            Ok(this.activate_toolchain(project_path, toolchain, cx))
         })?
         .await;
         Ok(proto::Ack {})
@@ -277,31 +317,21 @@ impl ToolchainStore {
         envelope: TypedEnvelope<proto::ActiveToolchain>,
         mut cx: AsyncApp,
     ) -> Result<proto::ActiveToolchainResponse> {
-        let path = RelPath::unix(envelope.payload.path.as_deref().unwrap_or(""))?;
         let toolchain = this
-            .update(&mut cx, |this, cx| {
+            .update(&mut cx, |this, cx| -> Result<_> {
                 let language_name = LanguageName::from_proto(envelope.payload.language_name);
                 let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-                this.active_toolchain(
-                    ProjectPath {
-                        worktree_id,
-                        path: Arc::from(path),
-                    },
-                    language_name,
+                let project_path = this.project_path_from_proto(
+                    worktree_id,
+                    envelope.payload.path_v2.as_ref(),
                     cx,
-                )
-            })
+                )?;
+                Ok(this.active_toolchain(project_path, language_name, cx))
+            })?
             .await;
 
         Ok(proto::ActiveToolchainResponse {
-            toolchain: toolchain.map(|toolchain| {
-                let path = PathBuf::from(toolchain.path.to_string());
-                proto::Toolchain {
-                    name: toolchain.name.into(),
-                    path: path.to_string_lossy().into_owned(),
-                    raw_json: toolchain.as_json.to_string(),
-                }
-            }),
+            toolchain: toolchain.as_ref().map(toolchain_to_proto),
         })
     }
 
@@ -311,15 +341,15 @@ impl ToolchainStore {
         mut cx: AsyncApp,
     ) -> Result<proto::ListToolchainsResponse> {
         let toolchains = this
-            .update(&mut cx, |this, cx| {
+            .update(&mut cx, |this, cx| -> Result<_> {
                 let language_name = LanguageName::from_proto(envelope.payload.language_name);
                 let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-                let path = RelPath::from_proto(envelope.payload.path.as_deref().unwrap_or(""))?;
-                anyhow::Ok(this.list_toolchains(
-                    ProjectPath { worktree_id, path },
-                    language_name,
+                let project_path = this.project_path_from_proto(
+                    worktree_id,
+                    envelope.payload.path_v2.as_ref(),
                     cx,
-                ))
+                )?;
+                Ok(this.list_toolchains(project_path, language_name, cx))
             })?
             .await;
         let has_values = toolchains.is_some();
@@ -346,25 +376,29 @@ impl ToolchainStore {
             let toolchains = toolchains
                 .toolchains
                 .into_iter()
-                .map(|toolchain| {
-                    let path = PathBuf::from(toolchain.path.to_string());
-                    proto::Toolchain {
-                        name: toolchain.name.to_string(),
-                        path: path.to_string_lossy().into_owned(),
-                        raw_json: toolchain.as_json.to_string(),
-                    }
-                })
+                .map(|toolchain| toolchain_to_proto(&toolchain))
                 .collect::<Vec<_>>();
             (toolchains, relative_path)
         } else {
             (vec![], Arc::from(RelPath::empty()))
         };
 
+        let relative_worktree_path_v2 = this
+            .read_with(&cx, |this, cx| {
+                let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
+                this.worktree_store
+                    .read(cx)
+                    .worktree_for_id(worktree_id, cx)
+                    .and_then(|worktree| worktree.read(cx).vfs_path_for_path(&relative_path))
+            })
+            .context("toolchain root has no exact VFS identity")?;
         Ok(proto::ListToolchainsResponse {
             has_values,
             toolchains,
             groups,
-            relative_worktree_path: Some(relative_path.to_proto()),
+            relative_worktree_path_v2: Some(proto::VfsPathV2::from_vfs_path(
+                &relative_worktree_path_v2,
+            )),
         })
     }
 
@@ -376,17 +410,18 @@ impl ToolchainStore {
         let toolchain = this
             .update(&mut cx, |this, cx| {
                 let language_name = LanguageName::from_proto(envelope.payload.language_name);
-                let path = PathBuf::from(envelope.payload.abs_path);
-                this.resolve_toolchain(path, language_name, cx)
-            })
+                let native_path = envelope
+                    .payload
+                    .abs_path_v2
+                    .as_ref()
+                    .context("resolve-toolchain request is missing its exact native path")?
+                    .to_native_path()?;
+                anyhow::Ok(this.resolve_toolchain(native_path, language_name, cx))
+            })?
             .await;
         let response = match toolchain {
             Ok(toolchain) => {
-                let toolchain = proto::Toolchain {
-                    name: toolchain.name.to_string(),
-                    path: toolchain.path.to_string(),
-                    raw_json: toolchain.as_json.to_string(),
-                };
+                let toolchain = toolchain_to_proto(&toolchain);
                 ResolveResponsePayload::Toolchain(toolchain)
             }
             Err(e) => ResolveResponsePayload::Error(e.to_string()),
@@ -577,10 +612,14 @@ impl LocalToolchainStore {
 
     fn resolve_toolchain(
         &self,
-        path: PathBuf,
+        native_path: vfs::NativePath,
         language_name: LanguageName,
         cx: &mut Context<Self>,
     ) -> Task<Result<Toolchain>> {
+        let path = match native_path.to_local_path_buf() {
+            Ok(path) => path,
+            Err(error) => return Task::ready(Err(error.into())),
+        };
         let registry = self.languages.clone();
         let environment = self.project_environment.clone();
         cx.spawn(async move |_, cx| {
@@ -611,6 +650,7 @@ impl EventEmitter<ToolchainStoreEvent> for RemoteToolchainStore {}
 struct RemoteToolchainStore {
     client: AnyProtoClient,
     project_id: u64,
+    worktree_store: Entity<WorktreeStore>,
 }
 
 impl RemoteToolchainStore {
@@ -622,21 +662,24 @@ impl RemoteToolchainStore {
     ) -> Task<Option<()>> {
         let project_id = self.project_id;
         let client = self.client.clone();
+        let vfs_path = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(project_path.worktree_id, cx)
+            .and_then(|worktree| worktree.read(cx).vfs_path_for_path(&project_path.path));
+        let Some(vfs_path) = vfs_path else {
+            return Task::ready(None);
+        };
         cx.spawn(async move |this, cx| {
             let did_activate = cx
                 .background_spawn(async move {
-                    let path = PathBuf::from(toolchain.path.to_string());
                     client
                         .request(proto::ActivateToolchain {
                             project_id,
                             worktree_id: project_path.worktree_id.to_proto(),
-                            language_name: toolchain.language_name.into(),
-                            toolchain: Some(proto::Toolchain {
-                                name: toolchain.name.into(),
-                                path: path.to_string_lossy().into_owned(),
-                                raw_json: toolchain.as_json.to_string(),
-                            }),
-                            path: Some(project_path.path.to_proto()),
+                            language_name: toolchain.language_name.clone().into(),
+                            toolchain: Some(toolchain_to_proto(&toolchain)),
+                            path_v2: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
                         })
                         .await
                         .log_err()?;
@@ -660,13 +703,21 @@ impl RemoteToolchainStore {
     ) -> Task<Option<(ToolchainList, Arc<RelPath>)>> {
         let project_id = self.project_id;
         let client = self.client.clone();
+        let vfs_path = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(path.worktree_id, cx)
+            .and_then(|worktree| worktree.read(cx).vfs_path_for_path(&path.path));
+        let Some(vfs_path) = vfs_path else {
+            return Task::ready(None);
+        };
         cx.background_spawn(async move {
             let response = client
                 .request(proto::ListToolchains {
                     project_id,
                     worktree_id: path.worktree_id.to_proto(),
                     language_name: language_name.clone().into(),
-                    path: Some(path.path.to_proto()),
+                    path_v2: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
                 })
                 .await
                 .log_err()?;
@@ -677,12 +728,7 @@ impl RemoteToolchainStore {
                 .toolchains
                 .into_iter()
                 .filter_map(|toolchain| {
-                    Some(Toolchain {
-                        language_name: language_name.clone(),
-                        name: toolchain.name.into(),
-                        path: toolchain.path.into(),
-                        as_json: serde_json::Value::from_str(&toolchain.raw_json).ok()?,
-                    })
+                    toolchain_from_proto(toolchain, language_name.clone()).log_err()
                 })
                 .collect();
             let groups = response
@@ -692,13 +738,19 @@ impl RemoteToolchainStore {
                     Some((usize::try_from(group.start_index).ok()?, group.name.into()))
                 })
                 .collect();
-            let relative_path = RelPath::from_proto(
-                response
-                    .relative_worktree_path
-                    .as_deref()
-                    .unwrap_or_default(),
-            )
-            .log_err()?;
+            let relative_vfs_path = response
+                .relative_worktree_path_v2
+                .as_ref()
+                .context("toolchain response is missing its exact root")
+                .and_then(|path| path.to_vfs_path().map_err(Into::into))
+                .log_err()?;
+            if relative_vfs_path.mount_id() != vfs_path.mount_id() {
+                log::error!("toolchain response mount does not match request mount");
+                return None;
+            }
+            let relative_path =
+                vfs::provider_path_to_legacy_utf8(relative_vfs_path.provider_path()).log_err()?;
+            let relative_path = RelPath::from_proto(&relative_path).log_err()?;
             Some((
                 ToolchainList {
                     toolchains,
@@ -717,31 +769,34 @@ impl RemoteToolchainStore {
     ) -> Task<Option<Toolchain>> {
         let project_id = self.project_id;
         let client = self.client.clone();
+        let vfs_path = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(path.worktree_id, cx)
+            .and_then(|worktree| worktree.read(cx).vfs_path_for_path(&path.path));
+        let Some(vfs_path) = vfs_path else {
+            return Task::ready(None);
+        };
         cx.background_spawn(async move {
             let response = client
                 .request(proto::ActiveToolchain {
                     project_id,
                     worktree_id: path.worktree_id.to_proto(),
                     language_name: language_name.clone().into(),
-                    path: Some(path.path.to_proto()),
+                    path_v2: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
                 })
                 .await
                 .log_err()?;
 
-            response.toolchain.and_then(|toolchain| {
-                Some(Toolchain {
-                    language_name: language_name.clone(),
-                    name: toolchain.name.into(),
-                    path: toolchain.path.into(),
-                    as_json: serde_json::Value::from_str(&toolchain.raw_json).ok()?,
-                })
-            })
+            response
+                .toolchain
+                .and_then(|toolchain| toolchain_from_proto(toolchain, language_name).log_err())
         })
     }
 
     fn resolve_toolchain(
         &self,
-        abs_path: PathBuf,
+        native_path: vfs::NativePath,
         language_name: LanguageName,
         cx: &mut Context<Self>,
     ) -> Task<Result<Toolchain>> {
@@ -752,7 +807,7 @@ impl RemoteToolchainStore {
                 .request(proto::ResolveToolchain {
                     project_id,
                     language_name: language_name.clone().into(),
-                    abs_path: abs_path.to_string_lossy().into_owned(),
+                    abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_path)),
                 })
                 .await?;
 
@@ -761,17 +816,58 @@ impl RemoteToolchainStore {
                 .context("Failed to resolve toolchain via RPC")?;
             use proto::resolve_toolchain_response::Response;
             match response {
-                Response::Toolchain(toolchain) => Ok(Toolchain {
-                    language_name: language_name.clone(),
-                    name: toolchain.name.into(),
-                    path: toolchain.path.into(),
-                    as_json: serde_json::Value::from_str(&toolchain.raw_json)
-                        .context("Deserializing ResolveToolchain LSP response")?,
-                }),
+                Response::Toolchain(toolchain) => toolchain_from_proto(toolchain, language_name)
+                    .context("deserializing resolved toolchain"),
                 Response::Error(error) => {
                     anyhow::bail!("{error}");
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toolchain_proto_roundtrip_preserves_non_unicode_native_path() {
+        let native_path = vfs::NativePath::from_unix_bytes(b"/toolchains/python-\xff");
+        let Ok(native_path) = native_path else {
+            panic!("toolchain path fixture must be valid: {native_path:?}");
+        };
+        let toolchain = Toolchain::try_new(
+            "Python".into(),
+            native_path.clone(),
+            LanguageName::new_static("Python"),
+            serde_json::json!({ "kind": "venv" }),
+        )
+        .expect("absolute toolchain path should be accepted");
+
+        let decoded = toolchain_from_proto(
+            toolchain_to_proto(&toolchain),
+            LanguageName::new_static("Python"),
+        );
+        let Ok(decoded) = decoded else {
+            panic!("exact toolchain protobuf must decode: {decoded:?}");
+        };
+
+        assert_eq!(decoded.native_path, native_path);
+        assert_eq!(decoded, toolchain);
+        assert_eq!(decoded.as_json, toolchain.as_json);
+    }
+
+    #[test]
+    fn toolchain_proto_rejects_missing_exact_path() {
+        let result = toolchain_from_proto(
+            proto::Toolchain {
+                name: String::from("Python"),
+                raw_json: String::from("{}"),
+                path_v2: None,
+            },
+            LanguageName::new_static("Python"),
+        );
+
+        assert!(result.is_err());
     }
 }

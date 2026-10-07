@@ -83,6 +83,16 @@ pub enum PathError {
     InvalidWindowsDrive,
     #[error("absolute paths are not accepted by the legacy relative-path adapter")]
     AbsolutePathNotAllowed,
+    #[error("an absolute native path is required")]
+    AbsolutePathRequired,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum NativePathTextError {
+    #[error(transparent)]
+    InvalidPath(#[from] PathError),
+    #[error("native path cannot be represented as Unicode text")]
+    NonUnicode,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -629,6 +639,16 @@ impl NativePath {
                 |wide| String::from_utf16_lossy(&wide),
             ),
             PathEncoding::PortableUtf8 => self.path.display(),
+        }
+    }
+
+    pub fn to_unicode_string(&self) -> Result<String, NativePathTextError> {
+        match self.path.encoding {
+            PathEncoding::UnixBytes => String::from_utf8(self.to_unix_bytes()?)
+                .map_err(|_| NativePathTextError::NonUnicode),
+            PathEncoding::WindowsWtf8 => String::from_utf16(&self.to_windows_wide()?)
+                .map_err(|_| NativePathTextError::NonUnicode),
+            PathEncoding::PortableUtf8 => Ok(self.path.display()),
         }
     }
 
@@ -1202,6 +1222,10 @@ mod tests {
         };
         assert_eq!(parsed.to_unix_bytes(), Ok(input.to_vec()));
         assert_eq!(parsed.provider_path().display(), "tmp/non-�-utf8");
+        assert_eq!(
+            parsed.to_unicode_string(),
+            Err(NativePathTextError::NonUnicode)
+        );
     }
 
     #[test]
@@ -1215,7 +1239,11 @@ mod tests {
         };
         let encoded = encode_windows_wide(&drive_path);
         assert_eq!(parsed.to_windows_wide(), Ok(drive_path));
-        assert_eq!(NativePath::from_windows_wtf8(&encoded), Ok(parsed));
+        assert_eq!(NativePath::from_windows_wtf8(&encoded), Ok(parsed.clone()));
+        assert_eq!(
+            parsed.to_unicode_string(),
+            Err(NativePathTextError::NonUnicode)
+        );
 
         for path in [
             r"\\server\share\folder\file.txt",
@@ -1231,6 +1259,26 @@ mod tests {
             };
             assert_eq!(parsed.to_windows_wide(), Ok(wide));
         }
+    }
+
+    #[test]
+    fn native_paths_convert_to_unicode_without_changing_identity() {
+        let unix = NativePath::from_unix_bytes(b"/tmp/toolchain");
+        let Ok(unix) = unix else {
+            panic!("Unix path fixture must parse: {unix:?}");
+        };
+        assert_eq!(unix.to_unicode_string(), Ok(String::from("/tmp/toolchain")));
+
+        let windows = NativePath::from_windows_wide(
+            &r"C:\Python\python.exe".encode_utf16().collect::<Vec<_>>(),
+        );
+        let Ok(windows) = windows else {
+            panic!("Windows path fixture must parse: {windows:?}");
+        };
+        assert_eq!(
+            windows.to_unicode_string(),
+            Ok(String::from(r"C:\Python\python.exe"))
+        );
     }
 
     #[test]

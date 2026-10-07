@@ -3606,7 +3606,7 @@ impl Project {
 
     pub fn resolve_toolchain(
         &self,
-        path: PathBuf,
+        native_path: vfs::NativePath,
         language_name: LanguageName,
         cx: &App,
     ) -> Task<Result<Toolchain>> {
@@ -3614,7 +3614,7 @@ impl Project {
             cx.spawn(async move |cx| {
                 toolchain_store
                     .update(cx, |this, cx| {
-                        this.resolve_toolchain(path, language_name, cx)
+                        this.resolve_toolchain(native_path, language_name, cx)
                     })?
                     .await
             })
@@ -4663,6 +4663,41 @@ impl Project {
         }
 
         None
+    }
+
+    pub fn find_project_path_for_native_path(
+        &self,
+        path: &vfs::NativePath,
+        cx: &App,
+    ) -> Option<ProjectPath> {
+        for worktree in self.worktree_store.read(cx).visible_worktrees(cx) {
+            let worktree = worktree.read(cx);
+            let Ok(relative_path) = path.strip_prefix(&worktree.native_abs_path()) else {
+                continue;
+            };
+            let Ok(relative_path) = vfs::provider_path_to_legacy_utf8(&relative_path) else {
+                continue;
+            };
+            let Ok(relative_path) = RelPath::from_proto(&relative_path) else {
+                continue;
+            };
+            return Some(ProjectPath {
+                worktree_id: worktree.id(),
+                path: relative_path.into_arc(),
+            });
+        }
+        None
+    }
+
+    pub fn native_path_for_execution(&self, path: &Path, cx: &App) -> Result<vfs::NativePath> {
+        let path_style = self.path_style(cx);
+        if path_style == util::paths::PathStyle::local() {
+            return Ok(vfs::NativePath::from_local_path(path)?);
+        }
+        let path = path
+            .to_str()
+            .context("remote native path is not representable as Unicode")?;
+        native_path_from_remote_text(path, path_style)
     }
 
     /// If there's only one visible worktree, returns the given worktree-relative path with no prefix.
