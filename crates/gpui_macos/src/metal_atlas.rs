@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_clears_stale_keys_from_tiles_by_key() {
+    fn test_remove_retires_keys_at_frame_boundary() {
         let Some(atlas) = create_atlas() else {
             return;
         };
@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_deallocates_tile_space_for_reuse() {
+    fn test_removed_tile_space_remains_tombstoned() {
         let Some(atlas) = create_atlas() else {
             return;
         };

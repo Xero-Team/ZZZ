@@ -1,3 +1,8 @@
+//! Shared sprite-atlas allocation, residency, and frame-lifecycle policy.
+//!
+//! GPU backends implement texture storage only. This module owns stable identities,
+//! page allocation, content budgets, retirement, compaction, diagnostics, and gutters.
+
 use crate::{
     Bounds, DevicePixels, GlyphRasterFormat, Point, RenderGlyphParams, RenderImageParams,
     RenderSvgParams, Size,
