@@ -9770,15 +9770,20 @@ impl LspStore {
                 .await?;
             // we want to adhere to the read-only settings of the worktree we came from in case we opened an invisible one
             if let Some((source_ws, worktree_root)) = source_ws {
+                let source_vfs_path = lsp_store.read_with(cx, |lsp_store, cx| {
+                    lsp_store
+                        .worktree_store
+                        .read(cx)
+                        .worktree_for_id(source_ws, cx)
+                        .and_then(|worktree| worktree.read(cx).vfs_path_for_path(RelPath::empty()))
+                })?;
                 buffer.update(cx, |buffer, cx| {
                     let settings = WorktreeSettings::get(
-                        Some(
-                            (&ProjectPath {
-                                worktree_id: source_ws,
-                                path: Arc::from(RelPath::empty()),
-                            })
-                                .into(),
-                        ),
+                        Some(SettingsLocation {
+                            worktree_id: source_ws,
+                            path: RelPath::empty(),
+                            vfs_path: source_vfs_path,
+                        }),
                         cx,
                     );
                     let is_read_only = settings.is_std_path_read_only(&worktree_root);

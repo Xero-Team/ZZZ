@@ -115,7 +115,7 @@ use rpc::{
 };
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
-use settings::{InvalidSettingsError, RegisterSetting, Settings, SettingsLocation, SettingsStore};
+use settings::{InvalidSettingsError, RegisterSetting, Settings, SettingsStore};
 use snippet::Snippet;
 pub use snippet_provider;
 use snippet_provider::SnippetProvider;
@@ -5916,16 +5916,6 @@ impl<'a> Iterator for PathMatchCandidateSetNucleoIter<'a> {
 }
 
 impl EventEmitter<Event> for Project {}
-
-impl<'a> From<&'a ProjectPath> for SettingsLocation<'a> {
-    fn from(val: &'a ProjectPath) -> Self {
-        SettingsLocation {
-            worktree_id: val.worktree_id,
-            path: val.path.as_ref(),
-            vfs_path: None,
-        }
-    }
-}
 
 impl<P: Into<Arc<RelPath>>> From<(WorktreeId, P)> for ProjectPath {
     fn from((worktree_id, path): (WorktreeId, P)) -> Self {

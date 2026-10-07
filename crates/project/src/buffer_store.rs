@@ -23,7 +23,7 @@ use rpc::{
     proto::{self, PeerId},
 };
 
-use settings::Settings;
+use settings::{Settings, SettingsLocation};
 use std::{io, sync::Arc, time::Instant};
 use text::{BufferId, ReplicaId};
 use util::{ResultExt as _, TryFutureExt, debug_panic, maybe, rel_path::RelPath};
@@ -698,14 +698,22 @@ impl LocalBufferStore {
                 this.add_buffer(buffer.clone(), cx)?;
                 let buffer_id = buffer.read(cx).remote_id();
                 if let Some(file) = File::from_dyn(buffer.read(cx).file()) {
+                    let worktree_id = file.worktree_id(cx);
                     let project_path = ProjectPath {
-                        worktree_id: file.worktree_id(cx),
+                        worktree_id,
                         path: file.path.clone(),
                     };
                     let entry_id = file.entry_id;
 
                     // Check if the file should be read-only based on settings
-                    let settings = WorktreeSettings::get(Some((&project_path).into()), cx);
+                    let settings = WorktreeSettings::get(
+                        Some(SettingsLocation {
+                            worktree_id,
+                            path: file.path.as_ref(),
+                            vfs_path: file.vfs_path.clone(),
+                        }),
+                        cx,
+                    );
                     let is_read_only = if project_path.path.is_empty() {
                         settings.is_std_path_read_only(&file.full_path(cx))
                     } else {
