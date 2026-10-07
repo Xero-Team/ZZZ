@@ -3919,6 +3919,7 @@ dependencies = [
  "project",
  "rpc",
  "schemars 1.2.2",
+ "search",
  "serde",
  "serde_json",
  "serde_json_lenient",
