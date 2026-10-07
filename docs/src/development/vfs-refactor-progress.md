@@ -14,15 +14,14 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `f683641c8bf455434197789c8b9107b622ed457e`
+  `f7f69bd23c17c041f726d6a0c05efcd3cf67fb24`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
 - Next action: 继续删除 Phase 9 剩余 operational string path。优先迁移 debugger、AI
-  command/root、Git repo-relative/native path、`Entry.canonical_path` 与
-  `buffer.proto::PathKey.path`；随后清理 compatibility adapter、运行 `VFS-EXP-013` 并完成
-  Phase 9 全量验收。
+  command/root 与 Git repo-relative/native path；随后清理 compatibility adapter、运行
+  `VFS-EXP-013` 并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -37,7 +36,7 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 | 6     | LSP/Git/native execution           | PASS        | `47381efe23`, `4940e57051`                                                                                                                                                                                                                   | PASS        | VFS-EXP-010 PASS                                    |
 | 7     | ArchiveProvider 与 ZIP             | PASS        | `fe9044e579`, `611012cacb`                                                                                                                                                                                                                   | PASS        | VFS-EXP-011 PASS                                    |
 | 8     | Composition layers 与 overlay 决策 | PASS        | `b89939043d`, `3b48092dce`                                                                                                                                                                                                                   | PASS        | VFS-EXP-012 PASS; overlay REJECTED                  |
-| 9     | Cross-provider 与旧模型移除        | IN PROGRESS | `e26042c8cf`, `8a84e36c40`, `0ebc08732e`, `160efe656f`, `2997b90376`, `906bd33674`, `d8530febf5`, `f683641c8b`                                                                                                                               | IN PROGRESS | Transfer model and major exact wire groups complete |
+| 9     | Cross-provider 与旧模型移除        | IN PROGRESS | `e26042c8cf`, `8a84e36c40`, `0ebc08732e`, `160efe656f`, `2997b90376`, `906bd33674`, `d8530febf5`, `f683641c8b`, `f7f69bd23c`                                                                                                                 | IN PROGRESS | Transfer model and major exact wire groups complete |
 | 10    | 收敛与最终验证                     | NOT STARTED | -                                                                                                                                                                                                                                            | -           | -                                                   |
 
 ## Baseline {#baseline}
@@ -353,6 +352,9 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-07 | 9C    | `./script/clippy -p vfs -p language_core -p languages -p project -p workspace -p proto -p dap_adapters -p repl -p toolchain_selector`                                         | 0        | PASS: all release/all-target/all-feature legs and philosophy gate                                                                               | No                                                                            |
 | 2026-10-07 | 9C    | `cargo fmt --all -- --check`, `git diff --check`, proto string-path detector and `hunting-code-smells` P0/P1/P2 review                                                        | 0        | PASS: exact-path downgrade rejection and absolute toolchain invariant fixed; no remaining P0/P1/P2 finding in scope                             | No                                                                            |
 | 2026-10-07 | 9C    | `buf lint crates/proto/proto` and `buf format --diff --exit-code crates/proto/proto`                                                                                          | -        | NOT RUN: `buf` unavailable                                                                                                                      | Tool unavailable; prost build and proto tests PASS                            |
+| 2026-10-07 | 9C    | exact `PathKey` serialization and non-UTF-8 canonical-entry wire tests                                                                                                        | 0        | PASS: missing exact PathKey invalidates restore; canonical `NativePath` bytes round-trip                                                        | No                                                                            |
+| 2026-10-07 | 9C    | `cargo test --locked -p worktree`, `cargo test --locked -p workspace` and `cargo test --locked -p project_panel`                                                              | 101/0/0  | Worktree: 95 passed plus baseline encoding failure; Workspace 239 and Project Panel 113 passed                                                  | Yes: `test_load_file_encoding`                                                |
+| 2026-10-07 | 9C    | `./script/clippy -p proto -p worktree -p editor -p project_panel -p workspace`, fmt/diff gates and code-smell review                                                          | 0        | PASS: exact canonical identity retained until explicit display adapters; no remaining P0/P1/P2 finding in scope                                 | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -400,6 +402,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `906bd336749417ba9642fe531abf9eea2d705d68` | 9C    | Exact buffer open/save mount paths and early worktree VFS-root metadata                                                              | Buffer/project/remote race regressions, proto tests and baseline parity PASS                                                    | Restore buffer string path wire while retaining earlier exact Worktree messages                        |
 | `d8530febf55248292501b71b51b0b87c7f6966fd` | 9C    | Exact LSP symbols, diagnostics, registered-buffer and server-binary paths                                                            | LSP/project/remote regressions, proto checks and baseline parity PASS                                                           | Restore LSP string path wire without changing toolchain or transfer paths                              |
 | `f683641c8bf455434197789c8b9107b622ed457e` | 9C    | Exact toolchain identity, wire, persistence and execution-host conversion                                                            | VFS 49, proto 9, language 106, Workspace 238, Project baseline parity, cross-target checks and scoped clippy PASS               | Restore toolchain string identity/wire and legacy DB tables without changing other Phase 9 path groups |
+| `ed952c2053b1253ab8af977e7450a25da641370a` | 9C    | Durable Phase 9 progress, validation and compatibility-adapter ledger update                                                         | Docs Prettier PASS                                                                                                              | Revert the progress update without changing runtime behavior                                           |
+| `f7f69bd23c17c041f726d6a0c05efcd3cf67fb24` | 9C    | Exact editor `PathKey` wire and exact Worktree canonical native paths                                                                | Exact wire tests, Worktree baseline parity, Workspace 239, Project Panel 113, cross-target checks and scoped clippy PASS        | Restore legacy PathKey/canonical strings while retaining other exact Worktree and buffer messages      |
 
 ## 平台 QA {#platform-qa}
 
@@ -420,8 +424,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Next action {#next-action}
 
-继续 Phase 9 exact-path 清理。先迁移 debugger path wire、AI command/root native paths、Git
-repo-relative/native paths、`Entry.canonical_path` 与 `buffer.proto::PathKey.path`，并用 detector
-确认 protobuf 不再存在 operational string path。随后删除对应 legacy persistence、no-op adapter、
-重复 cache 与剩余普通 consumer `Local`/`Remote` behavior branch；最后执行 `VFS-EXP-013`、
-Phase 9 全量 regression matrix 和 code-smell 审查。
+继续 Phase 9 exact-path 清理。先迁移 debugger path wire、AI command/root native paths 与 Git
+repo-relative/native paths，并用 detector 确认 protobuf 不再存在 operational string path。随后
+删除对应 legacy persistence、no-op adapter、重复 cache 与剩余普通 consumer `Local`/`Remote`
+behavior branch；最后执行 `VFS-EXP-013`、Phase 9 全量 regression matrix 和 code-smell 审查。
