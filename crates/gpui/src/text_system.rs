@@ -47,12 +47,41 @@ pub const SUBPIXEL_VARIANTS_X: u8 = 4;
 /// Number of subpixel glyph variants along the Y axis.
 pub const SUBPIXEL_VARIANTS_Y: u8 = 1;
 
+/// Pixel format produced by a platform glyph rasterizer.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum GlyphRasterFormat {
+    /// One byte per pixel of tintable grayscale coverage.
+    Alpha8,
+    /// Four bytes per pixel of tintable subpixel coverage in BGRA channel order.
+    SubpixelBgra8,
+    /// Four bytes per pixel of untinted straight-alpha color in BGRA channel order.
+    ColorBgra8,
+}
+
+/// Bounds and pixel format for one rasterized glyph.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GlyphRasterInfo {
+    /// Device-pixel bounds relative to the quantized glyph origin.
+    pub bounds: Bounds<DevicePixels>,
+    /// Pixel format the rasterizer will produce for this glyph.
+    pub format: GlyphRasterFormat,
+}
+
+/// Pixel data and its authoritative raster metadata.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RasterizedGlyph {
+    /// Bounds and format corresponding to `pixels`.
+    pub info: GlyphRasterInfo,
+    /// Tightly packed rows in the format described by `info`.
+    pub pixels: Vec<u8>,
+}
+
 /// The GPUI text rendering sub system.
 pub struct TextSystem {
     platform_text_system: Arc<dyn PlatformTextSystem>,
     font_ids_by_font: RwLock<FxHashMap<Font, Result<FontId>>>,
     font_metrics: RwLock<FxHashMap<FontId, FontMetrics>>,
-    raster_bounds: RwLock<FxHashMap<RenderGlyphParams, Bounds<DevicePixels>>>,
+    raster_info: RwLock<FxHashMap<RenderGlyphParams, GlyphRasterInfo>>,
     wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<LineWrapper>>>,
     font_runs_pool: Mutex<Vec<Vec<FontRun>>>,
     fallback_font_stack: SmallVec<[Font; 2]>,
@@ -64,7 +93,7 @@ impl TextSystem {
         TextSystem {
             platform_text_system,
             font_metrics: RwLock::default(),
-            raster_bounds: RwLock::default(),
+            raster_info: RwLock::default(),
             font_ids_by_font: RwLock::default(),
             wrapper_pool: Mutex::default(),
             font_runs_pool: Mutex::default(),
@@ -339,25 +368,28 @@ impl TextSystem {
     }
 
     /// Get the rasterized size and location of a specific, rendered glyph.
-    pub(crate) fn raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        let raster_bounds = self.raster_bounds.upgradable_read();
-        if let Some(bounds) = raster_bounds.get(params) {
-            Ok(*bounds)
+    pub(crate) fn raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        let raster_info = self.raster_info.upgradable_read();
+        if let Some(info) = raster_info.get(params) {
+            Ok(*info)
         } else {
-            let mut raster_bounds = RwLockUpgradableReadGuard::upgrade(raster_bounds);
-            let bounds = self.platform_text_system.glyph_raster_bounds(params)?;
-            raster_bounds.insert(params.clone(), bounds);
-            Ok(bounds)
+            let mut raster_info = RwLockUpgradableReadGuard::upgrade(raster_info);
+            let info = self.platform_text_system.glyph_raster_info(params)?;
+            raster_info.insert(params.clone(), info);
+            Ok(info)
         }
     }
 
-    pub(crate) fn rasterize_glyph(
-        &self,
-        params: &RenderGlyphParams,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
-        let raster_bounds = self.raster_bounds(params)?;
-        self.platform_text_system
-            .rasterize_glyph(params, raster_bounds)
+    pub(crate) fn rasterize_glyph(&self, params: &RenderGlyphParams) -> Result<RasterizedGlyph> {
+        let raster_info = self.raster_info(params)?;
+        let rasterized = self
+            .platform_text_system
+            .rasterize_glyph(params, raster_info)?;
+        anyhow::ensure!(
+            rasterized.info == raster_info,
+            "glyph raster format or bounds changed between info and pixel queries"
+        );
+        Ok(rasterized)
     }
 
     /// Returns the dilation level to use for a glyph painted in the given color.

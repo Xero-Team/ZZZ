@@ -1,5 +1,6 @@
 use crate::{
-    Bounds, DevicePixels, Point, RenderGlyphParams, RenderImageParams, RenderSvgParams, Size,
+    Bounds, DevicePixels, GlyphRasterFormat, Point, RenderGlyphParams, RenderImageParams,
+    RenderSvgParams, Size,
 };
 use anyhow::Result;
 use collections::{FxHashMap, FxHashSet};
@@ -9,7 +10,10 @@ use std::borrow::Cow;
 #[derive(PartialEq, Eq, Hash, Clone)]
 #[expect(missing_docs)]
 pub enum AtlasKey {
-    Glyph(RenderGlyphParams),
+    Glyph {
+        params: RenderGlyphParams,
+        format: GlyphRasterFormat,
+    },
     Svg(RenderSvgParams),
     Image(RenderImageParams),
 }
@@ -18,15 +22,11 @@ impl AtlasKey {
     /// Returns the lifecycle and budget class for this atlas key.
     pub fn content_kind(&self) -> AtlasContentKind {
         match self {
-            AtlasKey::Glyph(params) => {
-                if params.is_emoji {
-                    AtlasContentKind::GlyphColor
-                } else if params.subpixel_rendering {
-                    AtlasContentKind::GlyphSubpixel
-                } else {
-                    AtlasContentKind::GlyphAlpha
-                }
-            }
+            AtlasKey::Glyph { format, .. } => match format {
+                GlyphRasterFormat::Alpha8 => AtlasContentKind::GlyphAlpha,
+                GlyphRasterFormat::SubpixelBgra8 => AtlasContentKind::GlyphSubpixel,
+                GlyphRasterFormat::ColorBgra8 => AtlasContentKind::GlyphColor,
+            },
             AtlasKey::Svg(_) => AtlasContentKind::SvgMask,
             AtlasKey::Image(_) => AtlasContentKind::Image,
         }
@@ -42,11 +42,10 @@ impl AtlasKey {
             AtlasContentKind::GlyphColor | AtlasContentKind::Image => AtlasTextureKind::Polychrome,
         }
     }
-}
 
-impl From<RenderGlyphParams> for AtlasKey {
-    fn from(params: RenderGlyphParams) -> Self {
-        Self::Glyph(params)
+    /// Creates a glyph key using the rasterizer's authoritative format.
+    pub fn glyph(params: RenderGlyphParams, format: GlyphRasterFormat) -> Self {
+        Self::Glyph { params, format }
     }
 }
 
@@ -1325,18 +1324,27 @@ mod tests {
     }
 
     fn glyph_key(glyph_id: u32, is_emoji: bool, subpixel_rendering: bool) -> AtlasKey {
-        AtlasKey::Glyph(RenderGlyphParams {
-            font_id: crate::FontId(0),
-            glyph_id: crate::GlyphId(glyph_id),
-            font_size: crate::px(16.0),
-            subpixel_variant: Point::default(),
-            scale_factor: 1.0,
-            synthetic_italic: Default::default(),
-            synthetic_bold: Default::default(),
-            is_emoji,
-            subpixel_rendering,
-            dilation: 0,
-        })
+        AtlasKey::glyph(
+            RenderGlyphParams {
+                font_id: crate::FontId(0),
+                glyph_id: crate::GlyphId(glyph_id),
+                font_size: crate::px(16.0),
+                subpixel_variant: Point::default(),
+                scale_factor: 1.0,
+                synthetic_italic: Default::default(),
+                synthetic_bold: Default::default(),
+                is_emoji,
+                subpixel_rendering,
+                dilation: 0,
+            },
+            if is_emoji {
+                GlyphRasterFormat::ColorBgra8
+            } else if subpixel_rendering {
+                GlyphRasterFormat::SubpixelBgra8
+            } else {
+                GlyphRasterFormat::Alpha8
+            },
+        )
     }
 
     fn build_tile() -> Result<Option<(Size<DevicePixels>, Cow<'static, [u8]>)>> {

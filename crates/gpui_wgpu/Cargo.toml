@@ -41,6 +41,16 @@ font-kit = { path = "../../vendor/font-kit", optional = true }
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 pollster.workspace = true
 
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+resvg = { version = "0.48.1", default-features = false }
+skrifa.workspace = true
+usvg = { version = "0.48.1", default-features = false, features = ["svgz"] }
+vello_cpu = { version = "0.0.9", default-features = false, features = [
+    "std",
+    "text",
+    "u8_pipeline",
+] }
+
 [dev-dependencies]
 serde_json.workspace = true
 

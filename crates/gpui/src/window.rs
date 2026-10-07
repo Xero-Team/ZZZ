@@ -2,23 +2,24 @@
 use crate::Inspector;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
-    AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
-    Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
+    AsyncWindowContext, AtlasKey, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds,
+    BoxShadow, Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
     DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
     FileDropEvent, FontId, Frame, FrameBuilder, FrameScheduler, Global, GlobalElementId, GlyphId,
-    GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner, IsZero,
-    KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers,
-    ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent,
-    PaintIndex, Path, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
-    PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton,
-    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
-    ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels,
-    Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet,
-    Subscription, SystemWindowTab, SystemWindowTabController, Task, TextInputClient,
-    TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
-    WindowParams, WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
+    GlyphRasterFormat, GpuSpecs, Hsla, InputHandler, InputModality, InputPreference,
+    InteractionOwner, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke,
+    KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton,
+    MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path, Pixels, PlatformAtlas,
+    PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow, Point, PolychromeSprite,
+    PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size,
+    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
+    SystemWindowTabController, Task, TextInputClient, TextInputOwner, TextRenderingMode, TextStyle,
+    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowInvalidator, WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems,
+    size, transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -3891,50 +3892,7 @@ impl Window {
             dilation,
         };
 
-        let raster_bounds = self.text_system().raster_bounds(&params)?;
-        if !raster_bounds.is_zero() {
-            let tile = self
-                .sprite_atlas
-                .get_or_insert_with(params.clone().into(), &mut || {
-                    let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
-            let bounds = Bounds {
-                origin: integer_origin + raster_bounds.origin.map(Into::into),
-                size: tile.bounds.size.map(Into::into),
-            };
-            let content_mask = self.snapped_content_mask();
-
-            if subpixel_rendering {
-                self.interaction
-                    .next_frame
-                    .scene
-                    .insert_primitive(SubpixelSprite {
-                        order: 0,
-                        pad: 0,
-                        bounds,
-                        content_mask,
-                        color: color.opacity(element_opacity),
-                        tile,
-                        transformation: TransformationMatrix::unit(),
-                    });
-            } else {
-                self.interaction
-                    .next_frame
-                    .scene
-                    .insert_primitive(MonochromeSprite {
-                        order: 0,
-                        pad: 0,
-                        bounds,
-                        content_mask,
-                        color: color.opacity(element_opacity),
-                        tile,
-                        transformation: TransformationMatrix::unit(),
-                    });
-            }
-        }
-        Ok(())
+        self.paint_rasterized_glyph(integer_origin, params, color.opacity(element_opacity))
     }
 
     fn should_use_subpixel_rendering(&self, font_id: FontId, font_size: Pixels) -> bool {
@@ -3991,36 +3949,84 @@ impl Window {
             dilation: 0,
         };
 
-        let raster_bounds = self.text_system().raster_bounds(&params)?;
-        if !raster_bounds.is_zero() {
-            let tile = self
-                .sprite_atlas
-                .get_or_insert_with(params.clone().into(), &mut || {
-                    let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
+        self.paint_rasterized_glyph(
+            integer_origin,
+            params,
+            crate::white().opacity(self.element_opacity()),
+        )
+    }
 
-            let bounds = Bounds {
-                origin: integer_origin + raster_bounds.origin.map(Into::into),
-                size: tile.bounds.size.map(Into::into),
-            };
-            let content_mask = self.snapped_content_mask();
-            let opacity = self.element_opacity();
+    fn paint_rasterized_glyph(
+        &mut self,
+        integer_origin: Point<ScaledPixels>,
+        params: RenderGlyphParams,
+        tint: Hsla,
+    ) -> Result<()> {
+        let raster_info = self.text_system().raster_info(&params)?;
+        if raster_info.bounds.is_zero() {
+            return Ok(());
+        }
+        let key = AtlasKey::glyph(params.clone(), raster_info.format);
+        let tile = self
+            .sprite_atlas
+            .get_or_insert_with(key, &mut || {
+                let rasterized = self.text_system().rasterize_glyph(&params)?;
+                Ok(Some((
+                    rasterized.info.bounds.size,
+                    Cow::Owned(rasterized.pixels),
+                )))
+            })?
+            .expect("invariant: non-empty glyph raster info produces pixels");
+        let bounds = Bounds {
+            origin: integer_origin + raster_info.bounds.origin.map(Into::into),
+            size: tile.bounds.size.map(Into::into),
+        };
+        let content_mask = self.snapped_content_mask();
 
-            self.interaction
-                .next_frame
-                .scene
-                .insert_primitive(PolychromeSprite {
-                    order: 0,
-                    pad: 0,
-                    grayscale: false.into(),
-                    bounds,
-                    corner_radii: Default::default(),
-                    content_mask,
-                    tile,
-                    opacity,
-                });
+        match raster_info.format {
+            GlyphRasterFormat::Alpha8 => {
+                self.interaction
+                    .next_frame
+                    .scene
+                    .insert_primitive(MonochromeSprite {
+                        order: 0,
+                        pad: 0,
+                        bounds,
+                        content_mask,
+                        color: tint,
+                        tile,
+                        transformation: TransformationMatrix::unit(),
+                    });
+            }
+            GlyphRasterFormat::SubpixelBgra8 => {
+                self.interaction
+                    .next_frame
+                    .scene
+                    .insert_primitive(SubpixelSprite {
+                        order: 0,
+                        pad: 0,
+                        bounds,
+                        content_mask,
+                        color: tint,
+                        tile,
+                        transformation: TransformationMatrix::unit(),
+                    });
+            }
+            GlyphRasterFormat::ColorBgra8 => {
+                self.interaction
+                    .next_frame
+                    .scene
+                    .insert_primitive(PolychromeSprite {
+                        order: 0,
+                        pad: 0,
+                        grayscale: false.into(),
+                        bounds,
+                        corner_radii: Default::default(),
+                        content_mask,
+                        tile,
+                        opacity: self.element_opacity(),
+                    });
+            }
         }
         Ok(())
     }

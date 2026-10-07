@@ -34,10 +34,10 @@ pub(crate) type PlatformScreenCaptureFrame = core_video::image_buffer::CVImageBu
 use crate::{
     Action, AnyWindowHandle, App, AsyncWindowContext, BackgroundExecutor, Bounds,
     DEFAULT_WINDOW_SIZE, DevicePixels, DispatchEventResult, Font, FontId, FontMetrics, FontRun,
-    ForegroundExecutor, GlyphId, GpuSpecs, Hsla, ImageSource, Keymap, LineLayout, Pixels,
-    PlatformAtlas, PlatformInput, Point, Priority, RenderGlyphParams, RenderImage, Scene,
-    ShapedGlyph, ShapedRun, SharedString, Size, SvgRenderer, SystemWindowTab, Task,
-    ThreadTaskTimings, Window, WindowControlArea, hash, point, px, size,
+    ForegroundExecutor, GlyphId, GlyphRasterFormat, GlyphRasterInfo, GpuSpecs, Hsla, ImageSource,
+    Keymap, LineLayout, Pixels, PlatformAtlas, PlatformInput, Point, Priority, RasterizedGlyph,
+    RenderGlyphParams, RenderImage, Scene, ShapedGlyph, ShapedRun, SharedString, Size, SvgRenderer,
+    SystemWindowTab, Task, ThreadTaskTimings, Window, WindowControlArea, hash, point, px, size,
 };
 use anyhow::Result;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -1067,14 +1067,14 @@ pub trait PlatformTextSystem: Send + Sync {
     fn advance(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Size<f32>>;
     /// Get the glyph ID for a character.
     fn glyph_for_char(&self, font_id: FontId, ch: char) -> Option<GlyphId>;
-    /// Get raster bounds for a glyph.
-    fn glyph_raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>>;
+    /// Get raster bounds and the authoritative pixel format for a glyph.
+    fn glyph_raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo>;
     /// Rasterize a glyph.
     fn rasterize_glyph(
         &self,
         params: &RenderGlyphParams,
-        raster_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)>;
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph>;
     /// Layout a line of text with the given font runs.
     fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout;
     /// Returns the recommended text rendering mode for the given font and size.
@@ -1148,16 +1148,22 @@ impl PlatformTextSystem for NoopTextSystem {
         Some(GlyphId(ch.len_utf16() as u32))
     }
 
-    fn glyph_raster_bounds(&self, _params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        Ok(Default::default())
+    fn glyph_raster_info(&self, _params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        Ok(GlyphRasterInfo {
+            bounds: Default::default(),
+            format: GlyphRasterFormat::Alpha8,
+        })
     }
 
     fn rasterize_glyph(
         &self,
         _params: &RenderGlyphParams,
-        raster_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
-        Ok((raster_bounds.size, Vec::new()))
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        Ok(RasterizedGlyph {
+            info: raster_info,
+            pixels: Vec::new(),
+        })
     }
 
     fn layout_line(&self, text: &str, font_size: Pixels, _runs: &[FontRun]) -> LineLayout {

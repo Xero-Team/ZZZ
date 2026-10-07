@@ -36,10 +36,10 @@ use font_kit::{
 };
 use gpui::{
     Bounds, DevicePixels, Font, FontFallbacks, FontFeatures, FontId, FontMetrics, FontRun,
-    FontStyle, FontWeight, GlyphId, Hsla, LineLayout, Pixels, PlatformTextSystem,
-    RenderGlyphParams, Result, Rgba, SUBPIXEL_VARIANTS_X, ShapedGlyph, ShapedRun, SharedString,
-    Size, SyntheticBold, SyntheticItalic, TextRenderingMode, point, px, size, swap_rgba_pa_to_bgra,
-    synthetic_bold_for,
+    FontStyle, FontWeight, GlyphId, GlyphRasterFormat, GlyphRasterInfo, Hsla, LineLayout, Pixels,
+    PlatformTextSystem, RasterizedGlyph, RenderGlyphParams, Result, Rgba, SUBPIXEL_VARIANTS_X,
+    ShapedGlyph, ShapedRun, SharedString, Size, SyntheticBold, SyntheticItalic, TextRenderingMode,
+    point, px, size, swap_rgba_pa_to_bgra, synthetic_bold_for,
 };
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use pathfinder_geometry::{
@@ -193,16 +193,16 @@ impl PlatformTextSystem for MacTextSystem {
         self.0.read().glyph_for_char(font_id, ch)
     }
 
-    fn glyph_raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        self.0.read().raster_bounds(params)
+    fn glyph_raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        self.0.read().raster_info(params)
     }
 
     fn rasterize_glyph(
         &self,
-        glyph_id: &RenderGlyphParams,
-        raster_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
-        self.0.read().rasterize_glyph(glyph_id, raster_bounds)
+        params: &RenderGlyphParams,
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        self.0.read().rasterize_glyph(params, raster_info)
     }
 
     fn layout_line(&self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {
@@ -420,7 +420,12 @@ impl MacTextSystemState {
             })
     }
 
-    fn raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
+    fn raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        let format = if params.is_emoji {
+            GlyphRasterFormat::ColorBgra8
+        } else {
+            GlyphRasterFormat::Alpha8
+        };
         let font = &self.fonts[params.font_id.0];
         let scale = Transform2F::from_scale(params.scale_factor);
         let bounds: Bounds<DevicePixels> = bounds_from_rect_i(font.raster_bounds(
@@ -441,7 +446,7 @@ impl MacTextSystemState {
             bounds.origin.x -= DevicePixels(extra_width);
             bounds.size.width += DevicePixels(extra_width * 2);
         }
-        if params.synthetic_bold.is_enabled() && !params.is_emoji {
+        if params.synthetic_bold.is_enabled() && format != GlyphRasterFormat::ColorBgra8 {
             bounds.size.width += DevicePixels(
                 params
                     .synthetic_bold
@@ -449,31 +454,30 @@ impl MacTextSystemState {
                     .ceil() as i32,
             );
         }
-        Ok(bounds)
+        if params.subpixel_variant.x > 0 {
+            bounds.size.width += DevicePixels(1);
+        }
+        if params.subpixel_variant.y > 0 {
+            bounds.size.height += DevicePixels(1);
+        }
+        Ok(GlyphRasterInfo { bounds, format })
     }
 
     fn rasterize_glyph(
         &self,
         params: &RenderGlyphParams,
-        glyph_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        let glyph_bounds = raster_info.bounds;
         if glyph_bounds.size.width.0 == 0 || glyph_bounds.size.height.0 == 0 {
             anyhow::bail!("glyph bounds are empty");
         }
 
-        // Add an extra pixel when the subpixel variant isn't zero to make room for anti-aliasing.
-        let mut bitmap_size = glyph_bounds.size;
-        if params.subpixel_variant.x > 0 {
-            bitmap_size.width += DevicePixels(1);
-        }
-        if params.subpixel_variant.y > 0 {
-            bitmap_size.height += DevicePixels(1);
-        }
-        let bitmap_size = bitmap_size;
+        let bitmap_size = glyph_bounds.size;
 
         let mut bytes;
         let cx;
-        if params.is_emoji {
+        if raster_info.format == GlyphRasterFormat::ColorBgra8 {
             bytes = vec![0; bitmap_size.width.0 as usize * 4 * bitmap_size.height.0 as usize];
             cx = CGContext::create_bitmap_context(
                 Some(bytes.as_mut_ptr().cast()),
@@ -547,7 +551,8 @@ impl MacTextSystemState {
                 )],
                 cx.clone(),
             );
-        if params.synthetic_bold.is_enabled() && !params.is_emoji {
+        if params.synthetic_bold.is_enabled() && raster_info.format != GlyphRasterFormat::ColorBgra8
+        {
             let bold_amount = params
                 .synthetic_bold
                 .device_pixel_amount(params.font_size, params.scale_factor);
@@ -568,14 +573,17 @@ impl MacTextSystemState {
             }
         }
 
-        if params.is_emoji {
+        if raster_info.format == GlyphRasterFormat::ColorBgra8 {
             // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
             for pixel in bytes.chunks_exact_mut(4) {
                 swap_rgba_pa_to_bgra(pixel);
             }
         }
 
-        Ok((bitmap_size, bytes))
+        Ok(RasterizedGlyph {
+            info: raster_info,
+            pixels: bytes,
+        })
     }
 
     fn layout_line(&mut self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {
@@ -649,8 +657,13 @@ impl MacTextSystemState {
                         (run_start_utf16 < end).then_some((*style, *weight))
                     })
                     .unwrap_or((FontStyle::default(), FontWeight::default()));
-                let synthetic_italic = synthetic_italic_for(requested_style, &font);
-                let synthetic_bold = if self.is_emoji(font_id) {
+                let color_capable = self.is_emoji(font_id);
+                let synthetic_italic = if color_capable {
+                    SyntheticItalic::disabled()
+                } else {
+                    synthetic_italic_for(requested_style, &font)
+                };
+                let synthetic_bold = if color_capable {
                     SyntheticBold::disabled()
                 } else {
                     synthetic_bold_for(requested_weight, ct_font_weight(&font))

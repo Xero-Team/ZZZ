@@ -387,8 +387,41 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
 
 状态：`IN PROGRESS`
 
-尚未修改代码。先收敛 platform trait 和 WGPU Swash content，再分别处理 Windows
-per-glyph color detection 与 macOS CoreText color capability。
+已完成但尚未提交：
+
+- 增加 `GlyphRasterFormat`、`GlyphRasterInfo` 和 `RasterizedGlyph`；platform bounds 与
+  pixel 查询共享同一 format-aware contract，并验证两次查询的 metadata 不漂移。
+- `AtlasKey::Glyph` 包含 rasterizer 返回的实际 format；`Window::paint_glyph` 与
+  `paint_emoji` 共享内部 paint 路径。`Alpha8`、`SubpixelBgra8`、`ColorBgra8` 分别进入
+  monochrome、subpixel、untinted polychrome sprite。
+- WGPU 以 Swash `Image::content` 为权威。OpenMoji 即使带 emoji source hint，实际
+  monochrome mask 仍保持 `Alpha8` 和可 tint。
+- Swash 0.2.10 不支持 COLRv1 或 OpenType-SVG。系统 FreeType 头文件也明确声明
+  `FT_LOAD_COLOR` 不渲染 COLRv1，因此没有加入无效的 FreeType 回退。Linux/FreeBSD
+  改用纯 Rust `skrifa` + `vello_cpu`/`glifo` 解释 COLRv1 paint graph，并用
+  `skrifa` + `usvg`/`resvg` 渲染 `SVG ` glyph document；没有 Skia/rust-skia。
+- WGPU 内部 pending image 在缓存前已统一为最终 contract：color pixels 是
+  straight-alpha BGRA8，premultiplied RGBA 只转换一次。
+- Windows 已改为 per-glyph color detection；macOS 已适配显式 raster contract。
+  Windows 的非 COLRv0 native color raster 与 macOS PostScript whitelist 替换仍待完成。
+
+TEXT-007 当前 WGPU 结果：`PASS`
+
+| 检查                                                                                 | 结果   | 说明                                                      |
+| ------------------------------------------------------------------------------------ | ------ | --------------------------------------------------------- |
+| `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests` | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport |
+| `GPUI_*_FONT=... cargo test ... text_glyph_format_runner -- --ignored --nocapture`   | `PASS` | RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome    |
+| `./script/clippy -p gpui_wgpu`                                                       | `PASS` | all-target/all-feature release clippy + philosophy        |
+
+TEXT-007 artifact：
+
+- `.tmp/text-rendering-refactor/phase-5/text-007-hardware.json`，SHA-256
+  `56e7b6b50a8455afa2ea7f7a7772a08852548a647d09a7e639370a178f94ab66`
+- `.tmp/text-rendering-refactor/phase-5/text-007-fallback.json`，SHA-256
+  `48b3b2e897fe36771bb8acfe9e862bf82176d2e91c923bac8ddc6b90918ae04c`
+
+下一步：完成 macOS CoreText color-glyph trait、补齐 Windows SVG/bitmap/COLRv1 native
+raster 路径或精确 runbook，并固定 licensed fixture provenance/manifest 后关闭阶段 5。
 
 ### 阶段 6–9
 

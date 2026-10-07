@@ -6572,10 +6572,14 @@ dependencies = [
  "pollster 1.0.1",
  "profiling",
  "raw-window-handle",
+ "resvg",
  "serde_json",
+ "skrifa 0.48.0",
  "smallvec",
  "swash",
  "unicode-bidi",
+ "usvg 0.48.1",
+ "vello_cpu 0.0.9",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wayland-backend",
@@ -6983,7 +6987,7 @@ dependencies = [
  "image",
  "kurbo",
  "pic-scale",
- "vello_cpu",
+ "vello_cpu 0.0.8",
 ]
 
 [[package]]
@@ -18687,6 +18691,7 @@ checksum = "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91"
 dependencies = [
  "base64 0.23.1",
  "data-url",
+ "flate2",
  "fontdb 0.24.0",
  "harfrust 0.12.0",
  "imagesize 0.15.0",
@@ -18912,6 +18917,18 @@ dependencies = [
  "hashbrown 0.17.1",
  "png",
  "vello_common 0.0.8",
+]
+
+[[package]]
+name = "vello_cpu"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "588691169aed86b5c8fb487266afee01323234e6fd0a3f2aaec0eaa8e4007f23"
+dependencies = [
+ "bytemuck",
+ "glifo",
+ "hashbrown 0.17.1",
+ "vello_common 0.0.9",
 ]
 
 [[package]]

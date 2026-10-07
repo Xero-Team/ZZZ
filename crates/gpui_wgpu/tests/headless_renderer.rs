@@ -4,12 +4,12 @@ use anyhow::Context as _;
 use gpui::{
     AnyWindowHandle, AppContext as _, AtlasContentKind, AtlasKey, AtlasPolicy, AtlasSnapshot,
     AtlasTextureKind, AtlasTile, AtlasUsage, Bounds, ContentMask, Context, Corners, DevicePixels,
-    Edges, FontId, FontRun, FontStyle, FontWeight, GlyphId, HeadlessAppContext, Hsla, ImageId,
-    IntoElement, IsZero as _, MonochromeSprite, PaddedBool32, PathBuilder, PlatformAtlas,
-    PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad, Render,
-    RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow, Size,
-    Styled as _, SubpixelSprite, TransformationMatrix, Underline, Window, canvas, font, point, px,
-    size,
+    Edges, FontId, FontRun, FontStyle, FontWeight, GlyphId, GlyphRasterFormat, HeadlessAppContext,
+    Hsla, ImageId, IntoElement, IsZero as _, MonochromeSprite, PaddedBool32, PathBuilder,
+    PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad,
+    Render, RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow,
+    Size, Styled as _, SubpixelSprite, TransformationMatrix, Underline, Window, canvas, font,
+    point, px, size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
 use std::{borrow::Cow, collections::HashSet, path::Path, sync::Arc, time::Instant};
@@ -618,14 +618,17 @@ fn insert_shaped_text(
                 subpixel_rendering: !glyph.is_emoji,
                 dilation: 0,
             };
-            let key = AtlasKey::from(params.clone());
+            let raster_info = text_system.glyph_raster_info(&params)?;
+            if raster_info.bounds.is_zero() {
+                continue;
+            }
+            let key = AtlasKey::glyph(params.clone(), raster_info.format);
             let Some(tile) = atlas.get_or_insert_with(key.clone(), &mut || {
-                let raster_bounds = text_system.glyph_raster_bounds(&params)?;
-                if raster_bounds.is_zero() {
-                    return Ok(None);
-                }
-                let (size, bytes) = text_system.rasterize_glyph(&params, raster_bounds)?;
-                Ok(Some((size, Cow::Owned(bytes))))
+                let rasterized = text_system.rasterize_glyph(&params, raster_info)?;
+                Ok(Some((
+                    rasterized.info.bounds.size,
+                    Cow::Owned(rasterized.pixels),
+                )))
             })?
             else {
                 continue;
@@ -1253,6 +1256,241 @@ fn run_text_atlas_content_isolation(
     Ok(())
 }
 
+struct GlyphFixtureResult {
+    family: &'static str,
+    character: char,
+    format: GlyphRasterFormat,
+    image: image::RgbaImage,
+}
+
+fn rasterize_glyph_fixture(
+    renderer: &mut WgpuHeadlessRenderer,
+    font_path: &Path,
+    family: &'static str,
+    weight: FontWeight,
+    character: char,
+    color_source_hint: bool,
+) -> anyhow::Result<GlyphFixtureResult> {
+    let text_system = CosmicTextSystem::new_without_system_fonts(family);
+    text_system.add_fonts(vec![Cow::Owned(std::fs::read(font_path)?)])?;
+    let mut descriptor = font(family);
+    descriptor.weight = weight;
+    let font_id = text_system
+        .font_id(&descriptor)
+        .or_else(|_| text_system.first_fixture_font_id(family))
+        .with_context(|| format!("failed to select {family} from {}", font_path.display()))?;
+    let glyph_id = text_system
+        .glyph_for_char(font_id, character)
+        .with_context(|| format!("{family} does not contain {character}"))?;
+    let params = RenderGlyphParams {
+        font_id,
+        glyph_id,
+        font_size: px(64.0),
+        subpixel_variant: Point::default(),
+        scale_factor: 1.0,
+        synthetic_italic: Default::default(),
+        synthetic_bold: Default::default(),
+        is_emoji: color_source_hint,
+        subpixel_rendering: false,
+        dilation: 0,
+    };
+    let raster_info = text_system.glyph_raster_info(&params)?;
+    anyhow::ensure!(
+        !raster_info.bounds.is_zero(),
+        "{family} raster bounds are empty"
+    );
+    let rasterized = text_system.rasterize_glyph(&params, raster_info)?;
+    let atlas = renderer.sprite_atlas();
+    let frame = atlas.begin_frame();
+    let tile = atlas
+        .get_or_insert_with(AtlasKey::glyph(params, rasterized.info.format), &mut || {
+            Ok(Some((
+                rasterized.info.bounds.size,
+                Cow::Borrowed(rasterized.pixels.as_slice()),
+            )))
+        })?
+        .context("fixture glyph must produce an atlas tile")?;
+    let target_size = Size {
+        width: DevicePixels(96),
+        height: DevicePixels(96),
+    };
+    let target_bounds = bounds(0.0, 0.0, 96.0, 96.0, 1.0);
+    let sprite_bounds = bounds(16.0, 16.0, 64.0, 64.0, 1.0);
+    let mut scene = Scene::default();
+    match rasterized.info.format {
+        GlyphRasterFormat::Alpha8 => scene.insert_primitive(MonochromeSprite {
+            order: 0,
+            pad: 0,
+            bounds: sprite_bounds,
+            content_mask: ContentMask {
+                bounds: target_bounds,
+            },
+            color: gpui::rgb(0x00ff00).into(),
+            tile,
+            transformation: TransformationMatrix::unit(),
+        }),
+        GlyphRasterFormat::SubpixelBgra8 => scene.insert_primitive(SubpixelSprite {
+            order: 0,
+            pad: 0,
+            bounds: sprite_bounds,
+            content_mask: ContentMask {
+                bounds: target_bounds,
+            },
+            color: gpui::rgb(0x00ff00).into(),
+            tile,
+            transformation: TransformationMatrix::unit(),
+        }),
+        GlyphRasterFormat::ColorBgra8 => scene.insert_primitive(PolychromeSprite {
+            order: 0,
+            pad: 0,
+            grayscale: PaddedBool32::from(false),
+            opacity: 1.0,
+            bounds: sprite_bounds,
+            content_mask: ContentMask {
+                bounds: target_bounds,
+            },
+            corner_radii: Corners::default(),
+            tile,
+        }),
+    }
+    scene.finish();
+    atlas.finish_frame(frame, scene.atlas_usage());
+    let image = renderer.render_scene_to_image(&scene, target_size)?;
+    Ok(GlyphFixtureResult {
+        family,
+        character,
+        format: rasterized.info.format,
+        image,
+    })
+}
+
+fn has_chromatic_pixel(image: &image::RgbaImage) -> bool {
+    image.pixels().any(|pixel| {
+        let [red, green, blue, alpha] = pixel.0;
+        alpha > 0 && (red.abs_diff(green) > 8 || green.abs_diff(blue) > 8)
+    })
+}
+
+fn has_green_tinted_pixel(image: &image::RgbaImage) -> bool {
+    image.pixels().any(|pixel| {
+        let [red, green, blue, alpha] = pixel.0;
+        alpha > 0 && green > red.saturating_add(32) && green > blue.saturating_add(32)
+    })
+}
+
+fn run_text_glyph_format(
+    force_fallback_adapter: bool,
+    output_directory: &Path,
+) -> anyhow::Result<()> {
+    let fixture = |name: &str| {
+        std::env::var_os(name)
+            .map(std::path::PathBuf::from)
+            .with_context(|| format!("{name} must point to a licensed font fixture"))
+    };
+    let colrv1_path = fixture("GPUI_COLRV1_FONT")?;
+    let bitmap_path = fixture("GPUI_BITMAP_COLOR_FONT")?;
+    let svg_path = fixture("GPUI_SVG_COLOR_FONT")?;
+    let monochrome_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/openmoji/openmoji.ttf");
+    let mut renderer = WgpuHeadlessRenderer::new_with_fallback(force_fallback_adapter)?;
+    let results = [
+        rasterize_glyph_fixture(
+            &mut renderer,
+            &bitmap_path,
+            "Noto Color Emoji",
+            FontWeight::NORMAL,
+            '😀',
+            true,
+        )?,
+        rasterize_glyph_fixture(
+            &mut renderer,
+            &svg_path,
+            "Twitter Color Emoji",
+            FontWeight::NORMAL,
+            '🚀',
+            true,
+        )?,
+        rasterize_glyph_fixture(
+            &mut renderer,
+            &colrv1_path,
+            "Noto Color Emoji",
+            FontWeight::NORMAL,
+            '😀',
+            true,
+        )?,
+        rasterize_glyph_fixture(
+            &mut renderer,
+            &monochrome_path,
+            "OpenMoji",
+            FontWeight::BLACK,
+            '😀',
+            true,
+        )?,
+    ];
+    for result in &results[..3] {
+        anyhow::ensure!(
+            result.format == GlyphRasterFormat::ColorBgra8,
+            "{} {} produced {:?}",
+            result.family,
+            result.character,
+            result.format
+        );
+        anyhow::ensure!(
+            has_chromatic_pixel(&result.image),
+            "{} {} produced no chromatic pixels",
+            result.family,
+            result.character
+        );
+    }
+    let monochrome = &results[3];
+    anyhow::ensure!(
+        monochrome.format == GlyphRasterFormat::Alpha8,
+        "OpenMoji Black source hint incorrectly selected a color atlas"
+    );
+    anyhow::ensure!(
+        has_green_tinted_pixel(&monochrome.image),
+        "monochrome fixture did not remain tintable"
+    );
+
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    std::fs::create_dir_all(output_directory)?;
+    let labels = ["bitmap", "svg", "colrv1", "monochrome"];
+    for (label, result) in labels.into_iter().zip(&results) {
+        result
+            .image
+            .save(output_directory.join(format!("text-007-{adapter}-{label}.png")))?;
+    }
+    let artifact = serde_json::json!({
+        "experiment": "TEXT-007",
+        "adapter": adapter,
+        "fixtures": {
+            "colrv1": colrv1_path,
+            "bitmap": bitmap_path,
+            "svg": svg_path,
+            "monochrome": monochrome_path,
+        },
+        "results": labels.into_iter().zip(&results).map(|(label, result)| {
+            (label.to_owned(), serde_json::json!({
+                "family": result.family,
+                "character": result.character.to_string(),
+                "format": format!("{:?}", result.format),
+                "chromatic": has_chromatic_pixel(&result.image),
+                "green_tinted": has_green_tinted_pixel(&result.image),
+            }))
+        }).collect::<serde_json::Map<_, _>>(),
+    });
+    std::fs::write(
+        output_directory.join(format!("text-007-{adapter}.json")),
+        serde_json::to_vec_pretty(&artifact)?,
+    )?;
+    println!("{}", serde_json::to_string_pretty(&artifact)?);
+    Ok(())
+}
+
 #[test]
 fn hardware_adapter_renders_primitive_corpus() {
     let mut renderer = WgpuHeadlessRenderer::new().expect("hardware headless renderer");
@@ -1386,4 +1624,18 @@ fn text_atlas_content_isolation_runner() -> anyhow::Result<()> {
     );
     run_text_atlas_content_isolation(false, &output_directory)?;
     run_text_atlas_content_isolation(true, &output_directory)
+}
+
+#[test]
+#[ignore = "phase-5 color-font runner requires licensed fixture paths"]
+fn text_glyph_format_runner() -> anyhow::Result<()> {
+    let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("GPUI_TEXT_ATLAS_OUTPUT_DIR must be set"))?;
+    anyhow::ensure!(
+        output_directory.is_absolute(),
+        "GPUI_TEXT_ATLAS_OUTPUT_DIR must be an absolute path"
+    );
+    run_text_glyph_format(false, &output_directory)?;
+    run_text_glyph_format(true, &output_directory)
 }

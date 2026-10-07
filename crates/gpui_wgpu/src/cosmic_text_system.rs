@@ -5,10 +5,11 @@ use cosmic_text::{
     FontSystem, ShapeBuffer, ShapeLine,
 };
 use gpui::{
-    Bounds, DevicePixels, Font, FontFeatures, FontId, FontMetrics, FontRun, FontStyle, FontWeight,
-    GlyphId, IsZero as _, LineLayout, Pixels, PlatformTextSystem, RenderGlyphParams,
-    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ShapedGlyph, ShapedRun, SharedString, Size,
-    SyntheticBold, SyntheticItalic, TextRenderingMode, point, size, synthetic_bold_for,
+    Bounds, Font, FontFeatures, FontId, FontMetrics, FontRun, FontStyle, FontWeight, GlyphId,
+    GlyphRasterFormat, GlyphRasterInfo, IsZero as _, LineLayout, Pixels, PlatformTextSystem,
+    RasterizedGlyph, RenderGlyphParams, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ShapedGlyph,
+    ShapedRun, SharedString, Size, SyntheticBold, SyntheticItalic, TextRenderingMode, point, size,
+    synthetic_bold_for,
 };
 
 use itertools::Itertools;
@@ -18,6 +19,20 @@ use std::{borrow::Cow, ops::Range, sync::Arc};
 use swash::{
     scale::{Render, ScaleContext, Source, StrikeWith},
     zeno::{Format, Transform, Vector},
+};
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+use skrifa::{
+    FontRef as SkrifaFontRef, MetadataProvider,
+    color::ColorGlyphFormat,
+    instance::{LocationRef, Size as SkrifaSize},
+    raw::TableProvider,
+};
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+use vello_cpu::{
+    Glyph as VelloGlyph, Pixmap as VelloPixmap, RenderContext, Resources,
+    color::palette::css::BLACK,
+    peniko::{Blob, FontData},
 };
 
 pub struct CosmicTextSystem(RwLock<CosmicTextSystemState>);
@@ -38,7 +53,7 @@ struct CosmicTextSystemState {
     font_system: FontSystem,
     scratch: ShapeBuffer,
     swash_scale_context: ScaleContext,
-    pending_glyph_images: HashMap<RenderGlyphParams, swash::scale::image::Image>,
+    pending_glyph_images: HashMap<RenderGlyphParams, RenderedGlyphImage>,
     /// Contains all already loaded fonts, including all faces. Indexed by `FontId`.
     loaded_fonts: Vec<LoadedFont>,
     /// Caches the `FontId`s associated with a specific family to avoid iterating the font database
@@ -52,7 +67,34 @@ struct LoadedFont {
     features: CosmicFontFeatures,
     style: cosmic_text::Style,
     weight: FontWeight,
-    is_known_emoji_font: bool,
+    prefers_color_sources: bool,
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    vector_color_font_data: Option<FontData>,
+}
+
+struct RenderedGlyphImage {
+    info: GlyphRasterInfo,
+    pixels: Vec<u8>,
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[derive(Clone, Copy)]
+struct SvgViewport {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+struct ColorImageCrop {
+    source_width: u16,
+    minimum_x: usize,
+    minimum_y: usize,
+    maximum_x: usize,
+    maximum_y: usize,
+    source_left: i32,
+    source_top: i32,
 }
 
 impl CosmicTextSystem {
@@ -85,6 +127,33 @@ impl CosmicTextSystem {
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_owned(),
         }))
+    }
+
+    /// Returns the first face registered for a fixture family without applying
+    /// style matching. This is only available to renderer test infrastructure.
+    #[cfg(feature = "test-support")]
+    pub fn first_fixture_font_id(&self, family_name: &str) -> Result<FontId> {
+        let family: SharedString = family_name.to_owned().into();
+        let mut state = self.0.write();
+        if let Some(font_id) = state
+            .load_family(&family, &FontFeatures::default())?
+            .first()
+            .copied()
+        {
+            return Ok(font_id);
+        }
+        let cosmic_font_id = state
+            .font_system
+            .db()
+            .faces()
+            .find(|face| {
+                face.families
+                    .iter()
+                    .any(|(candidate, _)| candidate.eq_ignore_ascii_case(family_name))
+            })
+            .with_context(|| format!("fixture family {family} has no faces"))?
+            .id;
+        state.font_id_for_cosmic_id(cosmic_font_id)
     }
 }
 
@@ -173,16 +242,16 @@ impl PlatformTextSystem for CosmicTextSystem {
         self.0.read().glyph_for_char(font_id, ch)
     }
 
-    fn glyph_raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        self.0.write().raster_bounds(params)
+    fn glyph_raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        self.0.write().raster_info(params)
     }
 
     fn rasterize_glyph(
         &self,
         params: &RenderGlyphParams,
-        raster_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
-        self.0.write().rasterize_glyph(params, raster_bounds)
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        self.0.write().rasterize_glyph(params, raster_info)
     }
 
     fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout {
@@ -259,18 +328,22 @@ impl CosmicTextSystemState {
 
         let mut loaded_font_ids = SmallVec::new();
         for (font_id, postscript_name) in families {
-            let (style, weight) = {
+            let (style, weight, face_index) = {
                 let face = self
                     .font_system
                     .db()
                     .face(font_id)
                     .context("font face not found in database")?;
-                (face.style, FontWeight(face.weight.0.into()))
+                (face.style, FontWeight(face.weight.0.into()), face.index)
             };
             let font = self
                 .font_system
                 .get_font(font_id, cosmic_text::Weight::NORMAL)
                 .context("Could not load font")?;
+            let prefers_color_sources = is_color_capable_font(font.as_swash())
+                || check_is_known_emoji_font(&postscript_name);
+            #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+            let vector_color_font_data = vector_color_font_data(&font, face_index);
 
             // HACK: To let the storybook run and render Windows caption icons. We should actually do better font fallback.
             let allowed_bad_font_names = [
@@ -280,6 +353,7 @@ impl CosmicTextSystemState {
 
             if font.as_swash().charmap().map('m') == 0
                 && !allowed_bad_font_names.contains(&postscript_name.as_str())
+                && !prefers_color_sources
             {
                 self.font_system.db_mut().remove_face(font.id());
                 continue;
@@ -292,7 +366,9 @@ impl CosmicTextSystemState {
                 features: cosmic_font_features(features)?,
                 style,
                 weight,
-                is_known_emoji_font: check_is_known_emoji_font(&postscript_name),
+                prefers_color_sources,
+                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                vector_color_font_data,
             });
         }
 
@@ -316,60 +392,46 @@ impl CosmicTextSystemState {
         }
     }
 
-    fn raster_bounds(&mut self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
+    fn raster_info(&mut self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
         let image = self.render_glyph_image(params)?;
-        let bounds = Bounds {
-            origin: point(image.placement.left.into(), (-image.placement.top).into()),
-            size: size(image.placement.width.into(), image.placement.height.into()),
-        };
-        if !bounds.is_zero() {
+        let info = image.info;
+        if !info.bounds.is_zero() {
             self.pending_glyph_images.insert(params.clone(), image);
         }
-        Ok(bounds)
+        Ok(info)
     }
 
     #[profiling::function]
     fn rasterize_glyph(
         &mut self,
         params: &RenderGlyphParams,
-        glyph_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        let glyph_bounds = raster_info.bounds;
         if glyph_bounds.size.width.0 == 0 || glyph_bounds.size.height.0 == 0 {
             anyhow::bail!("glyph bounds are empty");
         }
 
-        let mut image = match self.pending_glyph_images.remove(params) {
+        let image = match self.pending_glyph_images.remove(params) {
             Some(image) => image,
             None => self.render_glyph_image(params)?,
         };
-        let bitmap_size = glyph_bounds.size;
-        match image.content {
-            swash::scale::image::Content::Color | swash::scale::image::Content::SubpixelMask => {
-                // Convert from RGBA to BGRA.
-                for pixel in image.data.chunks_exact_mut(4) {
-                    pixel.swap(0, 2);
-                }
-                Ok((bitmap_size, image.data))
-            }
-            swash::scale::image::Content::Mask => {
-                if params.subpixel_rendering {
-                    // We must always return RGBA data when subpixel rendering is requested.
-                    let expanded = image.data.iter().flat_map(|&a| [a, a, a, a]).collect();
-                    Ok((bitmap_size, expanded))
-                } else {
-                    Ok((bitmap_size, image.data))
-                }
-            }
-        }
+        anyhow::ensure!(
+            image.info == raster_info,
+            "glyph raster format or bounds changed between info and pixel queries"
+        );
+        Ok(RasterizedGlyph {
+            info: raster_info,
+            pixels: image.pixels,
+        })
     }
 
-    fn render_glyph_image(
-        &mut self,
-        params: &RenderGlyphParams,
-    ) -> Result<swash::scale::image::Image> {
+    fn render_glyph_image(&mut self, params: &RenderGlyphParams) -> Result<RenderedGlyphImage> {
         let loaded_font = &self.loaded_fonts[params.font_id.0];
         let font_ref = loaded_font.font.as_swash();
         let pixel_size = f32::from(params.font_size);
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        let vector_color_font_data = loaded_font.vector_color_font_data.clone();
 
         let subpixel_offset = Vector::new(
             params.subpixel_variant.x as f32 / SUBPIXEL_VARIANTS_X as f32 / params.scale_factor,
@@ -419,9 +481,37 @@ impl CosmicTextSystemState {
         }
 
         let glyph_id: u16 = params.glyph_id.0.try_into()?;
-        renderer
+        let swash_image = renderer
             .render(&mut scaler, glyph_id)
-            .with_context(|| format!("unable to render glyph via swash for {params:?}"))
+            .map(|image| normalize_swash_image(image, params.subpixel_rendering))
+            .transpose()?;
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        if let Some(font_data) = vector_color_font_data {
+            let raster_pixel_size = pixel_size * params.scale_factor;
+            if let Some(image) = render_svg_glyph(&font_data, params.glyph_id, raster_pixel_size)? {
+                return Ok(image);
+            }
+            if swash_image
+                .as_ref()
+                .is_some_and(|image| !image.info.bounds.is_zero())
+            {
+                return swash_image.context("non-empty Swash image disappeared");
+            }
+            if let Some(image) =
+                render_colrv1_glyph(&font_data, params.glyph_id, raster_pixel_size)?
+            {
+                return Ok(image);
+            }
+        }
+
+        if swash_image
+            .as_ref()
+            .is_some_and(|image| !image.info.bounds.is_zero())
+        {
+            return swash_image.context("non-empty Swash image disappeared");
+        }
+
+        swash_image.with_context(|| format!("unable to render glyph via Swash for {params:?}"))
     }
 
     /// This is used when cosmic_text has chosen a fallback font instead of using the requested
@@ -449,6 +539,10 @@ impl CosmicTextSystemState {
                 .db()
                 .face(id)
                 .context("fallback font face not found in cosmic-text database")?;
+            let prefers_color_sources = is_color_capable_font(font.as_swash())
+                || check_is_known_emoji_font(&face.post_script_name);
+            #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+            let vector_color_font_data = vector_color_font_data(&font, face.index);
 
             let font_id = FontId(self.loaded_fonts.len());
             self.loaded_fonts.push(LoadedFont {
@@ -456,7 +550,9 @@ impl CosmicTextSystemState {
                 features: CosmicFontFeatures::new(),
                 style: face.style,
                 weight: FontWeight(face.weight.0.into()),
-                is_known_emoji_font: check_is_known_emoji_font(&face.post_script_name),
+                prefers_color_sources,
+                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                vector_color_font_data,
             });
 
             Ok(font_id)
@@ -656,8 +752,12 @@ impl CosmicTextSystemState {
                     }
                 }
             }
-            let is_emoji = loaded_font.is_known_emoji_font;
-            let synthetic_italic = synthetic_italic_for(font_run.font_style, loaded_font.style);
+            let is_emoji = loaded_font.prefers_color_sources;
+            let synthetic_italic = if is_emoji {
+                SyntheticItalic::disabled()
+            } else {
+                synthetic_italic_for(font_run.font_style, loaded_font.style)
+            };
             let synthetic_bold = if is_emoji {
                 SyntheticBold::disabled()
             } else {
@@ -888,14 +988,516 @@ fn face_info_into_properties(
     }
 }
 
+fn normalize_swash_image(
+    mut image: swash::scale::image::Image,
+    subpixel_rendering: bool,
+) -> Result<RenderedGlyphImage> {
+    let format = glyph_raster_format(image.content, subpixel_rendering);
+    let bounds = Bounds {
+        origin: point(image.placement.left.into(), (-image.placement.top).into()),
+        size: size(image.placement.width.into(), image.placement.height.into()),
+    };
+    let pixel_count = usize::try_from(image.placement.width)?
+        .checked_mul(usize::try_from(image.placement.height)?)
+        .context("glyph pixel count overflowed")?;
+    let pixels = match image.content {
+        swash::scale::image::Content::Color | swash::scale::image::Content::SubpixelMask => {
+            anyhow::ensure!(
+                image.data.len() == pixel_count.saturating_mul(4),
+                "Swash returned an invalid four-channel glyph buffer"
+            );
+            for pixel in image.data.chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
+            image.data
+        }
+        swash::scale::image::Content::Mask if subpixel_rendering => {
+            anyhow::ensure!(
+                image.data.len() == pixel_count,
+                "Swash returned an invalid alpha glyph buffer"
+            );
+            image.data.iter().flat_map(|&alpha| [alpha; 4]).collect()
+        }
+        swash::scale::image::Content::Mask => {
+            anyhow::ensure!(
+                image.data.len() == pixel_count,
+                "Swash returned an invalid alpha glyph buffer"
+            );
+            image.data
+        }
+    };
+    Ok(RenderedGlyphImage {
+        info: GlyphRasterInfo { bounds, format },
+        pixels,
+    })
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn vector_color_font_data(font: &CosmicTextFont, face_index: u32) -> Option<FontData> {
+    let swash_font = font.as_swash();
+    let has_colrv1 = swash_font
+        .table(swash::tag_from_bytes(b"COLR"))
+        .is_some_and(|table| table.get(..2) == Some([0, 1].as_slice()));
+    let has_svg = swash_font.table(swash::tag_from_bytes(b"SVG ")).is_some();
+    if !has_colrv1 && !has_svg {
+        return None;
+    }
+    Some(FontData::new(
+        Blob::new(Arc::new(font.data().to_vec())),
+        face_index,
+    ))
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn render_svg_glyph(
+    font_data: &FontData,
+    glyph_id: GlyphId,
+    pixel_size: f32,
+) -> Result<Option<RenderedGlyphImage>> {
+    anyhow::ensure!(
+        pixel_size.is_finite() && pixel_size > 0.0,
+        "SVG glyph pixel size must be finite and positive"
+    );
+    let font_ref = SkrifaFontRef::from_index(font_data.data.data(), font_data.index)
+        .context("failed to parse OpenType-SVG font data")?;
+    let Some(document) = font_ref
+        .svg()
+        .ok()
+        .and_then(|table| table.glyph_data(skrifa::GlyphId::new(glyph_id.0)))
+    else {
+        return Ok(None);
+    };
+
+    let metrics = font_ref.metrics(SkrifaSize::unscaled(), LocationRef::default());
+    anyhow::ensure!(metrics.units_per_em > 0, "SVG font units per em are zero");
+    let ascent = metrics.ascent.max(0.0);
+    let line_height = (metrics.ascent + metrics.descent).max(f32::from(metrics.units_per_em));
+    let advance_width = font_ref
+        .glyph_metrics(SkrifaSize::unscaled(), LocationRef::default())
+        .advance_width(skrifa::GlyphId::new(glyph_id.0))
+        .unwrap_or(f32::from(metrics.units_per_em))
+        .max(f32::from(metrics.units_per_em));
+    anyhow::ensure!(
+        [ascent, line_height, advance_width]
+            .into_iter()
+            .all(f32::is_finite),
+        "SVG font metrics must be finite"
+    );
+
+    let document = svg_document_with_viewport(
+        document,
+        SvgViewport {
+            x: 0.0,
+            y: -ascent,
+            width: advance_width,
+            height: line_height,
+        },
+    )?;
+    let tree = usvg::Tree::from_data(&document, &usvg::Options::default())
+        .context("failed to parse OpenType-SVG glyph document")?;
+    let scale = pixel_size / f32::from(metrics.units_per_em);
+    let width = (advance_width * scale).ceil() as u32;
+    let height = (line_height * scale).ceil() as u32;
+    anyhow::ensure!(width > 0 && height > 0, "SVG glyph bounds are empty");
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(width, height).context("SVG glyph pixmap is too large")?;
+    let tree_size = tree.size();
+    let transform = resvg::tiny_skia::Transform::from_scale(
+        width as f32 / tree_size.width(),
+        height as f32 / tree_size.height(),
+    );
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+
+    let width = u16::try_from(width).context("SVG glyph width exceeds the raster contract")?;
+    let height = u16::try_from(height).context("SVG glyph height exceeds the raster contract")?;
+    let (minimum_x, minimum_y, maximum_x, maximum_y) =
+        visible_pixel_bounds(pixmap.data(), width, height)
+            .context("SVG glyph renderer produced no visible pixels")?;
+    let baseline_y = (ascent * scale).ceil() as i32;
+    cropped_color_image(
+        pixmap.data(),
+        ColorImageCrop {
+            source_width: width,
+            minimum_x,
+            minimum_y,
+            maximum_x,
+            maximum_y,
+            source_left: 0,
+            source_top: baseline_y,
+        },
+    )
+    .map(Some)
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn svg_document_with_viewport(document: &[u8], viewport: SvgViewport) -> Result<Vec<u8>> {
+    let document = if document.starts_with(&[0x1f, 0x8b]) {
+        usvg::decompress_svgz(document).context("failed to decompress OpenType-SVG document")?
+    } else {
+        document.to_vec()
+    };
+    let mut document = String::from_utf8(document).context("OpenType-SVG document is not UTF-8")?;
+    let svg_start = document
+        .find("<svg")
+        .context("OpenType-SVG root is missing")?;
+    let root_end = document[svg_start..]
+        .find('>')
+        .map(|offset| svg_start + offset)
+        .context("OpenType-SVG root tag is unterminated")?;
+    let root = &document[svg_start..root_end];
+    let mut attributes = String::new();
+    // OpenType supplies an implicit font-space viewport that standalone SVG parsers do not know.
+    if !svg_root_has_attribute(root, "viewBox") {
+        attributes.push_str(&format!(
+            " viewBox=\"{} {} {} {}\"",
+            viewport.x, viewport.y, viewport.width, viewport.height
+        ));
+    }
+    if !svg_root_has_attribute(root, "width") {
+        attributes.push_str(&format!(" width=\"{}\"", viewport.width));
+    }
+    if !svg_root_has_attribute(root, "height") {
+        attributes.push_str(&format!(" height=\"{}\"", viewport.height));
+    }
+    document.insert_str(root_end, &attributes);
+    Ok(document.into_bytes())
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn svg_root_has_attribute(root: &str, attribute: &str) -> bool {
+    root.match_indices(attribute).any(|(index, _)| {
+        let has_boundary = index == 0
+            || root[..index]
+                .chars()
+                .next_back()
+                .is_some_and(char::is_whitespace);
+        has_boundary
+            && root[index + attribute.len()..]
+                .trim_start()
+                .starts_with('=')
+    })
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn render_colrv1_glyph(
+    font_data: &FontData,
+    glyph_id: GlyphId,
+    pixel_size: f32,
+) -> Result<Option<RenderedGlyphImage>> {
+    anyhow::ensure!(
+        pixel_size.is_finite() && pixel_size > 0.0,
+        "COLRv1 glyph pixel size must be finite and positive"
+    );
+    let font_ref = SkrifaFontRef::from_index(font_data.data.data(), font_data.index)
+        .context("failed to parse COLRv1 font data")?;
+    let Some(color_glyph) = font_ref
+        .color_glyphs()
+        .get_with_format(skrifa::GlyphId::new(glyph_id.0), ColorGlyphFormat::ColrV1)
+    else {
+        return Ok(None);
+    };
+
+    let bounding_box =
+        color_glyph.bounding_box(LocationRef::default(), SkrifaSize::new(pixel_size));
+    let has_explicit_bounds = bounding_box.is_some();
+    let (left, bottom, right, top) = if let Some(bounding_box) = bounding_box {
+        anyhow::ensure!(
+            [
+                bounding_box.x_min,
+                bounding_box.y_min,
+                bounding_box.x_max,
+                bounding_box.y_max,
+            ]
+            .into_iter()
+            .all(f32::is_finite),
+            "COLRv1 glyph bounds must be finite"
+        );
+        (
+            bounding_box.x_min.floor() as i32,
+            bounding_box.y_min.floor() as i32,
+            bounding_box.x_max.ceil() as i32,
+            bounding_box.y_max.ceil() as i32,
+        )
+    } else {
+        let extent = (pixel_size * 2.0).ceil().max(1.0) as i32;
+        (-extent, -extent, extent, extent)
+    };
+    let width = u16::try_from(right.checked_sub(left).context("COLRv1 width overflowed")?)
+        .context("COLRv1 glyph is too wide to rasterize")?;
+    let height = u16::try_from(
+        top.checked_sub(bottom)
+            .context("COLRv1 height overflowed")?,
+    )
+    .context("COLRv1 glyph is too tall to rasterize")?;
+    anyhow::ensure!(width > 0 && height > 0, "COLRv1 glyph bounds are empty");
+
+    let mut resources = Resources::new();
+    let mut render_context = RenderContext::new(width, height);
+    render_context.set_paint(BLACK);
+    render_context
+        .glyph_run(&mut resources, font_data)
+        .font_size(pixel_size)
+        .hint(false)
+        .fill_glyphs(
+            [VelloGlyph {
+                id: glyph_id.0,
+                x: -left as f32,
+                y: top as f32,
+            }]
+            .into_iter(),
+        );
+    render_context.flush();
+    let mut pixmap = VelloPixmap::new(width, height);
+    render_context.render_to_pixmap(&mut resources, &mut pixmap);
+
+    let (minimum_x, minimum_y, maximum_x, maximum_y) =
+        visible_pixel_bounds(pixmap.data_as_u8_slice(), width, height)
+            .context("COLRv1 renderer produced no visible pixels")?;
+    if !has_explicit_bounds {
+        anyhow::ensure!(
+            minimum_x > 0
+                && minimum_y > 0
+                && maximum_x + 1 < usize::from(width)
+                && maximum_y + 1 < usize::from(height),
+            "COLRv1 glyph exceeded the conservative fallback canvas"
+        );
+    }
+
+    cropped_color_image(
+        pixmap.data_as_u8_slice(),
+        ColorImageCrop {
+            source_width: width,
+            minimum_x,
+            minimum_y,
+            maximum_x,
+            maximum_y,
+            source_left: left,
+            source_top: top,
+        },
+    )
+    .map(Some)
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn cropped_color_image(source_pixels: &[u8], crop: ColorImageCrop) -> Result<RenderedGlyphImage> {
+    let cropped_width = crop.maximum_x - crop.minimum_x + 1;
+    let cropped_height = crop.maximum_y - crop.minimum_y + 1;
+    let pixel_capacity = cropped_width
+        .checked_mul(cropped_height)
+        .and_then(|count| count.checked_mul(4))
+        .context("cropped color glyph pixel count overflowed")?;
+    let mut pixels = Vec::with_capacity(pixel_capacity);
+    for y in crop.minimum_y..=crop.maximum_y {
+        for x in crop.minimum_x..=crop.maximum_x {
+            let offset = (y * usize::from(crop.source_width) + x) * 4;
+            let pixel: [u8; 4] = source_pixels[offset..offset + 4]
+                .try_into()
+                .context("color glyph pixel buffer is truncated")?;
+            pixels.extend_from_slice(&premultiplied_rgba_to_straight_bgra(pixel));
+        }
+    }
+
+    let cropped_left = crop
+        .source_left
+        .checked_add(i32::try_from(crop.minimum_x)?)
+        .context("color glyph left bearing overflowed")?;
+    let cropped_top = crop
+        .source_top
+        .checked_sub(i32::try_from(crop.minimum_y)?)
+        .context("color glyph top bearing overflowed")?;
+    Ok(RenderedGlyphImage {
+        info: GlyphRasterInfo {
+            bounds: Bounds {
+                origin: point(cropped_left.into(), (-cropped_top).into()),
+                size: size(
+                    i32::try_from(cropped_width)?.into(),
+                    i32::try_from(cropped_height)?.into(),
+                ),
+            },
+            format: GlyphRasterFormat::ColorBgra8,
+        },
+        pixels,
+    })
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn visible_pixel_bounds(
+    pixels: &[u8],
+    width: u16,
+    height: u16,
+) -> Option<(usize, usize, usize, usize)> {
+    let expected_length = usize::from(width)
+        .checked_mul(usize::from(height))?
+        .checked_mul(4)?;
+    if pixels.len() != expected_length {
+        return None;
+    }
+    let mut bounds: Option<(usize, usize, usize, usize)> = None;
+    for (index, pixel) in pixels.chunks_exact(4).enumerate() {
+        if pixel[3] == 0 {
+            continue;
+        }
+        let x = index % usize::from(width);
+        let y = index / usize::from(width);
+        bounds = Some(match bounds {
+            Some((minimum_x, minimum_y, maximum_x, maximum_y)) => (
+                minimum_x.min(x),
+                minimum_y.min(y),
+                maximum_x.max(x),
+                maximum_y.max(y),
+            ),
+            None => (x, y, x, y),
+        });
+    }
+    bounds
+}
+
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn premultiplied_rgba_to_straight_bgra(pixel: [u8; 4]) -> [u8; 4] {
+    let [red, green, blue, alpha] = pixel;
+    if alpha == 0 {
+        return [0; 4];
+    }
+    let unpremultiply = |component: u8| {
+        let numerator = u32::from(component) * 255 + u32::from(alpha) / 2;
+        u8::try_from((numerator / u32::from(alpha)).min(255)).unwrap_or(255)
+    };
+    [
+        unpremultiply(blue),
+        unpremultiply(green),
+        unpremultiply(red),
+        alpha,
+    ]
+}
+
+fn glyph_raster_format(
+    content: swash::scale::image::Content,
+    subpixel_rendering: bool,
+) -> GlyphRasterFormat {
+    match content {
+        swash::scale::image::Content::Color => GlyphRasterFormat::ColorBgra8,
+        swash::scale::image::Content::SubpixelMask => GlyphRasterFormat::SubpixelBgra8,
+        swash::scale::image::Content::Mask if subpixel_rendering => {
+            GlyphRasterFormat::SubpixelBgra8
+        }
+        swash::scale::image::Content::Mask => GlyphRasterFormat::Alpha8,
+    }
+}
+
+fn is_color_capable_font(font: swash::FontRef<'_>) -> bool {
+    [b"COLR", b"CBDT", b"sbix", b"SVG "]
+        .into_iter()
+        .any(|tag| font.table(swash::tag_from_bytes(tag)).is_some())
+}
+
 fn check_is_known_emoji_font(postscript_name: &str) -> bool {
-    // OpenMoji is bundled as a fallback for platforms that do not ship a
-    // color emoji font.
+    // This only selects color-capable Swash sources. The rendered Image::content
+    // remains authoritative for the atlas format.
     matches!(postscript_name, "NotoColorEmoji" | "OpenMojiBlack")
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[test]
+    fn vello_color_pixels_are_normalized_once() {
+        assert_eq!(
+            premultiplied_rgba_to_straight_bgra([32, 64, 16, 128]),
+            [32, 128, 64, 128]
+        );
+        assert_eq!(
+            premultiplied_rgba_to_straight_bgra([200, 100, 50, 0]),
+            [0, 0, 0, 0]
+        );
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[test]
+    fn opentype_svg_gets_an_explicit_font_viewport() -> Result<()> {
+        let document = svg_document_with_viewport(
+            br#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><path/></svg>"#,
+            SvgViewport {
+                x: 0.0,
+                y: -800.0,
+                width: 1000.0,
+                height: 1000.0,
+            },
+        )?;
+        let document = String::from_utf8(document)?;
+        assert!(document.contains("viewBox=\"0 -800 1000 1000\""));
+        assert!(document.contains("width=\"1000\""));
+        assert!(document.contains("height=\"1000\""));
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[test]
+    fn opentype_svg_preserves_explicit_viewport_attributes() -> Result<()> {
+        let document = svg_document_with_viewport(
+            br#"<svg viewBox = '1 2 3 4' width = '5' height = '6'></svg>"#,
+            SvgViewport {
+                x: 0.0,
+                y: 0.0,
+                width: 1000.0,
+                height: 1000.0,
+            },
+        )?;
+        let document = String::from_utf8(document)?;
+        assert_eq!(document.matches("viewBox").count(), 1);
+        assert_eq!(document.matches("width").count(), 1);
+        assert_eq!(document.matches("height").count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn swash_content_is_authoritative_for_glyph_format() -> Result<()> {
+        assert_eq!(
+            glyph_raster_format(swash::scale::image::Content::Mask, false),
+            GlyphRasterFormat::Alpha8
+        );
+        assert_eq!(
+            glyph_raster_format(swash::scale::image::Content::Mask, true),
+            GlyphRasterFormat::SubpixelBgra8
+        );
+        assert_eq!(
+            glyph_raster_format(swash::scale::image::Content::SubpixelMask, false),
+            GlyphRasterFormat::SubpixelBgra8
+        );
+        assert_eq!(
+            glyph_raster_format(swash::scale::image::Content::Color, false),
+            GlyphRasterFormat::ColorBgra8
+        );
+
+        let text_system = CosmicTextSystem::new_without_system_fonts("Lilex");
+        text_system.add_fonts(vec![Cow::Borrowed(include_bytes!(
+            "../../../assets/fonts/openmoji/openmoji.ttf"
+        ))])?;
+        let mut descriptor = gpui::font("OpenMoji");
+        descriptor.weight = FontWeight::BLACK;
+        let font_id = text_system.font_id(&descriptor)?;
+        let glyph_id = text_system
+            .glyph_for_char(font_id, '😀')
+            .context("OpenMoji fixture must contain the grinning face")?;
+        let params = RenderGlyphParams {
+            font_id,
+            glyph_id,
+            font_size: gpui::px(32.0),
+            subpixel_variant: gpui::Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: SyntheticItalic::disabled(),
+            synthetic_bold: SyntheticBold::disabled(),
+            is_emoji: true,
+            subpixel_rendering: false,
+            dilation: 0,
+        };
+        assert_eq!(
+            text_system.glyph_raster_info(&params)?.format,
+            GlyphRasterFormat::Alpha8,
+            "the emoji source hint must not turn monochrome OpenMoji pixels into color"
+        );
+        Ok(())
+    }
 
     fn fid(i: usize) -> FontId {
         FontId(i)

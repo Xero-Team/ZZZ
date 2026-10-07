@@ -259,21 +259,18 @@ impl PlatformTextSystem for DirectWriteTextSystem {
         self.state.read().glyph_for_char(font_id, ch)
     }
 
-    fn glyph_raster_bounds(
-        &self,
-        params: &RenderGlyphParams,
-    ) -> anyhow::Result<Bounds<DevicePixels>> {
-        self.state.read().raster_bounds(&self.components, params)
+    fn glyph_raster_info(&self, params: &RenderGlyphParams) -> anyhow::Result<GlyphRasterInfo> {
+        self.state.read().raster_info(&self.components, params)
     }
 
     fn rasterize_glyph(
         &self,
         params: &RenderGlyphParams,
-        raster_bounds: Bounds<DevicePixels>,
-    ) -> anyhow::Result<(Size<DevicePixels>, Vec<u8>)> {
+        raster_info: GlyphRasterInfo,
+    ) -> anyhow::Result<RasterizedGlyph> {
         self.state
             .read()
-            .rasterize_glyph(&self.components, params, raster_bounds)
+            .rasterize_glyph(&self.components, params, raster_info)
     }
 
     fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout {
@@ -752,14 +749,28 @@ impl DirectWriteState {
         Ok(glyph_analysis)
     }
 
-    fn raster_bounds(
+    fn raster_info(
         &self,
         components: &DirectWriteComponents,
         params: &RenderGlyphParams,
-    ) -> Result<Bounds<DevicePixels>> {
-        let glyph_analysis = self.create_glyph_run_analysis(components, params)?;
+    ) -> Result<GlyphRasterInfo> {
+        let font = &self.fonts[params.font_id.0];
+        let format = if is_color_glyph(&font.font_face, params.glyph_id, &components.factory) {
+            GlyphRasterFormat::ColorBgra8
+        } else if params.subpixel_rendering {
+            GlyphRasterFormat::SubpixelBgra8
+        } else {
+            GlyphRasterFormat::Alpha8
+        };
+        let mut effective_params = params.clone();
+        if format == GlyphRasterFormat::ColorBgra8 {
+            effective_params.subpixel_rendering = false;
+            effective_params.synthetic_bold = SyntheticBold::disabled();
+            effective_params.synthetic_italic = SyntheticItalic::disabled();
+        }
+        let glyph_analysis = self.create_glyph_run_analysis(components, &effective_params)?;
 
-        let texture_type = if params.subpixel_rendering {
+        let texture_type = if format == GlyphRasterFormat::SubpixelBgra8 {
             DWRITE_TEXTURE_CLEARTYPE_3x1
         } else {
             DWRITE_TEXTURE_ALIASED_1x1
@@ -768,25 +779,32 @@ impl DirectWriteState {
         let bounds = unsafe { glyph_analysis.GetAlphaTextureBounds(texture_type)? };
 
         if bounds.right < bounds.left {
-            Ok(Bounds {
-                origin: point(0.into(), 0.into()),
-                size: size(0.into(), 0.into()),
+            Ok(GlyphRasterInfo {
+                format,
+                bounds: Bounds {
+                    origin: point(0.into(), 0.into()),
+                    size: size(0.into(), 0.into()),
+                },
             })
         } else {
-            let extra_width = if params.synthetic_bold.is_enabled() && !params.is_emoji {
-                params
-                    .synthetic_bold
-                    .device_pixel_amount(params.font_size, params.scale_factor)
-                    .ceil() as i32
-            } else {
-                0
-            };
-            Ok(Bounds {
-                origin: point(bounds.left.into(), bounds.top.into()),
-                size: size(
-                    (bounds.right - bounds.left + extra_width).into(),
-                    (bounds.bottom - bounds.top).into(),
-                ),
+            let extra_width =
+                if params.synthetic_bold.is_enabled() && format != GlyphRasterFormat::ColorBgra8 {
+                    params
+                        .synthetic_bold
+                        .device_pixel_amount(params.font_size, params.scale_factor)
+                        .ceil() as i32
+                } else {
+                    0
+                };
+            Ok(GlyphRasterInfo {
+                format,
+                bounds: Bounds {
+                    origin: point(bounds.left.into(), bounds.top.into()),
+                    size: size(
+                        (bounds.right - bounds.left + extra_width).into(),
+                        (bounds.bottom - bounds.top).into(),
+                    ),
+                },
             })
         }
     }
@@ -808,27 +826,39 @@ impl DirectWriteState {
         &self,
         components: &DirectWriteComponents,
         params: &RenderGlyphParams,
-        glyph_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        let glyph_bounds = raster_info.bounds;
         if glyph_bounds.size.width.0 == 0 || glyph_bounds.size.height.0 == 0 {
             anyhow::bail!("glyph bounds are empty");
         }
 
-        let bitmap_data = if params.is_emoji {
-            if let Ok(color) = self.rasterize_color(components, params, glyph_bounds) {
-                color
-            } else {
-                let monochrome = self.rasterize_monochrome(components, params, glyph_bounds)?;
-                monochrome
-                    .into_iter()
-                    .flat_map(|pixel| [0, 0, 0, pixel])
-                    .collect::<Vec<_>>()
+        let bitmap_data = match raster_info.format {
+            GlyphRasterFormat::ColorBgra8 => {
+                if let Ok(color) = self.rasterize_color(components, params, glyph_bounds) {
+                    color
+                } else {
+                    let mut monochrome_params = params.clone();
+                    monochrome_params.subpixel_rendering = false;
+                    monochrome_params.synthetic_bold = SyntheticBold::disabled();
+                    monochrome_params.synthetic_italic = SyntheticItalic::disabled();
+                    let monochrome =
+                        self.rasterize_monochrome(components, &monochrome_params, glyph_bounds)?;
+                    monochrome
+                        .into_iter()
+                        .flat_map(|pixel| [0, 0, 0, pixel])
+                        .collect::<Vec<_>>()
+                }
             }
-        } else {
-            self.rasterize_monochrome(components, params, glyph_bounds)?
+            GlyphRasterFormat::Alpha8 | GlyphRasterFormat::SubpixelBgra8 => {
+                self.rasterize_monochrome(components, params, glyph_bounds)?
+            }
         };
 
-        Ok((glyph_bounds.size, bitmap_data))
+        Ok(RasterizedGlyph {
+            info: raster_info,
+            pixels: bitmap_data,
+        })
     }
 
     fn rasterize_monochrome(
@@ -1605,8 +1635,11 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
                 ((desc.textPosition as usize) < *end).then_some((*style, *weight))
             })
             .unwrap_or((FontStyle::default(), FontWeight::default()));
-        let synthetic_italic =
-            synthetic_italic_for(requested_style, unsafe { font_face.GetStyle() });
+        let synthetic_italic = if color_font {
+            SyntheticItalic::disabled()
+        } else {
+            synthetic_italic_for(requested_style, unsafe { font_face.GetStyle() })
+        };
         let synthetic_bold = if color_font {
             SyntheticBold::disabled()
         } else {
@@ -2190,18 +2223,19 @@ mod tests {
                 synthetic_bold: Default::default(),
                 synthetic_italic: Default::default(),
             };
-            let raster_bounds = text_system.glyph_raster_bounds(&params)?;
-            if raster_bounds.size.width.0 == 0 || raster_bounds.size.height.0 == 0 {
+            let raster_info = text_system.glyph_raster_info(&params)?;
+            assert_eq!(raster_info.format, GlyphRasterFormat::ColorBgra8);
+            if raster_info.bounds.size.width.0 == 0 || raster_info.bounds.size.height.0 == 0 {
                 log::info!("raster bounds are empty for {ch}");
                 continue;
             }
-            params_list.push((params, raster_bounds));
+            params_list.push((params, raster_info));
         }
         assert!(!params_list.is_empty());
 
         let first: Vec<_> = params_list
             .iter()
-            .map(|(params, bounds)| text_system.rasterize_glyph(params, *bounds))
+            .map(|(params, info)| text_system.rasterize_glyph(params, *info))
             .collect::<Result<_>>()?;
 
         // Churn the texture heap with further rasterization passes. If the color
@@ -2209,13 +2243,13 @@ mod tests {
         // the second batch can pick up different contents and differ from the first.
         // With an explicit clear both batches are deterministic and identical.
         for _ in 0..3 {
-            for (params, bounds) in &params_list {
-                text_system.rasterize_glyph(params, *bounds)?;
+            for (params, info) in &params_list {
+                text_system.rasterize_glyph(params, *info)?;
             }
         }
         let second: Vec<_> = params_list
             .iter()
-            .map(|(params, bounds)| text_system.rasterize_glyph(params, *bounds))
+            .map(|(params, info)| text_system.rasterize_glyph(params, *info))
             .collect::<Result<_>>()?;
 
         assert_eq!(
