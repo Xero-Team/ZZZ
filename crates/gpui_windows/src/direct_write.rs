@@ -79,7 +79,6 @@ struct DirectWriteState {
     font_to_font_id: HashMap<Font, FontId>,
     font_info_cache: HashMap<usize, FontId>,
     layout_line_scratch: Vec<u16>,
-    pending_color_glyphs: HashMap<RenderGlyphParams, RasterizedGlyph>,
 }
 
 impl GPUState {
@@ -221,7 +220,6 @@ impl DirectWriteTextSystem {
                 font_to_font_id: HashMap::default(),
                 font_info_cache: HashMap::default(),
                 layout_line_scratch: Vec::new(),
-                pending_color_glyphs: HashMap::default(),
             }),
         })
     }
@@ -268,7 +266,7 @@ impl PlatformTextSystem for DirectWriteTextSystem {
     }
 
     fn glyph_raster_info(&self, params: &RenderGlyphParams) -> anyhow::Result<GlyphRasterInfo> {
-        self.state.write().raster_info(&self.components, params)
+        self.state.read().raster_info(&self.components, params)
     }
 
     fn rasterize_glyph(
@@ -277,7 +275,7 @@ impl PlatformTextSystem for DirectWriteTextSystem {
         raster_info: GlyphRasterInfo,
     ) -> anyhow::Result<RasterizedGlyph> {
         self.state
-            .write()
+            .read()
             .rasterize_glyph(&self.components, params, raster_info)
     }
 
@@ -758,7 +756,7 @@ impl DirectWriteState {
     }
 
     fn raster_info(
-        &mut self,
+        &self,
         components: &DirectWriteComponents,
         params: &RenderGlyphParams,
     ) -> Result<GlyphRasterInfo> {
@@ -773,9 +771,7 @@ impl DirectWriteState {
         if format == GlyphRasterFormat::ColorBgra8 {
             match self.rasterize_native_color(components, params) {
                 Ok(rasterized) => {
-                    let info = rasterized.info;
-                    self.pending_color_glyphs.insert(params.clone(), rasterized);
-                    return Ok(info);
+                    return Ok(rasterized.info);
                 }
                 Err(error) => {
                     log::debug!("native DirectWrite color raster is unavailable: {error:#}");
@@ -843,18 +839,11 @@ impl DirectWriteState {
     }
 
     fn rasterize_glyph(
-        &mut self,
+        &self,
         components: &DirectWriteComponents,
         params: &RenderGlyphParams,
         raster_info: GlyphRasterInfo,
     ) -> Result<RasterizedGlyph> {
-        if let Some(rasterized) = self.pending_color_glyphs.remove(params) {
-            anyhow::ensure!(
-                rasterized.info == raster_info,
-                "native color glyph metadata changed between info and pixel queries"
-            );
-            return Ok(rasterized);
-        }
         let glyph_bounds = raster_info.bounds;
         if glyph_bounds.size.width.0 == 0 || glyph_bounds.size.height.0 == 0 {
             anyhow::bail!("glyph bounds are empty");

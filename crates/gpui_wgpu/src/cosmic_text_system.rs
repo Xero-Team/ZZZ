@@ -53,7 +53,6 @@ struct CosmicTextSystemState {
     font_system: FontSystem,
     scratch: ShapeBuffer,
     swash_scale_context: ScaleContext,
-    pending_glyph_images: HashMap<RenderGlyphParams, RenderedGlyphImage>,
     /// Contains all already loaded fonts, including all faces. Indexed by `FontId`.
     loaded_fonts: Vec<LoadedFont>,
     /// Caches the `FontId`s associated with a specific family to avoid iterating the font database
@@ -105,7 +104,6 @@ impl CosmicTextSystem {
             font_system,
             scratch: ShapeBuffer::default(),
             swash_scale_context: ScaleContext::new(),
-            pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_owned(),
@@ -122,7 +120,6 @@ impl CosmicTextSystem {
             font_system,
             scratch: ShapeBuffer::default(),
             swash_scale_context: ScaleContext::new(),
-            pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             font_ids_by_family_cache: HashMap::default(),
             system_font_fallback: system_font_fallback.to_owned(),
@@ -393,12 +390,7 @@ impl CosmicTextSystemState {
     }
 
     fn raster_info(&mut self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
-        let image = self.render_glyph_image(params)?;
-        let info = image.info;
-        if !info.bounds.is_zero() {
-            self.pending_glyph_images.insert(params.clone(), image);
-        }
-        Ok(info)
+        Ok(self.render_glyph_image(params)?.info)
     }
 
     #[profiling::function]
@@ -412,10 +404,7 @@ impl CosmicTextSystemState {
             anyhow::bail!("glyph bounds are empty");
         }
 
-        let image = match self.pending_glyph_images.remove(params) {
-            Some(image) => image,
-            None => self.render_glyph_image(params)?,
-        };
+        let image = self.render_glyph_image(params)?;
         anyhow::ensure!(
             image.info == raster_info,
             "glyph raster format or bounds changed between info and pixel queries"

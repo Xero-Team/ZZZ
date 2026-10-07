@@ -1,6 +1,7 @@
 #![cfg(feature = "test-support")]
 
 use anyhow::Context as _;
+use collections::FxHashMap;
 use gpui::{
     AnyWindowHandle, AppContext as _, AtlasContentKind, AtlasKey, AtlasPolicy, AtlasSnapshot,
     AtlasTextureKind, AtlasTile, AtlasUsage, Bounds, ContentMask, Context, Corners, DevicePixels,
@@ -8,8 +9,8 @@ use gpui::{
     Hsla, ImageId, IntoElement, IsZero as _, MonochromeSprite, PaddedBool32, PathBuilder,
     PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad,
     Render, RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow,
-    Size, Styled as _, SubpixelSprite, TransformationMatrix, Underline, Window, canvas, font,
-    point, px, radians, size,
+    Size, Styled as _, SubpixelSprite, SyntheticBold, SyntheticItalic, TextSystem,
+    TransformationMatrix, Underline, Window, canvas, font, point, px, radians, size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
 use std::{borrow::Cow, collections::HashSet, path::Path, sync::Arc, time::Instant};
@@ -1814,6 +1815,219 @@ fn run_text_atlas_sampling_gutter(
     Ok(())
 }
 
+fn raster_cache_snapshot_json(snapshot: gpui::GlyphRasterInfoCacheSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "strike_count": snapshot.strike_count,
+        "entry_count": snapshot.entry_count,
+        "estimated_bytes": snapshot.estimated_bytes,
+        "max_strikes": snapshot.max_strikes,
+        "max_bytes": snapshot.max_bytes,
+        "hits": snapshot.hits,
+        "misses": snapshot.misses,
+        "evictions": snapshot.evictions,
+    })
+}
+
+fn run_text_raster_info_cache(output_directory: &Path) -> anyhow::Result<()> {
+    const MAX_STRIKES: usize = 24;
+    const MAX_BYTES: usize = 64 * 1024;
+    const WARM_SAMPLES: usize = 200;
+
+    let platform_text_system = Arc::new(CosmicTextSystem::new_without_system_fonts("Lilex"));
+    platform_text_system.add_fonts(vec![
+        Cow::Borrowed(include_bytes!(
+            "../../../assets/fonts/lilex/Lilex-Regular.ttf"
+        )),
+        Cow::Borrowed(include_bytes!(
+            "../../../assets/fonts/openmoji/openmoji.ttf"
+        )),
+    ])?;
+    let lilex_font_id = platform_text_system.font_id(&font("Lilex"))?;
+    let mut openmoji = font("OpenMoji");
+    openmoji.weight = FontWeight::BLACK;
+    let openmoji_font_id = platform_text_system.font_id(&openmoji)?;
+    let latin_glyphs = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        .chars()
+        .map(|character| {
+            platform_text_system
+                .glyph_for_char(lilex_font_id, character)
+                .with_context(|| format!("Lilex has no glyph for {character}"))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let emoji_glyph = platform_text_system
+        .glyph_for_char(openmoji_font_id, '😀')
+        .context("OpenMoji fixture has no grinning face")?;
+    let text_system = TextSystem::new(platform_text_system);
+    text_system.set_raster_info_cache_limits_for_test(MAX_STRIKES, MAX_BYTES);
+
+    for font_size in 10..46 {
+        for scale_factor in [1.0, 1.25, 2.0] {
+            for synthetic_italic in [SyntheticItalic::disabled(), SyntheticItalic::enabled()] {
+                for dilation in [0, 2] {
+                    for (glyph_index, glyph_id) in latin_glyphs.iter().take(12).enumerate() {
+                        let params = RenderGlyphParams {
+                            font_id: lilex_font_id,
+                            glyph_id: *glyph_id,
+                            font_size: px(font_size as f32),
+                            subpixel_variant: Point::new((glyph_index % 4) as u8, 0),
+                            scale_factor,
+                            synthetic_italic,
+                            synthetic_bold: SyntheticBold::disabled(),
+                            is_emoji: false,
+                            subpixel_rendering: true,
+                            dilation,
+                        };
+                        text_system.glyph_raster_info_for_test(&params)?;
+                    }
+                }
+            }
+        }
+    }
+    for font_size in [16.0, 24.0, 32.0, 48.0] {
+        text_system.glyph_raster_info_for_test(&RenderGlyphParams {
+            font_id: openmoji_font_id,
+            glyph_id: emoji_glyph,
+            font_size: px(font_size),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: SyntheticItalic::disabled(),
+            synthetic_bold: SyntheticBold::disabled(),
+            is_emoji: true,
+            subpixel_rendering: false,
+            dilation: 0,
+        })?;
+    }
+    let churn_snapshot = text_system.raster_info_cache_snapshot_for_test();
+    anyhow::ensure!(
+        churn_snapshot.strike_count <= churn_snapshot.max_strikes,
+        "strike-count limit was exceeded"
+    );
+    anyhow::ensure!(
+        churn_snapshot.estimated_bytes <= churn_snapshot.max_bytes,
+        "raster-info byte limit was exceeded"
+    );
+    anyhow::ensure!(
+        churn_snapshot.evictions > 0,
+        "churn workload must exercise strike eviction"
+    );
+
+    text_system.set_raster_info_cache_limits_for_test(8, 128 * 1024);
+    let mut warm_params = Vec::new();
+    for font_size in [18.0, 24.0] {
+        for synthetic_italic in [SyntheticItalic::disabled(), SyntheticItalic::enabled()] {
+            for dilation in [0, 1] {
+                for glyph_id in &latin_glyphs {
+                    for subpixel_x in 0..gpui::SUBPIXEL_VARIANTS_X {
+                        warm_params.push(RenderGlyphParams {
+                            font_id: lilex_font_id,
+                            glyph_id: *glyph_id,
+                            font_size: px(font_size),
+                            subpixel_variant: Point::new(subpixel_x, 0),
+                            scale_factor: 1.25,
+                            synthetic_italic,
+                            synthetic_bold: SyntheticBold::disabled(),
+                            is_emoji: false,
+                            subpixel_rendering: true,
+                            dilation,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let mut expected = Vec::with_capacity(warm_params.len());
+    for params in &warm_params {
+        expected.push(text_system.glyph_raster_info_for_test(params)?);
+    }
+    let seeded_snapshot = text_system.raster_info_cache_snapshot_for_test();
+    anyhow::ensure!(
+        seeded_snapshot.evictions == 0,
+        "warm working set must fit without eviction"
+    );
+    for (params, expected) in warm_params.iter().zip(&expected) {
+        anyhow::ensure!(
+            text_system.glyph_raster_info_for_test(params)? == *expected,
+            "warm raster metadata changed"
+        );
+    }
+    let validated_snapshot = text_system.raster_info_cache_snapshot_for_test();
+    let flat_cache = parking_lot::RwLock::new(
+        warm_params
+            .iter()
+            .cloned()
+            .zip(expected.iter().copied())
+            .collect::<FxHashMap<_, _>>(),
+    );
+    let misses_before_warm = validated_snapshot.misses;
+    text_system.set_raster_info_cache_hit_accounting_for_test(false);
+    let mut flat_samples = Vec::with_capacity(WARM_SAMPLES);
+    let mut bounded_samples = Vec::with_capacity(WARM_SAMPLES);
+    for sample_index in 0..WARM_SAMPLES {
+        let measure_flat = || {
+            let started = Instant::now();
+            for params in &warm_params {
+                let cache = flat_cache.upgradable_read();
+                std::hint::black_box(cache.get(params).copied());
+            }
+            u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
+        };
+        let measure_bounded = || -> anyhow::Result<u64> {
+            let started = Instant::now();
+            for params in &warm_params {
+                let actual = text_system.glyph_raster_info_for_test(params)?;
+                std::hint::black_box(actual);
+            }
+            Ok(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX))
+        };
+        if sample_index % 2 == 0 {
+            flat_samples.push(measure_flat());
+            bounded_samples.push(measure_bounded()?);
+        } else {
+            bounded_samples.push(measure_bounded()?);
+            flat_samples.push(measure_flat());
+        }
+    }
+    let warm_snapshot = text_system.raster_info_cache_snapshot_for_test();
+    anyhow::ensure!(
+        warm_snapshot.misses == misses_before_warm,
+        "warm lookups unexpectedly queried the platform rasterizer"
+    );
+    let flat_p95 = percentile(&flat_samples, 95);
+    let bounded_p95 = percentile(&bounded_samples, 95);
+    let maximum_allowed_p95 = flat_p95.saturating_mul(105).div_ceil(100);
+    anyhow::ensure!(
+        bounded_p95 <= maximum_allowed_p95,
+        "bounded cache warm p95 regressed: {bounded_p95} ns vs {flat_p95} ns flat baseline"
+    );
+
+    let artifact = serde_json::json!({
+        "experiment": "TEXT-009",
+        "workload": {
+            "churn_font_sizes": 36,
+            "churn_scale_factors": [1.0, 1.25, 2.0],
+            "churn_synthetic_italic_states": 2,
+            "churn_dilation_levels": [0, 2],
+            "churn_glyphs_per_strike": 12,
+            "warm_entries": warm_params.len(),
+            "warm_samples": WARM_SAMPLES,
+        },
+        "churn_snapshot": raster_cache_snapshot_json(churn_snapshot),
+        "warm_snapshot": raster_cache_snapshot_json(warm_snapshot),
+        "timing_nanoseconds": {
+            "flat_map_p95": flat_p95,
+            "bounded_cache_p95": bounded_p95,
+            "ratio": bounded_p95 as f64 / flat_p95.max(1) as f64,
+        },
+    });
+    std::fs::create_dir_all(output_directory)?;
+    std::fs::write(
+        output_directory.join("text-009.json"),
+        serde_json::to_vec_pretty(&artifact)?,
+    )?;
+    println!("{}", serde_json::to_string_pretty(&artifact)?);
+    Ok(())
+}
+
 #[test]
 fn hardware_adapter_renders_primitive_corpus() {
     let mut renderer = WgpuHeadlessRenderer::new().expect("hardware headless renderer");
@@ -1975,4 +2189,17 @@ fn text_atlas_sampling_gutter_runner() -> anyhow::Result<()> {
     );
     run_text_atlas_sampling_gutter(false, &output_directory)?;
     run_text_atlas_sampling_gutter(true, &output_directory)
+}
+
+#[test]
+#[ignore = "phase-7 raster-info cache runner writes explicit diagnostics artifacts"]
+fn text_raster_info_cache_runner() -> anyhow::Result<()> {
+    let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("GPUI_TEXT_ATLAS_OUTPUT_DIR must be set"))?;
+    anyhow::ensure!(
+        output_directory.is_absolute(),
+        "GPUI_TEXT_ATLAS_OUTPUT_DIR must be an absolute path"
+    );
+    run_text_raster_info_cache(&output_directory)
 }

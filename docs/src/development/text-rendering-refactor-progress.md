@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 7 进行中                              |
+| 当前阶段      | 阶段 8 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -525,18 +525,77 @@ TEXT-008 artifact：
 gutter 与 sampler 提交：
 `c03f3748b37d8bac9ea895890115bf12b9ca224c`（signed）。
 
+TEXT-008 pixel matrix 提交：
+`92dcd557669fe56aeb6770e2482be10b251626f9`（signed）。
+
 阶段 6 结论：inner content bounds 没有因 padding 增大，outer allocation/upload bytes
 包含真实 gutter；普通 image 的 extruded edge 消除了 seam，glyph/SVG 的 transparent
 gutter 阻断邻接采样。TEXT-008 在当前可执行 backend 全部通过。
 
 ### 阶段 7：有预算的 strike/raster-info cache
 
+状态：`COMPLETE`
+
+已完成：
+
+- flat application-lifetime map 替换为 `GlyphStrikeKey → PackedGlyphKey → GlyphRasterInfo`。
+  strike key 包含 font、size bits、scale bits、synthetic style、emoji source hint、subpixel
+  mode 与离散 dilation；packed key 保存 glyph id 和经过范围验证的 x/y subpixel variant。
+- 默认同时限制 256 strikes 与 8 MiB estimated bytes。cache 使用稳定 strike slots、
+  key-to-index map、hot strike index 与 whole-strike LRU；warm hot path 是短 `RwLock` read。
+- platform raster-info query 在 lock 外执行，插入时 double-check。test-support 可注入
+  byte/count limits、读取 snapshot，并独立开关 benchmark hit accounting。
+- 第一版只缓存 metadata。删除 WGPU `pending_glyph_images` 与 Windows
+  `pending_color_glyphs` 隐性 bitmap tier；atlas miss 时重新 rasterize，并继续验证
+  info/pixel metadata 完全一致。
+- unit coverage 包含 subpixel range、同 strike warm hit、whole-strike LRU、byte/count hard
+  caps、eviction 后 cold equivalence，以及 zero-limit 无 replacement growth。
+
+TEXT-009：`PASS`
+
+| 指标                                     | 结果             |
+| ---------------------------------------- | ---------------- |
+| churn configured strike limit            | 24               |
+| churn configured byte limit              | 65,536           |
+| churn resident strikes / estimated bytes | 24 / 17,136      |
+| churn whole-strike evictions             | 412              |
+| warm resident strikes / entries          | 8 / 1,152        |
+| warm estimated bytes                     | 69,952 / 131,072 |
+| warm platform misses during timing       | 0                |
+| flat-map warm lookup p95                 | 18,254 ns        |
+| bounded-cache warm lookup p95            | 17,913 ns        |
+| bounded / flat p95 ratio                 | 98.13%           |
+
+TEXT-009 release artifact：
+
+- `.tmp/text-rendering-refactor/phase-7/release/text-009.json`，SHA-256
+  `33964c8c6cd0d8f6fc8ec1a28752998feccd77e34ab64feaabe92ff50f034730`
+
+验证：
+
+| 检查                                                                      | 结果   | 说明                                         |
+| ------------------------------------------------------------------------- | ------ | -------------------------------------------- |
+| `cargo test --locked -p gpui raster_info_cache_tests`                     | `PASS` | 5 bounded-cache unit tests                   |
+| `cargo test --locked -p gpui --features frame-diagnostics`                | `PASS` | 265 unit + 1 integration，0 failed           |
+| `cargo test --locked -p gpui_wgpu --features test-support`                | `PASS` | 21 unit passed、1 ignored；5 headless passed |
+| release `text_raster_info_cache_runner`                                   | `PASS` | p95 improves 1.87% vs flat-map baseline      |
+| TEXT-007 / TEXT-008 regression rerun                                      | `PASS` | hardware + llvmpipe                          |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin` | `PASS` | cross-target metadata/reraster compile       |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`      | `PASS` | all-target/all-feature + philosophy          |
+
+阶段 7 结论：cache 的 count/estimated bytes 始终不超过注入限制，同 strike warm lookup
+不重复查询 platform font state，eviction 后 metadata 与 cold raster 一致，且没有第二份
+bitmap 或永久增长的 replacement map。
+
+### 阶段 8：upload batching 决策
+
 状态：`IN PROGRESS`
 
-尚未修改代码。下一步将 flat `raster_info` map 拆成 `GlyphStrikeKey` + packed glyph key，
-实现 previous/current generation 与 byte/count 双预算，并完成 TEXT-009。
+尚未修改代码。下一步执行 TEXT-010，对比当前逐 entry upload 与 bounded batching prototype；
+仅在 upload calls、bytes 与 frame time 同时满足合同阈值时保留，否则删除 prototype 并记录
+拒绝结论。
 
-### 阶段 8–9
+### 阶段 9
 
 状态：`NOT STARTED`
 

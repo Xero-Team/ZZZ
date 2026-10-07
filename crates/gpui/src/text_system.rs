@@ -29,7 +29,10 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut, Range},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 /// An opaque identifier for a specific font.
@@ -76,12 +79,332 @@ pub struct RasterizedGlyph {
     pub pixels: Vec<u8>,
 }
 
+const DEFAULT_RASTER_INFO_CACHE_STRIKES: usize = 256;
+const DEFAULT_RASTER_INFO_CACHE_BYTES: usize = 8 * 1024 * 1024;
+const ESTIMATED_HASH_ENTRY_OVERHEAD: usize = 32;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct GlyphStrikeKey {
+    font_id: FontId,
+    font_size_bits: u32,
+    scale_factor_bits: u32,
+    synthetic_italic: SyntheticItalic,
+    synthetic_bold: SyntheticBold,
+    is_emoji: bool,
+    subpixel_rendering: bool,
+    dilation: u8,
+}
+
+impl From<&RenderGlyphParams> for GlyphStrikeKey {
+    fn from(params: &RenderGlyphParams) -> Self {
+        Self {
+            font_id: params.font_id,
+            font_size_bits: params.font_size.0.to_bits(),
+            scale_factor_bits: params.scale_factor.to_bits(),
+            synthetic_italic: params.synthetic_italic,
+            synthetic_bold: params.synthetic_bold,
+            is_emoji: params.is_emoji,
+            subpixel_rendering: params.subpixel_rendering,
+            dilation: params.dilation,
+        }
+    }
+}
+
+impl GlyphStrikeKey {
+    #[inline(always)]
+    fn matches(self, params: &RenderGlyphParams) -> bool {
+        self.font_id == params.font_id
+            && self.font_size_bits == params.font_size.0.to_bits()
+            && self.scale_factor_bits == params.scale_factor.to_bits()
+            && self.synthetic_italic == params.synthetic_italic
+            && self.synthetic_bold == params.synthetic_bold
+            && self.is_emoji == params.is_emoji
+            && self.subpixel_rendering == params.subpixel_rendering
+            && self.dilation == params.dilation
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct PackedGlyphKey(u64);
+
+impl PackedGlyphKey {
+    #[inline(always)]
+    fn new(params: &RenderGlyphParams) -> Result<Self> {
+        anyhow::ensure!(
+            params.subpixel_variant.x < SUBPIXEL_VARIANTS_X,
+            "glyph subpixel x variant {} exceeds {} variants",
+            params.subpixel_variant.x,
+            SUBPIXEL_VARIANTS_X,
+        );
+        anyhow::ensure!(
+            params.subpixel_variant.y < SUBPIXEL_VARIANTS_Y,
+            "glyph subpixel y variant {} exceeds {} variants",
+            params.subpixel_variant.y,
+            SUBPIXEL_VARIANTS_Y,
+        );
+        Ok(Self(
+            u64::from(params.glyph_id.0)
+                | (u64::from(params.subpixel_variant.x) << 32)
+                | (u64::from(params.subpixel_variant.y) << 40),
+        ))
+    }
+}
+
+struct GlyphStrike {
+    glyphs: FxHashMap<PackedGlyphKey, GlyphRasterInfo>,
+    last_used: u64,
+    estimated_bytes: usize,
+}
+
+struct CachedGlyphStrike {
+    key: GlyphStrikeKey,
+    strike: GlyphStrike,
+}
+
+impl GlyphStrike {
+    fn new(last_used: u64) -> Self {
+        Self {
+            glyphs: FxHashMap::default(),
+            last_used,
+            estimated_bytes: Self::base_estimated_bytes(),
+        }
+    }
+
+    fn base_estimated_bytes() -> usize {
+        std::mem::size_of::<GlyphStrikeKey>()
+            .saturating_add(std::mem::size_of::<Self>())
+            .saturating_add(ESTIMATED_HASH_ENTRY_OVERHEAD)
+    }
+
+    fn glyph_estimated_bytes() -> usize {
+        std::mem::size_of::<PackedGlyphKey>()
+            .saturating_add(std::mem::size_of::<GlyphRasterInfo>())
+            .saturating_add(ESTIMATED_HASH_ENTRY_OVERHEAD)
+    }
+}
+
+struct GlyphRasterInfoCache {
+    strikes: Vec<CachedGlyphStrike>,
+    strike_indices: FxHashMap<GlyphStrikeKey, usize>,
+    hot_strike_index: Option<usize>,
+    max_strikes: usize,
+    max_bytes: usize,
+    estimated_bytes: usize,
+    access_serial: u64,
+    hits: AtomicU64,
+    misses: u64,
+    evictions: u64,
+    record_hits: bool,
+}
+
+impl Default for GlyphRasterInfoCache {
+    fn default() -> Self {
+        Self {
+            strikes: Vec::new(),
+            strike_indices: FxHashMap::default(),
+            hot_strike_index: None,
+            max_strikes: DEFAULT_RASTER_INFO_CACHE_STRIKES,
+            max_bytes: DEFAULT_RASTER_INFO_CACHE_BYTES,
+            estimated_bytes: 0,
+            access_serial: 0,
+            hits: AtomicU64::new(0),
+            misses: 0,
+            evictions: 0,
+            record_hits: false,
+        }
+    }
+}
+
+impl GlyphRasterInfoCache {
+    fn strike_count(&self) -> usize {
+        self.strikes.len()
+    }
+
+    fn next_access_serial(&mut self) -> u64 {
+        self.access_serial = self.access_serial.saturating_add(1);
+        self.access_serial
+    }
+
+    #[inline(always)]
+    fn get_hot(
+        &self,
+        params: &RenderGlyphParams,
+        glyph_key: PackedGlyphKey,
+    ) -> Option<GlyphRasterInfo> {
+        let entry = self.strikes.get(self.hot_strike_index?)?;
+        if !entry.key.matches(params) {
+            return None;
+        }
+        let info = entry.strike.glyphs.get(&glyph_key).copied()?;
+        // The hot strike remains the most recent until a different strike is promoted.
+        if self.record_hits {
+            self.hits.fetch_add(1, Ordering::Relaxed);
+        }
+        Some(info)
+    }
+
+    fn get_or_promote(
+        &mut self,
+        strike_key: GlyphStrikeKey,
+        glyph_key: PackedGlyphKey,
+    ) -> Option<GlyphRasterInfo> {
+        let access_serial = self.next_access_serial();
+        let info = self
+            .strike_indices
+            .get(&strike_key)
+            .copied()
+            .and_then(|index| {
+                self.hot_strike_index = Some(index);
+                let entry = self.strikes.get_mut(index)?;
+                entry.strike.last_used = access_serial;
+                entry.strike.glyphs.get(&glyph_key).copied()
+            });
+        if info.is_some() {
+            if self.record_hits {
+                self.hits.fetch_add(1, Ordering::Relaxed);
+            }
+        } else {
+            self.misses = self.misses.saturating_add(1);
+        }
+        info
+    }
+
+    fn insert_or_get(
+        &mut self,
+        strike_key: GlyphStrikeKey,
+        glyph_key: PackedGlyphKey,
+        info: GlyphRasterInfo,
+    ) -> GlyphRasterInfo {
+        let access_serial = self.next_access_serial();
+        let strike_index = if let Some(index) = self.strike_indices.get(&strike_key).copied() {
+            self.hot_strike_index = Some(index);
+            if let Some(entry) = self.strikes.get_mut(index) {
+                entry.strike.last_used = access_serial;
+            }
+            if let Some(cached) = self
+                .strikes
+                .get(index)
+                .and_then(|entry| entry.strike.glyphs.get(&glyph_key))
+            {
+                return *cached;
+            }
+            index
+        } else {
+            let strike = GlyphStrike::new(access_serial);
+            self.estimated_bytes = self.estimated_bytes.saturating_add(strike.estimated_bytes);
+            let index = self.strikes.len();
+            self.strikes.push(CachedGlyphStrike {
+                key: strike_key,
+                strike,
+            });
+            self.strike_indices.insert(strike_key, index);
+            index
+        };
+        self.hot_strike_index = Some(strike_index);
+        let Some(entry) = self.strikes.get_mut(strike_index) else {
+            log::error!("glyph raster-info strike index disappeared during insertion");
+            return info;
+        };
+        entry.strike.glyphs.insert(glyph_key, info);
+        let glyph_bytes = GlyphStrike::glyph_estimated_bytes();
+        entry.strike.estimated_bytes = entry.strike.estimated_bytes.saturating_add(glyph_bytes);
+        self.estimated_bytes = self.estimated_bytes.saturating_add(glyph_bytes);
+        self.enforce_limits();
+        info
+    }
+
+    fn enforce_limits(&mut self) {
+        while self.strike_count() > self.max_strikes || self.estimated_bytes > self.max_bytes {
+            let Some(lru_index) = self
+                .strikes
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, entry)| entry.strike.last_used)
+                .map(|(index, _)| index)
+            else {
+                self.estimated_bytes = 0;
+                break;
+            };
+            let removed = self.strikes.swap_remove(lru_index);
+            self.strike_indices.remove(&removed.key);
+            if let Some(swapped) = self.strikes.get(lru_index) {
+                self.strike_indices.insert(swapped.key, lru_index);
+            }
+            self.hot_strike_index = None;
+            self.estimated_bytes = self
+                .estimated_bytes
+                .saturating_sub(removed.strike.estimated_bytes);
+            self.evictions = self.evictions.saturating_add(1);
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn configure_for_test(&mut self, max_strikes: usize, max_bytes: usize) {
+        self.strikes.clear();
+        self.strike_indices.clear();
+        self.hot_strike_index = None;
+        self.max_strikes = max_strikes;
+        self.max_bytes = max_bytes;
+        self.estimated_bytes = 0;
+        self.access_serial = 0;
+        self.hits.store(0, Ordering::Relaxed);
+        self.misses = 0;
+        self.evictions = 0;
+        self.record_hits = true;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn set_record_hits_for_test(&mut self, record_hits: bool) {
+        self.record_hits = record_hits;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn snapshot(&self) -> GlyphRasterInfoCacheSnapshot {
+        GlyphRasterInfoCacheSnapshot {
+            strike_count: self.strike_count(),
+            entry_count: self
+                .strikes
+                .iter()
+                .map(|entry| entry.strike.glyphs.len())
+                .sum(),
+            estimated_bytes: self.estimated_bytes,
+            max_strikes: self.max_strikes,
+            max_bytes: self.max_bytes,
+            hits: self.hits.load(Ordering::Relaxed),
+            misses: self.misses,
+            evictions: self.evictions,
+        }
+    }
+}
+
+/// Test-only diagnostics for the bounded glyph raster-info cache.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GlyphRasterInfoCacheSnapshot {
+    /// Number of resident strikes.
+    pub strike_count: usize,
+    /// Number of resident glyph metadata entries.
+    pub entry_count: usize,
+    /// Conservative estimated bytes retained by the cache.
+    pub estimated_bytes: usize,
+    /// Configured strike-count limit.
+    pub max_strikes: usize,
+    /// Configured estimated-byte limit.
+    pub max_bytes: usize,
+    /// Successful metadata lookups.
+    pub hits: u64,
+    /// Metadata lookups that queried the platform rasterizer.
+    pub misses: u64,
+    /// Whole strikes removed by the LRU.
+    pub evictions: u64,
+}
+
 /// The GPUI text rendering sub system.
 pub struct TextSystem {
     platform_text_system: Arc<dyn PlatformTextSystem>,
     font_ids_by_font: RwLock<FxHashMap<Font, Result<FontId>>>,
     font_metrics: RwLock<FxHashMap<FontId, FontMetrics>>,
-    raster_info: RwLock<FxHashMap<RenderGlyphParams, GlyphRasterInfo>>,
+    raster_info: RwLock<GlyphRasterInfoCache>,
     wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<LineWrapper>>>,
     font_runs_pool: Mutex<Vec<Vec<FontRun>>>,
     fallback_font_stack: SmallVec<[Font; 2]>,
@@ -111,6 +434,36 @@ impl TextSystem {
                 font("Arial"), // macOS, Windows
             ],
         }
+    }
+
+    /// Reconfigures and clears the glyph raster-info cache for tests.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_raster_info_cache_limits_for_test(&self, max_strikes: usize, max_bytes: usize) {
+        self.raster_info
+            .write()
+            .configure_for_test(max_strikes, max_bytes);
+    }
+
+    /// Returns test-only diagnostics for the glyph raster-info cache.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn raster_info_cache_snapshot_for_test(&self) -> GlyphRasterInfoCacheSnapshot {
+        self.raster_info.read().snapshot()
+    }
+
+    /// Enables or disables test-only warm-hit accounting.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_raster_info_cache_hit_accounting_for_test(&self, enabled: bool) {
+        self.raster_info.write().set_record_hits_for_test(enabled);
+    }
+
+    /// Queries glyph raster metadata through the bounded cache for tests.
+    #[cfg(any(test, feature = "test-support"))]
+    #[inline]
+    pub fn glyph_raster_info_for_test(
+        &self,
+        params: &RenderGlyphParams,
+    ) -> Result<GlyphRasterInfo> {
+        self.raster_info(params)
     }
 
     /// Get sorted, unique font family names available to the platform text system.
@@ -368,16 +721,25 @@ impl TextSystem {
     }
 
     /// Get the rasterized size and location of a specific, rendered glyph.
+    #[inline]
     pub(crate) fn raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
-        let raster_info = self.raster_info.upgradable_read();
-        if let Some(info) = raster_info.get(params) {
-            Ok(*info)
-        } else {
-            let mut raster_info = RwLockUpgradableReadGuard::upgrade(raster_info);
-            let info = self.platform_text_system.glyph_raster_info(params)?;
-            raster_info.insert(params.clone(), info);
-            Ok(info)
+        let glyph_key = PackedGlyphKey::new(params)?;
+        if let Some(info) = self.raster_info.read().get_hot(params, glyph_key) {
+            return Ok(info);
         }
+        let strike_key = GlyphStrikeKey::from(params);
+        if let Some(info) = self
+            .raster_info
+            .write()
+            .get_or_promote(strike_key, glyph_key)
+        {
+            return Ok(info);
+        }
+        let info = self.platform_text_system.glyph_raster_info(params)?;
+        Ok(self
+            .raster_info
+            .write()
+            .insert_or_get(strike_key, glyph_key, info))
     }
 
     pub(crate) fn rasterize_glyph(&self, params: &RenderGlyphParams) -> Result<RasterizedGlyph> {
@@ -1383,5 +1745,227 @@ pub fn font_name_with_fallbacks_shared<'a>(
         ".ZZZSans" | "ZZZ Plex Sans" => const { &SharedString::new_static("IBM Plex Sans") },
         ".ZZZMono" | "ZZZ Plex Mono" => const { &SharedString::new_static("Lilex") },
         _ => name,
+    }
+}
+
+#[cfg(test)]
+mod raster_info_cache_tests {
+    use super::*;
+    use crate::NoopTextSystem;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingTextSystem {
+        inner: NoopTextSystem,
+        raster_queries: AtomicUsize,
+    }
+
+    impl CountingTextSystem {
+        fn new() -> Self {
+            Self {
+                inner: NoopTextSystem::new(),
+                raster_queries: AtomicUsize::new(0),
+            }
+        }
+
+        fn raster_queries(&self) -> usize {
+            self.raster_queries.load(Ordering::SeqCst)
+        }
+    }
+
+    impl PlatformTextSystem for CountingTextSystem {
+        fn add_fonts(&self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()> {
+            self.inner.add_fonts(fonts)
+        }
+
+        fn all_font_names(&self) -> Vec<String> {
+            self.inner.all_font_names()
+        }
+
+        fn font_id(&self, descriptor: &Font) -> Result<FontId> {
+            self.inner.font_id(descriptor)
+        }
+
+        fn prewarm_fonts(&self, font_ids: &[FontId]) {
+            self.inner.prewarm_fonts(font_ids);
+        }
+
+        fn font_metrics(&self, font_id: FontId) -> FontMetrics {
+            self.inner.font_metrics(font_id)
+        }
+
+        fn typographic_bounds(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Bounds<f32>> {
+            self.inner.typographic_bounds(font_id, glyph_id)
+        }
+
+        fn advance(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Size<f32>> {
+            self.inner.advance(font_id, glyph_id)
+        }
+
+        fn glyph_for_char(&self, font_id: FontId, character: char) -> Option<GlyphId> {
+            self.inner.glyph_for_char(font_id, character)
+        }
+
+        fn glyph_raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+            self.raster_queries.fetch_add(1, Ordering::SeqCst);
+            Ok(GlyphRasterInfo {
+                bounds: Bounds {
+                    origin: Point::new(
+                        DevicePixels(i32::try_from(params.glyph_id.0)?),
+                        DevicePixels(params.dilation.into()),
+                    ),
+                    size: Size {
+                        width: DevicePixels(params.font_size.0.round() as i32),
+                        height: DevicePixels(1),
+                    },
+                },
+                format: if params.is_emoji {
+                    GlyphRasterFormat::ColorBgra8
+                } else if params.subpixel_rendering {
+                    GlyphRasterFormat::SubpixelBgra8
+                } else {
+                    GlyphRasterFormat::Alpha8
+                },
+            })
+        }
+
+        fn rasterize_glyph(
+            &self,
+            _params: &RenderGlyphParams,
+            raster_info: GlyphRasterInfo,
+        ) -> Result<RasterizedGlyph> {
+            Ok(RasterizedGlyph {
+                info: raster_info,
+                pixels: Vec::new(),
+            })
+        }
+
+        fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout {
+            self.inner.layout_line(text, font_size, runs)
+        }
+
+        fn recommended_rendering_mode(
+            &self,
+            font_id: FontId,
+            font_size: Pixels,
+        ) -> TextRenderingMode {
+            self.inner.recommended_rendering_mode(font_id, font_size)
+        }
+    }
+
+    fn params(font_size: f32, glyph_id: u32) -> RenderGlyphParams {
+        RenderGlyphParams {
+            font_id: FontId(0),
+            glyph_id: GlyphId(glyph_id),
+            font_size: px(font_size),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: SyntheticItalic::disabled(),
+            synthetic_bold: SyntheticBold::disabled(),
+            is_emoji: false,
+            subpixel_rendering: false,
+            dilation: 0,
+        }
+    }
+
+    #[test]
+    fn packed_glyph_key_validates_subpixel_ranges() {
+        let mut invalid_x = params(16.0, 1);
+        invalid_x.subpixel_variant.x = SUBPIXEL_VARIANTS_X;
+        PackedGlyphKey::new(&invalid_x).expect_err("x variant must be range checked");
+
+        let mut invalid_y = params(16.0, 1);
+        invalid_y.subpixel_variant.y = SUBPIXEL_VARIANTS_Y;
+        PackedGlyphKey::new(&invalid_y).expect_err("y variant must be range checked");
+    }
+
+    #[test]
+    fn warm_strike_lookups_do_not_repeat_platform_queries() -> Result<()> {
+        let platform = Arc::new(CountingTextSystem::new());
+        let text_system = TextSystem::new(platform.clone());
+        text_system.set_raster_info_cache_limits_for_test(8, usize::MAX);
+        let first = params(16.0, 1);
+        let second = params(16.0, 2);
+
+        let first_info = text_system.glyph_raster_info_for_test(&first)?;
+        let second_info = text_system.glyph_raster_info_for_test(&second)?;
+        assert_eq!(text_system.glyph_raster_info_for_test(&first)?, first_info);
+        assert_eq!(
+            text_system.glyph_raster_info_for_test(&second)?,
+            second_info
+        );
+        assert_eq!(platform.raster_queries(), 2);
+
+        let snapshot = text_system.raster_info_cache_snapshot_for_test();
+        assert_eq!(snapshot.strike_count, 1);
+        assert_eq!(snapshot.entry_count, 2);
+        assert_eq!(snapshot.hits, 2);
+        assert_eq!(snapshot.misses, 2);
+        assert_eq!(snapshot.evictions, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn lru_eviction_returns_cold_equivalent_metadata() -> Result<()> {
+        let platform = Arc::new(CountingTextSystem::new());
+        let text_system = TextSystem::new(platform.clone());
+        text_system.set_raster_info_cache_limits_for_test(2, usize::MAX);
+        let first = params(14.0, 1);
+        let second = params(15.0, 1);
+        let third = params(16.0, 1);
+
+        text_system.glyph_raster_info_for_test(&first)?;
+        let second_cold = text_system.glyph_raster_info_for_test(&second)?;
+        text_system.glyph_raster_info_for_test(&first)?;
+        text_system.glyph_raster_info_for_test(&third)?;
+        let after_eviction = text_system.raster_info_cache_snapshot_for_test();
+        assert_eq!(after_eviction.strike_count, 2);
+        assert_eq!(after_eviction.evictions, 1);
+
+        assert_eq!(
+            text_system.glyph_raster_info_for_test(&second)?,
+            second_cold
+        );
+        assert_eq!(platform.raster_queries(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn byte_and_strike_limits_are_hard_caps() -> Result<()> {
+        let platform = Arc::new(CountingTextSystem::new());
+        let text_system = TextSystem::new(platform);
+        text_system.set_raster_info_cache_limits_for_test(8, usize::MAX);
+        text_system.glyph_raster_info_for_test(&params(10.0, 1))?;
+        let one_strike_bytes = text_system
+            .raster_info_cache_snapshot_for_test()
+            .estimated_bytes;
+
+        text_system.set_raster_info_cache_limits_for_test(2, one_strike_bytes);
+        for font_size in 10..20 {
+            text_system.glyph_raster_info_for_test(&params(font_size as f32, 1))?;
+            let snapshot = text_system.raster_info_cache_snapshot_for_test();
+            assert!(snapshot.strike_count <= snapshot.max_strikes);
+            assert!(snapshot.estimated_bytes <= snapshot.max_bytes);
+        }
+        let snapshot = text_system.raster_info_cache_snapshot_for_test();
+        assert_eq!(snapshot.strike_count, 1);
+        assert!(snapshot.evictions > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn zero_limits_disable_residency_without_replacement_growth() -> Result<()> {
+        let platform = Arc::new(CountingTextSystem::new());
+        let text_system = TextSystem::new(platform.clone());
+        text_system.set_raster_info_cache_limits_for_test(0, 0);
+        let params = params(16.0, 1);
+        text_system.glyph_raster_info_for_test(&params)?;
+        text_system.glyph_raster_info_for_test(&params)?;
+
+        let snapshot = text_system.raster_info_cache_snapshot_for_test();
+        assert_eq!(snapshot.strike_count, 0);
+        assert_eq!(snapshot.entry_count, 0);
+        assert_eq!(snapshot.estimated_bytes, 0);
+        assert_eq!(platform.raster_queries(), 2);
+        Ok(())
     }
 }
