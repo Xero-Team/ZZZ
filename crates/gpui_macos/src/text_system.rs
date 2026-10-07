@@ -19,8 +19,8 @@ use core_text::{
     font::CTFont,
     font_collection::CTFontCollectionRef,
     font_descriptor::{
-        CTFontDescriptor, kCTFontItalicTrait, kCTFontSlantTrait, kCTFontSymbolicTrait,
-        kCTFontWeightTrait, kCTFontWidthTrait,
+        CTFontDescriptor, kCTFontColorGlyphsTrait, kCTFontItalicTrait, kCTFontSlantTrait,
+        kCTFontSymbolicTrait, kCTFontWeightTrait, kCTFontWidthTrait,
     },
     line::CTLine,
     string_attributes::kCTFontAttributeName,
@@ -72,7 +72,6 @@ struct MacTextSystemState {
     font_selections: HashMap<Font, FontId>,
     font_ids_by_postscript_name: HashMap<String, FontId>,
     font_ids_by_font_key: HashMap<FontKey, SmallVec<[FontId; 4]>>,
-    postscript_names_by_font_id: HashMap<FontId, String>,
 }
 
 impl MacTextSystem {
@@ -85,7 +84,6 @@ impl MacTextSystem {
             font_selections: HashMap::default(),
             font_ids_by_postscript_name: HashMap::default(),
             font_ids_by_font_key: HashMap::default(),
-            postscript_names_by_font_id: HashMap::default(),
         }))
     }
 }
@@ -302,13 +300,14 @@ impl MacTextSystemState {
                 //
                 // Therefore, we check up front that the font has the necessary glyph.
                 let has_m_glyph = font.glyph_for_char('m').is_some();
+                let color_capable = ct_font_is_color_capable(&font.native_font());
 
                 // HACK: The 'Segoe Fluent Icons' font does not have an 'm' glyph,
                 // but we need to be able to load it for rendering Windows icons in
                 // the Storybook (on macOS).
                 let is_segoe_fluent_icons = font.full_name() == "Segoe Fluent Icons";
 
-                if !has_m_glyph && !is_segoe_fluent_icons {
+                if !has_m_glyph && !is_segoe_fluent_icons && !color_capable {
                     // I spent far too long trying to track down why a font missing the 'm'
                     // character wasn't loading. This log statement will hopefully save
                     // someone else from suffering the same fate.
@@ -376,9 +375,7 @@ impl MacTextSystemState {
             let font_id = FontId(self.fonts.len());
             font_ids.push(font_id);
             self.font_ids_by_postscript_name
-                .insert(postscript_name.clone(), font_id);
-            self.postscript_names_by_font_id
-                .insert(font_id, postscript_name);
+                .insert(postscript_name, font_id);
             self.fonts.push(font);
         }
         Ok(font_ids)
@@ -401,9 +398,7 @@ impl MacTextSystemState {
         } else {
             let font_id = FontId(self.fonts.len());
             self.font_ids_by_postscript_name
-                .insert(postscript_name.clone(), font_id);
-            self.postscript_names_by_font_id
-                .insert(font_id, postscript_name);
+                .insert(postscript_name, font_id);
             self.fonts
                 .push(font_kit::font::Font::from_core_graphics_font(
                     requested_font.copy_to_CGFont(),
@@ -412,16 +407,12 @@ impl MacTextSystemState {
         }
     }
 
-    fn is_emoji(&self, font_id: FontId) -> bool {
-        self.postscript_names_by_font_id
-            .get(&font_id)
-            .is_some_and(|postscript_name| {
-                postscript_name == "AppleColorEmoji" || postscript_name == ".AppleColorEmojiUI"
-            })
+    fn is_color_capable(&self, font_id: FontId) -> bool {
+        ct_font_is_color_capable(&self.fonts[font_id.0].native_font())
     }
 
     fn raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
-        let format = if params.is_emoji {
+        let format = if self.is_color_capable(params.font_id) {
             GlyphRasterFormat::ColorBgra8
         } else {
             GlyphRasterFormat::Alpha8
@@ -438,7 +429,7 @@ impl MacTextSystemState {
 
         // Expand the bounds by 1 pixel on each side to give CG room for anti-aliasing.
         let mut bounds = bounds.dilate(DevicePixels(1));
-        if params.synthetic_italic.is_enabled() {
+        if params.synthetic_italic.is_enabled() && format != GlyphRasterFormat::ColorBgra8 {
             let extra_width = (params.font_size.as_f32()
                 * params.scale_factor
                 * params.synthetic_italic.to_skew().abs())
@@ -511,7 +502,9 @@ impl MacTextSystemState {
             params.scale_factor as CGFloat,
             params.scale_factor as CGFloat,
         );
-        if params.synthetic_italic.is_enabled() {
+        if params.synthetic_italic.is_enabled()
+            && raster_info.format != GlyphRasterFormat::ColorBgra8
+        {
             cx.concat_ctm(CGAffineTransform::new(
                 1.0,
                 0.0,
@@ -657,7 +650,7 @@ impl MacTextSystemState {
                         (run_start_utf16 < end).then_some((*style, *weight))
                     })
                     .unwrap_or((FontStyle::default(), FontWeight::default()));
-                let color_capable = self.is_emoji(font_id);
+                let color_capable = self.is_color_capable(font_id);
                 let synthetic_italic = if color_capable {
                     SyntheticItalic::disabled()
                 } else {
@@ -707,7 +700,7 @@ impl MacTextSystemState {
                         id: GlyphId(glyph_id as u32),
                         position: point(position.x as f32, position.y as f32).map(px),
                         index: ix_converter.utf8_ix,
-                        is_emoji: self.is_emoji(font_id),
+                        is_emoji: self.is_color_capable(font_id),
                     });
                 }
             }
@@ -747,6 +740,10 @@ fn ct_font_weight(font: &CTFont) -> FontWeight {
 
 fn ct_font_is_italic_or_oblique(font: &CTFont) -> bool {
     font.symbolic_traits() & kCTFontItalicTrait != 0 || font.slant_angle() != 0.0
+}
+
+fn ct_font_is_color_capable(font: &CTFont) -> bool {
+    font.symbolic_traits() & kCTFontColorGlyphsTrait != 0
 }
 
 #[derive(Debug, Clone)]
@@ -867,7 +864,56 @@ mod lenient_font_attributes {
 #[cfg(test)]
 mod tests {
     use crate::MacTextSystem;
-    use gpui::{FontRun, FontWeight, GlyphId, PlatformTextSystem, font, px};
+    use anyhow::{Context as _, Result};
+    use gpui::{
+        FontRun, FontStyle, FontWeight, GlyphId, GlyphRasterFormat, PlatformTextSystem, Point,
+        RenderGlyphParams, font, px,
+    };
+
+    #[test]
+    fn color_glyph_trait_drives_raster_format_and_synthetic_styles() -> Result<()> {
+        let fonts = MacTextSystem::new();
+        let font_id = fonts.font_id(&font("Apple Color Emoji"))?;
+        let glyph_id = fonts
+            .glyph_for_char(font_id, '😀')
+            .context("Apple Color Emoji must contain the grinning face")?;
+        let params = RenderGlyphParams {
+            font_id,
+            glyph_id,
+            font_size: px(32.0),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
+            is_emoji: false,
+            subpixel_rendering: false,
+            dilation: 0,
+        };
+        assert_eq!(
+            fonts.glyph_raster_info(&params)?.format,
+            GlyphRasterFormat::ColorBgra8
+        );
+
+        let text = "😀";
+        let layout = fonts.layout_line(
+            text,
+            px(32.0),
+            &[FontRun {
+                font_id,
+                len: text.len(),
+                font_style: FontStyle::Italic,
+                font_weight: FontWeight::BOLD,
+            }],
+        );
+        let run = layout
+            .runs
+            .first()
+            .context("color glyph layout must produce a run")?;
+        assert!(!run.synthetic_italic.is_enabled());
+        assert!(!run.synthetic_bold.is_enabled());
+        assert!(run.glyphs.iter().all(|glyph| glyph.is_emoji));
+        Ok(())
+    }
 
     #[test]
     fn test_layout_line_bom_char() {

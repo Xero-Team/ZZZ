@@ -387,7 +387,7 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
 
 状态：`IN PROGRESS`
 
-已完成但尚未提交：
+已完成：
 
 - 增加 `GlyphRasterFormat`、`GlyphRasterInfo` 和 `RasterizedGlyph`；platform bounds 与
   pixel 查询共享同一 format-aware contract，并验证两次查询的 metadata 不漂移。
@@ -403,7 +403,9 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
 - WGPU 内部 pending image 在缓存前已统一为最终 contract：color pixels 是
   straight-alpha BGRA8，premultiplied RGBA 只转换一次。
 - Windows 已改为 per-glyph color detection；macOS 已适配显式 raster contract。
-  Windows 的非 COLRv0 native color raster 与 macOS PostScript whitelist 替换仍待完成。
+- macOS 删除 Apple Color Emoji PostScript 白名单，改用 CoreText
+  `kCTFontColorGlyphsTrait`。该 capability 统一决定保守 `ColorBgra8` raster、shaping
+  hint 和 synthetic bold/italic 禁用；缺少 `m` 的 color font 也可加载。
 
 TEXT-007 当前 WGPU 结果：`PASS`
 
@@ -412,6 +414,7 @@ TEXT-007 当前 WGPU 结果：`PASS`
 | `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests` | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport |
 | `GPUI_*_FONT=... cargo test ... text_glyph_format_runner -- --ignored --nocapture`   | `PASS` | RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome    |
 | `./script/clippy -p gpui_wgpu`                                                       | `PASS` | all-target/all-feature release clippy + philosophy        |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`            | `PASS` | CoreText capability test cross-compile；native NOT RUN    |
 
 TEXT-007 artifact：
 
@@ -420,8 +423,11 @@ TEXT-007 artifact：
 - `.tmp/text-rendering-refactor/phase-5/text-007-fallback.json`，SHA-256
   `48b3b2e897fe36771bb8acfe9e862bf82176d2e91c923bac8ddc6b90918ae04c`
 
-下一步：完成 macOS CoreText color-glyph trait、补齐 Windows SVG/bitmap/COLRv1 native
-raster 路径或精确 runbook，并固定 licensed fixture provenance/manifest 后关闭阶段 5。
+显式 raster contract 与 WGPU color-font 提交：
+`58700e6e399f34355c7dd77bf288801ba8872ebe`（signed）。
+
+下一步：补齐 Windows SVG/bitmap/COLRv1 native raster 路径或精确 runbook，并固定
+licensed fixture provenance/manifest 后关闭阶段 5。
 
 ### 阶段 6–9
 
