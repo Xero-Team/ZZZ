@@ -858,7 +858,7 @@ impl DapStore {
             })
             .await?;
 
-        Ok(request.to_proto())
+        request.to_proto()
     }
 
     async fn handle_get_debug_adapter_binary(
@@ -909,7 +909,7 @@ impl DapStore {
                 )
             })
             .await?;
-        Ok(binary.to_proto())
+        binary.to_proto()
     }
 
     async fn handle_log_to_debug_console(

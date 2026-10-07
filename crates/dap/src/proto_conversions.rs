@@ -4,6 +4,19 @@ use client::proto::{
     DapScopePresentationHint, DapSource, DapSourcePresentationHint, DapStackFrame, DapVariable,
 };
 use dap_types::{OutputEventCategory, OutputEventGroup, ScopePresentationHint, Source};
+use std::path::Path;
+use util::ResultExt as _;
+
+fn native_path_to_proto(path: Option<String>) -> Option<proto::NativePathV2> {
+    let path = path?;
+    let native_path = vfs::NativePath::from_local_path(Path::new(&path)).log_err()?;
+    Some(proto::NativePathV2::from_native_path(&native_path))
+}
+
+fn native_path_from_proto(path: Option<proto::NativePathV2>) -> Option<String> {
+    let native_path = path?.to_native_path().log_err()?;
+    native_path.to_unicode_string().log_err()
+}
 
 pub trait ProtoConversion {
     type ProtoType;
@@ -205,7 +218,7 @@ impl ProtoConversion for dap_types::Source {
     fn to_proto(self) -> Self::ProtoType {
         Self::ProtoType {
             name: self.name,
-            path: self.path,
+            path_v2: native_path_to_proto(self.path),
             source_reference: self.source_reference,
             presentation_hint: self.presentation_hint.map(|hint| hint.to_proto().into()),
             origin: self.origin,
@@ -218,7 +231,7 @@ impl ProtoConversion for dap_types::Source {
     fn from_proto(payload: Self::ProtoType) -> Self {
         Self {
             name: payload.name,
-            path: payload.path,
+            path: native_path_from_proto(payload.path_v2),
             source_reference: payload.source_reference,
             presentation_hint: payload
                 .presentation_hint
@@ -298,12 +311,12 @@ impl ProtoConversion for dap_types::Module {
                 id: Some(self.id.to_proto()),
             }),
             name: self.name,
-            path: self.path,
+            path_v2: native_path_to_proto(self.path),
             is_optimized: self.is_optimized,
             is_user_code: self.is_user_code,
             version: self.version,
             symbol_status: self.symbol_status,
-            symbol_file_path: self.symbol_file_path,
+            symbol_file_path_v2: native_path_to_proto(self.symbol_file_path),
             date_time_stamp: self.date_time_stamp,
             address_range: self.address_range,
         }
@@ -323,15 +336,37 @@ impl ProtoConversion for dap_types::Module {
         Ok(Self {
             id,
             name: payload.name,
-            path: payload.path,
+            path: native_path_from_proto(payload.path_v2),
             is_optimized: payload.is_optimized,
             is_user_code: payload.is_user_code,
             version: payload.version,
             symbol_status: payload.symbol_status,
-            symbol_file_path: payload.symbol_file_path,
+            symbol_file_path: native_path_from_proto(payload.symbol_file_path_v2),
             date_time_stamp: payload.date_time_stamp,
             address_range: payload.address_range,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_dap_paths_use_exact_wire_and_reject_non_unicode_text() {
+        let wire = native_path_to_proto(Some(String::from("/tmp/source.rs")))
+            .expect("DAP source path should serialize");
+        assert_eq!(
+            native_path_from_proto(Some(wire)),
+            Some(String::from("/tmp/source.rs"))
+        );
+
+        let non_unicode = vfs::NativePath::from_unix_bytes(b"/tmp/source-\xff.rs")
+            .expect("non-Unicode path fixture should be valid");
+        assert_eq!(
+            native_path_from_proto(Some(proto::NativePathV2::from_native_path(&non_unicode))),
+            None
+        );
     }
 }
 

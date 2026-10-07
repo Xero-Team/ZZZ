@@ -207,28 +207,41 @@ impl BreakpointStore {
         message: TypedEnvelope<proto::BreakpointsForFile>,
         mut cx: AsyncApp,
     ) -> Result<()> {
+        let vfs_path = message
+            .payload
+            .path_v2
+            .as_ref()
+            .context("breakpoint update is missing its exact VFS path")?
+            .to_vfs_path()?;
         if message.payload.breakpoints.is_empty() {
             return Ok(());
         }
 
-        let buffer = this
+        let (buffer, abs_path) = this
             .update(&mut cx, |this, cx| {
-                let path = this
+                let project_path = this
                     .worktree_store
                     .read(cx)
-                    .project_path_for_absolute_path(message.payload.path.as_ref(), cx)?;
-                Some(
+                    .project_path_for_vfs_path(&vfs_path, cx)?;
+                let abs_path = this
+                    .worktree_store
+                    .read(cx)
+                    .worktree_for_id(project_path.worktree_id, cx)?
+                    .read(cx)
+                    .absolutize(&project_path.path);
+                Some((
                     this.buffer_store
-                        .update(cx, |this, cx| this.open_buffer(path, cx)),
-                )
+                        .update(cx, |this, cx| this.open_buffer(project_path, cx)),
+                    Arc::<Path>::from(abs_path),
+                ))
             })
-            .context("Invalid project path")?
-            .await?;
+            .context("Invalid project path")?;
+        let buffer = buffer.await?;
 
         this.update(&mut cx, move |this, cx| {
             let bps = this
                 .breakpoints
-                .entry(Arc::<Path>::from(message.payload.path.as_ref()))
+                .entry(abs_path)
                 .or_insert_with(|| BreakpointsInFile::new(buffer, cx));
 
             bps.breakpoints = message
@@ -269,11 +282,17 @@ impl BreakpointStore {
         message: TypedEnvelope<proto::ToggleBreakpoint>,
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
+        let vfs_path = message
+            .payload
+            .path_v2
+            .as_ref()
+            .context("toggle-breakpoint request is missing its exact VFS path")?
+            .to_vfs_path()?;
         let path = this
             .update(&mut cx, |this, cx| {
                 this.worktree_store
                     .read(cx)
-                    .project_path_for_absolute_path(message.payload.path.as_ref(), cx)
+                    .project_path_for_vfs_path(&vfs_path, cx)
             })
             .context("Could not resolve provided abs path")?;
         let buffer = this
@@ -371,6 +390,12 @@ impl BreakpointStore {
             .map(Arc::<Path>::from)
     }
 
+    fn vfs_path_from_buffer(buffer: &Entity<Buffer>, cx: &App) -> Option<vfs::VfsPath> {
+        worktree::File::from_dyn(buffer.read(cx).file())?
+            .vfs_path
+            .clone()
+    }
+
     pub fn toggle_breakpoint(
         &mut self,
         buffer: Entity<Buffer>,
@@ -381,6 +406,7 @@ impl BreakpointStore {
         let Some(abs_path) = Self::abs_path_from_buffer(&buffer, cx) else {
             return;
         };
+        let vfs_path = Self::vfs_path_from_buffer(&buffer, cx);
 
         let breakpoint_set = self
             .breakpoints
@@ -542,17 +568,20 @@ impl BreakpointStore {
             self.breakpoints.remove(&abs_path);
         }
         if let BreakpointStoreMode::Remote(remote) = &self.mode {
-            if let Some(breakpoint) =
-                breakpoint
-                    .bp
-                    .to_proto(&abs_path, &breakpoint.position, &HashMap::default())
+            if let Some(breakpoint) = breakpoint
+                .bp
+                .to_proto(&breakpoint.position, &HashMap::default())
             {
-                cx.background_spawn(remote.upstream_client.request(proto::ToggleBreakpoint {
-                    project_id: remote.upstream_project_id,
-                    path: abs_path.to_string_lossy().into_owned(),
-                    breakpoint: Some(breakpoint),
-                }))
-                .detach();
+                if let Some(vfs_path) = vfs_path.as_ref() {
+                    cx.background_spawn(remote.upstream_client.request(proto::ToggleBreakpoint {
+                        project_id: remote.upstream_project_id,
+                        breakpoint: Some(breakpoint),
+                        path_v2: Some(proto::VfsPathV2::from_vfs_path(vfs_path)),
+                    }))
+                    .detach();
+                } else {
+                    log::error!("cannot send breakpoint without exact VFS identity");
+                }
             }
         } else if let Some((client, project_id)) = &self.downstream_client {
             let breakpoints = self
@@ -562,22 +591,22 @@ impl BreakpointStore {
                     breakpoint_set
                         .breakpoints
                         .iter()
-                        .filter_map(|bp| {
-                            bp.bp
-                                .bp
-                                .to_proto(&abs_path, bp.position(), &bp.session_state)
-                        })
+                        .filter_map(|bp| bp.bp.bp.to_proto(bp.position(), &bp.session_state))
                         .collect()
                 })
                 .unwrap_or_default();
 
-            client
-                .send(proto::BreakpointsForFile {
-                    project_id: *project_id,
-                    path: abs_path.to_string_lossy().into_owned(),
-                    breakpoints,
-                })
-                .log_err();
+            if let Some(vfs_path) = vfs_path.as_ref() {
+                client
+                    .send(proto::BreakpointsForFile {
+                        project_id: *project_id,
+                        breakpoints,
+                        path_v2: Some(proto::VfsPathV2::from_vfs_path(vfs_path)),
+                    })
+                    .log_err();
+            } else {
+                log::error!("cannot share breakpoints without exact VFS identity");
+            }
         }
 
         cx.emit(BreakpointStoreEvent::BreakpointsUpdated(
@@ -971,7 +1000,6 @@ impl Breakpoint {
 
     fn to_proto(
         &self,
-        _path: &Path,
         position: &text::Anchor,
         session_states: &HashMap<SessionId, BreakpointSessionState>,
     ) -> Option<client::proto::Breakpoint> {

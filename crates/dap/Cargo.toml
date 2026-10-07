@@ -48,6 +48,7 @@ smallvec.workspace = true
 smol.workspace = true
 task.workspace = true
 util.workspace = true
+vfs.workspace = true
 
 [target.'cfg(not(windows))'.dependencies]
 libc.workspace = true

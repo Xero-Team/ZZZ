@@ -5,7 +5,7 @@ use log as _;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use util::{debug_panic, schemars::add_new_subschema};
 
 use crate::{TaskTemplate, adapter_schema::AdapterSchemas};
@@ -118,25 +118,30 @@ pub enum DebugRequest {
 }
 
 impl DebugRequest {
-    pub fn to_proto(&self) -> proto::DebugRequest {
-        match self {
-            DebugRequest::Launch(launch_request) => proto::DebugRequest {
-                request: Some(proto::debug_request::Request::DebugLaunchRequest(
-                    proto::DebugLaunchRequest {
-                        program: launch_request.program.clone(),
-                        cwd: launch_request
-                            .cwd
-                            .as_ref()
-                            .map(|cwd| cwd.to_string_lossy().into_owned()),
-                        args: launch_request.args.clone(),
-                        env: launch_request
-                            .env
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect(),
-                    },
-                )),
-            },
+    pub fn to_proto(&self) -> Result<proto::DebugRequest> {
+        Ok(match self {
+            DebugRequest::Launch(launch_request) => {
+                let program = vfs::NativePath::from_local_path(Path::new(&launch_request.program))?;
+                let cwd = launch_request
+                    .cwd
+                    .as_ref()
+                    .map(|cwd| vfs::NativePath::from_local_path(cwd))
+                    .transpose()?;
+                proto::DebugRequest {
+                    request: Some(proto::debug_request::Request::DebugLaunchRequest(
+                        proto::DebugLaunchRequest {
+                            program_v2: Some(proto::NativePathV2::from_native_path(&program)),
+                            cwd_v2: cwd.as_ref().map(proto::NativePathV2::from_native_path),
+                            args: launch_request.args.clone(),
+                            env: launch_request
+                                .env
+                                .iter()
+                                .map(|(k, v)| (k.clone(), v.clone()))
+                                .collect(),
+                        },
+                    )),
+                }
+            }
             DebugRequest::Attach(attach_request) => proto::DebugRequest {
                 request: Some(proto::debug_request::Request::DebugAttachRequest(
                     proto::DebugAttachRequest {
@@ -146,23 +151,35 @@ impl DebugRequest {
                     },
                 )),
             },
-        }
+        })
     }
 
     pub fn from_proto(val: proto::DebugRequest) -> Result<DebugRequest> {
         let request = val.request.context("Missing debug request")?;
         match request {
             proto::debug_request::Request::DebugLaunchRequest(proto::DebugLaunchRequest {
-                program,
-                cwd,
                 args,
                 env,
-            }) => Ok(DebugRequest::Launch(LaunchRequest {
-                program,
-                cwd: cwd.map(From::from),
-                args,
-                env: env.into_iter().collect(),
-            })),
+                program_v2,
+                cwd_v2,
+            }) => {
+                let program = program_v2
+                    .as_ref()
+                    .context("missing exact debug program path")?
+                    .to_native_path()?
+                    .to_unicode_string()?;
+                let cwd = cwd_v2
+                    .as_ref()
+                    .map(proto::NativePathV2::to_native_path)
+                    .transpose()?
+                    .map(|path| path.display_path_buf());
+                Ok(DebugRequest::Launch(LaunchRequest {
+                    program,
+                    cwd,
+                    args,
+                    env: env.into_iter().collect(),
+                }))
+            }
 
             proto::debug_request::Request::DebugAttachRequest(proto::DebugAttachRequest {
                 process_id,
@@ -408,8 +425,47 @@ impl DebugTaskFile {
 
 #[cfg(test)]
 mod tests {
+    use super::{DebugRequest, LaunchRequest};
     use crate::DebugScenario;
+    use collections::FxHashMap;
     use serde_json::json;
+    use std::path::PathBuf;
+
+    #[test]
+    fn debug_request_proto_requires_exact_native_paths() {
+        let request = DebugRequest::Launch(LaunchRequest {
+            program: String::from("/project/bin/app"),
+            cwd: Some(PathBuf::from("/project")),
+            args: vec![String::from("--test")],
+            env: FxHashMap::default(),
+        });
+        let proto = request
+            .to_proto()
+            .expect("absolute debug paths should serialize");
+        let Some(proto::debug_request::Request::DebugLaunchRequest(launch)) = &proto.request else {
+            panic!("launch request should retain its variant");
+        };
+        assert!(launch.program_v2.is_some());
+        assert!(launch.cwd_v2.is_some());
+        assert_eq!(
+            DebugRequest::from_proto(proto).expect("exact debug request should decode"),
+            request
+        );
+
+        assert!(
+            DebugRequest::from_proto(proto::DebugRequest {
+                request: Some(proto::debug_request::Request::DebugLaunchRequest(
+                    proto::DebugLaunchRequest {
+                        program_v2: None,
+                        cwd_v2: None,
+                        args: Vec::new(),
+                        env: Default::default(),
+                    },
+                )),
+            })
+            .is_err()
+        );
+    }
 
     #[test]
     fn test_just_build_args() {

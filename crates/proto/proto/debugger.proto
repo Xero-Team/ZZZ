@@ -3,6 +3,7 @@ package zzz.messages;
 
 import "buffer.proto";
 import "task.proto";
+import "vfs.proto";
 
 enum BreakpointState {
   Enabled = 0;
@@ -26,14 +27,18 @@ message BreakpointSessionState {
 
 message BreakpointsForFile {
   uint64 project_id = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
   repeated Breakpoint breakpoints = 3;
+  VfsPathV2 path_v2 = 4;
 }
 
 message ToggleBreakpoint {
   uint64 project_id = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
   Breakpoint breakpoint = 3;
+  VfsPathV2 path_v2 = 4;
 }
 
 enum DapThreadStatus {
@@ -377,13 +382,15 @@ message DapScope {
 
 message DapSource {
   optional string name = 1;
-  optional string path = 2;
+  reserved 2;
+  reserved "path";
   optional uint64 source_reference = 3;
   optional DapSourcePresentationHint presentation_hint = 4;
   optional string origin = 5;
   repeated DapSource sources = 6;
   optional bytes adapter_data = 7;
   repeated DapChecksum checksums = 8;
+  NativePathV2 path_v2 = 9;
 }
 
 enum DapOutputCategory {
@@ -447,14 +454,18 @@ enum DapStackPresentationHint {
 message DapModule {
   DapModuleId id = 1;
   string name = 2;
-  optional string path = 3;
+  reserved 3;
+  reserved "path";
   optional bool is_optimized = 4;
   optional bool is_user_code = 5;
   optional string version = 6;
   optional string symbol_status = 7;
-  optional string symbol_file_path = 8;
+  reserved 8;
+  reserved "symbol_file_path";
   optional string date_time_stamp = 9;
   optional string address_range = 10;
+  NativePathV2 path_v2 = 11;
+  NativePathV2 symbol_file_path_v2 = 12;
 }
 
 message DebugTaskDefinition {
@@ -471,10 +482,12 @@ message TcpHost {
 }
 
 message DebugLaunchRequest {
-  string program = 1;
-  optional string cwd = 2;
+  reserved 1, 2;
+  reserved "program", "cwd";
   repeated string args = 3;
   map<string, string> env = 4;
+  NativePathV2 program_v2 = 5;
+  NativePathV2 cwd_v2 = 6;
 }
 
 message DebugAttachRequest {
@@ -496,13 +509,17 @@ message GetDebugAdapterBinary {
 }
 
 message DebugAdapterBinary {
-  optional string command = 1;
+  reserved 1;
+  reserved "command";
   repeated string arguments = 2;
   map<string, string> envs = 3;
-  optional string cwd = 4;
+  reserved 4;
+  reserved "cwd";
   optional TcpHost connection = 5;
+  NativePathV2 command_v2 = 6;
   string configuration = 7;
   LaunchType launch_type = 8;
+  NativePathV2 cwd_v2 = 9;
   enum LaunchType {
     Attach = 0;
     Launch = 1;

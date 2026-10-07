@@ -213,9 +213,22 @@ impl DebugAdapterBinary {
                 StartDebuggingRequestArgumentsRequest::Attach
             }
         };
+        let command = binary
+            .command_v2
+            .as_ref()
+            .map(proto::NativePathV2::to_native_path)
+            .transpose()?
+            .map(|path| path.to_unicode_string())
+            .transpose()?;
+        let cwd = binary
+            .cwd_v2
+            .as_ref()
+            .map(proto::NativePathV2::to_native_path)
+            .transpose()?
+            .map(|path| path.display_path_buf());
 
         Ok(DebugAdapterBinary {
-            command: binary.command,
+            command,
             arguments: binary.arguments,
             envs: binary.envs.into_iter().collect(),
             connection: binary
@@ -226,23 +239,28 @@ impl DebugAdapterBinary {
                 configuration: serde_json::from_str(&binary.configuration)?,
                 request,
             },
-            cwd: binary.cwd.map(|cwd| cwd.into()),
+            cwd,
         })
     }
 
-    pub fn to_proto(&self) -> proto::DebugAdapterBinary {
-        proto::DebugAdapterBinary {
-            command: self.command.clone(),
+    pub fn to_proto(&self) -> anyhow::Result<proto::DebugAdapterBinary> {
+        let command = self
+            .command
+            .as_ref()
+            .map(|command| vfs::NativePath::from_local_path(Path::new(command)))
+            .transpose()?;
+        let cwd = self
+            .cwd
+            .as_ref()
+            .map(|cwd| vfs::NativePath::from_local_path(cwd))
+            .transpose()?;
+        Ok(proto::DebugAdapterBinary {
             arguments: self.arguments.clone(),
             envs: self
                 .envs
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-            cwd: self
-                .cwd
-                .as_ref()
-                .map(|cwd| cwd.to_string_lossy().into_owned()),
             connection: self.connection.as_ref().map(|c| c.to_proto()),
             launch_type: match self.request_args.request {
                 StartDebuggingRequestArgumentsRequest::Launch => {
@@ -253,7 +271,9 @@ impl DebugAdapterBinary {
                 }
             },
             configuration: self.request_args.configuration.to_string(),
-        }
+            command_v2: command.as_ref().map(proto::NativePathV2::from_native_path),
+            cwd_v2: cwd.as_ref().map(proto::NativePathV2::from_native_path),
+        })
     }
 }
 
@@ -267,6 +287,34 @@ pub enum DownloadedFileType {
     Vsix,
     GzipTar,
     Zip,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_adapter_binary_proto_uses_exact_native_paths() {
+        let binary = DebugAdapterBinary {
+            command: Some(String::from("/tmp/debug-adapter")),
+            arguments: vec![String::from("--stdio")],
+            envs: HashMap::default(),
+            cwd: Some(PathBuf::from("/tmp/project")),
+            connection: None,
+            request_args: StartDebuggingRequestArguments {
+                configuration: serde_json::json!({}),
+                request: StartDebuggingRequestArgumentsRequest::Launch,
+            },
+        };
+
+        let proto = binary.to_proto().expect("debug adapter should serialize");
+        assert!(proto.command_v2.is_some());
+        assert!(proto.cwd_v2.is_some());
+        assert_eq!(
+            DebugAdapterBinary::from_proto(proto).expect("debug adapter should deserialize"),
+            binary
+        );
+    }
 }
 
 pub struct GithubRepo {

@@ -353,6 +353,31 @@ impl WorktreeStore {
             .filter_map(move |worktree| worktree.upgrade())
     }
 
+    pub fn project_path_for_vfs_path(
+        &self,
+        vfs_path: &vfs::VfsPath,
+        cx: &App,
+    ) -> Option<ProjectPath> {
+        self.worktrees().find_map(|worktree| {
+            let worktree = worktree.read(cx);
+            let root = worktree.vfs_path_for_path(RelPath::empty())?;
+            if root.mount_id() != vfs_path.mount_id() {
+                return None;
+            }
+            let path = match worktree.relative_path_from_vfs_path(vfs_path) {
+                Ok(path) => path,
+                Err(error) => {
+                    log::error!("cannot map exact VFS path to legacy project path: {error:#}");
+                    return None;
+                }
+            };
+            Some(ProjectPath {
+                worktree_id: worktree.id(),
+                path,
+            })
+        })
+    }
+
     /// Iterates through all user-visible worktrees, the ones that appear in the project panel.
     pub fn visible_worktrees<'a>(
         &'a self,

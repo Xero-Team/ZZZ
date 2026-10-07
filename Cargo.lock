@@ -3672,6 +3672,7 @@ dependencies = [
  "smol",
  "task",
  "util",
+ "vfs",
  "zlog",
 ]
 
@@ -16640,6 +16641,7 @@ dependencies = [
  "sha2 0.11.0",
  "shellexpand",
  "util",
+ "vfs",
  "zzz_actions",
 ]
 
