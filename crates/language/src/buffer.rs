@@ -335,14 +335,10 @@ pub enum BufferEvent {
 /// The file associated with a buffer.
 pub trait File: Send + Sync + Any {
     /// Returns this file's session-stable VFS identity when it has been materialized.
-    fn resource_id(&self) -> Option<vfs::ResourceId> {
-        None
-    }
+    fn resource_id(&self) -> Option<vfs::ResourceId>;
 
     /// Returns this file's exact mount-relative VFS path when available.
-    fn vfs_path(&self) -> Option<&vfs::VfsPath> {
-        None
-    }
+    fn vfs_path(&self) -> Option<&vfs::VfsPath>;
 
     /// Returns the [`LocalFile`] associated with this file, if the
     /// file is local.
@@ -5958,6 +5954,14 @@ pub struct TestFile {
 
 #[cfg(any(test, feature = "test-support"))]
 impl File for TestFile {
+    fn resource_id(&self) -> Option<vfs::ResourceId> {
+        None
+    }
+
+    fn vfs_path(&self) -> Option<&vfs::VfsPath> {
+        None
+    }
+
     fn path(&self) -> &Arc<RelPath> {
         &self.path
     }

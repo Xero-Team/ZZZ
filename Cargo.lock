@@ -6130,6 +6130,7 @@ dependencies = [
  "ui_input",
  "unindent",
  "util",
+ "vfs",
  "watch",
  "windows 0.62.2",
  "workspace",

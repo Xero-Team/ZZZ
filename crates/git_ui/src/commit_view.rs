@@ -897,6 +897,14 @@ impl CommitView {
 }
 
 impl language::File for GitBlob {
+    fn resource_id(&self) -> Option<vfs::ResourceId> {
+        None
+    }
+
+    fn vfs_path(&self) -> Option<&vfs::VfsPath> {
+        None
+    }
+
     fn as_local(&self) -> Option<&dyn language::LocalFile> {
         None
     }
