@@ -15,7 +15,7 @@ use rpc::{AnyProtoClient, TypedEnvelope, proto};
 use settings::{InvalidSettingsError, SettingsLocation};
 use task::{TaskContext, TaskVariables, VariableName};
 use text::{BufferId, OffsetRangeExt};
-use util::ResultExt;
+use util::{ResultExt, paths::PathStyle};
 
 use crate::{
     BasicContextProvider, Inventory, ProjectEnvironment, buffer_store::BufferStore,
@@ -147,16 +147,19 @@ impl TaskStore {
             store.task_context_for_location(captured_variables, location, cx)
         });
         let task_context = context_task.await?.unwrap_or_default();
+        let cwd = task_context
+            .cwd
+            .as_ref()
+            .map(|cwd| vfs::NativePath::from_local_path(cwd))
+            .transpose()?;
         Ok(proto::TaskContext {
             project_env: task_context.project_env.into_iter().collect(),
-            cwd: task_context
-                .cwd
-                .map(|cwd| cwd.to_string_lossy().into_owned()),
             task_variables: task_context
                 .task_variables
                 .into_iter()
                 .map(|(variable_name, variable_value)| (variable_name.to_string(), variable_value))
                 .collect(),
+            cwd_v2: cwd.as_ref().map(proto::NativePathV2::from_native_path),
         })
     }
 
@@ -375,6 +378,7 @@ fn remote_task_context_for_location(
     cx: &mut App,
 ) -> Task<anyhow::Result<Option<TaskContext>>> {
     cx.spawn(async move |cx| {
+        let path_style = cx.update(|cx| worktree_store.read(cx).path_style());
         // We need to gather a client context, as the headless one may lack certain information (e.g. tree-sitter parsing is disabled there, so symbols are not available).
         let mut remote_context = cx
             .update(|cx| {
@@ -411,8 +415,15 @@ fn remote_task_context_for_location(
                 .collect(),
         });
         let task_context = context_task.await?;
+        let cwd = task_context
+            .cwd_v2
+            .as_ref()
+            .map(proto::NativePathV2::to_native_path)
+            .transpose()?
+            .map(|path| native_task_path_to_legacy_path_buf(path, path_style))
+            .transpose()?;
         Ok(Some(TaskContext {
-            cwd: task_context.cwd.map(PathBuf::from),
+            cwd,
             task_variables: task_context
                 .task_variables
                 .into_iter()
@@ -428,6 +439,27 @@ fn remote_task_context_for_location(
             project_env: task_context.project_env.into_iter().collect(),
         }))
     })
+}
+
+fn native_task_path_to_legacy_path_buf(
+    path: vfs::NativePath,
+    path_style: PathStyle,
+) -> anyhow::Result<PathBuf> {
+    if path_style == PathStyle::local() {
+        return Ok(path.to_local_path_buf()?);
+    }
+
+    let expected_encoding = if path_style.is_posix() {
+        vfs::PathEncoding::UnixBytes
+    } else {
+        vfs::PathEncoding::WindowsWtf8
+    };
+    anyhow::ensure!(
+        path.provider_path().encoding() == expected_encoding,
+        "remote task cwd uses {} instead of {expected_encoding}",
+        path.provider_path().encoding()
+    );
+    Ok(PathBuf::from(path.to_unicode_string()?))
 }
 
 fn worktree_root(

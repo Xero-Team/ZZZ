@@ -42,6 +42,13 @@ impl SshRunningKernel {
             .read(cx)
             .remote_id()
             .unwrap_or(proto::REMOTE_SERVER_PROJECT_ID);
+        let working_directory_v2 = match project
+            .read(cx)
+            .native_path_for_execution(&working_directory, cx)
+        {
+            Ok(path) => path,
+            Err(error) => return Task::ready(Err(error)),
+        };
 
         window.spawn(cx, async move |cx| {
             let command = kernel_spec
@@ -60,10 +67,12 @@ impl SshRunningKernel {
 
             let request = proto::SpawnKernel {
                 kernel_name: kernel_spec.name.clone(),
-                working_directory: working_directory.to_string_lossy().to_string(),
                 project_id,
                 command,
                 args,
+                working_directory_v2: Some(proto::NativePathV2::from_native_path(
+                    &working_directory_v2,
+                )),
             };
             let response = if let Some(remote_client) = remote_client.as_ref() {
                 remote_client
@@ -76,7 +85,7 @@ impl SshRunningKernel {
 
             let kernel_id = response.kernel_id.clone();
             let connection_info: serde_json::Value =
-                serde_json::from_str(&response.connection_file)?;
+                serde_json::from_str(&response.connection_info_json)?;
 
             // Setup SSH Tunneling - allocate local ports
             let mut local_ports = Vec::new();

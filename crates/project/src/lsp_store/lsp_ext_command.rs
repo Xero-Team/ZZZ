@@ -387,7 +387,7 @@ impl LspCommand for SwitchSourceHeader {
         _: &mut App,
     ) -> proto::LspExtSwitchSourceHeaderResponse {
         proto::LspExtSwitchSourceHeaderResponse {
-            target_file: response.0,
+            target_uri: response.0,
         }
     }
 
@@ -398,7 +398,7 @@ impl LspCommand for SwitchSourceHeader {
         _: Entity<Buffer>,
         _: AsyncApp,
     ) -> anyhow::Result<SwitchSourceHeaderResult> {
-        Ok(SwitchSourceHeaderResult(message.target_file))
+        Ok(SwitchSourceHeaderResult(message.target_uri))
     }
 
     fn buffer_id_from_proto(message: &proto::LspExtSwitchSourceHeader) -> Result<BufferId> {

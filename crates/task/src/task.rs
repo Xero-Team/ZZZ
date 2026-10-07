@@ -8,7 +8,7 @@ mod task_template;
 mod vscode_debug_format;
 mod vscode_format;
 
-use anyhow::Context as _;
+use anyhow::{Context as _, Result};
 use collections::{HashMap, HashSet, hash_map};
 use gpui::SharedString;
 use serde::{Deserialize, Serialize};
@@ -80,8 +80,28 @@ pub struct SpawnInTerminal {
 }
 
 impl SpawnInTerminal {
-    pub fn to_proto(&self) -> proto::SpawnInTerminal {
-        proto::SpawnInTerminal {
+    pub fn to_proto(&self, path_style: util::paths::PathStyle) -> Result<proto::SpawnInTerminal> {
+        let cwd = self
+            .cwd
+            .as_ref()
+            .map(|cwd| -> Result<vfs::NativePath> {
+                if path_style == util::paths::PathStyle::local() {
+                    Ok(vfs::NativePath::from_local_path(cwd)?)
+                } else {
+                    let cwd = cwd
+                        .to_str()
+                        .context("remote task cwd is not representable as Unicode")?;
+                    if path_style.is_posix() {
+                        Ok(vfs::NativePath::from_unix_bytes(cwd.as_bytes())?)
+                    } else {
+                        Ok(vfs::NativePath::from_windows_wide(
+                            &cwd.encode_utf16().collect::<Vec<_>>(),
+                        )?)
+                    }
+                }
+            })
+            .transpose()?;
+        Ok(proto::SpawnInTerminal {
             label: self.label.clone(),
             command: self.command.clone(),
             args: self.args.clone(),
@@ -90,22 +110,103 @@ impl SpawnInTerminal {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-            cwd: self
-                .cwd
-                .clone()
-                .map(|cwd| cwd.to_string_lossy().into_owned()),
-        }
+            cwd_v2: cwd.as_ref().map(proto::NativePathV2::from_native_path),
+        })
     }
 
-    pub fn from_proto(proto: proto::SpawnInTerminal) -> Self {
-        Self {
-            label: proto.label.clone(),
-            command: proto.command.clone(),
-            args: proto.args.clone(),
+    pub fn from_proto(proto: proto::SpawnInTerminal) -> Result<Self> {
+        let cwd = proto
+            .cwd_v2
+            .as_ref()
+            .map(proto::NativePathV2::to_native_path)
+            .transpose()?
+            .map(|path| path.to_local_path_buf())
+            .transpose()?;
+        Ok(Self {
+            label: proto.label,
+            command: proto.command,
+            args: proto.args,
             env: proto.env.into_iter().collect(),
-            cwd: proto.cwd.map(PathBuf::from),
+            cwd,
+            ..Default::default()
+        })
+    }
+}
+
+#[cfg(test)]
+mod proto_tests {
+    use super::*;
+
+    #[test]
+    fn spawn_in_terminal_proto_uses_exact_cwd() {
+        let task = SpawnInTerminal {
+            label: String::from("test"),
+            command: Some(String::from("cargo")),
+            cwd: Some(PathBuf::from("/tmp/project")),
+            ..Default::default()
+        };
+        let proto = task
+            .to_proto(util::paths::PathStyle::local())
+            .expect("task cwd should serialize");
+        assert!(proto.cwd_v2.is_some());
+        let decoded = SpawnInTerminal::from_proto(proto).expect("task cwd should deserialize");
+        assert_eq!(decoded.cwd, task.cwd);
+    }
+
+    #[test]
+    fn spawn_in_terminal_proto_uses_requested_remote_path_style() {
+        let (path_style, cwd, expected_encoding) = if util::paths::PathStyle::local().is_posix() {
+            (
+                util::paths::PathStyle::Windows,
+                PathBuf::from(r"C:\workspace\project"),
+                vfs::PathEncoding::WindowsWtf8,
+            )
+        } else {
+            (
+                util::paths::PathStyle::Posix,
+                PathBuf::from("/workspace/project"),
+                vfs::PathEncoding::UnixBytes,
+            )
+        };
+        let proto = SpawnInTerminal {
+            cwd: Some(cwd),
             ..Default::default()
         }
+        .to_proto(path_style)
+        .expect("remote task cwd should serialize");
+        let cwd = proto
+            .cwd_v2
+            .expect("remote task cwd should use the exact wire")
+            .to_native_path()
+            .expect("remote task cwd wire should decode");
+        assert_eq!(cwd.provider_path().encoding(), expected_encoding);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spawn_in_terminal_proto_preserves_non_utf8_local_cwd() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt as _};
+
+        let cwd = PathBuf::from(OsString::from_vec(b"/tmp/project-\xff".to_vec()));
+        let task = SpawnInTerminal {
+            cwd: Some(cwd.clone()),
+            ..Default::default()
+        };
+        let proto = task
+            .to_proto(util::paths::PathStyle::Posix)
+            .expect("non-UTF-8 local task cwd should serialize");
+        let decoded = SpawnInTerminal::from_proto(proto)
+            .expect("non-UTF-8 local task cwd should deserialize");
+        assert_eq!(decoded.cwd, Some(cwd));
+
+        let error = task
+            .to_proto(util::paths::PathStyle::Windows)
+            .expect_err("cross-style task cwd must reject non-Unicode paths");
+        assert!(
+            error
+                .to_string()
+                .contains("remote task cwd is not representable as Unicode")
+        );
     }
 }
 

@@ -55,7 +55,7 @@ pub fn switch_source_header(
                 .request(request)
                 .await
                 .context("lsp ext switch source header proto request")?;
-            SwitchSourceHeaderResult(response.target_file)
+            SwitchSourceHeaderResult(response.target_uri)
         } else {
             project
                 .update(cx, |project, cx| {

@@ -262,8 +262,31 @@ impl ProjectEnvironment {
             return Task::ready(Some(HashMap::default())).shared();
         }
 
+        let Some(worktree_store) = self.worktree_store.upgrade() else {
+            log::error!("cannot resolve remote directory environment without a worktree store");
+            return Task::ready(None).shared();
+        };
+        let path_style = worktree_store.read(cx).path_style();
+        let native_path = if path_style == util::paths::PathStyle::local() {
+            vfs::NativePath::from_local_path(&abs_path)
+        } else if let Some(path) = abs_path.to_str() {
+            if path_style.is_posix() {
+                vfs::NativePath::from_unix_bytes(path.as_bytes())
+            } else {
+                vfs::NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())
+            }
+        } else {
+            log::error!("remote environment path is not representable as Unicode");
+            return Task::ready(None).shared();
+        };
+        let Ok(native_path) = native_path else {
+            log::error!("remote environment path is invalid: {native_path:?}");
+            return Task::ready(None).shared();
+        };
+        let directory_v2 = proto::NativePathV2::from_native_path(&native_path);
+
         self.remote_environments
-            .entry((shell.clone(), abs_path.clone()))
+            .entry((shell.clone(), abs_path))
             .or_insert_with(|| {
                 let response =
                     remote_client
@@ -272,7 +295,7 @@ impl ProjectEnvironment {
                         .request(proto::GetDirectoryEnvironment {
                             project_id: REMOTE_SERVER_PROJECT_ID,
                             shell: Some(shell_to_proto(shell.clone())),
-                            directory: abs_path.to_string_lossy().to_string(),
+                            directory_v2: Some(directory_v2),
                         });
                 cx.background_spawn(async move {
                     let environment = response.await.log_err()?;

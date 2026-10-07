@@ -1061,18 +1061,15 @@ impl HeadlessProject {
         )
         .await?;
 
-        let working_directory = if envelope.payload.working_directory.is_empty() {
-            std::env::current_dir()
-                .ok()
-                .map(|p| p.to_string_lossy().into_owned())
-        } else {
-            Some(envelope.payload.working_directory)
+        let working_directory = match envelope.payload.working_directory_v2.as_ref() {
+            Some(path) => path.to_native_path()?.to_local_path_buf()?,
+            None => std::env::current_dir().context("resolving the kernel working directory")?,
         };
 
         // Spawn kernel (Assuming python for now, or we'd need to parse kernelspec logic here or pass the command)
 
         // Spawn kernel
-        let spawn_kernel = |binary: &str, args: &[String]| {
+        let spawn_kernel = |binary: &std::ffi::OsStr, args: &[String]| {
             let mut command = smol::process::Command::new(binary);
 
             if args.is_empty() {
@@ -1103,34 +1100,32 @@ impl HeadlessProject {
                 }
 
                 if let Some(venv_root) = bin_dir.parent() {
-                    command.env("VIRTUAL_ENV", venv_root.to_string_lossy().to_string());
+                    command.env("VIRTUAL_ENV", venv_root);
                 }
             }
 
-            if let Some(wd) = &working_directory {
-                command.current_dir(wd);
-            }
+            command.current_dir(&working_directory);
             command.spawn()
         };
 
         // We need to manage the child process lifecycle
         let child = if !envelope.payload.command.is_empty() {
-            spawn_kernel(&envelope.payload.command, &envelope.payload.args).context(format!(
+            spawn_kernel(
+                std::ffi::OsStr::new(&envelope.payload.command),
+                &envelope.payload.args,
+            )
+            .context(format!(
                 "failed to spawn kernel process (command: {})",
                 envelope.payload.command
             ))?
-        } else if let Some(venv_python) = working_directory
-            .as_ref()
-            .and_then(|wd| find_venv_python(wd))
-        {
-            let path_str = venv_python.to_string_lossy().to_string();
-            spawn_kernel(&path_str, &[]).context(format!(
+        } else if let Some(venv_python) = find_venv_python(&working_directory) {
+            spawn_kernel(venv_python.as_os_str(), &[]).context(format!(
                 "failed to spawn kernel process (venv: {})",
-                path_str
+                venv_python.display()
             ))?
         } else {
-            spawn_kernel("python3", &[])
-                .or_else(|_| spawn_kernel("python", &[]))
+            spawn_kernel(std::ffi::OsStr::new("python3"), &[])
+                .or_else(|_| spawn_kernel(std::ffi::OsStr::new("python"), &[]))
                 .context("failed to spawn kernel process (tried python3 and python)")?
         };
 
@@ -1140,7 +1135,7 @@ impl HeadlessProject {
 
         Ok(proto::SpawnKernelResponse {
             kernel_id,
-            connection_file: connection_file_content,
+            connection_info_json: connection_file_content,
         })
     }
 
@@ -1435,7 +1430,13 @@ impl HeadlessProject {
         mut cx: AsyncApp,
     ) -> Result<proto::DirectoryEnvironment> {
         let shell = task::shell_from_proto(envelope.payload.shell.context("missing shell")?)?;
-        let directory = PathBuf::from(envelope.payload.directory);
+        let directory = envelope
+            .payload
+            .directory_v2
+            .as_ref()
+            .context("directory environment request is missing its exact path")?
+            .to_native_path()?
+            .to_local_path_buf()?;
         let environment = this
             .update(&mut cx, |this, cx| {
                 this.environment.update(cx, |environment, cx| {
@@ -1492,8 +1493,8 @@ fn prompt_to_proto(
     }
 }
 
-fn find_venv_python(working_directory: &str) -> Option<std::path::PathBuf> {
-    let wd = std::path::Path::new(working_directory);
+fn find_venv_python(working_directory: &std::path::Path) -> Option<std::path::PathBuf> {
+    let wd = working_directory;
     for dir_name in &[".venv", "venv", ".env", "env"] {
         let venv_dir = wd.join(dir_name);
         let has_pyvenv_cfg = venv_dir.join("pyvenv.cfg").is_file();

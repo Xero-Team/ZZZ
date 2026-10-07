@@ -513,15 +513,19 @@ message RemoteStarted {}
 
 message SpawnKernel {
   string kernel_name = 1;
-  string working_directory = 2;
+  reserved 2;
+  reserved "working_directory";
   uint64 project_id = 3;
   string command = 4;
   repeated string args = 5;
+  NativePathV2 working_directory_v2 = 6;
 }
 
 message SpawnKernelResponse {
   string kernel_id = 1;
-  string connection_file = 2;
+  reserved 2;
+  reserved "connection_file";
+  string connection_info_json = 3;
 }
 
 message KillKernel {

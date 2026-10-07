@@ -241,7 +241,9 @@ message LspExtSwitchSourceHeader {
 }
 
 message LspExtSwitchSourceHeaderResponse {
-  string target_file = 1;
+  reserved 1;
+  reserved "target_file";
+  string target_uri = 2;
 }
 
 message LspExtGoToParentModule {

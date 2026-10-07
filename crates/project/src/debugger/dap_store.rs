@@ -427,9 +427,14 @@ impl DapStore {
                 )))
             }
             DapStoreMode::Remote(remote) => {
+                let path_style = self.worktree_store.read(cx).path_style();
+                let build_command = match build_command.to_proto(path_style) {
+                    Ok(build_command) => build_command,
+                    Err(error) => return Task::ready(Err(error)),
+                };
                 let request = remote.upstream_client.request(proto::RunDebugLocators {
                     project_id: remote.upstream_project_id,
-                    build_command: Some(build_command.to_proto()),
+                    build_command: Some(build_command),
                     locator: locator_name.to_owned(),
                 });
                 cx.background_spawn(async move {
@@ -850,7 +855,7 @@ impl DapStore {
             .payload
             .build_command
             .context("missing definition")?;
-        let build_task = SpawnInTerminal::from_proto(task);
+        let build_task = SpawnInTerminal::from_proto(task)?;
         let locator = envelope.payload.locator;
         let request = this
             .update(&mut cx, |this, cx| {
