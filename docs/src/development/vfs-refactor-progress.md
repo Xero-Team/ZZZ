@@ -14,14 +14,14 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `020a9b5bd6d97c00b53129f3f01291d543cd3112`
+  `a336a13165cd3d662291de5472ec14eff0ca96e6`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
 - Next action: media 和 editor persistence 已完成一次性 exact-sidecar migration，
-  `VFS-EXP-013` 已通过；继续审计普通 `Local`/`Remote` branch、`SettingsLocation` legacy
-  key 与 lazy remote provider task，并完成 Phase 9 全量验收。
+  `VFS-EXP-013` 已通过；继续审计普通 `Local`/`Remote` branch、external/WIT
+  `SettingsLocation` fallback 与 lazy remote provider task，并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -129,7 +129,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | Legacy `RevealInProjectPanel` event             | Existing   | Non-migrated callers still reveal by `ProjectEntryId`; Workspace uses resource-first reveal                                                                                                                         | Phase 9       | MIGRATING |
 | `ProjectResourceIdentity::Path` fallback        | Phase 5    | Removed; SearchMatch and Workspace diagnostics require `ResourceId`, and unmaterialized paths are excluded from identity maps                                                                                       | Phase 9       | REMOVED   |
 | Data-local media `TempPath` staging             | Phase 5    | Audio/video decoders that require a native path materialize provider bytes locally and retain the owner for decoder lifetime                                                                                        | Phase 10      | ACTIVE    |
-| `SettingsLocation` legacy worktree/path key     | Phase 5    | Exact `VfsPath` is authoritative when available; extension/WIT and test callers may still supply only `WorktreeId` plus `RelPath`                                                                                   | Phase 9       | ACTIVE    |
+| `SettingsLocation` legacy worktree/path key     | Phase 5    | Internal ProjectPath adapter removed; Buffer and invisible-LSP worktree settings carry exact `VfsPath`; extension/WIT and text-only test boundaries may still explicitly supply `WorktreeId` plus `RelPath`         | Phase 9       | MIGRATING |
 | Native trust path legacy string wire            | Existing   | Worktree metadata, add-worktree responses and trust requests now require exact `NativePathV2`; legacy string fields are reserved                                                                                    | Phase 9       | REMOVED   |
 | Trusted-worktree legacy DB text                 | Existing   | Exact `NativePath` BLOB is authoritative; migration rebuilds the table and explicitly invalidates old text-only rows                                                                                                | Phase 9       | REMOVED   |
 | Toolchain native-path string wire/DB            | Existing   | Toolchain RPC and SQLite persistence require exact `NativePathV2`/BLOB; legacy strings and old rows are removed or explicitly invalidated                                                                           | Phase 9       | REMOVED   |
@@ -391,6 +391,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-08 | 9D    | `cargo test --locked -p editor`                                                                                                                                                | SIGTERM     | NOT RUN to completion: relevant tests passed; manually terminated after 145 s when seven recorded baseline failures and three known formatter timeouts remained | Yes: frozen editor failures/timeouts                                          |
 | 2026-10-08 | 9D    | `./script/clippy -p editor -p project`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                        | 0 each      | PASS: removed silent persisted-sidecar fallback and lossy buffer-path dual-write; no new P0/P1/P2 finding                                                       | No                                                                            |
 | 2026-10-08 | 9E    | `cargo test --locked -p vfs transfer --lib -- --nocapture`                                                                                                                     | 0           | PASS: 8-test cross-provider copy/move disconnect and rollback matrix satisfies `VFS-EXP-013`                                                                    | No                                                                            |
+| 2026-10-08 | 9E    | `cargo check --offline -p project`; `test_read_only_files_setting`; three `test_open_buffer_via_lsp*` regressions                                                              | 0 each      | PASS: Buffer and invisible-LSP settings lookup retain read-only behavior while carrying exact VFS scope                                                         | No                                                                            |
+| 2026-10-08 | 9E    | `./script/clippy -p project`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                                  | 0 each      | PASS: no implicit ProjectPath-to-text-settings identity remains; no new P0/P1/P2 finding                                                                        | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -466,6 +468,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `4b362a1e415518341d75bb4237c13f1f6249fb61` | 9D    | Remote Worktree text loads through the exact VFS provider                                                                            | Remote text-load regression, baseline parity and scoped clippy/code-smell review PASS                                           | Restore remote text-load error without changing binary/stat/archive provider dispatch                  |
 | `3bbfb19985379ebcfce67700dd96ef4595c59357` | 9D    | One-time exact-sidecar migration for audio, video and PDF persistence                                                                | Project persistence regression, viewer suites, scoped clippy, fmt/diff and code-smell review PASS                               | Restore permanent legacy media fallback while retaining exact sidecars                                 |
 | `020a9b5bd6d97c00b53129f3f01291d543cd3112` | 9D    | One-time exact-sidecar migration for editor persistence, native locator naming and lossy buffer-text write removal                   | Targeted editor restore tests, scoped clippy, fmt/diff and code-smell review PASS                                               | Restore silent editor fallback and lossy buffer-text dual-write                                        |
+| `a336a13165cd3d662291de5472ec14eff0ca96e6` | 9E    | Explicit VFS identity for Buffer and invisible-LSP settings lookup; removed implicit ProjectPath settings adapter                    | Project read-only/LSP regressions, scoped clippy, fmt/diff and code-smell review PASS                                           | Restore implicit VFS-less ProjectPath settings conversion                                              |
 
 ## 平台 QA {#platform-qa}
 
