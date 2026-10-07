@@ -89,6 +89,7 @@ use crate::ignore::IgnoreKind;
 
 pub const FS_WATCH_LATENCY: Duration = Duration::from_millis(100);
 const REMOTE_VFS_RECONNECT_DELAY: Duration = Duration::from_millis(100);
+const MAX_FILE_LOAD_BYTES: u64 = 6 * 1024 * 1024 * 1024;
 
 /// How often the background scanner verifies that the worktree root still
 /// exists at its recorded path. Native watchers report the root itself being
@@ -1132,8 +1133,56 @@ impl Worktree {
     pub fn load_file(&self, path: &RelPath, cx: &Context<Worktree>) -> Task<Result<LoadedFile>> {
         match self {
             Worktree::Local(this) => this.load_file(path, cx),
-            Worktree::Remote(_) => {
-                Task::ready(Err(anyhow!("remote worktrees can't yet load files")))
+            Worktree::Remote(remote_worktree) => {
+                let Some(provider_task) = self.remote_vfs_provider(cx) else {
+                    return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
+                };
+                let Some(entry) = remote_worktree.entry_for_path(path).cloned() else {
+                    return Task::ready(Err(anyhow!("no worktree entry for {path:?}")));
+                };
+                let Some(provider_path) = entry
+                    .vfs_path
+                    .as_ref()
+                    .map(|path| path.provider_path().clone())
+                else {
+                    return Task::ready(Err(anyhow!(
+                        "worktree entry has no exact VFS path for {path:?}"
+                    )));
+                };
+                let worktree = cx.weak_entity();
+                cx.background_spawn(async move {
+                    let provider = provider_task.await.map_err(anyhow::Error::new)?;
+                    let metadata = provider
+                        .stat(&provider_path, vfs::StatOptions::default())
+                        .await?;
+                    anyhow::ensure!(
+                        metadata.kind != vfs::EntryKind::Directory
+                            && !(metadata.kind == vfs::EntryKind::SymbolicLink
+                                && metadata.symbolic_link_target_kind
+                                    == Some(vfs::EntryKind::Directory)),
+                        "Cannot load directories as files: {:?}",
+                        entry.path
+                    );
+                    anyhow::ensure!(
+                        metadata.size < MAX_FILE_LOAD_BYTES,
+                        "File is too large to load"
+                    );
+                    let bytes = vfs::load_provider_bytes(
+                        provider.as_ref(),
+                        &provider_path,
+                        vfs::OperationContext::default(),
+                    )
+                    .await?;
+                    let (text, encoding, has_bom) = decode_file_bytes(bytes.bytes)?;
+                    let worktree = worktree.upgrade().context("worktree was dropped")?;
+                    Ok(LoadedFile {
+                        file: File::for_entry(entry, worktree, None),
+                        text,
+                        encoding,
+                        has_bom,
+                        is_writable: metadata.permissions.writable,
+                    })
+                })
             }
         }
     }
@@ -2027,7 +2076,6 @@ impl LocalWorktree {
             //       if it is too large
             //       5GB seems to be more reasonable, peaking at ~16GB, while 6GB jumps up to >24GB which seems like a
             //       reasonable limit
-            const FILE_SIZE_MAX: u64 = 6 * 1024 * 1024 * 1024; // 6GB
             let (text, encoding, has_bom, is_writable) =
                 if let (Some(vfs_snapshot), Some(provider_path)) =
                     (vfs_snapshot.as_ref(), provider_path.as_ref())
@@ -2043,7 +2091,10 @@ impl LocalWorktree {
                                     == Some(vfs::EntryKind::Directory)),
                         "Cannot load directories as files: {abs_path:?}"
                     );
-                    anyhow::ensure!(metadata.size < FILE_SIZE_MAX, "File is too large to load");
+                    anyhow::ensure!(
+                        metadata.size < MAX_FILE_LOAD_BYTES,
+                        "File is too large to load"
+                    );
                     let bytes = vfs_snapshot
                         .load_bytes(provider_path, vfs::OperationContext::default())
                         .await?;
@@ -2057,7 +2108,7 @@ impl LocalWorktree {
                         anyhow::bail!("Cannot load directories as files: {abs_path:?}");
                     }
                     if let Some(metadata) = metadata.as_ref()
-                        && metadata.len >= FILE_SIZE_MAX
+                        && metadata.len >= MAX_FILE_LOAD_BYTES
                     {
                         anyhow::bail!("File is too large to load");
                     }

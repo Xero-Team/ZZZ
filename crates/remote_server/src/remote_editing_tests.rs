@@ -2065,6 +2065,49 @@ async fn test_remote_root_repo_common_dir(cx: &mut TestAppContext, server_cx: &m
 }
 
 #[gpui::test]
+async fn test_remote_worktree_load_file_uses_vfs(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(
+        path!("/code"),
+        json!({
+            "project": {
+                "package.json": "{\"scripts\":{\"test\":\"cargo test\"}}"
+            }
+        }),
+    )
+    .await;
+    let (project, _headless) = init_test(&fs, cx, server_cx).await;
+    let worktree = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/code/project"), true, cx)
+        })
+        .await
+        .expect("remote worktree should open")
+        .0;
+    server_cx.run_until_parked();
+    cx.run_until_parked();
+    server_cx.run_until_parked();
+    cx.run_until_parked();
+    assert!(worktree.read_with(cx, |worktree, _| {
+        worktree.entry_for_path(rel_path("package.json")).is_some()
+    }));
+    let loaded = worktree
+        .update(cx, |worktree, cx| {
+            worktree.load_file(rel_path("package.json"), cx)
+        })
+        .await
+        .expect("remote text file should load through VFS");
+
+    assert_eq!(loaded.text, "{\"scripts\":{\"test\":\"cargo test\"}}");
+    assert!(loaded.file.resource_id.is_some());
+    assert!(loaded.file.vfs_path.is_some());
+    assert!(!loaded.file.is_local);
+}
+
+#[gpui::test]
 async fn test_remote_archive_git_operations_are_supported(
     cx: &mut TestAppContext,
     server_cx: &mut TestAppContext,
