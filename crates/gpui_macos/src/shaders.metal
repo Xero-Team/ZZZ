@@ -362,7 +362,6 @@ fragment float4 quad_fragment(QuadFragmentInput input [[stage_in]],
       }
 
       float dash_length = dash_length_per_width / dash_period_per_width;
-      float desired_dash_gap = dash_gap_per_width / dash_period_per_width;
 
       // Straight borders should start and end with a dash, so max_t is
       // reduced to cause this.

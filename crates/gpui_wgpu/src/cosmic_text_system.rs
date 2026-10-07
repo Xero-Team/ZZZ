@@ -325,7 +325,7 @@ impl CosmicTextSystemState {
 
         let mut loaded_font_ids = SmallVec::new();
         for (font_id, postscript_name) in families {
-            let (style, weight, face_index) = {
+            let (style, weight, _face_index) = {
                 let face = self
                     .font_system
                     .db()
@@ -340,7 +340,7 @@ impl CosmicTextSystemState {
             let prefers_color_sources = is_color_capable_font(font.as_swash())
                 || check_is_known_emoji_font(&postscript_name);
             #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-            let vector_color_font_data = vector_color_font_data(&font, face_index);
+            let vector_color_font_data = vector_color_font_data(&font, _face_index);
 
             // HACK: To let the storybook run and render Windows caption icons. We should actually do better font fallback.
             let allowed_bad_font_names = [
