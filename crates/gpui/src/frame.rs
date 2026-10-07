@@ -38,10 +38,53 @@ pub(crate) enum DrawPhase {
     Focus,
 }
 
+/// Element IDs for the current draw path with the hash of every prefix.
+#[derive(Clone, Default)]
+pub(crate) struct ElementIdStack {
+    ids: SmallVec<[ElementId; 32]>,
+    hashes: SmallVec<[u64; 32]>,
+}
+
+impl ElementIdStack {
+    fn push(&mut self, id: ElementId) {
+        self.hashes.push(crate::extend_path_hash(self.hash(), &id));
+        self.ids.push(id);
+    }
+
+    fn pop(&mut self) -> Option<ElementId> {
+        self.hashes.pop();
+        self.ids.pop()
+    }
+
+    fn clear(&mut self) {
+        self.ids.clear();
+        self.hashes.clear();
+    }
+
+    fn hash(&self) -> u64 {
+        self.hashes
+            .last()
+            .copied()
+            .unwrap_or(crate::EMPTY_PATH_HASH)
+    }
+
+    fn global_id(&self) -> GlobalElementId {
+        GlobalElementId::with_hash(&self.ids, self.hash())
+    }
+}
+
+impl std::ops::Deref for ElementIdStack {
+    type Target = [ElementId];
+
+    fn deref(&self) -> &Self::Target {
+        &self.ids
+    }
+}
+
 /// Mutable state used only while constructing a frame.
 pub(crate) struct FrameBuilder {
     layout_engine: Option<TaffyLayoutEngine>,
-    element_id_stack: SmallVec<[ElementId; 32]>,
+    element_id_stack: ElementIdStack,
     text_style_stack: Vec<TextStyleRefinement>,
     rendered_entity_stack: Vec<EntityId>,
     element_offset_stack: Vec<Point<Pixels>>,
@@ -55,7 +98,7 @@ impl FrameBuilder {
     pub(crate) fn new() -> Self {
         Self {
             layout_engine: Some(TaffyLayoutEngine::new()),
-            element_id_stack: SmallVec::default(),
+            element_id_stack: ElementIdStack::default(),
             text_style_stack: Vec::new(),
             rendered_entity_stack: Vec::new(),
             element_offset_stack: Vec::new(),
@@ -106,15 +149,19 @@ impl FrameBuilder {
         &self.element_id_stack
     }
 
+    pub(crate) fn global_element_id(&self) -> GlobalElementId {
+        self.element_id_stack.global_id()
+    }
+
     pub(crate) fn element_id_depth(&self) -> usize {
         self.element_id_stack.len()
     }
 
-    pub(crate) fn clone_element_ids(&self) -> SmallVec<[ElementId; 32]> {
+    pub(crate) fn clone_element_ids(&self) -> ElementIdStack {
         self.element_id_stack.clone()
     }
 
-    pub(crate) fn restore_element_ids(&mut self, element_ids: &SmallVec<[ElementId; 32]>) {
+    pub(crate) fn restore_element_ids(&mut self, element_ids: &ElementIdStack) {
         self.element_id_stack.clone_from(element_ids);
     }
 
@@ -649,7 +696,7 @@ pub(crate) struct DeferredDraw {
     pub(crate) current_view: EntityId,
     pub(crate) priority: usize,
     pub(crate) parent_node: DispatchNodeId,
-    pub(crate) element_id_stack: SmallVec<[ElementId; 32]>,
+    pub(crate) element_id_stack: ElementIdStack,
     pub(crate) text_style_stack: Vec<TextStyleRefinement>,
     pub(crate) content_mask: Option<ContentMask<Pixels>>,
     pub(crate) rem_size: Pixels,

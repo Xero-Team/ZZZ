@@ -36,7 +36,6 @@ use crate::{
     InspectorElementId, LayoutId, Pixels, Point, SharedString, Size, Style, Window,
     util::FluentBuilder, window::with_element_arena,
 };
-use derive_more::{Deref, DerefMut};
 use std::{
     any::{Any, type_name},
     fmt::{self, Debug, Display},
@@ -301,12 +300,74 @@ impl<C: RenderOnce> IntoElement for Component<C> {
 }
 
 /// A globally unique identifier for an element, used to track state across frames.
-#[derive(Deref, DerefMut, Clone, Default, Debug, Eq, PartialEq, Hash)]
-pub struct GlobalElementId(pub(crate) Arc<[ElementId]>);
+///
+/// The path hash is computed when the ID is built and reused by frame state maps.
+#[derive(Clone, Debug)]
+pub struct GlobalElementId {
+    ids: Arc<[ElementId]>,
+    hash: u64,
+}
+
+pub(crate) const EMPTY_PATH_HASH: u64 = 0;
+
+pub(crate) fn extend_path_hash(prefix: u64, id: &ElementId) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = collections::FxHasher::with_seed(prefix as usize);
+    id.hash(&mut hasher);
+    hasher.finish()
+}
+
+impl GlobalElementId {
+    pub(crate) fn new(ids: &[ElementId]) -> Self {
+        let hash = ids.iter().fold(EMPTY_PATH_HASH, extend_path_hash);
+        Self::with_hash(ids, hash)
+    }
+
+    pub(crate) fn with_hash(ids: &[ElementId], hash: u64) -> Self {
+        debug_assert_eq!(hash, ids.iter().fold(EMPTY_PATH_HASH, extend_path_hash));
+        Self {
+            ids: Arc::from(ids),
+            hash,
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub(crate) fn accesskit_node_id(&self) -> accesskit::NodeId {
+        accesskit::NodeId(self.hash)
+    }
+}
+
+impl Default for GlobalElementId {
+    fn default() -> Self {
+        Self::new(&[])
+    }
+}
+
+impl std::ops::Deref for GlobalElementId {
+    type Target = [ElementId];
+
+    fn deref(&self) -> &Self::Target {
+        &self.ids
+    }
+}
+
+impl PartialEq for GlobalElementId {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash == other.hash && (Arc::ptr_eq(&self.ids, &other.ids) || self.ids == other.ids)
+    }
+}
+
+impl Eq for GlobalElementId {}
+
+impl std::hash::Hash for GlobalElementId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
 
 impl Display for GlobalElementId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i, element_id) in self.0.iter().enumerate() {
+        for (i, element_id) in self.ids.iter().enumerate() {
             if i > 0 {
                 write!(f, ".")?;
             }
@@ -316,10 +377,42 @@ impl Display for GlobalElementId {
     }
 }
 
-impl GlobalElementId {
-    #[cfg(feature = "accessibility")]
-    pub(crate) fn accesskit_node_id(&self) -> accesskit::NodeId {
-        crate::stable_semantic_node_id(self)
+#[cfg(test)]
+mod global_element_id_tests {
+    use super::*;
+    use std::hash::{Hash, Hasher};
+
+    fn path(depth: usize, leaf: u64) -> Vec<ElementId> {
+        let mut ids = (0..depth as u64)
+            .map(|level| ElementId::NamedInteger("container".into(), level))
+            .collect::<Vec<_>>();
+        ids.push(ElementId::NamedInteger("leaf".into(), leaf));
+        ids
+    }
+
+    fn fx_hash(value: &impl Hash) -> u64 {
+        let mut hasher = collections::FxHasher::default();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn equal_paths_are_equal_and_hash_alike() {
+        let first = GlobalElementId::new(&path(8, 1));
+        let equal = GlobalElementId::new(&path(8, 1));
+        let different_leaf = GlobalElementId::new(&path(8, 2));
+        let shallower = GlobalElementId::new(&path(7, 1));
+
+        assert_eq!(first, equal);
+        assert_eq!(fx_hash(&first), fx_hash(&equal));
+        assert_ne!(first, different_leaf);
+        assert_ne!(first, shallower);
+        assert_ne!(fx_hash(&first), fx_hash(&different_leaf));
+        assert_eq!(&*first, path(8, 1).as_slice());
+        assert_eq!(first.to_string(), equal.to_string());
+        assert_eq!(GlobalElementId::default(), GlobalElementId::new(&[]));
+        #[cfg(feature = "accessibility")]
+        assert_eq!(first.accesskit_node_id(), equal.accesskit_node_id());
     }
 }
 
@@ -389,7 +482,7 @@ impl<E: Element> Drawable<E> {
             ElementDrawPhase::Start => {
                 let global_id = self.element.id().map(|element_id| {
                     window.push_element_id(element_id);
-                    GlobalElementId(Arc::from(window.element_id_path()))
+                    window.global_element_id()
                 });
 
                 let inspector_id;
@@ -398,7 +491,7 @@ impl<E: Element> Drawable<E> {
                     inspector_id = if window.inspector_enabled() {
                         self.element.source_location().map(|source| {
                             let path = crate::InspectorElementPath {
-                                global_id: GlobalElementId(Arc::from(window.element_id_path())),
+                                global_id: window.global_element_id(),
                                 source_location: source,
                             };
                             window.build_inspector_element_id(path)
@@ -453,10 +546,9 @@ impl<E: Element> Drawable<E> {
                 if let Some(element_id) = self.element.id() {
                     window.push_element_id(element_id);
                     debug_assert_eq!(
-                        &*global_id
+                        &**global_id
                             .as_ref()
-                            .expect("value should have the expected type")
-                            .0,
+                            .expect("value should have the expected type"),
                         window.element_id_path()
                     );
                 }
@@ -541,10 +633,9 @@ impl<E: Element> Drawable<E> {
                 if let Some(element_id) = self.element.id() {
                     window.push_element_id(element_id);
                     debug_assert_eq!(
-                        &*global_id
+                        &**global_id
                             .as_ref()
-                            .expect("value should have the expected type")
-                            .0,
+                            .expect("value should have the expected type"),
                         window.element_id_path()
                     );
                 }

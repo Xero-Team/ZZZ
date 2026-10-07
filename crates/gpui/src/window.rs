@@ -2331,7 +2331,7 @@ impl Window {
         f: impl FnOnce(&GlobalElementId, &mut Self) -> R,
     ) -> R {
         self.with_id(element_id, |this| {
-            let global_id = GlobalElementId(Arc::from(this.element_id_path()));
+            let global_id = this.global_element_id();
 
             f(&global_id, this)
         })
@@ -2360,6 +2360,10 @@ impl Window {
 
     pub(crate) fn element_id_path(&self) -> &[ElementId] {
         self.frame_builder.element_id_path()
+    }
+
+    pub(crate) fn global_element_id(&self) -> GlobalElementId {
+        self.frame_builder.global_element_id()
     }
 
     /// Executes the provided function with the specified rem size.
