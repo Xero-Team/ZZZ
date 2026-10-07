@@ -1727,9 +1727,7 @@ fn local_settings_path_from_proto(
             let path = path.to_native_path()?;
             let path = match path.provider_path().encoding() {
                 vfs::PathEncoding::UnixBytes => String::from_utf8(path.to_unix_bytes()?)?,
-                vfs::PathEncoding::WindowsWtf8 => {
-                    String::from_utf16(&path.to_windows_wide()?)?
-                }
+                vfs::PathEncoding::WindowsWtf8 => String::from_utf16(&path.to_windows_wide()?)?,
                 vfs::PathEncoding::PortableUtf8 => {
                     vfs::provider_path_to_legacy_utf8(path.provider_path())?
                 }

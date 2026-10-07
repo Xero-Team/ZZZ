@@ -105,12 +105,23 @@ fn test_project_path_exact_wire_round_trip_and_missing_identity_rejection() {
         worktree_id: WorktreeId::from_proto(9),
         path: rel_path("src/main.rs").into(),
     };
-    let serialized = original.to_proto();
+    let provider_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::PortableUtf8,
+        [b"src".as_slice(), b"main.rs".as_slice()],
+    )
+    .expect("project path fixture must be valid");
+    let mount_id = vfs::MountId::new(42);
+    let vfs_path = vfs::VfsPath::new(mount_id, provider_path);
+    let root = vfs::VfsPath::new(
+        mount_id,
+        vfs::ProviderPath::root(vfs::PathEncoding::PortableUtf8),
+    );
+    let serialized = original.to_proto(&vfs_path);
     let Ok(serialized) = serialized else {
         panic!("project path must serialize: {serialized:?}");
     };
     assert!(serialized.vfs_path.is_some());
-    let round_tripped = ProjectPath::from_proto(serialized.clone());
+    let round_tripped = ProjectPath::from_proto(serialized.clone(), &root);
     let Ok(round_tripped) = round_tripped else {
         panic!("project path must deserialize: {round_tripped:?}");
     };
@@ -118,7 +129,7 @@ fn test_project_path_exact_wire_round_trip_and_missing_identity_rejection() {
 
     let mut missing_identity = serialized;
     missing_identity.vfs_path = None;
-    assert!(ProjectPath::from_proto(missing_identity).is_err());
+    assert!(ProjectPath::from_proto(missing_identity, &root).is_err());
 }
 
 #[test]

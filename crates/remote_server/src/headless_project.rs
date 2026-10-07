@@ -778,6 +778,10 @@ impl HeadlessProject {
                     .snapshot()
                     .native_root_repo_common_dir()
                     .map(proto::NativePathV2::from_native_path),
+                vfs_root: worktree
+                    .vfs_path_for_path(RelPath::empty())
+                    .as_ref()
+                    .map(proto::VfsPathV2::from_vfs_path),
             }
         });
 
@@ -825,14 +829,25 @@ impl HeadlessProject {
         mut cx: AsyncApp,
     ) -> Result<proto::OpenBufferResponse> {
         let worktree_id = WorktreeId::from_proto(message.payload.worktree_id);
-        let path = RelPath::from_proto(&message.payload.path)?;
-        let (buffer_store, buffer) = this.update(&mut cx, |this, cx| {
+        let vfs_path = message
+            .payload
+            .path_v2
+            .as_ref()
+            .context("open-buffer request is missing its exact VFS path")?
+            .to_vfs_path()?;
+        let (buffer_store, buffer) = this.update(&mut cx, |this, cx| -> Result<_> {
+            let worktree = this
+                .worktree_store
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .context("open-buffer worktree not found")?;
+            let path = worktree.read(cx).relative_path_from_vfs_path(&vfs_path)?;
             let buffer_store = this.buffer_store.clone();
             let buffer = this.buffer_store.update(cx, |buffer_store, cx| {
                 buffer_store.open_buffer(ProjectPath { worktree_id, path }, cx)
             });
-            (buffer_store, buffer)
-        });
+            Ok((buffer_store, buffer))
+        })?;
 
         let buffer = buffer.await?;
         let buffer_id = buffer.read_with(&cx, |b, _| b.remote_id());

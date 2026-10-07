@@ -2,6 +2,7 @@ syntax = "proto3";
 package zzz.messages;
 
 import "core.proto";
+import "vfs.proto";
 import "worktree.proto";
 
 message OpenNewBuffer {
@@ -30,7 +31,9 @@ message UpdateBuffer {
 message OpenBufferByPath {
   uint64 project_id = 1;
   uint64 worktree_id = 2;
-  string path = 3;
+  reserved 3;
+  reserved "path";
+  VfsPathV2 path_v2 = 4;
 }
 
 message OpenBufferById {

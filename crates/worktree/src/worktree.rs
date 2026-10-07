@@ -181,6 +181,7 @@ struct ScanRequest {
 
 pub struct RemoteWorktree {
     snapshot: Snapshot,
+    vfs_root: VfsPath,
     background_snapshot: Arc<Mutex<(Snapshot, Vec<proto::UpdateWorktree>)>>,
     project_id: u64,
     client: AnyProtoClient,
@@ -672,6 +673,11 @@ impl Worktree {
             .map(proto::NativePathV2::to_native_path)
             .transpose()
             .context("remote worktree has an invalid exact Git common directory")?;
+        let vfs_root = worktree
+            .vfs_root
+            .as_ref()
+            .context("remote worktree is missing its exact VFS root")?
+            .to_vfs_path()?;
         Ok(cx.new(|cx: &mut Context<Self>| {
             let mut snapshot = Snapshot::new(
                 WorktreeId::from_proto(worktree.id),
@@ -706,6 +712,7 @@ impl Worktree {
             let worktree = RemoteWorktree {
                 client,
                 vfs_provider: OnceLock::new(),
+                vfs_root,
                 project_id,
                 replica_id,
                 snapshot,
@@ -893,13 +900,12 @@ impl Worktree {
             return Some(vfs_path);
         }
         if let Worktree::Remote(remote) = self {
-            let root_path = remote.entry_for_path(RelPath::empty())?.vfs_path.as_ref()?;
             let provider_path = provider_path_from_legacy_utf8(
                 path.as_unix_str(),
-                root_path.provider_path().encoding(),
+                remote.vfs_root.provider_path().encoding(),
             )
             .ok()?;
-            return Some(VfsPath::new(root_path.mount_id(), provider_path));
+            return Some(VfsPath::new(remote.vfs_root.mount_id(), provider_path));
         }
         let snapshot = self.vfs_snapshot()?;
         let provider_path = provider_path_from_legacy_utf8(
@@ -1038,6 +1044,10 @@ impl Worktree {
             root_repo_common_dir_v2: snapshot
                 .native_root_repo_common_dir()
                 .map(proto::NativePathV2::from_native_path),
+            vfs_root: self
+                .vfs_path_for_path(RelPath::empty())
+                .as_ref()
+                .map(proto::VfsPathV2::from_vfs_path),
         }
     }
 

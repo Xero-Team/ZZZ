@@ -141,10 +141,7 @@ use util::{
     paths::{PathStyle, SanitizedPath, is_absolute},
     rel_path::RelPath,
 };
-use vfs::{
-    MountId, PathEncoding, VfsPath as CoreVfsPath, provider_path_from_legacy_utf8,
-    provider_path_to_legacy_utf8,
-};
+use vfs::{PathEncoding, VfsPath as CoreVfsPath, provider_path_to_legacy_utf8};
 use worktree::{CreatedEntry, Snapshot, Traversal};
 pub use worktree::{
     Entry, EntryKind, FS_WATCH_LATENCY, File, LocalWorktree, PathChange, ProjectEntryId,
@@ -493,15 +490,15 @@ impl ProjectPath {
         }
     }
 
-    pub fn from_proto(path: proto::ProjectPath) -> Result<Self> {
+    pub fn from_proto(path: proto::ProjectPath, expected_root: &CoreVfsPath) -> Result<Self> {
         let worktree_id = WorktreeId::from_proto(path.worktree_id);
         let vfs_path = path
             .vfs_path
             .context("project path is missing exact VFS identity")?;
         let vfs_path = vfs_path.to_vfs_path()?;
         anyhow::ensure!(
-            vfs_path.mount_id().get() == path.worktree_id,
-            "VFS mount ID does not match worktree ID"
+            vfs_path.mount_id() == expected_root.mount_id(),
+            "VFS mount ID does not match the worktree mount"
         );
         let relative_path = provider_path_to_legacy_utf8(vfs_path.provider_path())?;
         Ok(Self {
@@ -510,14 +507,16 @@ impl ProjectPath {
         })
     }
 
-    pub fn to_proto(&self) -> Result<proto::ProjectPath> {
+    pub fn to_proto(&self, vfs_path: &CoreVfsPath) -> Result<proto::ProjectPath> {
         let worktree_id = self.worktree_id.to_proto();
         let path = self.path.as_ref().to_proto();
-        let provider_path = provider_path_from_legacy_utf8(&path, PathEncoding::PortableUtf8)?;
-        let vfs_path = CoreVfsPath::new(MountId::new(worktree_id), provider_path);
+        anyhow::ensure!(
+            provider_path_to_legacy_utf8(vfs_path.provider_path())? == path,
+            "exact VFS path does not match the project path"
+        );
         Ok(proto::ProjectPath {
             worktree_id,
-            vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
+            vfs_path: Some(proto::VfsPathV2::from_vfs_path(vfs_path)),
         })
     }
 
@@ -1893,6 +1892,10 @@ impl Project {
                 root_repo_is_linked_worktree: false,
                 abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_abs_path)),
                 root_repo_common_dir_v2: None,
+                vfs_root: Some(proto::VfsPathV2::from_vfs_path(&vfs::VfsPath::new(
+                    vfs::MountId::new(100 + self.visible_worktrees(cx).count() as u64),
+                    vfs::ProviderPath::root(vfs::PathEncoding::PortableUtf8),
+                ))),
             },
             client,
             PathStyle::Posix,
@@ -5300,11 +5303,20 @@ impl Project {
     ) -> Result<proto::OpenBufferResponse> {
         let peer_id = envelope.original_sender_id()?;
         let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-        let path = RelPath::from_proto(&envelope.payload.path)?;
+        let vfs_path = envelope
+            .payload
+            .path_v2
+            .as_ref()
+            .context("open-buffer request is missing its exact VFS path")?
+            .to_vfs_path()?;
         let open_buffer = this
-            .update(&mut cx, |this, cx| {
-                this.open_buffer(ProjectPath { worktree_id, path }, cx)
-            })
+            .update(&mut cx, |this, cx| -> Result<_> {
+                let worktree = this
+                    .worktree_for_id(worktree_id, cx)
+                    .context("open-buffer worktree not found")?;
+                let path = worktree.read(cx).relative_path_from_vfs_path(&vfs_path)?;
+                Ok(this.open_buffer(ProjectPath { worktree_id, path }, cx))
+            })?
             .await?;
         Project::respond_to_open_buffer_request(this, open_buffer, peer_id, &mut cx)
     }

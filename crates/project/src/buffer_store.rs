@@ -299,6 +299,9 @@ impl RemoteBufferStore {
         cx: &mut Context<BufferStore>,
     ) -> Task<Result<Entity<Buffer>>> {
         let worktree_id = worktree.read(cx).id().to_proto();
+        let Some(vfs_path) = worktree.read(cx).vfs_path_for_path(&path) else {
+            return Task::ready(Err(anyhow!("buffer path has no exact VFS identity")));
+        };
         let project_id = self.project_id;
         let client = self.upstream_client.clone();
         cx.spawn(async move |this, cx| {
@@ -306,7 +309,7 @@ impl RemoteBufferStore {
                 .request(proto::OpenBufferByPath {
                     project_id,
                     worktree_id,
-                    path: path.to_proto(),
+                    path_v2: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
                 })
                 .await?;
             let buffer_id = BufferId::new(response.buffer_id)?;
@@ -953,10 +956,24 @@ impl BufferStore {
         let old_file = buffer.read(cx).file().cloned();
         let task = match &self.state {
             BufferStoreState::Local(this) => this.save_buffer_as(buffer.clone(), path, cx),
-            BufferStoreState::Remote(this) => match path.to_proto() {
-                Ok(path) => this.save_remote_buffer(buffer.clone(), Some(path), cx),
-                Err(error) => Task::ready(Err(error)),
-            },
+            BufferStoreState::Remote(this) => {
+                let wire_path = this
+                    .worktree_store
+                    .read(cx)
+                    .worktree_for_id(path.worktree_id, cx)
+                    .context("save target worktree not found")
+                    .and_then(|worktree| {
+                        let vfs_path = worktree
+                            .read(cx)
+                            .vfs_path_for_path(&path.path)
+                            .context("save target has no exact VFS identity")?;
+                        path.to_proto(&vfs_path)
+                    });
+                match wire_path {
+                    Ok(path) => this.save_remote_buffer(buffer.clone(), Some(path), cx),
+                    Err(error) => Task::ready(Err(error)),
+                }
+            }
         };
         cx.spawn(async move |this, cx| {
             task.await?;
@@ -1469,7 +1486,20 @@ impl BufferStore {
         let buffer_id = buffer.read_with(&cx, |buffer, _| buffer.remote_id());
 
         if let Some(new_path) = envelope.payload.new_path {
-            let new_path = ProjectPath::from_proto(new_path)?;
+            let worktree_id = WorktreeId::from_proto(new_path.worktree_id);
+            let worktree = this
+                .read_with(&cx, |this, cx| {
+                    this.worktree_store
+                        .read(cx)
+                        .worktree_for_id(worktree_id, cx)
+                })
+                .context("save target worktree not found")?;
+            let expected_root = worktree
+                .read_with(&cx, |worktree, _| {
+                    worktree.vfs_path_for_path(RelPath::empty())
+                })
+                .context("save target worktree has no exact VFS root")?;
+            let new_path = ProjectPath::from_proto(new_path, &expected_root)?;
             this.update(&mut cx, |this, cx| {
                 this.save_buffer_as(buffer.clone(), new_path, cx)
             })

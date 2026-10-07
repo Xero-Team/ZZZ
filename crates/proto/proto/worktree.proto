@@ -55,6 +55,7 @@ message AddWorktreeResponse {
   bool root_repo_is_linked_worktree = 4;
   NativePathV2 canonicalized_path_v2 = 5;
   NativePathV2 root_repo_common_dir_v2 = 6;
+  VfsPathV2 vfs_root = 7;
 }
 
 message RemoveWorktree {
@@ -85,6 +86,7 @@ message WorktreeMetadata {
   bool root_repo_is_linked_worktree = 6;
   NativePathV2 abs_path_v2 = 7;
   NativePathV2 root_repo_common_dir_v2 = 8;
+  VfsPathV2 vfs_root = 9;
 }
 
 message ProjectPath {

@@ -875,6 +875,7 @@ impl WorktreeStore {
                             &canonicalized_path,
                         )),
                         root_repo_common_dir_v2: response.root_repo_common_dir_v2,
+                        vfs_root: response.vfs_root,
                     },
                     client,
                     path_style,

@@ -41,6 +41,13 @@ fn native_path_wire(path: &str) -> Option<proto::NativePathV2> {
     Some(proto::NativePathV2::from_native_path(&native_path))
 }
 
+fn vfs_root_wire(mount_id: u64) -> Option<proto::VfsPathV2> {
+    Some(proto::VfsPathV2::from_vfs_path(&VfsPath::new(
+        MountId::new(mount_id),
+        ProviderPath::root(PathEncoding::PortableUtf8),
+    )))
+}
+
 #[gpui::test]
 fn test_remote_worktree_rejects_missing_exact_root(cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -58,6 +65,7 @@ fn test_remote_worktree_rejects_missing_exact_root(cx: &mut TestAppContext) {
                 root_repo_is_linked_worktree: false,
                 abs_path_v2: None,
                 root_repo_common_dir_v2: None,
+                vfs_root: vfs_root_wire(1),
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::Posix,
@@ -6388,6 +6396,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 abs_path_v2: native_path_wire("/home/user/project"),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
+                vfs_root: vfs_root_wire(1),
             },
             client,
             PathStyle::Posix,
@@ -6487,6 +6496,7 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
                 abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_abs_path)),
+                vfs_root: vfs_root_wire(1),
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::Posix,
@@ -6548,6 +6558,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 abs_path_v2: native_path_wire("/home/user/project"),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
+                vfs_root: vfs_root_wire(1),
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::Posix,
@@ -6699,6 +6710,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 abs_path_v2: native_path_wire("/home/user/project"),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
+                vfs_root: vfs_root_wire(1),
             },
             client,
             PathStyle::Posix,
@@ -6803,6 +6815,7 @@ async fn test_remote_worktree_root_repo_metadata_cleared_only_by_completed_scan(
                 abs_path_v2: native_path_wire("/home/user/monty/feature-a"),
                 root_repo_common_dir_v2: native_path_wire("/home/user/monty/.bare"),
                 root_repo_is_linked_worktree: true,
+                vfs_root: vfs_root_wire(1),
             },
             client,
             PathStyle::Posix,
@@ -6919,6 +6932,7 @@ async fn test_remote_worktree_update_entries_carry_changed_paths(cx: &mut TestAp
                 abs_path_v2: native_path_wire(path!("/root")),
                 root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
+                vfs_root: vfs_root_wire(1),
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::local(),
