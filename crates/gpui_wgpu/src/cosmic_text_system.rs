@@ -26,7 +26,7 @@ use skrifa::{
     FontRef as SkrifaFontRef, MetadataProvider,
     color::ColorGlyphFormat,
     instance::{LocationRef, Size as SkrifaSize},
-    raw::TableProvider,
+    raw::{ReadError, TableProvider},
 };
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use vello_cpu::{
@@ -990,7 +990,15 @@ fn normalize_swash_image(
         .checked_mul(usize::try_from(image.placement.height)?)
         .context("glyph pixel count overflowed")?;
     let pixels = match image.content {
-        swash::scale::image::Content::Color | swash::scale::image::Content::SubpixelMask => {
+        swash::scale::image::Content::Color => {
+            anyhow::ensure!(
+                image.data.len() == pixel_count.saturating_mul(4),
+                "Swash returned an invalid four-channel glyph buffer"
+            );
+            normalize_swash_color_pixels(&mut image.data, image.source);
+            image.data
+        }
+        swash::scale::image::Content::SubpixelMask => {
             anyhow::ensure!(
                 image.data.len() == pixel_count.saturating_mul(4),
                 "Swash returned an invalid four-channel glyph buffer"
@@ -1021,6 +1029,19 @@ fn normalize_swash_image(
     })
 }
 
+fn normalize_swash_color_pixels(pixels: &mut [u8], source: Source) {
+    let is_premultiplied = matches!(source, Source::ColorOutline(_));
+    for pixel in pixels.chunks_exact_mut(4) {
+        if is_premultiplied {
+            let normalized =
+                premultiplied_rgba_to_straight_bgra([pixel[0], pixel[1], pixel[2], pixel[3]]);
+            pixel.copy_from_slice(&normalized);
+        } else {
+            pixel.swap(0, 2);
+        }
+    }
+}
+
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn vector_color_font_data(font: &CosmicTextFont, face_index: u32) -> Option<FontData> {
     let swash_font = font.as_swash();
@@ -1049,11 +1070,12 @@ fn render_svg_glyph(
     );
     let font_ref = SkrifaFontRef::from_index(font_data.data.data(), font_data.index)
         .context("failed to parse OpenType-SVG font data")?;
-    let Some(document) = font_ref
-        .svg()
-        .ok()
-        .and_then(|table| table.glyph_data(skrifa::GlyphId::new(glyph_id.0)))
-    else {
+    let svg = match font_ref.svg() {
+        std::result::Result::Ok(svg) => svg,
+        Err(ReadError::TableIsMissing(_)) => return Ok(None),
+        Err(error) => return Err(error).context("failed to parse OpenType-SVG table"),
+    };
+    let Some(document) = svg.glyph_data(skrifa::GlyphId::new(glyph_id.0)) else {
         return Ok(None);
     };
 
@@ -1341,7 +1363,6 @@ fn visible_pixel_bounds(
     bounds
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn premultiplied_rgba_to_straight_bgra(pixel: [u8; 4]) -> [u8; 4] {
     let [red, green, blue, alpha] = pixel;
     if alpha == 0 {
@@ -1387,6 +1408,17 @@ fn check_is_known_emoji_font(postscript_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn swash_color_sources_use_straight_alpha_bgra() {
+        let mut color_outline = [32, 64, 16, 128];
+        normalize_swash_color_pixels(&mut color_outline, Source::ColorOutline(0));
+        assert_eq!(color_outline, [32, 128, 64, 128]);
+
+        let mut color_bitmap = [32, 64, 16, 128];
+        normalize_swash_color_pixels(&mut color_bitmap, Source::ColorBitmap(StrikeWith::BestFit));
+        assert_eq!(color_bitmap, [16, 64, 32, 128]);
+    }
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     #[test]

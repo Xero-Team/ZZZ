@@ -3929,6 +3929,17 @@ impl Window {
         glyph_id: GlyphId,
         font_size: Pixels,
     ) -> Result<()> {
+        self.paint_emoji_with_color_hint(origin, font_id, glyph_id, font_size, crate::white())
+    }
+
+    pub(crate) fn paint_emoji_with_color_hint(
+        &mut self,
+        origin: Point<Pixels>,
+        font_id: FontId,
+        glyph_id: GlyphId,
+        font_size: Pixels,
+        color: Hsla,
+    ) -> Result<()> {
         self.invalidator.debug_assert_paint();
 
         let scale_factor = self.scale_factor();
@@ -3952,7 +3963,7 @@ impl Window {
         self.paint_rasterized_glyph(
             integer_origin,
             params,
-            crate::white().opacity(self.element_opacity()),
+            color.opacity(self.element_opacity()),
         )
     }
 
@@ -4024,7 +4035,7 @@ impl Window {
                         corner_radii: Default::default(),
                         content_mask,
                         tile,
-                        opacity: self.element_opacity(),
+                        opacity: tint.a,
                     });
             }
         }
