@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 8 进行中                              |
+| 当前阶段      | 阶段 9 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -587,17 +587,46 @@ TEXT-009 release artifact：
 不重复查询 platform font state，eviction 后 metadata 与 cold raster 一致，且没有第二份
 bitmap 或永久增长的 replacement map。
 
+bounded raster-info cache 提交：
+`f29ef80998c62aa2cbfb3aaf487d0f5c74c58003`（signed）。
+
 ### 阶段 8：upload batching 决策
 
-状态：`IN PROGRESS`
+状态：`COMPLETE — REJECTED`
 
-尚未修改代码。下一步执行 TEXT-010，对比当前逐 entry upload 与 bounded batching prototype；
-仅在 upload calls、bytes 与 frame time 同时满足合同阈值时保留，否则删除 prototype 并记录
-拒绝结论。
+TEXT-010 使用 phase-0 mixed Latin/CJK/emoji workload，在 RADV 与 llvmpipe 上分别运行
+5 次 cold-cache per-entry baseline 与 single-staging-buffer prototype。prototype 使用一个
+transient `COPY_SRC` buffer 和多条 buffer-to-texture copy，没有 full-page CPU mirror。
+
+TEXT-010：`REJECTED`
+
+| 指标                          | RADV hardware               | llvmpipe fallback           |
+| ----------------------------- | --------------------------- | --------------------------- |
+| allocations / pending regions | 9,520                       | 9,520                       |
+| per-entry upload calls        | 9,520                       | 9,520                       |
+| batched upload calls          | 1                           | 1                           |
+| logical upload bytes          | 25,140,440                  | 25,140,440                  |
+| batched submitted bytes       | 60,598,784                  | 60,598,784                  |
+| byte amplification            | 2.4104×                     | 2.4104×                     |
+| per-entry frame p95           | 2,634,702,984 ns            | 2,669,681,261 ns            |
+| batched frame p95             | 2,645,214,282 ns            | 2,607,770,467 ns            |
+| frame p95 ratio               | 100.40%                     | 97.68%                      |
+| gate                          | `FAIL`：bytes amplification | `FAIL`：bytes amplification |
+
+upload calls 显著下降且 frame p95 没有超过 5% 回退，但 WebGPU
+`COPY_BYTES_PER_ROW_ALIGNMENT = 256` 使大量小 glyph region 的 submitted bytes 放大到
+2.41×，超过 1.5× 实验门槛。WGPU 首关失败，因此没有把 Linux 结果外推到 Metal/DirectX。
+prototype、test toggles 与 staging code 已全部删除；生产仍使用 per-entry
+`queue.write_texture`，没有遗留双路径或 CPU atlas mirror。
+
+TEXT-010 artifact：
+
+- `.tmp/text-rendering-refactor/phase-8/text-010.json`，SHA-256
+  `1cbe80ee59a786d076da896fe0c05ac12074c6908115f9e388b833ab1dc08ddf`
 
 ### 阶段 9
 
-状态：`NOT STARTED`
+状态：`IN PROGRESS`
 
-后续阶段严格按执行合同顺序推进；阶段 8 的实现可以由 TEXT-010 决定保留或拒绝，
-其它阶段均为必做。
+下一步：清理旧命名/双路径/TODO，更新最终 architecture/docs/evidence/experiments，执行完整
+workspace tests、clippy、philosophy、docs Prettier 与全部当前主机 headless tests。
