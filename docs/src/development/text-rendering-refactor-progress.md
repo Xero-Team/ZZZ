@@ -411,25 +411,29 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
   `DrawGlyphRunWithColorSupport`；native target 先清零、裁切真实 coverage，再只做一次
   premultiplied BGRA → straight-alpha BGRA 转换。旧系统保留现有 COLRv0 layer compositor
   与视觉正确的 monochrome-in-color fallback。
+- 增加约 12 KiB 的 tracked licensed fixtures：COLRv1 U+1F600、CBDT/CBLC U+1F600 与
+  OpenType-SVG U+1F680。`assets/fonts/text-rendering-fixtures/MANIFEST.md` 固定 source
+  commit/package、source/output SHA-256、attribution 和 license；
+  `script/build-text-rendering-fixtures` 可离线确定性重建子集。
 
 TEXT-007 当前 WGPU 结果：`PASS`
 
-| 检查                                                                                 | 结果   | 说明                                                                                       |
-| ------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------ |
-| `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests` | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport                                  |
-| `GPUI_*_FONT=... cargo test ... text_glyph_format_runner -- --ignored --nocapture`   | `PASS` | RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome                                     |
-| `./script/clippy -p gpui_wgpu`                                                       | `PASS` | all-target/all-feature release clippy + philosophy                                         |
-| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`            | `PASS` | CoreText capability test cross-compile；native NOT RUN                                     |
-| `./script/clippy -p gpui_windows`                                                    | `PASS` | host graph + philosophy；Windows cfg 不在本机执行                                          |
-| isolated Windows `IDWriteBitmapRenderTarget3` API crosscheck                         | `PASS` | `x86_64-pc-windows-gnu` 类型检查                                                           |
-| full `gpui_windows` cross-target check                                               | `FAIL` | baseline：`async-tar` 缺 `async-std/unstable`；启用后为既有 `windows-core 0.62/0.100` 冲突 |
+| 检查                                                                                              | 结果   | 说明                                                                                       |
+| ------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
+| `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests`              | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport                                  |
+| `GPUI_TEXT_ATLAS_OUTPUT_DIR=... cargo test ... text_glyph_format_runner -- --ignored --nocapture` | `PASS` | tracked fixtures；RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome                   |
+| `./script/clippy -p gpui_wgpu`                                                                    | `PASS` | all-target/all-feature release clippy + philosophy                                         |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                         | `PASS` | CoreText capability test cross-compile；native NOT RUN                                     |
+| `./script/clippy -p gpui_windows`                                                                 | `PASS` | host graph + philosophy；Windows cfg 不在本机执行                                          |
+| isolated Windows `IDWriteBitmapRenderTarget3` API crosscheck                                      | `PASS` | `x86_64-pc-windows-gnu` 类型检查                                                           |
+| full `gpui_windows` cross-target check                                                            | `FAIL` | baseline：`async-tar` 缺 `async-std/unstable`；启用后为既有 `windows-core 0.62/0.100` 冲突 |
 
 TEXT-007 artifact：
 
-- `.tmp/text-rendering-refactor/phase-5/text-007-hardware.json`，SHA-256
-  `56e7b6b50a8455afa2ea7f7a7772a08852548a647d09a7e639370a178f94ab66`
-- `.tmp/text-rendering-refactor/phase-5/text-007-fallback.json`，SHA-256
-  `48b3b2e897fe36771bb8acfe9e862bf82176d2e91c923bac8ddc6b90918ae04c`
+- `.tmp/text-rendering-refactor/phase-5/tracked/text-007-hardware.json`，SHA-256
+  `3f858f5ebf64791497bc78bad0017122c0f47aa2e292b3b0885fb7ab5c17180f`
+- `.tmp/text-rendering-refactor/phase-5/tracked/text-007-fallback.json`，SHA-256
+  `a05df121e8ce87f61fc94f1028d2fcf50e86d810fda7bc61fb443ab8c8a4f680`
 
 显式 raster contract 与 WGPU color-font 提交：
 `58700e6e399f34355c7dd77bf288801ba8872ebe`（signed）。
@@ -437,17 +441,22 @@ TEXT-007 artifact：
 macOS CoreText capability 提交：
 `55dd1cd567368db1ce6416d586381cc8393692f5`（signed）。
 
+Windows native color raster 提交：
+`28ba8b9cf478fb09ad7139bb2f88821a5ca2e688`（signed）。
+
 Windows native TEXT-007 runbook（当前主机 `NOT RUN`）：
 
 ```powershell
-$env:GPUI_COLRV1_FONT = "C:\fixtures\Noto-COLRv1.ttf"
-$env:GPUI_BITMAP_COLOR_FONT = "C:\fixtures\NotoColorEmoji.subset.ttf"
-$env:GPUI_SVG_COLOR_FONT = "C:\fixtures\TwitterColorEmoji-SVGinOT.ttf"
 cargo test --locked -p gpui_windows color_font_fixture_runner -- --ignored --nocapture
 ```
 
-下一步：固定 licensed fixture provenance/manifest，补充 macOS native TEXT-007 runbook，
-完成阶段 5 审计。
+macOS native TEXT-007 runbook（当前主机 `NOT RUN`）：
+
+```sh
+cargo test --locked -p gpui_macos color_font_fixture_runner -- --ignored --nocapture
+```
+
+下一步：提交 fixtures 与 native runners，完成阶段 5 全量审计后进入阶段 6。
 
 ### 阶段 6–9
 

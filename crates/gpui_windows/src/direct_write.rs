@@ -2462,30 +2462,37 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires licensed color-font fixture paths and a native Windows color renderer"]
+    #[ignore = "requires a native Windows color renderer"]
     fn color_font_fixture_runner() -> Result<()> {
-        let fixture_path = |variable: &str| {
+        let fixture_path = |variable: &str, file_name: &str| {
             std::env::var_os(variable)
                 .map(PathBuf::from)
-                .with_context(|| format!("{variable} must point to a licensed font fixture"))
+                .unwrap_or_else(|| {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../assets/fonts/text-rendering-fixtures")
+                        .join(file_name)
+                })
         };
         let fixtures = [
             GlyphFixture {
-                path: fixture_path("GPUI_COLRV1_FONT")?,
+                path: fixture_path("GPUI_COLRV1_FONT", "noto-colrv1-grinning-face.ttf"),
                 family: "Noto Color Emoji",
                 weight: FontWeight::NORMAL,
                 character: '😀',
                 expected_format: GlyphRasterFormat::ColorBgra8,
             },
             GlyphFixture {
-                path: fixture_path("GPUI_BITMAP_COLOR_FONT")?,
+                path: fixture_path(
+                    "GPUI_BITMAP_COLOR_FONT",
+                    "noto-color-emoji-bitmap-grinning-face.ttf",
+                ),
                 family: "Noto Color Emoji",
                 weight: FontWeight::NORMAL,
                 character: '😀',
                 expected_format: GlyphRasterFormat::ColorBgra8,
             },
             GlyphFixture {
-                path: fixture_path("GPUI_SVG_COLOR_FONT")?,
+                path: fixture_path("GPUI_SVG_COLOR_FONT", "twitter-color-emoji-svg-rocket.ttf"),
                 family: "Twitter Color Emoji",
                 weight: FontWeight::NORMAL,
                 character: '🚀',

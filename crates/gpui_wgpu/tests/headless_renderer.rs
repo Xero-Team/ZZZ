@@ -1382,14 +1382,21 @@ fn run_text_glyph_format(
     force_fallback_adapter: bool,
     output_directory: &Path,
 ) -> anyhow::Result<()> {
-    let fixture = |name: &str| {
+    let fixture = |name: &str, file_name: &str| {
         std::env::var_os(name)
             .map(std::path::PathBuf::from)
-            .with_context(|| format!("{name} must point to a licensed font fixture"))
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../assets/fonts/text-rendering-fixtures")
+                    .join(file_name)
+            })
     };
-    let colrv1_path = fixture("GPUI_COLRV1_FONT")?;
-    let bitmap_path = fixture("GPUI_BITMAP_COLOR_FONT")?;
-    let svg_path = fixture("GPUI_SVG_COLOR_FONT")?;
+    let colrv1_path = fixture("GPUI_COLRV1_FONT", "noto-colrv1-grinning-face.ttf");
+    let bitmap_path = fixture(
+        "GPUI_BITMAP_COLOR_FONT",
+        "noto-color-emoji-bitmap-grinning-face.ttf",
+    );
+    let svg_path = fixture("GPUI_SVG_COLOR_FONT", "twitter-color-emoji-svg-rocket.ttf");
     let monochrome_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts/openmoji/openmoji.ttf");
     let mut renderer = WgpuHeadlessRenderer::new_with_fallback(force_fallback_adapter)?;
@@ -1627,7 +1634,7 @@ fn text_atlas_content_isolation_runner() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "phase-5 color-font runner requires licensed fixture paths"]
+#[ignore = "phase-5 color-font runner writes explicit diagnostics artifacts"]
 fn text_glyph_format_runner() -> anyhow::Result<()> {
     let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
         .map(std::path::PathBuf::from)

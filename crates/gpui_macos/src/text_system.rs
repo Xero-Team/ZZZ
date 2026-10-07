@@ -867,8 +867,102 @@ mod tests {
     use anyhow::{Context as _, Result};
     use gpui::{
         FontRun, FontStyle, FontWeight, GlyphId, GlyphRasterFormat, PlatformTextSystem, Point,
-        RenderGlyphParams, font, px,
+        RasterizedGlyph, RenderGlyphParams, font, px,
     };
+    use std::{borrow::Cow, path::PathBuf};
+
+    struct GlyphFixture {
+        file_name: &'static str,
+        family: &'static str,
+        weight: FontWeight,
+        character: char,
+        expected_format: GlyphRasterFormat,
+    }
+
+    fn rasterize_fixture(fixture: &GlyphFixture) -> Result<RasterizedGlyph> {
+        let text_system = MacTextSystem::new();
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/fonts/text-rendering-fixtures")
+            .join(fixture.file_name);
+        text_system.add_fonts(vec![Cow::Owned(std::fs::read(&path)?)])?;
+        let mut descriptor = font(fixture.family);
+        descriptor.weight = fixture.weight;
+        let font_id = text_system.font_id(&descriptor)?;
+        let glyph_id = text_system
+            .glyph_for_char(font_id, fixture.character)
+            .with_context(|| {
+                format!("{} does not contain {}", path.display(), fixture.character)
+            })?;
+        let params = RenderGlyphParams {
+            font_id,
+            glyph_id,
+            font_size: px(64.0),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
+            is_emoji: true,
+            subpixel_rendering: false,
+            dilation: 0,
+        };
+        let raster_info = text_system.glyph_raster_info(&params)?;
+        assert_eq!(raster_info.format, fixture.expected_format);
+        text_system.rasterize_glyph(&params, raster_info)
+    }
+
+    #[test]
+    #[ignore = "requires a native macOS CoreText color renderer"]
+    fn color_font_fixture_runner() -> Result<()> {
+        let fixtures = [
+            GlyphFixture {
+                file_name: "noto-colrv1-grinning-face.ttf",
+                family: "Noto Color Emoji",
+                weight: FontWeight::NORMAL,
+                character: '😀',
+                expected_format: GlyphRasterFormat::ColorBgra8,
+            },
+            GlyphFixture {
+                file_name: "noto-color-emoji-bitmap-grinning-face.ttf",
+                family: "Noto Color Emoji",
+                weight: FontWeight::NORMAL,
+                character: '😀',
+                expected_format: GlyphRasterFormat::ColorBgra8,
+            },
+            GlyphFixture {
+                file_name: "twitter-color-emoji-svg-rocket.ttf",
+                family: "Twitter Color Emoji",
+                weight: FontWeight::NORMAL,
+                character: '🚀',
+                expected_format: GlyphRasterFormat::ColorBgra8,
+            },
+            GlyphFixture {
+                file_name: "../openmoji/openmoji.ttf",
+                family: "OpenMoji",
+                weight: FontWeight::BLACK,
+                character: '😀',
+                expected_format: GlyphRasterFormat::Alpha8,
+            },
+        ];
+        for fixture in fixtures {
+            let rasterized = rasterize_fixture(&fixture)?;
+            assert!(!rasterized.pixels.is_empty());
+            match rasterized.info.format {
+                GlyphRasterFormat::ColorBgra8 => {
+                    assert!(rasterized.pixels.chunks_exact(4).any(|pixel| {
+                        pixel[3] > 0
+                            && (pixel[0].abs_diff(pixel[1]) > 8 || pixel[1].abs_diff(pixel[2]) > 8)
+                    }));
+                }
+                GlyphRasterFormat::Alpha8 => {
+                    assert!(rasterized.pixels.iter().any(|pixel| *pixel > 0));
+                }
+                GlyphRasterFormat::SubpixelBgra8 => {
+                    panic!("fixture runner does not request subpixel rendering");
+                }
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn color_glyph_trait_drives_raster_format_and_synthetic_styles() -> Result<()> {

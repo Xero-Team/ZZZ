@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import hashlib
+import re
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+OUTPUT_DIRECTORY = ROOT / "assets/fonts/text-rendering-fixtures"
+
+
+def read_tables(font: bytes) -> tuple[bytes, dict[bytes, bytes]]:
+    scaler_type = font[:4]
+    table_count = struct.unpack_from(">H", font, 4)[0]
+    tables: dict[bytes, bytes] = {}
+    for index in range(table_count):
+        tag, _checksum, offset, length = struct.unpack_from(">4sIII", font, 12 + index * 16)
+        tables[tag] = font[offset : offset + length]
+    return scaler_type, tables
+
+
+def extract_svg_document(font: bytes, glyph_id: int) -> bytes:
+    _scaler_type, tables = read_tables(font)
+    svg_table = tables[b"SVG "]
+    document_list_offset = struct.unpack_from(">I", svg_table, 2)[0]
+    entry_count = struct.unpack_from(">H", svg_table, document_list_offset)[0]
+    for index in range(entry_count):
+        record_offset = document_list_offset + 2 + index * 12
+        start_glyph, end_glyph, document_offset, document_length = struct.unpack_from(
+            ">HHII", svg_table, record_offset
+        )
+        if start_glyph <= glyph_id <= end_glyph:
+            start = document_list_offset + document_offset
+            return svg_table[start : start + document_length]
+    raise ValueError(f"SVG table has no document for glyph {glyph_id}")
+
+
+def table_checksum(data: bytes) -> int:
+    padded = data + bytes((-len(data)) % 4)
+    return sum(struct.unpack(f">{len(padded) // 4}I", padded)) & 0xFFFFFFFF
+
+
+def build_font(scaler_type: bytes, tables: dict[bytes, bytes]) -> bytes:
+    tables = dict(tables)
+    head = bytearray(tables[b"head"])
+    head[8:12] = bytes(4)
+    tables[b"head"] = bytes(head)
+    records = sorted(tables.items())
+    table_count = len(records)
+    entry_selector = table_count.bit_length() - 1
+    search_range = (1 << entry_selector) * 16
+    range_shift = table_count * 16 - search_range
+    output = bytearray(
+        struct.pack(
+            ">4sHHHH",
+            scaler_type,
+            table_count,
+            search_range,
+            entry_selector,
+            range_shift,
+        )
+    )
+    output.extend(bytes(table_count * 16))
+    offset = len(output)
+    table_offsets: dict[bytes, int] = {}
+    for index, (tag, data) in enumerate(records):
+        table_offsets[tag] = offset
+        struct.pack_into(
+            ">4sIII",
+            output,
+            12 + index * 16,
+            tag,
+            table_checksum(data),
+            offset,
+            len(data),
+        )
+        output.extend(data)
+        output.extend(bytes((-len(data)) % 4))
+        offset = len(output)
+
+    adjustment = (0xB1B0AFBA - table_checksum(output)) & 0xFFFFFFFF
+    struct.pack_into(">I", output, table_offsets[b"head"] + 8, adjustment)
+    return bytes(output)
+
+
+def glyph_id(font_path: Path, text: str) -> int:
+    result = subprocess.run(
+        ["hb-shape", "--no-glyph-names", str(font_path), text],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    match = re.fullmatch(r"\[(\d+)=.*\]\n?", result.stdout)
+    if match is None:
+        raise ValueError(f"unexpected hb-shape output: {result.stdout!r}")
+    return int(match.group(1))
+
+
+def subset(source: Path, unicode_value: str, output: Path) -> None:
+    subprocess.run(
+        [
+            "hb-subset",
+            str(source),
+            f"--unicodes={unicode_value}",
+            "--name-IDs=*",
+            "--name-languages=*",
+            "--layout-features=*",
+            "--glyph-names",
+            f"--output-file={output}",
+        ],
+        check=True,
+    )
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main() -> None:
+    if len(sys.argv) != 4:
+        raise SystemExit(
+            "usage: script/build-text-rendering-fixtures "
+            "<Noto-COLRv1.ttf> <NotoColorEmoji-bitmap.ttf> "
+            "<TwitterColorEmoji-SVGinOT.ttf>"
+        )
+    colrv1_source, bitmap_source, svg_source = map(Path, sys.argv[1:])
+    OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    colrv1_output = OUTPUT_DIRECTORY / "noto-colrv1-grinning-face.ttf"
+    bitmap_output = OUTPUT_DIRECTORY / "noto-color-emoji-bitmap-grinning-face.ttf"
+    svg_output = OUTPUT_DIRECTORY / "twitter-color-emoji-svg-rocket.ttf"
+
+    subset(colrv1_source, "U+1F600", colrv1_output)
+    subset(bitmap_source, "U+1F600", bitmap_output)
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        base_svg_subset = Path(temporary_directory) / "twitter-svg-base.ttf"
+        subset(svg_source, "U+1F680", base_svg_subset)
+        source_document = extract_svg_document(
+            svg_source.read_bytes(), glyph_id(svg_source, "🚀")
+        )
+        subset_glyph_id = glyph_id(base_svg_subset, "🚀")
+        svg_table = (
+            struct.pack(">HIIH", 0, 10, 0, 1)
+            + struct.pack(
+                ">HHII",
+                subset_glyph_id,
+                subset_glyph_id,
+                14,
+                len(source_document),
+            )
+            + source_document
+        )
+        scaler_type, tables = read_tables(base_svg_subset.read_bytes())
+        tables[b"SVG "] = svg_table
+        svg_output.write_bytes(build_font(scaler_type, tables))
+
+    for output in [colrv1_output, bitmap_output, svg_output]:
+        print(f"{sha256(output)}  {output.relative_to(ROOT)}")
+
+
+if __name__ == "__main__":
+    main()
