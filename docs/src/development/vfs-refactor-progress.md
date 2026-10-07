@@ -19,9 +19,9 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
-- Next action: media 和 editor persistence 已完成一次性 exact-sidecar migration；继续审计
-  普通 `Local`/`Remote` branch、`SettingsLocation` legacy key 与 lazy remote provider task，
-  运行 `VFS-EXP-013` 并完成 Phase 9 全量验收。
+- Next action: media 和 editor persistence 已完成一次性 exact-sidecar migration，
+  `VFS-EXP-013` 已通过；继续审计普通 `Local`/`Remote` branch、`SettingsLocation` legacy
+  key 与 lazy remote provider task，并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -142,22 +142,22 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 实验总状态只记录必做验收结果；`VFS-EXP-012` 的可选 overlay 结论单独写入
 `Decision`，即使 overlay 为 `REJECTED`，必做 composition 验收仍必须为 `PASS`。
 
-| Experiment  | Status  | Command/data                                                                                            | Result                                                                                                                               | Decision                                                                           |
-| ----------- | ------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| VFS-EXP-001 | PASS    | Commands in validation log and `.tmp/vfs-refactor/`                                                     | Existing failures reproduced; scan and RSS recorded                                                                                  | Baseline frozen at `a3a0f97340`                                                    |
-| VFS-EXP-002 | PASS    | `cargo test --locked -p vfs -p proto` and cross-target checks                                           | 10 valid fixtures round-trip; 6 invalid fixtures reject                                                                              | Adopt component bytes plus explicit encoding/root                                  |
-| VFS-EXP-003 | PASS    | Shared conformance on Memory/Legacy/Local providers                                                     | Capability, errors, pagination, versions and cancellation agree                                                                      | Adopt provider contract and staged legacy façade                                   |
-| VFS-EXP-004 | PASS    | Concurrent offset test and `.tmp/vfs-refactor/phase2-positioned-io-throughput.log`                      | No cursor race; sparse/EOF/cancel pass; native 0.56 ms vs legacy 6.67 ms                                                             | Adopt native positioned file implementation                                        |
-| VFS-EXP-005 | PASS    | Initial watch, 20-rename storm, explicit Rescan overflow and paged rescan                               | Monotonic sequence and identical final committed state                                                                               | Treat backend rescan as overflow hint                                              |
-| VFS-EXP-006 | PASS    | direct VFS test binary under `/usr/bin/time -v`; `.tmp/vfs-refactor/phase3-snapshot-million.log`        | 1,000,000 provider entries; 11,001 identities; 5.05 ms first paint; 0.811 µs lookup p95; 18,564 KiB RSS                              | Adopt lazy snapshot plus 48/80/128 MiB metadata/directory/range LRU budgets        |
-| VFS-EXP-007 | PASS    | rpc loopback conformance, active cancellation and `FaultInjectingTransport` response-loss test          | Provider parity; 3-byte fragmentation; 2 ms latency; explicit cancel; committed response drop/reconnect; no duplicate mutation       | Adopt version 1 remote protocol, leased handles and bounded SHA-256 result journal |
-| VFS-EXP-008 | PASS    | remote watch resume test with two-entry journal and client `VfsSnapshot`                                | Retained history replays; truncation emits overflow; scoped rescan converges to the exact five-directory tree                        | Adopt sequence resume with mandatory overflow fallback                             |
-| VFS-EXP-009 | PASS    | Local/remote parity legs plus audio/video/PDF exact persistence and restore tests                       | Buffer, media, Project Panel, search and persistence behavior match; ordinary consumer dispatch has no transport branch              | Accept resource-first consumers with documented Phase 6/9 native and legacy seams  |
-| VFS-EXP-010 | PASS    | Exact mapper, local prevalidation/read-only tests, loopback remote edit+rename, Git and task parity     | Exact POSIX bytes/WTF-8 map on the execution host; unsupported edits reject before mutation; remote LSP/Git/task execute server-side | Accept explicit native execution context and typed LSP mapping boundary            |
-| VFS-EXP-011 | PASS    | ZIP/Zip64 hostile corpus, positioned cursor, local/loopback/headless remote mounts and member consumers | Trees and member bytes match; remote listing sends zero client range reads; all declared limits, stale reload and safety errors pass | Accept data-local read-only `ArchiveProvider` with bounded nested mounts           |
-| VFS-EXP-012 | PASS    | Memory/Subtree/ReadOnly/Cache conformance, capability monotonicity, stale-range race and overlay models | Required wrappers pass; exact containment and bounded versioned LRU hold under root replacement and mid-read mutation                | Accept required composition; `OverlayProvider` separately `REJECTED`               |
-| VFS-EXP-013 | NOT RUN | -                                                                                                       | -                                                                                                                                    | -                                                                                  |
-| VFS-EXP-014 | NOT RUN | -                                                                                                       | -                                                                                                                                    | -                                                                                  |
+| Experiment  | Status  | Command/data                                                                                            | Result                                                                                                                                | Decision                                                                           |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| VFS-EXP-001 | PASS    | Commands in validation log and `.tmp/vfs-refactor/`                                                     | Existing failures reproduced; scan and RSS recorded                                                                                   | Baseline frozen at `a3a0f97340`                                                    |
+| VFS-EXP-002 | PASS    | `cargo test --locked -p vfs -p proto` and cross-target checks                                           | 10 valid fixtures round-trip; 6 invalid fixtures reject                                                                               | Adopt component bytes plus explicit encoding/root                                  |
+| VFS-EXP-003 | PASS    | Shared conformance on Memory/Legacy/Local providers                                                     | Capability, errors, pagination, versions and cancellation agree                                                                       | Adopt provider contract and staged legacy façade                                   |
+| VFS-EXP-004 | PASS    | Concurrent offset test and `.tmp/vfs-refactor/phase2-positioned-io-throughput.log`                      | No cursor race; sparse/EOF/cancel pass; native 0.56 ms vs legacy 6.67 ms                                                              | Adopt native positioned file implementation                                        |
+| VFS-EXP-005 | PASS    | Initial watch, 20-rename storm, explicit Rescan overflow and paged rescan                               | Monotonic sequence and identical final committed state                                                                                | Treat backend rescan as overflow hint                                              |
+| VFS-EXP-006 | PASS    | direct VFS test binary under `/usr/bin/time -v`; `.tmp/vfs-refactor/phase3-snapshot-million.log`        | 1,000,000 provider entries; 11,001 identities; 5.05 ms first paint; 0.811 µs lookup p95; 18,564 KiB RSS                               | Adopt lazy snapshot plus 48/80/128 MiB metadata/directory/range LRU budgets        |
+| VFS-EXP-007 | PASS    | rpc loopback conformance, active cancellation and `FaultInjectingTransport` response-loss test          | Provider parity; 3-byte fragmentation; 2 ms latency; explicit cancel; committed response drop/reconnect; no duplicate mutation        | Adopt version 1 remote protocol, leased handles and bounded SHA-256 result journal |
+| VFS-EXP-008 | PASS    | remote watch resume test with two-entry journal and client `VfsSnapshot`                                | Retained history replays; truncation emits overflow; scoped rescan converges to the exact five-directory tree                         | Adopt sequence resume with mandatory overflow fallback                             |
+| VFS-EXP-009 | PASS    | Local/remote parity legs plus audio/video/PDF exact persistence and restore tests                       | Buffer, media, Project Panel, search and persistence behavior match; ordinary consumer dispatch has no transport branch               | Accept resource-first consumers with documented Phase 6/9 native and legacy seams  |
+| VFS-EXP-010 | PASS    | Exact mapper, local prevalidation/read-only tests, loopback remote edit+rename, Git and task parity     | Exact POSIX bytes/WTF-8 map on the execution host; unsupported edits reject before mutation; remote LSP/Git/task execute server-side  | Accept explicit native execution context and typed LSP mapping boundary            |
+| VFS-EXP-011 | PASS    | ZIP/Zip64 hostile corpus, positioned cursor, local/loopback/headless remote mounts and member consumers | Trees and member bytes match; remote listing sends zero client range reads; all declared limits, stale reload and safety errors pass  | Accept data-local read-only `ArchiveProvider` with bounded nested mounts           |
+| VFS-EXP-012 | PASS    | Memory/Subtree/ReadOnly/Cache conformance, capability monotonicity, stale-range race and overlay models | Required wrappers pass; exact containment and bounded versioned LRU hold under root replacement and mid-read mutation                 | Accept required composition; `OverlayProvider` separately `REJECTED`               |
+| VFS-EXP-013 | PASS    | `cargo test --locked -p vfs transfer --lib -- --nocapture`                                              | 8 transfer matrix tests pass: native fast path, verified stream copy, cancellation/disconnect/source-change rollback and partial move | Accept precise, non-atomic cross-provider outcomes and copy-before-delete moves    |
+| VFS-EXP-014 | NOT RUN | -                                                                                                       | -                                                                                                                                     | -                                                                                  |
 
 ## 验证记录 {#validation-log}
 
@@ -390,6 +390,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-08 | 9D    | `cargo check --offline -p editor`; exact editor deserialize/migration, malformed-sidecar, exact-first and database round-trip tests                                            | 0 each      | PASS: missing sidecar migrates once; malformed sidecar rejects; exact sidecar wins; standalone locator without VFS identity remains supported                   | No                                                                            |
 | 2026-10-08 | 9D    | `cargo test --locked -p editor`                                                                                                                                                | SIGTERM     | NOT RUN to completion: relevant tests passed; manually terminated after 145 s when seven recorded baseline failures and three known formatter timeouts remained | Yes: frozen editor failures/timeouts                                          |
 | 2026-10-08 | 9D    | `./script/clippy -p editor -p project`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                        | 0 each      | PASS: removed silent persisted-sidecar fallback and lossy buffer-path dual-write; no new P0/P1/P2 finding                                                       | No                                                                            |
+| 2026-10-08 | 9E    | `cargo test --locked -p vfs transfer --lib -- --nocapture`                                                                                                                     | 0           | PASS: 8-test cross-provider copy/move disconnect and rollback matrix satisfies `VFS-EXP-013`                                                                    | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -480,12 +481,12 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Remaining work {#remaining-work}
 
-- Finish Phase 9 compatibility adapters, persistence policy and `VFS-EXP-013`.
+- Finish Phase 9 compatibility adapters and persistence policy.
 - Phase 10 convergence, documentation, platform runbooks and final validation.
 
 ## Next action {#next-action}
 
 继续 Phase 9 compatibility adapter 清理。审计 `SettingsLocation` legacy key 与 lazy remote
 provider task；普通 consumer dispatch 中只保留 scanner/native/OS process boundary。随后审计
-旧 persistence 的 migration/invalidation policy，执行 `VFS-EXP-013`、Phase 9 全量
-regression matrix 和 code-smell 审查。
+旧 persistence 的 migration/invalidation policy，执行 Phase 9 全量 regression matrix 和
+code-smell 审查。
