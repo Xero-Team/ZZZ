@@ -905,27 +905,11 @@ impl<'de> Deserialize<'de> for NativePath {
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum CompatibilityPathError {
-    #[error(transparent)]
-    InvalidPath(#[from] PathError),
     #[error("component {component_index} encoded as {encoding} cannot be represented as UTF-8")]
     UnrepresentableComponent {
         component_index: usize,
         encoding: PathEncoding,
     },
-}
-
-pub fn provider_path_from_legacy_utf8(
-    path: &str,
-    encoding: PathEncoding,
-) -> Result<ProviderPath, CompatibilityPathError> {
-    if path.starts_with('/') || path.starts_with('\\') {
-        return Err(PathError::AbsolutePathNotAllowed.into());
-    }
-    if path.is_empty() {
-        return Ok(ProviderPath::root(encoding));
-    }
-    ProviderPath::from_byte_components(encoding, path.split('/').map(str::as_bytes))
-        .map_err(Into::into)
 }
 
 pub fn provider_path_to_legacy_utf8(path: &ProviderPath) -> Result<String, CompatibilityPathError> {
@@ -1301,7 +1285,10 @@ mod tests {
 
     #[test]
     fn serde_round_trip_revalidates_paths() {
-        let path_result = provider_path_from_legacy_utf8("src/main.rs", PathEncoding::PortableUtf8);
+        let path_result = ProviderPath::from_byte_components(
+            PathEncoding::PortableUtf8,
+            [b"src".as_slice(), b"main.rs".as_slice()],
+        );
         let Ok(provider_path) = path_result else {
             panic!("test path must be valid: {path_result:?}");
         };

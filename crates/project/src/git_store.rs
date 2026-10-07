@@ -100,8 +100,10 @@ use worktree::{
 use zeroize::Zeroize;
 
 fn repo_path_to_proto(path: &RepoPath) -> Result<proto::ProviderPathV2> {
-    let provider_path =
-        vfs::provider_path_from_legacy_utf8(path.as_unix_str(), vfs::PathEncoding::PortableUtf8)?;
+    let provider_path = vfs::ProviderPath::from_byte_components(
+        vfs::PathEncoding::PortableUtf8,
+        path.components().map(str::as_bytes),
+    )?;
     Ok(proto::ProviderPathV2::from_provider_path(&provider_path))
 }
 

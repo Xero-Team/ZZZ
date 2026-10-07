@@ -6068,7 +6068,6 @@ impl BackgroundScanner {
                 let relative_path = match provider_path_to_legacy_utf8(&record.path) {
                     Ok(relative_path) => relative_path,
                     Err(CompatibilityPathError::UnrepresentableComponent { .. }) => continue,
-                    Err(error) => return Err(error.into()),
                 };
                 let relative_path = RelPath::from_proto(&relative_path)?;
                 let child_abs_path = root_abs_path.join(relative_path.as_std_path());

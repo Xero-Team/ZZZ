@@ -2300,9 +2300,9 @@ fn restore_serialized_buffer_contents(
 }
 
 fn serialize_path_key(path_key: &PathKey) -> Option<proto::PathKey> {
-    let provider_path = vfs::provider_path_from_legacy_utf8(
-        path_key.path.as_unix_str(),
+    let provider_path = vfs::ProviderPath::from_byte_components(
         vfs::PathEncoding::PortableUtf8,
+        path_key.path.components().map(str::as_bytes),
     )
     .log_err()?;
     Some(proto::PathKey {

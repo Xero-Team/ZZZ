@@ -281,9 +281,9 @@ async fn test_remote_buffer_path_swap(cx: &mut TestAppContext, server_cx: &mut T
             let message = buffer.read_with(cx, |buffer, cx| {
                 let mut file = buffer.file().unwrap().to_proto(cx);
                 let current_path = file.vfs_path.as_ref().unwrap().to_vfs_path().unwrap();
-                let provider_path = vfs::provider_path_from_legacy_utf8(
-                    path,
+                let provider_path = vfs::ProviderPath::from_byte_components(
                     current_path.provider_path().encoding(),
+                    path.split('/').map(str::as_bytes),
                 )
                 .unwrap();
                 file.vfs_path = Some(proto::VfsPathV2::from_vfs_path(&vfs::VfsPath::new(

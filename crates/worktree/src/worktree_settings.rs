@@ -29,20 +29,15 @@ impl WorktreeSettings {
     }
 
     pub fn is_provider_path_private(&self, path: &ProviderPath) -> Result<bool, vfs::PathError> {
-        let path =
-            match path.encoding() {
-                PathEncoding::PortableUtf8 => std::path::PathBuf::from(
-                    provider_path_to_legacy_utf8(path).map_err(|error| match error {
-                        vfs::CompatibilityPathError::InvalidPath(error) => error,
-                        vfs::CompatibilityPathError::UnrepresentableComponent { .. } => {
-                            vfs::PathError::InvalidPortableUtf8
-                        }
-                    })?,
-                ),
-                PathEncoding::UnixBytes | PathEncoding::WindowsWtf8 => {
-                    NativePath::new(NativePathRoot::Relative, path.clone())?.to_local_path_buf()?
-                }
-            };
+        let path = match path.encoding() {
+            PathEncoding::PortableUtf8 => std::path::PathBuf::from(
+                provider_path_to_legacy_utf8(path)
+                    .map_err(|_| vfs::PathError::InvalidPortableUtf8)?,
+            ),
+            PathEncoding::UnixBytes | PathEncoding::WindowsWtf8 => {
+                NativePath::new(NativePathRoot::Relative, path.clone())?.to_local_path_buf()?
+            }
+        };
         Ok(self.is_std_path_private(&path))
     }
 

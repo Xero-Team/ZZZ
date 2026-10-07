@@ -607,14 +607,14 @@ impl WorktreeStore {
                     if !is_root_entry && old_worktree.read(cx).id() == new_worktree_ref.id() {
                         old_worktree.read(cx).vfs_snapshot().and_then(|snapshot| {
                             let path_encoding = snapshot.provider().descriptor().path_encoding;
-                            let old_path = vfs::provider_path_from_legacy_utf8(
-                                old_entry.path.as_unix_str(),
+                            let old_path = vfs::ProviderPath::from_byte_components(
                                 path_encoding,
+                                old_entry.path.components().map(str::as_bytes),
                             )
                             .ok()?;
-                            let new_path = vfs::provider_path_from_legacy_utf8(
-                                new_project_path.path.as_unix_str(),
+                            let new_path = vfs::ProviderPath::from_byte_components(
                                 path_encoding,
+                                new_project_path.path.components().map(str::as_bytes),
                             )
                             .ok()?;
                             Some((snapshot, old_path, new_path))

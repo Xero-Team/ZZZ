@@ -1502,13 +1502,19 @@ mod tests {
         let resource_id = vfs::ResourceId::new(mount_id, 2, 0);
         let old_vfs_path = vfs::VfsPath::new(
             mount_id,
-            vfs::provider_path_from_legacy_utf8("old.rs", vfs::PathEncoding::PortableUtf8)
-                .expect("test path should be representable"),
+            vfs::ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"old.rs".as_slice()],
+            )
+            .expect("test path should be representable"),
         );
         let new_vfs_path = vfs::VfsPath::new(
             mount_id,
-            vfs::provider_path_from_legacy_utf8("renamed.rs", vfs::PathEncoding::PortableUtf8)
-                .expect("test path should be representable"),
+            vfs::ProviderPath::from_byte_components(
+                vfs::PathEncoding::PortableUtf8,
+                [b"renamed.rs".as_slice()],
+            )
+            .expect("test path should be representable"),
         );
         let mut existing_matches = vec![SearchMatch {
             path: ProjectPath {
