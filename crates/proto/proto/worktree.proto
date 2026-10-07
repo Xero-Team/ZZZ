@@ -33,11 +33,13 @@ message Entry {
   reserved 9;
   bool is_fifo = 10;
   optional uint64 size = 11;
-  optional string canonical_path = 12;
+  reserved 12;
+  reserved "canonical_path";
   bool is_hidden = 13;
   bool is_unloaded = 14;
   VfsPathV2 vfs_path = 15;
   ResourceIdV2 resource_id = 16;
+  NativePathV2 canonical_path_v2 = 17;
 }
 
 message AddWorktree {

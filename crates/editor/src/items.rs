@@ -223,7 +223,7 @@ impl FollowableItem for Editor {
             } else if let Some(path_key) = snapshot.path_for_buffer(excerpt.context.start.buffer_id)
             {
                 path_excerpts.push(proto::PathExcerpts {
-                    path_key: Some(serialize_path_key(path_key)),
+                    path_key: Some(serialize_path_key(path_key)?),
                     buffer_id: excerpt.context.start.buffer_id.to_proto(),
                     ranges: vec![serialize_excerpt_range(excerpt)],
                 });
@@ -286,7 +286,9 @@ impl FollowableItem for Editor {
                     ranges,
                 } => {
                     let buffer_id = buffer.read(cx).remote_id().to_proto();
-                    let path_key = serialize_path_key(path_key);
+                    let Some(path_key) = serialize_path_key(path_key) else {
+                        return false;
+                    };
                     let ranges = ranges
                         .iter()
                         .cloned()
@@ -2297,17 +2299,24 @@ fn restore_serialized_buffer_contents(
     }
 }
 
-fn serialize_path_key(path_key: &PathKey) -> proto::PathKey {
-    proto::PathKey {
+fn serialize_path_key(path_key: &PathKey) -> Option<proto::PathKey> {
+    let provider_path = vfs::provider_path_from_legacy_utf8(
+        path_key.path.as_unix_str(),
+        vfs::PathEncoding::PortableUtf8,
+    )
+    .log_err()?;
+    Some(proto::PathKey {
         sort_prefix: path_key.sort_prefix,
-        path: path_key.path.to_proto(),
-    }
+        path_v2: Some(proto::ProviderPathV2::from_provider_path(&provider_path)),
+    })
 }
 
 fn deserialize_path_key(path_key: proto::PathKey) -> Option<PathKey> {
+    let provider_path = path_key.path_v2.as_ref()?.to_provider_path().log_err()?;
+    let path = vfs::provider_path_to_legacy_utf8(&provider_path).log_err()?;
     Some(PathKey {
         sort_prefix: path_key.sort_prefix,
-        path: RelPath::from_proto(&path_key.path).ok()?,
+        path: RelPath::from_proto(&path).log_err()?,
     })
 }
 
@@ -2438,6 +2447,26 @@ mod tests {
             local_root: None,
         });
         assert_eq!(path_for_file(&file, 0, false, cx), None);
+    }
+
+    #[test]
+    fn path_key_proto_requires_exact_provider_path() {
+        let path_key = PathKey::with_sort_prefix(
+            7,
+            RelPath::unix("src/main.rs")
+                .expect("path key fixture should be valid")
+                .into_arc(),
+        );
+        let serialized = serialize_path_key(&path_key).expect("path key should serialize");
+        assert!(serialized.path_v2.is_some());
+        assert_eq!(deserialize_path_key(serialized), Some(path_key));
+        assert_eq!(
+            deserialize_path_key(proto::PathKey {
+                sort_prefix: None,
+                path_v2: None,
+            }),
+            None
+        );
     }
 
     #[gpui::test]

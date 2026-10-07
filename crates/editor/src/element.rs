@@ -81,7 +81,7 @@ use std::{
     fmt::{self, Write},
     iter, mem,
     ops::Range,
-    path::{self, Path},
+    path,
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -8868,9 +8868,10 @@ pub(crate) fn render_buffer_header(
                     let relative_path = file.path();
                     let entry_for_path = worktree.entry_for_path(relative_path);
                     let abs_path = entry_for_path.map(|e| {
-                        e.canonical_path
-                            .as_deref()
-                            .map_or_else(|| worktree.absolutize(relative_path), Path::to_path_buf)
+                        e.canonical_path.as_ref().map_or_else(
+                            || worktree.absolutize(relative_path),
+                            |path| path.display_path_buf(),
+                        )
                     });
                     let has_relative_path = worktree.root_entry().is_some_and(Entry::is_dir);
 

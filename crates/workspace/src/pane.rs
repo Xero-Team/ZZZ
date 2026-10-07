@@ -2722,7 +2722,7 @@ impl Pane {
             .read(cx);
         let entry = worktree.entry_for_id(entry)?;
         Some(match &entry.canonical_path {
-            Some(canonical_path) => canonical_path.to_path_buf(),
+            Some(canonical_path) => canonical_path.display_path_buf(),
             None => worktree.absolutize(&entry.path),
         })
     }

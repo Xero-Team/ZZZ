@@ -843,7 +843,7 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
                     is_external: false,
                     is_fifo: false,
                     size: None,
-                    canonical_path: None,
+                    canonical_path_v2: None,
                     is_unloaded: false,
                     vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_root)),
                     resource_id: None,

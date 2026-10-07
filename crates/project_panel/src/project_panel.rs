@@ -310,7 +310,7 @@ struct EntryDetails {
     git_status: GitSummary,
     is_private: bool,
     worktree_id: WorktreeId,
-    canonical_path: Option<Arc<Path>>,
+    canonical_path: Option<SharedString>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -4262,7 +4262,7 @@ impl ProjectPanel {
     ) {
         if let Some((worktree, entry)) = self.selected_sub_entry(cx) {
             let abs_path = match &entry.canonical_path {
-                Some(canonical_path) => canonical_path.to_path_buf(),
+                Some(canonical_path) => canonical_path.display_path_buf(),
                 None => worktree.read(cx).absolutize(&entry.path),
             };
 
@@ -6554,7 +6554,7 @@ impl ProjectPanel {
                                     .id("symlink_icon")
                                     .tooltip(move |_window, cx| {
                                         Tooltip::with_meta(
-                                            path.to_string_lossy().into_owned(),
+                                            path.to_string(),
                                             None,
                                             tr(cx, "project_panel.symlink", "Symbolic Link"),
                                             cx,
@@ -7054,7 +7054,10 @@ impl ProjectPanel {
             git_status,
             is_private: entry.is_private,
             worktree_id,
-            canonical_path: entry.canonical_path.clone(),
+            canonical_path: entry
+                .canonical_path
+                .as_ref()
+                .map(|path| path.display().into()),
         }
     }
 

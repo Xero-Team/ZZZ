@@ -79,8 +79,8 @@ use util::{
 };
 use vfs::{
     CaseSensitivity as VfsCaseSensitivity, CompatibilityPathError,
-    EntryMetadata as VfsEntryMetadata, ResourceId, SnapshotBudgets, VfsError, VfsErrorCode,
-    VfsPath, VfsProvider, VfsSnapshot, provider_path_from_legacy_utf8,
+    EntryMetadata as VfsEntryMetadata, NativePath, ResourceId, SnapshotBudgets, VfsError,
+    VfsErrorCode, VfsPath, VfsProvider, VfsSnapshot, provider_path_from_legacy_utf8,
     provider_path_to_legacy_utf8,
 };
 pub use worktree_settings::WorktreeSettings;
@@ -4598,7 +4598,7 @@ pub struct Entry {
     pub inode: u64,
     pub mtime: Option<MTime>,
 
-    pub canonical_path: Option<Arc<Path>>,
+    pub canonical_path: Option<NativePath>,
     /// Whether this entry is ignored by Git.
     ///
     /// We only scan ignored entries once the directory is expanded and
@@ -4770,6 +4770,8 @@ impl Entry {
         canonical_path: Option<Arc<Path>>,
     ) -> Self {
         let char_bag = char_bag_for_path(root_char_bag, &path);
+        let canonical_path = canonical_path
+            .and_then(|canonical_path| NativePath::from_local_path(&canonical_path).log_err());
         Self {
             id,
             resource_id: None,
@@ -5876,7 +5878,7 @@ impl BackgroundScanner {
                         let abs_path = if entry.is_external {
                             entry.canonical_path.as_ref().map_or_else(
                                 || root_path.join(ancestor.as_std_path()),
-                                |path| path.as_ref().to_path_buf(),
+                                NativePath::display_path_buf,
                             )
                         } else {
                             root_path.join(ancestor.as_std_path())
@@ -6232,7 +6234,7 @@ impl BackgroundScanner {
                     }
                 }
 
-                child_entry.canonical_path = Some(canonical_path.into());
+                child_entry.canonical_path = NativePath::from_local_path(&canonical_path).log_err();
             }
 
             if child_entry.is_dir() {
@@ -7653,10 +7655,10 @@ impl<'a> From<&'a Entry> for proto::Entry {
             is_external: entry.is_external,
             is_fifo: entry.is_fifo,
             size: Some(entry.size),
-            canonical_path: entry
+            canonical_path_v2: entry
                 .canonical_path
                 .as_ref()
-                .map(|path| path.to_string_lossy().into_owned()),
+                .map(proto::NativePathV2::from_native_path),
             is_unloaded: entry.kind == EntryKind::UnloadedDir,
             vfs_path: entry.vfs_path.as_ref().map(proto::VfsPathV2::from_vfs_path),
             resource_id: entry.resource_id.map(proto::ResourceIdV2::from_resource_id),
@@ -7701,8 +7703,11 @@ impl TryFrom<(&CharBag, &PathMatcher, proto::Entry)> for Entry {
             mtime: entry.mtime.map(|time| time.into()),
             size: entry.size.unwrap_or(0),
             canonical_path: entry
-                .canonical_path
-                .map(|path_string| Arc::from(PathBuf::from(path_string))),
+                .canonical_path_v2
+                .as_ref()
+                .map(proto::NativePathV2::to_native_path)
+                .transpose()
+                .context("invalid exact canonical path in entry protobuf")?,
             is_ignored: entry.is_ignored,
             is_hidden: entry.is_hidden,
             is_always_included,

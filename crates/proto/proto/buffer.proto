@@ -221,7 +221,9 @@ message EditorAnchor {
 
 message PathKey {
   optional uint64 sort_prefix = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
+  ProviderPathV2 path_v2 = 3;
 }
 
 enum CursorShape {

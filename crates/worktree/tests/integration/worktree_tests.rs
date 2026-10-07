@@ -6445,7 +6445,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                     is_external: false,
                     is_fifo: false,
                     size: None,
-                    canonical_path: None,
+                    canonical_path_v2: None,
                     is_unloaded: false,
                     vfs_path: Some(proto::VfsPathV2::from_vfs_path(&VfsPath::new(
                         MountId::new(1),
@@ -6575,6 +6575,10 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
     let mount_id = MountId::new(42);
     let resource_id = ResourceId::new(mount_id, 7, 0);
     let vfs_path = VfsPath::new(mount_id, provider_path);
+    let canonical_path = NativePath::from_unix_bytes(b"/outside/non-utf8-\xff");
+    let Ok(canonical_path) = canonical_path else {
+        panic!("canonical path fixture must be valid: {canonical_path:?}");
+    };
     let wire_entry = proto::Entry {
         id: 9,
         is_dir: false,
@@ -6584,7 +6588,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
         is_external: false,
         is_fifo: false,
         size: Some(8),
-        canonical_path: None,
+        canonical_path_v2: Some(proto::NativePathV2::from_native_path(&canonical_path)),
         is_hidden: false,
         is_unloaded: false,
         vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
@@ -6618,6 +6622,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
             .expect("remote identity entry should decode");
         assert_eq!(entry.resource_id, Some(resource_id));
         assert_eq!(entry.vfs_path, Some(vfs_path.clone()));
+        assert_eq!(entry.canonical_path.as_ref(), Some(&canonical_path));
         assert_eq!(
             worktree
                 .entry_for_resource_id(resource_id)
@@ -6756,7 +6761,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                     is_external: false,
                     is_fifo: false,
                     size: None,
-                    canonical_path: None,
+                    canonical_path_v2: None,
                     is_unloaded: false,
                     vfs_path: Some(proto::VfsPathV2::from_vfs_path(&VfsPath::new(
                         MountId::new(1),
