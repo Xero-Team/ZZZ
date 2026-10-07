@@ -19,7 +19,7 @@ use workspace::{ItemId, WorkspaceDb, WorkspaceId};
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub(crate) struct SerializedEditor {
-    pub(crate) abs_path: Option<PathBuf>,
+    pub(crate) native_file_path: Option<PathBuf>,
     pub(crate) vfs_path: Option<Vec<u8>>,
     pub(crate) contents: Option<String>,
     pub(crate) language: Option<String>,
@@ -34,14 +34,8 @@ impl StaticColumnCount for SerializedEditor {
 
 impl Bind for SerializedEditor {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
-        let start_index = statement.bind(&self.abs_path, start_index)?;
-        let start_index = statement.bind(
-            &self
-                .abs_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().into_owned()),
-            start_index,
-        )?;
+        let start_index = statement.bind(&self.native_file_path, start_index)?;
+        let start_index = statement.bind::<Option<String>>(&None, start_index)?;
         let start_index = statement.bind(&self.vfs_path, start_index)?;
         let start_index = statement.bind(&self.contents, start_index)?;
         let start_index = statement.bind(&self.language, start_index)?;
@@ -62,9 +56,9 @@ impl Bind for SerializedEditor {
 
 impl Column for SerializedEditor {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
-        let (abs_path, start_index): (Option<PathBuf>, i32) =
+        let (native_file_path, start_index): (Option<PathBuf>, i32) =
             Column::column(statement, start_index)?;
-        let (_abs_path, start_index): (Option<PathBuf>, i32) =
+        let (_buffer_path, start_index): (Option<String>, i32) =
             Column::column(statement, start_index)?;
         let (vfs_path, start_index): (Option<Vec<u8>>, i32) =
             Column::column(statement, start_index)?;
@@ -82,7 +76,7 @@ impl Column for SerializedEditor {
             .map(|(seconds, nanos)| MTime::from_seconds_and_nanos(seconds as u64, nanos as u32));
 
         let editor = Self {
-            abs_path,
+            native_file_path,
             vfs_path,
             contents,
             language,
@@ -101,7 +95,7 @@ impl Domain for EditorDb {
     // editors(
     //   item_id: usize,
     //   workspace_id: usize,
-    //   path: Option<PathBuf>,
+    //   native_file_path: Option<PathBuf>,
     //   vfs_path: Option<Vec<u8>>,
     //   scroll_top_row: usize,
     //   scroll_vertical_offset: f32,
@@ -229,6 +223,9 @@ impl Domain for EditorDb {
         sql! (
             ALTER TABLE editors ADD COLUMN vfs_path BLOB;
         ),
+        sql! (
+            ALTER TABLE editors RENAME COLUMN path TO native_file_path;
+        ),
     ];
 }
 
@@ -242,7 +239,7 @@ const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 impl EditorDb {
     query! {
         pub fn get_serialized_editor(item_id: ItemId, workspace_id: WorkspaceId) -> Result<Option<SerializedEditor>> {
-            SELECT path, buffer_path, vfs_path, contents, language, mtime_seconds, mtime_nanos FROM editors
+            SELECT native_file_path, buffer_path, vfs_path, contents, language, mtime_seconds, mtime_nanos FROM editors
             WHERE item_id = ? AND workspace_id = ?
         }
     }
@@ -250,19 +247,31 @@ impl EditorDb {
     query! {
         pub async fn save_serialized_editor(item_id: ItemId, workspace_id: WorkspaceId, serialized_editor: SerializedEditor) -> Result<()> {
             INSERT INTO editors
-                (item_id, workspace_id, path, buffer_path, vfs_path, contents, language, mtime_seconds, mtime_nanos)
+                (item_id, workspace_id, native_file_path, buffer_path, vfs_path, contents, language, mtime_seconds, mtime_nanos)
             VALUES
                 (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ON CONFLICT DO UPDATE SET
                 item_id = ?1,
                 workspace_id = ?2,
-                path = ?3,
+                native_file_path = ?3,
                 buffer_path = ?4,
                 vfs_path = ?5,
                 contents = ?6,
                 language = ?7,
                 mtime_seconds = ?8,
                 mtime_nanos = ?9
+        }
+    }
+
+    query! {
+        pub async fn save_serialized_editor_vfs_path(
+            item_id: ItemId,
+            workspace_id: WorkspaceId,
+            vfs_path: Vec<u8>
+        ) -> Result<()> {
+            UPDATE editors
+            SET vfs_path = ?3
+            WHERE item_id = ?1 AND workspace_id = ?2
         }
     }
 
@@ -428,7 +437,7 @@ mod tests {
         let editor_db = cx.update(|cx| EditorDb::global(cx));
 
         let serialized_editor = SerializedEditor {
-            abs_path: Some(PathBuf::from("testing.txt")),
+            native_file_path: Some(PathBuf::from("testing.txt")),
             vfs_path: Some(vec![0, 1, 2, 0xff]),
             contents: None,
             language: None,
@@ -448,7 +457,7 @@ mod tests {
 
         // Now update contents and language
         let serialized_editor = SerializedEditor {
-            abs_path: Some(PathBuf::from("testing.txt")),
+            native_file_path: Some(PathBuf::from("testing.txt")),
             vfs_path: None,
             contents: Some("Test".to_owned()),
             language: Some("Go".to_owned()),
@@ -468,7 +477,7 @@ mod tests {
 
         // Now set all the fields to NULL
         let serialized_editor = SerializedEditor {
-            abs_path: None,
+            native_file_path: None,
             vfs_path: None,
             contents: None,
             language: None,
@@ -488,7 +497,7 @@ mod tests {
 
         // Storing and retrieving mtime
         let serialized_editor = SerializedEditor {
-            abs_path: None,
+            native_file_path: None,
             vfs_path: None,
             contents: None,
             language: None,

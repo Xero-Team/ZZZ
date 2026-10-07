@@ -1278,7 +1278,8 @@ impl SerializableItem for Editor {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<Entity<Self>>> {
-        let serialized_editor = match EditorDb::global(cx)
+        let db = EditorDb::global(cx);
+        let serialized_editor = match db
             .get_serialized_editor(item_id, workspace_id)
             .context("Failed to query editor state")
         {
@@ -1290,7 +1291,7 @@ impl SerializableItem for Editor {
                     serialized_editor
                 } else {
                     SerializedEditor {
-                        abs_path: serialized_editor.abs_path,
+                        native_file_path: serialized_editor.native_file_path,
                         vfs_path: serialized_editor.vfs_path,
                         contents: None,
                         language: None,
@@ -1313,7 +1314,7 @@ impl SerializableItem for Editor {
 
         match serialized_editor {
             SerializedEditor {
-                abs_path: None,
+                native_file_path: None,
                 contents: Some(contents),
                 language,
                 ..
@@ -1364,30 +1365,49 @@ impl SerializableItem for Editor {
                 }
             }),
             SerializedEditor {
-                abs_path: Some(abs_path),
+                native_file_path: Some(native_file_path),
                 vfs_path,
                 contents,
                 mtime,
                 ..
             } => {
-                let opened_buffer = project.update(cx, |project, cx| {
-                    let (worktree, legacy_path) = project.find_worktree(&abs_path, cx)?;
-                    let path = vfs_path
-                        .as_deref()
-                        .and_then(|path| proto::ProviderPathV2::decode(path).log_err())
-                        .and_then(|path| path.to_provider_path().log_err())
-                        .and_then(|path| vfs::provider_path_to_legacy_utf8(&path).log_err())
-                        .and_then(|path| RelPath::from_proto(&path).log_err())
-                        .unwrap_or(legacy_path);
-                    let project_path = ProjectPath {
-                        worktree_id: worktree.read(cx).id(),
-                        path,
+                let opened_buffer = project.update(cx, |project, cx| -> Result<_> {
+                    let Some((worktree, legacy_path)) =
+                        project.find_worktree(&native_file_path, cx)
+                    else {
+                        anyhow::ensure!(
+                            vfs_path.is_none(),
+                            "persisted VFS editor resource no longer belongs to a worktree"
+                        );
+                        return Ok(None);
                     };
-                    Some(project.open_path(project_path, cx))
+                    let (worktree_id, inferred_vfs_path) = {
+                        let worktree = worktree.read(cx);
+                        (worktree.id(), worktree.vfs_path_for_path(&legacy_path))
+                    };
+                    let (path, migration) = project::restore_or_migrate_persisted_rel_path(
+                        vfs_path.as_deref(),
+                        inferred_vfs_path.as_ref(),
+                    )?;
+                    let project_path = ProjectPath { worktree_id, path };
+                    Ok(Some((project.open_path(project_path, cx), migration)))
                 });
+                let opened_buffer = match opened_buffer {
+                    Ok(opened_buffer) => opened_buffer,
+                    Err(error) => return Task::ready(Err(error)),
+                };
 
                 match opened_buffer {
-                    Some(opened_buffer) => window.spawn(cx, async move |cx| {
+                    Some((opened_buffer, migration)) => window.spawn(cx, async move |cx| {
+                        if let Some(provider_path) = migration {
+                            db.save_serialized_editor_vfs_path(
+                                item_id,
+                                workspace_id,
+                                provider_path,
+                            )
+                            .await
+                            .context("failed to migrate serialized editor VFS path")?;
+                        }
                         let (_, buffer) = opened_buffer
                             .await
                             .context("Failed to open path in project")?;
@@ -1416,10 +1436,12 @@ impl SerializableItem for Editor {
                         // returned item to the correct pane.
                         window.spawn(cx, async move |cx| {
                             let buffer = project
-                                .update(cx, |project, cx| project.open_local_buffer(&abs_path, cx))
+                                .update(cx, |project, cx| {
+                                    project.open_local_buffer(&native_file_path, cx)
+                                })
                                 .await
                                 .with_context(|| {
-                                    format!("Failed to open buffer for {abs_path:?}")
+                                    format!("Failed to open buffer for {native_file_path:?}")
                                 })?;
 
                             if let Some(contents) = contents {
@@ -1441,7 +1463,7 @@ impl SerializableItem for Editor {
                 }
             }
             SerializedEditor {
-                abs_path: None,
+                native_file_path: None,
                 contents: None,
                 language,
                 ..
@@ -1494,7 +1516,7 @@ impl SerializableItem for Editor {
 
         let buffer = self.buffer().read(cx).as_singleton()?;
 
-        let abs_path = buffer.read(cx).file().and_then(|file| {
+        let native_file_path = buffer.read(cx).file().and_then(|file| {
             let worktree_id = file.worktree_id(cx);
             project
                 .read(cx)
@@ -1539,7 +1561,7 @@ impl SerializableItem for Editor {
                 };
 
                 let editor = SerializedEditor {
-                    abs_path,
+                    native_file_path,
                     vfs_path,
                     contents,
                     language,
@@ -2718,7 +2740,7 @@ mod tests {
                 .mtime;
 
             let serialized_editor = SerializedEditor {
-                abs_path: Some(PathBuf::from(path!("/file.rs"))),
+                native_file_path: Some(PathBuf::from(path!("/file.rs"))),
                 vfs_path: None,
                 contents: Some("fn main() {}".to_string()),
                 language: Some("Rust".to_string()),
@@ -2756,7 +2778,7 @@ mod tests {
 
             let item_id = 5678 as ItemId;
             let serialized_editor = SerializedEditor {
-                abs_path: Some(PathBuf::from(path!("/file.rs"))),
+                native_file_path: Some(PathBuf::from(path!("/file.rs"))),
                 vfs_path: None,
                 contents: None,
                 language: None,
@@ -2779,6 +2801,14 @@ mod tests {
                 let buffer = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
                 assert!(buffer.file().is_some());
             });
+            assert!(
+                editor_db
+                    .get_serialized_editor(item_id, workspace_id)
+                    .unwrap()
+                    .unwrap()
+                    .vfs_path
+                    .is_some()
+            );
         }
 
         // Test case 3: Deserialize with no path (untitled buffer, with content and language)
@@ -2800,7 +2830,7 @@ mod tests {
 
             let item_id = 9012 as ItemId;
             let serialized_editor = SerializedEditor {
-                abs_path: None,
+                native_file_path: None,
                 vfs_path: None,
                 contents: Some("hello".to_string()),
                 language: Some("Rust".to_string()),
@@ -2844,7 +2874,7 @@ mod tests {
             let item_id = 9345 as ItemId;
             let old_mtime = MTime::from_seconds_and_nanos(0, 50);
             let serialized_editor = SerializedEditor {
-                abs_path: Some(PathBuf::from(path!("/file.rs"))),
+                native_file_path: Some(PathBuf::from(path!("/file.rs"))),
                 vfs_path: None,
                 contents: Some("fn main() {}".to_string()),
                 language: Some("Rust".to_string()),
@@ -2879,7 +2909,7 @@ mod tests {
 
             let item_id = 10000 as ItemId;
             let serialized_editor = SerializedEditor {
-                abs_path: None,
+                native_file_path: None,
                 vfs_path: None,
                 contents: None,
                 language: None,
@@ -2934,7 +2964,7 @@ mod tests {
 
             // Simulate serialized state: file with unsaved changes
             let serialized_editor = SerializedEditor {
-                abs_path: Some(PathBuf::from(path!("/standalone.rs"))),
+                native_file_path: Some(PathBuf::from(path!("/standalone.rs"))),
                 vfs_path: None,
                 contents: Some("modified content".to_string()),
                 language: Some("Rust".to_string()),
@@ -3004,7 +3034,7 @@ mod tests {
                 item_id,
                 workspace_id,
                 SerializedEditor {
-                    abs_path: Some(PathBuf::from(path!("/root/legacy.rs"))),
+                    native_file_path: Some(PathBuf::from(path!("/root/legacy.rs"))),
                     vfs_path: Some(serialized_provider_path),
                     contents: None,
                     language: None,
@@ -3021,6 +3051,58 @@ mod tests {
             let buffer = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
             assert_eq!(buffer.file().unwrap().path().as_ref(), rel_path("exact.rs"));
         });
+    }
+
+    #[gpui::test]
+    async fn test_deserialize_rejects_malformed_exact_vfs_path(cx: &mut gpui::TestAppContext) {
+        init_test(cx, |_| {});
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(path!("/root"), json!({ "file.rs": "content" }))
+            .await;
+        let project = Project::test(fs, [path!("/root").as_ref()], cx).await;
+        let (multi_workspace, cx) =
+            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
+        let workspace_id = cx
+            .update(|_, cx| workspace::WorkspaceDb::global(cx))
+            .next_id()
+            .await
+            .unwrap();
+        let editor_db = cx.update(|_, cx| EditorDb::global(cx));
+        let item_id = 12346 as ItemId;
+
+        editor_db
+            .save_serialized_editor(
+                item_id,
+                workspace_id,
+                SerializedEditor {
+                    native_file_path: Some(PathBuf::from(path!("/root/file.rs"))),
+                    vfs_path: Some(b"invalid".to_vec()),
+                    contents: None,
+                    language: None,
+                    mtime: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let deserialized = workspace
+            .update_in(cx, |workspace, window, cx| {
+                let pane = workspace.active_pane();
+                pane.update(cx, |_, cx| {
+                    Editor::deserialize(
+                        project.clone(),
+                        workspace.weak_handle(),
+                        workspace_id,
+                        item_id,
+                        window,
+                        cx,
+                    )
+                })
+            })
+            .await;
+        assert!(deserialized.is_err());
     }
 
     // Verify that renaming an open file emits EditorEvent::FileHandleChanged so that
@@ -3123,7 +3205,7 @@ mod tests {
         let item_id = 99999 as ItemId;
 
         let serialized_editor = SerializedEditor {
-            abs_path: Some(PathBuf::from(path!("/outside/settings.json"))),
+            native_file_path: Some(PathBuf::from(path!("/outside/settings.json"))),
             vfs_path: None,
             contents: None,
             language: None,
