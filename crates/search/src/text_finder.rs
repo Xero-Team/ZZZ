@@ -489,8 +489,8 @@ impl Focusable for TextFinder {
 #[derive(Clone)]
 pub struct SearchMatch {
     pub path: ProjectPath,
-    pub resource_id: Option<ResourceId>,
-    pub vfs_path: Option<VfsPath>,
+    pub resource_id: ResourceId,
+    pub vfs_path: VfsPath,
     pub buffer: Entity<Buffer>,
     pub anchor_range: Range<Anchor>,
     pub range: Range<usize>,
@@ -500,7 +500,7 @@ pub struct SearchMatch {
 
 impl SearchMatch {
     pub(crate) fn file_identity(&self) -> ProjectResourceIdentity {
-        ProjectResourceIdentity::new(self.resource_id, self.path.clone())
+        ProjectResourceIdentity::new(self.resource_id)
     }
 }
 

@@ -117,6 +117,8 @@ fn multibuffer_ranges_to_search_matches<'a>(
             worktree_id: file.worktree_id(cx),
             path: Arc::clone(file.path()),
         };
+        let resource_id = file.resource_id()?;
+        let vfs_path = file.vfs_path()?.clone();
         let buffer = multi_buffer.buffer(buffer_snapshot.remote_id())?;
 
         let start_offset: usize = buffer_snapshot.summary_for_anchor(&text_range.start);
@@ -125,8 +127,8 @@ fn multibuffer_ranges_to_search_matches<'a>(
 
         Some(SearchMatch {
             path,
-            resource_id: file.resource_id(),
-            vfs_path: file.vfs_path().cloned(),
+            resource_id,
+            vfs_path,
             buffer,
             anchor_range: text_range,
             range: start_offset..end_offset,
@@ -139,18 +141,16 @@ fn multibuffer_ranges_to_search_matches<'a>(
 fn merge_search_matches(existing_matches: &mut Vec<SearchMatch>, new_matches: Vec<SearchMatch>) {
     let latest_paths = new_matches
         .iter()
-        .filter_map(|search_match| {
-            search_match
-                .resource_id
-                .map(|resource_id| (resource_id, (&search_match.path, &search_match.vfs_path)))
+        .map(|search_match| {
+            (
+                search_match.resource_id,
+                (&search_match.path, &search_match.vfs_path),
+            )
         })
         .collect::<HashMap<_, _>>();
 
     for search_match in existing_matches.iter_mut() {
-        let Some(resource_id) = search_match.resource_id else {
-            continue;
-        };
-        let Some((path, vfs_path)) = latest_paths.get(&resource_id) else {
+        let Some((path, vfs_path)) = latest_paths.get(&search_match.resource_id) else {
             continue;
         };
         search_match.path.clone_from(path);
@@ -165,7 +165,7 @@ fn merge_search_matches(existing_matches: &mut Vec<SearchMatch>, new_matches: Ve
         .chain(new_matches)
     {
         let identity = search_match.file_identity();
-        match matches_by_identity.entry(identity.clone()) {
+        match matches_by_identity.entry(identity) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(search_match),
             hash_map::Entry::Vacant(entry) => {
                 identity_order.push(identity);
@@ -380,10 +380,10 @@ impl Delegate {
                     entries.push(Entry::Separator);
                 }
                 entries.push(Entry::Header {
-                    identity: identity.clone(),
+                    identity,
                     path: search_match.path.clone(),
                 });
-                last_identity = Some(identity.clone());
+                last_identity = Some(identity);
             }
             if !self.collapsed_files.contains(&identity) {
                 entries.push(Entry::Match(match_index));
@@ -415,7 +415,7 @@ impl Delegate {
 
     pub(crate) fn toggle_group_collapsed(&mut self, identity: &ProjectResourceIdentity) {
         if !self.collapsed_files.remove(identity) {
-            self.collapsed_files.insert(identity.clone());
+            self.collapsed_files.insert(*identity);
         }
         self.rebuild_entries();
     }
@@ -430,7 +430,7 @@ impl Delegate {
                 .matches
                 .get(*match_index)
                 .map(|search_match| (search_match.file_identity(), search_match.path.clone())),
-            Some(Entry::Header { identity, path }) => Some((identity.clone(), path.clone())),
+            Some(Entry::Header { identity, path }) => Some((*identity, path.clone())),
             Some(Entry::Separator) | None => None,
         };
         let Some((identity, path)) = selected_file else {
@@ -653,15 +653,17 @@ impl Delegate {
 
         buffer.read_with(cx, |buf, cx| {
             let file = buf.file();
-            let file_identity = file.map(|file| {
-                (
+            let file_identity = file.and_then(|file| {
+                let resource_id = file.resource_id()?;
+                let vfs_path = file.vfs_path()?.clone();
+                Some((
                     ProjectPath {
                         worktree_id: file.worktree_id(cx),
                         path: file.path().clone(),
                     },
-                    file.resource_id(),
-                    file.vfs_path().cloned(),
-                )
+                    resource_id,
+                    vfs_path,
+                ))
             });
             let mut matches = Vec::new();
             for anchor_range in ranges {
@@ -1143,7 +1145,7 @@ impl Delegate {
                             .size(IconSize::Small)
                     });
                 let is_collapsed = self.collapsed_files.contains(identity);
-                let toggle_identity = identity.clone();
+                let toggle_identity = *identity;
                 let tooltip_focus_handle = self.focus_handle.clone();
 
                 Some(
@@ -1521,8 +1523,8 @@ mod tests {
                 worktree_id: WorktreeId::from_proto(1),
                 path: rel_path("old.rs").into(),
             },
-            resource_id: Some(resource_id),
-            vfs_path: Some(old_vfs_path),
+            resource_id,
+            vfs_path: old_vfs_path,
             buffer: buffer.clone(),
             anchor_range: anchor..anchor,
             range: 0..0,
@@ -1534,8 +1536,8 @@ mod tests {
                 worktree_id: WorktreeId::from_proto(1),
                 path: rel_path("renamed.rs").into(),
             },
-            resource_id: Some(resource_id),
-            vfs_path: Some(new_vfs_path.clone()),
+            resource_id,
+            vfs_path: new_vfs_path.clone(),
             buffer,
             anchor_range: anchor..anchor,
             range: 1..1,
@@ -1551,7 +1553,7 @@ mod tests {
             existing_matches[0].path.path.as_ref(),
             rel_path("renamed.rs")
         );
-        assert_eq!(existing_matches[0].vfs_path, Some(new_vfs_path));
+        assert_eq!(existing_matches[0].vfs_path, new_vfs_path);
         assert!(
             existing_matches
                 .iter()

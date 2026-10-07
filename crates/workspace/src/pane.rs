@@ -805,7 +805,7 @@ impl Pane {
                     } else {
                         return None;
                     };
-                    let identity = project.resource_identity_for_project_path(&project_path, cx);
+                    let identity = project.resource_identity_for_project_path(&project_path, cx)?;
                     Some((identity, severity))
                 })
                 .collect()
@@ -2861,9 +2861,9 @@ impl Pane {
             .size(IconSize::Small)
             .color(Color::Muted);
 
-        let item_diagnostic = item.project_path(cx).and_then(|project_path| {
-            let identity = ProjectResourceIdentity::new(item.resource_id(cx), project_path);
-            self.diagnostics.get(&identity)
+        let item_diagnostic = item.resource_id(cx).and_then(|resource_id| {
+            self.diagnostics
+                .get(&ProjectResourceIdentity::new(resource_id))
         });
 
         let Some(diagnostic) = item_diagnostic else {

@@ -425,11 +425,8 @@ pub struct ProjectPath {
     pub path: Arc<RelPath>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ProjectResourceIdentity {
-    Resource(vfs::ResourceId),
-    Path(ProjectPath),
-}
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ProjectResourceIdentity(vfs::ResourceId);
 
 fn native_path_from_remote_text(
     path: &str,
@@ -453,8 +450,8 @@ fn native_path_to_remote_text(path: &vfs::NativePath) -> Result<String> {
 }
 
 impl ProjectResourceIdentity {
-    pub fn new(resource_id: Option<vfs::ResourceId>, path: ProjectPath) -> Self {
-        resource_id.map_or(Self::Path(path), Self::Resource)
+    pub fn new(resource_id: vfs::ResourceId) -> Self {
+        Self(resource_id)
     }
 }
 
@@ -4537,8 +4534,10 @@ impl Project {
         &self,
         path: &ProjectPath,
         cx: &App,
-    ) -> ProjectResourceIdentity {
-        ProjectResourceIdentity::new(self.vfs_identity_for_project_path(path, cx).0, path.clone())
+    ) -> Option<ProjectResourceIdentity> {
+        self.vfs_identity_for_project_path(path, cx)
+            .0
+            .map(ProjectResourceIdentity::new)
     }
 
     pub fn entry_identity_for_project_path(

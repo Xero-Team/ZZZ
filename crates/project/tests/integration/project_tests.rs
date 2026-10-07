@@ -7750,7 +7750,7 @@ async fn test_buffer_identity_across_renames(cx: &mut gpui::TestAppContext) {
     });
     assert_eq!(
         resource_identity,
-        ProjectResourceIdentity::Resource(resource_id)
+        Some(ProjectResourceIdentity::new(resource_id))
     );
     assert_eq!(
         project.update(cx, |project, cx| {
