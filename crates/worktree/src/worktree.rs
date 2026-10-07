@@ -79,8 +79,8 @@ use util::{
 };
 use vfs::{
     CaseSensitivity as VfsCaseSensitivity, CompatibilityPathError,
-    EntryMetadata as VfsEntryMetadata, NativePath, ResourceId, SnapshotBudgets, VfsError,
-    VfsErrorCode, VfsPath, VfsProvider, VfsSnapshot, provider_path_from_legacy_utf8,
+    EntryMetadata as VfsEntryMetadata, NativePath, PathEncoding, ProviderPath, ResourceId,
+    SnapshotBudgets, VfsError, VfsErrorCode, VfsPath, VfsProvider, VfsSnapshot,
     provider_path_to_legacy_utf8,
 };
 pub use worktree_settings::WorktreeSettings;
@@ -900,19 +900,15 @@ impl Worktree {
             return Some(vfs_path);
         }
         if let Worktree::Remote(remote) = self {
-            let provider_path = provider_path_from_legacy_utf8(
-                path.as_unix_str(),
-                remote.vfs_root.provider_path().encoding(),
-            )
-            .ok()?;
+            let provider_path =
+                provider_path_from_rel_path(path, remote.vfs_root.provider_path().encoding())
+                    .ok()?;
             return Some(VfsPath::new(remote.vfs_root.mount_id(), provider_path));
         }
         let snapshot = self.vfs_snapshot()?;
-        let provider_path = provider_path_from_legacy_utf8(
-            path.as_unix_str(),
-            snapshot.provider().descriptor().path_encoding,
-        )
-        .ok()?;
+        let provider_path =
+            provider_path_from_rel_path(path, snapshot.provider().descriptor().path_encoding)
+                .ok()?;
         Some(VfsPath::new(snapshot.registry().mount_id(), provider_path))
     }
 
@@ -1965,11 +1961,7 @@ impl LocalWorktree {
         let is_private = self.is_path_private(&path);
         let vfs_snapshot = self.vfs_snapshot.clone();
         let provider_path = vfs_snapshot.as_ref().and_then(|snapshot| {
-            provider_path_from_legacy_utf8(
-                path.as_unix_str(),
-                snapshot.provider().descriptor().path_encoding,
-            )
-            .ok()
+            provider_path_from_rel_path(&path, snapshot.provider().descriptor().path_encoding).ok()
         });
 
         let worktree = cx.weak_entity();
@@ -2024,11 +2016,7 @@ impl LocalWorktree {
         let is_private = self.is_path_private(path.as_ref());
         let vfs_snapshot = self.vfs_snapshot.clone();
         let provider_path = vfs_snapshot.as_ref().and_then(|snapshot| {
-            provider_path_from_legacy_utf8(
-                path.as_unix_str(),
-                snapshot.provider().descriptor().path_encoding,
-            )
-            .ok()
+            provider_path_from_rel_path(&path, snapshot.provider().descriptor().path_encoding).ok()
         });
 
         let this = cx.weak_entity();
@@ -2212,11 +2200,9 @@ impl LocalWorktree {
         let abs_path = self.absolutize(&path);
         let vfs_snapshot = self.vfs_snapshot.clone();
         let vfs_write = vfs_snapshot.as_ref().and_then(|snapshot| {
-            let provider_path = provider_path_from_legacy_utf8(
-                path.as_unix_str(),
-                snapshot.provider().descriptor().path_encoding,
-            )
-            .ok()?;
+            let provider_path =
+                provider_path_from_rel_path(&path, snapshot.provider().descriptor().path_encoding)
+                    .ok()?;
             let expected_version = snapshot
                 .registry()
                 .id_for_path(&provider_path)
@@ -2856,8 +2842,8 @@ impl RemoteWorktree {
                         target_path = target_path.join(&relative_path);
                     }
 
-                    let provider_path = provider_path_from_legacy_utf8(
-                        target_path.as_unix_str(),
+                    let provider_path = provider_path_from_rel_path(
+                        &target_path,
                         root_vfs_path.provider_path().encoding(),
                     )?;
                     let vfs_path = VfsPath::new(root_vfs_path.mount_id(), provider_path.clone());
@@ -4415,6 +4401,13 @@ impl language::LocalFile for File {
     }
 }
 
+fn provider_path_from_rel_path(
+    path: &RelPath,
+    encoding: PathEncoding,
+) -> Result<ProviderPath, vfs::PathError> {
+    ProviderPath::from_byte_components(encoding, path.components().map(str::as_bytes))
+}
+
 fn vfs_identity(
     path: &RelPath,
     snapshot: Option<&VfsSnapshot>,
@@ -4422,10 +4415,9 @@ fn vfs_identity(
     let Some(snapshot) = snapshot else {
         return (None, None);
     };
-    let Ok(provider_path) = provider_path_from_legacy_utf8(
-        path.as_unix_str(),
-        snapshot.provider().descriptor().path_encoding,
-    ) else {
+    let Ok(provider_path) =
+        provider_path_from_rel_path(path, snapshot.provider().descriptor().path_encoding)
+    else {
         return (None, None);
     };
     let resource_id = snapshot.registry().id_for_path(&provider_path);
@@ -6063,8 +6055,8 @@ impl BackgroundScanner {
 
         let mut provider_metadata = BTreeMap::new();
         let mut child_paths = if let Some(vfs_snapshot) = &self.vfs_snapshot {
-            let provider_path = provider_path_from_legacy_utf8(
-                job.path.as_unix_str(),
+            let provider_path = provider_path_from_rel_path(
+                &job.path,
                 vfs_snapshot.provider().descriptor().path_encoding,
             )?;
             vfs_snapshot.load_directory(&provider_path).await?;
