@@ -758,7 +758,17 @@ impl Worktree {
                                 for entry in &update.updated_entries {
                                     // Remote updates don't distinguish creation from
                                     // modification, so report `AddedOrUpdated`.
-                                    if let Some(path) = RelPath::from_proto(&entry.path).log_err() {
+                                    let path = entry
+                                        .vfs_path
+                                        .as_ref()
+                                        .context("updated entry is missing exact VFS path")
+                                        .and_then(|path| path.to_vfs_path().map_err(Into::into))
+                                        .and_then(|path| {
+                                            provider_path_to_legacy_utf8(path.provider_path())
+                                                .map_err(Into::into)
+                                        })
+                                        .and_then(|path| RelPath::from_proto(&path));
+                                    if let Some(path) = path.log_err() {
                                         changed_entries.push((
                                             path,
                                             ProjectEntryId::from_proto(entry.id),
@@ -4223,7 +4233,6 @@ impl language::File for File {
         rpc::proto::File {
             worktree_id: self.worktree.read(cx).id().to_proto(),
             entry_id: self.entry_id.map(|id| id.to_proto()),
-            path: self.path.as_ref().to_proto(),
             mtime: self.disk_state.mtime().map(|time| time.into()),
             is_deleted: self.disk_state.is_deleted(),
             is_historic: matches!(self.disk_state, DiskState::Historic { .. }),
@@ -4322,27 +4331,23 @@ fn vfs_identity(
 }
 
 fn vfs_identity_from_proto(
-    legacy_path: &str,
     vfs_path: Option<&proto::VfsPathV2>,
     resource_id: Option<&proto::ResourceIdV2>,
 ) -> Result<(Option<ResourceId>, Option<VfsPath>)> {
-    let vfs_path = vfs_path.map(proto::VfsPathV2::to_vfs_path).transpose()?;
-    if let Some(vfs_path) = &vfs_path {
-        anyhow::ensure!(
-            provider_path_to_legacy_utf8(vfs_path.provider_path())? == legacy_path,
-            "VFS path does not match legacy path"
-        );
-    }
+    let vfs_path = vfs_path
+        .context("file or entry is missing exact VFS path")?
+        .to_vfs_path()?;
     let resource_id = resource_id
         .map(proto::ResourceIdV2::to_resource_id)
         .transpose()?;
-    if let (Some(resource_id), Some(vfs_path)) = (resource_id, &vfs_path) {
+    if let Some(resource_id) = resource_id {
         anyhow::ensure!(
             resource_id.mount_id() == vfs_path.mount_id(),
             "resource ID mount does not match VFS path mount"
         );
+        return Ok((Some(resource_id), Some(vfs_path)));
     }
-    Ok((resource_id, vfs_path))
+    Ok((None, Some(vfs_path)))
 }
 
 impl File {
@@ -4411,12 +4416,15 @@ impl File {
             "worktree id does not match file"
         );
 
-        let path = RelPath::from_proto(&proto.path).context("invalid path in file protobuf")?;
-        let (resource_id, vfs_path) = vfs_identity_from_proto(
-            &proto.path,
-            proto.vfs_path.as_ref(),
-            proto.resource_id.as_ref(),
+        let (resource_id, vfs_path) =
+            vfs_identity_from_proto(proto.vfs_path.as_ref(), proto.resource_id.as_ref())?;
+        let path = provider_path_to_legacy_utf8(
+            vfs_path
+                .as_ref()
+                .context("file is missing exact VFS path")?
+                .provider_path(),
         )?;
+        let path = RelPath::from_proto(&path).context("invalid exact path in file protobuf")?;
 
         let disk_state = if proto.is_historic {
             DiskState::Historic {
@@ -7520,7 +7528,6 @@ impl<'a> From<&'a Entry> for proto::Entry {
         Self {
             id: entry.id.to_proto(),
             is_dir: entry.is_dir(),
-            path: entry.path.as_ref().to_proto(),
             inode: entry.inode,
             mtime: entry.mtime.map(|time| time.into()),
             is_ignored: entry.is_ignored,
@@ -7555,13 +7562,15 @@ impl TryFrom<(&CharBag, &PathMatcher, proto::Entry)> for Entry {
             EntryKind::File
         };
 
-        let path =
-            RelPath::from_proto(&entry.path).context("invalid relative path in proto message")?;
-        let (resource_id, vfs_path) = vfs_identity_from_proto(
-            &entry.path,
-            entry.vfs_path.as_ref(),
-            entry.resource_id.as_ref(),
+        let (resource_id, vfs_path) =
+            vfs_identity_from_proto(entry.vfs_path.as_ref(), entry.resource_id.as_ref())?;
+        let path = provider_path_to_legacy_utf8(
+            vfs_path
+                .as_ref()
+                .context("entry is missing exact VFS path")?
+                .provider_path(),
         )?;
+        let path = RelPath::from_proto(&path).context("invalid exact path in entry protobuf")?;
         let char_bag = char_bag_for_path(*root_char_bag, &path);
         let is_always_included = always_included.is_match(&path);
         Ok(Entry {

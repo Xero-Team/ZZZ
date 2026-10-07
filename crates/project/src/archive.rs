@@ -100,7 +100,6 @@ impl LanguageFile for ArchiveMemberFile {
         rpc::proto::File {
             worktree_id: self.virtual_worktree_id.to_proto(),
             entry_id: None,
-            path: self.path.as_ref().to_proto(),
             mtime: None,
             is_deleted: false,
             is_historic: false,

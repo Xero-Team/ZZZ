@@ -6393,7 +6393,6 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 updated_entries: vec![proto::Entry {
                     id: 1,
                     is_dir: true,
-                    path: String::new(),
                     inode: 1,
                     mtime: Some(proto::Timestamp {
                         seconds: 0,
@@ -6406,7 +6405,10 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                     size: None,
                     canonical_path: None,
                     is_unloaded: false,
-                    vfs_path: None,
+                    vfs_path: Some(proto::VfsPathV2::from_vfs_path(&VfsPath::new(
+                        MountId::new(1),
+                        ProviderPath::root(PathEncoding::PortableUtf8),
+                    ))),
                     resource_id: None,
                 }],
                 removed_entries: vec![],
@@ -6476,7 +6478,6 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
     let wire_file = proto::File {
         worktree_id: 1,
         entry_id: Some(9),
-        path: "identity.txt".to_owned(),
         mtime: None,
         is_deleted: false,
         is_historic: false,
@@ -6491,7 +6492,7 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
     assert_eq!(file.vfs_path, Some(vfs_path));
 
     let mut mismatched = wire_file;
-    mismatched.path = "different.txt".to_owned();
+    mismatched.vfs_path = None;
     assert!(
         cx.read(|cx| worktree::File::from_proto(mismatched, worktree, cx))
             .is_err()
@@ -6535,7 +6536,6 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
     let wire_entry = proto::Entry {
         id: 9,
         is_dir: false,
-        path: "identity.txt".to_owned(),
         inode: 1,
         mtime: None,
         is_ignored: false,
@@ -6594,7 +6594,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
     assert_eq!(file.vfs_path, Some(vfs_path));
 
     let mut mismatched_entry = wire_entry;
-    mismatched_entry.path = "different.txt".to_owned();
+    mismatched_entry.vfs_path = None;
     worktree.update(cx, |worktree, _cx| {
         worktree
             .as_remote()
@@ -6704,7 +6704,6 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 updated_entries: vec![proto::Entry {
                     id: 1,
                     is_dir: true,
-                    path: String::new(),
                     inode: 1,
                     mtime: Some(proto::Timestamp {
                         seconds: 0,
@@ -6717,7 +6716,10 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                     size: None,
                     canonical_path: None,
                     is_unloaded: false,
-                    vfs_path: None,
+                    vfs_path: Some(proto::VfsPathV2::from_vfs_path(&VfsPath::new(
+                        MountId::new(1),
+                        ProviderPath::root(PathEncoding::PortableUtf8),
+                    ))),
                     resource_id: None,
                 }],
                 removed_entries: vec![],
