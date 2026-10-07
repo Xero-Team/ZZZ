@@ -22,8 +22,9 @@ description: Evidence-backed assessment of GPUI text rasterization, atlas lifeti
 
 本报告以下“当前实现”和风险定位保留为计划基线
 `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` 的历史证据。重构已在
-`refactor/gpui-text-rendering` 上完成阶段 0–8；阶段 8 根据 TEXT-010 拒绝 upload
-batching，阶段 9 正在执行最终文档和全 workspace 验证。
+`refactor/gpui-text-rendering` 上完成阶段 0–9；阶段 8 根据 TEXT-010 拒绝 upload
+batching，阶段 9 的 Linux hardware/fallback runtime、TEXT-011、文档和全 workspace
+验证已收敛。macOS/Windows native runtime 按合同标记 `NOT RUN` 并提供精确 runbook。
 
 已实现的生产架构：
 

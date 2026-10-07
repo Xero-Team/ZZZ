@@ -17,8 +17,8 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 9 进行中                              |
-| Goal 状态     | `ACTIVE`                                   |
+| 当前阶段      | 阶段 9 已完成                              |
+| Goal 状态     | `COMPLETE`                                 |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
 执行开始时 HEAD 与计划基线相同，checkout 位于 `main`。工作树已有用户修改：
@@ -626,7 +626,163 @@ TEXT-010 artifact：
 
 ### 阶段 9
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
-下一步：清理旧命名/双路径/TODO，更新最终 architecture/docs/evidence/experiments，执行完整
-workspace tests、clippy、philosophy、docs Prettier 与全部当前主机 headless tests。
+阶段 9 完成旧 atlas 迁移命名、双路径和 staging prototype 清理，更新最终 architecture、
+implementation evidence、实验状态和跨平台欠账。production 继续使用 per-entry
+`queue.write_texture`；没有 Skia/rust-skia production dependency、默认网络下载、未说明
+feature flag、第二份 bitmap cache 或永久 TODO。
+
+TEXT-011：`PASS`
+
+- 使用既有 `frame_diagnostics_runner` 在计划基线
+  `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` 和最终分支各运行 5 次。每次包含 100 个
+  dirty render、100 个 cached replay、100 个 focus/input render，共 301 次 draw。
+- baseline `draw_p95` 中位数为 100,118 ns；最终中位数为 93,276 ns；比例
+  `93.17%`，通过 `<= 105%` 门槛。
+- baseline input p95 中位数为 128,162 ns；最终中位数为 126,799 ns；比例
+  `98.94%`。
+- `gpui` tests 覆盖 input/focus、appearance、resize/scale change、cached replay 和 atlas
+  clear/recovery epoch contract；WGPU hardware 与 llvmpipe headless tests 覆盖 pixel、budget、
+  color font、gutter、bounded cache 和真实 WGPU context rebind。
+
+最终 Linux/WGPU 验证：
+
+| 命令或检查                                                                                          | 结果               | 说明                                                                                   |
+| --------------------------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------- |
+| `cargo fmt --all -- --check`                                                                        | `PASS`             | workspace Rust formatting                                                              |
+| `./script/clippy`                                                                                   | `PASS`             | philosophy、workspace release/all-target/all-feature、`future_not_send`                |
+| `./script/check-philosophy`                                                                         | `PASS`             | 无 commercial/account/telemetry/default-network surface                                |
+| `script/check-licenses`                                                                             | `PASS`             | tracked color fixtures 和依赖 license                                                  |
+| `script/check-todos`                                                                                | `PASS`             | 无未说明 TODO                                                                          |
+| `script/check-keymaps`                                                                              | `PASS`             | keymap gate                                                                            |
+| `script/check-links local`                                                                          | `PASS`             | 0 errors                                                                               |
+| `cd docs && npx prettier --check src/`                                                              | `PASS`             | 全 docs tree                                                                           |
+| `cargo test --locked -p gpui`                                                                       | `PASS`             | 258 unit + 1 integration                                                               |
+| `cargo test --locked -p gpui --features frame-diagnostics`                                          | `PASS`             | 265 unit + 1 integration                                                               |
+| `cargo test --locked -p gpui_wgpu`                                                                  | `PASS`             | 22 passed、1 compositor-only ignored；无 feature 时 headless target 为 0 tests         |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                          | `PASS`             | 22 unit passed、5 headless passed、7 intentional ignored                               |
+| `cargo test --locked -p gpui_wgpu --test headless_renderer`                                         | `PASS`             | 合同要求的无 feature 编译检查，0 tests                                                 |
+| `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                 | `PASS`             | hardware + llvmpipe，5 passed、6 artifact runners ignored                              |
+| `text_atlas_baseline_runner -- --ignored --nocapture`                                               | `PASS`             | 9,520 entries；RADV/llvmpipe 11 pages、42,991,616 bytes、9,520 uploads                 |
+| `text_atlas_budget_runner -- --ignored --nocapture`                                                 | `PASS`             | 89,991 CJK keys；最大 resident/working set 2 MiB，在 budget + working-set allowance 内 |
+| `text_atlas_content_isolation_runner -- --ignored --nocapture`                                      | `PASS`             | glyph eviction 0；image 255；SVG 127                                                   |
+| `text_glyph_format_runner -- --ignored --nocapture`                                                 | `PASS`             | COLRv1、SVG、bitmap color、monochrome；RADV + llvmpipe                                 |
+| `text_atlas_sampling_gutter_runner -- --ignored --nocapture`                                        | `PASS`             | hardware/fallback 无 bleed、无 transparent seam                                        |
+| release `text_raster_info_cache_runner -- --ignored --nocapture`                                    | `PASS`             | final p95 ratio `104.39%`，低于 105%；24 strikes / 65,536-byte limits                  |
+| `wgpu_atlas::tests::device_lost_rebinds_without_reusing_atlas_identity`                             | `PASS`             | 销毁旧 device、绑定新 context；epoch/identity/pending uploads 正确                     |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                           | `PASS`             | native runtime `NOT RUN`；仅既有 vendor warnings                                       |
+| `cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu --no-default-features` | `FAIL (baseline)`  | `async-tar` 依赖缺少 `async-std/unstable`；在 gpui_windows 本体前失败                  |
+| `cargo test --workspace`                                                                            | `BASELINE FAILURE` | editor/keymap exact failures 与 16 个失败 target 均在计划基线复现                      |
+
+`cargo test --workspace` 运行 33 分钟后，`editor` 测试二进制仍有 3 个用例持续满核运行且无
+进展，因此中断并逐项复现。最终分支和 detached 计划基线 worktree 上一致的 editor
+例外为：
+
+| 类别         | 用例                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------ |
+| 稳定失败     | `editor_tests::test_auto_formatter_skips_server_without_formatting`                  |
+| 稳定失败     | `inlays::inlay_hints::tests::test_no_hint_duplication_when_refresh_races_with_fetch` |
+| 稳定失败     | `editor_tests::test_document_format_during_save`                                     |
+| 稳定失败     | `editor_tests::test_format_echoing_received_line_endings_keeps_cursor`               |
+| 稳定失败     | `editor_tests::test_join_lines_rust_block_comments`                                  |
+| 稳定失败     | `editor_tests::test_multibuffer_format_during_save`                                  |
+| 75 s timeout | `editor_tests::test_range_format_on_save_success`                                    |
+| 75 s timeout | `editor_tests::test_range_format_respects_language_tab_size_override`                |
+| 75 s timeout | `editor_tests::test_race_in_multibuffer_save`                                        |
+
+`keymap_editor::tests::test_modifier_search_keeps_matching_shortcuts_after_release` 也在两边以
+相同 `zed::OpenKeymap` action 缺失失败。
+
+随后在最终分支和计划基线分别运行相同的 `cargo test --workspace --no-fail-fast`，跳过上述
+editor/keymap 例外和单独已通过的 hover flake。两边得到完全相同的 16 个稳定失败 target：
+
+```text
+lsp_command_selector --lib
+markdown --lib
+migrator --lib
+outline_panel --lib
+project --test integration
+project_panel --lib
+project_symbols --lib
+remote_server --lib
+repl --lib
+settings --lib
+settings_profile_selector --lib
+sidebar --lib
+task --lib
+tasks_ui --lib
+util --lib
+worktree --test integration
+```
+
+当前分支该次运行还短暂报告 `markdown_preview --lib`，但单独复跑 25/25 通过；此前的
+`hover_links::tests::test_hover_markdown_link_with_row_column` 也单独通过，二者记录为并发
+flake，不列入稳定 baseline 集合。所有失败 target 均不在本分支 diff 中。
+
+上述逐项和完整 target-set 复现满足执行合同“只剩有复现记录的既有 baseline failure”
+条件。
+
+TEXT-011 artifact：
+
+- `.tmp/text-rendering-refactor/phase-9/text-011.json`，SHA-256
+  `6ef1ccc4b990ffc7d3988435d1bcca8be16ba4f98094a716460d309c2e3f051b`
+- 阶段 9 的 TEXT-001/004/006/007/008/009 hardware/fallback artifacts 位于
+  `.tmp/text-rendering-refactor/phase-9/final/`。
+
+| Artifact          | SHA-256                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| TEXT-001 hardware | `93546b864a4ded54476f98e04a38eeca581c4a53e91b6deeec3f68a371b181f9` |
+| TEXT-001 fallback | `70f452972841a34f5ea668513c73e59088b532f1542cd56c40722ab2a30609e5` |
+| TEXT-004 hardware | `a4304baa5567253e8fd7ee20b9e95223d382e0fff16097729e0db6c7d4bb6f48` |
+| TEXT-004 fallback | `bb595012fc827d59864f09fd04a725547a3a3430e64c954422e583b596fe11db` |
+| TEXT-006 hardware | `ff510b90268afcc1d95c10baa0209d086ea4018f90dc25bed6dcacae09d82831` |
+| TEXT-006 fallback | `03bad686bdbea0e23d5d0aea0676e8280ebd790f044a352e9a6b8c4ef2c98c2f` |
+| TEXT-007 hardware | `3f858f5ebf64791497bc78bad0017122c0f47aa2e292b3b0885fb7ab5c17180f` |
+| TEXT-007 fallback | `a05df121e8ce87f61fc94f1028d2fcf50e86d810fda7bc61fb443ab8c8a4f680` |
+| TEXT-008 hardware | `ba918f4c252fe768db02414c6f11e6dfaa90038aa176db5e224b9b18ff5b0139` |
+| TEXT-008 fallback | `78f25ec8e98c1d94728533b88cc859a8efa13f622599c1ba3f9c4eee8fbd8101` |
+| TEXT-009 release  | `4a865090dd8a18d93eb0027a98d95ce48c34643e19be6a2065e017ed5284067c` |
+
+平台矩阵：
+
+| 平台                | 状态      | 结论                                                                 |
+| ------------------- | --------- | -------------------------------------------------------------------- |
+| Linux/WGPU hardware | `PASS`    | RADV unit、headless pixel、CJK budget、color fixture、TEXT-011 smoke |
+| Linux/WGPU fallback | `PASS`    | llvmpipe pixel、budget、color、gutter、device-reset atlas contract   |
+| macOS/Metal         | `NOT RUN` | tests cross-compile 通过；native color、pixel、scale runtime 不可用  |
+| Windows/DirectX     | `NOT RUN` | full cross-target 受既有依赖阻断；native color/device-lost 不可用    |
+
+macOS native runbook（当前 Linux 主机 `NOT RUN`）：
+
+```sh
+cargo test --locked -p gpui_macos -- --nocapture
+cargo test --locked -p gpui_macos color_font_fixture_runner -- --ignored --nocapture
+RUST_LOG=gpui_macos=debug,gpui=debug cargo run --profile release-fast 2>&1 | tee /tmp/zzz-macos-text-rendering.log
+```
+
+在 tracked COLRv1、bitmap、OpenType-SVG 和 OpenMoji fixture 上验证 color/monochrome；在
+Retina 与非 Retina display 间移动窗口并切换 display scale，完成编辑、滚动、resize 和
+appearance change。采集原始/变化后截图、`/tmp/zzz-macos-text-rendering.log` 和 Metal GPU
+capture。判定：没有 tint、缺字、bleed、seam 或 stale tile；scale change 后完整 repaint；
+连续 5 次 frame diagnostics 的 draw p95 中位数不超过同机 baseline 的 105%。
+
+Windows native runbook（当前 Linux 主机 `NOT RUN`；在可丢弃测试机运行 device reset）：
+
+```powershell
+cargo test --locked -p gpui_windows -- --nocapture
+cargo test --locked -p gpui_windows color_font_fixture_runner -- --ignored --nocapture
+$env:RUST_LOG = "gpui_windows=debug,gpui=debug"
+cargo run --profile release-fast 2>&1 | Tee-Object -FilePath $env:TEMP\zzz-windows-text-rendering.log
+dxcap -forcetdr
+```
+
+使用相同 tracked fixture 和普通 monochrome 文本，运行编辑、滚动、resize 与 display-scale
+change；`dxcap -forcetdr` 后继续输入和滚动。采集 reset 前后截图、
+`zzz-windows-text-rendering.log` 和 PIX capture。判定：DirectWrite color glyph 不 tint，
+monochrome 仍可 tint；device lost 后 atlas epoch/full refresh 恢复，没有 stale tile、缺字、
+bleed 或崩溃；连续 5 次 frame diagnostics 的 draw p95 中位数不超过同机 baseline 的
+105%。
+
+阶段 9 结论：全部必做阶段、实验、清理、当前主机 runtime 和文档已完成；native
+macOS/Windows 欠账按合同精确标记 `NOT RUN`，没有未关闭 blocker、TODO 或 prototype。

@@ -5,7 +5,7 @@ description: Copyable Goal mode instruction for completing the GPUI text renderi
 
 # GPUI 文本渲染完整重构 Goal
 
-> 执行状态（2026-10-07）：该 Goal 已在 `refactor/gpui-text-rendering` 执行到阶段 9。
+> 执行状态（2026-10-07）：该 Goal 已在 `refactor/gpui-text-rendering` 完成阶段 0–9。
 > 实际提交、实验 artifact、跨平台 `NOT RUN` runbook 和最终验证见
 > [进度账本](../text-rendering-refactor-progress.md)。以下文本保留为可复用的完整执行指令。
 

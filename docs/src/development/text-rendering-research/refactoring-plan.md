@@ -17,9 +17,9 @@ description: Staged execution contract for correcting and restructuring GPUI tex
 - 可复制 Goal：[goal.md](./goal.md)
 - 执行结果：[../text-rendering-refactor-progress.md](../text-rendering-refactor-progress.md)
 
-> 执行状态（2026-10-07）：阶段 0–7 已通过，阶段 8 的 batching prototype 已按
-> TEXT-010 数据拒绝并删除，阶段 9 正在完成最终文档与全 workspace 验证。本文件继续
-> 作为不可缩减的历史执行合同。
+> 执行状态（2026-10-07）：阶段 0–7 和阶段 9 已通过；阶段 8 的 batching prototype
+> 已按 TEXT-010 数据拒绝并删除。Goal 已完成。本文件保留为不可缩减的历史执行合同，
+> 最终结果和 native `NOT RUN` 欠账见执行账本。
 
 如果执行开始时 HEAD 已前进，先审查相对本基线在目标 crate 上的差异。只要新提交
 没有完成或否定本计划，就更新执行基线并继续；不得 reset、clean 或覆盖用户修改。
