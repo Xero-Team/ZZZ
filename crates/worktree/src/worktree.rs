@@ -1156,14 +1156,18 @@ impl Worktree {
                 let Some(entry) = remote_worktree.entry_for_path(path).cloned() else {
                     return Task::ready(Err(anyhow!("no worktree entry for {path:?}")));
                 };
-                let path = Arc::<RelPath>::from(path);
+                let Some(provider_path) = entry
+                    .vfs_path
+                    .as_ref()
+                    .map(|path| path.provider_path().clone())
+                else {
+                    return Task::ready(Err(anyhow!(
+                        "worktree entry has no exact VFS path for {path:?}"
+                    )));
+                };
                 let worktree = cx.weak_entity();
                 cx.background_spawn(async move {
                     let provider = provider_task.await.map_err(anyhow::Error::new)?;
-                    let provider_path = provider_path_from_legacy_utf8(
-                        path.as_unix_str(),
-                        provider.descriptor().path_encoding,
-                    )?;
                     let loaded = vfs::load_provider_bytes(
                         provider.as_ref(),
                         &provider_path,
@@ -1184,17 +1188,18 @@ impl Worktree {
         match self {
             Worktree::Local(local_worktree) => {
                 if let Some(snapshot) = &local_worktree.vfs_snapshot {
-                    let provider = snapshot.provider().clone();
-                    let provider_path = provider_path_from_legacy_utf8(
-                        path.as_unix_str(),
-                        provider.descriptor().path_encoding,
-                    );
-                    return match provider_path {
-                        Ok(provider_path) => cx.background_spawn(async move {
-                            provider_path_is_file(provider.as_ref(), &provider_path).await
-                        }),
-                        Err(error) => Task::ready(Err(error.into())),
+                    let Some(provider_path) = self
+                        .vfs_path_for_path(path)
+                        .map(|path| path.provider_path().clone())
+                    else {
+                        return Task::ready(Err(anyhow!(
+                            "path has no exact VFS identity: {path:?}"
+                        )));
                     };
+                    let provider = snapshot.provider().clone();
+                    return cx.background_spawn(async move {
+                        provider_path_is_file(provider.as_ref(), &provider_path).await
+                    });
                 }
                 let fs = local_worktree.fs.clone();
                 let abs_path = local_worktree.absolutize(path);
@@ -1204,13 +1209,14 @@ impl Worktree {
                 let Some(provider_task) = self.remote_vfs_provider(cx) else {
                     return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
                 };
-                let path = path.to_owned();
+                let Some(provider_path) = self
+                    .vfs_path_for_path(path)
+                    .map(|path| path.provider_path().clone())
+                else {
+                    return Task::ready(Err(anyhow!("path has no exact VFS identity: {path:?}")));
+                };
                 cx.background_spawn(async move {
                     let provider = provider_task.await.map_err(anyhow::Error::new)?;
-                    let provider_path = provider_path_from_legacy_utf8(
-                        path.as_unix_str(),
-                        provider.descriptor().path_encoding,
-                    )?;
                     provider_path_is_file(provider.as_ref(), &provider_path).await
                 })
             }
@@ -1223,18 +1229,19 @@ impl Worktree {
         nested_depth: u8,
         cx: &Context<Worktree>,
     ) -> Task<Result<VfsSnapshot>> {
+        let Some(provider_path) = self
+            .vfs_path_for_path(path)
+            .map(|path| path.provider_path().clone())
+        else {
+            return Task::ready(Err(anyhow!("path has no exact VFS identity: {path:?}")));
+        };
         match self {
             Worktree::Local(local_worktree) => {
                 let Some(snapshot) = local_worktree.vfs_snapshot.clone() else {
                     return Task::ready(Err(anyhow!("local VFS provider is unavailable")));
                 };
                 let provider = snapshot.provider().clone();
-                let provider_path = provider_path_from_legacy_utf8(
-                    path.as_unix_str(),
-                    provider.descriptor().path_encoding,
-                );
                 cx.background_spawn(async move {
-                    let provider_path = provider_path?;
                     let archive = vfs::ArchiveProvider::mount_from_provider(
                         format!("archive-local-{}", snapshot.registry().mount_id().get()),
                         provider,
@@ -1252,13 +1259,8 @@ impl Worktree {
                 let Some(provider_task) = self.remote_vfs_provider(cx) else {
                     return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
                 };
-                let path = path.to_owned();
                 cx.background_spawn(async move {
                     let provider = provider_task.await.map_err(anyhow::Error::new)?;
-                    let provider_path = provider_path_from_legacy_utf8(
-                        path.as_unix_str(),
-                        provider.descriptor().path_encoding,
-                    )?;
                     let metadata = provider
                         .stat(&provider_path, vfs::StatOptions::default())
                         .await?;
