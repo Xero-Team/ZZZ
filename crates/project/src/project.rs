@@ -460,16 +460,23 @@ pub fn serialize_persisted_provider_path(vfs_path: Option<&vfs::VfsPath>) -> Opt
         .map(|path| proto::ProviderPathV2::from_provider_path(path.provider_path()).encode_to_vec())
 }
 
-pub fn restore_persisted_rel_path(
-    legacy_path: Arc<RelPath>,
-    provider_path: Option<&[u8]>,
-) -> Result<Arc<RelPath>> {
-    let Some(provider_path) = provider_path else {
-        return Ok(legacy_path);
+pub fn restore_or_migrate_persisted_rel_path(
+    persisted_provider_path: Option<&[u8]>,
+    inferred_vfs_path: Option<&vfs::VfsPath>,
+) -> Result<(Arc<RelPath>, Option<Vec<u8>>)> {
+    let provider_path = match persisted_provider_path {
+        Some(provider_path) => proto::ProviderPathV2::decode(provider_path)?.to_provider_path()?,
+        None => inferred_vfs_path
+            .context("legacy persisted path has no exact VFS identity")?
+            .provider_path()
+            .clone(),
     };
-    let provider_path = proto::ProviderPathV2::decode(provider_path)?.to_provider_path()?;
     let relative_path = provider_path_to_legacy_utf8(&provider_path)?;
-    RelPath::from_proto(&relative_path)
+    let relative_path = RelPath::from_proto(&relative_path)?;
+    let migration = persisted_provider_path
+        .is_none()
+        .then(|| proto::ProviderPathV2::from_provider_path(&provider_path).encode_to_vec());
+    Ok((relative_path, migration))
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

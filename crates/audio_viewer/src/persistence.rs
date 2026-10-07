@@ -8,7 +8,7 @@ use db::{
 use workspace::{ItemId, WorkspaceDb, WorkspaceId};
 
 pub(crate) struct AudioRecord {
-    pub path: PathBuf,
+    pub native_file_path: PathBuf,
     pub provider_path: Option<Vec<u8>>,
 }
 
@@ -31,6 +31,7 @@ impl Domain for AudioViewerDb {
             ) STRICT;
         ),
         sql!(ALTER TABLE audio_viewers ADD COLUMN provider_path BLOB;),
+        sql!(ALTER TABLE audio_viewers RENAME COLUMN audio_path TO native_file_path;),
     ];
 }
 
@@ -38,13 +39,13 @@ db::static_connection!(AudioViewerDb, [WorkspaceDb]);
 
 impl AudioViewerDb {
     query! {
-        pub async fn save_audio_path(
+        pub async fn save_audio(
             item_id: ItemId,
             workspace_id: WorkspaceId,
-            audio_path: PathBuf,
+            native_file_path: PathBuf,
             provider_path: Option<Vec<u8>>
         ) -> Result<()> {
-            INSERT OR REPLACE INTO audio_viewers(item_id, workspace_id, audio_path, provider_path)
+            INSERT OR REPLACE INTO audio_viewers(item_id, workspace_id, native_file_path, provider_path)
             VALUES (?, ?, ?, ?)
         }
     }
@@ -55,15 +56,15 @@ impl AudioViewerDb {
         workspace_id: WorkspaceId,
     ) -> anyhow::Result<Option<AudioRecord>> {
         let record = self.get_audio_row(item_id, workspace_id)?;
-        Ok(record.map(|(path, provider_path)| AudioRecord {
-            path,
+        Ok(record.map(|(native_file_path, provider_path)| AudioRecord {
+            native_file_path,
             provider_path,
         }))
     }
 
     query! {
         fn get_audio_row(item_id: ItemId, workspace_id: WorkspaceId) -> Result<Option<(PathBuf, Option<Vec<u8>>)>> {
-            SELECT audio_path, provider_path FROM audio_viewers WHERE item_id = ? AND workspace_id = ?
+            SELECT native_file_path, provider_path FROM audio_viewers WHERE item_id = ? AND workspace_id = ?
         }
     }
 }
@@ -83,7 +84,7 @@ mod tests {
         let provider_path = vec![0, 1, 2, 0xff];
 
         audio_db
-            .save_audio_path(
+            .save_audio(
                 1,
                 workspace_id,
                 PathBuf::from("legacy-audio.mp3"),
@@ -96,18 +97,21 @@ mod tests {
             .get_audio(1, workspace_id)
             .expect("audio record should load")
             .expect("audio record should exist");
-        assert_eq!(record.path, PathBuf::from("legacy-audio.mp3"));
+        assert_eq!(record.native_file_path, PathBuf::from("legacy-audio.mp3"));
         assert_eq!(record.provider_path, Some(provider_path));
 
         audio_db
-            .save_audio_path(1, workspace_id, PathBuf::from("legacy-only.mp3"), None)
+            .save_audio(1, workspace_id, PathBuf::from("legacy-only.mp3"), None)
             .await
             .expect("legacy audio record should save");
         let legacy_record = audio_db
             .get_audio(1, workspace_id)
             .expect("legacy audio record should load")
             .expect("legacy audio record should exist");
-        assert_eq!(legacy_record.path, PathBuf::from("legacy-only.mp3"));
+        assert_eq!(
+            legacy_record.native_file_path,
+            PathBuf::from("legacy-only.mp3")
+        );
         assert_eq!(legacy_record.provider_path, None);
     }
 }

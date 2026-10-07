@@ -8,7 +8,7 @@ use db::{
 use workspace::{ItemId, WorkspaceDb, WorkspaceId};
 
 pub(crate) struct VideoRecord {
-    pub path: PathBuf,
+    pub native_file_path: PathBuf,
     pub provider_path: Option<Vec<u8>>,
 }
 
@@ -31,6 +31,7 @@ impl Domain for VideoViewerDb {
             ) STRICT;
         ),
         sql!(ALTER TABLE video_viewers ADD COLUMN provider_path BLOB;),
+        sql!(ALTER TABLE video_viewers RENAME COLUMN video_path TO native_file_path;),
     ];
 }
 
@@ -38,13 +39,13 @@ db::static_connection!(VideoViewerDb, [WorkspaceDb]);
 
 impl VideoViewerDb {
     query! {
-        pub async fn save_video_path(
+        pub async fn save_video(
             item_id: ItemId,
             workspace_id: WorkspaceId,
-            video_path: PathBuf,
+            native_file_path: PathBuf,
             provider_path: Option<Vec<u8>>
         ) -> Result<()> {
-            INSERT OR REPLACE INTO video_viewers(item_id, workspace_id, video_path, provider_path)
+            INSERT OR REPLACE INTO video_viewers(item_id, workspace_id, native_file_path, provider_path)
             VALUES (?, ?, ?, ?)
         }
     }
@@ -55,15 +56,15 @@ impl VideoViewerDb {
         workspace_id: WorkspaceId,
     ) -> anyhow::Result<Option<VideoRecord>> {
         let record = self.get_video_row(item_id, workspace_id)?;
-        Ok(record.map(|(path, provider_path)| VideoRecord {
-            path,
+        Ok(record.map(|(native_file_path, provider_path)| VideoRecord {
+            native_file_path,
             provider_path,
         }))
     }
 
     query! {
         fn get_video_row(item_id: ItemId, workspace_id: WorkspaceId) -> Result<Option<(PathBuf, Option<Vec<u8>>)>> {
-            SELECT video_path, provider_path FROM video_viewers WHERE item_id = ? AND workspace_id = ?
+            SELECT native_file_path, provider_path FROM video_viewers WHERE item_id = ? AND workspace_id = ?
         }
     }
 }
@@ -83,7 +84,7 @@ mod tests {
         let provider_path = vec![0, 1, 2, 0xff];
 
         video_db
-            .save_video_path(
+            .save_video(
                 1,
                 workspace_id,
                 PathBuf::from("legacy-video.mp4"),
@@ -96,18 +97,21 @@ mod tests {
             .get_video(1, workspace_id)
             .expect("video record should load")
             .expect("video record should exist");
-        assert_eq!(record.path, PathBuf::from("legacy-video.mp4"));
+        assert_eq!(record.native_file_path, PathBuf::from("legacy-video.mp4"));
         assert_eq!(record.provider_path, Some(provider_path));
 
         video_db
-            .save_video_path(1, workspace_id, PathBuf::from("legacy-only.mp4"), None)
+            .save_video(1, workspace_id, PathBuf::from("legacy-only.mp4"), None)
             .await
             .expect("legacy video record should save");
         let legacy_record = video_db
             .get_video(1, workspace_id)
             .expect("legacy video record should load")
             .expect("legacy video record should exist");
-        assert_eq!(legacy_record.path, PathBuf::from("legacy-only.mp4"));
+        assert_eq!(
+            legacy_record.native_file_path,
+            PathBuf::from("legacy-only.mp4")
+        );
         assert_eq!(legacy_record.provider_path, None);
     }
 }

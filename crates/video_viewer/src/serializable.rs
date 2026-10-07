@@ -38,15 +38,27 @@ impl SerializableItem for VideoView {
                 .context("no video path found for item")?;
 
             let worktree_task = project.update(cx, |project, cx| {
-                project.find_or_create_worktree(record.path.clone(), false, cx)
+                project.find_or_create_worktree(record.native_file_path.clone(), false, cx)
             });
             let (worktree, legacy_relative_path) =
                 worktree_task.await.context("video path not found")?;
             let worktree_id = worktree.read_with(cx, |worktree, _cx| worktree.id());
-            let relative_path = project::restore_persisted_rel_path(
-                legacy_relative_path,
+            let inferred_vfs_path = worktree.read_with(cx, |worktree, _cx| {
+                worktree.vfs_path_for_path(&legacy_relative_path)
+            });
+            let (relative_path, migration) = project::restore_or_migrate_persisted_rel_path(
                 record.provider_path.as_deref(),
+                inferred_vfs_path.as_ref(),
             )?;
+            if let Some(provider_path) = migration {
+                db.save_video(
+                    item_id,
+                    workspace_id,
+                    record.native_file_path.clone(),
+                    Some(provider_path),
+                )
+                .await?;
+            }
 
             let project_path = ProjectPath {
                 worktree_id,
@@ -84,7 +96,7 @@ impl SerializableItem for VideoView {
         let db = VideoViewerDb::global(cx);
 
         Some(cx.background_spawn(async move {
-            db.save_video_path(item_id, workspace_id, path, provider_path)
+            db.save_video(item_id, workspace_id, path, provider_path)
                 .await
         }))
     }

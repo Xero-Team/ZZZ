@@ -11,7 +11,7 @@ use crate::view::ZoomMode;
 
 /// A persisted PDF viewer entry: file path plus restorable reading state.
 pub(crate) struct PdfRecord {
-    pub path: PathBuf,
+    pub native_file_path: PathBuf,
     pub provider_path: Option<Vec<u8>>,
     pub page: i64,
     pub zoom_mode: String,
@@ -50,6 +50,7 @@ impl Domain for PdfViewerDb {
             ) STRICT;
         ),
         sql!(ALTER TABLE pdf_viewers ADD COLUMN provider_path BLOB;),
+        sql!(ALTER TABLE pdf_viewers RENAME COLUMN pdf_path TO native_file_path;),
     ];
 }
 
@@ -60,13 +61,13 @@ impl PdfViewerDb {
         pub async fn save_pdf(
             item_id: ItemId,
             workspace_id: WorkspaceId,
-            pdf_path: PathBuf,
+            native_file_path: PathBuf,
             provider_path: Option<Vec<u8>>,
             page: i64,
             zoom_mode: String,
             zoom: f32
         ) -> Result<()> {
-            INSERT OR REPLACE INTO pdf_viewers(item_id, workspace_id, pdf_path, provider_path, page, zoom_mode, zoom)
+            INSERT OR REPLACE INTO pdf_viewers(item_id, workspace_id, native_file_path, provider_path, page, zoom_mode, zoom)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         }
     }
@@ -78,20 +79,22 @@ impl PdfViewerDb {
     ) -> anyhow::Result<Option<crate::persistence::PdfRecord>> {
         let row: Option<(PathBuf, Option<Vec<u8>>, i64, String, f32)> =
             self.select_pdf_row(item_id, workspace_id)?;
-        Ok(row.map(
-            |(path, provider_path, page, zoom_mode, zoom)| crate::persistence::PdfRecord {
-                path,
-                provider_path,
-                page,
-                zoom_mode,
-                zoom,
-            },
-        ))
+        Ok(
+            row.map(|(native_file_path, provider_path, page, zoom_mode, zoom)| {
+                crate::persistence::PdfRecord {
+                    native_file_path,
+                    provider_path,
+                    page,
+                    zoom_mode,
+                    zoom,
+                }
+            }),
+        )
     }
 
     query! {
         fn select_pdf_row(item_id: ItemId, workspace_id: WorkspaceId) -> Result<Option<(PathBuf, Option<Vec<u8>>, i64, String, f32)>> {
-            SELECT pdf_path, provider_path, page, zoom_mode, zoom
+            SELECT native_file_path, provider_path, page, zoom_mode, zoom
             FROM pdf_viewers
             WHERE item_id = ? AND workspace_id = ?
         }
@@ -129,7 +132,10 @@ mod tests {
             .get_pdf(1, workspace_id)
             .expect("PDF record should load")
             .expect("PDF record should exist");
-        assert_eq!(record.path, PathBuf::from("legacy-document.pdf"));
+        assert_eq!(
+            record.native_file_path,
+            PathBuf::from("legacy-document.pdf")
+        );
         assert_eq!(record.provider_path, Some(provider_path));
         assert_eq!(record.page, 17);
         assert_eq!(record.zoom_mode, "fit_page");
@@ -151,7 +157,10 @@ mod tests {
             .get_pdf(1, workspace_id)
             .expect("legacy PDF record should load")
             .expect("legacy PDF record should exist");
-        assert_eq!(legacy_record.path, PathBuf::from("legacy-only.pdf"));
+        assert_eq!(
+            legacy_record.native_file_path,
+            PathBuf::from("legacy-only.pdf")
+        );
         assert_eq!(legacy_record.provider_path, None);
         assert_eq!(legacy_record.page, 2);
         assert_eq!(legacy_record.zoom_mode, "fit_width");
