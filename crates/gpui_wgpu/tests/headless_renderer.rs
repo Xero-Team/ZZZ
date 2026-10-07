@@ -280,7 +280,7 @@ fn assert_working_set_over_budget(force_fallback_adapter: bool) -> anyhow::Resul
     let image = snapshot.content(AtlasContentKind::Image);
     assert_eq!(image.retained_budget_bytes, 0);
     assert_eq!(image.page_count, 4);
-    assert_eq!(image.working_set_bytes, 4 * 8 * 8 * 4);
+    assert_eq!(image.working_set_bytes, 4 * 10 * 10 * 4);
     assert_eq!(image.evictions, 0);
     assert_eq!(image.budget_pressure_frames, 1);
     assert_eq!(snapshot.entry_count, 4);

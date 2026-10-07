@@ -2,10 +2,12 @@ use crate::{
     Bounds, DevicePixels, GlyphRasterFormat, Point, RenderGlyphParams, RenderImageParams,
     RenderSvgParams, Size,
 };
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use collections::{FxHashMap, FxHashSet};
 use parking_lot::Mutex;
 use std::borrow::Cow;
+
+const ATLAS_GUTTER: u32 = 1;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 #[expect(missing_docs)]
@@ -46,6 +48,13 @@ impl AtlasKey {
     /// Creates a glyph key using the rasterizer's authoritative format.
     pub fn glyph(params: RenderGlyphParams, format: GlyphRasterFormat) -> Self {
         Self::Glyph { params, format }
+    }
+
+    fn gutter_mode(&self) -> AtlasGutterMode {
+        match self {
+            Self::Image(_) => AtlasGutterMode::EdgeExtruded,
+            Self::Glyph { .. } | Self::Svg(_) => AtlasGutterMode::Transparent,
+        }
     }
 }
 
@@ -369,7 +378,21 @@ struct AtlasConfiguration {
 struct AtlasEntry {
     key: AtlasKey,
     tile: AtlasTile,
+    allocation_bounds: Bounds<DevicePixels>,
     retirement: Option<AtlasRetirement>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AtlasGutterMode {
+    Transparent,
+    EdgeExtruded,
+}
+
+#[derive(Debug)]
+struct PreparedAtlasUpload {
+    allocation_size: Size<DevicePixels>,
+    padding: u32,
+    bytes: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -472,7 +495,9 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
     fn insert_or_get(
         &mut self,
         key: AtlasKey,
-        size: Size<DevicePixels>,
+        content_size: Size<DevicePixels>,
+        allocation_size: Size<DevicePixels>,
+        padding: u32,
         bytes: &[u8],
     ) -> Result<AtlasTile> {
         if let Some(entry) = self
@@ -485,7 +510,8 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
 
         let content_kind = key.content_kind();
         let texture_kind = key.texture_kind();
-        let (page_index, allocation) = self.allocate_region(content_kind, texture_kind, size)?;
+        let (page_index, allocation) =
+            self.allocate_region(content_kind, texture_kind, allocation_size)?;
         let tile_id = match self.allocate_tile_id() {
             Ok(tile_id) => tile_id,
             Err(error) => {
@@ -493,19 +519,31 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                 return Err(error);
             }
         };
+        let padding_pixels = DevicePixels(i32::try_from(padding)?);
         let tile = AtlasTile {
             texture_id: self.pages[page_index].texture_id,
             tile_id,
-            padding: 0,
+            padding,
             bounds: Bounds {
-                origin: etagere_point_to_device(allocation.rectangle.min),
-                size,
+                origin: etagere_point_to_device(allocation.rectangle.min)
+                    + Point::new(padding_pixels, padding_pixels),
+                size: content_size,
             },
+        };
+        let allocation_bounds = Bounds {
+            origin: etagere_point_to_device(allocation.rectangle.min),
+            size: allocation_size,
+        };
+        let entry = AtlasEntry {
+            key: key.clone(),
+            tile,
+            allocation_bounds,
+            retirement: None,
         };
 
         if let Err(error) = self.backend.upload(AtlasUpload {
             texture_id: tile.texture_id,
-            bounds: tile.bounds,
+            bounds: entry.allocation_bounds,
             bytes,
         }) {
             self.rollback_allocation(page_index, allocation.id);
@@ -513,15 +551,8 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         }
 
         self.pages[page_index].entry_ids.insert(tile.tile_id);
-        self.tile_ids_by_key.insert(key.clone(), tile.tile_id);
-        self.entries_by_tile_id.insert(
-            tile.tile_id,
-            AtlasEntry {
-                key,
-                tile,
-                retirement: None,
-            },
-        );
+        self.tile_ids_by_key.insert(key, tile.tile_id);
+        self.entries_by_tile_id.insert(tile.tile_id, entry);
         self.allocations = self.allocations.saturating_add(1);
         Ok(tile)
     }
@@ -1021,8 +1052,21 @@ impl<Backend: AtlasBackend> Atlas<Backend> {
         let Some((size, bytes)) = built else {
             return Ok(None);
         };
+        let prepared = match prepare_atlas_upload(&key, size, &bytes) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.state.lock().restore_compaction_entry(&key);
+                return Err(error);
+            }
+        };
         let mut state = self.state.lock();
-        match state.insert_or_get(key.clone(), size, &bytes) {
+        match state.insert_or_get(
+            key.clone(),
+            size,
+            prepared.allocation_size,
+            prepared.padding,
+            &prepared.bytes,
+        ) {
             Ok(tile) => Ok(Some(tile)),
             Err(error) => {
                 state.restore_compaction_entry(&key);
@@ -1217,10 +1261,99 @@ pub enum AtlasTextureKind {
     Subpixel = 2,
 }
 
+impl AtlasTextureKind {
+    fn bytes_per_pixel(self) -> usize {
+        match self {
+            Self::Monochrome => 1,
+            Self::Polychrome | Self::Subpixel => 4,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 #[expect(missing_docs)]
 pub struct TileId(pub u32);
+
+fn prepare_atlas_upload(
+    key: &AtlasKey,
+    content_size: Size<DevicePixels>,
+    bytes: &[u8],
+) -> Result<PreparedAtlasUpload> {
+    anyhow::ensure!(
+        content_size.width.0 > 0 && content_size.height.0 > 0,
+        "atlas entry size must be positive"
+    );
+    let width = usize::try_from(content_size.width.0)?;
+    let height = usize::try_from(content_size.height.0)?;
+    let bytes_per_pixel = key.texture_kind().bytes_per_pixel();
+    let source_row_bytes = width
+        .checked_mul(bytes_per_pixel)
+        .context("atlas source row length overflowed")?;
+    let expected_length = source_row_bytes
+        .checked_mul(height)
+        .context("atlas source buffer length overflowed")?;
+    anyhow::ensure!(
+        bytes.len() == expected_length,
+        "atlas source has {} bytes but {}x{} {:?} content requires {} bytes",
+        bytes.len(),
+        content_size.width.0,
+        content_size.height.0,
+        key.texture_kind(),
+        expected_length,
+    );
+
+    let padding = usize::try_from(ATLAS_GUTTER)?;
+    let doubled_padding = padding
+        .checked_mul(2)
+        .context("atlas gutter size overflowed")?;
+    let allocation_width = width
+        .checked_add(doubled_padding)
+        .context("atlas allocation width overflowed")?;
+    let allocation_height = height
+        .checked_add(doubled_padding)
+        .context("atlas allocation height overflowed")?;
+    let allocation_row_bytes = allocation_width
+        .checked_mul(bytes_per_pixel)
+        .context("atlas allocation row length overflowed")?;
+    let allocation_length = allocation_row_bytes
+        .checked_mul(allocation_height)
+        .context("atlas allocation buffer length overflowed")?;
+    let mut padded_bytes = vec![0; allocation_length];
+
+    match key.gutter_mode() {
+        AtlasGutterMode::Transparent => {
+            for source_y in 0..height {
+                let source_start = source_y * source_row_bytes;
+                let target_start =
+                    (source_y + padding) * allocation_row_bytes + padding * bytes_per_pixel;
+                padded_bytes[target_start..target_start + source_row_bytes]
+                    .copy_from_slice(&bytes[source_start..source_start + source_row_bytes]);
+            }
+        }
+        AtlasGutterMode::EdgeExtruded => {
+            for target_y in 0..allocation_height {
+                let source_y = target_y.saturating_sub(padding).min(height - 1);
+                for target_x in 0..allocation_width {
+                    let source_x = target_x.saturating_sub(padding).min(width - 1);
+                    let source_start = (source_y * width + source_x) * bytes_per_pixel;
+                    let target_start = (target_y * allocation_width + target_x) * bytes_per_pixel;
+                    padded_bytes[target_start..target_start + bytes_per_pixel]
+                        .copy_from_slice(&bytes[source_start..source_start + bytes_per_pixel]);
+                }
+            }
+        }
+    }
+
+    Ok(PreparedAtlasUpload {
+        allocation_size: Size {
+            width: DevicePixels(i32::try_from(allocation_width)?),
+            height: DevicePixels(i32::try_from(allocation_height)?),
+        },
+        padding: ATLAS_GUTTER,
+        bytes: padded_bytes,
+    })
+}
 
 fn device_size_to_etagere(size: Size<DevicePixels>) -> etagere::Size {
     etagere::size2(size.width.0, size.height.0)
@@ -1237,7 +1370,6 @@ fn etagere_point_to_device(point: etagere::Point) -> Point<DevicePixels> {
 mod tests {
     use super::*;
     use crate::ImageId;
-    use anyhow::Context as _;
     use std::{
         collections::HashSet,
         sync::{
@@ -1251,8 +1383,8 @@ mod tests {
         height: DevicePixels(1),
     };
     const PAGE_SIZE: Size<DevicePixels> = Size {
-        width: DevicePixels(2),
-        height: DevicePixels(2),
+        width: DevicePixels(6),
+        height: DevicePixels(3),
     };
 
     #[derive(Default)]
@@ -1260,6 +1392,8 @@ mod tests {
         textures: HashSet<AtlasTextureId>,
         create_calls: usize,
         upload_calls: usize,
+        uploaded_bounds: Vec<Bounds<DevicePixels>>,
+        uploaded_bytes: Vec<Vec<u8>>,
         destroyed_textures: Vec<AtlasTextureId>,
         clear_calls: usize,
         fail_next_create: bool,
@@ -1288,6 +1422,8 @@ mod tests {
                 "upload referred to a missing texture"
             );
             self.upload_calls += 1;
+            self.uploaded_bounds.push(upload.bounds);
+            self.uploaded_bytes.push(upload.bytes.to_vec());
             Ok(())
         }
 
@@ -1368,6 +1504,98 @@ mod tests {
     }
 
     #[test]
+    fn transparent_gutter_supports_single_channel_content() -> Result<()> {
+        let prepared = prepare_atlas_upload(
+            &glyph_key(1, false, false),
+            Size {
+                width: DevicePixels(2),
+                height: DevicePixels(1),
+            },
+            &[7, 9],
+        )?;
+        assert_eq!(
+            prepared.allocation_size,
+            Size {
+                width: DevicePixels(4),
+                height: DevicePixels(3),
+            }
+        );
+        assert_eq!(prepared.padding, 1);
+        assert_eq!(prepared.bytes, [0, 0, 0, 0, 0, 7, 9, 0, 0, 0, 0, 0]);
+        Ok(())
+    }
+
+    #[test]
+    fn image_gutter_extrudes_four_channel_edges() -> Result<()> {
+        let prepared = prepare_atlas_upload(
+            &image_key(1),
+            Size {
+                width: DevicePixels(2),
+                height: DevicePixels(2),
+            },
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        )?;
+        let first = [1, 2, 3, 4];
+        let second = [5, 6, 7, 8];
+        let third = [9, 10, 11, 12];
+        let fourth = [13, 14, 15, 16];
+        let expected = [
+            first, first, second, second, first, first, second, second, third, third, fourth,
+            fourth, third, third, fourth, fourth,
+        ]
+        .concat();
+        assert_eq!(prepared.bytes, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn gutter_rejects_invalid_source_length() {
+        prepare_atlas_upload(
+            &image_key(1),
+            Size {
+                width: DevicePixels(2),
+                height: DevicePixels(1),
+            },
+            &[0; 4],
+        )
+        .expect_err("a short BGRA row must be rejected");
+    }
+
+    #[test]
+    fn atlas_tile_exposes_inner_bounds_and_uploads_outer_bounds() -> Result<()> {
+        let atlas = atlas();
+        let tile = atlas
+            .get_or_insert_with(image_key(1), &mut build_tile)?
+            .context("image tile should exist")?;
+        assert_eq!(tile.padding, 1);
+        assert_eq!(
+            tile.bounds.origin,
+            Point::new(DevicePixels(1), DevicePixels(1))
+        );
+        assert_eq!(tile.bounds.size, TILE_SIZE);
+        atlas.with_backend(|backend| {
+            assert_eq!(
+                backend.uploaded_bounds,
+                [Bounds {
+                    origin: Point::default(),
+                    size: Size {
+                        width: DevicePixels(3),
+                        height: DevicePixels(3),
+                    },
+                }]
+            );
+            assert_eq!(backend.uploaded_bytes[0], [0, 0, 0, 255].repeat(9));
+        });
+        let state = atlas.state.lock();
+        let entry = state
+            .entries_by_tile_id
+            .get(&tile.tile_id)
+            .context("tile entry should exist")?;
+        assert_eq!(entry.allocation_bounds, state.backend.uploaded_bounds[0]);
+        Ok(())
+    }
+
+    #[test]
     fn only_successful_inserts_are_cached() -> Result<()> {
         let atlas = atlas();
         let key = image_key(1);
@@ -1407,7 +1635,7 @@ mod tests {
         assert!(atlas.contains(&key));
         let snapshot = atlas.snapshot();
         assert_eq!(snapshot.page_count, 1);
-        assert_eq!(snapshot.resident_bytes, 16);
+        assert_eq!(snapshot.resident_bytes, 72);
         assert_eq!(snapshot.entry_count, 1);
         assert_eq!(snapshot.hits, 1);
         assert_eq!(snapshot.misses, 5);
@@ -1466,14 +1694,14 @@ mod tests {
 
     #[test]
     fn remove_clear_and_recreate_do_not_reuse_identities() -> Result<()> {
-        let one_pixel_page = Size {
-            width: DevicePixels(1),
-            height: DevicePixels(1),
+        let single_entry_page = Size {
+            width: DevicePixels(3),
+            height: DevicePixels(3),
         };
         let atlas = Atlas::with_page_size(
             RecordingAtlasBackend::default(),
-            one_pixel_page,
-            one_pixel_page,
+            single_entry_page,
+            single_entry_page,
         );
         let first_key = image_key(1);
         let second_key = image_key(2);
@@ -1609,7 +1837,7 @@ mod tests {
 
         let snapshot = atlas.snapshot();
         assert_eq!(snapshot.page_count, 2);
-        assert_eq!(snapshot.resident_bytes, 20);
+        assert_eq!(snapshot.resident_bytes, 90);
         Ok(())
     }
 
@@ -1717,8 +1945,8 @@ mod tests {
         let snapshot = atlas.snapshot();
         let image = snapshot.content[AtlasContentKind::Image.index()];
         assert_eq!(image.page_count, 1);
-        assert_eq!(image.resident_bytes, 16);
-        assert_eq!(image.working_set_bytes, 16);
+        assert_eq!(image.resident_bytes, 72);
+        assert_eq!(image.working_set_bytes, 72);
         assert_eq!(image.evictions, 0);
         assert_eq!(image.budget_pressure_frames, 1);
         assert_eq!(snapshot.budget_pressure_frames, 1);

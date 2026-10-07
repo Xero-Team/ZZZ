@@ -476,9 +476,33 @@ BGRA8，premultiplied conversion 只发生一次。macOS/Windows native 结果�
 
 状态：`IN PROGRESS`
 
-尚未修改代码。下一步为 atlas allocation 增加一像素 outer gutter 与明确 inner/outer
-bounds，分别验证透明 padding 和 edge extrusion，并完成 TEXT-008 的整数、fractional
-与 transformed sampling pixel matrix。
+已完成第一组实现：
+
+- 所有 atlas entry 使用 1 device-pixel gutter。`AtlasTile::bounds` 继续表示 shader
+  采样的 inner content；`AtlasEntry::allocation_bounds` 保存 allocator/backend upload 的
+  outer bounds，`AtlasTile::padding == 1` 反映真实 gutter。
+- padding bytes 在 builder 完成后、atlas mutex 重新加锁前生成；并发 miss 仍可重复构建，
+  但 padding copy、font raster 和 image copy 都不在 atlas lock 内执行。
+- alpha/subpixel/color glyph 与 SVG mask 使用 transparent gutter；ordinary image 使用
+  edge-extruded gutter。公共 helper 覆盖 1-byte/4-byte row、exact input length 和
+  checked size arithmetic。
+- cropped image sub-tile 只修改 inner bounds，保留 texture/tile identity 与 padding。
+- WGPU/Metal 保留 linear sampling；DirectX atlas sampler 从 wrap 改为 clamp。
+- resident/working-set page bytes 仍由真实 texture page 计算；pending/uploaded bytes
+  现在包含 gutter bytes。
+
+验证：
+
+| 检查                                                                      | 结果   | 说明                                                        |
+| ------------------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
+| `cargo test --locked -p gpui atlas::tests`                                | `PASS` | 19 tests；含 inner/outer bounds、transparent/extruded bytes |
+| `cargo test --locked -p gpui --features frame-diagnostics`                | `PASS` | 260 unit + 1 integration，含 cropped sub-tile identity      |
+| `cargo test --locked -p gpui_wgpu --features test-support`                | `PASS` | 21 unit passed、1 ignored；5 headless passed                |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin` | `PASS` | Metal upload path cross-compile                             |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`      | `PASS` | all-target/all-feature + philosophy                         |
+
+下一步：实现 TEXT-008 adjacent high-contrast pixel matrix，覆盖 integer、fractional、scale
+与 rotation，验证 glyph/SVG 不串色且 ordinary image 边缘没有透明 seam。
 
 ### 阶段 7–9
 

@@ -394,9 +394,11 @@ mod tests {
         };
         let mut build = || Ok(Some((size, Cow::Owned(vec![0, 0, 0, 255]))));
 
-        atlas
+        let tile = atlas
             .get_or_insert_with(key.clone(), &mut build)?
             .expect("tile should be created");
+        assert_eq!(tile.padding, 1);
+        assert_eq!(tile.bounds.size, size);
         let pending = atlas.snapshot();
         assert_eq!(pending.page_count, 1);
         assert_eq!(pending.resident_bytes, 1024 * 1024 * 4);
@@ -404,7 +406,7 @@ mod tests {
         assert_eq!(pending.misses, 1);
         assert_eq!(pending.allocations, 1);
         assert_eq!(pending.pending_uploads, 1);
-        assert_eq!(pending.pending_upload_bytes, 4);
+        assert_eq!(pending.pending_upload_bytes, 3 * 3 * 4);
         assert_eq!(pending.upload_calls, 0);
 
         atlas.flush_uploads();
@@ -412,7 +414,7 @@ mod tests {
         assert_eq!(uploaded.pending_uploads, 0);
         assert_eq!(uploaded.pending_upload_bytes, 0);
         assert_eq!(uploaded.upload_calls, 1);
-        assert_eq!(uploaded.uploaded_bytes, 4);
+        assert_eq!(uploaded.uploaded_bytes, 3 * 3 * 4);
 
         atlas
             .get_or_insert_with(key.clone(), &mut || {

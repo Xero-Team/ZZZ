@@ -865,7 +865,7 @@ mod tests {
                 .object_fit(ObjectFit::Fill)
                 .into_any_element()
         });
-        let full_tile_bounds = window.update(|window, _| {
+        let full_tile = window.update(|window, _| {
             window
                 .interaction
                 .rendered_frame
@@ -874,7 +874,6 @@ mod tests {
                 .last()
                 .expect("fill image should paint a sprite")
                 .tile
-                .bounds
         });
 
         window.draw(point(px(10.), px(20.)), size(px(100.), px(100.)), |_, _| {
@@ -884,7 +883,7 @@ mod tests {
                 .into_any_element()
         });
 
-        let (rendered_bounds, rendered_tile_bounds, scale_factor) = window.update(|window, _| {
+        let (rendered_bounds, rendered_tile, scale_factor) = window.update(|window, _| {
             let sprite = window
                 .interaction
                 .rendered_frame
@@ -892,7 +891,7 @@ mod tests {
                 .polychrome_sprites
                 .last()
                 .expect("cover image should paint a sprite");
-            (sprite.bounds, sprite.tile.bounds, window.scale_factor())
+            (sprite.bounds, sprite.tile, window.scale_factor())
         });
         assert_eq!(
             rendered_bounds,
@@ -903,13 +902,17 @@ mod tests {
         );
         assert_eq!(
             (
-                rendered_tile_bounds.origin.x.0 - full_tile_bounds.origin.x.0,
-                rendered_tile_bounds.origin.y.0 - full_tile_bounds.origin.y.0,
-                rendered_tile_bounds.size.width.0,
-                rendered_tile_bounds.size.height.0,
+                rendered_tile.bounds.origin.x.0 - full_tile.bounds.origin.x.0,
+                rendered_tile.bounds.origin.y.0 - full_tile.bounds.origin.y.0,
+                rendered_tile.bounds.size.width.0,
+                rendered_tile.bounds.size.height.0,
             ),
             (50, 0, 100, 100),
         );
+        assert_eq!(rendered_tile.texture_id, full_tile.texture_id);
+        assert_eq!(rendered_tile.tile_id, full_tile.tile_id);
+        assert_eq!(rendered_tile.padding, full_tile.padding);
+        assert_eq!(rendered_tile.padding, 1);
     }
 
     #[gpui::test]
