@@ -14,14 +14,14 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `4b362a1e415518341d75bb4237c13f1f6249fb61`
+  `3bbfb19985379ebcfce67700dd96ef4595c59357`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
-- Next action: operational、wire 与主要 identity bridge 清理已完成；继续审计普通
-  `Local`/`Remote` branch、editor/media persistence sidecar、`SettingsLocation` legacy key
-  与 lazy remote provider task，运行 `VFS-EXP-013` 并完成 Phase 9 全量验收。
+- Next action: media persistence 已完成一次性 exact-sidecar migration；继续审计普通
+  `Local`/`Remote` branch、editor persistence sidecar、`SettingsLocation` legacy key 与
+  lazy remote provider task，运行 `VFS-EXP-013` 并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -109,31 +109,31 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Compatibility adapter 清单 {#compatibility-adapters}
 
-| Adapter                                         | Introduced | Callers                                                                                                                                                   | Removal phase | Status    |
-| ----------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------- |
-| Legacy `Fs` storage façade                      | Existing   | Storage callers remain; `NativeExecutionContext` exposes separate Git/process services while the compatibility object still implements all service traits | Phase 9       | MIGRATING |
-| `LegacyFsProvider`                              | Phase 2    | Removed; FakeFs/benchmark coverage now uses exact native-path `EmulatedFsProvider`, explicitly not an authority boundary                                  | Phase 9       | REMOVED   |
-| Generic UTF-8 `ProviderPath` bridge             | Phase 1    | Global separator-delimited adapter and all callers removed; typed sources now construct exact components directly                                         | Phase 9       | REMOVED   |
-| `WorktreeId` to temporary `MountId`             | Phase 1    | `ProjectPath` v2 dual-wire adapter; runtime snapshots now allocate session mount IDs                                                                      | Phase 5       | MIGRATING |
-| `RelPath`/`ProjectPath` UTF-8 wire              | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)                                                                                    | Phase 9       | MIGRATING |
-| `Worktree::Local/Remote` behavior branches      | Existing   | Text and binary file loads, stat and archive operations use provider dispatch; scanner, native paths and registered process/OS boundaries remain          | Phase 6/9     | MIGRATING |
-| Dedicated image/download byte RPC               | Existing   | `OpenImageByPath`/`CreateImageForPeer` and `DownloadFileByPath`/`CreateFileForPeer` were deleted; all remote bytes use VFS reads                          | Phase 9       | REMOVED   |
-| Worktree snapshot-to-legacy metadata bridge     | Phase 3    | `BackgroundScanner` while Worktree entries still use `RelPath`/legacy `Metadata`                                                                          | Phase 5/9     | ACTIVE    |
-| Lazy remote Worktree VFS provider task          | Phase 4    | One cached proxy task remains; eager construction was REJECTED for network side effects; removal requires a lazy provider handle                          | Phase 9       | ACTIVE    |
-| Optional `language::File` VFS identity defaults | Phase 5    | Defaults removed; every implementation explicitly supplies exact identity or declares a historic/test-only absence                                        | Phase 9       | REMOVED   |
-| Editor persisted provider-path BLOB             | Phase 5    | Exact `ProviderPathV2` is restored after legacy absolute path resolves the current worktree                                                               | Phase 9       | ACTIVE    |
-| Media persisted provider-path BLOB              | Phase 5    | Audio/video/PDF dual-write exact `ProviderPathV2`; legacy absolute path locates the worktree and is used only when the sidecar is absent                  | Phase 9       | ACTIVE    |
-| `LspPathMapper` legacy `ProjectPath` bridge     | Phase 6    | Removed from mapper; exact resources stay authoritative and the remaining conversion is isolated at the Worktree text-buffer boundary                     | Phase 9       | REMOVED   |
-| Archive member synthetic `WorktreeId`           | Phase 7    | Read-only language buffers use their child `MountId` as a temporary settings/wire worktree ID while exact `ResourceId`/`VfsPath` remains authoritative    | Phase 9       | ACTIVE    |
-| `ProjectEntryId` Project Panel selection        | Existing   | UI selection/expand state remains entry-ID based while entry views and drag payloads carry VFS identity                                                   | Phase 5/9     | MIGRATING |
-| Legacy `RevealInProjectPanel` event             | Existing   | Non-migrated callers still reveal by `ProjectEntryId`; Workspace uses resource-first reveal                                                               | Phase 9       | MIGRATING |
-| `ProjectResourceIdentity::Path` fallback        | Phase 5    | Removed; SearchMatch and Workspace diagnostics require `ResourceId`, and unmaterialized paths are excluded from identity maps                             | Phase 9       | REMOVED   |
-| Data-local media `TempPath` staging             | Phase 5    | Audio/video decoders that require a native path materialize provider bytes locally and retain the owner for decoder lifetime                              | Phase 10      | ACTIVE    |
-| `SettingsLocation` legacy worktree/path key     | Phase 5    | Exact `VfsPath` is authoritative when available; extension/WIT and test callers may still supply only `WorktreeId` plus `RelPath`                         | Phase 9       | ACTIVE    |
-| Native trust path legacy string wire            | Existing   | Worktree metadata, add-worktree responses and trust requests now require exact `NativePathV2`; legacy string fields are reserved                          | Phase 9       | REMOVED   |
-| Trusted-worktree legacy DB text                 | Existing   | Exact `NativePath` BLOB is authoritative; migration rebuilds the table and explicitly invalidates old text-only rows                                      | Phase 9       | REMOVED   |
-| Toolchain native-path string wire/DB            | Existing   | Toolchain RPC and SQLite persistence require exact `NativePathV2`/BLOB; legacy strings and old rows are removed or explicitly invalidated                 | Phase 9       | REMOVED   |
-| Native/OS action host checks                    | Existing   | `NativeExecutionContext` gates Git/LSP/task/debugger/terminal; reveal/open-system, system prompts, external drag and broken-item fallback remain          | Phase 9       | MIGRATING |
+| Adapter                                         | Introduced | Callers                                                                                                                                                                       | Removal phase | Status    |
+| ----------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------- |
+| Legacy `Fs` storage façade                      | Existing   | Storage callers remain; `NativeExecutionContext` exposes separate Git/process services while the compatibility object still implements all service traits                     | Phase 9       | MIGRATING |
+| `LegacyFsProvider`                              | Phase 2    | Removed; FakeFs/benchmark coverage now uses exact native-path `EmulatedFsProvider`, explicitly not an authority boundary                                                      | Phase 9       | REMOVED   |
+| Generic UTF-8 `ProviderPath` bridge             | Phase 1    | Global separator-delimited adapter and all callers removed; typed sources now construct exact components directly                                                             | Phase 9       | REMOVED   |
+| `WorktreeId` to temporary `MountId`             | Phase 1    | `ProjectPath` v2 dual-wire adapter; runtime snapshots now allocate session mount IDs                                                                                          | Phase 5       | MIGRATING |
+| `RelPath`/`ProjectPath` UTF-8 wire              | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)                                                                                                        | Phase 9       | MIGRATING |
+| `Worktree::Local/Remote` behavior branches      | Existing   | Text and binary file loads, stat and archive operations use provider dispatch; scanner, native paths and registered process/OS boundaries remain                              | Phase 6/9     | MIGRATING |
+| Dedicated image/download byte RPC               | Existing   | `OpenImageByPath`/`CreateImageForPeer` and `DownloadFileByPath`/`CreateFileForPeer` were deleted; all remote bytes use VFS reads                                              | Phase 9       | REMOVED   |
+| Worktree snapshot-to-legacy metadata bridge     | Phase 3    | `BackgroundScanner` while Worktree entries still use `RelPath`/legacy `Metadata`                                                                                              | Phase 5/9     | ACTIVE    |
+| Lazy remote Worktree VFS provider task          | Phase 4    | One cached proxy task remains; eager construction was REJECTED for network side effects; removal requires a lazy provider handle                                              | Phase 9       | ACTIVE    |
+| Optional `language::File` VFS identity defaults | Phase 5    | Defaults removed; every implementation explicitly supplies exact identity or declares a historic/test-only absence                                                            | Phase 9       | REMOVED   |
+| Editor persisted provider-path BLOB             | Phase 5    | Exact `ProviderPathV2` is restored after legacy absolute path resolves the current worktree                                                                                   | Phase 9       | ACTIVE    |
+| Media persisted provider-path BLOB              | Phase 5    | Exact `ProviderPathV2` is authoritative; a missing sidecar is inferred from the resolved worktree and immediately rewritten, while malformed or uninferable rows are rejected | Phase 9       | MIGRATING |
+| `LspPathMapper` legacy `ProjectPath` bridge     | Phase 6    | Removed from mapper; exact resources stay authoritative and the remaining conversion is isolated at the Worktree text-buffer boundary                                         | Phase 9       | REMOVED   |
+| Archive member synthetic `WorktreeId`           | Phase 7    | Read-only language buffers use their child `MountId` as a temporary settings/wire worktree ID while exact `ResourceId`/`VfsPath` remains authoritative                        | Phase 9       | ACTIVE    |
+| `ProjectEntryId` Project Panel selection        | Existing   | UI selection/expand state remains entry-ID based while entry views and drag payloads carry VFS identity                                                                       | Phase 5/9     | MIGRATING |
+| Legacy `RevealInProjectPanel` event             | Existing   | Non-migrated callers still reveal by `ProjectEntryId`; Workspace uses resource-first reveal                                                                                   | Phase 9       | MIGRATING |
+| `ProjectResourceIdentity::Path` fallback        | Phase 5    | Removed; SearchMatch and Workspace diagnostics require `ResourceId`, and unmaterialized paths are excluded from identity maps                                                 | Phase 9       | REMOVED   |
+| Data-local media `TempPath` staging             | Phase 5    | Audio/video decoders that require a native path materialize provider bytes locally and retain the owner for decoder lifetime                                                  | Phase 10      | ACTIVE    |
+| `SettingsLocation` legacy worktree/path key     | Phase 5    | Exact `VfsPath` is authoritative when available; extension/WIT and test callers may still supply only `WorktreeId` plus `RelPath`                                             | Phase 9       | ACTIVE    |
+| Native trust path legacy string wire            | Existing   | Worktree metadata, add-worktree responses and trust requests now require exact `NativePathV2`; legacy string fields are reserved                                              | Phase 9       | REMOVED   |
+| Trusted-worktree legacy DB text                 | Existing   | Exact `NativePath` BLOB is authoritative; migration rebuilds the table and explicitly invalidates old text-only rows                                                          | Phase 9       | REMOVED   |
+| Toolchain native-path string wire/DB            | Existing   | Toolchain RPC and SQLite persistence require exact `NativePathV2`/BLOB; legacy strings and old rows are removed or explicitly invalidated                                     | Phase 9       | REMOVED   |
+| Native/OS action host checks                    | Existing   | `NativeExecutionContext` gates Git/LSP/task/debugger/terminal; reveal/open-system, system prompts, external drag and broken-item fallback remain                              | Phase 9       | MIGRATING |
 
 ## 实验结果 {#experiments}
 
@@ -385,6 +385,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-07 | 9D    | `./script/clippy -p project -p remote_server`, mapper bridge detector, fmt/diff and code-smell review                                                                          | 0           | PASS: rename buffer lookup derives compatibility paths from exact VFS identity only at the consumer boundary; no remaining finding              | No                                                                            |
 | 2026-10-08 | 9D    | remote Worktree text-load regression, full Worktree and full remote-server regressions                                                                                         | 0/101/101   | New remote text VFS test PASS; Worktree 95/1 and remote server 31/2 preserve frozen failure sets                                                | Yes: frozen Worktree and remote-server failures                               |
 | 2026-10-08 | 9D    | `./script/clippy -p worktree -p remote_server`, fmt/diff and `hunting-code-smells` P0/P1/P2 review                                                                             | 0           | PASS: remote text load now shares exact provider semantics with binary/stat/archive loads; no remaining finding                                 | No                                                                            |
+| 2026-10-08 | 9D    | `cargo check --offline -p project -p audio_viewer -p video_viewer -p pdf_viewer`; targeted Project persistence test; Audio 20, Video 6 and PDF 22 tests                        | 0 each      | PASS: audio/video/PDF legacy rows migrate once to exact sidecars; exact paths win and malformed or uninferable sidecars reject                  | No                                                                            |
+| 2026-10-08 | 9D    | `./script/clippy -p project -p audio_viewer -p video_viewer -p pdf_viewer`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review    | 0 each      | PASS: no new P0/P1/P2 finding after removing the unused legacy helper parameter; philosophy gate passed                                         | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -458,6 +460,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `11744a9e31249ff2623a37cfadb2369d23b1c649` | 9D    | Exact-only `LspPathMapper` with legacy text-buffer adaptation moved to WorktreeStore                                                 | Mapper/prevalidation/read-only/remote workspace-edit tests and scoped clippy PASS                                               | Restore optional mapper `ProjectPath` without changing exact mapping or validation                     |
 | `30de7da3bf90eea8834ba157e5b83282e442bd6a` | 9D    | Progress update for exact LSP mapper                                                                                                 | Docs Prettier PASS                                                                                                              | Revert the progress update without changing runtime behavior                                           |
 | `4b362a1e415518341d75bb4237c13f1f6249fb61` | 9D    | Remote Worktree text loads through the exact VFS provider                                                                            | Remote text-load regression, baseline parity and scoped clippy/code-smell review PASS                                           | Restore remote text-load error without changing binary/stat/archive provider dispatch                  |
+| `3bbfb19985379ebcfce67700dd96ef4595c59357` | 9D    | One-time exact-sidecar migration for audio, video and PDF persistence                                                                | Project persistence regression, viewer suites, scoped clippy, fmt/diff and code-smell review PASS                               | Restore permanent legacy media fallback while retaining exact sidecars                                 |
 
 ## 平台 QA {#platform-qa}
 
@@ -478,7 +481,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Next action {#next-action}
 
-继续 Phase 9 compatibility adapter 清理。审计 editor/media persistence sidecar、
+继续 Phase 9 compatibility adapter 清理。审计 editor persistence sidecar、
 `SettingsLocation` legacy key 与 lazy remote provider task；普通 consumer dispatch 中只保留
 scanner/native/OS process boundary。随后审计旧 persistence 的 migration/invalidation policy，
 执行 `VFS-EXP-013`、Phase 9 全量 regression matrix 和 code-smell 审查。
