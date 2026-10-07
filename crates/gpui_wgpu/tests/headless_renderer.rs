@@ -9,7 +9,7 @@ use gpui::{
     PlatformAtlas, PlatformHeadlessRenderer, PlatformTextSystem, Point, PolychromeSprite, Quad,
     Render, RenderGlyphParams, RenderImageParams, RenderSvgParams, ScaledPixels, Scene, Shadow,
     Size, Styled as _, SubpixelSprite, TransformationMatrix, Underline, Window, canvas, font,
-    point, px, size,
+    point, px, radians, size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
 use std::{borrow::Cow, collections::HashSet, path::Path, sync::Arc, time::Instant};
@@ -105,6 +105,35 @@ fn image_tile(
             )))
         })?
         .ok_or_else(|| anyhow::anyhow!("image builder returned no tile"))
+}
+
+fn raw_tile(
+    atlas: &Arc<dyn PlatformAtlas>,
+    key: AtlasKey,
+    size: Size<DevicePixels>,
+    bytes: Vec<u8>,
+) -> anyhow::Result<AtlasTile> {
+    atlas
+        .get_or_insert_with(key, &mut || Ok(Some((size, Cow::Borrowed(&bytes)))))?
+        .context("raw atlas fixture must produce a tile")
+}
+
+fn glyph_atlas_key(glyph_id: u32, format: GlyphRasterFormat) -> AtlasKey {
+    AtlasKey::glyph(
+        RenderGlyphParams {
+            font_id: FontId(0),
+            glyph_id: GlyphId(glyph_id),
+            font_size: px(16.0),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
+            is_emoji: format == GlyphRasterFormat::ColorBgra8,
+            subpixel_rendering: format == GlyphRasterFormat::SubpixelBgra8,
+            dilation: 0,
+        },
+        format,
+    )
 }
 
 fn image_scene(tile: AtlasTile) -> Scene {
@@ -1499,6 +1528,292 @@ fn run_text_glyph_format(
     Ok(())
 }
 
+fn assert_solid_region(
+    image: &image::RgbaImage,
+    x_range: std::ops::Range<u32>,
+    y_range: std::ops::Range<u32>,
+    expected: [u8; 4],
+) {
+    for y in y_range {
+        for x in x_range.clone() {
+            assert_eq!(
+                image.get_pixel(x, y).0,
+                expected,
+                "unexpected sampling result at ({x}, {y})"
+            );
+        }
+    }
+}
+
+fn run_text_atlas_sampling_gutter(
+    force_fallback_adapter: bool,
+    output_directory: &Path,
+) -> anyhow::Result<()> {
+    let mut renderer = WgpuHeadlessRenderer::new_with_fallback(force_fallback_adapter)?;
+    let gpu_specs = renderer.gpu_specs();
+    anyhow::ensure!(
+        gpu_specs.is_software_emulated == force_fallback_adapter,
+        "requested fallback={force_fallback_adapter}, selected {}",
+        gpu_specs.device_name
+    );
+    let atlas = renderer.sprite_atlas();
+    let fixture_size = Size {
+        width: DevicePixels(2),
+        height: DevicePixels(2),
+    };
+    let frame = atlas.begin_frame();
+
+    let red_image = image_tile(
+        &atlas,
+        AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(8_000),
+            frame_index: 0,
+        }),
+        fixture_size,
+        [0, 0, 255, 255],
+    )?;
+    let blue_image = image_tile(
+        &atlas,
+        AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(8_001),
+            frame_index: 0,
+        }),
+        fixture_size,
+        [255, 0, 0, 255],
+    )?;
+    anyhow::ensure!(
+        red_image.texture_id == blue_image.texture_id,
+        "high-contrast image fixtures must share an atlas page"
+    );
+
+    let alpha_opaque = raw_tile(
+        &atlas,
+        glyph_atlas_key(8_100, GlyphRasterFormat::Alpha8),
+        fixture_size,
+        vec![255; 4],
+    )?;
+    let alpha_transparent = raw_tile(
+        &atlas,
+        glyph_atlas_key(8_101, GlyphRasterFormat::Alpha8),
+        fixture_size,
+        vec![0; 4],
+    )?;
+    let subpixel_opaque = raw_tile(
+        &atlas,
+        glyph_atlas_key(8_200, GlyphRasterFormat::SubpixelBgra8),
+        fixture_size,
+        vec![255; 16],
+    )?;
+    let subpixel_transparent = raw_tile(
+        &atlas,
+        glyph_atlas_key(8_201, GlyphRasterFormat::SubpixelBgra8),
+        fixture_size,
+        vec![0; 16],
+    )?;
+    let color_opaque = raw_tile(
+        &atlas,
+        glyph_atlas_key(8_300, GlyphRasterFormat::ColorBgra8),
+        fixture_size,
+        [255, 0, 255, 255].repeat(4),
+    )?;
+    let color_transparent = raw_tile(
+        &atlas,
+        glyph_atlas_key(8_301, GlyphRasterFormat::ColorBgra8),
+        fixture_size,
+        vec![0; 16],
+    )?;
+    let svg_opaque = raw_tile(
+        &atlas,
+        AtlasKey::Svg(RenderSvgParams {
+            path: "text-008-opaque.svg".into(),
+            size: fixture_size,
+        }),
+        fixture_size,
+        vec![255; 4],
+    )?;
+    let svg_transparent = raw_tile(
+        &atlas,
+        AtlasKey::Svg(RenderSvgParams {
+            path: "text-008-transparent.svg".into(),
+            size: fixture_size,
+        }),
+        fixture_size,
+        vec![0; 4],
+    )?;
+
+    for (opaque, transparent) in [
+        (alpha_opaque, alpha_transparent),
+        (subpixel_opaque, subpixel_transparent),
+        (color_opaque, color_transparent),
+        (svg_opaque, svg_transparent),
+    ] {
+        anyhow::ensure!(
+            opaque.texture_id == transparent.texture_id,
+            "high-contrast fixtures must share an atlas page"
+        );
+        anyhow::ensure!(
+            opaque.padding == 1 && transparent.padding == 1,
+            "TEXT-008 requires one-pixel gutters"
+        );
+    }
+
+    let image_target = Size {
+        width: DevicePixels(152),
+        height: DevicePixels(36),
+    };
+    let image_mask = ContentMask {
+        bounds: bounds(0.0, 0.0, 152.0, 36.0, 1.0),
+    };
+    let mut image_scene = Scene::default();
+    for (tile, sprite_bounds) in [
+        (red_image, bounds(4.0, 4.0, 24.0, 24.0, 1.0)),
+        (red_image, bounds(36.25, 4.5, 24.0, 24.0, 1.0)),
+        (red_image, bounds(68.5, 6.25, 40.0, 18.0, 1.0)),
+        (blue_image, bounds(120.25, 4.5, 24.0, 24.0, 1.0)),
+    ] {
+        image_scene.insert_primitive(PolychromeSprite {
+            order: 0,
+            pad: 0,
+            grayscale: PaddedBool32::from(false),
+            opacity: 1.0,
+            bounds: sprite_bounds,
+            content_mask: image_mask,
+            corner_radii: Corners::default(),
+            tile,
+        });
+    }
+    image_scene.finish();
+
+    let transparent_target = Size {
+        width: DevicePixels(128),
+        height: DevicePixels(96),
+    };
+    let transparent_mask = ContentMask {
+        bounds: bounds(0.0, 0.0, 128.0, 96.0, 1.0),
+    };
+    let alpha_transform = TransformationMatrix::unit()
+        .translate(point(ScaledPixels(54.5), ScaledPixels(24.25)))
+        .rotate(radians(0.43))
+        .scale(size(1.4, 0.75));
+    let subpixel_transform = TransformationMatrix::unit()
+        .translate(point(ScaledPixels(82.25), ScaledPixels(66.5)))
+        .rotate(radians(-0.37))
+        .scale(size(1.2, 1.4));
+    let mut transparent_scene = Scene::default();
+    transparent_scene.insert_primitive(MonochromeSprite {
+        order: 0,
+        pad: 0,
+        bounds: bounds(8.25, 8.5, 20.0, 20.0, 1.0),
+        content_mask: transparent_mask,
+        color: gpui::rgb(0xffffff).into(),
+        tile: alpha_transparent,
+        transformation: TransformationMatrix::unit(),
+    });
+    transparent_scene.insert_primitive(MonochromeSprite {
+        order: 0,
+        pad: 0,
+        bounds: bounds(-10.0, -10.0, 20.0, 20.0, 1.0),
+        content_mask: transparent_mask,
+        color: gpui::rgb(0xffffff).into(),
+        tile: alpha_transparent,
+        transformation: alpha_transform,
+    });
+    transparent_scene.insert_primitive(MonochromeSprite {
+        order: 0,
+        pad: 0,
+        bounds: bounds(92.5, 8.25, 20.0, 20.0, 1.0),
+        content_mask: transparent_mask,
+        color: gpui::rgb(0xffffff).into(),
+        tile: svg_transparent,
+        transformation: TransformationMatrix::unit(),
+    });
+    transparent_scene.insert_primitive(SubpixelSprite {
+        order: 0,
+        pad: 0,
+        bounds: bounds(-8.0, -8.0, 16.0, 16.0, 1.0),
+        content_mask: transparent_mask,
+        color: gpui::rgb(0xffffff).into(),
+        tile: subpixel_transparent,
+        transformation: subpixel_transform,
+    });
+    transparent_scene.insert_primitive(PolychromeSprite {
+        order: 0,
+        pad: 0,
+        grayscale: PaddedBool32::from(false),
+        opacity: 1.0,
+        bounds: bounds(12.5, 52.25, 28.0, 20.0, 1.0),
+        content_mask: transparent_mask,
+        corner_radii: Corners::default(),
+        tile: color_transparent,
+    });
+    transparent_scene.finish();
+
+    let mut usage = AtlasUsage::default();
+    for tile in [
+        red_image,
+        blue_image,
+        alpha_opaque,
+        alpha_transparent,
+        subpixel_opaque,
+        subpixel_transparent,
+        color_opaque,
+        color_transparent,
+        svg_opaque,
+        svg_transparent,
+    ] {
+        usage.insert(tile);
+    }
+    atlas.finish_frame(frame, &usage);
+
+    let image_output = renderer.render_scene_to_image(&image_scene, image_target)?;
+    assert_solid_region(&image_output, 4..28, 4..28, [255, 0, 0, 255]);
+    assert_solid_region(&image_output, 40..56, 8..24, [255, 0, 0, 255]);
+    assert_solid_region(&image_output, 74..103, 10..20, [255, 0, 0, 255]);
+    assert_solid_region(&image_output, 124..140, 8..24, [0, 0, 255, 255]);
+
+    let transparent_output =
+        renderer.render_scene_to_image(&transparent_scene, transparent_target)?;
+    anyhow::ensure!(
+        transparent_output
+            .pixels()
+            .all(|pixel| pixel.0 == [0, 0, 0, 0]),
+        "transparent gutter fixtures sampled neighboring atlas content"
+    );
+
+    let adapter = if force_fallback_adapter {
+        "fallback"
+    } else {
+        "hardware"
+    };
+    std::fs::create_dir_all(output_directory)?;
+    image_output.save(output_directory.join(format!("text-008-{adapter}-images.png")))?;
+    transparent_output
+        .save(output_directory.join(format!("text-008-{adapter}-transparent.png")))?;
+    let artifact = serde_json::json!({
+        "experiment": "TEXT-008",
+        "adapter": adapter,
+        "gpu": {
+            "device_name": gpu_specs.device_name,
+            "driver_name": gpu_specs.driver_name,
+            "driver_info": gpu_specs.driver_info,
+            "is_software_emulated": gpu_specs.is_software_emulated,
+        },
+        "gutter_pixels": red_image.padding,
+        "image_cases": ["integer", "fractional", "non_uniform_scale", "adjacent_high_contrast"],
+        "transparent_cases": ["glyph_alpha", "glyph_subpixel", "glyph_color", "svg_mask", "rotation"],
+        "result": {
+            "ordinary_image_has_no_transparent_seam": true,
+            "transparent_content_has_no_cross_tile_bleed": true,
+        },
+    });
+    std::fs::write(
+        output_directory.join(format!("text-008-{adapter}.json")),
+        serde_json::to_vec_pretty(&artifact)?,
+    )?;
+    println!("{}", serde_json::to_string_pretty(&artifact)?);
+    Ok(())
+}
+
 #[test]
 fn hardware_adapter_renders_primitive_corpus() {
     let mut renderer = WgpuHeadlessRenderer::new().expect("hardware headless renderer");
@@ -1646,4 +1961,18 @@ fn text_glyph_format_runner() -> anyhow::Result<()> {
     );
     run_text_glyph_format(false, &output_directory)?;
     run_text_glyph_format(true, &output_directory)
+}
+
+#[test]
+#[ignore = "phase-6 sampling gutter runner writes explicit pixel artifacts"]
+fn text_atlas_sampling_gutter_runner() -> anyhow::Result<()> {
+    let output_directory = std::env::var_os("GPUI_TEXT_ATLAS_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("GPUI_TEXT_ATLAS_OUTPUT_DIR must be set"))?;
+    anyhow::ensure!(
+        output_directory.is_absolute(),
+        "GPUI_TEXT_ATLAS_OUTPUT_DIR must be an absolute path"
+    );
+    run_text_atlas_sampling_gutter(false, &output_directory)?;
+    run_text_atlas_sampling_gutter(true, &output_directory)
 }

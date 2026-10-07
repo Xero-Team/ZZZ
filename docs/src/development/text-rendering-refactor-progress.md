@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 6 进行中                              |
+| 当前阶段      | 阶段 7 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -474,7 +474,7 @@ BGRA8，premultiplied conversion 只发生一次。macOS/Windows native 结果�
 
 ### 阶段 6：padding、sampling 和边界正确性
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 已完成第一组实现：
 
@@ -493,18 +493,50 @@ BGRA8，premultiplied conversion 只发生一次。macOS/Windows native 结果�
 
 验证：
 
-| 检查                                                                      | 结果   | 说明                                                        |
-| ------------------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
-| `cargo test --locked -p gpui atlas::tests`                                | `PASS` | 19 tests；含 inner/outer bounds、transparent/extruded bytes |
-| `cargo test --locked -p gpui --features frame-diagnostics`                | `PASS` | 260 unit + 1 integration，含 cropped sub-tile identity      |
-| `cargo test --locked -p gpui_wgpu --features test-support`                | `PASS` | 21 unit passed、1 ignored；5 headless passed                |
-| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin` | `PASS` | Metal upload path cross-compile                             |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`      | `PASS` | all-target/all-feature + philosophy                         |
+| 检查                                                                                                       | 结果   | 说明                                                        |
+| ---------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
+| `cargo test --locked -p gpui atlas::tests`                                                                 | `PASS` | 19 tests；含 inner/outer bounds、transparent/extruded bytes |
+| `cargo test --locked -p gpui --features frame-diagnostics`                                                 | `PASS` | 260 unit + 1 integration，含 cropped sub-tile identity      |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                                 | `PASS` | 21 unit passed、1 ignored；5 headless passed                |
+| `GPUI_TEXT_ATLAS_OUTPUT_DIR=... cargo test ... text_atlas_sampling_gutter_runner -- --ignored --nocapture` | `PASS` | RADV + llvmpipe；integer/fractional/scale/rotation matrix   |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                                  | `PASS` | Metal upload path cross-compile                             |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                                       | `PASS` | all-target/all-feature + philosophy                         |
 
-下一步：实现 TEXT-008 adjacent high-contrast pixel matrix，覆盖 integer、fractional、scale
-与 rotation，验证 glyph/SVG 不串色且 ordinary image 边缘没有透明 seam。
+TEXT-008：`PASS`
 
-### 阶段 7–9
+- ordinary image 红/蓝高对比相邻 tile 覆盖 integer、fractional、non-uniform scale；
+  integer baseline 的完整 sprite edge 与所有 interior samples 保持不透明原色，没有透明 seam
+  或邻 tile 串色。
+- alpha/subpixel/color glyph 与 SVG mask 的 transparent tile 紧邻 full-coverage tile；
+  fractional、non-uniform scale 和 rotation 后整张输出仍为透明，没有 cross-tile bleed。
+- RADV hardware 与 llvmpipe fallback 输出逐像素一致。
+
+TEXT-008 artifact：
+
+- `.tmp/text-rendering-refactor/phase-6/text-008-hardware.json`，SHA-256
+  `ba918f4c252fe768db02414c6f11e6dfaa90038aa176db5e224b9b18ff5b0139`
+- `.tmp/text-rendering-refactor/phase-6/text-008-fallback.json`，SHA-256
+  `78f25ec8e98c1d94728533b88cc859a8efa13f622599c1ba3f9c4eee8fbd8101`
+- hardware/fallback image matrix SHA-256 均为
+  `20d1d9d59546bfcc1deadc4c8921536deba4225cc2d384a95343372a3391b8ff`
+- hardware/fallback transparent matrix SHA-256 均为
+  `565cd802339d69a4ac19979f0ece95fe5d09ae3d6ab91c4cee9b52a26271a644`
+
+gutter 与 sampler 提交：
+`c03f3748b37d8bac9ea895890115bf12b9ca224c`（signed）。
+
+阶段 6 结论：inner content bounds 没有因 padding 增大，outer allocation/upload bytes
+包含真实 gutter；普通 image 的 extruded edge 消除了 seam，glyph/SVG 的 transparent
+gutter 阻断邻接采样。TEXT-008 在当前可执行 backend 全部通过。
+
+### 阶段 7：有预算的 strike/raster-info cache
+
+状态：`IN PROGRESS`
+
+尚未修改代码。下一步将 flat `raster_info` map 拆成 `GlyphStrikeKey` + packed glyph key，
+实现 previous/current generation 与 byte/count 双预算，并完成 TEXT-009。
+
+### 阶段 8–9
 
 状态：`NOT STARTED`
 
