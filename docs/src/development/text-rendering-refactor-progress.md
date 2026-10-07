@@ -17,7 +17,7 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | 工作分支      | `refactor/gpui-text-rendering`             |
 | 计划基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
 | 执行基线      | `a3a0f9734069b543f3fe1e0bdd77a37fbd1b2b31` |
-| 当前阶段      | 阶段 5 进行中                              |
+| 当前阶段      | 阶段 6 进行中                              |
 | Goal 状态     | `ACTIVE`                                   |
 | 固定随机 seed | `0x5A5A_5445_5854_2026`                    |
 
@@ -385,7 +385,7 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
 
 ### 阶段 5：format-aware glyph raster contract
 
-状态：`IN PROGRESS`
+状态：`COMPLETE`
 
 已完成：
 
@@ -402,6 +402,8 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
   `skrifa` + `usvg`/`resvg` 渲染 `SVG ` glyph document；没有 Skia/rust-skia。
 - WGPU 内部 pending image 在缓存前已统一为最终 contract：color pixels 是
   straight-alpha BGRA8，premultiplied RGBA 只转换一次。
+- 公共 macOS/GPUI RGBA conversion 也改为透明像素 RGB 清零和整数四舍五入，与
+  WGPU/Windows 的 straight-alpha contract 一致，并有独立 unit coverage。
 - Windows 已改为 per-glyph color detection；macOS 已适配显式 raster contract。
 - macOS 删除 Apple Color Emoji PostScript 白名单，改用 CoreText
   `kCTFontColorGlyphsTrait`。该 capability 统一决定保守 `ColorBgra8` raster、shaping
@@ -416,7 +418,7 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
   commit/package、source/output SHA-256、attribution 和 license；
   `script/build-text-rendering-fixtures` 可离线确定性重建子集。
 
-TEXT-007 当前 WGPU 结果：`PASS`
+TEXT-007：WGPU `PASS`；macOS/Windows native `NOT RUN`，精确 runbook 已固定。
 
 | 检查                                                                                              | 结果   | 说明                                                                                       |
 | ------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
@@ -427,6 +429,11 @@ TEXT-007 当前 WGPU 结果：`PASS`
 | `./script/clippy -p gpui_windows`                                                                 | `PASS` | host graph + philosophy；Windows cfg 不在本机执行                                          |
 | isolated Windows `IDWriteBitmapRenderTarget3` API crosscheck                                      | `PASS` | `x86_64-pc-windows-gnu` 类型检查                                                           |
 | full `gpui_windows` cross-target check                                                            | `FAIL` | baseline：`async-tar` 缺 `async-std/unstable`；启用后为既有 `windows-core 0.62/0.100` 冲突 |
+| `cargo test --locked -p gpui --features frame-diagnostics`                                        | `PASS` | 256 unit + 1 integration，0 failed                                                         |
+| `cargo test --locked -p gpui_wgpu --features test-support`                                        | `PASS` | 21 unit passed、1 ignored；5 headless passed、4 runners ignored                            |
+| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                              | `PASS` | all-target/all-feature release clippy + philosophy                                         |
+| `script/check-licenses`                                                                           | `PASS` | tracked fixture licenses accepted                                                          |
+| `cargo fmt --all -- --check`                                                                      | `PASS` | workspace Rust formatting                                                                  |
 
 TEXT-007 artifact：
 
@@ -444,6 +451,9 @@ macOS CoreText capability 提交：
 Windows native color raster 提交：
 `28ba8b9cf478fb09ad7139bb2f88821a5ca2e688`（signed）。
 
+licensed fixtures 与 native runners 提交：
+`9e0a22e8e063d1d7daec3c5980ccf83095745474`（signed）。
+
 Windows native TEXT-007 runbook（当前主机 `NOT RUN`）：
 
 ```powershell
@@ -456,9 +466,21 @@ macOS native TEXT-007 runbook（当前主机 `NOT RUN`）：
 cargo test --locked -p gpui_macos color_font_fixture_runner -- --ignored --nocapture
 ```
 
-下一步：提交 fixtures 与 native runners，完成阶段 5 全量审计后进入阶段 6。
+阶段 5 结论：实际 raster result 已成为 atlas format 的唯一权威；普通 glyph 仍可 tint，
+color glyph 不受 text color tint；WGPU 的 COLRv1、OpenType-SVG、bitmap color 与
+monochrome fixtures 均通过硬件和 fallback pixel checks。三平台明确使用 straight-alpha
+BGRA8，premultiplied conversion 只发生一次。macOS/Windows native 结果按合同保留为
+`NOT RUN` 并提供可直接执行的 tracked-fixture runners。
 
-### 阶段 6–9
+### 阶段 6：padding、sampling 和边界正确性
+
+状态：`IN PROGRESS`
+
+尚未修改代码。下一步为 atlas allocation 增加一像素 outer gutter 与明确 inner/outer
+bounds，分别验证透明 padding 和 edge extrusion，并完成 TEXT-008 的整数、fractional
+与 transformed sampling pixel matrix。
+
+### 阶段 7–9
 
 状态：`NOT STARTED`
 

@@ -1383,13 +1383,14 @@ fn run_text_glyph_format(
     output_directory: &Path,
 ) -> anyhow::Result<()> {
     let fixture = |name: &str, file_name: &str| {
-        std::env::var_os(name)
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| {
+        std::env::var_os(name).map_or_else(
+            || {
                 Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../assets/fonts/text-rendering-fixtures")
                     .join(file_name)
-            })
+            },
+            std::path::PathBuf::from,
+        )
     };
     let colrv1_path = fixture("GPUI_COLRV1_FONT", "noto-colrv1-grinning-face.ttf");
     let bitmap_path = fixture(

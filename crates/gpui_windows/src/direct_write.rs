@@ -2465,13 +2465,14 @@ mod tests {
     #[ignore = "requires a native Windows color renderer"]
     fn color_font_fixture_runner() -> Result<()> {
         let fixture_path = |variable: &str, file_name: &str| {
-            std::env::var_os(variable)
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
+            std::env::var_os(variable).map_or_else(
+                || {
                     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                         .join("../../assets/fonts/text-rendering-fixtures")
                         .join(file_name)
-                })
+                },
+                PathBuf::from,
+            )
         };
         let fixtures = [
             GlyphFixture {

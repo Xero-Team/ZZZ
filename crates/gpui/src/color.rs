@@ -22,14 +22,17 @@ pub fn rgba(hex: u32) -> Rgba {
     Rgba { r, g, b, a }
 }
 
-/// Swap from RGBA with premultiplied alpha to BGRA
+/// Convert premultiplied RGBA8 to straight-alpha BGRA8 in place.
 pub fn swap_rgba_pa_to_bgra(color: &mut [u8]) {
     color.swap(0, 2);
-    if color[3] > 0 {
-        let a = color[3] as f32 / 255.;
-        color[0] = (color[0] as f32 / a) as u8;
-        color[1] = (color[1] as f32 / a) as u8;
-        color[2] = (color[2] as f32 / a) as u8;
+    let alpha = color[3];
+    if alpha == 0 {
+        color[..3].fill(0);
+        return;
+    }
+    for component in &mut color[..3] {
+        let numerator = u32::from(*component) * 255 + u32::from(alpha) / 2;
+        *component = u8::try_from((numerator / u32::from(alpha)).min(255)).unwrap_or(255);
     }
 }
 
@@ -975,6 +978,17 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn premultiplied_rgba_is_converted_to_straight_bgra_once() {
+        let mut color = [32, 64, 16, 128];
+        swap_rgba_pa_to_bgra(&mut color);
+        assert_eq!(color, [32, 128, 64, 128]);
+
+        let mut transparent = [200, 100, 50, 0];
+        swap_rgba_pa_to_bgra(&mut transparent);
+        assert_eq!(transparent, [0, 0, 0, 0]);
+    }
 
     #[test]
     fn test_deserialize_three_value_hex_to_rgba() {
