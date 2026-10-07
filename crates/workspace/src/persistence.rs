@@ -1085,6 +1085,20 @@ impl Domain for WorkspaceDb {
         sql!(
             ALTER TABLE trusted_worktrees ADD COLUMN absolute_path_v2 BLOB;
         ),
+        sql!(
+            CREATE TABLE trusted_worktrees_v2 (
+                trust_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                absolute_path_v2 BLOB NOT NULL,
+                user_name TEXT,
+                host_name TEXT
+            ) STRICT;
+            INSERT INTO trusted_worktrees_v2(absolute_path_v2, user_name, host_name)
+                SELECT absolute_path_v2, user_name, host_name
+                FROM trusted_worktrees
+                WHERE absolute_path_v2 IS NOT NULL;
+            DROP TABLE trusted_worktrees;
+            ALTER TABLE trusted_worktrees_v2 RENAME TO trusted_worktrees;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -2650,28 +2664,20 @@ impl WorkspaceDb {
             .into_iter()
             .flat_map(|(host, abs_paths)| {
                 abs_paths.into_iter().map(move |trusted_path| {
-                    let native_path = trusted_path
-                        .native_path()
-                        .map(serde_json::to_vec)
-                        .transpose();
-                    (
-                        trusted_path.display_path().to_path_buf(),
-                        native_path,
-                        host.clone(),
-                    )
+                    (serde_json::to_vec(trusted_path.native_path()), host.clone())
                 })
             })
-            .map(|(display_path, native_path, host)| Ok((Some(display_path), native_path?, host)))
+            .map(|(native_path, host)| Ok((native_path?, host)))
             .collect::<Result<Vec<_>>>()?;
         self.clear_trusted_worktrees()
             .await
             .context("clearing previous trust state")?;
         let mut first_worktree;
         let mut last_worktree = 0_usize;
-        for (count, placeholders) in std::iter::once("(?, ?, ?, ?)")
+        for (count, placeholders) in std::iter::once("(?, ?, ?)")
             .cycle()
             .take(trusted_worktrees.len())
-            .chunks(MAX_QUERY_PLACEHOLDERS / 4)
+            .chunks(MAX_QUERY_PLACEHOLDERS / 3)
             .into_iter()
             .map(|chunk| {
                 let mut count = 0;
@@ -2687,7 +2693,7 @@ impl WorkspaceDb {
             first_worktree = last_worktree;
             last_worktree = last_worktree + count;
             let query = format!(
-                r#"INSERT INTO trusted_worktrees(absolute_path, absolute_path_v2, user_name, host_name)
+                r#"INSERT INTO trusted_worktrees(absolute_path_v2, user_name, host_name)
 VALUES {placeholders};"#
             );
 
@@ -2695,12 +2701,7 @@ VALUES {placeholders};"#
             self.write(move |conn| {
                 let mut statement = Statement::prepare(conn, query)?;
                 let mut next_index = 1;
-                for (abs_path, native_path, host) in trusted_worktrees {
-                    let abs_path = abs_path.as_ref().map(|abs_path| abs_path.to_string_lossy());
-                    next_index = statement.bind(
-                        &abs_path.as_ref().map(|abs_path| abs_path.as_ref()),
-                        next_index,
-                    )?;
+                for (native_path, host) in trusted_worktrees {
                     next_index = statement.bind(&native_path, next_index)?;
                     next_index = statement.bind(
                         &host
@@ -2723,7 +2724,7 @@ VALUES {placeholders};"#
 
     pub fn fetch_trusted_worktrees(&self) -> Result<DbTrustedPaths> {
         let mut trusted_paths = DbTrustedPaths::default();
-        for (abs_path, native_path, user_name, host_name) in self.trusted_worktrees()? {
+        for (native_path, user_name, host_name) in self.trusted_worktrees()? {
             let remote_host = match (user_name, host_name) {
                 (None, Some(host_name)) => Some(RemoteHostLocation {
                     user_name: None,
@@ -2735,18 +2736,9 @@ VALUES {placeholders};"#
                 }),
                 _ => None,
             };
-            let Some(abs_path) = abs_path else {
-                continue;
-            };
-            let native_path = native_path
-                .as_deref()
-                .map(serde_json::from_slice)
-                .transpose()
+            let native_path = serde_json::from_slice(&native_path)
                 .context("decoding exact trusted worktree path")?;
-            let display_path = native_path
-                .as_ref()
-                .and_then(|path: &vfs::NativePath| path.to_local_path_buf().ok())
-                .unwrap_or(abs_path);
+            let display_path = vfs::NativePath::display_path_buf(&native_path);
             trusted_paths
                 .entry(remote_host)
                 .or_default()
@@ -2756,8 +2748,8 @@ VALUES {placeholders};"#
     }
 
     query! {
-        fn trusted_worktrees() -> Result<Vec<(Option<PathBuf>, Option<Vec<u8>>, Option<String>, Option<String>)>> {
-            SELECT absolute_path, absolute_path_v2, user_name, host_name
+        fn trusted_worktrees() -> Result<Vec<(Vec<u8>, Option<String>, Option<String>)>> {
+            SELECT absolute_path_v2, user_name, host_name
             FROM trusted_worktrees
         }
     }

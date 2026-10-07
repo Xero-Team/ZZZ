@@ -163,9 +163,7 @@ impl LspPathMapper {
         let mut best_match: Option<(usize, WorktreeId, ProviderPath, VfsSnapshot)> = None;
         for worktree in worktree_store.worktrees() {
             let worktree = worktree.read(cx);
-            let Some(native_root) = worktree.native_abs_path() else {
-                continue;
-            };
+            let native_root = worktree.native_abs_path();
             let Ok(native_relative_path) = native_path.strip_prefix(&native_root) else {
                 continue;
             };

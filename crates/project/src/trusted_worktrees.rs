@@ -202,50 +202,37 @@ impl PathTrust {
                 )),
                 abs_path_v2: None,
             },
-            Self::AbsPath(path) => {
-                // Older peers require the string field; the exact sidecar is authoritative.
-                let legacy_abs_path = path.display_path.to_string_lossy().to_string();
-                proto::PathTrust {
-                    content: Some(proto::path_trust::Content::AbsPath(legacy_abs_path)),
-                    abs_path_v2: path
-                        .native_path
-                        .as_ref()
-                        .map(proto::NativePathV2::from_native_path),
-                }
-            }
+            Self::AbsPath(path) => proto::PathTrust {
+                content: None,
+                abs_path_v2: Some(proto::NativePathV2::from_native_path(&path.native_path)),
+            },
         }
     }
 
-    pub fn from_proto(proto: proto::PathTrust, path_style: util::paths::PathStyle) -> Result<Self> {
-        Ok(match proto.content.context("missing path trust content")? {
-            proto::path_trust::Content::WorktreeId(id) => {
-                Self::Worktree(WorktreeId::from_proto(id))
+    pub fn from_proto(proto: proto::PathTrust) -> Result<Self> {
+        match (proto.content, proto.abs_path_v2) {
+            (Some(proto::path_trust::Content::WorktreeId(id)), None) => {
+                Ok(Self::Worktree(WorktreeId::from_proto(id)))
             }
-            proto::path_trust::Content::AbsPath(path) => {
-                let legacy_display_path = PathBuf::from(path);
-                let trusted_path = if let Some(native_path) = proto.abs_path_v2 {
-                    let native_path = native_path.to_native_path()?;
-                    let display_path = native_path
-                        .to_local_path_buf()
-                        .unwrap_or(legacy_display_path);
-                    TrustedPath::new(display_path, Some(native_path))
-                } else {
-                    TrustedPath::from_legacy_path(legacy_display_path, path_style)?
-                };
-                Self::AbsPath(trusted_path)
+            (None, Some(native_path)) => {
+                let native_path = native_path.to_native_path()?;
+                let display_path = native_path.display_path_buf();
+                Ok(Self::AbsPath(TrustedPath::new(display_path, native_path)))
             }
-        })
+            (Some(_), Some(_)) => anyhow::bail!("path trust contains conflicting identities"),
+            (None, None) => anyhow::bail!("path trust is missing its identity"),
+        }
     }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct TrustedPath {
     display_path: PathBuf,
-    native_path: Option<NativePath>,
+    native_path: NativePath,
 }
 
 impl TrustedPath {
-    pub fn new(display_path: PathBuf, native_path: Option<NativePath>) -> Self {
+    pub fn new(display_path: PathBuf, native_path: NativePath) -> Self {
         Self {
             display_path,
             native_path,
@@ -268,28 +255,21 @@ impl TrustedPath {
                 NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())?
             }
         };
-        Ok(Self::new(display_path, Some(native_path)))
+        Ok(Self::new(display_path, native_path))
     }
 
     pub fn display_path(&self) -> &Path {
         &self.display_path
     }
 
-    pub fn native_path(&self) -> Option<&NativePath> {
-        self.native_path.as_ref()
+    pub fn native_path(&self) -> &NativePath {
+        &self.native_path
     }
 
     pub fn parent(&self) -> Option<Self> {
-        let native_path = self.native_path.as_ref().and_then(NativePath::parent);
-        if self.native_path.is_some() && native_path.is_none() {
-            return None;
-        }
-        let display_path = match self
-            .native_path
-            .as_ref()
-            .map(|path| path.provider_path().encoding())
-        {
-            Some(vfs::PathEncoding::WindowsWtf8) => windows_display_parent(&self.display_path)?,
+        let native_path = self.native_path.parent()?;
+        let display_path = match self.native_path.provider_path().encoding() {
+            vfs::PathEncoding::WindowsWtf8 => windows_display_parent(&self.display_path)?,
             _ => self.display_path.parent()?.to_path_buf(),
         };
         Some(Self {
@@ -299,17 +279,11 @@ impl TrustedPath {
     }
 
     pub fn starts_with(&self, prefix: &Self) -> bool {
-        match (&self.native_path, &prefix.native_path) {
-            (Some(path), Some(prefix)) => path.starts_with(prefix),
-            _ => self.display_path.starts_with(&prefix.display_path),
-        }
+        self.native_path.starts_with(&prefix.native_path)
     }
 
     fn same_path(&self, other: &Self) -> bool {
-        match (&self.native_path, &other.native_path) {
-            (Some(path), Some(other)) => path == other,
-            _ => self.display_path == other.display_path,
-        }
+        self.native_path == other.native_path
     }
 }
 
@@ -423,11 +397,7 @@ impl TrustedWorktreesStore {
                 }
                 PathTrust::AbsPath(abs_path) => {
                     debug_assert!(
-                        abs_path.native_path().is_some_and(NativePath::is_absolute)
-                            || util::paths::is_absolute(
-                                &abs_path.display_path().to_string_lossy(),
-                                worktree_store.read(cx).path_style()
-                            ),
+                        abs_path.native_path().is_absolute(),
                         "Cannot trust non-absolute path {abs_path:?} on path style {style:?}",
                         style = worktree_store.read(cx).path_style()
                     );

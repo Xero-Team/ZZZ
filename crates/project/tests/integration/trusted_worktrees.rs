@@ -48,8 +48,7 @@ fn test_path_trust_wire_preserves_non_utf8_native_path() {
     let wire = proto::PathTrust::decode(wire.encode_to_vec().as_slice())
         .expect("path trust protobuf should round-trip");
 
-    let decoded =
-        PathTrust::from_proto(wire, PathStyle::Posix).expect("exact trust path should decode");
+    let decoded = PathTrust::from_proto(wire).expect("exact trust path should decode");
     assert_eq!(decoded, trust);
 }
 

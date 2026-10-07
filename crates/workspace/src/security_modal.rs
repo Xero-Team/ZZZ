@@ -626,10 +626,7 @@ fn validate_trust_scope(
     };
     let expanded = TrustedPath::from_legacy_path(expanded, path_style)
         .map_err(|_| TrustScopeValidationError::NotAbsolute)?;
-    if !expanded
-        .native_path()
-        .is_some_and(vfs::NativePath::is_absolute)
-    {
+    if !expanded.native_path().is_absolute() {
         return Err(TrustScopeValidationError::NotAbsolute);
     }
 

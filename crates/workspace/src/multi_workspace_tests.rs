@@ -816,6 +816,11 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
     cx.run_until_parked();
 
     let worktree_id = remote_worktree.read_with(cx, |wt, _| wt.id().to_proto());
+    let native_root = vfs::NativePath::from_unix_bytes(b"/remote/project").unwrap();
+    let vfs_root = vfs::VfsPath::new(
+        vfs::MountId::new(worktree_id),
+        vfs::ProviderPath::root(vfs::PathEncoding::PortableUtf8),
+    );
     remote_worktree.update(cx, |worktree, _cx| {
         worktree
             .as_remote()
@@ -823,12 +828,11 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
             .update_from_remote(proto::UpdateWorktree {
                 project_id: 0,
                 worktree_id,
-                abs_path: "/remote/project".to_string(),
+                abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_root)),
                 root_name: "project".to_string(),
                 updated_entries: vec![proto::Entry {
                     id: 1,
                     is_dir: true,
-                    path: String::new(),
                     inode: 1,
                     mtime: Some(proto::Timestamp {
                         seconds: 0,
@@ -841,7 +845,7 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
                     size: None,
                     canonical_path: None,
                     is_unloaded: false,
-                    vfs_path: None,
+                    vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_root)),
                     resource_id: None,
                 }],
                 removed_entries: vec![],
@@ -849,7 +853,7 @@ async fn test_remote_project_root_dir_changes_update_groups(cx: &mut TestAppCont
                 is_last_update: true,
                 updated_repositories: vec![],
                 removed_repositories: vec![],
-                root_repo_common_dir: None,
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
     });

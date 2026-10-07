@@ -1858,25 +1858,28 @@ impl Project {
             .unwrap_or_default();
 
         let client = AnyProtoClient::new(NoopProtoClient::new());
-        let worktree = Worktree::remote(
+        let native_abs_path = vfs::NativePath::from_unix_bytes(abs_path.as_bytes());
+        let Ok(native_abs_path) = native_abs_path else {
+            panic!("test worktree path must be valid: {native_abs_path:?}");
+        };
+        let worktree = Worktree::try_remote(
             0,
             ReplicaId::new(1),
             proto::WorktreeMetadata {
                 id: 100 + self.visible_worktrees(cx).count() as u64,
                 root_name,
                 visible: true,
-                abs_path: abs_path.to_owned(),
-                root_repo_common_dir: None,
                 root_repo_is_linked_worktree: false,
-                abs_path_v2: vfs::NativePath::from_unix_bytes(abs_path.as_bytes())
-                    .ok()
-                    .as_ref()
-                    .map(proto::NativePathV2::from_native_path),
+                abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_abs_path)),
+                root_repo_common_dir_v2: None,
             },
             client,
             PathStyle::Posix,
             cx,
         );
+        let Ok(worktree) = worktree else {
+            panic!("test remote worktree must decode: {worktree:?}");
+        };
         self.worktree_store
             .update(cx, |store, cx| store.add(&worktree, cx));
         worktree
@@ -5000,12 +5003,11 @@ impl Project {
         let trusted_worktrees = cx
             .update(|cx| TrustedWorktrees::try_get_global(cx))
             .context("missing trusted worktrees")?;
-        let path_style = this.read_with(&cx, |this, cx| this.worktree_store.read(cx).path_style());
         let trusted_paths = envelope
             .payload
             .trusted_paths
             .into_iter()
-            .map(|proto_path| PathTrust::from_proto(proto_path, path_style))
+            .map(PathTrust::from_proto)
             .collect::<Result<HashSet<_>>>()?;
         trusted_worktrees.update(&mut cx, |trusted_worktrees, cx| {
             trusted_worktrees.trust(&this.read(cx).worktree_store(), trusted_paths, cx);

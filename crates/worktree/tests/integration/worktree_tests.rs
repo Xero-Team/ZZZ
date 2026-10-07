@@ -33,6 +33,40 @@ use util::{
 };
 use vfs::{MountId, NativePath, PathEncoding, ProviderPath, ResourceId, VfsErrorCode, VfsPath};
 
+fn native_path_wire(path: &str) -> Option<proto::NativePathV2> {
+    let native_path = NativePath::from_unix_bytes(path.as_bytes());
+    let Ok(native_path) = native_path else {
+        panic!("test native path must be valid: {native_path:?}");
+    };
+    Some(proto::NativePathV2::from_native_path(&native_path))
+}
+
+#[gpui::test]
+fn test_remote_worktree_rejects_missing_exact_root(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        let settings_store = SettingsStore::test(cx);
+        cx.set_global(settings_store);
+    });
+    let result = cx.update(|cx| {
+        Worktree::try_remote(
+            1,
+            clock::ReplicaId::new(1),
+            proto::WorktreeMetadata {
+                id: 1,
+                root_name: "project".to_owned(),
+                visible: true,
+                root_repo_is_linked_worktree: false,
+                abs_path_v2: None,
+                root_repo_common_dir_v2: None,
+            },
+            AnyProtoClient::new(NoopProtoClient::new()),
+            PathStyle::Posix,
+            cx,
+        )
+    });
+    assert!(result.is_err());
+}
+
 #[gpui::test]
 async fn test_traversal(cx: &mut TestAppContext) {
     init_test(cx);
@@ -6351,10 +6385,9 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 id: 1,
                 root_name: "project".to_string(),
                 visible: true,
-                abs_path: "/home/user/project".to_string(),
-                root_repo_common_dir: None,
+                abs_path_v2: native_path_wire("/home/user/project"),
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
-                abs_path_v2: None,
             },
             client,
             PathStyle::Posix,
@@ -6388,7 +6421,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
             .update_from_remote(proto::UpdateWorktree {
                 project_id: 1,
                 worktree_id: 1,
-                abs_path: "/home/user/project".to_string(),
+                abs_path_v2: native_path_wire("/home/user/project"),
                 root_name: "project".to_string(),
                 updated_entries: vec![proto::Entry {
                     id: 1,
@@ -6416,7 +6449,7 @@ async fn test_remote_worktree_without_git_emits_root_repo_event_after_first_upda
                 is_last_update: true,
                 updated_repositories: vec![],
                 removed_repositories: vec![],
-                root_repo_common_dir: None,
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
     });
@@ -6451,8 +6484,7 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
                 id: 1,
                 root_name: "project".to_owned(),
                 visible: true,
-                abs_path: "/home/user/project".to_owned(),
-                root_repo_common_dir: None,
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
                 abs_path_v2: Some(proto::NativePathV2::from_native_path(&native_abs_path)),
             },
@@ -6463,7 +6495,7 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
     });
     assert_eq!(
         worktree.read_with(cx, |worktree, _| worktree.native_abs_path()),
-        Some(native_abs_path)
+        native_abs_path
     );
     let provider_path = ProviderPath::from_byte_components(
         PathEncoding::PortableUtf8,
@@ -6513,10 +6545,9 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 id: 1,
                 root_name: "project".to_owned(),
                 visible: true,
-                abs_path: "/home/user/project".to_owned(),
-                root_repo_common_dir: None,
+                abs_path_v2: native_path_wire("/home/user/project"),
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
-                abs_path_v2: None,
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::Posix,
@@ -6556,7 +6587,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
             .update_from_remote(proto::UpdateWorktree {
                 project_id: 1,
                 worktree_id: 1,
-                abs_path: "/home/user/project".to_owned(),
+                abs_path_v2: native_path_wire("/home/user/project"),
                 root_name: "project".to_owned(),
                 updated_entries: vec![wire_entry.clone()],
                 removed_entries: Vec::new(),
@@ -6564,7 +6595,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 is_last_update: true,
                 updated_repositories: Vec::new(),
                 removed_repositories: Vec::new(),
-                root_repo_common_dir: None,
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
     });
@@ -6602,7 +6633,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
             .update_from_remote(proto::UpdateWorktree {
                 project_id: 1,
                 worktree_id: 1,
-                abs_path: "/home/user/project".to_owned(),
+                abs_path_v2: native_path_wire("/home/user/project"),
                 root_name: "project".to_owned(),
                 updated_entries: vec![mismatched_entry],
                 removed_entries: Vec::new(),
@@ -6610,7 +6641,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 is_last_update: true,
                 updated_repositories: Vec::new(),
                 removed_repositories: Vec::new(),
-                root_repo_common_dir: None,
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
     });
@@ -6627,7 +6658,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
             .update_from_remote(proto::UpdateWorktree {
                 project_id: 1,
                 worktree_id: 1,
-                abs_path: "/home/user/project".to_owned(),
+                abs_path_v2: native_path_wire("/home/user/project"),
                 root_name: "project".to_owned(),
                 updated_entries: Vec::new(),
                 removed_entries: vec![9],
@@ -6635,7 +6666,7 @@ async fn test_remote_entry_vfs_identity_wire_validation(cx: &mut TestAppContext)
                 is_last_update: true,
                 updated_repositories: Vec::new(),
                 removed_repositories: Vec::new(),
-                root_repo_common_dir: None,
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
             });
     });
@@ -6665,10 +6696,9 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 id: 1,
                 root_name: "project".to_string(),
                 visible: true,
-                abs_path: "/home/user/project".to_string(),
-                root_repo_common_dir: None,
+                abs_path_v2: native_path_wire("/home/user/project"),
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
-                abs_path_v2: None,
             },
             client,
             PathStyle::Posix,
@@ -6699,7 +6729,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
             .update_from_remote(proto::UpdateWorktree {
                 project_id: 1,
                 worktree_id: 1,
-                abs_path: "/home/user/project".to_string(),
+                abs_path_v2: native_path_wire("/home/user/project"),
                 root_name: "project".to_string(),
                 updated_entries: vec![proto::Entry {
                     id: 1,
@@ -6727,7 +6757,7 @@ async fn test_remote_worktree_with_git_emits_root_repo_event_when_repo_info_arri
                 is_last_update: true,
                 updated_repositories: vec![],
                 removed_repositories: vec![],
-                root_repo_common_dir: Some("/home/user/project/.git".to_string()),
+                root_repo_common_dir_v2: native_path_wire("/home/user/project/.git"),
                 root_repo_is_linked_worktree: false,
             });
     });
@@ -6770,10 +6800,9 @@ async fn test_remote_worktree_root_repo_metadata_cleared_only_by_completed_scan(
                 id: 1,
                 root_name: "feature-a".to_string(),
                 visible: true,
-                abs_path: "/home/user/monty/feature-a".to_string(),
-                root_repo_common_dir: Some("/home/user/monty/.bare".to_string()),
+                abs_path_v2: native_path_wire("/home/user/monty/feature-a"),
+                root_repo_common_dir_v2: native_path_wire("/home/user/monty/.bare"),
                 root_repo_is_linked_worktree: true,
-                abs_path_v2: None,
             },
             client,
             PathStyle::Posix,
@@ -6794,7 +6823,7 @@ async fn test_remote_worktree_root_repo_metadata_cleared_only_by_completed_scan(
     let update = |scan_id: u64, is_last_update: bool| proto::UpdateWorktree {
         project_id: 1,
         worktree_id: 1,
-        abs_path: "/home/user/monty/feature-a".to_string(),
+        abs_path_v2: native_path_wire("/home/user/monty/feature-a"),
         root_name: "feature-a".to_string(),
         updated_entries: vec![],
         removed_entries: vec![],
@@ -6802,7 +6831,7 @@ async fn test_remote_worktree_root_repo_metadata_cleared_only_by_completed_scan(
         is_last_update,
         updated_repositories: vec![],
         removed_repositories: vec![],
-        root_repo_common_dir: None,
+        root_repo_common_dir_v2: None,
         root_repo_is_linked_worktree: false,
     };
 
@@ -6887,10 +6916,9 @@ async fn test_remote_worktree_update_entries_carry_changed_paths(cx: &mut TestAp
                 id: 1,
                 root_name: "root".to_string(),
                 visible: true,
-                abs_path: path!("/root").to_string(),
-                root_repo_common_dir: None,
+                abs_path_v2: native_path_wire(path!("/root")),
+                root_repo_common_dir_v2: None,
                 root_repo_is_linked_worktree: false,
-                abs_path_v2: None,
             },
             AnyProtoClient::new(NoopProtoClient::new()),
             PathStyle::local(),

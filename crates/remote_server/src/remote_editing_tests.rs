@@ -260,7 +260,16 @@ async fn test_remote_buffer_path_swap(cx: &mut TestAppContext, server_cx: &mut T
         for (buffer, path) in updates {
             let message = buffer.read_with(cx, |buffer, cx| {
                 let mut file = buffer.file().unwrap().to_proto(cx);
-                file.path = path.to_owned();
+                let current_path = file.vfs_path.as_ref().unwrap().to_vfs_path().unwrap();
+                let provider_path = vfs::provider_path_from_legacy_utf8(
+                    path,
+                    current_path.provider_path().encoding(),
+                )
+                .unwrap();
+                file.vfs_path = Some(proto::VfsPathV2::from_vfs_path(&vfs::VfsPath::new(
+                    current_path.mount_id(),
+                    provider_path,
+                )));
                 proto::UpdateBufferFile {
                     project_id: proto::REMOTE_SERVER_PROJECT_ID,
                     buffer_id: buffer.remote_id().to_proto(),

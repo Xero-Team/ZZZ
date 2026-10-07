@@ -814,11 +814,20 @@ impl WorktreeStore {
             let this = this.upgrade().context("Dropped worktree store")?;
 
             let path = RemotePathBuf::new(abs_path, path_style);
+            let native_path = if path_style.is_posix() {
+                vfs::NativePath::from_unix_bytes(path.to_string().as_bytes())
+            } else {
+                vfs::NativePath::from_windows_wide(
+                    &path.to_string().encode_utf16().collect::<Vec<_>>(),
+                )
+            }
+            .map_err(anyhow::Error::from)
+            .map_err(Arc::new)?;
             let response = client
                 .request(proto::AddWorktree {
                     project_id: REMOTE_SERVER_PROJECT_ID,
-                    path: path.to_proto(),
                     visible,
+                    path_v2: Some(proto::NativePathV2::from_native_path(&native_path)),
                 })
                 .await?;
 
@@ -828,30 +837,38 @@ impl WorktreeStore {
                 return Ok(existing_worktree);
             }
 
-            let root_path_buf = PathBuf::from(response.canonicalized_path.clone());
-            let root_name = root_path_buf
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or(root_path_buf.to_string_lossy().into_owned());
+            let canonicalized_path = response
+                .canonicalized_path_v2
+                .as_ref()
+                .context("remote server omitted the exact canonical worktree path")
+                .map_err(Arc::new)?
+                .to_native_path()
+                .map_err(anyhow::Error::from)
+                .map_err(Arc::new)?;
+            let root_name = canonicalized_path.provider_path().file_name().map_or_else(
+                || canonicalized_path.display(),
+                |name| name.display().to_string(),
+            );
 
             let worktree = cx.update(|cx| {
-                Worktree::remote(
+                Worktree::try_remote(
                     REMOTE_SERVER_PROJECT_ID,
                     ReplicaId::REMOTE_SERVER,
                     proto::WorktreeMetadata {
                         id: response.worktree_id,
                         root_name,
                         visible,
-                        abs_path: response.canonicalized_path,
-                        root_repo_common_dir: response.root_repo_common_dir,
                         root_repo_is_linked_worktree: response.root_repo_is_linked_worktree,
-                        abs_path_v2: response.canonicalized_path_v2,
+                        abs_path_v2: Some(proto::NativePathV2::from_native_path(
+                            &canonicalized_path,
+                        )),
+                        root_repo_common_dir_v2: response.root_repo_common_dir_v2,
                     },
                     client,
                     path_style,
                     cx,
                 )
-            });
+            })?;
 
             this.update(cx, |this, cx| {
                 this.add(&worktree, cx);
@@ -1033,17 +1050,15 @@ impl WorktreeStore {
                 };
                 self.worktrees.push(handle);
             } else {
-                self.add(
-                    &Worktree::remote(
-                        project_id,
-                        replica_id,
-                        worktree,
-                        client.clone(),
-                        self.path_style(),
-                        cx,
-                    ),
+                let worktree = Worktree::try_remote(
+                    project_id,
+                    replica_id,
+                    worktree,
+                    client.clone(),
+                    self.path_style(),
                     cx,
-                );
+                )?;
+                self.add(&worktree, cx);
             }
         }
         self.send_project_updates(cx);

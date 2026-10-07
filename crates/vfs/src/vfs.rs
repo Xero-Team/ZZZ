@@ -618,6 +618,25 @@ impl NativePath {
         }
     }
 
+    pub fn display(&self) -> String {
+        match self.path.encoding {
+            PathEncoding::UnixBytes => self.to_unix_bytes().map_or_else(
+                |_| self.path.display(),
+                |bytes| String::from_utf8_lossy(&bytes).into_owned(),
+            ),
+            PathEncoding::WindowsWtf8 => self.to_windows_wide().map_or_else(
+                |_| self.path.display(),
+                |wide| String::from_utf16_lossy(&wide),
+            ),
+            PathEncoding::PortableUtf8 => self.path.display(),
+        }
+    }
+
+    pub fn display_path_buf(&self) -> PathBuf {
+        self.to_local_path_buf()
+            .unwrap_or_else(|_| PathBuf::from(self.display()))
+    }
+
     pub fn parent(&self) -> Option<Self> {
         Some(Self {
             root: self.root.clone(),

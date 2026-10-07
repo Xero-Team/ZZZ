@@ -846,9 +846,9 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             project_id: message.project_id,
             worktree_id: message.worktree_id,
             root_name: message.root_name.clone(),
-            abs_path: message.abs_path.clone(),
-            root_repo_common_dir: message.root_repo_common_dir.clone(),
             root_repo_is_linked_worktree: message.root_repo_is_linked_worktree,
+            abs_path_v2: message.abs_path_v2.clone(),
+            root_repo_common_dir_v2: message.root_repo_common_dir_v2.clone(),
             updated_entries,
             removed_entries,
             scan_id: message.scan_id,
@@ -1019,13 +1019,16 @@ mod tests {
 
     #[test]
     fn test_split_worktree_update_chunks_and_preserves_final_metadata() {
+        let abs_path = vfs::NativePath::from_unix_bytes(b"/tmp/workspace").unwrap();
+        let root_repo_common_dir =
+            vfs::NativePath::from_unix_bytes(b"/tmp/workspace/.git").unwrap();
         let update = UpdateWorktree {
             project_id: 7,
             worktree_id: 11,
             root_name: "workspace".into(),
-            abs_path: "/tmp/workspace".into(),
-            root_repo_common_dir: Some("/tmp/workspace/.git".into()),
             root_repo_is_linked_worktree: true,
+            abs_path_v2: Some(NativePathV2::from_native_path(&abs_path)),
+            root_repo_common_dir_v2: Some(NativePathV2::from_native_path(&root_repo_common_dir)),
             updated_entries: vec![Entry::default(), Entry::default(), Entry::default()],
             removed_entries: vec![1, 2, 3],
             scan_id: 99,
@@ -1054,10 +1057,19 @@ mod tests {
         assert_eq!(chunks[0].project_id, 7);
         assert_eq!(chunks[0].worktree_id, 11);
         assert_eq!(chunks[0].root_name, "workspace");
-        assert_eq!(chunks[0].abs_path, "/tmp/workspace");
         assert_eq!(
-            chunks[0].root_repo_common_dir.as_deref(),
-            Some("/tmp/workspace/.git")
+            chunks[0]
+                .abs_path_v2
+                .as_ref()
+                .and_then(|path| path.to_native_path().ok()),
+            Some(abs_path)
+        );
+        assert_eq!(
+            chunks[0]
+                .root_repo_common_dir_v2
+                .as_ref()
+                .and_then(|path| path.to_native_path().ok()),
+            Some(root_repo_common_dir)
         );
         assert!(chunks[0].root_repo_is_linked_worktree);
         assert_eq!(chunks[0].updated_entries.len(), 2);

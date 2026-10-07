@@ -181,7 +181,6 @@ struct ScanRequest {
 
 pub struct RemoteWorktree {
     snapshot: Snapshot,
-    native_abs_path: Option<vfs::NativePath>,
     background_snapshot: Arc<Mutex<(Snapshot, Vec<proto::UpdateWorktree>)>>,
     project_id: u64,
     client: AnyProtoClient,
@@ -203,6 +202,7 @@ pub struct Snapshot {
     id: WorktreeId,
     /// The absolute path of the worktree root.
     abs_path: Arc<SanitizedPath>,
+    native_abs_path: vfs::NativePath,
     path_style: PathStyle,
     root_name: Arc<RelPath>,
     root_char_bag: CharBag,
@@ -210,6 +210,7 @@ pub struct Snapshot {
     entries_by_id: SumTree<PathEntry>,
     entries_by_resource_id: HashMap<ResourceId, ProjectEntryId>,
     root_repo_common_dir: Option<Arc<SanitizedPath>>,
+    native_root_repo_common_dir: Option<vfs::NativePath>,
     root_repo_is_linked_worktree: bool,
 
     /// A number that increases every time the worktree begins scanning
@@ -537,6 +538,13 @@ impl Worktree {
         } else {
             (None, false)
         };
+        let native_abs_path = vfs::NativePath::from_local_path(&abs_path)
+            .context("failed to encode local worktree root")?;
+        let native_root_repo_common_dir = root_repo_common_dir
+            .as_ref()
+            .map(|path| vfs::NativePath::from_local_path(path.as_path()))
+            .transpose()
+            .context("failed to encode Git common directory")?;
         Ok(cx.new(move |cx: &mut Context<Worktree>| {
             let mut snapshot = LocalSnapshot {
                 ignores_by_parent_abs_path: Default::default(),
@@ -554,11 +562,13 @@ impl Worktree {
                         },
                     ),
                     abs_path.clone(),
+                    native_abs_path,
                     PathStyle::local(),
                 ),
                 root_file_handle,
             };
             snapshot.root_repo_common_dir = root_repo_common_dir;
+            snapshot.native_root_repo_common_dir = native_root_repo_common_dir;
             snapshot.root_repo_is_linked_worktree = root_repo_is_linked_worktree;
 
             let worktree_id = snapshot.id();
@@ -641,33 +651,40 @@ impl Worktree {
         }))
     }
 
-    pub fn remote(
+    pub fn try_remote(
         project_id: u64,
         replica_id: ReplicaId,
         worktree: proto::WorktreeMetadata,
         client: AnyProtoClient,
         path_style: PathStyle,
         cx: &mut App,
-    ) -> Entity<Self> {
-        cx.new(|cx: &mut Context<Self>| {
-            let native_abs_path = worktree
-                .abs_path_v2
-                .as_ref()
-                .map(proto::NativePathV2::to_native_path)
-                .transpose()
-                .log_err()
-                .flatten()
-                .or_else(|| native_path_from_legacy(&worktree.abs_path, path_style).log_err());
+    ) -> Result<Entity<Self>> {
+        let native_abs_path = worktree
+            .abs_path_v2
+            .as_ref()
+            .context("remote worktree is missing its exact root path")?
+            .to_native_path()
+            .context("remote worktree has an invalid exact root path")?;
+        let abs_path = native_abs_path.display_path_buf();
+        let native_root_repo_common_dir = worktree
+            .root_repo_common_dir_v2
+            .as_ref()
+            .map(proto::NativePathV2::to_native_path)
+            .transpose()
+            .context("remote worktree has an invalid exact Git common directory")?;
+        Ok(cx.new(|cx: &mut Context<Self>| {
             let mut snapshot = Snapshot::new(
                 WorktreeId::from_proto(worktree.id),
                 RelPath::from_proto(&worktree.root_name).unwrap_or_else(|_| RelPath::empty_arc()),
-                Path::new(&worktree.abs_path).into(),
+                abs_path.into(),
+                native_abs_path,
                 path_style,
             );
 
-            snapshot.root_repo_common_dir = worktree
-                .root_repo_common_dir
-                .map(|p| SanitizedPath::new_arc(Path::new(&p)));
+            snapshot.root_repo_common_dir = native_root_repo_common_dir
+                .as_ref()
+                .map(|path| SanitizedPath::new_arc(&path.display_path_buf()));
+            snapshot.native_root_repo_common_dir = native_root_repo_common_dir;
             snapshot.root_repo_is_linked_worktree = worktree.root_repo_is_linked_worktree;
 
             let background_snapshot = Arc::new(Mutex::new((
@@ -689,7 +706,6 @@ impl Worktree {
             let worktree = RemoteWorktree {
                 client,
                 vfs_provider: OnceLock::new(),
-                native_abs_path,
                 project_id,
                 replica_id,
                 snapshot,
@@ -815,7 +831,22 @@ impl Worktree {
             .detach();
 
             Worktree::Remote(worktree)
-        })
+        }))
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn remote(
+        project_id: u64,
+        replica_id: ReplicaId,
+        worktree: proto::WorktreeMetadata,
+        client: AnyProtoClient,
+        path_style: PathStyle,
+        cx: &mut App,
+    ) -> Entity<Self> {
+        match Self::try_remote(project_id, replica_id, worktree, client, path_style, cx) {
+            Ok(worktree) => worktree,
+            Err(error) => panic!("test remote worktree must decode: {error}"),
+        }
     }
 
     pub fn as_local(&self) -> Option<&LocalWorktree> {
@@ -974,29 +1005,23 @@ impl Worktree {
     }
 
     pub fn metadata_proto(&self) -> proto::WorktreeMetadata {
+        let snapshot = self.snapshot();
         proto::WorktreeMetadata {
             id: self.id().to_proto(),
             root_name: self.root_name().to_proto(),
             visible: self.is_visible(),
-            abs_path: self.abs_path().to_string_lossy().into_owned(),
-            root_repo_common_dir: self
-                .root_repo_common_dir()
-                .map(|p| p.to_string_lossy().into_owned()),
             root_repo_is_linked_worktree: self.root_repo_is_linked_worktree(),
-            abs_path_v2: self
-                .native_abs_path()
-                .as_ref()
+            abs_path_v2: Some(proto::NativePathV2::from_native_path(
+                snapshot.native_abs_path(),
+            )),
+            root_repo_common_dir_v2: snapshot
+                .native_root_repo_common_dir()
                 .map(proto::NativePathV2::from_native_path),
         }
     }
 
-    pub fn native_abs_path(&self) -> Option<vfs::NativePath> {
-        match self {
-            Worktree::Local(worktree) => {
-                vfs::NativePath::from_local_path(worktree.snapshot.abs_path()).log_err()
-            }
-            Worktree::Remote(worktree) => worktree.native_abs_path.clone(),
-        }
+    pub fn native_abs_path(&self) -> vfs::NativePath {
+        self.snapshot().native_abs_path
     }
 
     pub fn completed_scan_id(&self) -> usize {
@@ -1689,10 +1714,13 @@ impl LocalWorktree {
                 )
             })
         {
+            new_snapshot.native_root_repo_common_dir =
+                vfs::NativePath::from_local_path(common_dir.as_path()).log_err();
             new_snapshot.root_repo_common_dir = Some(common_dir);
             new_snapshot.root_repo_is_linked_worktree = is_linked_worktree;
         } else {
             new_snapshot.root_repo_common_dir = None;
+            new_snapshot.native_root_repo_common_dir = None;
             new_snapshot.root_repo_is_linked_worktree = false;
         }
 
@@ -2564,7 +2592,12 @@ impl LocalWorktree {
                     .expect("path should be a valid relative path")
                     .into()
             });
-        self.snapshot.update_abs_path(new_path, root_name);
+        let Some(native_abs_path) = vfs::NativePath::from_local_path(new_path.as_path()).log_err()
+        else {
+            return;
+        };
+        self.snapshot
+            .update_abs_path(new_path, native_abs_path, root_name);
         self.restart_background_scanners(cx);
     }
     #[cfg(feature = "test-support")]
@@ -2579,17 +2612,6 @@ impl LocalWorktree {
             .values()
             .map(|entry| entry.work_directory_abs_path.clone())
             .collect::<Vec<_>>()
-    }
-}
-
-fn native_path_from_legacy(
-    path: &str,
-    path_style: PathStyle,
-) -> Result<vfs::NativePath, vfs::PathError> {
-    if path_style.is_posix() {
-        vfs::NativePath::from_unix_bytes(path.as_bytes())
-    } else {
-        vfs::NativePath::from_windows_wide(&path.encode_utf16().collect::<Vec<_>>())
     }
 }
 
@@ -2821,11 +2843,13 @@ impl Snapshot {
         id: WorktreeId,
         root_name: Arc<RelPath>,
         abs_path: Arc<Path>,
+        native_abs_path: vfs::NativePath,
         path_style: PathStyle,
     ) -> Self {
         Snapshot {
             id,
             abs_path: SanitizedPath::from_arc(abs_path),
+            native_abs_path,
             path_style,
             root_char_bag: root_name
                 .as_unix_str()
@@ -2837,6 +2861,7 @@ impl Snapshot {
             entries_by_id: Default::default(),
             entries_by_resource_id: Default::default(),
             root_repo_common_dir: None,
+            native_root_repo_common_dir: None,
             root_repo_is_linked_worktree: false,
             scan_id: 1,
             completed_scan_id: 0,
@@ -2863,10 +2888,18 @@ impl Snapshot {
         SanitizedPath::cast_arc_ref(&self.abs_path)
     }
 
+    pub fn native_abs_path(&self) -> &vfs::NativePath {
+        &self.native_abs_path
+    }
+
     pub fn root_repo_common_dir(&self) -> Option<&Arc<Path>> {
         self.root_repo_common_dir
             .as_ref()
             .map(SanitizedPath::cast_arc_ref)
+    }
+
+    pub fn native_root_repo_common_dir(&self) -> Option<&vfs::NativePath> {
+        self.native_root_repo_common_dir.as_ref()
     }
 
     pub fn root_repo_is_linked_worktree(&self) -> bool {
@@ -2884,12 +2917,13 @@ impl Snapshot {
         proto::UpdateWorktree {
             project_id,
             worktree_id,
-            abs_path: self.abs_path().to_string_lossy().into_owned(),
             root_name: self.root_name().to_proto(),
-            root_repo_common_dir: self
-                .root_repo_common_dir()
-                .map(|p| p.to_string_lossy().into_owned()),
             root_repo_is_linked_worktree: self.root_repo_is_linked_worktree,
+            abs_path_v2: Some(proto::NativePathV2::from_native_path(&self.native_abs_path)),
+            root_repo_common_dir_v2: self
+                .native_root_repo_common_dir
+                .as_ref()
+                .map(proto::NativePathV2::from_native_path),
             updated_entries,
             removed_entries: Vec::new(),
             scan_id: self.scan_id as u64,
@@ -2985,8 +3019,14 @@ impl Snapshot {
         Some(removed_entry.path)
     }
 
-    fn update_abs_path(&mut self, abs_path: Arc<SanitizedPath>, root_name: Arc<RelPath>) {
+    fn update_abs_path(
+        &mut self,
+        abs_path: Arc<SanitizedPath>,
+        native_abs_path: vfs::NativePath,
+        root_name: Arc<RelPath>,
+    ) {
         self.abs_path = abs_path;
+        self.native_abs_path = native_abs_path;
         if root_name != self.root_name {
             self.root_char_bag = root_name
                 .as_unix_str()
@@ -3007,12 +3047,31 @@ impl Snapshot {
             update.updated_entries.len(),
             update.removed_entries.len()
         );
-        if let Some(root_name) = RelPath::from_proto(&update.root_name).log_err() {
-            self.update_abs_path(
-                SanitizedPath::new_arc(&Path::new(&update.abs_path)),
-                root_name,
-            );
-        }
+        let root_update = update
+            .abs_path_v2
+            .as_ref()
+            .context("worktree update is missing its exact root path")
+            .and_then(|path| path.to_native_path().map_err(Into::into))
+            .and_then(|native_path| {
+                let root_name = RelPath::from_proto(&update.root_name)?;
+                Ok((native_path, root_name))
+            });
+        let Some((native_abs_path, root_name)) = root_update.log_err() else {
+            return;
+        };
+        self.update_abs_path(
+            SanitizedPath::new_arc(&native_abs_path.display_path_buf()),
+            native_abs_path,
+            root_name,
+        );
+        let native_root_repo_common_dir = update
+            .root_repo_common_dir_v2
+            .as_ref()
+            .map(proto::NativePathV2::to_native_path)
+            .transpose();
+        let Some(native_root_repo_common_dir) = native_root_repo_common_dir.log_err() else {
+            return;
+        };
 
         let mut entries_by_path_edits = Vec::new();
         let mut entries_by_id_edits = Vec::new();
@@ -3067,16 +3126,16 @@ impl Snapshot {
 
         // A `None` from a completed scan is a real repo removal, whereas a `None`
         // mid-scan may just mean the sender hasn't registered the root repo yet.
-        match update
-            .root_repo_common_dir
-            .map(|p| SanitizedPath::new_arc(Path::new(&p)))
-        {
-            Some(dir) => {
-                self.root_repo_common_dir = Some(dir);
+        match native_root_repo_common_dir {
+            Some(native_path) => {
+                self.root_repo_common_dir =
+                    Some(SanitizedPath::new_arc(&native_path.display_path_buf()));
+                self.native_root_repo_common_dir = Some(native_path);
                 self.root_repo_is_linked_worktree = update.root_repo_is_linked_worktree;
             }
             None if update.is_last_update => {
                 self.root_repo_common_dir = None;
+                self.native_root_repo_common_dir = None;
                 self.root_repo_is_linked_worktree = false;
             }
             None => {}
@@ -3316,12 +3375,13 @@ impl LocalSnapshot {
         proto::UpdateWorktree {
             project_id,
             worktree_id,
-            abs_path: self.abs_path().to_string_lossy().into_owned(),
             root_name: self.root_name().to_proto(),
-            root_repo_common_dir: self
-                .root_repo_common_dir()
-                .map(|p| p.to_string_lossy().into_owned()),
             root_repo_is_linked_worktree: self.root_repo_is_linked_worktree,
+            abs_path_v2: Some(proto::NativePathV2::from_native_path(&self.native_abs_path)),
+            root_repo_common_dir_v2: self
+                .native_root_repo_common_dir
+                .as_ref()
+                .map(proto::NativePathV2::from_native_path),
             updated_entries,
             removed_entries,
             scan_id: self.scan_id as u64,

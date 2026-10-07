@@ -704,7 +704,19 @@ impl HeadlessProject {
     ) -> Result<proto::AddWorktreeResponse> {
         use client::ErrorCodeExt;
         let fs = this.read_with(&cx, |this, _| this.fs.clone());
-        let path = PathBuf::from(shellexpand::tilde(&message.payload.path).to_string());
+        let requested_path = message
+            .payload
+            .path_v2
+            .as_ref()
+            .context("add-worktree request is missing its exact path")?
+            .to_native_path()?;
+        let mut path = requested_path.to_local_path_buf()?;
+        if path.starts_with("~") {
+            let path_text = path
+                .to_str()
+                .context("home-relative worktree path is not Unicode")?;
+            path = PathBuf::from(shellexpand::tilde(path_text).to_string());
+        }
 
         let canonicalized = match fs.canonicalize(&path).await {
             Ok(path) => path,
@@ -753,14 +765,13 @@ impl HeadlessProject {
             let worktree = worktree.read(cx);
             proto::AddWorktreeResponse {
                 worktree_id: worktree.id().to_proto(),
-                canonicalized_path: canonicalized.to_string_lossy().into_owned(),
-                root_repo_common_dir: worktree
-                    .root_repo_common_dir()
-                    .map(|p| p.to_string_lossy().into_owned()),
                 root_repo_is_linked_worktree: worktree.root_repo_is_linked_worktree(),
-                canonicalized_path_v2: worktree
-                    .native_abs_path()
-                    .as_ref()
+                canonicalized_path_v2: Some(proto::NativePathV2::from_native_path(
+                    &worktree.native_abs_path(),
+                )),
+                root_repo_common_dir_v2: worktree
+                    .snapshot()
+                    .native_root_repo_common_dir()
                     .map(proto::NativePathV2::from_native_path),
             }
         });
@@ -840,13 +851,11 @@ impl HeadlessProject {
             .update(|cx| TrustedWorktrees::try_get_global(cx))
             .context("missing trusted worktrees")?;
         let worktree_store = this.read_with(&cx, |project, _| project.worktree_store.clone());
-        let path_style =
-            worktree_store.read_with(&cx, |worktree_store, _| worktree_store.path_style());
         let trusted_paths = envelope
             .payload
             .trusted_paths
             .into_iter()
-            .map(|path| PathTrust::from_proto(path, path_style))
+            .map(PathTrust::from_proto)
             .collect::<Result<HashSet<_>>>()?;
         trusted_worktrees.update(&mut cx, |trusted_worktrees, cx| {
             trusted_worktrees.trust(&worktree_store, trusted_paths, cx);
@@ -936,13 +945,24 @@ impl HeadlessProject {
         mut cx: AsyncApp,
     ) -> Result<proto::OpenBufferResponse> {
         let settings_path = paths::settings_file();
+        let settings_parent = settings_path
+            .parent()
+            .context("server settings path has no parent directory")?;
+        let fs = this.read_with(&cx, |this, _| this.fs.clone());
+        fs.create_dir(settings_parent).await?;
         let (worktree, path) = this
             .update(&mut cx, |this, cx| {
                 this.worktree_store.update(cx, |worktree_store, cx| {
-                    worktree_store.find_or_create_worktree(settings_path, false, cx)
+                    worktree_store.find_or_create_worktree(settings_parent, false, cx)
                 })
             })
             .await?;
+        let settings_file_name = settings_path
+            .strip_prefix(settings_parent)
+            .context("server settings path is outside its parent")?;
+        let settings_file_name = RelPath::new(settings_file_name, PathStyle::local())
+            .context("server settings file name is invalid")?;
+        let path = path.join(settings_file_name.as_ref());
 
         let (buffer, buffer_store) = this.update(&mut cx, |this, cx| {
             let buffer = this.buffer_store.update(cx, |buffer_store, cx| {
