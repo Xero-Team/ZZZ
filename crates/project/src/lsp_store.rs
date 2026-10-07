@@ -3251,16 +3251,20 @@ impl LocalLspStore {
                 .or_default()
                 .insert(server.server_id());
             if registered {
-                cx.emit(LspStoreEvent::LanguageServerUpdate {
-                    language_server_id: server.server_id(),
-                    name: None,
-                    message: proto::update_language_server::Variant::RegisteredForBuffer(
-                        proto::RegisteredForBuffer {
-                            buffer_abs_path: abs_path.to_string_lossy().into_owned(),
-                            buffer_id: buffer_id.to_proto(),
-                        },
-                    ),
-                });
+                if let Some(native_path) = vfs::NativePath::from_local_path(&abs_path).log_err() {
+                    cx.emit(LspStoreEvent::LanguageServerUpdate {
+                        language_server_id: server.server_id(),
+                        name: None,
+                        message: proto::update_language_server::Variant::RegisteredForBuffer(
+                            proto::RegisteredForBuffer {
+                                buffer_id: buffer_id.to_proto(),
+                                buffer_path_v2: Some(proto::NativePathV2::from_native_path(
+                                    &native_path,
+                                )),
+                            },
+                        ),
+                    });
+                }
             }
         }
     }
@@ -4490,21 +4494,24 @@ impl LocalLspStore {
 
 fn notify_server_capabilities_updated(server: &LanguageServer, cx: &mut Context<LspStore>) {
     if let Ok(capabilities) = serde_json::to_string(&server.capabilities()) {
+        let binary = vfs::NativePath::from_local_path(&server.binary().path)
+            .log_err()
+            .map(|path| proto::LanguageServerBinaryInfo {
+                arguments: server
+                    .binary()
+                    .arguments
+                    .iter()
+                    .map(|arg| arg.to_string_lossy().into_owned())
+                    .collect(),
+                path_v2: Some(proto::NativePathV2::from_native_path(&path)),
+            });
         cx.emit(LspStoreEvent::LanguageServerUpdate {
             language_server_id: server.server_id(),
             name: Some(server.name()),
             message: proto::update_language_server::Variant::MetadataUpdated(
                 proto::ServerMetadataUpdated {
                     capabilities: Some(capabilities),
-                    binary: Some(proto::LanguageServerBinaryInfo {
-                        path: server.binary().path.to_string_lossy().into_owned(),
-                        arguments: server
-                            .binary()
-                            .arguments
-                            .iter()
-                            .map(|arg| arg.to_string_lossy().into_owned())
-                            .collect(),
-                    }),
+                    binary,
                     configuration: serde_json::to_string(server.configuration()).ok(),
                     workspace_folders: server
                         .workspace_folders()
@@ -4706,9 +4713,13 @@ struct CoreSymbol {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SymbolLocation {
-    InProject(ProjectPath),
+    InProject {
+        project_path: ProjectPath,
+        vfs_path: vfs::VfsPath,
+    },
     OutsideProject {
         abs_path: Arc<Path>,
+        native_path: vfs::NativePath,
         signature: [u8; 32],
     },
 }
@@ -4716,7 +4727,7 @@ pub enum SymbolLocation {
 impl SymbolLocation {
     fn file_name(&self) -> Option<&str> {
         match self {
-            Self::InProject(path) => path.path.file_name(),
+            Self::InProject { project_path, .. } => project_path.path.file_name(),
             Self::OutsideProject { abs_path, .. } => abs_path.file_name()?.to_str(),
         }
     }
@@ -5667,9 +5678,9 @@ impl LspStore {
             && let Some(diangostic_summaries) = self.diagnostic_summaries.get(&worktree.id())
         {
             let mut summaries = diangostic_summaries.iter().flat_map(|(path, summaries)| {
-                summaries
-                    .iter()
-                    .map(|(server_id, summary)| summary.to_proto(*server_id, path.as_ref()))
+                summaries.iter().filter_map(|(server_id, summary)| {
+                    summary.to_proto(*server_id, path.as_ref()).log_err()
+                })
             });
             if let Some(summary) = summaries.next() {
                 client
@@ -6159,17 +6170,20 @@ impl LspStore {
                             server_id
                         });
 
-                        if let Some(language_server_id) = server_id {
+                        if let (Some(language_server_id), Some(native_path)) = (
+                            server_id,
+                            vfs::NativePath::from_local_path(&abs_path).log_err(),
+                        ) {
                             messages_to_report.push(LspStoreEvent::LanguageServerUpdate {
                                 language_server_id,
                                 name: node.name(),
                                 message:
                                     proto::update_language_server::Variant::RegisteredForBuffer(
                                         proto::RegisteredForBuffer {
-                                            buffer_abs_path: abs_path
-                                                .to_string_lossy()
-                                                .into_owned(),
                                             buffer_id: buffer_id.to_proto(),
+                                            buffer_path_v2: Some(
+                                                proto::NativePathV2::from_native_path(&native_path),
+                                            ),
                                         },
                                     ),
                             });
@@ -8726,14 +8740,22 @@ impl LspStore {
                                         this.worktree_store.read(cx).find_worktree(&abs_path, cx)
                                     {
                                         let worktree_id = tree.read(cx).id();
-                                        SymbolLocation::InProject(ProjectPath {
-                                            worktree_id,
-                                            path: rel_path,
-                                        })
+                                        let vfs_path =
+                                            tree.read(cx).vfs_path_for_path(&rel_path)?;
+                                        SymbolLocation::InProject {
+                                            project_path: ProjectPath {
+                                                worktree_id,
+                                                path: rel_path,
+                                            },
+                                            vfs_path,
+                                        }
                                     } else {
+                                        let native_path =
+                                            vfs::NativePath::from_local_path(&abs_path).ok()?;
                                         SymbolLocation::OutsideProject {
                                             signature: this.symbol_signature(&abs_path),
                                             abs_path: abs_path.into(),
+                                            native_path,
                                         }
                                     };
 
@@ -9217,16 +9239,16 @@ impl LspStore {
                 for (server_id, _) in &summaries_by_server_id {
                     cleared_server_ids.insert(*server_id);
                     if let Some((client, project_id)) = &downstream {
+                        let Some(summary) =
+                            diagnostic_summary_to_proto(path.as_ref(), *server_id, 0, 0).log_err()
+                        else {
+                            continue;
+                        };
                         client
                             .send(proto::UpdateDiagnosticSummary {
                                 project_id: *project_id,
                                 worktree_id: worktree_id.to_proto(),
-                                summary: Some(proto::DiagnosticSummary {
-                                    path: path.as_ref().to_proto(),
-                                    language_server_id: server_id.0 as u64,
-                                    error_count: 0,
-                                    warning_count: 0,
-                                }),
+                                summary: Some(summary),
                                 more_summaries: Vec::new(),
                             })
                             .ok();
@@ -9474,27 +9496,21 @@ impl LspStore {
             match updated {
                 ControlFlow::Continue(new_summary) => {
                     if let Some((project_id, new_summary)) = new_summary {
+                        let new_summary = diagnostic_summary_to_proto(
+                            project_path.path.as_ref(),
+                            server_id,
+                            new_summary.error_count,
+                            new_summary.warning_count,
+                        )?;
                         match &mut diagnostics_summary {
                             Some(diagnostics_summary) => {
-                                diagnostics_summary
-                                    .more_summaries
-                                    .push(proto::DiagnosticSummary {
-                                        path: project_path.path.as_ref().to_proto(),
-                                        language_server_id: server_id.0 as u64,
-                                        error_count: new_summary.error_count,
-                                        warning_count: new_summary.warning_count,
-                                    })
+                                diagnostics_summary.more_summaries.push(new_summary)
                             }
                             None => {
                                 diagnostics_summary = Some(proto::UpdateDiagnosticSummary {
                                     project_id,
                                     worktree_id: worktree_id.to_proto(),
-                                    summary: Some(proto::DiagnosticSummary {
-                                        path: project_path.path.as_ref().to_proto(),
-                                        language_server_id: server_id.0 as u64,
-                                        error_count: new_summary.error_count,
-                                        warning_count: new_summary.warning_count,
-                                    }),
+                                    summary: Some(new_summary),
                                     more_summaries: Vec::new(),
                                 })
                             }
@@ -9572,12 +9588,12 @@ impl LspStore {
             if let Some((_, project_id)) = &self.downstream_client {
                 Ok(ControlFlow::Continue(Some((
                     *project_id,
-                    proto::DiagnosticSummary {
-                        path: path_in_worktree.to_proto(),
-                        language_server_id: server_id.0 as u64,
-                        error_count: new_summary.error_count as u32,
-                        warning_count: new_summary.warning_count as u32,
-                    },
+                    diagnostic_summary_to_proto(
+                        &path_in_worktree,
+                        server_id,
+                        new_summary.error_count as u32,
+                        new_summary.warning_count as u32,
+                    )?,
                 ))))
             } else {
                 Ok(ControlFlow::Continue(None))
@@ -9616,13 +9632,14 @@ impl LspStore {
             };
 
             let symbol_abs_path = match &symbol.path {
-                SymbolLocation::InProject(project_path) => self
+                SymbolLocation::InProject { project_path, .. } => self
                     .worktree_store
                     .read(cx)
                     .absolutize(&project_path, cx)
                     .context("no such worktree"),
                 SymbolLocation::OutsideProject {
                     abs_path,
+                    native_path: _,
                     signature: _,
                 } => Ok(abs_path.to_path_buf()),
             };
@@ -10382,7 +10399,7 @@ impl LspStore {
             cx.clone(),
         )
         .await;
-        this.read_with(&cx, |this, _| {
+        this.read_with(&cx, |this, _cx| {
             this.did_rename_entry(
                 old_worktree_id,
                 &old_abs_path,
@@ -10408,9 +10425,15 @@ impl LspStore {
                 .into_iter()
                 .chain(envelope.payload.more_summaries)
             {
+                let provider_path = message_summary
+                    .path_v2
+                    .as_ref()
+                    .context("diagnostic summary is missing its exact path")?
+                    .to_provider_path()?;
+                let path = vfs::provider_path_to_legacy_utf8(&provider_path)?;
                 let project_path = ProjectPath {
                     worktree_id,
-                    path: RelPath::from_proto(&message_summary.path).context("invalid path")?,
+                    path: RelPath::from_proto(&path).context("invalid exact diagnostic path")?,
                 };
                 let path = project_path.path.clone();
                 let server_id = LanguageServerId(message_summary.language_server_id as usize);
@@ -10440,27 +10463,21 @@ impl LspStore {
                 }
 
                 if let Some((_, project_id)) = &lsp_store.downstream_client {
+                    let summary_wire = diagnostic_summary_to_proto(
+                        project_path.path.as_ref(),
+                        server_id,
+                        summary.error_count as u32,
+                        summary.warning_count as u32,
+                    )?;
                     match &mut diagnostics_summary {
                         Some(diagnostics_summary) => {
-                            diagnostics_summary
-                                .more_summaries
-                                .push(proto::DiagnosticSummary {
-                                    path: project_path.path.as_ref().to_proto(),
-                                    language_server_id: server_id.0 as u64,
-                                    error_count: summary.error_count as u32,
-                                    warning_count: summary.warning_count as u32,
-                                })
+                            diagnostics_summary.more_summaries.push(summary_wire)
                         }
                         None => {
                             diagnostics_summary = Some(proto::UpdateDiagnosticSummary {
                                 project_id: *project_id,
                                 worktree_id: worktree_id.to_proto(),
-                                summary: Some(proto::DiagnosticSummary {
-                                    path: project_path.path.as_ref().to_proto(),
-                                    language_server_id: server_id.0 as u64,
-                                    error_count: summary.error_count as u32,
-                                    warning_count: summary.warning_count as u32,
-                                }),
+                                summary: Some(summary_wire),
                                 more_summaries: Vec::new(),
                             })
                         }
@@ -11388,14 +11405,31 @@ impl LspStore {
         let peer_id = envelope.original_sender_id().unwrap_or_default();
         let symbol = envelope.payload.symbol.context("invalid symbol")?;
         let symbol = Self::deserialize_symbol(symbol)?;
-        this.read_with(&cx, |this, _| {
+        this.read_with(&cx, |this, cx| {
             if let SymbolLocation::OutsideProject {
                 abs_path,
+                native_path: _,
                 signature,
             } = &symbol.path
             {
                 let new_signature = this.symbol_signature(&abs_path);
                 anyhow::ensure!(&new_signature == signature, "invalid symbol signature");
+            }
+            if let SymbolLocation::InProject {
+                project_path,
+                vfs_path,
+            } = &symbol.path
+            {
+                let worktree = this
+                    .worktree_store
+                    .read(cx)
+                    .worktree_for_id(project_path.worktree_id, cx)
+                    .context("symbol worktree not found")?;
+                let exact_path = worktree.read(cx).relative_path_from_vfs_path(vfs_path)?;
+                anyhow::ensure!(
+                    exact_path == project_path.path,
+                    "symbol path identity mismatch"
+                );
             }
             Ok(())
         })?;
@@ -11942,19 +11976,18 @@ impl LspStore {
             summaries.retain(|path, summaries_by_server_id| {
                 if summaries_by_server_id.remove(&server_id).is_some() {
                     if let Some((client, project_id)) = self.downstream_client.clone() {
-                        client
-                            .send(proto::UpdateDiagnosticSummary {
-                                project_id,
-                                worktree_id: worktree_id.to_proto(),
-                                summary: Some(proto::DiagnosticSummary {
-                                    path: path.as_ref().to_proto(),
-                                    language_server_id: server_id.0 as u64,
-                                    error_count: 0,
-                                    warning_count: 0,
-                                }),
-                                more_summaries: Vec::new(),
-                            })
-                            .log_err();
+                        if let Some(summary) =
+                            diagnostic_summary_to_proto(path.as_ref(), server_id, 0, 0).log_err()
+                        {
+                            client
+                                .send(proto::UpdateDiagnosticSummary {
+                                    project_id,
+                                    worktree_id: worktree_id.to_proto(),
+                                    summary: Some(summary),
+                                    more_summaries: Vec::new(),
+                                })
+                                .log_err();
+                        }
                     }
                     cleared_paths.push(ProjectPath {
                         worktree_id: *worktree_id,
@@ -12728,13 +12761,16 @@ impl LspStore {
         });
 
         for (buffer_id, abs_path) in buffer_paths_registered {
+            let Some(native_path) = vfs::NativePath::from_local_path(&abs_path).log_err() else {
+                continue;
+            };
             cx.emit(LspStoreEvent::LanguageServerUpdate {
                 language_server_id: server_id,
                 name: Some(adapter.name()),
                 message: proto::update_language_server::Variant::RegisteredForBuffer(
                     proto::RegisteredForBuffer {
-                        buffer_abs_path: abs_path.to_string_lossy().into_owned(),
                         buffer_id: buffer_id.to_proto(),
+                        buffer_path_v2: Some(proto::NativePathV2::from_native_path(&native_path)),
                     },
                 ),
             });
@@ -12989,20 +13025,25 @@ impl LspStore {
                 column: symbol.range.end.0.column,
             }),
             worktree_id: Default::default(),
-            path: Default::default(),
             signature: Default::default(),
             container_name: symbol.container_name.clone(),
+            path_v2: None,
+            abs_path_v2: None,
         };
         match &symbol.path {
-            SymbolLocation::InProject(path) => {
-                result.worktree_id = path.worktree_id.to_proto();
-                result.path = path.path.to_proto();
+            SymbolLocation::InProject {
+                project_path,
+                vfs_path,
+            } => {
+                result.worktree_id = project_path.worktree_id.to_proto();
+                result.path_v2 = Some(proto::VfsPathV2::from_vfs_path(vfs_path));
             }
             SymbolLocation::OutsideProject {
-                abs_path,
+                abs_path: _,
+                native_path,
                 signature,
             } => {
-                result.path = abs_path.to_string_lossy().into_owned();
+                result.abs_path_v2 = Some(proto::NativePathV2::from_native_path(native_path));
                 result.signature = signature.to_vec();
             }
         }
@@ -13014,20 +13055,30 @@ impl LspStore {
         let worktree_id = WorktreeId::from_proto(serialized_symbol.worktree_id);
         let kind = unsafe { mem::transmute::<i32, lsp::SymbolKind>(serialized_symbol.kind) };
 
-        let path = if serialized_symbol.signature.is_empty() {
-            SymbolLocation::InProject(ProjectPath {
-                worktree_id,
-                path: RelPath::from_proto(&serialized_symbol.path)
-                    .context("invalid symbol path")?,
-            })
-        } else {
-            SymbolLocation::OutsideProject {
-                abs_path: Path::new(&serialized_symbol.path).into(),
-                signature: serialized_symbol
-                    .signature
-                    .try_into()
-                    .map_err(|_| anyhow!("invalid signature"))?,
+        let path = match (serialized_symbol.path_v2, serialized_symbol.abs_path_v2) {
+            (Some(path), None) if serialized_symbol.signature.is_empty() => {
+                let vfs_path = path.to_vfs_path()?;
+                let path = vfs::provider_path_to_legacy_utf8(vfs_path.provider_path())?;
+                SymbolLocation::InProject {
+                    project_path: ProjectPath {
+                        worktree_id,
+                        path: RelPath::from_proto(&path).context("invalid exact symbol path")?,
+                    },
+                    vfs_path,
+                }
             }
+            (None, Some(path)) if !serialized_symbol.signature.is_empty() => {
+                let native_path = path.to_native_path()?;
+                SymbolLocation::OutsideProject {
+                    abs_path: native_path.display_path_buf().into(),
+                    native_path,
+                    signature: serialized_symbol
+                        .signature
+                        .try_into()
+                        .map_err(|_| anyhow!("invalid signature"))?,
+                }
+            }
+            _ => anyhow::bail!("symbol has conflicting or missing exact path identity"),
         };
 
         let start = serialized_symbol.start.context("invalid start")?;
@@ -15399,14 +15450,30 @@ impl DiagnosticSummary {
         self,
         language_server_id: LanguageServerId,
         path: &RelPath,
-    ) -> proto::DiagnosticSummary {
-        proto::DiagnosticSummary {
-            path: path.to_proto(),
-            language_server_id: language_server_id.0 as u64,
-            error_count: self.error_count as u32,
-            warning_count: self.warning_count as u32,
-        }
+    ) -> Result<proto::DiagnosticSummary> {
+        diagnostic_summary_to_proto(
+            path,
+            language_server_id,
+            self.error_count as u32,
+            self.warning_count as u32,
+        )
     }
+}
+
+fn diagnostic_summary_to_proto(
+    path: &RelPath,
+    language_server_id: LanguageServerId,
+    error_count: u32,
+    warning_count: u32,
+) -> Result<proto::DiagnosticSummary> {
+    let provider_path =
+        vfs::provider_path_from_legacy_utf8(path.as_unix_str(), vfs::PathEncoding::PortableUtf8)?;
+    Ok(proto::DiagnosticSummary {
+        path_v2: Some(proto::ProviderPathV2::from_provider_path(&provider_path)),
+        language_server_id: language_server_id.0 as u64,
+        error_count,
+        warning_count,
+    })
 }
 
 #[derive(Clone, Debug)]

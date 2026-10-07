@@ -2,6 +2,7 @@ syntax = "proto3";
 package zzz.messages;
 
 import "buffer.proto";
+import "vfs.proto";
 
 message GetDefinition {
   uint64 project_id = 1;
@@ -102,7 +103,8 @@ message Symbol {
   string language_server_name = 3;
   string name = 4;
   int32 kind = 5;
-  string path = 6;
+  reserved 6;
+  reserved "path";
   // Cannot use generate anchors for unopened files,
   // so we are forced to use point coords instead
   PointUtf16 start = 7;
@@ -110,6 +112,8 @@ message Symbol {
   bytes signature = 9;
   uint64 language_server_id = 10;
   optional string container_name = 11;
+  VfsPathV2 path_v2 = 12;
+  NativePathV2 abs_path_v2 = 13;
 }
 
 message GetDocumentSymbols {
@@ -591,10 +595,12 @@ message UpdateDiagnosticSummary {
 }
 
 message DiagnosticSummary {
-  string path = 1;
+  reserved 1;
+  reserved "path";
   uint64 language_server_id = 2;
   uint32 error_count = 3;
   uint32 warning_count = 4;
+  ProviderPathV2 path_v2 = 5;
 }
 
 message UpdateLanguageServer {
@@ -674,13 +680,17 @@ enum ServerBinaryStatus {
 }
 
 message RegisteredForBuffer {
-  string buffer_abs_path = 1;
+  reserved 1;
+  reserved "buffer_abs_path";
   uint64 buffer_id = 2;
+  NativePathV2 buffer_path_v2 = 3;
 }
 
 message LanguageServerBinaryInfo {
-  string path = 1;
+  reserved 1;
+  reserved "path";
   repeated string arguments = 2;
+  NativePathV2 path_v2 = 3;
 }
 
 message ServerMetadataUpdated {

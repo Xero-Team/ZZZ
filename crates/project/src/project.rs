@@ -3146,15 +3146,19 @@ impl Project {
                                 .get_mut(language_server_id)
                             {
                                 if let Some(binary) = &update.binary {
-                                    language_server_status.binary = Some(LanguageServerBinary {
-                                        path: PathBuf::from(&binary.path),
-                                        arguments: binary
-                                            .arguments
-                                            .iter()
-                                            .map(OsString::from)
-                                            .collect(),
-                                        env: None,
-                                    });
+                                    language_server_status.binary = binary
+                                        .path_v2
+                                        .as_ref()
+                                        .and_then(|path| path.to_native_path().log_err())
+                                        .map(|path| LanguageServerBinary {
+                                            path: path.display_path_buf(),
+                                            arguments: binary
+                                                .arguments
+                                                .iter()
+                                                .map(OsString::from)
+                                                .collect(),
+                                            env: None,
+                                        });
                                 }
 
                                 language_server_status.configuration = update
@@ -3171,11 +3175,18 @@ impl Project {
                         });
                     }
                     proto::update_language_server::Variant::RegisteredForBuffer(update) => {
-                        if let Ok(buffer_id) = BufferId::new(update.buffer_id) {
+                        if let (Ok(buffer_id), Some(buffer_abs_path)) = (
+                            BufferId::new(update.buffer_id),
+                            update
+                                .buffer_path_v2
+                                .as_ref()
+                                .and_then(|path| path.to_native_path().log_err())
+                                .map(|path| path.display_path_buf()),
+                        ) {
                             cx.emit(Event::LanguageServerBufferRegistered {
                                 buffer_id,
                                 server_id: *language_server_id,
-                                buffer_abs_path: PathBuf::from(&update.buffer_abs_path),
+                                buffer_abs_path,
                                 name: name.clone(),
                             });
                         }
