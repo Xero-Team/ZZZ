@@ -14,15 +14,14 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `f4cf1d4fa89862b33eecb6b4029ad82afeaf5f54`
+  `e1e46cbb33f006c37fcb9b7807803925b8117cf1`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
-- Next action: operational 与广义 path-like wire 审计已完成；继续移除
-  editor/project/search 的 generic UTF-8 bridge caller，再审计 optional file identity、普通
-  `Local`/`Remote` branch、persistence invalidation，运行 `VFS-EXP-013` 并完成 Phase 9
-  全量验收。
+- Next action: operational、wire 与 generic UTF-8 bridge 清理已完成；继续审计 optional
+  `language::File` identity、普通 `Local`/`Remote` branch 和 persistence invalidation，运行
+  `VFS-EXP-013` 并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -37,7 +36,7 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 | 6     | LSP/Git/native execution           | PASS        | `47381efe23`, `4940e57051`                                                                                                                                                                                                                   | PASS        | VFS-EXP-010 PASS                                      |
 | 7     | ArchiveProvider 与 ZIP             | PASS        | `fe9044e579`, `611012cacb`                                                                                                                                                                                                                   | PASS        | VFS-EXP-011 PASS                                      |
 | 8     | Composition layers 与 overlay 决策 | PASS        | `b89939043d`, `3b48092dce`                                                                                                                                                                                                                   | PASS        | VFS-EXP-012 PASS; overlay REJECTED                    |
-| 9     | Cross-provider 与旧模型移除        | IN PROGRESS | `e26042c8cf`, `8a84e36c40`, `0ebc08732e`, `160efe656f`, `2997b90376`, `906bd33674`, `d8530febf5`, `f683641c8b`, `f7f69bd23c`, `4a5c33c225`, `7fa0bc99d9`, `8a5aa80da7`, `1b8189ce33`, `b0d21d63a1`, `fcc48eb011`, `f4cf1d4fa8`               | IN PROGRESS | Operational/wire audits clear; adapter cleanup active |
+| 9     | Cross-provider 与旧模型移除        | IN PROGRESS | `e26042c8cf`, `8a84e36c40`, `0ebc08732e`, `160efe656f`, `2997b90376`, `906bd33674`, `d8530febf5`, `f683641c8b`, `f7f69bd23c`, `4a5c33c225`, `7fa0bc99d9`, `8a5aa80da7`, `1b8189ce33`, `b0d21d63a1`, `fcc48eb011`, `f4cf1d4fa8`, `e1e46cbb33` | IN PROGRESS | Operational/wire audits clear; adapter cleanup active |
 | 10    | 收敛与最终验证                     | NOT STARTED | -                                                                                                                                                                                                                                            | -           | -                                                     |
 
 ## Baseline {#baseline}
@@ -114,7 +113,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | ----------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------- |
 | Legacy `Fs` storage façade                      | Existing   | Storage callers remain; `NativeExecutionContext` exposes separate Git/process services while the compatibility object still implements all service traits | Phase 9       | MIGRATING |
 | `LegacyFsProvider`                              | Phase 2    | Removed; FakeFs/benchmark coverage now uses exact native-path `EmulatedFsProvider`, explicitly not an authority boundary                                  | Phase 9       | REMOVED   |
-| Generic UTF-8 `ProviderPath` bridge             | Phase 1    | Removed from Worktree; its remaining `RelPath` compatibility boundary now constructs exact components directly, while external crate callers remain       | Phase 9       | MIGRATING |
+| Generic UTF-8 `ProviderPath` bridge             | Phase 1    | Global separator-delimited adapter and all callers removed; typed sources now construct exact components directly                                         | Phase 9       | REMOVED   |
 | `WorktreeId` to temporary `MountId`             | Phase 1    | `ProjectPath` v2 dual-wire adapter; runtime snapshots now allocate session mount IDs                                                                      | Phase 5       | MIGRATING |
 | `RelPath`/`ProjectPath` UTF-8 wire              | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)                                                                                    | Phase 9       | MIGRATING |
 | `Worktree::Local/Remote` behavior branches      | Existing   | Ordinary Phase 5 consumer dispatch is unified; Worktree internals and registered native/process boundaries remain                                         | Phase 6/9     | MIGRATING |
@@ -375,6 +374,9 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-07 | 9D    | `./script/clippy -p worktree -p project -p remote_server`, fmt/diff gates and `hunting-code-smells` P0/P1/P2 review                                                            | 0           | PASS: binary loads require entry `VfsPath`; stat/archive callers reuse exact identity; no remaining finding                                     | No                                                                            |
 | 2026-10-07 | 9D    | Worktree generic UTF-8 bridge detector, full Worktree regression and local/remote archive tests                                                                                | 0/101/0     | No global legacy bridge remains in Worktree; component adapter preserves 95/1 baseline and both archive paths PASS                              | Yes: `test_load_file_encoding`                                                |
 | 2026-10-07 | 9D    | `./script/clippy -p worktree`, fmt/diff gates and `hunting-code-smells` P0/P1/P2 review                                                                                        | 0           | PASS: normalized `RelPath` components construct provider identity without separator-delimited strings; no remaining finding                     | No                                                                            |
+| 2026-10-07 | 9D    | VFS 49, exact PathKey/Git/rename/search/remote-buffer tests and Worktree full regression                                                                                       | mixed       | All targeted tests PASS; Worktree preserves its sole frozen 95/1 encoding failure                                                               | Yes: `test_load_file_encoding`                                                |
+| 2026-10-07 | 9D    | global `provider_path_from_legacy_utf8` caller/API detector and Windows/macOS VFS cross-check                                                                                  | 0           | PASS: separator-delimited adapter deleted; typed components compile on both targets                                                             | No                                                                            |
+| 2026-10-07 | 9D    | `./script/clippy -p vfs -p editor -p project -p search -p remote_server -p worktree`, fmt/diff and code-smell review                                                           | 0           | PASS: exact component construction replaces every generic bridge caller; no remaining P0/P1/P2 finding                                          | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -438,6 +440,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `fcc48eb01196bfb1cea91e245c4bc6c292cfa6f9` | 9D    | Exact Worktree provider paths for remote binary, file-stat and archive consumers                                                     | Worktree baseline parity, local/remote archive regressions, scoped clippy and code-smell review PASS                            | Restore per-caller UTF-8 provider-path reconstruction without changing provider ownership              |
 | `4f678dd4822f173f5be6b8c1cb3b40d1abf642a2` | 9D    | Progress update for exact Worktree provider paths                                                                                    | Docs Prettier PASS                                                                                                              | Revert the progress update without changing runtime behavior                                           |
 | `f4cf1d4fa89862b33eecb6b4029ad82afeaf5f54` | 9D    | Component-based Worktree `RelPath` compatibility boundary replacing the generic UTF-8 bridge                                         | Worktree baseline parity, local/remote archive regressions, scoped clippy and code-smell review PASS                            | Restore the global UTF-8 bridge calls without changing exact Worktree identities                       |
+| `639d86226c63ec8ab4dec75ee2586491fb1e616c` | 9D    | Progress update for component-based Worktree paths                                                                                   | Docs Prettier PASS                                                                                                              | Revert the progress update without changing runtime behavior                                           |
+| `e1e46cbb33f006c37fcb9b7807803925b8117cf1` | 9D    | Removal of the global separator-delimited UTF-8 provider-path bridge                                                                 | VFS and targeted consumer tests, cross-target VFS checks, scoped clippy and code-smell review PASS                              | Restore the generic adapter without changing exact wire or provider identity                           |
 
 ## 平台 QA {#platform-qa}
 
@@ -458,7 +462,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Next action {#next-action}
 
-继续 Phase 9 compatibility adapter 清理。移除 editor/project/search 中剩余 generic UTF-8
-`ProviderPath` bridge caller，再审计 optional `language::File` identity 和普通 consumer
+继续 Phase 9 compatibility adapter 清理。审计 optional `language::File` identity、
+`ProjectResourceIdentity::Path`/`LspPathMapper` legacy bridge 与普通 consumer
 `Local`/`Remote` branch。随后审计旧 persistence 的 migration/invalidation policy，执行
 `VFS-EXP-013`、Phase 9 全量 regression matrix 和 code-smell 审查。
