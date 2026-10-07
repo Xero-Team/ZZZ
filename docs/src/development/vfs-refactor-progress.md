@@ -14,30 +14,31 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `7fa0bc99d944602efb8dd0f60642c2c241c4151d`
+  `8a5aa80da7c4ddf90d35fa641aeb130a891a40fd`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
-- Next action: 迁移 Git repo-relative/native path，确认 protobuf operational string path
-  detector 清零；随后清理 compatibility adapter、运行 `VFS-EXP-013` 并完成 Phase 9 全量
-  验收。
+- Next action: 主 string-path detector 已清零；继续广义 path-like wire 审计，迁移 task cwd、
+  REPL kernel working/connection paths、app profiling file 与 LSP target file 等真实路径，保留
+  glob/root display 等非身份文本。随后清理 compatibility adapter、运行 `VFS-EXP-013` 并完成
+  Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                             | Status      | Commit                                                                                                                                                                                                                                       | Validation  | Notes                                               |
-| ----- | ---------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------- |
-| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470`                                                                                                                                                                                                                                 | PASS        | VFS-EXP-001 PASS                                    |
-| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75`                                                                                                                                                                                                                                 | PASS        | VFS-EXP-002 PASS                                    |
-| 2     | Provider、LocalProvider、职责拆分  | PASS        | `9b344ee943`, `96a761f5be`                                                                                                                                                                                                                   | PASS        | VFS-EXP-003/004/005 PASS                            |
-| 3     | Snapshot、ResourceId、Worktree     | PASS        | `9514700ac9`                                                                                                                                                                                                                                 | PASS        | VFS-EXP-006 PASS                                    |
-| 4     | RemoteProviderProxy 与 VFS RPC     | PASS        | `a5d4bbc219`, `ce1038a9e7`, `82df2b06e3`, `31d8d5406d`, `067f939b01`, `345e726fbd`                                                                                                                                                           | PASS        | VFS-EXP-007/008 PASS                                |
-| 5     | Consumer 迁移                      | PASS        | `3783d71910`, `ea5edf3ba2`, `276d9f1776`, `08c8936af3`, `26e43eede4`, `928b3b6ea3`, `004b510de9`, `2c3728b4da`, `8fc81953bd`, `ec39df2891`, `aafc454ce4`, `ec7c52f022`, `8ceb12c91c`, `a589e994c3`, `e3ee94634b`, `d665dc0345`, `89bed4dce7` | PASS        | VFS-EXP-009 PASS                                    |
-| 6     | LSP/Git/native execution           | PASS        | `47381efe23`, `4940e57051`                                                                                                                                                                                                                   | PASS        | VFS-EXP-010 PASS                                    |
-| 7     | ArchiveProvider 与 ZIP             | PASS        | `fe9044e579`, `611012cacb`                                                                                                                                                                                                                   | PASS        | VFS-EXP-011 PASS                                    |
-| 8     | Composition layers 与 overlay 决策 | PASS        | `b89939043d`, `3b48092dce`                                                                                                                                                                                                                   | PASS        | VFS-EXP-012 PASS; overlay REJECTED                  |
-| 9     | Cross-provider 与旧模型移除        | IN PROGRESS | `e26042c8cf`, `8a84e36c40`, `0ebc08732e`, `160efe656f`, `2997b90376`, `906bd33674`, `d8530febf5`, `f683641c8b`, `f7f69bd23c`, `4a5c33c225`, `7fa0bc99d9`                                                                                     | IN PROGRESS | Transfer model and major exact wire groups complete |
-| 10    | 收敛与最终验证                     | NOT STARTED | -                                                                                                                                                                                                                                            | -           | -                                                   |
+| Phase | Result                             | Status      | Commit                                                                                                                                                                                                                                       | Validation  | Notes                                          |
+| ----- | ---------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------- |
+| 0     | Baseline、ADR、实验 harness        | PASS        | `4c35091470`                                                                                                                                                                                                                                 | PASS        | VFS-EXP-001 PASS                               |
+| 1     | Path/resource types 与 v2 wire     | PASS        | `86b96e7a75`                                                                                                                                                                                                                                 | PASS        | VFS-EXP-002 PASS                               |
+| 2     | Provider、LocalProvider、职责拆分  | PASS        | `9b344ee943`, `96a761f5be`                                                                                                                                                                                                                   | PASS        | VFS-EXP-003/004/005 PASS                       |
+| 3     | Snapshot、ResourceId、Worktree     | PASS        | `9514700ac9`                                                                                                                                                                                                                                 | PASS        | VFS-EXP-006 PASS                               |
+| 4     | RemoteProviderProxy 与 VFS RPC     | PASS        | `a5d4bbc219`, `ce1038a9e7`, `82df2b06e3`, `31d8d5406d`, `067f939b01`, `345e726fbd`                                                                                                                                                           | PASS        | VFS-EXP-007/008 PASS                           |
+| 5     | Consumer 迁移                      | PASS        | `3783d71910`, `ea5edf3ba2`, `276d9f1776`, `08c8936af3`, `26e43eede4`, `928b3b6ea3`, `004b510de9`, `2c3728b4da`, `8fc81953bd`, `ec39df2891`, `aafc454ce4`, `ec7c52f022`, `8ceb12c91c`, `a589e994c3`, `e3ee94634b`, `d665dc0345`, `89bed4dce7` | PASS        | VFS-EXP-009 PASS                               |
+| 6     | LSP/Git/native execution           | PASS        | `47381efe23`, `4940e57051`                                                                                                                                                                                                                   | PASS        | VFS-EXP-010 PASS                               |
+| 7     | ArchiveProvider 与 ZIP             | PASS        | `fe9044e579`, `611012cacb`                                                                                                                                                                                                                   | PASS        | VFS-EXP-011 PASS                               |
+| 8     | Composition layers 与 overlay 决策 | PASS        | `b89939043d`, `3b48092dce`                                                                                                                                                                                                                   | PASS        | VFS-EXP-012 PASS; overlay REJECTED             |
+| 9     | Cross-provider 与旧模型移除        | IN PROGRESS | `e26042c8cf`, `8a84e36c40`, `0ebc08732e`, `160efe656f`, `2997b90376`, `906bd33674`, `d8530febf5`, `f683641c8b`, `f7f69bd23c`, `4a5c33c225`, `7fa0bc99d9`, `8a5aa80da7`                                                                       | IN PROGRESS | Main operational string-path detector is clear |
+| 10    | 收敛与最终验证                     | NOT STARTED | -                                                                                                                                                                                                                                            | -           | -                                              |
 
 ## Baseline {#baseline}
 
@@ -359,6 +360,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-07 | 9C    | `./script/clippy -p proto -p project -p agent_servers -p context_server -p remote_server`, cross-target proto/VFS, fmt/diff gates and code-smell review                        | 0           | PASS: command path exact, dead root wire removed and text-only command adapters reject non-Unicode paths                                        | No                                                                            |
 | 2026-10-07 | 9C    | exact DAP path tests, `cargo test --locked -p dap -p dap_adapters`, `cargo test --locked -p task`, `cargo test --locked -p project` and `cargo test --locked -p remote_server` | mixed       | DAP 5 and adapters 3 PASS; Task 26/1, Project 295/7 and remote server 30/2 preserve frozen baseline failures                                    | Yes: frozen Task, Project and remote-server failures                          |
 | 2026-10-07 | 9C    | `./script/clippy -p proto -p task -p dap -p project -p remote_server -p dap_adapters`, cross-target proto/VFS, fmt/diff gates and code-smell review                            | 0           | PASS: breakpoint VFS identity and native DAP/launch/binary paths exact; text-only DAP adapters reject non-Unicode paths                         | No                                                                            |
+| 2026-10-07 | 9C    | exact Git path tests, remote Git 4, Git Graph 26, proto 9, Workspace 239, Worktree and Project full regressions                                                                | mixed       | PASS except frozen Worktree 95/1 and Project 295/7 failures; main operational string-path detector clear                                        | Yes: frozen Worktree and Project failures                                     |
+| 2026-10-07 | 9C    | `./script/clippy -p proto -p worktree -p project -p remote_server -p git_graph -p workspace`, cross-target proto/VFS, fmt/diff gates and code-smell review                     | 0           | PASS: exact native/repo-relative Git wire, remote path-style preservation and deprecated repository payload removal                             | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -412,6 +415,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `4a5c33c2252e8846499a9d52f4c9d638ade4b650` | 9C    | Exact agent/context command paths and removal of unused root-directory wire fields                                                   | Remote command tests, Project/remote baseline parity, proto/cross-target checks and scoped clippy PASS                          | Restore AI command/root strings without changing other exact path groups                               |
 | `edcaca390eaf0fe36b03d9419f2d902da05d1c14` | 9C    | Progress update for exact server command paths                                                                                       | Docs Prettier PASS                                                                                                              | Revert the progress update without changing runtime behavior                                           |
 | `7fa0bc99d944602efb8dd0f60642c2c241c4151d` | 9C    | Exact breakpoint, DAP source/module, launch and debug-adapter paths                                                                  | Exact path tests, DAP/adapters PASS, Task/Project/remote baseline parity, cross-target checks and scoped clippy PASS            | Restore debugger string paths without changing other exact path groups                                 |
+| `63cba26bb48cb0b838263aa9f29d200576ebc872` | 9C    | Progress update for exact debugger paths                                                                                             | Docs Prettier PASS                                                                                                              | Revert the progress update without changing runtime behavior                                           |
+| `8a5aa80da7c4ddf90d35fa641aeb130a891a40fd` | 9C    | Exact Git native/repo-relative paths and removal of deprecated Worktree repository payloads                                          | Exact/cross-style path tests, remote Git/Git Graph/Workspace PASS, baseline parity, cross-target checks and scoped clippy PASS  | Restore Git string paths and deprecated repository payloads without changing earlier Phase 9 groups    |
 
 ## 平台 QA {#platform-qa}
 
@@ -432,7 +437,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 
 ## Next action {#next-action}
 
-继续 Phase 9 exact-path 清理。迁移 Git repo-relative/native paths，并用 detector 确认
-protobuf 不再存在 operational string path。随后删除对应 legacy persistence、no-op adapter、
-重复 cache 与剩余普通 consumer `Local`/`Remote` behavior branch；最后执行
-`VFS-EXP-013`、Phase 9 全量 regression matrix 和 code-smell 审查。
+继续 Phase 9 广义 path-like wire 审计。迁移 task cwd、REPL kernel working/connection paths、
+app profiling file 与 LSP target file 等真实路径；明确保留 glob patterns、root display name、
+shell command 等非身份文本。随后删除对应 legacy persistence、no-op adapter、重复 cache 与
+剩余普通 consumer `Local`/`Remote` behavior branch；最后执行 `VFS-EXP-013`、Phase 9 全量
+regression matrix 和 code-smell 审查。
