@@ -406,15 +406,23 @@ raster result 决定 atlas format，并完成 WGPU/Windows/macOS color-font 路�
 - macOS 删除 Apple Color Emoji PostScript 白名单，改用 CoreText
   `kCTFontColorGlyphsTrait`。该 capability 统一决定保守 `ColorBgra8` raster、shaping
   hint 和 synthetic bold/italic 禁用；缺少 `m` 的 color font 也可加载。
+- Windows color raster 优先使用 `IDWriteBitmapRenderTarget3`。COLRv1 走
+  `DrawPaintGlyphRun`，COLRv0、SVG、PNG/JPEG/TIFF 和 premultiplied BGRA 走
+  `DrawGlyphRunWithColorSupport`；native target 先清零、裁切真实 coverage，再只做一次
+  premultiplied BGRA → straight-alpha BGRA 转换。旧系统保留现有 COLRv0 layer compositor
+  与视觉正确的 monochrome-in-color fallback。
 
 TEXT-007 当前 WGPU 结果：`PASS`
 
-| 检查                                                                                 | 结果   | 说明                                                      |
-| ------------------------------------------------------------------------------------ | ------ | --------------------------------------------------------- |
-| `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests` | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport |
-| `GPUI_*_FONT=... cargo test ... text_glyph_format_runner -- --ignored --nocapture`   | `PASS` | RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome    |
-| `./script/clippy -p gpui_wgpu`                                                       | `PASS` | all-target/all-feature release clippy + philosophy        |
-| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`            | `PASS` | CoreText capability test cross-compile；native NOT RUN    |
+| 检查                                                                                 | 结果   | 说明                                                                                       |
+| ------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------ |
+| `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests` | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport                                  |
+| `GPUI_*_FONT=... cargo test ... text_glyph_format_runner -- --ignored --nocapture`   | `PASS` | RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome                                     |
+| `./script/clippy -p gpui_wgpu`                                                       | `PASS` | all-target/all-feature release clippy + philosophy                                         |
+| `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`            | `PASS` | CoreText capability test cross-compile；native NOT RUN                                     |
+| `./script/clippy -p gpui_windows`                                                    | `PASS` | host graph + philosophy；Windows cfg 不在本机执行                                          |
+| isolated Windows `IDWriteBitmapRenderTarget3` API crosscheck                         | `PASS` | `x86_64-pc-windows-gnu` 类型检查                                                           |
+| full `gpui_windows` cross-target check                                               | `FAIL` | baseline：`async-tar` 缺 `async-std/unstable`；启用后为既有 `windows-core 0.62/0.100` 冲突 |
 
 TEXT-007 artifact：
 
@@ -426,8 +434,20 @@ TEXT-007 artifact：
 显式 raster contract 与 WGPU color-font 提交：
 `58700e6e399f34355c7dd77bf288801ba8872ebe`（signed）。
 
-下一步：补齐 Windows SVG/bitmap/COLRv1 native raster 路径或精确 runbook，并固定
-licensed fixture provenance/manifest 后关闭阶段 5。
+macOS CoreText capability 提交：
+`55dd1cd567368db1ce6416d586381cc8393692f5`（signed）。
+
+Windows native TEXT-007 runbook（当前主机 `NOT RUN`）：
+
+```powershell
+$env:GPUI_COLRV1_FONT = "C:\fixtures\Noto-COLRv1.ttf"
+$env:GPUI_BITMAP_COLOR_FONT = "C:\fixtures\NotoColorEmoji.subset.ttf"
+$env:GPUI_SVG_COLOR_FONT = "C:\fixtures\TwitterColorEmoji-SVGinOT.ttf"
+cargo test --locked -p gpui_windows color_font_fixture_runner -- --ignored --nocapture
+```
+
+下一步：固定 licensed fixture provenance/manifest，补充 macOS native TEXT-007 runbook，
+完成阶段 5 审计。
 
 ### 阶段 6–9
 
