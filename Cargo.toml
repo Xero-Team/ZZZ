@@ -937,6 +937,10 @@ features = [
 
 [patch.crates-io]
 async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd71e4e94fbda54ce6302444de14f4d190e" }
+# `block` 0.1.6 models `_NSConcreteStackBlock` as an uninhabited enum, which
+# newer Rust versions reject for extern statics. Keep its API while using an
+# FFI-safe opaque pointer type for that symbol.
+block = { path = "vendor/block" }
 # citationberg 0.7.0 was published with quick-xml 0.38, which is affected by
 # RUSTSEC-2026-0194 and RUSTSEC-2026-0195. This upstream commit keeps the same
 # citationberg API and raises quick-xml to the patched 0.41 series.
