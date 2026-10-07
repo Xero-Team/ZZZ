@@ -3759,10 +3759,18 @@ impl LocalLspStore {
                             mapper.uri_to_resource(&operation.text_document.uri, cx)
                         })
                         .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
-                    if resource.project_path().is_none() {
+                    let has_text_buffer_path = this.read_with(cx, |this, cx| {
+                        this.worktree_store
+                            .read(cx)
+                            .project_path_for_vfs_path(resource.vfs_path(), cx)
+                            .is_some()
+                    });
+                    if !has_text_buffer_path {
                         return Err(WorkspaceEditFailure::new(
                             change_index,
-                            NativeExecutionError::LegacyProjectPathUnavailable,
+                            NativeExecutionError::TextBufferPathUnavailable {
+                                path: resource.vfs_path().clone(),
+                            },
                         )
                         .into());
                     }
@@ -3845,8 +3853,14 @@ impl LocalLspStore {
                         .to_local_path_buf()
                         .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
                     let source_resource_id = source.resource_id();
-                    let source_project_path = source.project_path().cloned();
-                    let target_project_path = target.project_path().cloned();
+                    let (source_project_path, target_project_path) =
+                        this.read_with(cx, |this, cx| {
+                            let worktree_store = this.worktree_store.read(cx);
+                            (
+                                worktree_store.project_path_for_vfs_path(source.vfs_path(), cx),
+                                worktree_store.project_path_for_vfs_path(target.vfs_path(), cx),
+                            )
+                        });
 
                     // An LSP "rename symbol" can also rename the file, with the text edit
                     // applied only to the in-memory buffer. Persist it before renaming, or

@@ -208,9 +208,16 @@ async fn test_lsp_path_mapper_round_trip(cx: &mut gpui::TestAppContext) {
 
     assert_eq!(mapped.vfs_path(), &vfs_path);
     assert_eq!(mapped.resource_id(), expected_resource_id);
+    let project_path = project.read_with(cx, |project, cx| {
+        project
+            .worktree_store()
+            .read(cx)
+            .project_path_for_vfs_path(mapped.vfs_path(), cx)
+            .expect("UTF-8 text-buffer path should adapt")
+    });
     assert_eq!(
-        mapped.project_path().expect("UTF-8 path should adapt"),
-        &ProjectPath {
+        project_path,
+        ProjectPath {
             worktree_id: project.read_with(cx, |project, cx| {
                 project.worktrees(cx).next().unwrap().read(cx).id()
             }),
@@ -275,10 +282,13 @@ async fn test_lsp_path_mapper_preserves_non_utf8_native_path(cx: &mut gpui::Test
     });
 
     assert_eq!(mapped.vfs_path(), &vfs_path);
-    assert!(
-        mapped.project_path().is_none(),
-        "non-UTF-8 identity must not be coerced through the legacy ProjectPath adapter"
-    );
+    let project_path = project.read_with(cx, |project, cx| {
+        project
+            .worktree_store()
+            .read(cx)
+            .project_path_for_vfs_path(mapped.vfs_path(), cx)
+    });
+    assert!(project_path.is_none());
 }
 
 #[gpui::test]

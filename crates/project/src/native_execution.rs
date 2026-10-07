@@ -3,14 +3,12 @@ use std::sync::Arc;
 use fs::{Fs, GitService, ProcessService};
 use gpui::{App, AsyncApp, Entity};
 use lsp::Uri;
-use util::rel_path::RelPath;
 use vfs::{
     MountId, NativePath, OperationContext, ProviderCapabilities, ProviderId, ProviderPath,
     ResourceId, StatOptions, VfsErrorCode, VfsPath, VfsProvider, VfsSnapshot,
 };
-use worktree::WorktreeId;
 
-use crate::{ProjectPath, worktree_store::WorktreeStore};
+use crate::worktree_store::WorktreeStore;
 
 #[derive(Clone)]
 pub struct NativeExecutionContext {
@@ -58,7 +56,6 @@ pub struct LspPathMapper {
 
 pub struct MappedLspResource {
     native_path: NativePath,
-    project_path: Option<ProjectPath>,
     resource_id: Option<ResourceId>,
     vfs_path: VfsPath,
     provider: Arc<dyn VfsProvider>,
@@ -77,10 +74,6 @@ pub enum LspResourceOperation {
 impl MappedLspResource {
     pub fn native_path(&self) -> &NativePath {
         &self.native_path
-    }
-
-    pub fn project_path(&self) -> Option<&ProjectPath> {
-        self.project_path.as_ref()
     }
 
     pub fn resource_id(&self) -> Option<ResourceId> {
@@ -132,8 +125,8 @@ pub enum NativeExecutionError {
         source_mount: MountId,
         target_mount: MountId,
     },
-    #[error("LSP text edit path cannot be represented by the current ProjectPath adapter")]
-    LegacyProjectPathUnavailable,
+    #[error("LSP text edit path cannot be represented by the text-buffer path model: {path:?}")]
+    TextBufferPathUnavailable { path: VfsPath },
     #[error("provider returned a native path that this host cannot represent")]
     InvalidNativePath(#[source] vfs::PathError),
     #[error("native path cannot be represented as a file URI: {path}")]
@@ -160,7 +153,7 @@ impl LspPathMapper {
         }
         let native_path = native_path_from_file_uri(uri, worktree_store.path_style())?;
 
-        let mut best_match: Option<(usize, WorktreeId, ProviderPath, VfsSnapshot)> = None;
+        let mut best_match: Option<(usize, ProviderPath, VfsSnapshot)> = None;
         for worktree in worktree_store.worktrees() {
             let worktree = worktree.read(cx);
             let native_root = worktree.native_abs_path();
@@ -193,10 +186,10 @@ impl LspPathMapper {
             {
                 continue;
             }
-            best_match = Some((root_depth, worktree.id(), relative_path, snapshot));
+            best_match = Some((root_depth, relative_path, snapshot));
         }
 
-        let Some((_, worktree_id, relative_path, snapshot)) = best_match else {
+        let Some((_, relative_path, snapshot)) = best_match else {
             return Err(NativeExecutionError::UnmappedNativePath {
                 path: display_native_path(&native_path),
             });
@@ -210,14 +203,9 @@ impl LspPathMapper {
         }
         let vfs_path = VfsPath::new(snapshot.registry().mount_id(), relative_path.clone());
         let resource_id = snapshot.registry().id_for_path(&relative_path);
-        let project_path = vfs::provider_path_to_legacy_utf8(&relative_path)
-            .ok()
-            .and_then(|path| RelPath::from_proto(&path).ok())
-            .map(|path| ProjectPath { worktree_id, path });
 
         Ok(MappedLspResource {
             native_path,
-            project_path,
             resource_id,
             vfs_path,
             provider,
