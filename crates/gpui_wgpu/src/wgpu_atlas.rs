@@ -478,6 +478,48 @@ mod tests {
     }
 
     #[test]
+    fn device_lost_rebinds_without_reusing_atlas_identity() -> anyhow::Result<()> {
+        let initial_context = WgpuContext::new_headless(false)?;
+        let atlas = WgpuAtlas::from_context(&initial_context);
+        let size = Size {
+            width: DevicePixels(1),
+            height: DevicePixels(1),
+        };
+        let first_key = AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(1),
+            frame_index: 0,
+        });
+        let second_key = AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(2),
+            frame_index: 0,
+        });
+        let mut build = || Ok(Some((size, Cow::Owned(vec![0, 0, 0, 255]))));
+
+        let first = atlas
+            .get_or_insert_with(first_key, &mut build)?
+            .context("first tile should be created")?;
+        assert!(atlas.get_texture_info(first.texture_id).is_some());
+
+        let epoch_before_recovery = atlas.current_epoch();
+        initial_context.device.destroy();
+        let recovered_context = WgpuContext::new_headless(false)?;
+        atlas.handle_device_lost(&recovered_context);
+
+        assert_ne!(atlas.current_epoch(), epoch_before_recovery);
+        assert!(atlas.get_texture_info(first.texture_id).is_none());
+        assert_eq!(atlas.snapshot().pending_uploads, 0);
+
+        let second = atlas
+            .get_or_insert_with(second_key, &mut build)?
+            .context("second tile should be created")?;
+        assert_ne!(first.texture_id, second.texture_id);
+        assert_ne!(first.tile_id, second.tile_id);
+        atlas.flush_uploads();
+        assert!(atlas.get_texture_info(second.texture_id).is_some());
+        Ok(())
+    }
+
+    #[test]
     fn remove_keeps_tile_space_as_a_tombstone() -> anyhow::Result<()> {
         let (device, queue) = test_device_and_queue()?;
         let atlas = WgpuAtlas::new(device, queue, wgpu::TextureFormat::Bgra8Unorm);
