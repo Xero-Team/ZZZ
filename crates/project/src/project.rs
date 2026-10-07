@@ -1609,13 +1609,8 @@ impl Project {
             cx.subscribe(&settings_observer, Self::on_settings_observer_event)
                 .detach();
 
-            let agent_server_store = cx.new(|_| {
-                AgentServerStore::remote(
-                    REMOTE_SERVER_PROJECT_ID,
-                    remote.clone(),
-                    worktree_store.clone(),
-                )
-            });
+            let agent_server_store =
+                cx.new(|_| AgentServerStore::remote(REMOTE_SERVER_PROJECT_ID, remote.clone()));
 
             cx.subscribe(&remote, Self::on_remote_client_event).detach();
 

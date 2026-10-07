@@ -31,6 +31,18 @@ pub struct Terminals {
 }
 
 impl Project {
+    fn active_project_directory_worktree(&self, cx: &App) -> Option<Entity<worktree::Worktree>> {
+        self.active_entry()
+            .and_then(|entry_id| self.worktree_for_entry(entry_id, cx))
+            .into_iter()
+            .chain(self.worktrees(cx))
+            .find(|tree| {
+                tree.read(cx)
+                    .root_entry()
+                    .is_some_and(|entry| entry.is_dir())
+            })
+    }
+
     pub fn active_entry_directory(&self, cx: &App) -> Option<PathBuf> {
         let entry_id = self.active_entry()?;
         let worktree = self.worktree_for_entry(entry_id, cx)?;
@@ -46,11 +58,14 @@ impl Project {
     }
 
     pub fn active_project_directory(&self, cx: &App) -> Option<Arc<Path>> {
-        self.active_entry()
-            .and_then(|entry_id| self.worktree_for_entry(entry_id, cx))
-            .into_iter()
-            .chain(self.worktrees(cx))
-            .find_map(|tree| tree.read(cx).root_dir())
+        self.active_project_directory_worktree(cx)?
+            .read(cx)
+            .root_dir()
+    }
+
+    pub fn active_project_native_directory(&self, cx: &App) -> Option<vfs::NativePath> {
+        self.active_project_directory_worktree(cx)
+            .map(|worktree| worktree.read(cx).native_abs_path())
     }
 
     pub fn first_project_directory(&self, cx: &App) -> Option<PathBuf> {

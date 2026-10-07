@@ -878,9 +878,36 @@ impl ContextServerStore {
                     })
                 })
         })?;
+        let native_root_path = this.update(cx, |this, cx| {
+            this.project
+                .as_ref()
+                .and_then(|project| {
+                    project
+                        .read_with(cx, |project, cx| {
+                            project.active_project_native_directory(cx)
+                        })
+                        .ok()
+                        .flatten()
+                })
+                .or_else(|| {
+                    this.worktree_store.read_with(cx, |store, cx| {
+                        store.visible_worktrees(cx).find_map(|worktree| {
+                            let worktree = worktree.read(cx);
+                            worktree
+                                .root_entry()
+                                .filter(|entry| entry.is_dir())
+                                .map(|_| worktree.native_abs_path())
+                        })
+                    })
+                })
+        })?;
 
         let configuration = if let Some((project_id, upstream_client)) = remote_state {
-            let root_dir = root_path.as_ref().map(|p| p.display().to_string());
+            let root_dir = native_root_path
+                .as_ref()
+                .map(vfs::NativePath::to_unicode_string)
+                .transpose()
+                .context("context server root is not representable as command text")?;
 
             let response = upstream_client
                 .update(cx, |client, _| {
@@ -889,14 +916,21 @@ impl ContextServerStore {
                         .request(proto::GetContextServerCommand {
                             project_id,
                             server_id: id.0.to_string(),
-                            root_dir: root_dir.clone(),
                         })
                 })
                 .await?;
 
+            let command_path = response
+                .path_v2
+                .as_ref()
+                .context("context server response is missing its exact command path")?
+                .to_native_path()?
+                .to_unicode_string()
+                .context("context server command path is not representable as command text")?;
+
             let remote_command = upstream_client.update(cx, |client, _| {
                 client.build_command(
-                    Some(response.path),
+                    Some(command_path),
                     &response.args,
                     &response.env.into_iter().collect(),
                     root_dir,
@@ -1053,15 +1087,17 @@ impl ContextServerStore {
         let command = configuration
             .command()
             .context("context server has no command (HTTP servers don't need RPC)")?;
+        let command_path = vfs::NativePath::from_local_path(&command.path)
+            .context("context server command has an invalid native path")?;
 
         Ok(proto::ContextServerCommand {
-            path: command.path.display().to_string(),
             args: command.args.clone(),
             env: command
                 .env
                 .clone()
                 .map(|env| env.into_iter().collect())
                 .unwrap_or_default(),
+            path_v2: Some(proto::NativePathV2::from_native_path(&command_path)),
         })
     }
 

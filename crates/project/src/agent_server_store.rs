@@ -25,8 +25,6 @@ use util::{ResultExt as _, debug_panic};
 use crate::ProjectEnvironment;
 use crate::agent_registry_store::{AgentRegistryStore, RegistryAgent, RegistryTargetConfig};
 
-use crate::worktree_store::WorktreeStore;
-
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, JsonSchema)]
 pub struct AgentServerCommand {
     #[serde(rename = "command")]
@@ -145,7 +143,6 @@ enum AgentServerStoreState {
     Remote {
         project_id: u64,
         upstream_client: Entity<RemoteClient>,
-        worktree_store: Entity<WorktreeStore>,
     },
     Collab,
 }
@@ -501,16 +498,11 @@ impl AgentServerStore {
         this
     }
 
-    pub(crate) fn remote(
-        project_id: u64,
-        upstream_client: Entity<RemoteClient>,
-        worktree_store: Entity<WorktreeStore>,
-    ) -> Self {
+    pub(crate) fn remote(project_id: u64, upstream_client: Entity<RemoteClient>) -> Self {
         Self {
             state: AgentServerStoreState::Remote {
                 project_id,
                 upstream_client,
-                worktree_store,
             },
             external_agents: HashMap::default(),
             downstream_ready: false,
@@ -645,18 +637,16 @@ impl AgentServerStore {
                 anyhow::Ok(agent.get_command(vec![], extra_env, &mut cx.to_async()))
             })?
             .await?;
+        let command_path = vfs::NativePath::from_local_path(&command.path)
+            .context("agent server command has an invalid native path")?;
         Ok(proto::AgentServerCommand {
-            path: command.path.to_string_lossy().into_owned(),
             args: command.args,
             env: command
                 .env
                 .map(|env| env.into_iter().collect())
                 .unwrap_or_default(),
-            root_dir: envelope
-                .payload
-                .root_dir
-                .unwrap_or_else(|| paths::home_dir().to_string_lossy().to_string()),
             login: None,
+            path_v2: Some(proto::NativePathV2::from_native_path(&command_path)),
         })
     }
 
@@ -669,7 +659,7 @@ impl AgentServerStore {
             let AgentServerStoreState::Remote {
                 project_id,
                 upstream_client,
-                worktree_store,
+                ..
             } = &this.state
             else {
                 debug_panic!(
@@ -713,7 +703,6 @@ impl AgentServerStore {
                     let agent = RemoteExternalAgentServer {
                         project_id: *project_id,
                         upstream_client: upstream_client.clone(),
-                        worktree_store: worktree_store.clone(),
                         name: agent_id.clone(),
                         new_version_available_tx: new_version_available_txs.remove(&agent_id),
                     };
@@ -753,7 +742,6 @@ impl AgentServerStore {
 struct RemoteExternalAgentServer {
     project_id: u64,
     upstream_client: Entity<RemoteClient>,
-    worktree_store: Entity<WorktreeStore>,
     name: AgentId,
     new_version_available_tx: Option<watch::Sender<Option<String>>>,
 }
@@ -776,31 +764,26 @@ impl ExternalAgentServer for RemoteExternalAgentServer {
         let project_id = self.project_id;
         let name = self.name.to_string();
         let upstream_client = self.upstream_client.downgrade();
-        let worktree_store = self.worktree_store.clone();
         cx.spawn(async move |cx| {
-            let root_dir = worktree_store.read_with(cx, |worktree_store, cx| {
-                crate::Project::default_visible_worktree_paths(worktree_store, cx)
-                    .into_iter()
-                    .next()
-                    .map(|path| path.display().to_string())
-            });
-
             let mut response = upstream_client
                 .update(cx, |upstream_client, _| {
                     upstream_client
                         .proto_client()
-                        .request(proto::GetAgentServerCommand {
-                            project_id,
-                            name,
-                            root_dir,
-                        })
+                        .request(proto::GetAgentServerCommand { project_id, name })
                 })?
                 .await?;
             response.args.extend(extra_args);
             response.env.extend(extra_env);
+            let path = response
+                .path_v2
+                .as_ref()
+                .context("agent server response is missing its exact command path")?
+                .to_native_path()?
+                .to_unicode_string()
+                .context("agent server command path is not representable as command text")?;
 
             Ok(AgentServerCommand {
-                path: response.path.into(),
+                path: path.into(),
                 args: response.args,
                 env: Some(response.env.into_iter().collect()),
             })
