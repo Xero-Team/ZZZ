@@ -14,14 +14,14 @@ description: Durable execution ledger for the complete ZZZ VFS refactor.
 - Goal status: `ACTIVE`
 - Baseline HEAD: `6500fbdeccd7d523acfc69161d6371b631fdb6ac`
 - Current HEAD: tracked by the commit log; latest implementation boundary
-  `a336a13165cd3d662291de5472ec14eff0ca96e6`
+  `fbf39ad8073faae5f5362e6e66b880196ec46c0a`
 - Branch/worktree: `vfs-refactor` in the primary worktree
 - Active phase: `Phase 9`
 - Last completed phase: `Phase 8`
 - Blocking issue: `None`
 - Next action: media 和 editor persistence 已完成一次性 exact-sidecar migration，
-  `VFS-EXP-013` 已通过；继续审计普通 `Local`/`Remote` branch、external/WIT
-  `SettingsLocation` fallback 与 lazy remote provider task，并完成 Phase 9 全量验收。
+  `VFS-EXP-013` 已通过；继续审计 create/copy/scan 等普通 `Local`/`Remote` branch、
+  external/WIT `SettingsLocation` fallback 与 lazy remote provider task，并完成 Phase 9 全量验收。
 
 ## 阶段状态 {#phase-status}
 
@@ -116,7 +116,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | Generic UTF-8 `ProviderPath` bridge             | Phase 1    | Global separator-delimited adapter and all callers removed; typed sources now construct exact components directly                                                                                                   | Phase 9       | REMOVED   |
 | `WorktreeId` to temporary `MountId`             | Phase 1    | `ProjectPath` v2 dual-wire adapter; runtime snapshots now allocate session mount IDs                                                                                                                                | Phase 5       | MIGRATING |
 | `RelPath`/`ProjectPath` UTF-8 wire              | Existing   | Caller groups in [inventory](./vfs-research/path-adapter-inventory.md)                                                                                                                                              | Phase 9       | MIGRATING |
-| `Worktree::Local/Remote` behavior branches      | Existing   | Text and binary file loads, stat and archive operations use provider dispatch; scanner, native paths and registered process/OS boundaries remain                                                                    | Phase 6/9     | MIGRATING |
+| `Worktree::Local/Remote` behavior branches      | Existing   | Text/binary load, stat, archive and write use provider dispatch; scanner, native paths, entry synchronization and registered process/OS boundaries remain                                                           | Phase 6/9     | MIGRATING |
 | Dedicated image/download byte RPC               | Existing   | `OpenImageByPath`/`CreateImageForPeer` and `DownloadFileByPath`/`CreateFileForPeer` were deleted; all remote bytes use VFS reads                                                                                    | Phase 9       | REMOVED   |
 | Worktree snapshot-to-legacy metadata bridge     | Phase 3    | `BackgroundScanner` while Worktree entries still use `RelPath`/legacy `Metadata`                                                                                                                                    | Phase 5/9     | ACTIVE    |
 | Lazy remote Worktree VFS provider task          | Phase 4    | One cached proxy task remains; eager construction was REJECTED for network side effects; removal requires a lazy provider handle                                                                                    | Phase 9       | ACTIVE    |
@@ -393,6 +393,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-08 | 9E    | `cargo test --locked -p vfs transfer --lib -- --nocapture`                                                                                                                     | 0           | PASS: 8-test cross-provider copy/move disconnect and rollback matrix satisfies `VFS-EXP-013`                                                                    | No                                                                            |
 | 2026-10-08 | 9E    | `cargo check --offline -p project`; `test_read_only_files_setting`; three `test_open_buffer_via_lsp*` regressions                                                              | 0 each      | PASS: Buffer and invisible-LSP settings lookup retain read-only behavior while carrying exact VFS scope                                                         | No                                                                            |
 | 2026-10-08 | 9E    | `./script/clippy -p project`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                                  | 0 each      | PASS: no implicit ProjectPath-to-text-settings identity remains; no new P0/P1/P2 finding                                                                        | No                                                                            |
+| 2026-10-08 | 9E    | `cargo check --offline -p worktree -p remote_server`; local write/version/encoding and loopback remote VFS load+write regressions                                              | 0 each      | PASS: remote text save uses positioned VFS write with expected version and refreshed metadata; no specialized save RPC                                          | No                                                                            |
+| 2026-10-08 | 9E    | `./script/clippy -p worktree -p remote_server`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                | 0 each      | PASS: removed remote write rejection without new P0/P1/P2 finding                                                                                               | No                                                                            |
 
 ## 提交记录 {#commit-log}
 
@@ -469,6 +471,7 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | `3bbfb19985379ebcfce67700dd96ef4595c59357` | 9D    | One-time exact-sidecar migration for audio, video and PDF persistence                                                                | Project persistence regression, viewer suites, scoped clippy, fmt/diff and code-smell review PASS                               | Restore permanent legacy media fallback while retaining exact sidecars                                 |
 | `020a9b5bd6d97c00b53129f3f01291d543cd3112` | 9D    | One-time exact-sidecar migration for editor persistence, native locator naming and lossy buffer-text write removal                   | Targeted editor restore tests, scoped clippy, fmt/diff and code-smell review PASS                                               | Restore silent editor fallback and lossy buffer-text dual-write                                        |
 | `a336a13165cd3d662291de5472ec14eff0ca96e6` | 9E    | Explicit VFS identity for Buffer and invisible-LSP settings lookup; removed implicit ProjectPath settings adapter                    | Project read-only/LSP regressions, scoped clippy, fmt/diff and code-smell review PASS                                           | Restore implicit VFS-less ProjectPath settings conversion                                              |
+| `fbf39ad8073faae5f5362e6e66b880196ec46c0a` | 9E    | Remote Worktree text save through `RemoteProviderProxy` positioned VFS I/O                                                           | Local/loopback remote write regressions, scoped clippy, fmt/diff and code-smell review PASS                                     | Restore remote write rejection while retaining remote read/provider dispatch                           |
 
 ## 平台 QA {#platform-qa}
 
