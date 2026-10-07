@@ -911,19 +911,20 @@ impl SettingsObserver {
                                         apply_local_settings(
                                             worktree_id,
                                             path.clone(),
-                                            vfs_path,
+                                            vfs_path.clone(),
                                             LocalSettingsKind::Settings,
                                             &settings_contents,
                                             cx,
                                         );
-                                        if let Some(downstream_client) =
-                                            &settings_observer.downstream_client
+                                        if let (Some(downstream_client), Some(vfs_path)) = (
+                                            &settings_observer.downstream_client,
+                                            vfs_path.as_ref(),
+                                        )
                                         {
                                             downstream_client
                                                 .send(proto::UpdateWorktreeSettings {
                                                     project_id: settings_observer.project_id,
                                                     worktree_id: worktree_id.to_proto(),
-                                                    path: path.to_proto(),
                                                     content: settings_contents,
                                                     kind: Some(
                                                         local_settings_kind_to_proto(
@@ -931,7 +932,11 @@ impl SettingsObserver {
                                                         )
                                                         .into(),
                                                     ),
-                                                    outside_worktree: Some(false),
+                                                    path_v2: Some(
+                                                        proto::update_worktree_settings::PathV2::VfsPath(
+                                                            proto::VfsPathV2::from_vfs_path(vfs_path),
+                                                        ),
+                                                    ),
                                                 })
                                                 .log_err();
                                         }
@@ -1071,16 +1076,21 @@ impl SettingsObserver {
             for (path, content) in store.local_settings(worktree.read(cx).id()) {
                 let content =
                     serde_json::to_string(&content).expect("serializing to JSON cannot fail");
+                let path = LocalSettingsPath::InWorktree(path);
+                let Some(path_v2) =
+                    local_settings_path_to_proto(&path, worktree.read(cx)).log_err()
+                else {
+                    continue;
+                };
                 downstream_client
                     .send(proto::UpdateWorktreeSettings {
                         project_id,
                         worktree_id,
-                        path: path.to_proto(),
                         content: Some(content),
                         kind: Some(
                             local_settings_kind_to_proto(LocalSettingsKind::Settings).into(),
                         ),
-                        outside_worktree: Some(false),
+                        path_v2: Some(path_v2),
                     })
                     .log_err();
             }
@@ -1089,16 +1099,20 @@ impl SettingsObserver {
                 .read(cx)
                 .local_editorconfig_settings(worktree.read(cx).id())
             {
+                let Some(path_v2) =
+                    local_settings_path_to_proto(&path, worktree.read(cx)).log_err()
+                else {
+                    continue;
+                };
                 downstream_client
                     .send(proto::UpdateWorktreeSettings {
                         project_id,
                         worktree_id,
-                        path: path.to_proto(),
                         content: Some(content.to_owned()),
                         kind: Some(
                             local_settings_kind_to_proto(LocalSettingsKind::Editorconfig).into(),
                         ),
-                        outside_worktree: Some(path.is_outside_worktree()),
+                        path_v2: Some(path_v2),
                     })
                     .log_err();
             }
@@ -1120,20 +1134,17 @@ impl SettingsObserver {
             None => proto::LocalSettingsKind::Settings,
         };
 
-        let path = LocalSettingsPath::from_proto(
-            &envelope.payload.path,
-            envelope.payload.outside_worktree.unwrap_or(false),
-        )?;
-
-        this.update(&mut cx, |this, cx| {
+        this.update(&mut cx, |this, cx| -> anyhow::Result<()> {
             let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-            let Some(worktree) = this
+            let worktree = this
                 .worktree_store
                 .read(cx)
                 .worktree_for_id(worktree_id, cx)
-            else {
-                return;
-            };
+                .context("settings update worktree not found")?;
+            let path = local_settings_path_from_proto(
+                envelope.payload.path_v2.clone(),
+                worktree.read(cx),
+            )?;
 
             this.update_settings(
                 worktree,
@@ -1144,7 +1155,8 @@ impl SettingsObserver {
                 )],
                 cx,
             );
-        });
+            Ok(())
+        })?;
         Ok(())
     }
 
@@ -1497,14 +1509,18 @@ impl SettingsObserver {
 
             if applied {
                 if let Some(downstream_client) = &self.downstream_client {
+                    let Some(path_v2) =
+                        local_settings_path_to_proto(&directory_path, worktree.read(cx)).log_err()
+                    else {
+                        continue;
+                    };
                     downstream_client
                         .send(proto::UpdateWorktreeSettings {
                             project_id: self.project_id,
                             worktree_id: remote_worktree_id.to_proto(),
-                            path: directory_path.to_proto(),
                             content: file_content.clone(),
                             kind: Some(local_settings_kind_to_proto(kind).into()),
-                            outside_worktree: Some(directory_path.is_outside_worktree()),
+                            path_v2: Some(path_v2),
                         })
                         .log_err();
                 }
@@ -1671,6 +1687,57 @@ pub fn local_settings_kind_from_proto(kind: proto::LocalSettingsKind) -> LocalSe
         proto::LocalSettingsKind::Tasks => LocalSettingsKind::Tasks,
         proto::LocalSettingsKind::Editorconfig => LocalSettingsKind::Editorconfig,
         proto::LocalSettingsKind::Debug => LocalSettingsKind::Debug,
+    }
+}
+
+fn local_settings_path_to_proto(
+    path: &LocalSettingsPath,
+    worktree: &Worktree,
+) -> anyhow::Result<proto::update_worktree_settings::PathV2> {
+    Ok(match path {
+        LocalSettingsPath::InWorktree(path) => {
+            let vfs_path = worktree
+                .vfs_path_for_path(path)
+                .context("settings path has no exact VFS identity")?;
+            proto::update_worktree_settings::PathV2::VfsPath(proto::VfsPathV2::from_vfs_path(
+                &vfs_path,
+            ))
+        }
+        LocalSettingsPath::OutsideWorktree(path) => {
+            let native_path = vfs::NativePath::from_local_path(path)?;
+            proto::update_worktree_settings::PathV2::NativePath(
+                proto::NativePathV2::from_native_path(&native_path),
+            )
+        }
+    })
+}
+
+fn local_settings_path_from_proto(
+    path: Option<proto::update_worktree_settings::PathV2>,
+    worktree: &Worktree,
+) -> anyhow::Result<LocalSettingsPath> {
+    match path.context("settings update is missing its exact path")? {
+        proto::update_worktree_settings::PathV2::VfsPath(path) => {
+            let path = path.to_vfs_path()?;
+            Ok(LocalSettingsPath::InWorktree(
+                worktree.relative_path_from_vfs_path(&path)?,
+            ))
+        }
+        proto::update_worktree_settings::PathV2::NativePath(path) => {
+            let path = path.to_native_path()?;
+            let path = match path.provider_path().encoding() {
+                vfs::PathEncoding::UnixBytes => String::from_utf8(path.to_unix_bytes()?)?,
+                vfs::PathEncoding::WindowsWtf8 => {
+                    String::from_utf16(&path.to_windows_wide()?)?
+                }
+                vfs::PathEncoding::PortableUtf8 => {
+                    vfs::provider_path_to_legacy_utf8(path.provider_path())?
+                }
+            };
+            Ok(LocalSettingsPath::OutsideWorktree(
+                PathBuf::from(path).into(),
+            ))
+        }
     }
 }
 

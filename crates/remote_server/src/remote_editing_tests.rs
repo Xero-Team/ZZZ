@@ -105,6 +105,26 @@ async fn test_basic_remote_editing(cx: &mut TestAppContext, server_cx: &mut Test
     let downloaded_contents = std::fs::read_to_string(downloaded_path).unwrap();
     assert_eq!(downloaded_contents, "# project 1");
 
+    let directory_items = project
+        .update(cx, |project, cx| {
+            project.list_directory(String::from("/code/project1"), cx)
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        directory_items
+            .into_iter()
+            .map(|item| item.path)
+            .collect::<HashSet<_>>(),
+        [
+            PathBuf::from(".git"),
+            PathBuf::from("README.md"),
+            PathBuf::from("src"),
+        ]
+        .into_iter()
+        .collect::<HashSet<_>>()
+    );
+
     // The user opens a buffer in the remote worktree. The buffer's
     // contents are loaded from the remote filesystem.
     let buffer = project

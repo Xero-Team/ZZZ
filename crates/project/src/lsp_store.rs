@@ -10333,8 +10333,6 @@ impl LspStore {
     ) -> Result<proto::ProjectEntryResponse> {
         let entry_id = ProjectEntryId::from_proto(envelope.payload.entry_id);
         let new_worktree_id = WorktreeId::from_proto(envelope.payload.new_worktree_id);
-        let new_path =
-            RelPath::from_proto(&envelope.payload.new_path).context("invalid relative path")?;
 
         let (worktree_store, old_worktree, new_worktree, old_entry) = this
             .update(&mut cx, |this, cx| {
@@ -10354,6 +10352,15 @@ impl LspStore {
                 ))
             })
             .context("worktree not found")?;
+        let new_vfs_path = envelope
+            .payload
+            .new_path_v2
+            .as_ref()
+            .context("rename request is missing its exact target path")?
+            .to_vfs_path()?;
+        let new_path = new_worktree.read_with(&cx, |worktree, _| {
+            worktree.relative_path_from_vfs_path(&new_vfs_path)
+        })?;
         let (old_abs_path, old_worktree_id) = old_worktree.read_with(&cx, |worktree, _| {
             (worktree.absolutize(&old_entry.path), worktree.id())
         });

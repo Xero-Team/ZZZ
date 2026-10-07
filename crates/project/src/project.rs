@@ -434,6 +434,27 @@ pub enum ProjectResourceIdentity {
     Path(ProjectPath),
 }
 
+fn native_path_from_remote_text(
+    path: &str,
+    path_style: util::paths::PathStyle,
+) -> Result<vfs::NativePath> {
+    if path_style.is_posix() {
+        Ok(vfs::NativePath::from_unix_bytes(path.as_bytes())?)
+    } else {
+        Ok(vfs::NativePath::from_windows_wide(
+            &path.encode_utf16().collect::<Vec<_>>(),
+        )?)
+    }
+}
+
+fn native_path_to_remote_text(path: &vfs::NativePath) -> Result<String> {
+    match path.provider_path().encoding() {
+        PathEncoding::UnixBytes => Ok(String::from_utf8(path.to_unix_bytes()?)?),
+        PathEncoding::WindowsWtf8 => Ok(String::from_utf16(&path.to_windows_wide()?)?),
+        PathEncoding::PortableUtf8 => Ok(provider_path_to_legacy_utf8(path.provider_path())?),
+    }
+}
+
 impl ProjectResourceIdentity {
     pub fn new(resource_id: Option<vfs::ResourceId>, path: ProjectPath) -> Self {
         resource_id.map_or(Self::Path(path), Self::Resource)
@@ -4211,18 +4232,30 @@ impl Project {
                 })
             })
         } else if let Some(ssh_client) = self.remote_client.as_ref() {
+            let native_path = native_path_from_remote_text(path, self.path_style(cx));
+            let Ok(native_path) = native_path else {
+                log::error!("cannot encode remote path exactly: {native_path:?}");
+                return Task::ready(None);
+            };
             let request = ssh_client
                 .read(cx)
                 .proto_client()
                 .request(proto::GetPathMetadata {
                     project_id: REMOTE_SERVER_PROJECT_ID,
-                    path: path.into(),
+                    path_v2: Some(proto::NativePathV2::from_native_path(&native_path)),
                 });
             cx.background_spawn(async move {
                 let response = request.await.log_err()?;
                 if response.exists {
+                    let path = response
+                        .path_v2
+                        .as_ref()
+                        .context("path metadata response is missing its exact path")
+                        .and_then(|path| path.to_native_path().map_err(Into::into))
+                        .and_then(|path| native_path_to_remote_text(&path))
+                        .log_err()?;
                     Some(ResolvedPath::AbsPath {
-                        path: response.path,
+                        path,
                         is_dir: response.is_dir,
                     })
                 } else {
@@ -4318,26 +4351,39 @@ impl Project {
         if self.is_local() {
             DirectoryLister::Local(cx.entity(), self.fs.clone()).list_directory(query, cx)
         } else if let Some(session) = self.remote_client.as_ref() {
+            let native_path = match native_path_from_remote_text(&query, self.path_style(cx)) {
+                Ok(native_path) => native_path,
+                Err(error) => return Task::ready(Err(error)),
+            };
             let request = proto::ListRemoteDirectory {
                 dev_server_id: REMOTE_SERVER_PROJECT_ID,
-                path: query,
                 config: Some(proto::ListRemoteDirectoryConfig { is_dir: true }),
+                path_v2: Some(proto::NativePathV2::from_native_path(&native_path)),
             };
 
             let response = session.read(cx).proto_client().request(request);
             cx.background_spawn(async move {
-                let proto::ListRemoteDirectoryResponse {
-                    entries,
-                    entry_info,
-                } = response.await?;
-                Ok(entries
+                let response = response.await?;
+                response
+                    .entries_v2
                     .into_iter()
-                    .zip(entry_info)
-                    .map(|(entry, info)| DirectoryItem {
-                        path: PathBuf::from(entry),
-                        is_dir: info.is_dir,
+                    .map(|entry| {
+                        let name = entry
+                            .name
+                            .as_ref()
+                            .context("remote directory entry is missing its exact name")?
+                            .to_entry_name()?;
+                        let provider_path = vfs::ProviderPath::from_exact_components(
+                            name.exact().encoding(),
+                            [name.exact().clone()],
+                        )?;
+                        let path = vfs::provider_path_to_legacy_utf8(&provider_path)?;
+                        Ok(DirectoryItem {
+                            path: PathBuf::from(path),
+                            is_dir: entry.is_dir,
+                        })
                     })
-                    .collect())
+                    .collect()
             })
         } else {
             Task::ready(Err(anyhow!("cannot list directory in remote project")))

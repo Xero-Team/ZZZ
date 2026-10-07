@@ -209,21 +209,6 @@ impl LocalSettingsPath {
     pub fn is_outside_worktree(&self) -> bool {
         matches!(self, Self::OutsideWorktree(_))
     }
-
-    pub fn to_proto(&self) -> String {
-        match self {
-            Self::InWorktree(path) => path.to_proto(),
-            Self::OutsideWorktree(path) => path.to_string_lossy().to_string(),
-        }
-    }
-
-    pub fn from_proto(path: &str, is_outside_worktree: bool) -> anyhow::Result<Self> {
-        if is_outside_worktree {
-            Ok(Self::OutsideWorktree(PathBuf::from(path).into()))
-        } else {
-            Ok(Self::InWorktree(RelPath::from_proto(path)?))
-        }
-    }
 }
 
 impl Global for SettingsStore {}

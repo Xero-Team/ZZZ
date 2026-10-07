@@ -63,13 +63,17 @@ message RemoveWorktree {
 
 message GetPathMetadata {
   uint64 project_id = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
+  NativePathV2 path_v2 = 3;
 }
 
 message GetPathMetadataResponse {
   bool exists = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
   bool is_dir = 3;
+  NativePathV2 path_v2 = 4;
 }
 
 message WorktreeMetadata {
@@ -96,40 +100,50 @@ message ListRemoteDirectoryConfig {
 
 message ListRemoteDirectory {
   uint64 dev_server_id = 1;
-  string path = 2;
+  reserved 2;
+  reserved "path";
   ListRemoteDirectoryConfig config = 3;
+  NativePathV2 path_v2 = 4;
 }
 
-message EntryInfo {
-  bool is_dir = 1;
+message RemoteDirectoryEntry {
+  VfsPathComponentV2 name = 1;
+  bool is_dir = 2;
 }
 
 message ListRemoteDirectoryResponse {
-  repeated string entries = 1;
-  repeated EntryInfo entry_info = 2;
+  reserved 1, 2;
+  reserved "entries", "entry_info";
+  repeated RemoteDirectoryEntry entries_v2 = 3;
 }
 
 message CreateProjectEntry {
   uint64 project_id = 1;
   uint64 worktree_id = 2;
-  string path = 3;
+  reserved 3;
+  reserved "path";
   bool is_directory = 4;
   optional bytes content = 5;
+  VfsPathV2 path_v2 = 6;
 }
 
 message RenameProjectEntry {
   uint64 project_id = 1;
   uint64 entry_id = 2;
-  string new_path = 3;
+  reserved 3;
+  reserved "new_path";
   uint64 new_worktree_id = 4;
+  VfsPathV2 new_path_v2 = 5;
 }
 
 message CopyProjectEntry {
   uint64 project_id = 1;
   uint64 entry_id = 2;
-  string new_path = 3;
+  reserved 3;
+  reserved "new_path";
   uint64 new_worktree_id = 5;
   reserved 4;
+  VfsPathV2 new_path_v2 = 6;
 }
 
 message DeleteProjectEntry {
@@ -164,10 +178,15 @@ message ProjectEntryResponse {
 message UpdateWorktreeSettings {
   uint64 project_id = 1;
   uint64 worktree_id = 2;
-  string path = 3;
+  reserved 3;
+  reserved 6;
+  reserved "path", "outside_worktree";
   optional string content = 4;
   optional LocalSettingsKind kind = 5;
-  optional bool outside_worktree = 6;
+  oneof path_v2 {
+    VfsPathV2 vfs_path = 7;
+    NativePathV2 native_path = 8;
+  }
 }
 
 enum LocalSettingsKind {

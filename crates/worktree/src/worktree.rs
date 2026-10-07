@@ -892,6 +892,15 @@ impl Worktree {
         {
             return Some(vfs_path);
         }
+        if let Worktree::Remote(remote) = self {
+            let root_path = remote.entry_for_path(RelPath::empty())?.vfs_path.as_ref()?;
+            let provider_path = provider_path_from_legacy_utf8(
+                path.as_unix_str(),
+                root_path.provider_path().encoding(),
+            )
+            .ok()?;
+            return Some(VfsPath::new(root_path.mount_id(), provider_path));
+        }
         let snapshot = self.vfs_snapshot()?;
         let provider_path = provider_path_from_legacy_utf8(
             path.as_unix_str(),
@@ -899,6 +908,18 @@ impl Worktree {
         )
         .ok()?;
         Some(VfsPath::new(snapshot.registry().mount_id(), provider_path))
+    }
+
+    pub fn relative_path_from_vfs_path(&self, vfs_path: &VfsPath) -> Result<Arc<RelPath>> {
+        let expected_root = self
+            .vfs_path_for_path(RelPath::empty())
+            .context("worktree has no exact VFS root")?;
+        anyhow::ensure!(
+            vfs_path.mount_id() == expected_root.mount_id(),
+            "VFS mount does not match the worktree"
+        );
+        let path = provider_path_to_legacy_utf8(vfs_path.provider_path())?;
+        RelPath::from_proto(&path).context("VFS path is not representable by the worktree view")
     }
 
     pub fn vfs_authorizer(&self) -> Option<VfsAuthorizer> {
@@ -1298,16 +1319,20 @@ impl Worktree {
         cx: &Context<Worktree>,
     ) -> Task<Result<CreatedEntry>> {
         let worktree_id = self.id();
+        let vfs_path = self.vfs_path_for_path(&path);
         match self {
             Worktree::Local(this) => this.create_entry(path, is_directory, content, cx),
             Worktree::Remote(this) => {
                 let project_id = this.project_id;
+                let Some(vfs_path) = vfs_path else {
+                    return Task::ready(Err(anyhow!("worktree path has no exact VFS identity")));
+                };
                 let request = this.client.request(proto::CreateProjectEntry {
                     worktree_id: worktree_id.to_proto(),
                     project_id,
-                    path: path.as_ref().to_proto(),
                     content,
                     is_directory,
+                    path_v2: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
                 });
                 cx.spawn(async move |this, cx| {
                     let response = request.await?;
@@ -1450,16 +1475,14 @@ impl Worktree {
         mut cx: AsyncApp,
     ) -> Result<proto::ProjectEntryResponse> {
         let (scan_id, entry) = this.update(&mut cx, |this, cx| {
+            let path = relative_path_from_wire_vfs_path(
+                this,
+                request.path_v2.as_ref(),
+                "create-entry request",
+            )?;
             anyhow::Ok((
                 this.scan_id(),
-                this.create_entry(
-                    RelPath::from_proto(&request.path).with_context(|| {
-                        format!("received invalid relative path {:?}", request.path)
-                    })?,
-                    request.is_directory,
-                    request.content,
-                    cx,
-                ),
+                this.create_entry(path, request.is_directory, request.content, cx),
             ))
         })?;
         Ok(proto::ProjectEntryResponse {
@@ -2782,9 +2805,15 @@ impl RemoteWorktree {
         let client = self.client.clone();
         let worktree_id = self.id().to_proto();
         let project_id = self.project_id;
+        let Some(root_vfs_path) = self
+            .entry_for_path(RelPath::empty())
+            .and_then(|entry| entry.vfs_path.clone())
+        else {
+            return Task::ready(Err(anyhow!("remote worktree has no exact VFS root")));
+        };
 
         cx.background_spawn(async move {
-            let mut requests = Vec::new();
+            let mut requests = BTreeMap::new();
             for root_path_to_copy in paths_to_copy {
                 let Some(filename) = root_path_to_copy
                     .file_name()
@@ -2815,20 +2844,26 @@ impl RemoteWorktree {
                         target_path = target_path.join(&relative_path);
                     }
 
-                    requests.push(proto::CreateProjectEntry {
-                        project_id,
-                        worktree_id,
-                        path: target_path.to_proto(),
-                        is_directory,
-                        content,
-                    });
+                    let provider_path = provider_path_from_legacy_utf8(
+                        target_path.as_unix_str(),
+                        root_vfs_path.provider_path().encoding(),
+                    )?;
+                    let vfs_path = VfsPath::new(root_vfs_path.mount_id(), provider_path.clone());
+                    requests.insert(
+                        provider_path,
+                        proto::CreateProjectEntry {
+                            project_id,
+                            worktree_id,
+                            is_directory,
+                            content,
+                            path_v2: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
+                        },
+                    );
                 }
             }
-            requests.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-            requests.dedup();
 
             let mut copied_entry_ids = Vec::new();
-            for request in requests {
+            for request in requests.into_values() {
                 let response = client.request(request).await?;
                 copied_entry_ids.extend(response.entry.map(|e| ProjectEntryId::from_proto(e.id)));
             }
@@ -4408,6 +4443,19 @@ fn vfs_identity_from_proto(
         return Ok((Some(resource_id), Some(vfs_path)));
     }
     Ok((None, Some(vfs_path)))
+}
+
+fn relative_path_from_wire_vfs_path(
+    worktree: &Worktree,
+    wire_path: Option<&proto::VfsPathV2>,
+    context: &'static str,
+) -> Result<Arc<RelPath>> {
+    let vfs_path = wire_path
+        .with_context(|| format!("{context} is missing its exact VFS path"))?
+        .to_vfs_path()?;
+    worktree
+        .relative_path_from_vfs_path(&vfs_path)
+        .with_context(|| format!("{context} has an invalid exact path"))
 }
 
 impl File {

@@ -508,11 +508,17 @@ impl WorktreeStore {
                 upstream_project_id,
                 ..
             } => {
+                let Some(new_vfs_path) = new_worktree
+                    .read(cx)
+                    .vfs_path_for_path(&new_project_path.path)
+                else {
+                    return Task::ready(Err(anyhow!("target has no exact VFS identity")));
+                };
                 let response = upstream_client.request(proto::CopyProjectEntry {
                     project_id: *upstream_project_id,
                     entry_id: entry_id.to_proto(),
-                    new_path: new_project_path.path.to_proto(),
                     new_worktree_id: new_project_path.worktree_id.to_proto(),
+                    new_path_v2: Some(proto::VfsPathV2::from_vfs_path(&new_vfs_path)),
                 });
                 cx.spawn(async move |_, cx| {
                     let response = response.await?;
@@ -687,11 +693,17 @@ impl WorktreeStore {
                 upstream_project_id,
                 ..
             } => {
+                let Some(new_vfs_path) = new_worktree
+                    .read(cx)
+                    .vfs_path_for_path(&new_project_path.path)
+                else {
+                    return Task::ready(Err(anyhow!("target has no exact VFS identity")));
+                };
                 let response = upstream_client.request(proto::RenameProjectEntry {
                     project_id: *upstream_project_id,
                     entry_id: entry_id.to_proto(),
-                    new_path: new_project_path.path.to_proto(),
                     new_worktree_id: new_project_path.worktree_id.to_proto(),
+                    new_path_v2: Some(proto::VfsPathV2::from_vfs_path(&new_vfs_path)),
                 });
                 cx.spawn(async move |_, cx| {
                     let response = response.await?;
@@ -1231,10 +1243,6 @@ impl WorktreeStore {
     ) -> Result<proto::ProjectEntryResponse> {
         let entry_id = ProjectEntryId::from_proto(envelope.payload.entry_id);
         let new_worktree_id = WorktreeId::from_proto(envelope.payload.new_worktree_id);
-        let new_project_path = (
-            new_worktree_id,
-            RelPath::from_proto(&envelope.payload.new_path)?,
-        );
         let (scan_id, entry) = this.update(&mut cx, |this, cx| {
             let Some((_, project_id)) = this.downstream_client else {
                 bail!("no downstream client")
@@ -1249,6 +1257,18 @@ impl WorktreeStore {
             let new_worktree = this
                 .worktree_for_id(new_worktree_id, cx)
                 .context("no such worktree")?;
+            let new_vfs_path = envelope
+                .payload
+                .new_path_v2
+                .as_ref()
+                .context("copy request is missing its exact target path")?
+                .to_vfs_path()?;
+            let new_project_path = (
+                new_worktree_id,
+                new_worktree
+                    .read(cx)
+                    .relative_path_from_vfs_path(&new_vfs_path)?,
+            );
             let scan_id = new_worktree.read(cx).scan_id();
             anyhow::Ok((
                 scan_id,
@@ -1291,13 +1311,22 @@ impl WorktreeStore {
     ) -> Result<proto::ProjectEntryResponse> {
         let entry_id = ProjectEntryId::from_proto(request.entry_id);
         let new_worktree_id = WorktreeId::from_proto(request.new_worktree_id);
-        let rel_path = RelPath::from_proto(&request.new_path)
-            .with_context(|| format!("received invalid relative path {:?}", request.new_path))?;
 
         let (scan_id, task) = this.update(&mut cx, |this, cx| {
             let worktree = this
                 .worktree_for_entry(entry_id, cx)
                 .context("no such worktree")?;
+            let new_worktree = this
+                .worktree_for_id(new_worktree_id, cx)
+                .context("target worktree not found")?;
+            let new_vfs_path = request
+                .new_path_v2
+                .as_ref()
+                .context("rename request is missing its exact target path")?
+                .to_vfs_path()?;
+            let rel_path = new_worktree
+                .read(cx)
+                .relative_path_from_vfs_path(&new_vfs_path)?;
 
             let Some((_, project_id)) = this.downstream_client else {
                 bail!("no downstream client")

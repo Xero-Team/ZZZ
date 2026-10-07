@@ -57,6 +57,17 @@ macro_rules! vfs_headless_request_handler {
     };
 }
 
+fn expand_requested_native_path(path: &vfs::NativePath) -> Result<PathBuf> {
+    let mut local_path = path.to_local_path_buf()?;
+    if local_path.starts_with("~") {
+        let path_text = local_path
+            .to_str()
+            .context("home-relative remote path is not Unicode")?;
+        local_path = PathBuf::from(shellexpand::tilde(path_text).to_string());
+    }
+    Ok(local_path)
+}
+
 pub struct HeadlessProject {
     pub fs: Arc<dyn Fs>,
     pub session: AnyProtoClient,
@@ -710,13 +721,7 @@ impl HeadlessProject {
             .as_ref()
             .context("add-worktree request is missing its exact path")?
             .to_native_path()?;
-        let mut path = requested_path.to_local_path_buf()?;
-        if path.starts_with("~") {
-            let path_text = path
-                .to_str()
-                .context("home-relative worktree path is not Unicode")?;
-            path = PathBuf::from(shellexpand::tilde(path_text).to_string());
-        }
+        let path = expand_requested_native_path(&requested_path)?;
 
         let canonicalized = match fs.canonicalize(&path).await {
             Ok(path) => path,
@@ -1243,30 +1248,35 @@ impl HeadlessProject {
     ) -> Result<proto::ListRemoteDirectoryResponse> {
         use smol::stream::StreamExt;
         let fs = cx.read_entity(&this, |this, _| this.fs.clone());
-        let expanded = PathBuf::from(shellexpand::tilde(&envelope.payload.path).to_string());
+        let requested_path = envelope
+            .payload
+            .path_v2
+            .as_ref()
+            .context("directory-list request is missing its exact path")?
+            .to_native_path()?;
+        let expanded = expand_requested_native_path(&requested_path)?;
         let check_info = envelope
             .payload
             .config
             .as_ref()
             .is_some_and(|config| config.is_dir);
 
-        let mut entries = Vec::new();
-        let mut entry_info = Vec::new();
+        let mut entries_v2 = Vec::new();
         let mut response = fs.read_dir(&expanded).await?;
         while let Some(path) = response.next().await {
             let path = path?;
-            if let Some(file_name) = path.file_name() {
-                entries.push(file_name.to_string_lossy().into_owned());
-                if check_info {
-                    let is_dir = fs.is_dir(&path).await;
-                    entry_info.push(proto::EntryInfo { is_dir });
-                }
-            }
+            let native_path = vfs::NativePath::from_local_path(&path)?;
+            let Some(file_name) = native_path.provider_path().file_name().cloned() else {
+                continue;
+            };
+            let name = vfs::EntryName::from_exact(file_name);
+            let is_dir = check_info && fs.is_dir(&path).await;
+            entries_v2.push(proto::RemoteDirectoryEntry {
+                name: Some(proto::VfsPathComponentV2::from_entry_name(&name)),
+                is_dir,
+            });
         }
-        Ok(proto::ListRemoteDirectoryResponse {
-            entries,
-            entry_info,
-        })
+        Ok(proto::ListRemoteDirectoryResponse { entries_v2 })
     }
 
     async fn handle_get_path_metadata(
@@ -1275,7 +1285,13 @@ impl HeadlessProject {
         cx: AsyncApp,
     ) -> Result<proto::GetPathMetadataResponse> {
         let fs = cx.read_entity(&this, |this, _| this.fs.clone());
-        let expanded = PathBuf::from(shellexpand::tilde(&envelope.payload.path).to_string());
+        let requested_path = envelope
+            .payload
+            .path_v2
+            .as_ref()
+            .context("path-metadata request is missing its exact path")?
+            .to_native_path()?;
+        let expanded = expand_requested_native_path(&requested_path)?;
 
         let metadata = fs.metadata(&expanded).await?;
         let is_dir = metadata.is_some_and(|metadata| metadata.is_dir);
@@ -1283,7 +1299,9 @@ impl HeadlessProject {
         Ok(proto::GetPathMetadataResponse {
             exists: metadata.is_some(),
             is_dir,
-            path: expanded.to_string_lossy().into_owned(),
+            path_v2: Some(proto::NativePathV2::from_native_path(
+                &vfs::NativePath::from_local_path(&expanded)?,
+            )),
         })
     }
 
