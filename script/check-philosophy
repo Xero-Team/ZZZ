@@ -120,6 +120,11 @@ check_dev_docs_clone_this_repo() {
         "$root/docs/src/development"
 }
 
+check_gpui_docs_no_upstream_hosted_links() {
+    ! rg -n 'zed\.dev/community-links|https://www\.gpui\.rs|repository = "https://github\.com/zed-industries/zed"' \
+        "$root/crates/gpui/README.md" "$root/crates/gpui/Cargo.toml"
+}
+
 check_orphan_billing_docs_absent() {
     ! test -f "$root/docs/src/ai/billing.md" \
         && ! test -f "$root/docs/src/ai/subscription.md" \
@@ -419,6 +424,7 @@ check "AI onboarding has no plan or sign-in types" check_onboarding_has_no_plan_
 check "locales have no Zed Business or Student welcome copy" check_no_zed_business_locale
 check "docs have no Discord community invite" check_no_discord_community
 check "development clone URLs point at this repository" check_dev_docs_clone_this_repo
+check "GPUI docs do not point at upstream hosted support" check_gpui_docs_no_upstream_hosted_links
 check "orphan billing and account docs are absent" check_orphan_billing_docs_absent
 check "Cloudflare hosted-docs workers are absent" check_cloudflare_workers_absent
 check "default keymaps do not point at hosted docs" check_keymaps_no_hosted_docs

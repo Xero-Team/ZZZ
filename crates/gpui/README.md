@@ -33,9 +33,14 @@ The ZZZ repository records the current backend evidence and native validation
 runbooks under `docs/src/development/gui-framework-research/`. Keep a platform
 claim in your application tied to a tested target and feature set.
 
-- [Ownership and data flow](_ownership_and_data_flow)
+- [Contexts](docs/contexts.md)
 
-Everything in GPUI starts with an `Application`. You can create one with `Application::new()`, and kick off your application by passing a callback to `Application::run()`. Inside this callback, you can create a new window with `App::open_window()`, and register your first root view. See [gpui.rs](https://www.gpui.rs/) for a complete example.
+Everything in GPUI starts with an `Application`. You can create one with
+`Application::new()`, and kick off your application by passing a callback to
+`Application::run()`. Inside this callback, you can create a new window with
+`App::open_window()` and register your first root view. See
+[`examples/hello_world.rs`](examples/hello_world.rs) for a complete local
+example.
 
 ### Dependencies
 
@@ -85,4 +90,6 @@ In addition to the systems above, GPUI provides a range of smaller services that
 
 - The `[gpui::test]` macro provides a convenient way to write tests for your GPUI applications. Tests also have their own kind of context, a `TestAppContext` which provides ways of simulating common platform input. See `app::test_context` and `test` modules for more details.
 
-Currently, the best way to learn about these APIs is to read the ZZZ source code or drop a question in the [Zed Discord](https://zed.dev/community-links). We're working on improving the documentation, creating more examples, and will be publishing more guides to GPUI on our [blog](https://zed.dev/blog).
+The in-tree examples and docs are the current API reference. Read the ZZZ
+source when you need a production use case. Report documentation gaps or bugs
+in the [ZZZ issue tracker](https://github.com/Xero-Team/ZZZ/issues).

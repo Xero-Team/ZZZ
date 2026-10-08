@@ -11,14 +11,14 @@ description: Execution ledger for the GPUI Qt Base gap completion program.
 
 ## 执行状态 {#status}
 
-| 项目           | 值                                                             |
-| -------------- | -------------------------------------------------------------- |
-| 计划状态       | `ACTIVE`                                                       |
-| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1/2/4 已启动 |
-| 当前基线       | `434f808bc34b485368fe8927f5f91f774cc2931c` (`main`)            |
-| 启动时间       | 2026-10-08                                                     |
-| 旧基础设施计划 | 阶段 9 `COMPLETE`；不重新执行                                  |
-| 当前工作树     | 本计划新增的 report、plan、goal、progress 和 SUMMARY 文档修改  |
+| 项目           | 值                                                               |
+| -------------- | ---------------------------------------------------------------- |
+| 计划状态       | `ACTIVE`                                                         |
+| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1/2/4/6 已启动 |
+| 当前基线       | `434f808bc34b485368fe8927f5f91f774cc2931c` (`main`)              |
+| 启动时间       | 2026-10-08                                                       |
+| 旧基础设施计划 | 阶段 9 `COMPLETE`；不重新执行                                    |
+| 当前工作树     | 本计划新增的 report、plan、goal、progress 和 SUMMARY 文档修改    |
 
 ## 继承的事实 {#inherited-facts}
 
@@ -275,3 +275,21 @@ row identity/selection 的实际 table 或 list owner 时才重开。届时 prot
 将 InputField semantic value 与底层 editor 的 UTF-16 selection、marked text、caret bounds
 和 AccessKit text action 的 authoritative owner 对齐；在此之前不复制第二份 editor text
 model 到 GPUI。
+
+## 阶段 6：API、examples、docs 与升级纪律 {#phase-6}
+
+状态：`ACTIVE`
+
+### 已完成 {#phase-6-completed}
+
+- `gpui` package metadata 的 repository 现在指向 ZZZ；移除了没有 ZZZ ownership 的
+  GPUI homepage。
+- GPUI README 以 in-tree `contexts` doc 和 `hello_world` example 作为学习入口，移除
+  upstream `gpui.rs`、Zed Discord 和 Zed blog 链接；issues 指向本仓库。
+- `script/check-philosophy` 现在检查 GPUI README/manifest 不再回归到 upstream hosted
+  support 或 upstream repository metadata。
+
+### 下一步 {#phase-6-next}
+
+审计 public GPUI docs/examples 的 ownership、capability、feature-gate、cancellation 和
+upgrade semantics；只在 target/build matrix 能验证时增加平台声明。
