@@ -5,11 +5,33 @@ for Rust, designed to support a wide variety of applications.
 
 ## Getting Started
 
-GPUI is still in active development as we work on the ZZZ code editor, and is still pre-1.0. There will often be breaking changes between versions. You'll also need to use the latest version of stable Rust and be on macOS or Linux. Add the following to your `Cargo.toml`:
+GPUI is still in active development as we work on the ZZZ code editor, and is
+still pre-1.0. There will often be breaking changes between versions. Use the
+latest stable Rust. Add the following to your `Cargo.toml`:
 
 ```toml
 gpui = { version = "*" }
 ```
+
+### Platform availability
+
+The in-tree platform crates currently have target-specific implementations for
+macOS, Windows, Linux and FreeBSD, and WebAssembly. This describes the source
+targets, not a promise that every platform service has identical runtime
+coverage. Query [`PlatformCapabilities`](https://docs.rs/gpui/latest/gpui/struct.PlatformCapabilities.html)
+before relying on an optional service and test your application's target
+configuration.
+
+| Target            | Window and renderer path                       | Important limits                                                                           |
+| ----------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| macOS             | Native AppKit window and Metal renderer        | Optional accessibility support requires the `accessibility` feature.                       |
+| Windows           | Native Windows window and WGPU renderer        | Optional accessibility support requires the `accessibility` feature.                       |
+| Linux and FreeBSD | Native Wayland or X11 window and WGPU renderer | Backend services can differ between the compositor and X11.                                |
+| WebAssembly       | Web platform and WGPU canvas renderer          | Native text-input, IME candidate positioning, and accessibility are currently unavailable. |
+
+The ZZZ repository records the current backend evidence and native validation
+runbooks under `docs/src/development/gui-framework-research/`. Keep a platform
+claim in your application tied to a tested target and feature set.
 
 - [Ownership and data flow](_ownership_and_data_flow)
 

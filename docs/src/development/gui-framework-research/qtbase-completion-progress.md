@@ -47,6 +47,10 @@ contract、WGPU 模块化、platform capability/lifecycle、Editor IME 与最终
   Web 明确报告 `text_input`、candidate positioning 和 accessibility 为 false。
 - 已确认 macOS、Windows、X11、Wayland 都有 `AccessibilityBridge` adapter；Web 没有
   native adapter 实现。
+- 已修正 `crates/gpui/README.md` 的 macOS/Linux-only 断言。README 现在把 macOS、
+  Windows、Linux/FreeBSD 和 WebAssembly 标为 source targets，并明确 Web 的
+  text-input、IME candidate positioning 和 accessibility 当前不可用；它不再把 source
+  target 误写成未经验证的 runtime support tier。
 - 已验证 Linux capability matrix：
 
   ```sh
@@ -78,8 +82,8 @@ contract、WGPU 模块化、platform capability/lifecycle、Editor IME 与最终
 
 1. 将 capability inventory 从当前分散 bool 和 backend test 提取为可审查表，逐项连接
    advertised API、实际 backend、automated evidence、native runtime evidence 与支持等级。
-2. 审计 GPUI README、examples 和 platform docs，决定 support matrix 的单一事实来源及
-   自动/测试校验策略。
+2. 审计其余 examples 和 platform docs，决定 support matrix 的单一事实来源及自动/测试
+   校验策略。
 3. 固定 desktop acceptance fixture 的最小输入和结果格式，复用旧 IME/a11y runbook，
    不重建已通过的 Linux 环境脚本。
 4. 对 capability bool 是否需要表达 `degraded` 做设计调查；在有实际歧义前不做
