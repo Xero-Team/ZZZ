@@ -39,3 +39,9 @@ sha2.workspace = true
 tempfile.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+# async-tar's Windows symlink extraction calls async_std::os::windows::fs,
+# which async-std gates behind its unstable feature.
+async-std = { version = "1.13", features = ["unstable"] }
+
+[package.metadata.cargo-machete]
+ignored = ["async-std"]

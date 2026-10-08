@@ -51,6 +51,14 @@ contract、WGPU 模块化、platform capability/lifecycle、Editor IME 与最终
   Windows、Linux/FreeBSD 和 WebAssembly 标为 source targets，并明确 Web 的
   text-input、IME candidate positioning 和 accessibility 当前不可用；它不再把 source
   target 误写成未经验证的 runtime support tier。
+- 当前主机已安装 macOS、Windows 和 WASM cross targets。macOS accessibility check 与
+  WASM `gpui_web` check 通过；WASM 仅有 vendored WGPU 的既有 unused warning，不属于
+  ZZZ-owned source warning。
+- Windows cross-check 首先揭露了两个真实的 build boundary 问题：`async-tar` 的 Windows
+  symlink code 需要 `async-std/unstable`，以及 `gpui_windows` 将 `windows 0.62` 与
+  `windows-core`/`windows-numerics`/`windows-registry` 0.100 混用。`http_client` 现在
+  仅在 Windows 启用前一 feature；GPUI Windows crate 将后三个 crate 对齐到 Windows
+  0.62 的 ABI generation。修复后 locked Windows accessibility cross-check 通过。
 - 已验证 Linux capability matrix：
 
   ```sh
@@ -58,6 +66,28 @@ contract、WGPU 模块化、platform capability/lifecycle、Editor IME 与最终
   ```
 
   结果：`3 passed; 0 failed`。
+
+- 已执行 cross-target checks：
+
+  ```sh
+  cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin --features accessibility
+  cargo check --locked -p gpui_windows --tests --target x86_64-pc-windows-gnu --no-default-features --features accessibility
+  RUSTC_BOOTSTRAP=1 cargo check --locked -p gpui_web --tests --target wasm32-unknown-unknown
+  ```
+
+  结果：均通过；这只证明 target build。macOS VoiceOver、Windows Narrator/hardware 和
+  browser runtime 仍维持各自的 `NOT RUN`/`UNSUPPORTED` 状态。
+
+### Capability inventory v1 {#capability-inventory-v1}
+
+| Target/backend | Advertised source capability                                                                                                          | Automated evidence                                                  | Runtime evidence                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| macOS          | AppKit + Metal; text input, candidate positioning, native prompt, accessibility feature, test headless renderer                       | `gpui_macos` capability test cross-check PASS                       | VoiceOver/IME `NOT RUN` on this host                                                   |
+| Windows        | Win32 + WGPU; text input, candidate positioning, native prompt, accessibility feature, test headless renderer                         | Windows accessibility test cross-check PASS after ABI/async-tar fix | Narrator, IME and hardware renderer `NOT RUN` on this host                             |
+| Linux X11      | X11 + WGPU; text input, candidate positioning, accessibility feature; no platform-window headless renderer                            | `gpui_linux` capability matrix PASS                                 | XIM 100/100 and AT-SPI/Orca PASS in inherited runbook                                  |
+| Linux Wayland  | Wayland + WGPU; text input, candidate positioning, accessibility feature; compositor-dependent controls/bell                          | `gpui_linux` capability matrix PASS                                 | No separate fresh Wayland assistive-technology run in this phase                       |
+| WebAssembly    | Web canvas + WGPU; frame callbacks and write-only clipboard; no text input, candidate positioning, accessibility or headless renderer | WASM `gpui_web` check PASS                                          | Browser composition/runtime remains `NOT RUN`; accessibility is explicitly unsupported |
+| Linux headless | no compositor services, no IME/a11y; test renderer is supplied separately by `gpui_platform`                                          | headless capability matrix PASS                                     | deterministic test only                                                                |
 
 - 已验证当前 UI semantic smoke test：
 

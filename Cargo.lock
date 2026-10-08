@@ -1100,6 +1100,7 @@ dependencies = [
  "async-global-executor",
  "async-io",
  "async-lock",
+ "async-process",
  "crossbeam-utils",
  "futures-channel",
  "futures-core",
@@ -6615,9 +6616,9 @@ dependencies = [
  "util",
  "uuid",
  "windows 0.62.2",
- "windows-core 0.100.0",
- "windows-numerics 0.100.0",
- "windows-registry 0.100.0",
+ "windows-core 0.62.2",
+ "windows-numerics",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]
@@ -7382,6 +7383,7 @@ dependencies = [
  "anyhow",
  "async-compression",
  "async-fs",
+ "async-std",
  "async-tar",
  "bytes 1.12.1",
  "derive_more",
@@ -20325,7 +20327,7 @@ dependencies = [
  "windows-collections",
  "windows-core 0.62.2",
  "windows-future",
- "windows-numerics 0.3.1",
+ "windows-numerics",
 ]
 
 [[package]]
@@ -20500,15 +20502,6 @@ checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
 dependencies = [
  "windows-core 0.62.2",
  "windows-link 0.2.1",
-]
-
-[[package]]
-name = "windows-numerics"
-version = "0.100.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c5500bf6a9098f27922953422ae7324cdd330c868e945801593455a6832701"
-dependencies = [
- "windows-core 0.100.0",
 ]
 
 [[package]]

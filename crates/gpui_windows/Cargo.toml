@@ -36,16 +36,17 @@ smallvec.workspace = true
 util.workspace = true
 uuid.workspace = true
 windows.workspace = true
-windows-core.workspace = true
-windows-numerics = "0.100"
-windows-registry = "0.100"
+# These crates must stay on the same ABI generation as `windows`.
+windows-core = "0.62"
+windows-numerics = "0.3.1"
+windows-registry = "0.6.1"
 
 [target.'cfg(target_os = "windows")'.dependencies.scap]
 workspace = true
 optional = true
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
-windows-registry = "0.100"
+windows-registry = "0.6.1"
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
