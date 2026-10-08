@@ -31,7 +31,7 @@ use workspace::PathList;
 use workspace::item::ItemHandle;
 use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWorkspaceLocation};
 
-const SKILL_URL_PREFIXES: [&str; 2] = ["zzz://skill", "zzz://skill"];
+const SKILL_URL_PREFIX: &str = "zzz://skill";
 
 #[derive(Default, Debug)]
 pub struct OpenRequest {
@@ -168,10 +168,7 @@ impl OpenRequest {
                 this.kind = Some(OpenRequestKind::Extension {
                     extension_id: extension_id.to_owned(),
                 });
-            } else if SKILL_URL_PREFIXES
-                .iter()
-                .any(|prefix| url.starts_with(prefix))
-            {
+            } else if url.starts_with(SKILL_URL_PREFIX) {
                 this.parse_skill_install_url(&url)?
             } else if let Some(agent_path) = url.strip_prefix("zzz://agent") {
                 this.parse_agent_url(agent_path)
@@ -221,9 +218,8 @@ impl OpenRequest {
     }
 
     fn parse_skill_install_url(&mut self, url: &str) -> Result<()> {
-        let skill_path = SKILL_URL_PREFIXES
-            .iter()
-            .find_map(|prefix| url.strip_prefix(prefix))
+        let skill_path = url
+            .strip_prefix(SKILL_URL_PREFIX)
             .context("invalid skill url: unsupported prefix")?;
         let skill_path = skill_path.strip_prefix('/').unwrap_or(skill_path);
 

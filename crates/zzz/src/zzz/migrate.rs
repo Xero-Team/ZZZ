@@ -8,7 +8,10 @@ use settings::{KeymapFile, Settings, SettingsStore};
 use util::ResultExt;
 use workspace::notifications::NotifyTaskExt;
 
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use gpui::{Entity, EventEmitter, Global, Task, TextStyle, TextStyleRefinement};
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
@@ -97,7 +100,7 @@ impl MigrationBanner {
     fn show(&mut self, cx: &mut Context<Self>) {
         let (file_type, backup_file_name) = match self.migration_type {
             Some(MigrationType::Keymap) => (
-                "keymap",
+                tr(cx, "zzz.migrate.file_type.keymap", "keymap"),
                 paths::keymap_backup_file()
                     .file_name()
                     .unwrap_or_default()
@@ -105,7 +108,7 @@ impl MigrationBanner {
                     .into_owned(),
             ),
             Some(MigrationType::Settings) => (
-                "settings",
+                tr(cx, "zzz.migrate.file_type.settings", "settings"),
                 paths::settings_backup_file()
                     .file_name()
                     .unwrap_or_default()
@@ -115,11 +118,13 @@ impl MigrationBanner {
             None => return,
         };
 
-        let migration_text = format!(
-            "Your {} file uses deprecated settings which can be \
-            automatically updated. A backup will be saved to `{}`",
-            file_type, backup_file_name
-        );
+        let migration_text = tr(
+            cx,
+            "zzz.migrate.deprecated_settings",
+            "Your {} file uses deprecated settings which can be automatically updated. A backup will be saved to `{}`",
+        )
+        .replacen("{}", &file_type, 1)
+        .replacen("{}", &backup_file_name, 1);
 
         self.markdown = Some(cx.new(|cx| Markdown::new(migration_text.into(), None, None, cx)));
 
@@ -173,7 +178,7 @@ impl ToolbarItemView for MigrationBanner {
                 }
             });
             self.should_migrate_task = Some(cx.spawn_in(window, async move |this, cx| {
-                if matches!(should_migrate.await, Ok(true)) {
+                if should_migrate.await.log_err() == Some(true) {
                     this.update(cx, |this, cx| {
                         this.show(cx);
                     })
@@ -267,66 +272,66 @@ impl Render for MigrationBanner {
 
 async fn should_migrate_keymap(fs: Arc<dyn Fs>) -> Result<bool> {
     let old_text = KeymapFile::load_keymap_file(&fs).await?;
-    if let Ok(Some(_)) = migrate_keymap(&old_text) {
-        return Ok(true);
-    };
-    Ok(false)
+    Ok(migrate_keymap(&old_text)?.is_some())
 }
 
 async fn should_migrate_settings(fs: Arc<dyn Fs>) -> Result<bool> {
     let old_text = SettingsStore::load_settings(&fs).await?;
-    if let Ok(Some(_)) = migrate_settings(&old_text) {
-        return Ok(true);
-    };
-    Ok(false)
+    Ok(migrate_settings(&old_text)?.is_some())
 }
 
 async fn write_keymap_migration(fs: Arc<dyn Fs>) -> Result<()> {
     let old_text = KeymapFile::load_keymap_file(&fs).await?;
-    let Ok(Some(new_text)) = migrate_keymap(&old_text) else {
+    let Some(new_text) = migrate_keymap(&old_text)? else {
         return Ok(());
     };
-    let keymap_path = paths::keymap_file().as_path();
-    if fs.is_file(keymap_path).await {
-        fs.atomic_write(paths::keymap_backup_file().clone(), old_text)
-            .await
-            .with_context(|| "Failed to create settings backup in home directory".to_owned())?;
-        let resolved_path = fs
-            .canonicalize(keymap_path)
-            .await
-            .with_context(|| format!("Failed to canonicalize keymap path {:?}", keymap_path))?;
-        fs.atomic_write(resolved_path.clone(), new_text)
-            .await
-            .with_context(|| format!("Failed to write keymap to file {:?}", resolved_path))?;
-    } else {
-        fs.atomic_write(keymap_path.to_path_buf(), new_text)
-            .await
-            .with_context(|| format!("Failed to write keymap to file {:?}", keymap_path))?;
-    }
-    Ok(())
+    write_migrated_file(
+        fs.as_ref(),
+        paths::keymap_file(),
+        paths::keymap_backup_file().clone(),
+        old_text,
+        new_text,
+    )
+    .await
 }
 
 async fn write_settings_migration(fs: Arc<dyn Fs>) -> Result<()> {
     let old_text = SettingsStore::load_settings(&fs).await?;
-    let Ok(Some(new_text)) = migrate_settings(&old_text) else {
+    let Some(new_text) = migrate_settings(&old_text)? else {
         return Ok(());
     };
-    let settings_path = paths::settings_file().as_path();
-    if fs.is_file(settings_path).await {
-        fs.atomic_write(paths::settings_backup_file().clone(), old_text)
+    write_migrated_file(
+        fs.as_ref(),
+        paths::settings_file(),
+        paths::settings_backup_file().clone(),
+        old_text,
+        new_text,
+    )
+    .await
+}
+
+async fn write_migrated_file(
+    fs: &dyn Fs,
+    source_path: &Path,
+    backup_path: PathBuf,
+    old_text: String,
+    new_text: String,
+) -> Result<()> {
+    if fs.is_file(source_path).await {
+        fs.atomic_write(backup_path.clone(), old_text)
             .await
-            .with_context(|| "Failed to create settings backup in home directory".to_owned())?;
+            .with_context(|| format!("Failed to create migration backup at {backup_path:?}"))?;
         let resolved_path = fs
-            .canonicalize(settings_path)
+            .canonicalize(source_path)
             .await
-            .with_context(|| format!("Failed to canonicalize settings path {:?}", settings_path))?;
+            .with_context(|| format!("Failed to canonicalize migration file {source_path:?}"))?;
         fs.atomic_write(resolved_path.clone(), new_text)
             .await
-            .with_context(|| format!("Failed to write settings to file {:?}", resolved_path))?;
+            .with_context(|| format!("Failed to write migrated file {resolved_path:?}"))?;
     } else {
-        fs.atomic_write(settings_path.to_path_buf(), new_text)
+        fs.atomic_write(source_path.to_path_buf(), new_text)
             .await
-            .with_context(|| format!("Failed to write settings to file {:?}", settings_path))?;
+            .with_context(|| format!("Failed to write migrated file {source_path:?}"))?;
     }
     Ok(())
 }

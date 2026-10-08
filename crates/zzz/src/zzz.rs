@@ -1208,20 +1208,20 @@ fn register_actions(
                 cx.spawn_in(window, async move |workspace, cx| {
                     let buffer = open_server_settings.await?;
 
-                    workspace
-                        .update_in(cx, |workspace, window, cx| {
-                            workspace.open_path(
-                                buffer
-                                    .read(cx)
-                                    .project_path(cx)
-                                    .expect("Settings file must have a location"),
-                                None,
-                                true,
-                                window,
-                                cx,
-                            )
-                        })?
-                        .await?;
+                    let open_task = workspace.update_in(cx, |workspace, window, cx| {
+                        let project_path = buffer
+                            .read(cx)
+                            .project_path(cx)
+                            .context("remote server settings buffer has no project path")?;
+                        Ok::<_, anyhow::Error>(workspace.open_path(
+                            project_path,
+                            None,
+                            true,
+                            window,
+                            cx,
+                        ))
+                    })??;
+                    open_task.await?;
 
                     anyhow::Ok(())
                 })
@@ -1927,9 +1927,7 @@ pub fn handle_keymap_file_changes(
             old_helix_enabled = new_helix_enabled;
             old_disable_ai = new_disable_ai;
 
-            base_keymap_tx
-                .unbounded_send(())
-                .expect("value should be present");
+            base_keymap_tx.unbounded_send(()).log_err();
         }
     })
     .detach();
@@ -1941,7 +1939,7 @@ pub fn handle_keymap_file_changes(
             let next_layout_id = cx.keyboard_layout().id();
             if next_layout_id != current_layout_id {
                 current_layout_id = next_layout_id.to_owned();
-                keyboard_layout_tx.unbounded_send(()).ok();
+                keyboard_layout_tx.unbounded_send(()).log_err();
             }
         })
         .detach();
@@ -1954,7 +1952,7 @@ pub fn handle_keymap_file_changes(
             let next_mapping = cx.keyboard_mapper().get_key_equivalents();
             if current_mapping.as_ref() != next_mapping {
                 current_mapping = next_mapping.cloned();
-                keyboard_layout_tx.unbounded_send(()).ok();
+                keyboard_layout_tx.unbounded_send(()).log_err();
             }
         })
         .detach();
@@ -1975,12 +1973,20 @@ pub fn handle_keymap_file_changes(
                 _ = keyboard_layout_rx.next() => {},
                 content = user_keymap_file_rx.next() => {
                     if let Some(content) = content {
-                        if let Ok(Some(migrated_content)) = migrate_keymap(&content) {
-                            user_keymap_content = migrated_content;
-                            migrating_in_memory = true;
-                        } else {
-                            user_keymap_content = content;
-                            migrating_in_memory = false;
+                        match migrate_keymap(&content) {
+                            Ok(Some(migrated_content)) => {
+                                user_keymap_content = migrated_content;
+                                migrating_in_memory = true;
+                            }
+                            Ok(None) => {
+                                user_keymap_content = content;
+                                migrating_in_memory = false;
+                            }
+                            Err(error) => {
+                                log::error!("Failed to migrate keymap file: {error:#}");
+                                user_keymap_content = content;
+                                migrating_in_memory = false;
+                            }
                         }
                     }
                 }

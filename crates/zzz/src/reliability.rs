@@ -67,23 +67,30 @@ fn monitor_hangs(cx: &App) {
 }
 
 fn cleanup_old_hang_traces() {
-    if let Ok(entries) = std::fs::read_dir(paths::hang_traces_dir()) {
-        let mut files: Vec<_> = entries
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .is_some_and(|ext| ext == "json" || ext == "miniprof")
-            })
-            .collect();
+    prune_hang_traces(paths::hang_traces_dir(), MAX_HANG_TRACES);
+}
 
-        if files.len() > MAX_HANG_TRACES {
-            files.sort_by_key(|entry| entry.file_name());
-            for entry in files.iter().take(files.len() - MAX_HANG_TRACES) {
-                std::fs::remove_file(entry.path()).log_err();
-            }
-        }
+fn prune_hang_traces(directory: &Path, maximum_count: usize) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    let mut files: Vec<_> = entries
+        .filter_map(|entry| entry.log_err())
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "json" || extension == "miniprof")
+        })
+        .collect();
+    let number_to_remove = files.len().saturating_sub(maximum_count);
+    if number_to_remove == 0 {
+        return;
+    }
+
+    files.sort_by_key(|entry| entry.file_name());
+    for entry in files.iter().take(number_to_remove) {
+        std::fs::remove_file(entry.path()).log_err();
     }
 }
 
@@ -114,24 +121,7 @@ fn save_hang_trace(
         hang_time.format("%Y-%m-%d_%H-%M-%S")
     ));
 
-    if let Ok(entries) = std::fs::read_dir(paths::hang_traces_dir()) {
-        let mut files: Vec<_> = entries
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .is_some_and(|ext| ext == "json" || ext == "miniprof")
-            })
-            .collect();
-
-        if files.len() >= MAX_HANG_TRACES {
-            files.sort_by_key(|entry| entry.file_name());
-            for entry in files.iter().take(files.len() - (MAX_HANG_TRACES - 1)) {
-                std::fs::remove_file(entry.path()).log_err();
-            }
-        }
-    }
+    prune_hang_traces(paths::hang_traces_dir(), MAX_HANG_TRACES - 1);
 
     if write_hang_trace(&trace_path, &thread_timings)
         .log_err()
@@ -155,4 +145,32 @@ fn write_hang_trace(
     serde_json::to_writer(&mut writer, thread_timings).context("hang timings serialization")?;
     writer.flush().context("hang trace file writing")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prune_hang_traces_keeps_the_newest_trace_files() {
+        let directory =
+            std::env::temp_dir().join(format!("zzz-hang-traces-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        for file_name in [
+            "hang-2026-01-01.json",
+            "hang-2026-01-02.miniprof",
+            "hang-2026-01-03.miniprof.json",
+            "not-a-trace.txt",
+        ] {
+            std::fs::File::create(directory.join(file_name)).unwrap();
+        }
+
+        prune_hang_traces(&directory, 2);
+
+        assert!(!directory.join("hang-2026-01-01.json").exists());
+        assert!(directory.join("hang-2026-01-02.miniprof").exists());
+        assert!(directory.join("hang-2026-01-03.miniprof.json").exists());
+        assert!(directory.join("not-a-trace.txt").exists());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 }
