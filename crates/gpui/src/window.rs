@@ -2,23 +2,24 @@
 use crate::Inspector;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
-    AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
-    Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
+    AsyncWindowContext, AtlasKey, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds,
+    BoxShadow, Capslock, Context, Corners, CursorStyle, Decorations, DeferredDraw, DevicePixels,
     DispatchNodeId, DispatchTree, DisplayId, DrawPhase, Edges, Entity, EntityId, EventEmitter,
     FileDropEvent, FontId, Frame, FrameBuilder, FrameScheduler, Global, GlobalElementId, GlyphId,
-    GpuSpecs, Hsla, InputHandler, InputModality, InputPreference, InteractionOwner, IsZero,
-    KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, Modifiers,
-    ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent,
-    PaintIndex, Path, Pixels, PlatformAtlas, PlatformCapabilities, PlatformDisplay, PlatformInput,
-    PlatformWindow, Point, PolychromeSprite, PrepaintStateIndex, Priority, PromptButton,
-    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
-    ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels,
-    Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite, SubscriberSet,
-    Subscription, SystemWindowTab, SystemWindowTabController, Task, TextInputClient,
-    TextInputOwner, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowInvalidator, WindowOptions,
-    WindowParams, WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
+    GlyphRasterFormat, GpuSpecs, Hsla, InputHandler, InputModality, InputPreference,
+    InteractionOwner, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke,
+    KeystrokeEvent, LayoutId, Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton,
+    MouseEvent, MouseMoveEvent, MouseUpEvent, PaintIndex, Path, Pixels, PlatformAtlas,
+    PlatformCapabilities, PlatformDisplay, PlatformInput, PlatformWindow, Point, PolychromeSprite,
+    PrepaintStateIndex, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Shadow, SharedString, Size,
+    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
+    SystemWindowTabController, Task, TextInputClient, TextInputOwner, TextRenderingMode, TextStyle,
+    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowInvalidator, WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems,
+    size, transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -73,6 +74,27 @@ use crate::profiler::{
     FrameEvent, FrameInputProvenance, FramePhase, FramePhaseTiming, FramePresentationTiming,
     FrameTiming,
 };
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct QuantizedGlyphCoordinate {
+    integer: i32,
+    variant: u8,
+}
+
+fn quantize_glyph_coordinate(
+    device_coordinate: f32,
+    subpixel_variants: u8,
+) -> QuantizedGlyphCoordinate {
+    debug_assert!(device_coordinate.is_finite());
+    debug_assert!(subpixel_variants > 0);
+
+    let subpixel_variants = i32::from(subpixel_variants);
+    let tick = round_half_toward_zero(device_coordinate * subpixel_variants as f32) as i32;
+    QuantizedGlyphCoordinate {
+        integer: tick.div_euclid(subpixel_variants),
+        variant: tick.rem_euclid(subpixel_variants) as u8,
+    }
+}
 
 /// Default window size used when no explicit size is provided.
 pub const DEFAULT_WINDOW_SIZE: Size<Pixels> = size(px(1536.), px(1095.));
@@ -2419,6 +2441,10 @@ impl Window {
     /// the contents of the new [`Scene`], use [`Self::present`].
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+        let atlas_frame = self.sprite_atlas.begin_frame();
+        if self.interaction.rendered_frame.atlas_epoch != atlas_frame.epoch() {
+            self.force_refresh();
+        }
         #[cfg(feature = "frame-diagnostics")]
         let draw_start = Instant::now();
         #[cfg(feature = "frame-diagnostics")]
@@ -2466,6 +2492,9 @@ impl Window {
         self.interaction
             .next_frame
             .finish(&mut self.interaction.rendered_frame);
+        self.interaction.next_frame.atlas_epoch = self
+            .sprite_atlas
+            .finish_frame(atlas_frame, self.interaction.next_frame.scene.atlas_usage());
 
         self.invalidator.set_phase(DrawPhase::Focus);
         let previous_focus_path = self.interaction.rendered_frame.focus_path();
@@ -3842,16 +3871,12 @@ impl Window {
         let glyph_origin = origin.scale(scale_factor);
 
         let quantized_origin = Point::new(
-            round_half_toward_zero(glyph_origin.x.0 * SUBPIXEL_VARIANTS_X as f32)
-                / SUBPIXEL_VARIANTS_X as f32,
-            round_half_toward_zero(glyph_origin.y.0 * SUBPIXEL_VARIANTS_Y as f32)
-                / SUBPIXEL_VARIANTS_Y as f32,
+            quantize_glyph_coordinate(glyph_origin.x.0, SUBPIXEL_VARIANTS_X),
+            quantize_glyph_coordinate(glyph_origin.y.0, SUBPIXEL_VARIANTS_Y),
         );
-        let subpixel_variant = Point::new(
-            (quantized_origin.x.fract() * SUBPIXEL_VARIANTS_X as f32) as u8,
-            (quantized_origin.y.fract() * SUBPIXEL_VARIANTS_Y as f32) as u8,
-        );
-        let integer_origin = quantized_origin.map(|c| ScaledPixels(c.trunc()));
+        let subpixel_variant = quantized_origin.map(|coordinate| coordinate.variant);
+        let integer_origin =
+            quantized_origin.map(|coordinate| ScaledPixels(coordinate.integer as f32));
         let subpixel_rendering = self.should_use_subpixel_rendering(font_id, font_size);
         let dilation = self.text_system().glyph_dilation_for_color(color);
         let params = RenderGlyphParams {
@@ -3867,50 +3892,7 @@ impl Window {
             dilation,
         };
 
-        let raster_bounds = self.text_system().raster_bounds(&params)?;
-        if !raster_bounds.is_zero() {
-            let tile = self
-                .sprite_atlas
-                .get_or_insert_with(params.clone().into(), &mut || {
-                    let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
-            let bounds = Bounds {
-                origin: integer_origin + raster_bounds.origin.map(Into::into),
-                size: tile.bounds.size.map(Into::into),
-            };
-            let content_mask = self.snapped_content_mask();
-
-            if subpixel_rendering {
-                self.interaction
-                    .next_frame
-                    .scene
-                    .insert_primitive(SubpixelSprite {
-                        order: 0,
-                        pad: 0,
-                        bounds,
-                        content_mask,
-                        color: color.opacity(element_opacity),
-                        tile,
-                        transformation: TransformationMatrix::unit(),
-                    });
-            } else {
-                self.interaction
-                    .next_frame
-                    .scene
-                    .insert_primitive(MonochromeSprite {
-                        order: 0,
-                        pad: 0,
-                        bounds,
-                        content_mask,
-                        color: color.opacity(element_opacity),
-                        tile,
-                        transformation: TransformationMatrix::unit(),
-                    });
-            }
-        }
-        Ok(())
+        self.paint_rasterized_glyph(integer_origin, params, color.opacity(element_opacity))
     }
 
     fn should_use_subpixel_rendering(&self, font_id: FontId, font_size: Pixels) -> bool {
@@ -3947,11 +3929,24 @@ impl Window {
         glyph_id: GlyphId,
         font_size: Pixels,
     ) -> Result<()> {
+        self.paint_emoji_with_color_hint(origin, font_id, glyph_id, font_size, crate::white())
+    }
+
+    pub(crate) fn paint_emoji_with_color_hint(
+        &mut self,
+        origin: Point<Pixels>,
+        font_id: FontId,
+        glyph_id: GlyphId,
+        font_size: Pixels,
+        color: Hsla,
+    ) -> Result<()> {
         self.invalidator.debug_assert_paint();
 
         let scale_factor = self.scale_factor();
         let glyph_origin = origin.scale(scale_factor);
-        let integer_origin = glyph_origin.map(|c| ScaledPixels(round_half_toward_zero(c.0)));
+        let integer_origin = glyph_origin.map(|coordinate| {
+            ScaledPixels(quantize_glyph_coordinate(coordinate.0, 1).integer as f32)
+        });
         let params = RenderGlyphParams {
             font_id,
             glyph_id,
@@ -3965,36 +3960,84 @@ impl Window {
             dilation: 0,
         };
 
-        let raster_bounds = self.text_system().raster_bounds(&params)?;
-        if !raster_bounds.is_zero() {
-            let tile = self
-                .sprite_atlas
-                .get_or_insert_with(params.clone().into(), &mut || {
-                    let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
-                    Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
+        self.paint_rasterized_glyph(
+            integer_origin,
+            params,
+            color.opacity(self.element_opacity()),
+        )
+    }
 
-            let bounds = Bounds {
-                origin: integer_origin + raster_bounds.origin.map(Into::into),
-                size: tile.bounds.size.map(Into::into),
-            };
-            let content_mask = self.snapped_content_mask();
-            let opacity = self.element_opacity();
+    fn paint_rasterized_glyph(
+        &mut self,
+        integer_origin: Point<ScaledPixels>,
+        params: RenderGlyphParams,
+        tint: Hsla,
+    ) -> Result<()> {
+        let raster_info = self.text_system().raster_info(&params)?;
+        if raster_info.bounds.is_zero() {
+            return Ok(());
+        }
+        let key = AtlasKey::glyph(params.clone(), raster_info.format);
+        let tile = self
+            .sprite_atlas
+            .get_or_insert_with(key, &mut || {
+                let rasterized = self.text_system().rasterize_glyph(&params)?;
+                Ok(Some((
+                    rasterized.info.bounds.size,
+                    Cow::Owned(rasterized.pixels),
+                )))
+            })?
+            .expect("invariant: non-empty glyph raster info produces pixels");
+        let bounds = Bounds {
+            origin: integer_origin + raster_info.bounds.origin.map(Into::into),
+            size: tile.bounds.size.map(Into::into),
+        };
+        let content_mask = self.snapped_content_mask();
 
-            self.interaction
-                .next_frame
-                .scene
-                .insert_primitive(PolychromeSprite {
-                    order: 0,
-                    pad: 0,
-                    grayscale: false.into(),
-                    bounds,
-                    corner_radii: Default::default(),
-                    content_mask,
-                    tile,
-                    opacity,
-                });
+        match raster_info.format {
+            GlyphRasterFormat::Alpha8 => {
+                self.interaction
+                    .next_frame
+                    .scene
+                    .insert_primitive(MonochromeSprite {
+                        order: 0,
+                        pad: 0,
+                        bounds,
+                        content_mask,
+                        color: tint,
+                        tile,
+                        transformation: TransformationMatrix::unit(),
+                    });
+            }
+            GlyphRasterFormat::SubpixelBgra8 => {
+                self.interaction
+                    .next_frame
+                    .scene
+                    .insert_primitive(SubpixelSprite {
+                        order: 0,
+                        pad: 0,
+                        bounds,
+                        content_mask,
+                        color: tint,
+                        tile,
+                        transformation: TransformationMatrix::unit(),
+                    });
+            }
+            GlyphRasterFormat::ColorBgra8 => {
+                self.interaction
+                    .next_frame
+                    .scene
+                    .insert_primitive(PolychromeSprite {
+                        order: 0,
+                        pad: 0,
+                        grayscale: false.into(),
+                        bounds,
+                        corner_radii: Default::default(),
+                        content_mask,
+                        tile,
+                        opacity: tint.a,
+                    });
+            }
         }
         Ok(())
     }
@@ -4200,13 +4243,18 @@ impl Window {
 
     /// Removes an image from the sprite atlas.
     pub fn drop_image(&mut self, data: Arc<RenderImage>) -> Result<()> {
+        let mut requested_removal = false;
         for frame_index in 0..data.frame_count() {
             let params = RenderImageParams {
                 image_id: data.id,
                 frame_index,
             };
 
-            self.sprite_atlas.remove(&params.clone().into());
+            self.sprite_atlas.remove(&params.into());
+            requested_removal = true;
+        }
+        if requested_removal {
+            self.force_refresh();
         }
 
         Ok(())
@@ -6027,6 +6075,8 @@ pub fn outline(
 mod tests {
     #[cfg(feature = "accessibility")]
     use crate::AccessibilityUpdate;
+    #[cfg(feature = "frame-diagnostics")]
+    use crate::RenderImage;
     #[cfg(feature = "accessibility")]
     use crate::StatefulInteractiveElement as _;
     #[cfg(feature = "frame-diagnostics")]
@@ -6044,6 +6094,8 @@ mod tests {
     use scheduler::Instant;
     #[cfg(feature = "frame-diagnostics")]
     use std::ops::Range;
+    #[cfg(feature = "frame-diagnostics")]
+    use std::sync::Arc;
     use std::{cell::Cell, rc::Rc};
 
     struct RootView {
@@ -6052,6 +6104,127 @@ mod tests {
     }
 
     struct EmptyView;
+
+    fn reconstructed_coordinate(
+        coordinate: super::QuantizedGlyphCoordinate,
+        subpixel_variants: u8,
+    ) -> f32 {
+        coordinate.integer as f32 + f32::from(coordinate.variant) / f32::from(subpixel_variants)
+    }
+
+    #[test]
+    fn glyph_coordinate_quantization_uses_euclidean_subpixel_ticks() {
+        for tick in -8..=8 {
+            let device_coordinate = tick as f32 / f32::from(crate::SUBPIXEL_VARIANTS_X);
+            let quantized =
+                super::quantize_glyph_coordinate(device_coordinate, crate::SUBPIXEL_VARIANTS_X);
+            assert_eq!(
+                reconstructed_coordinate(quantized, crate::SUBPIXEL_VARIANTS_X),
+                device_coordinate
+            );
+            assert!(quantized.variant < crate::SUBPIXEL_VARIANTS_X);
+        }
+
+        assert_eq!(
+            super::quantize_glyph_coordinate(-0.25, crate::SUBPIXEL_VARIANTS_X),
+            super::QuantizedGlyphCoordinate {
+                integer: -1,
+                variant: 3,
+            }
+        );
+        assert_eq!(
+            super::quantize_glyph_coordinate(0.75, crate::SUBPIXEL_VARIANTS_X),
+            super::QuantizedGlyphCoordinate {
+                integer: 0,
+                variant: 3,
+            }
+        );
+    }
+
+    #[test]
+    fn glyph_coordinate_quantization_preserves_ties_scale_and_integer_alignment() {
+        for (device_coordinate, expected) in [
+            (
+                -0.1251,
+                super::QuantizedGlyphCoordinate {
+                    integer: -1,
+                    variant: 3,
+                },
+            ),
+            (
+                -0.125,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                -0.1249,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                0.1249,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                0.125,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 0,
+                },
+            ),
+            (
+                0.1251,
+                super::QuantizedGlyphCoordinate {
+                    integer: 0,
+                    variant: 1,
+                },
+            ),
+        ] {
+            assert_eq!(
+                super::quantize_glyph_coordinate(device_coordinate, crate::SUBPIXEL_VARIANTS_X,),
+                expected
+            );
+        }
+
+        for integer in -16..=16 {
+            assert_eq!(
+                super::quantize_glyph_coordinate(integer as f32, crate::SUBPIXEL_VARIANTS_X),
+                super::QuantizedGlyphCoordinate {
+                    integer,
+                    variant: 0,
+                }
+            );
+            assert_eq!(
+                super::quantize_glyph_coordinate(integer as f32, crate::SUBPIXEL_VARIANTS_Y),
+                super::QuantizedGlyphCoordinate {
+                    integer,
+                    variant: 0,
+                }
+            );
+        }
+
+        for scale_factor in [1.0, 1.25, 2.0] {
+            for logical_coordinate in [-2.0, -0.2, -0.125, 0.0, 0.125, 0.2, 2.0] {
+                let device_coordinate = logical_coordinate * scale_factor;
+                let quantized =
+                    super::quantize_glyph_coordinate(device_coordinate, crate::SUBPIXEL_VARIANTS_X);
+                let expected = crate::util::round_half_toward_zero(
+                    device_coordinate * f32::from(crate::SUBPIXEL_VARIANTS_X),
+                ) / f32::from(crate::SUBPIXEL_VARIANTS_X);
+                assert_eq!(
+                    reconstructed_coordinate(quantized, crate::SUBPIXEL_VARIANTS_X),
+                    expected
+                );
+            }
+        }
+    }
 
     impl Render for EmptyView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
@@ -6092,9 +6265,83 @@ mod tests {
     struct DiagnosticsPanel;
 
     #[cfg(feature = "frame-diagnostics")]
+    struct AtlasCachedPanel {
+        image: Arc<RenderImage>,
+        render_count: Rc<Cell<usize>>,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct AtlasCachedRoot {
+        panel: Entity<AtlasCachedPanel>,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    struct DropImageDuringPaintView {
+        image: Arc<RenderImage>,
+        render_count: Rc<Cell<usize>>,
+        drop_on_paint: Rc<Cell<bool>>,
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
     impl Render for DiagnosticsPanel {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             div().size_full().child("cached panel")
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for AtlasCachedPanel {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            let image = self.image.clone();
+            canvas(
+                |bounds, _, _| bounds,
+                move |bounds, image_bounds, window, _| {
+                    window
+                        .paint_image(bounds, image_bounds, Default::default(), image, 0, false)
+                        .expect("test image should paint");
+                },
+            )
+            .size_full()
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for AtlasCachedRoot {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .size_full()
+                .child(AnyView::from(self.panel.clone()).cached(StyleRefinement::default()))
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    impl Render for DropImageDuringPaintView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            let image = self.image.clone();
+            let drop_on_paint = self.drop_on_paint.clone();
+            canvas(
+                |bounds, _, _| bounds,
+                move |bounds, image_bounds, window, _| {
+                    window
+                        .paint_image(
+                            bounds,
+                            image_bounds,
+                            Default::default(),
+                            image.clone(),
+                            0,
+                            false,
+                        )
+                        .expect("test image should paint");
+                    if drop_on_paint.replace(false) {
+                        window
+                            .drop_image(image)
+                            .expect("image removal should queue during paint");
+                    }
+                },
+            )
+            .size_full()
         }
     }
 
@@ -6365,6 +6612,7 @@ mod tests {
             window.draw(cx).clear();
 
             let expected_scene = &window.interaction.rendered_frame.scene;
+            let expected_atlas_epoch = window.interaction.rendered_frame.atlas_epoch;
             let expected_hitbox_count = window.interaction.rendered_frame.hitboxes.len();
             let expected_dispatch_node_count =
                 window.interaction.rendered_frame.dispatch_tree.len();
@@ -6381,6 +6629,7 @@ mod tests {
 
             let built_frame = window.interaction.built_frame(&window.text_input);
             assert!(std::ptr::eq(built_frame.scene, expected_scene));
+            assert_eq!(built_frame.atlas_epoch, expected_atlas_epoch);
             assert_eq!(
                 built_frame.interaction.hitboxes.len(),
                 expected_hitbox_count
@@ -6653,6 +6902,209 @@ mod tests {
                     && timing.input == Some(FrameInputProvenance::Keyboard)
                     && timing.input_to_present.is_some()
         )));
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn atlas_epoch_change_bypasses_cached_paint_replay(cx: &mut TestAppContext) {
+        let frame = image::Frame::new(image::ImageBuffer::from_pixel(
+            1,
+            1,
+            image::Rgba([0, 0, 255, 255]),
+        ));
+        let image = Arc::new(RenderImage::new(smallvec::SmallVec::from_elem(frame, 1)));
+        let render_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let image = image.clone();
+            let render_count = render_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AtlasCachedPanel {
+                    image,
+                    render_count,
+                });
+                AtlasCachedRoot { panel }
+            }
+        });
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw_and_present_for_test(cx);
+        })
+        .expect("atlas cache window should remain open");
+        assert_eq!(render_count.get(), 1);
+        let test_window = cx.test_window(handle);
+
+        let mut collector = cx
+            .update_window(handle, |_, window, _| {
+                FrameTimingCollector::for_window(window)
+            })
+            .expect("atlas cache window should remain open");
+        collector.snapshot();
+
+        window
+            .update(cx, |_, _, cx| cx.notify())
+            .expect("atlas cache root should remain alive");
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(render_count.get(), 1);
+        assert!(collector.snapshot().events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Phase(timing) if timing.phase == FramePhase::PaintCacheReplay
+        )));
+
+        cx.update_window(handle, move |_, window, _| window.drop_image(image))
+            .expect("atlas cache window should remain open")
+            .expect("image removal should succeed");
+        collector.snapshot();
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        cx.update_window(handle, |_, window, _| {
+            assert_eq!(
+                window.interaction.rendered_frame.atlas_epoch,
+                window.sprite_atlas.current_epoch()
+            );
+        })
+        .expect("atlas cache window should remain open");
+
+        assert_eq!(render_count.get(), 2);
+        let final_snapshot = collector.snapshot();
+        assert!(!final_snapshot.events.iter().any(|event| matches!(
+            event,
+            FrameEvent::Phase(timing) if timing.phase == FramePhase::PaintCacheReplay
+        )));
+        cx.update_window(handle, |_, window, _| {
+            let epoch = window.interaction.rendered_frame.atlas_epoch;
+            window.present_for_test();
+            assert_eq!(window.interaction.rendered_frame.atlas_epoch, epoch);
+        })
+        .expect("atlas cache window should remain open");
+        assert_eq!(render_count.get(), 2);
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn dropping_an_image_refreshes_each_window_at_its_own_epoch(cx: &mut TestAppContext) {
+        let frame = image::Frame::new(image::ImageBuffer::from_pixel(
+            1,
+            1,
+            image::Rgba([0, 255, 0, 255]),
+        ));
+        let image = Arc::new(RenderImage::new(smallvec::SmallVec::from_elem(frame, 1)));
+        let first_render_count = Rc::new(Cell::new(0));
+        let second_render_count = Rc::new(Cell::new(0));
+
+        let first_window = cx.add_window({
+            let image = image.clone();
+            let render_count = first_render_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AtlasCachedPanel {
+                    image,
+                    render_count,
+                });
+                AtlasCachedRoot { panel }
+            }
+        });
+        let second_window = cx.add_window({
+            let image = image.clone();
+            let render_count = second_render_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AtlasCachedPanel {
+                    image,
+                    render_count,
+                });
+                AtlasCachedRoot { panel }
+            }
+        });
+        let first_handle: AnyWindowHandle = first_window.into();
+        let second_handle: AnyWindowHandle = second_window.into();
+        for handle in [first_handle, second_handle] {
+            cx.update_window(handle, |_, window, cx| {
+                window.draw_and_present_for_test(cx);
+            })
+            .expect("atlas cache window should remain open");
+        }
+        assert_eq!(first_render_count.get(), 1);
+        assert_eq!(second_render_count.get(), 1);
+        for handle in [first_handle, second_handle] {
+            cx.update_window(handle, |_, window, _| {
+                let key = crate::RenderImageParams {
+                    image_id: image.id,
+                    frame_index: 0,
+                };
+                window
+                    .sprite_atlas
+                    .get_or_insert_with(key.into(), &mut || {
+                        Ok(Some((
+                            crate::size(crate::DevicePixels(1), crate::DevicePixels(1)),
+                            std::borrow::Cow::Borrowed(&[0, 255, 0, 255]),
+                        )))
+                    })
+                    .expect("test image should enter each atlas")
+                    .expect("test image builder should return a tile");
+                assert_eq!(window.sprite_atlas.snapshot().entry_count, 1);
+            })
+            .expect("atlas cache window should remain open");
+        }
+
+        let first_test_window = cx.test_window(first_handle);
+        let second_test_window = cx.test_window(second_handle);
+        let first_wake_count = first_test_window.frame_wake_count();
+        let second_wake_count = second_test_window.frame_wake_count();
+        cx.update(|cx| cx.drop_image(image, None));
+        assert!(first_test_window.frame_wake_count() > first_wake_count);
+        assert!(second_test_window.frame_wake_count() > second_wake_count);
+
+        first_test_window.simulate_frame_request(RequestFrameOptions::default());
+        second_test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(first_render_count.get(), 2);
+        assert_eq!(second_render_count.get(), 2);
+        for handle in [first_handle, second_handle] {
+            cx.update_window(handle, |_, window, _| {
+                assert_ne!(
+                    window.interaction.rendered_frame.atlas_epoch,
+                    crate::AtlasEpoch::default()
+                );
+                assert_eq!(
+                    window.interaction.rendered_frame.atlas_epoch,
+                    window.sprite_atlas.current_epoch()
+                );
+            })
+            .expect("atlas cache window should remain open");
+        }
+    }
+
+    #[cfg(feature = "frame-diagnostics")]
+    #[gpui::test]
+    fn image_removal_during_paint_schedules_the_retirement_frame(cx: &mut TestAppContext) {
+        let frame = image::Frame::new(image::ImageBuffer::from_pixel(
+            1,
+            1,
+            image::Rgba([255, 0, 0, 255]),
+        ));
+        let image = Arc::new(RenderImage::new(smallvec::SmallVec::from_elem(frame, 1)));
+        let render_count = Rc::new(Cell::new(0));
+        let drop_on_paint = Rc::new(Cell::new(true));
+        let window = cx.add_window({
+            let render_count = render_count.clone();
+            let drop_on_paint = drop_on_paint.clone();
+            move |_, _| DropImageDuringPaintView {
+                image,
+                render_count,
+                drop_on_paint,
+            }
+        });
+        let handle: AnyWindowHandle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.draw_and_present_for_test(cx);
+        })
+        .expect("atlas retirement window should remain open");
+        assert!(!drop_on_paint.get());
+        assert!(render_count.get() >= 2);
+        cx.update_window(handle, |_, window, _| {
+            assert_ne!(
+                window.interaction.rendered_frame.atlas_epoch,
+                crate::AtlasEpoch::default()
+            );
+            assert_eq!(window.sprite_atlas.snapshot().entry_count, 1);
+        })
+        .expect("atlas retirement window should remain open");
     }
 
     #[cfg(feature = "frame-diagnostics")]

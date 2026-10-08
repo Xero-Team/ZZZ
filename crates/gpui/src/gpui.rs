@@ -22,6 +22,7 @@ pub use accesskit;
 mod arena;
 mod asset_cache;
 mod assets;
+mod atlas;
 mod bounds_tree;
 mod color;
 /// The default colors used by GPUI.
@@ -103,6 +104,7 @@ pub use app::*;
 pub(crate) use arena::*;
 pub use asset_cache::*;
 pub use assets::*;
+pub use atlas::*;
 pub use color::*;
 pub use ctor::ctor;
 pub use element::*;

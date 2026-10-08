@@ -530,11 +530,12 @@ fn paint_line(
                 if max_glyph_bounds.intersects(&content_mask.bounds) {
                     let vertical_offset = point(px(0.0), glyph.position.y);
                     if glyph.is_emoji {
-                        window.paint_emoji(
+                        window.paint_emoji_with_color_hint(
                             glyph_origin + baseline_offset + vertical_offset,
                             run.font_id,
                             glyph.id,
                             layout.font_size,
+                            color,
                         )?;
                     } else {
                         window.paint_glyph(
@@ -805,7 +806,108 @@ fn aligned_origin_x(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{FontId, GlyphId};
+    use crate::{
+        Context, Font, FontId, FontMetrics, FontRun, GlyphId, GlyphRasterFormat, GlyphRasterInfo,
+        IntoElement, NoopTextSystem, PlatformTextSystem, RasterizedGlyph, Render, Size,
+        Styled as _, TestApp, TextRenderingMode, canvas, rgb,
+    };
+    use std::borrow::Cow;
+
+    struct AlphaEmojiTextSystem {
+        inner: NoopTextSystem,
+    }
+
+    impl AlphaEmojiTextSystem {
+        fn new() -> Self {
+            Self {
+                inner: NoopTextSystem::new(),
+            }
+        }
+    }
+
+    impl PlatformTextSystem for AlphaEmojiTextSystem {
+        fn add_fonts(&self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()> {
+            self.inner.add_fonts(fonts)
+        }
+
+        fn all_font_names(&self) -> Vec<String> {
+            self.inner.all_font_names()
+        }
+
+        fn font_id(&self, descriptor: &Font) -> Result<FontId> {
+            self.inner.font_id(descriptor)
+        }
+
+        fn font_metrics(&self, font_id: FontId) -> FontMetrics {
+            self.inner.font_metrics(font_id)
+        }
+
+        fn typographic_bounds(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Bounds<f32>> {
+            self.inner.typographic_bounds(font_id, glyph_id)
+        }
+
+        fn advance(&self, font_id: FontId, glyph_id: GlyphId) -> Result<Size<f32>> {
+            self.inner.advance(font_id, glyph_id)
+        }
+
+        fn glyph_for_char(&self, font_id: FontId, character: char) -> Option<GlyphId> {
+            self.inner.glyph_for_char(font_id, character)
+        }
+
+        fn glyph_raster_info(&self, _params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+            Ok(GlyphRasterInfo {
+                bounds: Bounds {
+                    origin: Point::default(),
+                    size: Size {
+                        width: DevicePixels(1),
+                        height: DevicePixels(1),
+                    },
+                },
+                format: GlyphRasterFormat::Alpha8,
+            })
+        }
+
+        fn rasterize_glyph(
+            &self,
+            _params: &RenderGlyphParams,
+            raster_info: GlyphRasterInfo,
+        ) -> Result<RasterizedGlyph> {
+            Ok(RasterizedGlyph {
+                info: raster_info,
+                pixels: vec![255],
+            })
+        }
+
+        fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout {
+            self.inner.layout_line(text, font_size, runs)
+        }
+
+        fn recommended_rendering_mode(
+            &self,
+            font_id: FontId,
+            font_size: Pixels,
+        ) -> TextRenderingMode {
+            self.inner.recommended_rendering_mode(font_id, font_size)
+        }
+    }
+
+    struct EmojiHintView {
+        line: ShapedLine,
+    }
+
+    impl Render for EmojiHintView {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            let line = self.line.clone();
+            canvas(
+                |bounds, _, _| bounds,
+                move |bounds, _, window, cx| {
+                    line.paint(bounds.origin, px(16.0), TextAlign::Left, None, window, cx)
+                        .expect("emoji-hinted alpha glyph should paint");
+                },
+            )
+            .size_full()
+        }
+    }
 
     /// Helper: build a ShapedLine from glyph descriptors without the platform text system.
     /// Each glyph is described as (byte_index, x_position).
@@ -842,6 +944,54 @@ mod tests {
             text: SharedString::new(text),
             decoration_runs: SmallVec::from(decorations.to_vec()),
         }
+    }
+
+    #[test]
+    fn emoji_hint_preserves_text_color_for_alpha_rasters() {
+        let green: Hsla = rgb(0x00ff00).into();
+        let line = ShapedLine {
+            layout: Arc::new(LineLayout {
+                font_size: px(16.0),
+                width: px(16.0),
+                ascent: px(12.0),
+                descent: px(4.0),
+                runs: vec![ShapedRun {
+                    font_id: FontId(0),
+                    synthetic_italic: Default::default(),
+                    synthetic_bold: Default::default(),
+                    glyphs: vec![ShapedGlyph {
+                        id: GlyphId(1),
+                        position: Point::default(),
+                        index: 0,
+                        is_emoji: true,
+                    }],
+                }],
+                len: 1,
+            }),
+            text: "x".into(),
+            decoration_runs: SmallVec::from_vec(vec![DecorationRun {
+                len: 1,
+                color: green,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            }]),
+        };
+        let mut app = TestApp::with_text_system(Arc::new(AlphaEmojiTextSystem::new()));
+        let mut window = app.open_window(move |_, _| EmojiHintView { line });
+        window.draw();
+
+        let painted_color = window.update(|_, window, _| {
+            window
+                .interaction
+                .rendered_frame
+                .scene
+                .monochrome_sprites
+                .last()
+                .expect("alpha glyph should produce a monochrome sprite")
+                .color
+        });
+        assert_eq!(painted_color, green);
     }
 
     #[test]

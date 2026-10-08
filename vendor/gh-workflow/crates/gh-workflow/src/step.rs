@@ -99,7 +99,7 @@ impl Input {
 
 /// Represents a step value in the workflow.
 #[allow(clippy::duplicated_attributes)]
-#[derive(Debug, Setters, Serialize, Deserialize, Clone, Default, PartialEq, Eq, Merge)]
+#[derive(Debug, Setters, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 #[setters(
     strip_option,
@@ -110,70 +110,79 @@ impl Input {
 pub struct StepValue {
     /// The ID of the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub id: Option<String>,
 
     /// The name of the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub name: Option<String>,
 
     /// The condition under which the step runs.
     #[serde(skip_serializing_if = "Option::is_none", rename = "if")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub if_condition: Option<Expression>,
 
     /// The action to use in the step.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[setters(skip)]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub uses: Option<String>,
 
     /// Input parameters for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub with: Option<Input>,
 
     /// The command to run in the step.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[setters(skip)]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub run: Option<String>,
 
     /// Shell to run with
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub shell: Option<String>,
 
     /// Environment variables for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub env: Option<Env>,
 
     /// The timeout for the step in minutes.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub timeout_minutes: Option<u32>,
 
     /// Whether to continue on error.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub continue_on_error: Option<bool>,
 
     /// The working directory for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub working_directory: Option<String>,
 
     /// The retry strategy for the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub retry: Option<RetryStrategy>,
 
     /// Artifacts produced by the step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::overwrite_none)]
     pub artifacts: Option<Artifacts>,
+}
+
+impl Merge for StepValue {
+    fn merge(&mut self, other: Self) {
+        merge_option_fields!(
+            self,
+            other,
+            id,
+            name,
+            if_condition,
+            uses,
+            with,
+            run,
+            shell,
+            env,
+            timeout_minutes,
+            continue_on_error,
+            working_directory,
+            retry,
+            artifacts,
+        );
+    }
 }
 
 impl StepValue {

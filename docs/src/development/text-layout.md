@@ -61,3 +61,42 @@ Do not migrate now. Track two things:
 If the migration is attempted later, do it behind a feature flag so the
 CoreText backend remains available as a fallback, and land it with visual
 tests rather than as a single large change.
+
+This backend-migration decision is separate from the current glyph raster and
+atlas lifecycle work. See
+[Text Rendering Architecture Research](./text-rendering-research/report.md) for
+the plan to correct subpixel positioning, atlas identity, cache budgets, color
+glyph formats, and texture sampling without replacing the platform shapers.
+
+## Rendering and atlas architecture
+
+The refactor keeps those three shaping backends, but the raster and GPU
+residency contract is now shared:
+
+```mermaid
+flowchart LR
+    Shape[Platform shaping] --> Cache[Bounded raster-info strike cache]
+    Cache --> Raster[Platform glyph rasterizer]
+    Raster --> Atlas[Common sprite atlas lifecycle]
+    Atlas --> GPU[WGPU / Metal / DirectX texture storage]
+    Atlas --> Scene[Scene atlas usage]
+    Scene --> Frame[Completed frame epoch]
+```
+
+- `GlyphRasterInfo` is the authority for bounds and Alpha8, subpixel BGRA8, or
+  straight-alpha color BGRA8. `is_emoji` is only a source-selection hint.
+- `TextSystem` caches metadata in byte/count-bounded strikes. Glyph pixels are
+  rerasterized on an atlas miss instead of being retained in a second CPU
+  bitmap cache.
+- The common atlas owns page allocation, content-class budgets, LRU,
+  whole-page compaction, stable identities, retirement, and epoch changes.
+  Backends only create, upload, destroy, and resolve textures.
+- Every tile has a one-device-pixel gutter. Coverage and SVG masks use
+  transparent padding; ordinary images extrude their edge pixels. The shader
+  still samples only the inner content bounds.
+- A completed frame records atlas usage. Removing or evicting content advances
+  the atlas epoch at a frame boundary and prevents stale cached paint replay.
+
+The implementation evidence, experiments, cross-platform runbooks, and raw
+artifact hashes are recorded in the
+[text rendering refactor progress ledger](./text-rendering-refactor-progress.md).

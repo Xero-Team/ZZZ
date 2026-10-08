@@ -1,0 +1,4 @@
+id	requested_name	requested_url	resolved_url	clone_path	status	notes	checked_at
+zzz	ZZZ	https://github.com/Xero-Team/ZZZ	https://github.com/Xero-Team/ZZZ	.	direct	Current local checkout and implementation target.	2026-10-06T12:26:35Z
+skia	Skia official GitHub mirror	https://github.com/google/skia	https://github.com/google/skia	.tmp/text-rendering-refactor-research/skia	direct	Current Graphite atlas and CPU strike-cache reference.	2026-10-06T12:26:35Z
+rust-skia	rust-skia	https://github.com/rust-skia/rust-skia	https://github.com/rust-skia/rust-skia	.tmp/text-rendering-refactor-research/rust-skia	direct	Optional metrics and visual-oracle feasibility reference only.	2026-10-06T12:26:35Z

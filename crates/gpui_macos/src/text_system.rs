@@ -19,8 +19,8 @@ use core_text::{
     font::CTFont,
     font_collection::CTFontCollectionRef,
     font_descriptor::{
-        CTFontDescriptor, kCTFontItalicTrait, kCTFontSlantTrait, kCTFontSymbolicTrait,
-        kCTFontWeightTrait, kCTFontWidthTrait,
+        CTFontDescriptor, kCTFontColorGlyphsTrait, kCTFontItalicTrait, kCTFontSlantTrait,
+        kCTFontSymbolicTrait, kCTFontWeightTrait, kCTFontWidthTrait,
     },
     line::CTLine,
     string_attributes::kCTFontAttributeName,
@@ -36,10 +36,10 @@ use font_kit::{
 };
 use gpui::{
     Bounds, DevicePixels, Font, FontFallbacks, FontFeatures, FontId, FontMetrics, FontRun,
-    FontStyle, FontWeight, GlyphId, Hsla, LineLayout, Pixels, PlatformTextSystem,
-    RenderGlyphParams, Result, Rgba, SUBPIXEL_VARIANTS_X, ShapedGlyph, ShapedRun, SharedString,
-    Size, SyntheticBold, SyntheticItalic, TextRenderingMode, point, px, size, swap_rgba_pa_to_bgra,
-    synthetic_bold_for,
+    FontStyle, FontWeight, GlyphId, GlyphRasterFormat, GlyphRasterInfo, Hsla, LineLayout, Pixels,
+    PlatformTextSystem, RasterizedGlyph, RenderGlyphParams, Result, Rgba, SUBPIXEL_VARIANTS_X,
+    ShapedGlyph, ShapedRun, SharedString, Size, SyntheticBold, SyntheticItalic, TextRenderingMode,
+    point, px, size, swap_rgba_pa_to_bgra, synthetic_bold_for,
 };
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use pathfinder_geometry::{
@@ -72,7 +72,6 @@ struct MacTextSystemState {
     font_selections: HashMap<Font, FontId>,
     font_ids_by_postscript_name: HashMap<String, FontId>,
     font_ids_by_font_key: HashMap<FontKey, SmallVec<[FontId; 4]>>,
-    postscript_names_by_font_id: HashMap<FontId, String>,
 }
 
 impl MacTextSystem {
@@ -85,7 +84,6 @@ impl MacTextSystem {
             font_selections: HashMap::default(),
             font_ids_by_postscript_name: HashMap::default(),
             font_ids_by_font_key: HashMap::default(),
-            postscript_names_by_font_id: HashMap::default(),
         }))
     }
 }
@@ -193,16 +191,16 @@ impl PlatformTextSystem for MacTextSystem {
         self.0.read().glyph_for_char(font_id, ch)
     }
 
-    fn glyph_raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        self.0.read().raster_bounds(params)
+    fn glyph_raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        self.0.read().raster_info(params)
     }
 
     fn rasterize_glyph(
         &self,
-        glyph_id: &RenderGlyphParams,
-        raster_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
-        self.0.read().rasterize_glyph(glyph_id, raster_bounds)
+        params: &RenderGlyphParams,
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        self.0.read().rasterize_glyph(params, raster_info)
     }
 
     fn layout_line(&self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {
@@ -302,13 +300,14 @@ impl MacTextSystemState {
                 //
                 // Therefore, we check up front that the font has the necessary glyph.
                 let has_m_glyph = font.glyph_for_char('m').is_some();
+                let color_capable = ct_font_is_color_capable(&font.native_font());
 
                 // HACK: The 'Segoe Fluent Icons' font does not have an 'm' glyph,
                 // but we need to be able to load it for rendering Windows icons in
                 // the Storybook (on macOS).
                 let is_segoe_fluent_icons = font.full_name() == "Segoe Fluent Icons";
 
-                if !has_m_glyph && !is_segoe_fluent_icons {
+                if !has_m_glyph && !is_segoe_fluent_icons && !color_capable {
                     // I spent far too long trying to track down why a font missing the 'm'
                     // character wasn't loading. This log statement will hopefully save
                     // someone else from suffering the same fate.
@@ -376,9 +375,7 @@ impl MacTextSystemState {
             let font_id = FontId(self.fonts.len());
             font_ids.push(font_id);
             self.font_ids_by_postscript_name
-                .insert(postscript_name.clone(), font_id);
-            self.postscript_names_by_font_id
-                .insert(font_id, postscript_name);
+                .insert(postscript_name, font_id);
             self.fonts.push(font);
         }
         Ok(font_ids)
@@ -401,9 +398,7 @@ impl MacTextSystemState {
         } else {
             let font_id = FontId(self.fonts.len());
             self.font_ids_by_postscript_name
-                .insert(postscript_name.clone(), font_id);
-            self.postscript_names_by_font_id
-                .insert(font_id, postscript_name);
+                .insert(postscript_name, font_id);
             self.fonts
                 .push(font_kit::font::Font::from_core_graphics_font(
                     requested_font.copy_to_CGFont(),
@@ -412,15 +407,16 @@ impl MacTextSystemState {
         }
     }
 
-    fn is_emoji(&self, font_id: FontId) -> bool {
-        self.postscript_names_by_font_id
-            .get(&font_id)
-            .is_some_and(|postscript_name| {
-                postscript_name == "AppleColorEmoji" || postscript_name == ".AppleColorEmojiUI"
-            })
+    fn is_color_capable(&self, font_id: FontId) -> bool {
+        ct_font_is_color_capable(&self.fonts[font_id.0].native_font())
     }
 
-    fn raster_bounds(&self, params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
+    fn raster_info(&self, params: &RenderGlyphParams) -> Result<GlyphRasterInfo> {
+        let format = if self.is_color_capable(params.font_id) {
+            GlyphRasterFormat::ColorBgra8
+        } else {
+            GlyphRasterFormat::Alpha8
+        };
         let font = &self.fonts[params.font_id.0];
         let scale = Transform2F::from_scale(params.scale_factor);
         let bounds: Bounds<DevicePixels> = bounds_from_rect_i(font.raster_bounds(
@@ -433,7 +429,7 @@ impl MacTextSystemState {
 
         // Expand the bounds by 1 pixel on each side to give CG room for anti-aliasing.
         let mut bounds = bounds.dilate(DevicePixels(1));
-        if params.synthetic_italic.is_enabled() {
+        if params.synthetic_italic.is_enabled() && format != GlyphRasterFormat::ColorBgra8 {
             let extra_width = (params.font_size.as_f32()
                 * params.scale_factor
                 * params.synthetic_italic.to_skew().abs())
@@ -441,7 +437,7 @@ impl MacTextSystemState {
             bounds.origin.x -= DevicePixels(extra_width);
             bounds.size.width += DevicePixels(extra_width * 2);
         }
-        if params.synthetic_bold.is_enabled() && !params.is_emoji {
+        if params.synthetic_bold.is_enabled() && format != GlyphRasterFormat::ColorBgra8 {
             bounds.size.width += DevicePixels(
                 params
                     .synthetic_bold
@@ -449,31 +445,30 @@ impl MacTextSystemState {
                     .ceil() as i32,
             );
         }
-        Ok(bounds)
+        if params.subpixel_variant.x > 0 {
+            bounds.size.width += DevicePixels(1);
+        }
+        if params.subpixel_variant.y > 0 {
+            bounds.size.height += DevicePixels(1);
+        }
+        Ok(GlyphRasterInfo { bounds, format })
     }
 
     fn rasterize_glyph(
         &self,
         params: &RenderGlyphParams,
-        glyph_bounds: Bounds<DevicePixels>,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
+        raster_info: GlyphRasterInfo,
+    ) -> Result<RasterizedGlyph> {
+        let glyph_bounds = raster_info.bounds;
         if glyph_bounds.size.width.0 == 0 || glyph_bounds.size.height.0 == 0 {
             anyhow::bail!("glyph bounds are empty");
         }
 
-        // Add an extra pixel when the subpixel variant isn't zero to make room for anti-aliasing.
-        let mut bitmap_size = glyph_bounds.size;
-        if params.subpixel_variant.x > 0 {
-            bitmap_size.width += DevicePixels(1);
-        }
-        if params.subpixel_variant.y > 0 {
-            bitmap_size.height += DevicePixels(1);
-        }
-        let bitmap_size = bitmap_size;
+        let bitmap_size = glyph_bounds.size;
 
         let mut bytes;
         let cx;
-        if params.is_emoji {
+        if raster_info.format == GlyphRasterFormat::ColorBgra8 {
             bytes = vec![0; bitmap_size.width.0 as usize * 4 * bitmap_size.height.0 as usize];
             cx = CGContext::create_bitmap_context(
                 Some(bytes.as_mut_ptr().cast()),
@@ -507,7 +502,9 @@ impl MacTextSystemState {
             params.scale_factor as CGFloat,
             params.scale_factor as CGFloat,
         );
-        if params.synthetic_italic.is_enabled() {
+        if params.synthetic_italic.is_enabled()
+            && raster_info.format != GlyphRasterFormat::ColorBgra8
+        {
             cx.concat_ctm(CGAffineTransform::new(
                 1.0,
                 0.0,
@@ -547,7 +544,8 @@ impl MacTextSystemState {
                 )],
                 cx.clone(),
             );
-        if params.synthetic_bold.is_enabled() && !params.is_emoji {
+        if params.synthetic_bold.is_enabled() && raster_info.format != GlyphRasterFormat::ColorBgra8
+        {
             let bold_amount = params
                 .synthetic_bold
                 .device_pixel_amount(params.font_size, params.scale_factor);
@@ -568,14 +566,17 @@ impl MacTextSystemState {
             }
         }
 
-        if params.is_emoji {
+        if raster_info.format == GlyphRasterFormat::ColorBgra8 {
             // Convert from RGBA with premultiplied alpha to BGRA with straight alpha.
             for pixel in bytes.chunks_exact_mut(4) {
                 swap_rgba_pa_to_bgra(pixel);
             }
         }
 
-        Ok((bitmap_size, bytes))
+        Ok(RasterizedGlyph {
+            info: raster_info,
+            pixels: bytes,
+        })
     }
 
     fn layout_line(&mut self, text: &str, font_size: Pixels, font_runs: &[FontRun]) -> LineLayout {
@@ -649,8 +650,13 @@ impl MacTextSystemState {
                         (run_start_utf16 < end).then_some((*style, *weight))
                     })
                     .unwrap_or((FontStyle::default(), FontWeight::default()));
-                let synthetic_italic = synthetic_italic_for(requested_style, &font);
-                let synthetic_bold = if self.is_emoji(font_id) {
+                let color_capable = self.is_color_capable(font_id);
+                let synthetic_italic = if color_capable {
+                    SyntheticItalic::disabled()
+                } else {
+                    synthetic_italic_for(requested_style, &font)
+                };
+                let synthetic_bold = if color_capable {
                     SyntheticBold::disabled()
                 } else {
                     synthetic_bold_for(requested_weight, ct_font_weight(&font))
@@ -694,7 +700,7 @@ impl MacTextSystemState {
                         id: GlyphId(glyph_id as u32),
                         position: point(position.x as f32, position.y as f32).map(px),
                         index: ix_converter.utf8_ix,
-                        is_emoji: self.is_emoji(font_id),
+                        is_emoji: self.is_color_capable(font_id),
                     });
                 }
             }
@@ -734,6 +740,10 @@ fn ct_font_weight(font: &CTFont) -> FontWeight {
 
 fn ct_font_is_italic_or_oblique(font: &CTFont) -> bool {
     font.symbolic_traits() & kCTFontItalicTrait != 0 || font.slant_angle() != 0.0
+}
+
+fn ct_font_is_color_capable(font: &CTFont) -> bool {
+    font.symbolic_traits() & kCTFontColorGlyphsTrait != 0
 }
 
 #[derive(Debug, Clone)]
@@ -854,7 +864,150 @@ mod lenient_font_attributes {
 #[cfg(test)]
 mod tests {
     use crate::MacTextSystem;
-    use gpui::{FontRun, FontWeight, GlyphId, PlatformTextSystem, font, px};
+    use anyhow::{Context as _, Result};
+    use gpui::{
+        FontRun, FontStyle, FontWeight, GlyphId, GlyphRasterFormat, PlatformTextSystem, Point,
+        RasterizedGlyph, RenderGlyphParams, font, px,
+    };
+    use std::{borrow::Cow, path::PathBuf};
+
+    struct GlyphFixture {
+        file_name: &'static str,
+        family: &'static str,
+        weight: FontWeight,
+        character: char,
+        expected_format: GlyphRasterFormat,
+    }
+
+    fn rasterize_fixture(fixture: &GlyphFixture) -> Result<RasterizedGlyph> {
+        let text_system = MacTextSystem::new();
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/fonts/text-rendering-fixtures")
+            .join(fixture.file_name);
+        text_system.add_fonts(vec![Cow::Owned(std::fs::read(&path)?)])?;
+        let mut descriptor = font(fixture.family);
+        descriptor.weight = fixture.weight;
+        let font_id = text_system.font_id(&descriptor)?;
+        let glyph_id = text_system
+            .glyph_for_char(font_id, fixture.character)
+            .with_context(|| {
+                format!("{} does not contain {}", path.display(), fixture.character)
+            })?;
+        let params = RenderGlyphParams {
+            font_id,
+            glyph_id,
+            font_size: px(64.0),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
+            is_emoji: true,
+            subpixel_rendering: false,
+            dilation: 0,
+        };
+        let raster_info = text_system.glyph_raster_info(&params)?;
+        assert_eq!(raster_info.format, fixture.expected_format);
+        text_system.rasterize_glyph(&params, raster_info)
+    }
+
+    #[test]
+    #[ignore = "requires a native macOS CoreText color renderer"]
+    fn color_font_fixture_runner() -> Result<()> {
+        let fixtures = [
+            GlyphFixture {
+                file_name: "noto-colrv1-grinning-face.ttf",
+                family: "Noto Color Emoji",
+                weight: FontWeight::NORMAL,
+                character: '😀',
+                expected_format: GlyphRasterFormat::ColorBgra8,
+            },
+            GlyphFixture {
+                file_name: "noto-color-emoji-bitmap-grinning-face.ttf",
+                family: "Noto Color Emoji",
+                weight: FontWeight::NORMAL,
+                character: '😀',
+                expected_format: GlyphRasterFormat::ColorBgra8,
+            },
+            GlyphFixture {
+                file_name: "twitter-color-emoji-svg-rocket.ttf",
+                family: "Twitter Color Emoji",
+                weight: FontWeight::NORMAL,
+                character: '🚀',
+                expected_format: GlyphRasterFormat::ColorBgra8,
+            },
+            GlyphFixture {
+                file_name: "../openmoji/openmoji.ttf",
+                family: "OpenMoji",
+                weight: FontWeight::BLACK,
+                character: '😀',
+                expected_format: GlyphRasterFormat::Alpha8,
+            },
+        ];
+        for fixture in fixtures {
+            let rasterized = rasterize_fixture(&fixture)?;
+            assert!(!rasterized.pixels.is_empty());
+            match rasterized.info.format {
+                GlyphRasterFormat::ColorBgra8 => {
+                    assert!(rasterized.pixels.chunks_exact(4).any(|pixel| {
+                        pixel[3] > 0
+                            && (pixel[0].abs_diff(pixel[1]) > 8 || pixel[1].abs_diff(pixel[2]) > 8)
+                    }));
+                }
+                GlyphRasterFormat::Alpha8 => {
+                    assert!(rasterized.pixels.iter().any(|pixel| *pixel > 0));
+                }
+                GlyphRasterFormat::SubpixelBgra8 => {
+                    panic!("fixture runner does not request subpixel rendering");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn color_glyph_trait_drives_raster_format_and_synthetic_styles() -> Result<()> {
+        let fonts = MacTextSystem::new();
+        let font_id = fonts.font_id(&font("Apple Color Emoji"))?;
+        let glyph_id = fonts
+            .glyph_for_char(font_id, '😀')
+            .context("Apple Color Emoji must contain the grinning face")?;
+        let params = RenderGlyphParams {
+            font_id,
+            glyph_id,
+            font_size: px(32.0),
+            subpixel_variant: Point::default(),
+            scale_factor: 1.0,
+            synthetic_italic: Default::default(),
+            synthetic_bold: Default::default(),
+            is_emoji: false,
+            subpixel_rendering: false,
+            dilation: 0,
+        };
+        assert_eq!(
+            fonts.glyph_raster_info(&params)?.format,
+            GlyphRasterFormat::ColorBgra8
+        );
+
+        let text = "😀";
+        let layout = fonts.layout_line(
+            text,
+            px(32.0),
+            &[FontRun {
+                font_id,
+                len: text.len(),
+                font_style: FontStyle::Italic,
+                font_weight: FontWeight::BOLD,
+            }],
+        );
+        let run = layout
+            .runs
+            .first()
+            .context("color glyph layout must produce a run")?;
+        assert!(!run.synthetic_italic.is_enabled());
+        assert!(!run.synthetic_bold.is_enabled());
+        assert!(run.glyphs.iter().all(|glyph| glyph.is_emoji));
+        Ok(())
+    }
 
     #[test]
     fn test_layout_line_bom_char() {

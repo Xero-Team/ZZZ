@@ -1,0 +1,2110 @@
+//! Shared sprite-atlas allocation, residency, and frame-lifecycle policy.
+//!
+//! GPU backends implement texture storage only. This module owns stable identities,
+//! page allocation, content budgets, retirement, compaction, diagnostics, and gutters.
+
+use crate::{
+    Bounds, DevicePixels, GlyphRasterFormat, Point, RenderGlyphParams, RenderImageParams,
+    RenderSvgParams, Size,
+};
+use anyhow::{Context as _, Result};
+use collections::{FxHashMap, FxHashSet};
+use parking_lot::Mutex;
+use std::borrow::Cow;
+
+const ATLAS_GUTTER: u32 = 1;
+
+#[derive(PartialEq, Eq, Hash, Clone)]
+#[expect(missing_docs)]
+pub enum AtlasKey {
+    Glyph {
+        params: RenderGlyphParams,
+        format: GlyphRasterFormat,
+    },
+    Svg(RenderSvgParams),
+    Image(RenderImageParams),
+}
+
+impl AtlasKey {
+    /// Returns the lifecycle and budget class for this atlas key.
+    pub fn content_kind(&self) -> AtlasContentKind {
+        match self {
+            AtlasKey::Glyph { format, .. } => match format {
+                GlyphRasterFormat::Alpha8 => AtlasContentKind::GlyphAlpha,
+                GlyphRasterFormat::SubpixelBgra8 => AtlasContentKind::GlyphSubpixel,
+                GlyphRasterFormat::ColorBgra8 => AtlasContentKind::GlyphColor,
+            },
+            AtlasKey::Svg(_) => AtlasContentKind::SvgMask,
+            AtlasKey::Image(_) => AtlasContentKind::Image,
+        }
+    }
+
+    /// Returns the texture kind for this atlas key.
+    pub fn texture_kind(&self) -> AtlasTextureKind {
+        match self.content_kind() {
+            AtlasContentKind::GlyphAlpha | AtlasContentKind::SvgMask => {
+                AtlasTextureKind::Monochrome
+            }
+            AtlasContentKind::GlyphSubpixel => AtlasTextureKind::Subpixel,
+            AtlasContentKind::GlyphColor | AtlasContentKind::Image => AtlasTextureKind::Polychrome,
+        }
+    }
+
+    /// Creates a glyph key using the rasterizer's authoritative format.
+    pub fn glyph(params: RenderGlyphParams, format: GlyphRasterFormat) -> Self {
+        Self::Glyph { params, format }
+    }
+
+    fn gutter_mode(&self) -> AtlasGutterMode {
+        match self {
+            Self::Image(_) => AtlasGutterMode::EdgeExtruded,
+            Self::Glyph { .. } | Self::Svg(_) => AtlasGutterMode::Transparent,
+        }
+    }
+}
+
+impl From<RenderSvgParams> for AtlasKey {
+    fn from(params: RenderSvgParams) -> Self {
+        Self::Svg(params)
+    }
+}
+
+impl From<RenderImageParams> for AtlasKey {
+    fn from(params: RenderImageParams) -> Self {
+        Self::Image(params)
+    }
+}
+
+/// Classifies atlas content by lifecycle and retained-cache policy.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum AtlasContentKind {
+    /// Grayscale glyph coverage that is tinted at paint time.
+    GlyphAlpha,
+    /// LCD/subpixel glyph coverage.
+    GlyphSubpixel,
+    /// Glyph pixels that already contain their final color.
+    GlyphColor,
+    /// Grayscale SVG coverage that is tinted at paint time.
+    SvgMask,
+    /// Ordinary image pixels, including animated image frames.
+    Image,
+}
+
+impl AtlasContentKind {
+    /// Number of content classes.
+    pub const COUNT: usize = 5;
+    const ALL: [Self; Self::COUNT] = [
+        Self::GlyphAlpha,
+        Self::GlyphSubpixel,
+        Self::GlyphColor,
+        Self::SvgMask,
+        Self::Image,
+    ];
+
+    fn index(self) -> usize {
+        match self {
+            Self::GlyphAlpha => 0,
+            Self::GlyphSubpixel => 1,
+            Self::GlyphColor => 2,
+            Self::SvgMask => 3,
+            Self::Image => 4,
+        }
+    }
+}
+
+/// Retained-cache budgets and page sizing for an atlas instance.
+#[derive(Clone, Copy, Debug)]
+pub struct AtlasPolicy {
+    page_size: Size<DevicePixels>,
+    retained_bytes: [usize; AtlasContentKind::COUNT],
+}
+
+impl Default for AtlasPolicy {
+    fn default() -> Self {
+        const MEBIBYTE: usize = 1024 * 1024;
+        // TEXT-001 uses 28 MiB of subpixel pages, 1 MiB of SVG pages, and
+        // 4 MiB of image pages. These defaults retain that workload with page
+        // headroom while preventing image churn from consuming glyph budgets.
+        Self {
+            page_size: DEFAULT_ATLAS_SIZE,
+            retained_bytes: [
+                16 * MEBIBYTE,
+                32 * MEBIBYTE,
+                32 * MEBIBYTE,
+                8 * MEBIBYTE,
+                64 * MEBIBYTE,
+            ],
+        }
+    }
+}
+
+impl AtlasPolicy {
+    /// Returns the default page dimensions used for non-oversized entries.
+    pub fn page_size(&self) -> Size<DevicePixels> {
+        self.page_size
+    }
+
+    /// Sets the page dimensions used for non-oversized entries.
+    pub fn set_page_size(&mut self, page_size: Size<DevicePixels>) {
+        self.page_size = page_size;
+    }
+
+    /// Returns the retained-cache budget for one content class.
+    pub fn retained_budget(&self, content_kind: AtlasContentKind) -> usize {
+        self.retained_bytes[content_kind.index()]
+    }
+
+    /// Sets the retained-cache budget for one content class.
+    pub fn set_retained_budget(&mut self, content_kind: AtlasContentKind, retained_bytes: usize) {
+        self.retained_bytes[content_kind.index()] = retained_bytes;
+    }
+}
+
+#[expect(missing_docs)]
+pub trait PlatformAtlas {
+    /// The builder runs without the atlas lock. Concurrent misses may invoke it
+    /// more than once, but insertion double-checks before creating residency.
+    fn get_or_insert_with<'a>(
+        &self,
+        key: AtlasKey,
+        build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
+    ) -> Result<Option<AtlasTile>>;
+    fn remove(&self, key: &AtlasKey);
+    fn begin_frame(&self) -> AtlasFrame;
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch;
+    fn current_epoch(&self) -> AtlasEpoch;
+
+    /// Returns a point-in-time view of atlas residency and activity.
+    fn snapshot(&self) -> AtlasSnapshot {
+        AtlasSnapshot::default()
+    }
+}
+
+/// A point-in-time view of sprite atlas residency and cumulative activity.
+///
+/// Page and byte fields are gauges at the instant of the snapshot. Hit, miss,
+/// allocation, upload, removal, retirement, eviction, compaction, and pressure
+/// fields are cumulative counts for the lifetime of the atlas instance.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AtlasSnapshot {
+    /// Number of resident GPU texture pages.
+    pub page_count: usize,
+    /// Bytes reserved by resident GPU texture pages, including unused space.
+    pub resident_bytes: usize,
+    /// Number of keys currently addressable through the atlas lookup table.
+    pub entry_count: usize,
+    /// Number of successful key lookups.
+    pub hits: u64,
+    /// Number of key lookups that required invoking the miss builder.
+    pub misses: u64,
+    /// Number of successful resident entry allocations.
+    pub allocations: u64,
+    /// Number of uploads waiting for backend submission.
+    pub pending_uploads: usize,
+    /// Bytes held by uploads waiting for backend submission.
+    pub pending_upload_bytes: usize,
+    /// Number of backend upload calls issued.
+    pub upload_calls: u64,
+    /// Bytes submitted through backend upload calls.
+    pub uploaded_bytes: u64,
+    /// Number of entries removed from key lookup by remove or clear operations.
+    pub removals: u64,
+    /// Number of entries or pages moved into retirement.
+    pub retirements: u64,
+    /// Number of entries or pages evicted by cache policy.
+    pub evictions: u64,
+    /// Number of completed whole-page compactions.
+    pub compactions: u64,
+    /// Resident bytes required by the current completed-frame working set.
+    pub current_frame_working_set_bytes: usize,
+    /// Number of frames whose working set or misses exceeded retained budgets.
+    pub budget_pressure_frames: u64,
+    /// Per-content lifecycle and budget diagnostics.
+    pub content: [AtlasContentSnapshot; AtlasContentKind::COUNT],
+}
+
+impl AtlasSnapshot {
+    /// Returns diagnostics for one content class.
+    pub fn content(&self, content_kind: AtlasContentKind) -> AtlasContentSnapshot {
+        self.content[content_kind.index()]
+    }
+}
+
+/// Point-in-time diagnostics for one atlas content class.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AtlasContentSnapshot {
+    /// Number of resident texture pages owned by this content class.
+    pub page_count: usize,
+    /// Resident GPU bytes owned by this content class.
+    pub resident_bytes: usize,
+    /// Addressable entries owned by this content class.
+    pub entry_count: usize,
+    /// Configured retained-cache budget in bytes.
+    pub retained_budget_bytes: usize,
+    /// Completed-frame working-set floor in resident page bytes.
+    pub working_set_bytes: usize,
+    /// Entries automatically retired by budget maintenance.
+    pub evictions: u64,
+    /// Whole-page compactions scheduled for this content class.
+    pub compactions: u64,
+    /// Frames where this content class exceeded its retained budget.
+    pub budget_pressure_frames: u64,
+}
+
+/// A monotonically increasing atlas content generation.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct AtlasEpoch(u64);
+
+impl AtlasEpoch {
+    /// Returns the numeric generation for diagnostics and tests.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// A monotonically increasing identifier for an atlas frame build.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct AtlasFrameId(u64);
+
+impl AtlasFrameId {
+    /// Returns the numeric identifier for diagnostics and tests.
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+/// Identifies one in-progress atlas frame and the epoch it observes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AtlasFrame {
+    id: AtlasFrameId,
+    epoch: AtlasEpoch,
+}
+
+impl AtlasFrame {
+    /// Returns this frame's monotonic identifier.
+    pub fn id(self) -> AtlasFrameId {
+        self.id
+    }
+
+    /// Returns the atlas epoch observed before frame construction.
+    pub fn epoch(self) -> AtlasEpoch {
+        self.epoch
+    }
+}
+
+/// Atlas resources referenced by one completed scene.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AtlasUsage {
+    texture_ids: FxHashSet<AtlasTextureId>,
+    tile_ids: FxHashSet<TileId>,
+}
+
+impl AtlasUsage {
+    /// Records one visible tile and its texture page.
+    pub fn insert(&mut self, tile: AtlasTile) {
+        self.texture_ids.insert(tile.texture_id);
+        self.tile_ids.insert(tile.tile_id);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.texture_ids.clear();
+        self.tile_ids.clear();
+    }
+
+    /// Returns whether the scene references the given texture page.
+    pub fn contains_texture(&self, texture_id: AtlasTextureId) -> bool {
+        self.texture_ids.contains(&texture_id)
+    }
+
+    /// Returns whether the scene references the given tile.
+    pub fn contains_tile(&self, tile_id: TileId) -> bool {
+        self.tile_ids.contains(&tile_id)
+    }
+
+    /// Returns the number of distinct texture pages referenced by the scene.
+    pub fn texture_count(&self) -> usize {
+        self.texture_ids.len()
+    }
+
+    /// Returns the number of distinct tiles referenced by the scene.
+    pub fn tile_count(&self) -> usize {
+        self.tile_ids.len()
+    }
+
+    /// Returns whether the scene references no atlas resources.
+    pub fn is_empty(&self) -> bool {
+        self.tile_ids.is_empty()
+    }
+}
+
+const DEFAULT_ATLAS_SIZE: Size<DevicePixels> = Size {
+    width: DevicePixels(1024),
+    height: DevicePixels(1024),
+};
+
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug)]
+pub struct AtlasTextureDescriptor {
+    pub texture_id: AtlasTextureId,
+    pub size: Size<DevicePixels>,
+    pub content_kind: AtlasContentKind,
+    pub kind: AtlasTextureKind,
+}
+
+#[doc(hidden)]
+pub struct AtlasUpload<'a> {
+    pub texture_id: AtlasTextureId,
+    pub bounds: Bounds<DevicePixels>,
+    pub bytes: &'a [u8],
+}
+
+#[doc(hidden)]
+pub trait AtlasBackend {
+    fn create_texture(&mut self, descriptor: AtlasTextureDescriptor) -> Result<()>;
+    fn upload(&mut self, upload: AtlasUpload<'_>) -> Result<()>;
+    fn destroy_texture(&mut self, texture_id: AtlasTextureId);
+    fn clear_textures(&mut self);
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        AtlasSnapshot::default()
+    }
+
+    fn stores_texture_pages(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
+struct AtlasConfiguration {
+    policy: AtlasPolicy,
+    max_texture_size: Size<DevicePixels>,
+}
+
+struct AtlasEntry {
+    key: AtlasKey,
+    tile: AtlasTile,
+    allocation_bounds: Bounds<DevicePixels>,
+    retirement: Option<AtlasRetirement>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AtlasGutterMode {
+    Transparent,
+    EdgeExtruded,
+}
+
+#[derive(Debug)]
+struct PreparedAtlasUpload {
+    allocation_size: Size<DevicePixels>,
+    padding: u32,
+    bytes: Vec<u8>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AtlasRetirement {
+    Explicit,
+    Eviction,
+    Compaction,
+}
+
+struct AtlasPage {
+    texture_id: AtlasTextureId,
+    content_kind: AtlasContentKind,
+    size: Size<DevicePixels>,
+    allocator: etagere::BucketedAtlasAllocator,
+    entry_ids: FxHashSet<TileId>,
+    active_entry_count: usize,
+    last_used_frame: AtlasFrameId,
+}
+
+impl AtlasPage {
+    fn resident_bytes(&self) -> usize {
+        let bytes_per_pixel = match self.texture_id.kind {
+            AtlasTextureKind::Monochrome => 1,
+            AtlasTextureKind::Polychrome | AtlasTextureKind::Subpixel => 4,
+        };
+        (self.size.width.0.max(0) as usize)
+            .saturating_mul(self.size.height.0.max(0) as usize)
+            .saturating_mul(bytes_per_pixel)
+    }
+}
+
+struct AtlasState<Backend> {
+    tile_ids_by_key: FxHashMap<AtlasKey, TileId>,
+    entries_by_tile_id: FxHashMap<TileId, AtlasEntry>,
+    pages: Vec<AtlasPage>,
+    configuration: AtlasConfiguration,
+    next_texture_id: u32,
+    next_tile_id: u32,
+    next_frame_id: u64,
+    epoch: AtlasEpoch,
+    active_frame: Option<AtlasFrame>,
+    completed_usage: AtlasUsage,
+    pending_removals: FxHashSet<AtlasKey>,
+    hits: u64,
+    misses: u64,
+    allocations: u64,
+    removals: u64,
+    retirements: u64,
+    evictions_by_content: [u64; AtlasContentKind::COUNT],
+    compactions_by_content: [u64; AtlasContentKind::COUNT],
+    budget_pressure_by_content: [u64; AtlasContentKind::COUNT],
+    budget_pressure_frames: u64,
+    backend: Backend,
+}
+
+impl<Backend: AtlasBackend> AtlasState<Backend> {
+    fn new(backend: Backend, policy: AtlasPolicy, max_texture_size: Size<DevicePixels>) -> Self {
+        Self {
+            tile_ids_by_key: FxHashMap::default(),
+            entries_by_tile_id: FxHashMap::default(),
+            pages: Vec::new(),
+            configuration: AtlasConfiguration {
+                policy,
+                max_texture_size,
+            },
+            next_texture_id: 0,
+            next_tile_id: 0,
+            next_frame_id: 0,
+            epoch: AtlasEpoch::default(),
+            active_frame: None,
+            completed_usage: AtlasUsage::default(),
+            pending_removals: FxHashSet::default(),
+            hits: 0,
+            misses: 0,
+            allocations: 0,
+            removals: 0,
+            retirements: 0,
+            evictions_by_content: [0; AtlasContentKind::COUNT],
+            compactions_by_content: [0; AtlasContentKind::COUNT],
+            budget_pressure_by_content: [0; AtlasContentKind::COUNT],
+            budget_pressure_frames: 0,
+            backend,
+        }
+    }
+
+    fn lookup(&mut self, key: &AtlasKey) -> Option<AtlasTile> {
+        if let Some(entry) = self
+            .tile_ids_by_key
+            .get(key)
+            .and_then(|tile_id| self.entries_by_tile_id.get(tile_id))
+        {
+            self.hits = self.hits.saturating_add(1);
+            Some(entry.tile)
+        } else {
+            self.misses = self.misses.saturating_add(1);
+            None
+        }
+    }
+
+    fn insert_or_get(
+        &mut self,
+        key: AtlasKey,
+        content_size: Size<DevicePixels>,
+        allocation_size: Size<DevicePixels>,
+        padding: u32,
+        bytes: &[u8],
+    ) -> Result<AtlasTile> {
+        if let Some(entry) = self
+            .tile_ids_by_key
+            .get(&key)
+            .and_then(|tile_id| self.entries_by_tile_id.get(tile_id))
+        {
+            return Ok(entry.tile);
+        }
+
+        let content_kind = key.content_kind();
+        let texture_kind = key.texture_kind();
+        let (page_index, allocation) =
+            self.allocate_region(content_kind, texture_kind, allocation_size)?;
+        let tile_id = match self.allocate_tile_id() {
+            Ok(tile_id) => tile_id,
+            Err(error) => {
+                self.rollback_allocation(page_index, allocation.id);
+                return Err(error);
+            }
+        };
+        let padding_pixels = DevicePixels(i32::try_from(padding)?);
+        let tile = AtlasTile {
+            texture_id: self.pages[page_index].texture_id,
+            tile_id,
+            padding,
+            bounds: Bounds {
+                origin: etagere_point_to_device(allocation.rectangle.min)
+                    + Point::new(padding_pixels, padding_pixels),
+                size: content_size,
+            },
+        };
+        let allocation_bounds = Bounds {
+            origin: etagere_point_to_device(allocation.rectangle.min),
+            size: allocation_size,
+        };
+        let entry = AtlasEntry {
+            key: key.clone(),
+            tile,
+            allocation_bounds,
+            retirement: None,
+        };
+
+        if let Err(error) = self.backend.upload(AtlasUpload {
+            texture_id: tile.texture_id,
+            bounds: entry.allocation_bounds,
+            bytes,
+        }) {
+            self.rollback_allocation(page_index, allocation.id);
+            return Err(error);
+        }
+
+        self.pages[page_index].entry_ids.insert(tile.tile_id);
+        self.tile_ids_by_key.insert(key, tile.tile_id);
+        self.entries_by_tile_id.insert(tile.tile_id, entry);
+        self.allocations = self.allocations.saturating_add(1);
+        Ok(tile)
+    }
+
+    fn allocate_region(
+        &mut self,
+        content_kind: AtlasContentKind,
+        texture_kind: AtlasTextureKind,
+        size: Size<DevicePixels>,
+    ) -> Result<(usize, etagere::Allocation)> {
+        anyhow::ensure!(
+            size.width.0 > 0 && size.height.0 > 0,
+            "atlas entry size must be positive"
+        );
+        anyhow::ensure!(
+            size.width.0 <= self.configuration.max_texture_size.width.0
+                && size.height.0 <= self.configuration.max_texture_size.height.0,
+            "atlas entry {}x{} exceeds maximum texture size {}x{}",
+            size.width.0,
+            size.height.0,
+            self.configuration.max_texture_size.width.0,
+            self.configuration.max_texture_size.height.0,
+        );
+
+        for page_index in (0..self.pages.len()).rev() {
+            let page = &mut self.pages[page_index];
+            if page.content_kind != content_kind || page.texture_id.kind != texture_kind {
+                continue;
+            }
+            if let Some(allocation) = page.allocator.allocate(device_size_to_etagere(size)) {
+                page.active_entry_count += 1;
+                return Ok((page_index, allocation));
+            }
+        }
+
+        self.create_page(content_kind, texture_kind, size)
+    }
+
+    fn create_page(
+        &mut self,
+        content_kind: AtlasContentKind,
+        texture_kind: AtlasTextureKind,
+        minimum_size: Size<DevicePixels>,
+    ) -> Result<(usize, etagere::Allocation)> {
+        let default_page_size = self
+            .configuration
+            .policy
+            .page_size
+            .min(&self.configuration.max_texture_size);
+        let page_size = minimum_size.max(&default_page_size);
+        let texture_id = self.allocate_texture_id(texture_kind)?;
+        self.backend.create_texture(AtlasTextureDescriptor {
+            texture_id,
+            size: page_size,
+            content_kind,
+            kind: texture_kind,
+        })?;
+
+        let mut page = AtlasPage {
+            texture_id,
+            content_kind,
+            size: page_size,
+            allocator: etagere::BucketedAtlasAllocator::new(device_size_to_etagere(page_size)),
+            entry_ids: FxHashSet::default(),
+            active_entry_count: 0,
+            last_used_frame: self.active_frame.map(|frame| frame.id).unwrap_or_default(),
+        };
+        let Some(allocation) = page
+            .allocator
+            .allocate(device_size_to_etagere(minimum_size))
+        else {
+            self.backend.destroy_texture(texture_id);
+            anyhow::bail!("new atlas page could not allocate its requested entry");
+        };
+        page.active_entry_count = 1;
+        self.pages.push(page);
+        Ok((self.pages.len() - 1, allocation))
+    }
+
+    fn allocate_texture_id(&mut self, kind: AtlasTextureKind) -> Result<AtlasTextureId> {
+        let index = self.next_texture_id;
+        self.next_texture_id = self
+            .next_texture_id
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("atlas texture ID space exhausted"))?;
+        Ok(AtlasTextureId { index, kind })
+    }
+
+    fn allocate_tile_id(&mut self) -> Result<TileId> {
+        let id = self.next_tile_id;
+        self.next_tile_id = self
+            .next_tile_id
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("atlas tile ID space exhausted"))?;
+        Ok(TileId(id))
+    }
+
+    fn rollback_allocation(&mut self, page_index: usize, allocation_id: etagere::AllocId) {
+        let page = &mut self.pages[page_index];
+        page.allocator.deallocate(allocation_id);
+        page.active_entry_count -= 1;
+        if page.active_entry_count == 0 && page.entry_ids.is_empty() {
+            let page = self.pages.remove(page_index);
+            self.backend.destroy_texture(page.texture_id);
+        }
+    }
+
+    fn request_remove(&mut self, key: &AtlasKey) {
+        if self.tile_ids_by_key.contains_key(key) {
+            self.pending_removals.insert(key.clone());
+        }
+    }
+
+    fn begin_frame(&mut self) -> AtlasFrame {
+        debug_assert!(
+            self.active_frame.is_none(),
+            "an atlas frame must finish before another begins"
+        );
+        let invalidated = self.apply_pending_removals() | self.maintain_budgets();
+        self.destroy_unreferenced_retired_pages();
+        if invalidated {
+            self.advance_epoch();
+        }
+        let id = AtlasFrameId(self.next_frame_id);
+        self.next_frame_id = self
+            .next_frame_id
+            .checked_add(1)
+            .expect("invariant: atlas frame ID space is exhausted");
+        let frame = AtlasFrame {
+            id,
+            epoch: self.epoch,
+        };
+        self.active_frame = Some(frame);
+        frame
+    }
+
+    fn finish_frame(&mut self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        debug_assert_eq!(
+            self.active_frame,
+            Some(frame),
+            "atlas frame token must match the active build"
+        );
+        debug_assert_eq!(
+            frame.epoch, self.epoch,
+            "atlas epoch cannot change while a frame is being built"
+        );
+        self.active_frame = None;
+        for page in &mut self.pages {
+            if usage.contains_texture(page.texture_id) {
+                page.last_used_frame = frame.id;
+            }
+        }
+        self.completed_usage = usage.clone();
+        self.record_budget_pressure();
+        // Entries absent from the just-completed Scene cannot be reached by its
+        // cached paint ranges, so retiring them here does not invalidate that frame.
+        self.retire_cold_entries_after_frame();
+        self.destroy_unreferenced_retired_pages();
+        self.epoch
+    }
+
+    fn apply_pending_removals(&mut self) -> bool {
+        let pending_removals = std::mem::take(&mut self.pending_removals);
+        let mut changed = false;
+        for key in pending_removals {
+            let Some(tile_id) = self.tile_ids_by_key.get(&key).copied() else {
+                continue;
+            };
+            changed |= self.retire_entry(tile_id, AtlasRetirement::Explicit);
+        }
+        changed
+    }
+
+    fn maintain_budgets(&mut self) -> bool {
+        if !self.backend.stores_texture_pages() {
+            return false;
+        }
+
+        let mut changed = false;
+        let mut compaction_scheduled = false;
+        for content_kind in AtlasContentKind::ALL {
+            let budget = self.configuration.policy.retained_budget(content_kind);
+            if self.content_resident_bytes(content_kind) <= budget {
+                continue;
+            }
+
+            changed |= self.retire_cold_entries(content_kind);
+            self.destroy_unreferenced_retired_pages();
+
+            if compaction_scheduled || self.content_resident_bytes(content_kind) <= budget {
+                continue;
+            }
+            let sparse_page = self
+                .pages
+                .iter()
+                .filter(|page| {
+                    page.content_kind == content_kind
+                        && page.active_entry_count > 0
+                        && page.entry_ids.len() > page.active_entry_count
+                        && self.completed_usage.contains_texture(page.texture_id)
+                })
+                .min_by_key(|page| (page.active_entry_count, page.last_used_frame))
+                .map(|page| page.texture_id);
+            let Some(texture_id) = sparse_page else {
+                continue;
+            };
+            let active_entries = self
+                .pages
+                .iter()
+                .find(|page| page.texture_id == texture_id)
+                .map(|page| {
+                    page.entry_ids
+                        .iter()
+                        .filter_map(|tile_id| {
+                            self.entries_by_tile_id
+                                .get(tile_id)
+                                .is_some_and(|entry| entry.retirement.is_none())
+                                .then_some(*tile_id)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            for tile_id in active_entries {
+                changed |= self.retire_entry(tile_id, AtlasRetirement::Compaction);
+            }
+            self.compactions_by_content[content_kind.index()] =
+                self.compactions_by_content[content_kind.index()].saturating_add(1);
+            compaction_scheduled = true;
+        }
+        changed
+    }
+
+    fn record_budget_pressure(&mut self) {
+        if !self.backend.stores_texture_pages() {
+            return;
+        }
+        let mut pressure = false;
+        for content_kind in AtlasContentKind::ALL {
+            if self.content_resident_bytes(content_kind)
+                > self.configuration.policy.retained_budget(content_kind)
+            {
+                self.budget_pressure_by_content[content_kind.index()] =
+                    self.budget_pressure_by_content[content_kind.index()].saturating_add(1);
+                pressure = true;
+            }
+        }
+        if pressure {
+            self.budget_pressure_frames = self.budget_pressure_frames.saturating_add(1);
+        }
+    }
+
+    fn retire_cold_entries_after_frame(&mut self) {
+        if !self.backend.stores_texture_pages() {
+            return;
+        }
+        for content_kind in AtlasContentKind::ALL {
+            if self.content_resident_bytes(content_kind)
+                > self.configuration.policy.retained_budget(content_kind)
+            {
+                self.retire_cold_entries(content_kind);
+            }
+        }
+    }
+
+    fn retire_cold_entries(&mut self, content_kind: AtlasContentKind) -> bool {
+        let mut changed = false;
+        let mut pages = self
+            .pages
+            .iter()
+            .filter(|page| page.content_kind == content_kind)
+            .map(|page| (page.last_used_frame, page.texture_id))
+            .collect::<Vec<_>>();
+        pages.sort_unstable_by_key(|(last_used_frame, _)| *last_used_frame);
+        for (_, texture_id) in pages {
+            let cold_entries = self
+                .pages
+                .iter()
+                .find(|page| page.texture_id == texture_id)
+                .map(|page| {
+                    page.entry_ids
+                        .iter()
+                        .filter_map(|tile_id| {
+                            self.entries_by_tile_id.get(tile_id).and_then(|entry| {
+                                (entry.retirement.is_none()
+                                    && !self.completed_usage.contains_tile(*tile_id))
+                                .then_some(*tile_id)
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            for tile_id in cold_entries {
+                changed |= self.retire_entry(tile_id, AtlasRetirement::Eviction);
+            }
+        }
+        changed
+    }
+
+    fn retire_entry(&mut self, tile_id: TileId, retirement: AtlasRetirement) -> bool {
+        let Some(entry) = self.entries_by_tile_id.get_mut(&tile_id) else {
+            log::error!("atlas key referred to missing tile {tile_id:?}");
+            return false;
+        };
+        if entry.retirement.is_some() {
+            return false;
+        }
+        entry.retirement = Some(retirement);
+        let key = entry.key.clone();
+        let texture_id = entry.tile.texture_id;
+        let content_kind = key.content_kind();
+        self.tile_ids_by_key.remove(&key);
+        let Some(page) = self
+            .pages
+            .iter_mut()
+            .find(|page| page.texture_id == texture_id)
+        else {
+            log::error!("atlas tile {tile_id:?} referred to a missing page");
+            return false;
+        };
+        page.active_entry_count -= 1;
+        self.removals = self.removals.saturating_add(1);
+        self.retirements = self.retirements.saturating_add(1);
+        if retirement != AtlasRetirement::Explicit {
+            self.evictions_by_content[content_kind.index()] =
+                self.evictions_by_content[content_kind.index()].saturating_add(1);
+        }
+        true
+    }
+
+    fn restore_compaction_entry(&mut self, key: &AtlasKey) -> Option<AtlasTile> {
+        let tile_id = self
+            .entries_by_tile_id
+            .iter()
+            .filter_map(|(tile_id, entry)| {
+                (entry.key == *key && entry.retirement == Some(AtlasRetirement::Compaction))
+                    .then_some(*tile_id)
+            })
+            .max()?;
+        let entry = self.entries_by_tile_id.get_mut(&tile_id)?;
+        entry.retirement = None;
+        let tile = entry.tile;
+        self.tile_ids_by_key.insert(key.clone(), tile_id);
+        let page = self
+            .pages
+            .iter_mut()
+            .find(|page| page.texture_id == tile.texture_id)?;
+        page.active_entry_count += 1;
+        Some(tile)
+    }
+
+    fn content_resident_bytes(&self, content_kind: AtlasContentKind) -> usize {
+        self.pages
+            .iter()
+            .filter(|page| page.content_kind == content_kind)
+            .fold(0usize, |total, page| {
+                total.saturating_add(page.resident_bytes())
+            })
+    }
+
+    fn destroy_unreferenced_retired_pages(&mut self) {
+        for page_index in (0..self.pages.len()).rev() {
+            let page = &self.pages[page_index];
+            if page.active_entry_count > 0 || self.completed_usage.contains_texture(page.texture_id)
+            {
+                continue;
+            }
+            let page = self.pages.remove(page_index);
+            for tile_id in page.entry_ids {
+                self.entries_by_tile_id.remove(&tile_id);
+            }
+            self.backend.destroy_texture(page.texture_id);
+        }
+    }
+
+    fn clear(&mut self) {
+        debug_assert!(
+            self.active_frame.is_none(),
+            "atlas resources cannot be cleared during frame construction"
+        );
+        let removed_entries = self.tile_ids_by_key.len();
+        self.removals = self
+            .removals
+            .saturating_add(u64::try_from(removed_entries).unwrap_or(u64::MAX));
+        self.retirements = self
+            .retirements
+            .saturating_add(u64::try_from(removed_entries).unwrap_or(u64::MAX));
+        self.tile_ids_by_key.clear();
+        self.entries_by_tile_id.clear();
+        self.pages.clear();
+        self.pending_removals.clear();
+        self.completed_usage.clear();
+        self.backend.clear_textures();
+        self.advance_epoch();
+    }
+
+    fn advance_epoch(&mut self) {
+        self.epoch.0 = self
+            .epoch
+            .0
+            .checked_add(1)
+            .expect("invariant: atlas epoch space is exhausted");
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        let mut snapshot = self.backend.snapshot();
+        snapshot.entry_count = self.tile_ids_by_key.len();
+        snapshot.hits = self.hits;
+        snapshot.misses = self.misses;
+        snapshot.allocations = self.allocations;
+        snapshot.removals = self.removals;
+        snapshot.retirements = self.retirements;
+        snapshot.budget_pressure_frames = self.budget_pressure_frames;
+        for content_kind in AtlasContentKind::ALL {
+            let content = &mut snapshot.content[content_kind.index()];
+            content.retained_budget_bytes = self.configuration.policy.retained_budget(content_kind);
+            content.evictions = self.evictions_by_content[content_kind.index()];
+            content.compactions = self.compactions_by_content[content_kind.index()];
+            content.budget_pressure_frames = self.budget_pressure_by_content[content_kind.index()];
+            snapshot.evictions = snapshot.evictions.saturating_add(content.evictions);
+            snapshot.compactions = snapshot.compactions.saturating_add(content.compactions);
+        }
+        for key in self.tile_ids_by_key.keys() {
+            snapshot.content[key.content_kind().index()].entry_count += 1;
+        }
+        if self.backend.stores_texture_pages() {
+            snapshot.page_count = self.pages.len();
+            for page in &self.pages {
+                let resident_bytes = page.resident_bytes();
+                let content = &mut snapshot.content[page.content_kind.index()];
+                content.page_count += 1;
+                content.resident_bytes = content.resident_bytes.saturating_add(resident_bytes);
+                snapshot.resident_bytes = snapshot.resident_bytes.saturating_add(resident_bytes);
+                if self.completed_usage.contains_texture(page.texture_id) {
+                    content.working_set_bytes =
+                        content.working_set_bytes.saturating_add(resident_bytes);
+                    snapshot.current_frame_working_set_bytes = snapshot
+                        .current_frame_working_set_bytes
+                        .saturating_add(resident_bytes);
+                }
+            }
+        } else {
+            snapshot.page_count = 0;
+            snapshot.resident_bytes = 0;
+        }
+        snapshot
+    }
+}
+
+#[doc(hidden)]
+pub struct Atlas<Backend> {
+    state: Mutex<AtlasState<Backend>>,
+}
+
+impl<Backend: AtlasBackend> Atlas<Backend> {
+    pub fn new(backend: Backend, max_texture_size: Size<DevicePixels>) -> Self {
+        Self::with_policy(backend, max_texture_size, AtlasPolicy::default())
+    }
+
+    pub fn with_policy(
+        backend: Backend,
+        max_texture_size: Size<DevicePixels>,
+        policy: AtlasPolicy,
+    ) -> Self {
+        Self {
+            state: Mutex::new(AtlasState::new(backend, policy, max_texture_size)),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_page_size(
+        backend: Backend,
+        default_page_size: Size<DevicePixels>,
+        max_texture_size: Size<DevicePixels>,
+    ) -> Self {
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(default_page_size);
+        Self::with_policy(backend, max_texture_size, policy)
+    }
+
+    pub fn get_or_insert_with<'a>(
+        &self,
+        key: AtlasKey,
+        build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
+    ) -> Result<Option<AtlasTile>> {
+        if let Some(tile) = self.state.lock().lookup(&key) {
+            return Ok(Some(tile));
+        }
+
+        profiling::scope!("new tile");
+        let built = match build() {
+            Ok(built) => built,
+            Err(error) => {
+                self.state.lock().restore_compaction_entry(&key);
+                return Err(error);
+            }
+        };
+        let Some((size, bytes)) = built else {
+            return Ok(None);
+        };
+        let prepared = match prepare_atlas_upload(&key, size, &bytes) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.state.lock().restore_compaction_entry(&key);
+                return Err(error);
+            }
+        };
+        let mut state = self.state.lock();
+        match state.insert_or_get(
+            key.clone(),
+            size,
+            prepared.allocation_size,
+            prepared.padding,
+            &prepared.bytes,
+        ) {
+            Ok(tile) => Ok(Some(tile)),
+            Err(error) => {
+                state.restore_compaction_entry(&key);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn remove(&self, key: &AtlasKey) {
+        self.state.lock().request_remove(key);
+    }
+
+    pub fn begin_frame(&self) -> AtlasFrame {
+        self.state.lock().begin_frame()
+    }
+
+    pub fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.state.lock().finish_frame(frame, usage)
+    }
+
+    pub fn current_epoch(&self) -> AtlasEpoch {
+        self.state.lock().epoch
+    }
+
+    pub fn snapshot(&self) -> AtlasSnapshot {
+        self.state.lock().snapshot()
+    }
+
+    pub fn with_backend<R>(&self, read: impl FnOnce(&Backend) -> R) -> R {
+        read(&self.state.lock().backend)
+    }
+
+    pub fn update_backend<R>(&self, update: impl FnOnce(&mut Backend) -> R) -> R {
+        update(&mut self.state.lock().backend)
+    }
+
+    pub fn clear(&self) {
+        self.state.lock().clear();
+    }
+
+    pub fn reset(
+        &self,
+        max_texture_size: Size<DevicePixels>,
+        reset_backend: impl FnOnce(&mut Backend),
+    ) {
+        let mut state = self.state.lock();
+        state.clear();
+        state.configuration.max_texture_size = max_texture_size;
+        reset_backend(&mut state.backend);
+    }
+
+    #[cfg(test)]
+    fn contains(&self, key: &AtlasKey) -> bool {
+        self.state.lock().tile_ids_by_key.contains_key(key)
+    }
+}
+
+impl<Backend: AtlasBackend> PlatformAtlas for Atlas<Backend> {
+    fn get_or_insert_with<'a>(
+        &self,
+        key: AtlasKey,
+        build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
+    ) -> Result<Option<AtlasTile>> {
+        self.get_or_insert_with(key, build)
+    }
+
+    fn remove(&self, key: &AtlasKey) {
+        self.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.current_epoch()
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        self.snapshot()
+    }
+}
+
+/// A sprite atlas for windows without a GPU. It hands out uniquely identified
+/// tiles without uploading any pixels, so glyph, SVG, and image painting can
+/// run to completion in tests and headless platforms.
+pub struct HeadlessAtlas(Atlas<HeadlessAtlasBackend>);
+
+impl Default for HeadlessAtlas {
+    fn default() -> Self {
+        const MAX_HEADLESS_TEXTURE_SIZE: Size<DevicePixels> = Size {
+            width: DevicePixels(16384),
+            height: DevicePixels(16384),
+        };
+        Self(Atlas::new(HeadlessAtlasBackend, MAX_HEADLESS_TEXTURE_SIZE))
+    }
+}
+
+#[doc(hidden)]
+pub struct HeadlessAtlasBackend;
+
+impl AtlasBackend for HeadlessAtlasBackend {
+    fn create_texture(&mut self, _descriptor: AtlasTextureDescriptor) -> Result<()> {
+        Ok(())
+    }
+
+    fn upload(&mut self, _upload: AtlasUpload<'_>) -> Result<()> {
+        Ok(())
+    }
+
+    fn destroy_texture(&mut self, _texture_id: AtlasTextureId) {}
+
+    fn clear_textures(&mut self) {}
+
+    fn stores_texture_pages(&self) -> bool {
+        false
+    }
+}
+
+impl PlatformAtlas for HeadlessAtlas {
+    fn get_or_insert_with<'a>(
+        &self,
+        key: AtlasKey,
+        build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
+    ) -> Result<Option<AtlasTile>> {
+        self.0.get_or_insert_with(key, build)
+    }
+
+    fn remove(&self, key: &AtlasKey) {
+        self.0.remove(key);
+    }
+
+    fn begin_frame(&self) -> AtlasFrame {
+        self.0.begin_frame()
+    }
+
+    fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch {
+        self.0.finish_frame(frame, usage)
+    }
+
+    fn current_epoch(&self) -> AtlasEpoch {
+        self.0.current_epoch()
+    }
+
+    fn snapshot(&self) -> AtlasSnapshot {
+        self.0.snapshot()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C)]
+#[expect(missing_docs)]
+pub struct AtlasTile {
+    /// The texture this tile belongs to.
+    pub texture_id: AtlasTextureId,
+    /// The stable identity of this tile within the atlas instance.
+    pub tile_id: TileId,
+    /// Padding around the tile content in pixels.
+    pub padding: u32,
+    /// The bounds of this tile within the texture.
+    pub bounds: Bounds<DevicePixels>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[expect(missing_docs)]
+pub struct AtlasTextureId {
+    // We use u32 instead of usize for Metal Shader Language compatibility.
+    /// A monotonic texture identity that is not reused by this atlas instance.
+    pub index: u32,
+    /// The kind of content stored in this texture.
+    pub kind: AtlasTextureKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[cfg_attr(
+    all(
+        any(target_os = "linux", target_os = "freebsd"),
+        not(any(feature = "x11", feature = "wayland"))
+    ),
+    allow(dead_code)
+)]
+#[expect(missing_docs)]
+pub enum AtlasTextureKind {
+    Monochrome = 0,
+    Polychrome = 1,
+    Subpixel = 2,
+}
+
+impl AtlasTextureKind {
+    fn bytes_per_pixel(self) -> usize {
+        match self {
+            Self::Monochrome => 1,
+            Self::Polychrome | Self::Subpixel => 4,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(C)]
+#[expect(missing_docs)]
+pub struct TileId(pub u32);
+
+fn prepare_atlas_upload(
+    key: &AtlasKey,
+    content_size: Size<DevicePixels>,
+    bytes: &[u8],
+) -> Result<PreparedAtlasUpload> {
+    anyhow::ensure!(
+        content_size.width.0 > 0 && content_size.height.0 > 0,
+        "atlas entry size must be positive"
+    );
+    let width = usize::try_from(content_size.width.0)?;
+    let height = usize::try_from(content_size.height.0)?;
+    let bytes_per_pixel = key.texture_kind().bytes_per_pixel();
+    let source_row_bytes = width
+        .checked_mul(bytes_per_pixel)
+        .context("atlas source row length overflowed")?;
+    let expected_length = source_row_bytes
+        .checked_mul(height)
+        .context("atlas source buffer length overflowed")?;
+    anyhow::ensure!(
+        bytes.len() == expected_length,
+        "atlas source has {} bytes but {}x{} {:?} content requires {} bytes",
+        bytes.len(),
+        content_size.width.0,
+        content_size.height.0,
+        key.texture_kind(),
+        expected_length,
+    );
+
+    let padding = usize::try_from(ATLAS_GUTTER)?;
+    let doubled_padding = padding
+        .checked_mul(2)
+        .context("atlas gutter size overflowed")?;
+    let allocation_width = width
+        .checked_add(doubled_padding)
+        .context("atlas allocation width overflowed")?;
+    let allocation_height = height
+        .checked_add(doubled_padding)
+        .context("atlas allocation height overflowed")?;
+    let allocation_row_bytes = allocation_width
+        .checked_mul(bytes_per_pixel)
+        .context("atlas allocation row length overflowed")?;
+    let allocation_length = allocation_row_bytes
+        .checked_mul(allocation_height)
+        .context("atlas allocation buffer length overflowed")?;
+    let mut padded_bytes = vec![0; allocation_length];
+
+    match key.gutter_mode() {
+        AtlasGutterMode::Transparent => {
+            for source_y in 0..height {
+                let source_start = source_y * source_row_bytes;
+                let target_start =
+                    (source_y + padding) * allocation_row_bytes + padding * bytes_per_pixel;
+                padded_bytes[target_start..target_start + source_row_bytes]
+                    .copy_from_slice(&bytes[source_start..source_start + source_row_bytes]);
+            }
+        }
+        AtlasGutterMode::EdgeExtruded => {
+            for target_y in 0..allocation_height {
+                let source_y = target_y.saturating_sub(padding).min(height - 1);
+                for target_x in 0..allocation_width {
+                    let source_x = target_x.saturating_sub(padding).min(width - 1);
+                    let source_start = (source_y * width + source_x) * bytes_per_pixel;
+                    let target_start = (target_y * allocation_width + target_x) * bytes_per_pixel;
+                    padded_bytes[target_start..target_start + bytes_per_pixel]
+                        .copy_from_slice(&bytes[source_start..source_start + bytes_per_pixel]);
+                }
+            }
+        }
+    }
+
+    Ok(PreparedAtlasUpload {
+        allocation_size: Size {
+            width: DevicePixels(i32::try_from(allocation_width)?),
+            height: DevicePixels(i32::try_from(allocation_height)?),
+        },
+        padding: ATLAS_GUTTER,
+        bytes: padded_bytes,
+    })
+}
+
+fn device_size_to_etagere(size: Size<DevicePixels>) -> etagere::Size {
+    etagere::size2(size.width.0, size.height.0)
+}
+
+fn etagere_point_to_device(point: etagere::Point) -> Point<DevicePixels> {
+    Point {
+        x: DevicePixels(point.x),
+        y: DevicePixels(point.y),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ImageId;
+    use std::{
+        collections::HashSet,
+        sync::{
+            Arc, Barrier,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+
+    const TILE_SIZE: Size<DevicePixels> = Size {
+        width: DevicePixels(1),
+        height: DevicePixels(1),
+    };
+    const PAGE_SIZE: Size<DevicePixels> = Size {
+        width: DevicePixels(6),
+        height: DevicePixels(3),
+    };
+
+    #[derive(Default)]
+    struct RecordingAtlasBackend {
+        textures: HashSet<AtlasTextureId>,
+        create_calls: usize,
+        upload_calls: usize,
+        uploaded_bounds: Vec<Bounds<DevicePixels>>,
+        uploaded_bytes: Vec<Vec<u8>>,
+        destroyed_textures: Vec<AtlasTextureId>,
+        clear_calls: usize,
+        fail_next_create: bool,
+        fail_next_upload: bool,
+    }
+
+    impl AtlasBackend for RecordingAtlasBackend {
+        fn create_texture(&mut self, descriptor: AtlasTextureDescriptor) -> Result<()> {
+            self.create_calls += 1;
+            if std::mem::take(&mut self.fail_next_create) {
+                anyhow::bail!("backend create failed");
+            }
+            anyhow::ensure!(
+                self.textures.insert(descriptor.texture_id),
+                "texture identity was reused"
+            );
+            Ok(())
+        }
+
+        fn upload(&mut self, upload: AtlasUpload<'_>) -> Result<()> {
+            if std::mem::take(&mut self.fail_next_upload) {
+                anyhow::bail!("backend upload failed");
+            }
+            anyhow::ensure!(
+                self.textures.contains(&upload.texture_id),
+                "upload referred to a missing texture"
+            );
+            self.upload_calls += 1;
+            self.uploaded_bounds.push(upload.bounds);
+            self.uploaded_bytes.push(upload.bytes.to_vec());
+            Ok(())
+        }
+
+        fn destroy_texture(&mut self, texture_id: AtlasTextureId) {
+            self.textures.remove(&texture_id);
+            self.destroyed_textures.push(texture_id);
+        }
+
+        fn clear_textures(&mut self) {
+            self.textures.clear();
+            self.clear_calls += 1;
+        }
+    }
+
+    fn atlas() -> Atlas<RecordingAtlasBackend> {
+        Atlas::with_page_size(RecordingAtlasBackend::default(), PAGE_SIZE, PAGE_SIZE)
+    }
+
+    fn atlas_with_budget(
+        content_kind: AtlasContentKind,
+        retained_budget: usize,
+    ) -> Atlas<RecordingAtlasBackend> {
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(PAGE_SIZE);
+        policy.set_retained_budget(content_kind, retained_budget);
+        Atlas::with_policy(RecordingAtlasBackend::default(), PAGE_SIZE, policy)
+    }
+
+    fn image_key(image_id: usize) -> AtlasKey {
+        AtlasKey::Image(RenderImageParams {
+            image_id: ImageId(image_id),
+            frame_index: 0,
+        })
+    }
+
+    fn glyph_key(glyph_id: u32, is_emoji: bool, subpixel_rendering: bool) -> AtlasKey {
+        AtlasKey::glyph(
+            RenderGlyphParams {
+                font_id: crate::FontId(0),
+                glyph_id: crate::GlyphId(glyph_id),
+                font_size: crate::px(16.0),
+                subpixel_variant: Point::default(),
+                scale_factor: 1.0,
+                synthetic_italic: Default::default(),
+                synthetic_bold: Default::default(),
+                is_emoji,
+                subpixel_rendering,
+                dilation: 0,
+            },
+            if is_emoji {
+                GlyphRasterFormat::ColorBgra8
+            } else if subpixel_rendering {
+                GlyphRasterFormat::SubpixelBgra8
+            } else {
+                GlyphRasterFormat::Alpha8
+            },
+        )
+    }
+
+    fn build_tile() -> Result<Option<(Size<DevicePixels>, Cow<'static, [u8]>)>> {
+        Ok(Some((TILE_SIZE, Cow::Borrowed(&[0, 0, 0, 255]))))
+    }
+
+    fn usage(tiles: impl IntoIterator<Item = AtlasTile>) -> AtlasUsage {
+        let mut usage = AtlasUsage::default();
+        for tile in tiles {
+            usage.insert(tile);
+        }
+        usage
+    }
+
+    fn complete_frame(
+        atlas: &Atlas<RecordingAtlasBackend>,
+        tiles: impl IntoIterator<Item = AtlasTile>,
+    ) -> AtlasEpoch {
+        let frame = atlas.begin_frame();
+        atlas.finish_frame(frame, &usage(tiles))
+    }
+
+    #[test]
+    fn transparent_gutter_supports_single_channel_content() -> Result<()> {
+        let prepared = prepare_atlas_upload(
+            &glyph_key(1, false, false),
+            Size {
+                width: DevicePixels(2),
+                height: DevicePixels(1),
+            },
+            &[7, 9],
+        )?;
+        assert_eq!(
+            prepared.allocation_size,
+            Size {
+                width: DevicePixels(4),
+                height: DevicePixels(3),
+            }
+        );
+        assert_eq!(prepared.padding, 1);
+        assert_eq!(prepared.bytes, [0, 0, 0, 0, 0, 7, 9, 0, 0, 0, 0, 0]);
+        Ok(())
+    }
+
+    #[test]
+    fn image_gutter_extrudes_four_channel_edges() -> Result<()> {
+        let prepared = prepare_atlas_upload(
+            &image_key(1),
+            Size {
+                width: DevicePixels(2),
+                height: DevicePixels(2),
+            },
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        )?;
+        let first = [1, 2, 3, 4];
+        let second = [5, 6, 7, 8];
+        let third = [9, 10, 11, 12];
+        let fourth = [13, 14, 15, 16];
+        let expected = [
+            first, first, second, second, first, first, second, second, third, third, fourth,
+            fourth, third, third, fourth, fourth,
+        ]
+        .concat();
+        assert_eq!(prepared.bytes, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn gutter_rejects_invalid_source_length() {
+        prepare_atlas_upload(
+            &image_key(1),
+            Size {
+                width: DevicePixels(2),
+                height: DevicePixels(1),
+            },
+            &[0; 4],
+        )
+        .expect_err("a short BGRA row must be rejected");
+    }
+
+    #[test]
+    fn atlas_tile_exposes_inner_bounds_and_uploads_outer_bounds() -> Result<()> {
+        let atlas = atlas();
+        let tile = atlas
+            .get_or_insert_with(image_key(1), &mut build_tile)?
+            .context("image tile should exist")?;
+        assert_eq!(tile.padding, 1);
+        assert_eq!(
+            tile.bounds.origin,
+            Point::new(DevicePixels(1), DevicePixels(1))
+        );
+        assert_eq!(tile.bounds.size, TILE_SIZE);
+        atlas.with_backend(|backend| {
+            assert_eq!(
+                backend.uploaded_bounds,
+                [Bounds {
+                    origin: Point::default(),
+                    size: Size {
+                        width: DevicePixels(3),
+                        height: DevicePixels(3),
+                    },
+                }]
+            );
+            assert_eq!(backend.uploaded_bytes[0], [0, 0, 0, 255].repeat(9));
+        });
+        let state = atlas.state.lock();
+        let entry = state
+            .entries_by_tile_id
+            .get(&tile.tile_id)
+            .context("tile entry should exist")?;
+        assert_eq!(entry.allocation_bounds, state.backend.uploaded_bounds[0]);
+        Ok(())
+    }
+
+    #[test]
+    fn only_successful_inserts_are_cached() -> Result<()> {
+        let atlas = atlas();
+        let key = image_key(1);
+
+        assert_eq!(
+            atlas.get_or_insert_with(key.clone(), &mut || Ok(None))?,
+            None
+        );
+        atlas
+            .get_or_insert_with(key.clone(), &mut || anyhow::bail!("builder failed"))
+            .expect_err("builder error should propagate");
+        assert!(!atlas.contains(&key));
+
+        atlas.update_backend(|backend| backend.fail_next_create = true);
+        atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)
+            .expect_err("backend create error should propagate");
+        assert!(!atlas.contains(&key));
+
+        atlas.update_backend(|backend| backend.fail_next_upload = true);
+        atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)
+            .expect_err("backend upload error should propagate");
+        assert!(!atlas.contains(&key));
+        assert_eq!(atlas.snapshot().page_count, 0);
+
+        let tile = atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)?
+            .context("builder should produce a tile")?;
+        assert_eq!(tile.texture_id.kind, key.texture_kind());
+        assert_eq!(
+            atlas.get_or_insert_with(key.clone(), &mut || {
+                anyhow::bail!("cache hit must not call the builder")
+            })?,
+            Some(tile)
+        );
+        assert!(atlas.contains(&key));
+        let snapshot = atlas.snapshot();
+        assert_eq!(snapshot.page_count, 1);
+        assert_eq!(snapshot.resident_bytes, 72);
+        assert_eq!(snapshot.entry_count, 1);
+        assert_eq!(snapshot.hits, 1);
+        assert_eq!(snapshot.misses, 5);
+        assert_eq!(snapshot.allocations, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn builder_runs_outside_the_atlas_lock() -> Result<()> {
+        let atlas = atlas();
+        let key = image_key(1);
+        atlas
+            .get_or_insert_with(key, &mut || {
+                assert_eq!(atlas.snapshot().entry_count, 0);
+                build_tile()
+            })?
+            .context("builder should produce a tile")?;
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_misses_double_check_before_inserting() {
+        let atlas = Arc::new(atlas());
+        let barrier = Arc::new(Barrier::new(2));
+        let builder_calls = Arc::new(AtomicUsize::new(0));
+        let key = image_key(1);
+        let mut threads = Vec::new();
+
+        for _ in 0..2 {
+            let atlas = atlas.clone();
+            let barrier = barrier.clone();
+            let builder_calls = builder_calls.clone();
+            let key = key.clone();
+            threads.push(std::thread::spawn(move || {
+                atlas
+                    .get_or_insert_with(key, &mut || {
+                        builder_calls.fetch_add(1, Ordering::SeqCst);
+                        barrier.wait();
+                        build_tile()
+                    })
+                    .expect("concurrent insert should succeed")
+                    .expect("builder should produce a tile")
+            }));
+        }
+
+        let tiles = threads
+            .into_iter()
+            .map(|thread| thread.join().expect("atlas thread should not panic"))
+            .collect::<Vec<_>>();
+        assert_eq!(tiles[0], tiles[1]);
+        assert_eq!(builder_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(atlas.snapshot().entry_count, 1);
+        assert_eq!(atlas.snapshot().allocations, 1);
+        assert_eq!(atlas.with_backend(|backend| backend.upload_calls), 1);
+    }
+
+    #[test]
+    fn remove_clear_and_recreate_do_not_reuse_identities() -> Result<()> {
+        let single_entry_page = Size {
+            width: DevicePixels(3),
+            height: DevicePixels(3),
+        };
+        let atlas = Atlas::with_page_size(
+            RecordingAtlasBackend::default(),
+            single_entry_page,
+            single_entry_page,
+        );
+        let first_key = image_key(1);
+        let second_key = image_key(2);
+        let third_key = image_key(3);
+
+        let first = atlas
+            .get_or_insert_with(first_key.clone(), &mut build_tile)?
+            .context("first tile should exist")?;
+        assert_eq!(complete_frame(&atlas, [first]), AtlasEpoch::default());
+        atlas.remove(&first_key);
+        assert!(atlas.contains(&first_key));
+        let replacement_frame = atlas.begin_frame();
+        assert_ne!(replacement_frame.epoch(), AtlasEpoch::default());
+        assert!(!atlas.contains(&first_key));
+        assert!(atlas.with_backend(|backend| backend.textures.contains(&first.texture_id)));
+        let second = atlas
+            .get_or_insert_with(second_key, &mut build_tile)?
+            .context("second tile should exist")?;
+        assert_ne!(first.texture_id, second.texture_id);
+        assert_ne!(first.tile_id, second.tile_id);
+        atlas.finish_frame(replacement_frame, &usage([second]));
+        assert!(!atlas.with_backend(|backend| backend.textures.contains(&first.texture_id)));
+
+        atlas.clear();
+        let third = atlas
+            .get_or_insert_with(third_key, &mut build_tile)?
+            .context("third tile should exist")?;
+        assert_ne!(second.texture_id, third.texture_id);
+        assert_ne!(second.tile_id, third.tile_id);
+        assert!(!atlas.with_backend(|backend| backend.textures.contains(&first.texture_id)));
+        assert!(!atlas.with_backend(|backend| backend.textures.contains(&second.texture_id)));
+        assert!(atlas.with_backend(|backend| backend.textures.contains(&third.texture_id)));
+        Ok(())
+    }
+
+    #[test]
+    fn remove_and_clear_invalidate_keys() -> Result<()> {
+        let atlas = atlas();
+        let key = image_key(1);
+        let other_key = image_key(2);
+        let tile = atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)?
+            .context("builder should produce a tile")?;
+        let other_tile = atlas
+            .get_or_insert_with(other_key.clone(), &mut build_tile)?
+            .context("builder should produce another tile")?;
+        complete_frame(&atlas, [tile, other_tile]);
+
+        atlas.remove(&key);
+        atlas.remove(&key);
+        assert!(atlas.contains(&key));
+        let frame = atlas.begin_frame();
+        assert!(!atlas.contains(&key));
+        assert!(atlas.contains(&other_key));
+        assert_eq!(atlas.snapshot().page_count, 1);
+        assert_eq!(atlas.snapshot().retirements, 1);
+        atlas.finish_frame(frame, &usage([other_tile]));
+
+        atlas.clear();
+        assert!(!atlas.contains(&other_key));
+        assert_eq!(atlas.snapshot().page_count, 0);
+        assert_eq!(atlas.snapshot().removals, 2);
+        assert_eq!(atlas.with_backend(|backend| backend.clear_calls), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn removal_during_frame_build_is_deferred_to_the_next_boundary() -> Result<()> {
+        let atlas = atlas();
+        let key = image_key(1);
+        let tile = atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)?
+            .context("tile should exist")?;
+        complete_frame(&atlas, [tile]);
+
+        let frame = atlas.begin_frame();
+        let frame_epoch = frame.epoch();
+        atlas.remove(&key);
+        assert!(atlas.contains(&key));
+        assert_eq!(atlas.current_epoch(), frame_epoch);
+        atlas.finish_frame(frame, &usage([tile]));
+
+        let next_frame = atlas.begin_frame();
+        assert_ne!(next_frame.epoch(), frame_epoch);
+        assert!(!atlas.contains(&key));
+        atlas.finish_frame(next_frame, &AtlasUsage::default());
+        Ok(())
+    }
+
+    #[test]
+    fn retired_suballocations_remain_tombstones() -> Result<()> {
+        let atlas = atlas();
+        let retired_key = image_key(1);
+        let keeper_key = image_key(2);
+        let replacement_key = image_key(3);
+        let retired = atlas
+            .get_or_insert_with(retired_key.clone(), &mut build_tile)?
+            .context("retired tile should exist")?;
+        let keeper = atlas
+            .get_or_insert_with(keeper_key, &mut build_tile)?
+            .context("keeper tile should exist")?;
+        complete_frame(&atlas, [retired, keeper]);
+
+        atlas.remove(&retired_key);
+        let frame = atlas.begin_frame();
+        let replacement = atlas
+            .get_or_insert_with(replacement_key, &mut build_tile)?
+            .context("replacement tile should exist")?;
+        assert_ne!(replacement.tile_id, retired.tile_id);
+        assert_ne!(
+            (replacement.texture_id, replacement.bounds),
+            (retired.texture_id, retired.bounds)
+        );
+        atlas.finish_frame(frame, &usage([keeper, replacement]));
+        Ok(())
+    }
+
+    #[test]
+    fn content_formats_report_actual_resident_page_bytes() -> Result<()> {
+        let atlas = atlas();
+        atlas
+            .get_or_insert_with(image_key(1), &mut build_tile)?
+            .context("image tile should exist")?;
+        let svg_key = AtlasKey::Svg(RenderSvgParams {
+            path: "test.svg".into(),
+            size: TILE_SIZE,
+        });
+        atlas
+            .get_or_insert_with(svg_key, &mut || {
+                Ok(Some((TILE_SIZE, Cow::Borrowed(&[255]))))
+            })?
+            .context("SVG tile should exist")?;
+
+        let snapshot = atlas.snapshot();
+        assert_eq!(snapshot.page_count, 2);
+        assert_eq!(snapshot.resident_bytes, 90);
+        Ok(())
+    }
+
+    #[test]
+    fn content_classes_with_the_same_texture_format_use_separate_pages() -> Result<()> {
+        let atlas = atlas();
+        atlas
+            .get_or_insert_with(image_key(1), &mut build_tile)?
+            .context("image tile should exist")?;
+        atlas
+            .get_or_insert_with(glyph_key(1, true, false), &mut build_tile)?
+            .context("color glyph tile should exist")?;
+        atlas
+            .get_or_insert_with(
+                AtlasKey::Svg(RenderSvgParams {
+                    path: "mask.svg".into(),
+                    size: TILE_SIZE,
+                }),
+                &mut || Ok(Some((TILE_SIZE, Cow::Borrowed(&[255])))),
+            )?
+            .context("SVG mask tile should exist")?;
+        atlas
+            .get_or_insert_with(glyph_key(2, false, false), &mut || {
+                Ok(Some((TILE_SIZE, Cow::Borrowed(&[255]))))
+            })?
+            .context("alpha glyph tile should exist")?;
+
+        let snapshot = atlas.snapshot();
+        assert_eq!(snapshot.page_count, 4);
+        assert_eq!(
+            snapshot.content[AtlasContentKind::Image.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphColor.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::SvgMask.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphAlpha.index()].page_count,
+            1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn budget_pressure_is_isolated_by_content_class() -> Result<()> {
+        let atlas = atlas_with_budget(AtlasContentKind::Image, 0);
+        let frame = atlas.begin_frame();
+        let image_key = image_key(1);
+        let image = atlas
+            .get_or_insert_with(image_key, &mut build_tile)?
+            .context("image tile should exist")?;
+        let glyph_key = glyph_key(1, false, false);
+        let glyph = atlas
+            .get_or_insert_with(glyph_key.clone(), &mut || {
+                Ok(Some((TILE_SIZE, Cow::Borrowed(&[255]))))
+            })?
+            .context("glyph tile should exist")?;
+        atlas.finish_frame(frame, &usage([glyph]));
+
+        let maintenance_frame = atlas.begin_frame();
+        let snapshot = atlas.snapshot();
+        assert_eq!(
+            snapshot.content[AtlasContentKind::Image.index()].page_count,
+            0
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::Image.index()].evictions,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphAlpha.index()].page_count,
+            1
+        );
+        assert_eq!(
+            snapshot.content[AtlasContentKind::GlyphAlpha.index()].evictions,
+            0
+        );
+        assert_eq!(
+            atlas.get_or_insert_with(glyph_key, &mut || {
+                anyhow::bail!("glyph class must remain resident")
+            })?,
+            Some(glyph)
+        );
+        atlas.finish_frame(maintenance_frame, &usage([glyph]));
+        assert_ne!(image.tile_id, glyph.tile_id);
+        Ok(())
+    }
+
+    #[test]
+    fn working_set_over_budget_remains_complete() -> Result<()> {
+        let atlas = atlas_with_budget(AtlasContentKind::Image, 0);
+        let frame = atlas.begin_frame();
+        let key = image_key(1);
+        let tile = atlas
+            .get_or_insert_with(key.clone(), &mut build_tile)?
+            .context("working-set tile should exist")?;
+        atlas.finish_frame(frame, &usage([tile]));
+
+        let maintenance_frame = atlas.begin_frame();
+        let snapshot = atlas.snapshot();
+        let image = snapshot.content[AtlasContentKind::Image.index()];
+        assert_eq!(image.page_count, 1);
+        assert_eq!(image.resident_bytes, 72);
+        assert_eq!(image.working_set_bytes, 72);
+        assert_eq!(image.evictions, 0);
+        assert_eq!(image.budget_pressure_frames, 1);
+        assert_eq!(snapshot.budget_pressure_frames, 1);
+        assert_eq!(
+            atlas.get_or_insert_with(key, &mut || {
+                anyhow::bail!("working-set tile must not be evicted")
+            })?,
+            Some(tile)
+        );
+        atlas.finish_frame(maintenance_frame, &usage([tile]));
+        Ok(())
+    }
+
+    #[test]
+    fn sparse_page_compaction_rehomes_hot_entries() -> Result<()> {
+        let page_size = Size {
+            width: DevicePixels(16),
+            height: DevicePixels(16),
+        };
+        let page_bytes = 16 * 16 * 4;
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(page_size);
+        policy.set_retained_budget(AtlasContentKind::Image, page_bytes);
+        let atlas = Atlas::with_policy(RecordingAtlasBackend::default(), page_size, policy);
+        let frame = atlas.begin_frame();
+        let mut keys = Vec::new();
+        let mut tiles = Vec::new();
+        let mut second_texture_id = None;
+        for image_id in 0..1024 {
+            let key = image_key(image_id);
+            let tile = atlas
+                .get_or_insert_with(key.clone(), &mut build_tile)?
+                .context("compaction tile should exist")?;
+            keys.push(key);
+            tiles.push(tile);
+            if tile.texture_id != tiles[0].texture_id {
+                second_texture_id = Some(tile.texture_id);
+                break;
+            }
+        }
+        second_texture_id.context("workload should fill the first page")?;
+        assert!(tiles.len() > 2);
+        assert_eq!(atlas.snapshot().page_count, 2);
+        let second_page_tile = *tiles.last().context("second-page tile should exist")?;
+        atlas.finish_frame(frame, &usage([tiles[0], second_page_tile]));
+
+        let maintenance_frame = atlas.begin_frame();
+        let during_compaction = atlas.snapshot();
+        let image = during_compaction.content[AtlasContentKind::Image.index()];
+        assert_eq!(image.page_count, 2);
+        assert_eq!(image.compactions, 1);
+        assert!(image.evictions >= 2);
+        assert_eq!(during_compaction.entry_count, 1);
+
+        let rehomed = atlas
+            .get_or_insert_with(keys[0].clone(), &mut build_tile)?
+            .context("hot tile should be rehomed")?;
+        assert_ne!(rehomed.tile_id, tiles[0].tile_id);
+        assert_ne!(
+            (rehomed.texture_id, rehomed.bounds),
+            (tiles[0].texture_id, tiles[0].bounds)
+        );
+        atlas.finish_frame(maintenance_frame, &usage([rehomed, second_page_tile]));
+
+        let compacted = atlas.snapshot();
+        let image = compacted.content[AtlasContentKind::Image.index()];
+        assert_eq!(image.page_count, 1);
+        assert_eq!(image.resident_bytes, page_bytes);
+        assert_eq!(image.working_set_bytes, page_bytes);
+        assert_eq!(compacted.entry_count, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn failed_compaction_raster_restores_the_previous_entry() -> Result<()> {
+        let page_size = Size {
+            width: DevicePixels(16),
+            height: DevicePixels(16),
+        };
+        let mut policy = AtlasPolicy::default();
+        policy.set_page_size(page_size);
+        policy.set_retained_budget(AtlasContentKind::Image, 16 * 16 * 4);
+        let atlas = Atlas::with_policy(RecordingAtlasBackend::default(), page_size, policy);
+        let frame = atlas.begin_frame();
+        let mut keys = Vec::new();
+        let mut tiles = Vec::new();
+        for image_id in 0..1024 {
+            let key = image_key(image_id);
+            let tile = atlas
+                .get_or_insert_with(key.clone(), &mut build_tile)?
+                .context("compaction tile should exist")?;
+            keys.push(key);
+            tiles.push(tile);
+            if tile.texture_id != tiles[0].texture_id {
+                break;
+            }
+        }
+        let second_page_tile = *tiles.last().context("second-page tile should exist")?;
+        atlas.finish_frame(frame, &usage([tiles[0], second_page_tile]));
+
+        let maintenance_frame = atlas.begin_frame();
+        atlas
+            .get_or_insert_with(keys[0].clone(), &mut || anyhow::bail!("raster failed"))
+            .expect_err("compaction raster error should propagate");
+        assert_eq!(
+            atlas.get_or_insert_with(keys[0].clone(), &mut || {
+                anyhow::bail!("restored compaction entry should hit")
+            })?,
+            Some(tiles[0])
+        );
+        assert_eq!(atlas.snapshot().entry_count, 2);
+        atlas.finish_frame(maintenance_frame, &usage([tiles[0], second_page_tile]));
+        Ok(())
+    }
+
+    #[test]
+    fn oversized_entries_fail_without_creating_a_texture() {
+        let atlas = atlas();
+        let oversized = Size {
+            width: DevicePixels(3),
+            height: DevicePixels(3),
+        };
+        atlas
+            .get_or_insert_with(image_key(1), &mut || {
+                Ok(Some((oversized, Cow::Owned(vec![0; 3 * 3 * 4]))))
+            })
+            .expect_err("oversized entry should fail");
+        assert_eq!(atlas.snapshot().page_count, 0);
+        assert_eq!(atlas.with_backend(|backend| backend.create_calls), 0);
+    }
+
+    #[test]
+    fn identity_exhaustion_fails_without_leaking_pages() {
+        let texture_exhausted = atlas();
+        texture_exhausted.state.lock().next_texture_id = u32::MAX;
+        texture_exhausted
+            .get_or_insert_with(image_key(1), &mut build_tile)
+            .expect_err("texture identity exhaustion should fail");
+        assert_eq!(texture_exhausted.snapshot().page_count, 0);
+        assert_eq!(
+            texture_exhausted.with_backend(|backend| backend.textures.len()),
+            0
+        );
+
+        let tile_exhausted = atlas();
+        tile_exhausted.state.lock().next_tile_id = u32::MAX;
+        tile_exhausted
+            .get_or_insert_with(image_key(1), &mut build_tile)
+            .expect_err("tile identity exhaustion should fail");
+        assert_eq!(tile_exhausted.snapshot().page_count, 0);
+        assert_eq!(
+            tile_exhausted.with_backend(|backend| backend.textures.len()),
+            0
+        );
+    }
+}

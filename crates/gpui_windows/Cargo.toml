@@ -25,7 +25,6 @@ accesskit = { workspace = true, optional = true }
 accesskit_windows = { workspace = true, optional = true }
 anyhow.workspace = true
 collections.workspace = true
-etagere = "0.3"
 futures.workspace = true
 image.workspace = true
 itertools.workspace = true
