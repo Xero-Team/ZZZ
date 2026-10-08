@@ -11,7 +11,8 @@ use settings::{ProjectPanelAutoOpenSettings, SettingsStore, SplicingVec};
 use std::path::{Path, PathBuf};
 use util::{markdown::MarkdownInlineCode, path, paths::PathStyle, rel_path::rel_path};
 use workspace::{
-    AppState, ItemHandle, MultiWorkspace, Pane, Workspace,
+    AppState, BottomDockLayout, ItemHandle, MultiWorkspace, Pane, Workspace,
+    dock::{DockPosition, test::TestPanel},
     item::{Item, ProjectItem, test::TestItem},
     register_project_item,
 };
@@ -10966,6 +10967,94 @@ async fn test_panel_keeps_focus_highlight_while_context_menu_is_deployed(
     panel.update_in(cx, |panel, window, cx| {
         assert!(panel.contains_focus(window, cx));
     });
+}
+
+#[gpui::test]
+async fn test_many_entries_keep_bottom_dock_visible(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/root"), json!({})).await;
+
+    let project = Project::test(fs.clone(), [path!("/root").as_ref()], cx).await;
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let workspace = window
+        .read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone())
+        .expect("window is open");
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    let project_panel = workspace.update_in(&mut cx, |workspace, window, cx| {
+        let panel = ProjectPanel::new(workspace, window, cx);
+        workspace.add_panel(panel.clone(), window, cx);
+        let bottom_panel = cx.new(|cx| TestPanel::new(DockPosition::Bottom, 1, cx));
+        workspace.add_panel(bottom_panel, window, cx);
+        workspace.open_panel::<ProjectPanel>(window, cx);
+        panel
+    });
+    cx.run_until_parked();
+    cx.simulate_resize(size(px(960.), px(640.)));
+
+    let files = (0..400)
+        .map(|index| (format!("file_{index}.txt"), json!("")))
+        .collect::<serde_json::Map<_, _>>();
+    fs.insert_tree(path!("/root"), serde_json::Value::Object(files))
+        .await;
+    cx.run_until_parked();
+    assert!(
+        project_panel.read_with(&cx, |panel, _| {
+            panel
+                .state
+                .visible_entries
+                .iter()
+                .map(|worktree| worktree.entries.len())
+                .sum::<usize>()
+                >= 400
+        }),
+        "project panel did not load the large directory"
+    );
+
+    for bottom_dock_open in [false, true] {
+        if bottom_dock_open {
+            workspace.update_in(&mut cx, |workspace, window, cx| {
+                workspace.open_panel::<TestPanel>(window, cx);
+            });
+        }
+
+        for layout in [
+            BottomDockLayout::Contained,
+            BottomDockLayout::Full,
+            BottomDockLayout::LeftAligned,
+            BottomDockLayout::RightAligned,
+        ] {
+            cx.cx.update(|cx| {
+                cx.update_global::<SettingsStore, _>(|store, cx| {
+                    store.update_user_settings(cx, |settings| {
+                        settings.workspace.bottom_dock_layout = Some(layout);
+                    });
+                });
+            });
+            cx.update(|window, cx| {
+                window.draw(cx).clear();
+            });
+            let viewport = cx.update(|window, _| window.viewport_size());
+            let status_bar = cx
+                .debug_bounds("workspace-status-bar")
+                .unwrap_or_else(|| panic!("status bar was not laid out for {layout:?}"));
+            assert!(
+                status_bar.size.height > px(0.) && status_bar.bottom() <= viewport.height + px(1.),
+                "status bar is outside the window for {layout:?}: status bar {status_bar:?}, viewport {viewport:?}"
+            );
+
+            if bottom_dock_open {
+                let bottom = cx
+                    .debug_bounds("workspace-dock-bottom")
+                    .unwrap_or_else(|| panic!("bottom dock was not laid out for {layout:?}"));
+                assert!(
+                    bottom.size.height > px(40.) && bottom.bottom() <= viewport.height + px(1.),
+                    "bottom dock is outside the window for {layout:?}: dock {bottom:?}, viewport {viewport:?}"
+                );
+            }
+        }
+    }
 }
 
 async fn open_panel_with_files(

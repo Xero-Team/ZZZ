@@ -113,6 +113,7 @@ impl Render for StatusBar {
         let at_top = position == StatusBarPosition::Top;
 
         h_flex()
+            .debug_selector(|| "workspace-status-bar".to_string())
             .w_full()
             .justify_between()
             .gap(DynamicSpacing::Base08.rems(cx))

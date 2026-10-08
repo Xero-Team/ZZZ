@@ -7449,6 +7449,7 @@ impl Render for ProjectPanel {
                 })
                 .size_full()
                 .relative()
+                .overflow_hidden()
                 .on_modifiers_changed(cx.listener(
                     |this, event: &ModifiersChangedEvent, window, cx| {
                         this.refresh_drag_cursor_style(&event.modifiers, window, cx);
@@ -7526,6 +7527,10 @@ impl Render for ProjectPanel {
                 .track_focus(&self.focus_handle(cx))
                 .child(
                     v_flex()
+                        .flex_1()
+                        .size_full()
+                        .min_h_0()
+                        .overflow_hidden()
                         .child(
                             uniform_list("entries", item_count, {
                                 cx.processor(|this, range: Range<usize>, window, cx| {

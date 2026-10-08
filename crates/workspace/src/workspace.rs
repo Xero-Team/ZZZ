@@ -7357,6 +7357,11 @@ impl Workspace {
             .flex()
             .overflow_hidden()
             .flex_none()
+            .debug_selector(|| match position {
+                DockPosition::Left => "workspace-dock-left".to_string(),
+                DockPosition::Bottom => "workspace-dock-bottom".to_string(),
+                DockPosition::Right => "workspace-dock-right".to_string(),
+            })
             .child(dock.clone())
             .children(leader_border);
 
@@ -7927,6 +7932,7 @@ impl Render for Workspace {
             .size_full()
             .flex()
             .flex_col()
+            .min_h_0()
             .font(ui_font)
             .gap_0()
             .justify_start()
@@ -7946,6 +7952,7 @@ impl Render for Workspace {
                     .flex_1()
                     .flex()
                     .flex_col()
+                    .min_h_0()
                     .when(
                         self.status_bar_visible(cx)
                             && status_bar_position == StatusBarPosition::Top,
@@ -7957,6 +7964,7 @@ impl Render for Workspace {
                             .bg(colors.background)
                             .relative()
                             .flex_1()
+                            .min_h_0()
                             .w_full()
                             .flex()
                             .flex_col()
@@ -8045,16 +8053,23 @@ impl Render for Workspace {
                                 ))
                             })
                             .child({
+                                // The flexible region beside an open bottom dock has to
+                                // shrink below its content size. A tall project panel or
+                                // editor otherwise becomes that region's minimum height
+                                // and pushes the dock below the clipped workspace.
                                 match bottom_dock_layout {
                                     BottomDockLayout::Full => div()
                                         .flex()
                                         .flex_col()
                                         .h_full()
+                                        .min_h_0()
+                                        .overflow_hidden()
                                         .child(
                                             div()
                                                 .flex()
                                                 .flex_row()
                                                 .flex_1()
+                                                .min_h_0()
                                                 .overflow_hidden()
                                                 .children(self.render_dock(
                                                     DockPosition::Left,
@@ -8067,10 +8082,13 @@ impl Render for Workspace {
                                                         .flex()
                                                         .flex_col()
                                                         .flex_1()
+                                                        .min_h_0()
                                                         .overflow_hidden()
                                                         .child(
                                                             h_flex()
                                                                 .flex_1()
+                                                                .min_h_0()
+                                                                .overflow_hidden()
                                                                 .when_some(
                                                                     centered_paddings.0,
                                                                     |this, p| {
@@ -8110,17 +8128,23 @@ impl Render for Workspace {
                                         .flex()
                                         .flex_row()
                                         .h_full()
+                                        .min_h_0()
+                                        .overflow_hidden()
                                         .child(
                                             div()
                                                 .flex()
                                                 .flex_col()
                                                 .flex_1()
                                                 .h_full()
+                                                .min_h_0()
+                                                .overflow_hidden()
                                                 .child(
                                                     div()
                                                         .flex()
                                                         .flex_row()
                                                         .flex_1()
+                                                        .min_h_0()
+                                                        .overflow_hidden()
                                                         .children(self.render_dock(
                                                             DockPosition::Left,
                                                             &self.left_dock,
@@ -8132,10 +8156,13 @@ impl Render for Workspace {
                                                                 .flex()
                                                                 .flex_col()
                                                                 .flex_1()
+                                                                .min_h_0()
                                                                 .overflow_hidden()
                                                                 .child(
                                                                     h_flex()
                                                                         .flex_1()
+                                                                        .min_h_0()
+                                                                        .overflow_hidden()
                                                                         .when_some(
                                                                             centered_paddings.0,
                                                                             |this, p| {
@@ -8179,6 +8206,8 @@ impl Render for Workspace {
                                         .flex()
                                         .flex_row()
                                         .h_full()
+                                        .min_h_0()
+                                        .overflow_hidden()
                                         .children(self.render_dock(
                                             DockPosition::Left,
                                             &self.left_dock,
@@ -8191,20 +8220,27 @@ impl Render for Workspace {
                                                 .flex_col()
                                                 .flex_1()
                                                 .h_full()
+                                                .min_h_0()
+                                                .overflow_hidden()
                                                 .child(
                                                     div()
                                                         .flex()
                                                         .flex_row()
                                                         .flex_1()
+                                                        .min_h_0()
+                                                        .overflow_hidden()
                                                         .child(
                                                             div()
                                                                 .flex()
                                                                 .flex_col()
                                                                 .flex_1()
+                                                                .min_h_0()
                                                                 .overflow_hidden()
                                                                 .child(
                                                                     h_flex()
                                                                         .flex_1()
+                                                                        .min_h_0()
+                                                                        .overflow_hidden()
                                                                         .when_some(
                                                                             centered_paddings.0,
                                                                             |this, p| {
@@ -8248,6 +8284,8 @@ impl Render for Workspace {
                                         .flex()
                                         .flex_row()
                                         .h_full()
+                                        .min_h_0()
+                                        .overflow_hidden()
                                         .children(self.render_dock(
                                             DockPosition::Left,
                                             &self.left_dock,
@@ -8259,10 +8297,13 @@ impl Render for Workspace {
                                                 .flex()
                                                 .flex_col()
                                                 .flex_1()
+                                                .min_h_0()
                                                 .overflow_hidden()
                                                 .child(
                                                     h_flex()
                                                         .flex_1()
+                                                        .min_h_0()
+                                                        .overflow_hidden()
                                                         .when_some(
                                                             centered_paddings.0,
                                                             |this, p| this.child(p.border_r_1()),
