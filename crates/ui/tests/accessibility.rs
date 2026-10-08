@@ -4,8 +4,9 @@ use gpui::{
 };
 use std::{cell::Cell, rc::Rc};
 use ui::{
-    AnnouncementToast, Button, ButtonCommon as _, Checkbox, Clickable as _, Disableable as _,
-    ListItem, Modal, ModalHeader, Switch, Tab, ToggleState, Toggleable as _, TreeViewItem,
+    AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
+    Disableable as _, ListItem, Modal, ModalHeader, Switch, Tab, ToggleState, Toggleable as _,
+    TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -42,6 +43,22 @@ impl Render for SemanticComponents {
             .child(
                 Switch::new("switch", ToggleState::Indeterminate)
                     .label("Enable previews")
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(
+                ChoiceCard::radio("radio-card", "Desktop notifications", true)
+                    .description("Show alerts for completed tasks")
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(
+                ChoiceCard::checkbox("checkbox-card", "Include terminal output", true)
+                    .description("Attach recent terminal output to the report")
                     .on_click({
                         let action_count = self.action_count.clone();
                         move |_, _, _| action_count.set(action_count.get() + 1)
@@ -178,6 +195,76 @@ fn components_emit_roles_labels_and_state() {
     })
     .expect("semantic test window should remain open");
     assert_eq!(action_count.get(), 3);
+
+    let (radio_card_id, radio_card) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::RadioButton
+                && node.label() == Some("Desktop notifications")
+        })
+        .expect("radio choice card semantic node should exist");
+    assert_eq!(
+        radio_card.description(),
+        Some("Show alerts for completed tasks")
+    );
+    assert_eq!(radio_card.is_selected(), Some(true));
+    assert!(radio_card.supports_action(gpui::accesskit::Action::Click));
+
+    let (checkbox_card_id, checkbox_card) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::CheckBox
+                && node.label() == Some("Include terminal output")
+        })
+        .expect("checkbox choice card semantic node should exist");
+    assert_eq!(
+        checkbox_card.description(),
+        Some("Attach recent terminal output to the report")
+    );
+    assert_eq!(
+        checkbox_card.toggled(),
+        Some(gpui::accesskit::Toggled::True)
+    );
+    assert!(checkbox_card.supports_action(gpui::accesskit::Action::Click));
+    assert!(!snapshot.update.nodes.iter().any(|(_, node)| {
+        node.role() == gpui::accesskit::Role::CheckBox && node.label().is_none()
+    }));
+
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            *radio_card_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *checkbox_card_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+    })
+    .expect("semantic test window should remain open");
+    assert_eq!(action_count.get(), 5);
+
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            *radio_card_id,
+            gpui::accesskit::Action::Focus,
+            None,
+            cx,
+        ));
+        window.draw(cx).clear();
+        let focused_snapshot = window
+            .accessibility_snapshot_for_test()
+            .expect("completed frame should contain a semantic snapshot");
+        assert_eq!(focused_snapshot.focused_node, *radio_card_id);
+    })
+    .expect("semantic test window should remain open");
 
     cx.update_window(handle, |_, window, cx| {
         assert!(window.dispatch_accessibility_action(

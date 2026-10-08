@@ -1,7 +1,9 @@
 use gpui::{BorderStyle, ClickEvent, Corners, Edges, Hsla, canvas, quad};
+use std::rc::Rc;
 
 use crate::{Checkbox, ToggleState, prelude::*};
 
+#[derive(Clone, Copy)]
 enum ChoiceCardKind {
     Radio,
     Checkbox,
@@ -21,7 +23,7 @@ pub struct ChoiceCard {
     description: Option<SharedString>,
     is_selected: bool,
     invalid: bool,
-    on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
 }
 
 impl ChoiceCard {
@@ -79,7 +81,7 @@ impl ChoiceCard {
         mut self,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_click = Some(Box::new(handler));
+        self.on_click = Some(Rc::new(handler));
         self
     }
 
@@ -136,6 +138,7 @@ impl ChoiceCard {
 
 impl RenderOnce for ChoiceCard {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let on_click = self.on_click;
         let colors = cx.theme().colors();
         let border_color = if self.invalid {
             Color::Error.color(cx)
@@ -171,13 +174,29 @@ impl RenderOnce for ChoiceCard {
                     ToggleState::Unselected
                 };
                 div()
-                    .child(Checkbox::new((self.id.clone(), "checkbox"), checkbox_state))
+                    .child(
+                        Checkbox::new((self.id.clone(), "checkbox"), checkbox_state).decorative(),
+                    )
                     .into_any_element()
             }
         };
 
-        h_flex()
-            .id(self.id)
+        let card = h_flex().id(self.id);
+        #[cfg(feature = "accessibility")]
+        let card = match self.kind {
+            ChoiceCardKind::Radio => card
+                .role(gpui::accesskit::Role::RadioButton)
+                .aria_selected(self.is_selected),
+            ChoiceCardKind::Checkbox => card
+                .role(gpui::accesskit::Role::CheckBox)
+                .aria_toggled(self.is_selected.into()),
+        }
+        .aria_label(self.label.clone())
+        .when_some(self.description.clone(), |this, description| {
+            this.aria_description(description)
+        });
+
+        let card = card
             .w_full()
             .min_h(rems_from_px(28_f32))
             .items_start()
@@ -190,24 +209,37 @@ impl RenderOnce for ChoiceCard {
             .py_1()
             .hover(move |this| this.bg(hover_background))
             .focus_visible(move |this| this.border_color(focused_border_color))
-            .when_some(self.on_click, |this, on_click| {
-                this.tab_index(0).cursor_pointer().on_click(on_click)
+            .when_some(on_click.clone(), |this, on_click| {
+                this.tab_index(0)
+                    .cursor_pointer()
+                    .on_click(move |event, window, cx| on_click(event, window, cx))
+            });
+
+        #[cfg(feature = "accessibility")]
+        let card = card.when_some(on_click, |this, on_click| {
+            this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                on_click(
+                    &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                    window,
+                    cx,
+                )
             })
-            .child(indicator)
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .flex_1()
-                    .gap_0p5()
-                    .child(Label::new(self.label).size(LabelSize::Small))
-                    .when_some(self.description, |this, description| {
-                        this.child(
-                            Label::new(description)
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        )
-                    }),
-            )
+        });
+
+        card.child(indicator).child(
+            v_flex()
+                .min_w_0()
+                .flex_1()
+                .gap_0p5()
+                .child(Label::new(self.label).size(LabelSize::Small))
+                .when_some(self.description, |this, description| {
+                    this.child(
+                        Label::new(description)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    )
+                }),
+        )
     }
 }
 

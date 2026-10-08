@@ -141,8 +141,13 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `Toggled::{False, Mixed, True}`，并在可用时提供 label、disabled state 和 Click action。
 - Checkbox 的 click listener 改为 `Rc`，使 mouse 与 a11y action 调用同一个 handler；
   这避免两条路径拥有容易漂移的 state transition。
+- `ChoiceCard` 现在是唯一的 semantic control：radio/checkbox variant 分别投影为
+  `Role::RadioButton`/`Role::CheckBox`，携带 label、description、selected/toggled state、
+  focus 和 Click action。内部 checkbox indicator 明确为装饰，避免 screen reader 重复
+  朗读无名称的第二个 checkbox。
 - 扩展 UI semantic integration test：验证 checkbox/switch 的 role、label、三态和
-  AccessKit Click，并确认它们调用与鼠标相同的业务 action。
+  AccessKit Click；同时验证 ChoiceCard 的 description、state、Click 和 Focus，并确认
+  它们调用与鼠标相同的业务 action。
 - 已验证：
 
   ```sh

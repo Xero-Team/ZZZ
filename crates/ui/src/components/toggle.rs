@@ -57,6 +57,8 @@ pub struct Checkbox {
     placeholder: bool,
     filled: bool,
     visualization: bool,
+    #[cfg(feature = "accessibility")]
+    decorative: bool,
     label: Option<SharedString>,
     label_size: LabelSize,
     label_color: Color,
@@ -75,6 +77,8 @@ impl Checkbox {
             placeholder: false,
             filled: false,
             visualization: false,
+            #[cfg(feature = "accessibility")]
+            decorative: false,
             label: None,
             label_size: LabelSize::Default,
             label_color: Color::Muted,
@@ -124,6 +128,17 @@ impl Checkbox {
     /// Primarily used for uninteractive markdown previews.
     pub fn visualization_only(mut self, visualization: bool) -> Self {
         self.visualization = visualization;
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub(crate) fn decorative(mut self) -> Self {
+        self.decorative = true;
+        self
+    }
+
+    #[cfg(not(feature = "accessibility"))]
+    pub(crate) fn decorative(self) -> Self {
         self
     }
 
@@ -267,11 +282,15 @@ impl RenderOnce for Checkbox {
 
         let container = h_flex().id(self.id);
         #[cfg(feature = "accessibility")]
-        let container = container
-            .role(gpui::accesskit::Role::CheckBox)
-            .aria_disabled(self.disabled)
-            .aria_toggled(accessibility_toggled_state(self.toggle_state))
-            .when_some(accessibility_label, |this, label| this.aria_label(label));
+        let container = if self.decorative {
+            container
+        } else {
+            container
+                .role(gpui::accesskit::Role::CheckBox)
+                .aria_disabled(self.disabled)
+                .aria_toggled(accessibility_toggled_state(self.toggle_state))
+                .when_some(accessibility_label, |this, label| this.aria_label(label))
+        };
 
         let container = container
             .map(|this| {
@@ -302,16 +321,20 @@ impl RenderOnce for Checkbox {
             });
 
         #[cfg(feature = "accessibility")]
-        let container = container.when_some(on_click, |this, on_click| {
-            this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
-                on_click(
-                    &next_toggle_state,
-                    &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
-                    window,
-                    cx,
-                )
+        let container = if self.decorative {
+            container
+        } else {
+            container.when_some(on_click, |this, on_click| {
+                this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                    on_click(
+                        &next_toggle_state,
+                        &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                        window,
+                        cx,
+                    )
+                })
             })
-        });
+        };
 
         container
     }
