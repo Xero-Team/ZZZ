@@ -74,7 +74,21 @@ impl Render for SemanticComponents {
                 ListItem::new("list-item")
                     .aria_label("Item")
                     .toggle(true)
-                    .toggle_state(true),
+                    .toggle_state(true)
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(
+                ListItem::new("menu-item")
+                    .aria_label("Open recent project")
+                    .accessibility_role(gpui::accesskit::Role::MenuItemCheckBox)
+                    .accessibility_toggled(gpui::accesskit::Toggled::True)
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
             )
             .child(
                 Modal::new("preferences", None).header(ModalHeader::new().headline("Preferences")),
@@ -297,16 +311,45 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(tree_item.is_expanded(), Some(true));
     assert_eq!(tree_item.is_selected(), Some(true));
 
-    let list_item = snapshot
+    let (list_item_id, list_item) = snapshot
         .update
         .nodes
         .iter()
         .find(|(_, node)| node.role() == gpui::accesskit::Role::ListItem)
-        .map(|(_, node)| node)
         .expect("list item semantic node should exist");
     assert_eq!(list_item.label(), Some("Item"));
     assert_eq!(list_item.is_expanded(), Some(true));
     assert_eq!(list_item.is_selected(), Some(true));
+    assert!(list_item.supports_action(gpui::accesskit::Action::Click));
+
+    let (menu_item_id, menu_item) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::MenuItemCheckBox
+                && node.label() == Some("Open recent project")
+        })
+        .expect("menu item semantic node should exist");
+    assert_eq!(menu_item.toggled(), Some(gpui::accesskit::Toggled::True));
+    assert!(menu_item.supports_action(gpui::accesskit::Action::Click));
+
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            *list_item_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *menu_item_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+    })
+    .expect("semantic test window should remain open");
+    assert_eq!(action_count.get(), 7);
 
     let dialog = snapshot
         .update

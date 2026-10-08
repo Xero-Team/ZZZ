@@ -1861,6 +1861,25 @@ impl ContextMenu {
                     .inset(true)
                     .disabled(*disabled)
                     .toggle_state(Some(ix) == self.selected_index)
+                    .map(|item| {
+                        #[cfg(feature = "accessibility")]
+                        {
+                            let item = item
+                                .accessibility_role(if toggle.is_some() {
+                                    gpui::accesskit::Role::MenuItemCheckBox
+                                } else {
+                                    gpui::accesskit::Role::MenuItem
+                                })
+                                .aria_label(label.clone());
+                            match toggle {
+                                Some((_, toggled)) => item.accessibility_toggled((*toggled).into()),
+                                None => item,
+                            }
+                        }
+
+                        #[cfg(not(feature = "accessibility"))]
+                        item
+                    })
                     .when(self.main_menu.is_none() && !*disabled, |item| {
                         item.on_hover(cx.listener(move |this, hovered, window, cx| {
                             if *hovered {
@@ -2153,6 +2172,15 @@ impl Render for ContextMenu {
                 .child(
                     v_flex()
                         .id("context-menu")
+                        .map(|menu| {
+                            #[cfg(feature = "accessibility")]
+                            {
+                                menu.role(gpui::accesskit::Role::Menu)
+                            }
+
+                            #[cfg(not(feature = "accessibility"))]
+                            menu
+                        })
                         .max_h(vh(0.75, window))
                         .flex_shrink_0()
                         .child(menu_bounds_measure)

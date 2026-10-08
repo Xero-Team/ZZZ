@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use gpui::{AnyElement, AnyView, ClickEvent, MouseButton, MouseDownEvent, Pixels, px};
 use smallvec::SmallVec;
@@ -39,7 +39,7 @@ pub struct ListItem {
     end_slot_visibility: EndSlotVisibility,
     toggle: Option<bool>,
     inset: bool,
-    on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     on_hover: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
     on_toggle: Option<Arc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
@@ -55,6 +55,10 @@ pub struct ListItem {
     height: Option<DefiniteLength>,
     #[cfg(feature = "accessibility")]
     accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    accessibility_role: Option<gpui::accesskit::Role>,
+    #[cfg(feature = "accessibility")]
+    accessibility_toggled: Option<gpui::accesskit::Toggled>,
 }
 
 impl ListItem {
@@ -88,6 +92,10 @@ impl ListItem {
             height: None,
             #[cfg(feature = "accessibility")]
             accessibility_label: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_role: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_toggled: None,
         }
     }
 
@@ -115,7 +123,7 @@ impl ListItem {
         mut self,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_click = Some(Box::new(handler));
+        self.on_click = Some(Rc::new(handler));
         self
     }
 
@@ -221,6 +229,18 @@ impl ListItem {
         self.accessibility_label = Some(label.into());
         self
     }
+
+    #[cfg(feature = "accessibility")]
+    pub fn accessibility_role(mut self, role: gpui::accesskit::Role) -> Self {
+        self.accessibility_role = Some(role);
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub fn accessibility_toggled(mut self, toggled: gpui::accesskit::Toggled) -> Self {
+        self.accessibility_toggled = Some(toggled);
+        self
+    }
 }
 
 impl Disableable for ListItem {
@@ -245,18 +265,25 @@ impl ParentElement for ListItem {
 
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let on_click = self.on_click.clone().filter(|_| !self.disabled);
         let item = h_flex().id(self.id);
         #[cfg(feature = "accessibility")]
         let item = item
-            .role(gpui::accesskit::Role::ListItem)
+            .role(
+                self.accessibility_role
+                    .unwrap_or(gpui::accesskit::Role::ListItem),
+            )
             .aria_disabled(self.disabled)
             .aria_selected(self.selected)
             .when_some(self.toggle, |this, expanded| this.aria_expanded(expanded))
+            .when_some(self.accessibility_toggled, |this, toggled| {
+                this.aria_toggled(toggled)
+            })
             .when_some(self.accessibility_label, |this, label| {
                 this.aria_label(label)
             });
 
-        item
+        let item = item
             .when_some(self.group_name, |this, group| this.group(group))
             .w_full()
             .when_some(self.height, |this, height| this.h(height))
@@ -317,10 +344,10 @@ impl RenderOnce for ListItem {
                                 })
                         })
                     })
-                    .when_some(
-                        self.on_click.filter(|_| !self.disabled),
-                        |this, on_click| this.cursor_pointer().on_click(on_click),
-                    )
+                    .when_some(on_click.clone(), |this, on_click| {
+                        this.cursor_pointer()
+                            .on_click(move |event, window, cx| on_click(event, window, cx))
+                    })
                     .when(self.outlined, |this| {
                         this.border_1()
                             .border_color(cx.theme().colors().border)
@@ -402,7 +429,20 @@ impl RenderOnce for ListItem {
                         ),
                         _ => this,
                     }),
-            )
+            );
+
+        #[cfg(feature = "accessibility")]
+        let item = item.when_some(on_click, |this, on_click| {
+            this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                on_click(
+                    &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                    window,
+                    cx,
+                )
+            })
+        });
+
+        item
     }
 }
 

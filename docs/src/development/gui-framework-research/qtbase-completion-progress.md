@@ -145,9 +145,12 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `Role::RadioButton`/`Role::CheckBox`，携带 label、description、selected/toggled state、
   focus 和 Click action。内部 checkbox indicator 明确为装饰，避免 screen reader 重复
   朗读无名称的第二个 checkbox。
+- `ListItem` 现在可声明特定 a11y role/toggled state，并复用 pointer Click handler
+  注册 AccessKit Click。ContextMenu 使用该能力将根投影为 `Role::Menu`，将普通和
+  checked entry 分别投影为 `Role::MenuItem`/`Role::MenuItemCheckBox`。
 - 扩展 UI semantic integration test：验证 checkbox/switch 的 role、label、三态和
-  AccessKit Click；同时验证 ChoiceCard 的 description、state、Click 和 Focus，并确认
-  它们调用与鼠标相同的业务 action。
+  AccessKit Click；同时验证 ChoiceCard 的 description、state、Click 和 Focus，以及
+  ListItem 的 MenuItemCheckBox override，并确认它们调用与鼠标相同的业务 action。
 - 已验证：
 
   ```sh
