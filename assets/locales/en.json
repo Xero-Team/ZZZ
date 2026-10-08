@@ -2062,6 +2062,7 @@
     "typst_preview.save_before_opening": "Save the Typst file before opening its preview.",
     "typst_preview.save_to_refresh": "Save the file to refresh the Typst preview.",
     "typst_preview.tab_title": "Typst Preview",
+    "typst_preview.updating": "Updating Typst preview…",
     "ui_input.hide": "Hide",
     "ui_input.show": "Show",
     "language_tools.syntax.update_view_to": "Update view to '{}'",

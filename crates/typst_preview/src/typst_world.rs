@@ -34,6 +34,7 @@ struct PreviewFileLoader {
     package_data: Option<FsPackages>,
     package_cache: Option<FsPackages>,
     remote: bool,
+    draft_files: HashMap<VirtualPath, Bytes>,
     remote_files: HashMap<VirtualPath, Bytes>,
     missing_remote_files: Mutex<HashSet<VirtualPath>>,
     missing_packages: Mutex<HashSet<PackageSpec>>,
@@ -46,6 +47,7 @@ impl PreviewFileLoader {
             package_data: FsPackages::system_data(),
             package_cache: FsPackages::system_cache(),
             remote,
+            draft_files: HashMap::new(),
             remote_files: HashMap::new(),
             missing_remote_files: Mutex::new(HashSet::new()),
             missing_packages: Mutex::new(HashSet::new()),
@@ -56,6 +58,13 @@ impl PreviewFileLoader {
         if self.remote {
             self.remote_files.clear();
         }
+    }
+
+    fn set_draft_files(&mut self, draft_files: HashMap<VirtualPath, String>) {
+        self.draft_files = draft_files
+            .into_iter()
+            .map(|(path, contents)| (path, Bytes::from_string(contents)))
+            .collect();
     }
 
     fn insert_remote_file(&mut self, path: VirtualPath, bytes: Vec<u8>) {
@@ -83,7 +92,15 @@ impl PreviewFileLoader {
 impl FileLoader for PreviewFileLoader {
     fn load(&self, id: FileId) -> FileResult<Bytes> {
         match id.root() {
-            VirtualRoot::Project if self.remote => {
+            VirtualRoot::Project => {
+                if let Some(bytes) = self.draft_files.get(id.vpath()) {
+                    return Ok(bytes.clone());
+                }
+
+                if !self.remote {
+                    return self.project_files.load(id.vpath());
+                }
+
                 if let Some(bytes) = self.remote_files.get(id.vpath()) {
                     return Ok(bytes.clone());
                 }
@@ -93,7 +110,6 @@ impl FileLoader for PreviewFileLoader {
                     id.vpath().get_without_slash(),
                 )))
             }
-            VirtualRoot::Project => self.project_files.load(id.vpath()),
             VirtualRoot::Package(package) => {
                 let root = self
                     .package_data
@@ -174,6 +190,10 @@ impl TypstCompiler {
 
     pub fn clear_remote_files(&mut self) {
         self.files.loader_mut().clear_remote_files();
+    }
+
+    pub fn set_draft_files(&mut self, draft_files: HashMap<VirtualPath, String>) {
+        self.files.loader_mut().set_draft_files(draft_files);
     }
 
     pub fn insert_remote_file(&mut self, path: VirtualPath, bytes: Vec<u8>) {
@@ -378,6 +398,113 @@ mod tests {
         };
 
         assert_eq!(result.pages.map_err(anyhow::Error::msg)?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn compiles_unsaved_main_draft_without_writing_to_disk() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let main_path = directory.path().join("main.typ");
+        std::fs::write(&main_path, "#let")?;
+
+        let mut compiler = TypstCompiler::new(
+            directory.path().to_path_buf(),
+            "main.typ",
+            false,
+            LIGHT_COLORS,
+        )?;
+        let renderer = SvgRenderer::new(Arc::new(()));
+
+        compiler.set_draft_files(HashMap::from([(
+            VirtualPath::new("main.typ")?,
+            "Unsaved draft".into(),
+        )]));
+        let CompileAttempt::Complete(result) = compiler.compile(&renderer) else {
+            anyhow::bail!("local compilation requested remote files");
+        };
+        assert_eq!(result.pages.map_err(anyhow::Error::msg)?.len(), 1);
+        assert_eq!(std::fs::read_to_string(&main_path)?, "#let");
+
+        compiler.set_draft_files(HashMap::new());
+        let CompileAttempt::Complete(result) = compiler.compile(&renderer) else {
+            anyhow::bail!("local compilation requested remote files");
+        };
+        assert!(result.pages.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn compiles_unsaved_remote_main_draft_without_fetching_it() -> Result<()> {
+        let mut compiler =
+            TypstCompiler::new(PathBuf::from("/remote"), "main.typ", true, LIGHT_COLORS)?;
+        let renderer = SvgRenderer::new(Arc::new(()));
+
+        compiler.set_draft_files(HashMap::from([(
+            VirtualPath::new("main.typ")?,
+            "Unsaved remote draft".into(),
+        )]));
+        compiler.clear_remote_files();
+        let CompileAttempt::Complete(result) = compiler.compile(&renderer) else {
+            anyhow::bail!("remote compilation requested the drafted main file");
+        };
+        assert_eq!(result.pages.map_err(anyhow::Error::msg)?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn compiles_unsaved_remote_import_drafts_without_fetching_them() -> Result<()> {
+        let mut compiler =
+            TypstCompiler::new(PathBuf::from("/remote"), "main.typ", true, LIGHT_COLORS)?;
+        let renderer = SvgRenderer::new(Arc::new(()));
+
+        compiler.set_draft_files(HashMap::from([
+            (
+                VirtualPath::new("main.typ")?,
+                "#include \"chapter.typ\"".into(),
+            ),
+            (VirtualPath::new("chapter.typ")?, "Unsaved chapter".into()),
+        ]));
+        compiler.clear_remote_files();
+        let CompileAttempt::Complete(result) = compiler.compile(&renderer) else {
+            anyhow::bail!("remote compilation requested drafted files");
+        };
+        assert_eq!(result.pages.map_err(anyhow::Error::msg)?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn compiles_unsaved_import_draft_without_writing_to_disk() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        std::fs::write(
+            directory.path().join("main.typ"),
+            "#include \"chapter.typ\"",
+        )?;
+        let chapter_path = directory.path().join("chapter.typ");
+        std::fs::write(&chapter_path, "#let")?;
+
+        let mut compiler = TypstCompiler::new(
+            directory.path().to_path_buf(),
+            "main.typ",
+            false,
+            LIGHT_COLORS,
+        )?;
+        let renderer = SvgRenderer::new(Arc::new(()));
+
+        compiler.set_draft_files(HashMap::from([(
+            VirtualPath::new("chapter.typ")?,
+            "Unsaved chapter".into(),
+        )]));
+        let CompileAttempt::Complete(result) = compiler.compile(&renderer) else {
+            anyhow::bail!("local compilation requested remote files");
+        };
+        assert_eq!(result.pages.map_err(anyhow::Error::msg)?.len(), 1);
+        assert_eq!(std::fs::read_to_string(&chapter_path)?, "#let");
+
+        compiler.set_draft_files(HashMap::new());
+        let CompileAttempt::Complete(result) = compiler.compile(&renderer) else {
+            anyhow::bail!("local compilation requested remote files");
+        };
+        assert!(result.pages.is_err());
         Ok(())
     }
 

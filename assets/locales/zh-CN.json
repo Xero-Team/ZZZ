@@ -2062,6 +2062,7 @@
     "typst_preview.save_before_opening": "请先保存 Typst 文件，再打开预览。",
     "typst_preview.save_to_refresh": "保存文件以刷新 Typst 预览。",
     "typst_preview.tab_title": "Typst 预览",
+    "typst_preview.updating": "正在更新 Typst 预览…",
     "ui_input.hide": "隐藏",
     "ui_input.show": "显示",
     "language_tools.syntax.update_view_to": "将视图更新为“{}”",
