@@ -14,7 +14,7 @@ description: Execution ledger for the GPUI Qt Base gap completion program.
 | 项目           | 值                                                            |
 | -------------- | ------------------------------------------------------------- |
 | 计划状态       | `ACTIVE`                                                      |
-| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实                   |
+| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1 已启动    |
 | 当前基线       | `434f808bc34b485368fe8927f5f91f774cc2931c` (`main`)           |
 | 启动时间       | 2026-10-08                                                    |
 | 旧基础设施计划 | 阶段 9 `COMPLETE`；不重新执行                                 |
@@ -94,3 +94,36 @@ contract、WGPU 模块化、platform capability/lifecycle、Editor IME 与最终
 阅读各 backend 的完整 capability constructors、test hooks 和 README/examples，形成第一版
 capability inventory；随后以一个可失败的文档/测试同步 gate 防止 README 再次宣称错误的
 平台支持。
+
+## 阶段 1：Semantic tree 与 native accessibility correctness {#phase-1}
+
+状态：`ACTIVE`
+
+### 已完成 {#phase-1-completed}
+
+- 修复重复带 role 的 `ElementId` 会污染语义层级的问题。此前
+  `SemanticTreeBuilder::push_node` 拒绝重复 node ID，但没有抑制其后代；后代会挂到此前
+  使用同一 ID 的 sibling。builder 现在以 frame-local suppressed scope 表达这个失败，
+  并在该 scope 结束后恢复正常 parent。
+- 为 builder 添加 unit regression：重复 node 与其 child 不出现，之后的有效 sibling
+  仍附着到 root。
+- 为真实 Element lifecycle 添加 regression：两个 sibling 重复语义 ID 时，重复 subtree
+  不会将后代附着到第一个 sibling，且后续 sibling 仍在完整 snapshot 中。
+- 已验证：
+
+  ```sh
+  cargo test --locked -p gpui --lib
+  cargo test --locked -p gpui --lib --features accessibility
+  cargo test --locked -p ui --features accessibility --test accessibility
+  ./script/clippy -p gpui --features accessibility
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+  结果：default GPUI `259 passed`；accessibility GPUI `268 passed`；UI semantic
+  smoke `1 passed`；clippy 和 philosophy gate 通过。
+
+### 下一步 {#phase-1-next}
+
+审计 semantic tree 的 focus、action、teardown 和 cached/overlay subtree 边界，选择一个
+尚未由真实 Element lifecycle 覆盖的可复现错误先加 regression，再考虑任何结构性 API。

@@ -34,7 +34,7 @@ pub struct SemanticSnapshot {
 /// Builds one complete semantic tree per frame.
 pub struct SemanticTreeBuilder {
     nodes: HashMap<NodeId, Node>,
-    node_stack: Vec<NodeId>,
+    node_stack: Vec<Option<NodeId>>,
     focused_node: NodeId,
 }
 
@@ -49,7 +49,7 @@ impl SemanticTreeBuilder {
     pub fn new() -> Self {
         let mut builder = Self {
             nodes: HashMap::new(),
-            node_stack: vec![ROOT_NODE_ID],
+            node_stack: vec![Some(ROOT_NODE_ID)],
             focused_node: ROOT_NODE_ID,
         };
         builder.nodes.insert(ROOT_NODE_ID, Node::new(Role::Window));
@@ -62,19 +62,28 @@ impl SemanticTreeBuilder {
     }
 
     /// Adds a node below the current parent and makes it the parent for nested elements.
-    pub(crate) fn push_node(&mut self, node_id: NodeId, node: Node) -> bool {
+    ///
+    /// A duplicate node ID suppresses this node and all of its descendants for the rest of the
+    /// scope. This prevents a duplicate element ID from attaching descendants to an unrelated
+    /// sibling that happened to use the same semantic node ID first.
+    pub(crate) fn push_node(&mut self, node_id: NodeId, node: Node) -> Option<NodeId> {
+        let Some(parent_id) = self.node_stack.last().copied().flatten() else {
+            self.node_stack.push(None);
+            return None;
+        };
+
         if self.nodes.contains_key(&node_id) {
-            return false;
+            self.node_stack.push(None);
+            return None;
         }
-        let parent_id = self.node_stack.last().copied().unwrap_or(ROOT_NODE_ID);
         if let Some(parent) = self.nodes.get_mut(&parent_id) {
             let mut children = parent.children().to_vec();
             children.push(node_id);
             parent.set_children(children);
         }
         self.nodes.insert(node_id, node);
-        self.node_stack.push(node_id);
-        true
+        self.node_stack.push(Some(node_id));
+        Some(node_id)
     }
 
     /// Finishes the current element node and restores its parent.
@@ -90,7 +99,7 @@ impl SemanticTreeBuilder {
         self.nodes.clear();
         self.nodes.insert(ROOT_NODE_ID, Node::new(Role::Window));
         self.node_stack.clear();
-        self.node_stack.push(ROOT_NODE_ID);
+        self.node_stack.push(Some(ROOT_NODE_ID));
         self.focused_node = ROOT_NODE_ID;
     }
 
@@ -250,8 +259,14 @@ mod tests {
         let group_id = stable_semantic_node_id("group");
         let button_id = stable_semantic_node_id("button");
         let mut builder = SemanticTreeBuilder::new();
-        assert!(builder.push_node(group_id, Node::new(Role::Group)));
-        assert!(builder.push_node(button_id, Node::new(Role::Button)));
+        assert_eq!(
+            builder.push_node(group_id, Node::new(Role::Group)),
+            Some(group_id)
+        );
+        assert_eq!(
+            builder.push_node(button_id, Node::new(Role::Button)),
+            Some(button_id)
+        );
         builder.pop_node();
         builder.pop_node();
 
@@ -275,6 +290,53 @@ mod tests {
         let snapshot = builder.snapshot();
         assert_eq!(snapshot.update.nodes.len(), 1);
         assert_eq!(snapshot.focused_node, ROOT_NODE_ID);
+    }
+
+    #[test]
+    fn duplicate_node_suppresses_its_subtree_without_corrupting_siblings() {
+        let duplicate_id = stable_semantic_node_id("duplicate");
+        let suppressed_child_id = stable_semantic_node_id("suppressed-child");
+        let sibling_id = stable_semantic_node_id("sibling");
+        let mut builder = SemanticTreeBuilder::new();
+
+        assert_eq!(
+            builder.push_node(duplicate_id, Node::new(Role::Group)),
+            Some(duplicate_id)
+        );
+        builder.pop_node();
+
+        assert_eq!(
+            builder.push_node(duplicate_id, Node::new(Role::Group)),
+            None
+        );
+        assert_eq!(
+            builder.push_node(suppressed_child_id, Node::new(Role::Button)),
+            None
+        );
+        builder.pop_node();
+        builder.pop_node();
+
+        assert_eq!(
+            builder.push_node(sibling_id, Node::new(Role::Button)),
+            Some(sibling_id)
+        );
+        builder.pop_node();
+
+        let snapshot = builder.snapshot();
+        let root = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(node_id, _)| *node_id == ROOT_NODE_ID)
+            .expect("root should exist");
+        assert_eq!(root.1.children(), &[duplicate_id, sibling_id]);
+        assert!(
+            snapshot
+                .update
+                .nodes
+                .iter()
+                .all(|(node_id, _)| *node_id != suppressed_child_id)
+        );
     }
 
     #[test]

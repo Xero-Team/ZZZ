@@ -463,8 +463,8 @@ impl<E: Element> Drawable<E> {
 
                 let bounds = window.layout_bounds(layout_id);
                 #[cfg(feature = "accessibility")]
-                let accessibility_node_id = global_id.as_ref().and_then(|global_id| {
-                    self.element.a11y_role().and_then(|role| {
+                let accessibility_node = global_id.as_ref().and_then(|global_id| {
+                    self.element.a11y_role().map(|role| {
                         let node_id = global_id.accesskit_node_id();
                         let mut node = accesskit::Node::new(role);
                         let scale_factor = window.scale_factor();
@@ -480,7 +480,6 @@ impl<E: Element> Drawable<E> {
                             .next_frame
                             .accessibility_builder
                             .push_node(node_id, node)
-                            .then_some(node_id)
                     })
                 });
                 let node_id = window.interaction.next_frame.dispatch_tree.push_node();
@@ -495,9 +494,11 @@ impl<E: Element> Drawable<E> {
                 window.interaction.next_frame.dispatch_tree.pop_node();
 
                 #[cfg(feature = "accessibility")]
-                if let Some(accessibility_node_id) = accessibility_node_id {
-                    self.element
-                        .register_a11y_actions(accessibility_node_id, window);
+                if let Some(accessibility_node) = accessibility_node {
+                    if let Some(accessibility_node_id) = accessibility_node {
+                        self.element
+                            .register_a11y_actions(accessibility_node_id, window);
+                    }
                     window
                         .interaction
                         .next_frame

@@ -6261,6 +6261,46 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "accessibility")]
+    struct DuplicateAccessibilityIdsView;
+
+    #[cfg(feature = "accessibility")]
+    impl Render for DuplicateAccessibilityIdsView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .child(
+                    div()
+                        .id("duplicate-accessibility-id")
+                        .role(accesskit::Role::Group)
+                        .aria_label("First group")
+                        .child(
+                            div()
+                                .id("first-child")
+                                .role(accesskit::Role::Button)
+                                .aria_label("First child"),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("duplicate-accessibility-id")
+                        .role(accesskit::Role::Group)
+                        .aria_label("Duplicate group")
+                        .child(
+                            div()
+                                .id("suppressed-child")
+                                .role(accesskit::Role::Button)
+                                .aria_label("Suppressed child"),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("sibling")
+                        .role(accesskit::Role::Button)
+                        .aria_label("Sibling"),
+                )
+        }
+    }
+
     #[cfg(feature = "frame-diagnostics")]
     struct DiagnosticsPanel;
 
@@ -6735,6 +6775,61 @@ mod tests {
             assert_eq!(cached_snapshot.update.nodes.len(), 3);
         })
         .expect("accessibility window should remain open");
+    }
+
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn duplicate_semantic_element_ids_do_not_attach_descendants_to_prior_siblings(
+        cx: &mut TestAppContext,
+    ) {
+        let window = cx.add_window(|_, _| DuplicateAccessibilityIdsView);
+        let handle: AnyWindowHandle = window.into();
+        let snapshot = cx
+            .update_window(handle, |_, window, cx| {
+                window.refresh();
+                window.draw(cx).clear();
+                window
+                    .accessibility_snapshot_for_test()
+                    .expect("completed frame should contain a semantic snapshot")
+            })
+            .expect("semantic test window should remain open");
+
+        let mut labels = snapshot
+            .update
+            .nodes
+            .iter()
+            .filter_map(|(_, node)| node.label())
+            .collect::<Vec<_>>();
+        labels.sort_unstable();
+        assert_eq!(labels, ["First child", "First group", "Sibling"]);
+
+        let (first_group_id, first_group) = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("First group"))
+            .expect("first group should be present");
+        let (first_child_id, _) = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("First child"))
+            .expect("first child should be present");
+        let (sibling_id, _) = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Sibling"))
+            .expect("sibling should be present");
+        let root = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(node_id, _)| *node_id == crate::ROOT_NODE_ID)
+            .expect("root should be present");
+
+        assert_eq!(first_group.children(), &[*first_child_id]);
+        assert_eq!(root.1.children(), &[*first_group_id, *sibling_id]);
     }
 
     #[cfg(feature = "accessibility")]
