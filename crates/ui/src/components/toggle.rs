@@ -21,6 +21,15 @@ pub fn switch(id: impl Into<ElementId>, toggle_state: ToggleState) -> Switch {
     Switch::new(id, toggle_state)
 }
 
+#[cfg(feature = "accessibility")]
+fn accessibility_toggled_state(toggle_state: ToggleState) -> gpui::accesskit::Toggled {
+    match toggle_state {
+        ToggleState::Unselected => gpui::accesskit::Toggled::False,
+        ToggleState::Indeterminate => gpui::accesskit::Toggled::Mixed,
+        ToggleState::Selected => gpui::accesskit::Toggled::True,
+    }
+}
+
 /// The visual style of a toggle.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub enum ToggleStyle {
@@ -52,7 +61,7 @@ pub struct Checkbox {
     label_size: LabelSize,
     label_color: Color,
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
-    on_click: Option<Box<dyn Fn(&ToggleState, &ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_click: Option<Rc<dyn Fn(&ToggleState, &ClickEvent, &mut Window, &mut App) + 'static>>,
 }
 
 impl Checkbox {
@@ -91,7 +100,7 @@ impl Checkbox {
         mut self,
         handler: impl Fn(&ToggleState, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_click = Some(Box::new(move |state, _, window, cx| {
+        self.on_click = Some(Rc::new(move |state, _, window, cx| {
             handler(state, window, cx)
         }));
         self
@@ -101,7 +110,7 @@ impl Checkbox {
         mut self,
         handler: impl Fn(&ToggleState, &ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_click = Some(Box::new(handler));
+        self.on_click = Some(Rc::new(handler));
         self
     }
 
@@ -186,6 +195,10 @@ impl Checkbox {
 impl RenderOnce for Checkbox {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let group_id = format!("checkbox_group_{:?}", self.id);
+        let next_toggle_state = self.toggle_state.inverse();
+        let on_click = self.on_click.clone().filter(|_| !self.disabled);
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self.label.clone();
         let color = if self.disabled {
             Color::Disabled
         } else {
@@ -252,8 +265,15 @@ impl RenderOnce for Checkbox {
                     .children(icon),
             );
 
-        h_flex()
-            .id(self.id)
+        let container = h_flex().id(self.id);
+        #[cfg(feature = "accessibility")]
+        let container = container
+            .role(gpui::accesskit::Role::CheckBox)
+            .aria_disabled(self.disabled)
+            .aria_toggled(accessibility_toggled_state(self.toggle_state))
+            .when_some(accessibility_label, |this, label| this.aria_label(label));
+
+        let container = container
             .map(|this| {
                 if self.disabled {
                     this.cursor_not_allowed()
@@ -275,14 +295,25 @@ impl RenderOnce for Checkbox {
             .when_some(self.tooltip, |this, tooltip| {
                 this.tooltip(move |window, cx| tooltip(window, cx))
             })
-            .when_some(
-                self.on_click.filter(|_| !self.disabled),
-                |this, on_click| {
-                    this.on_click(move |click, window, cx| {
-                        on_click(&self.toggle_state.inverse(), click, window, cx)
-                    })
-                },
-            )
+            .when_some(on_click.clone(), |this, on_click| {
+                this.on_click(move |click, window, cx| {
+                    on_click(&next_toggle_state, click, window, cx)
+                })
+            });
+
+        #[cfg(feature = "accessibility")]
+        let container = container.when_some(on_click, |this, on_click| {
+            this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                on_click(
+                    &next_toggle_state,
+                    &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                    window,
+                    cx,
+                )
+            })
+        });
+
+        container
     }
 }
 
@@ -427,6 +458,10 @@ impl Switch {
 impl RenderOnce for Switch {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let is_on = self.toggle_state == ToggleState::Selected;
+        let next_toggle_state = self.toggle_state.inverse();
+        let accessibility_on_click = self.on_click.clone().filter(|_| !self.disabled);
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self.label.clone();
         let adjust_ratio = if is_light(cx) { 1.5 } else { 1.0 };
 
         let base_color = cx.theme().colors().text;
@@ -497,8 +532,15 @@ impl RenderOnce for Switch {
                     ),
             );
 
-        h_flex()
-            .id(self.id)
+        let container = h_flex().id(self.id);
+        #[cfg(feature = "accessibility")]
+        let container = container
+            .role(gpui::accesskit::Role::Switch)
+            .aria_disabled(self.disabled)
+            .aria_toggled(accessibility_toggled_state(self.toggle_state))
+            .when_some(accessibility_label, |this, label| this.aria_label(label));
+
+        let container = container
             .cursor_pointer()
             .gap(DynamicSpacing::Base06.rems(cx))
             .when(self.full_width, |this| this.w_full().justify_between())
@@ -520,14 +562,18 @@ impl RenderOnce for Switch {
                 },
             )
             .children(self.key_binding)
-            .when_some(
-                self.on_click.filter(|_| !self.disabled),
-                |this, on_click| {
-                    this.on_click(move |_, window, cx| {
-                        on_click(&self.toggle_state.inverse(), window, cx)
-                    })
-                },
-            )
+            .when_some(accessibility_on_click.clone(), |this, on_click| {
+                this.on_click(move |_, window, cx| on_click(&next_toggle_state, window, cx))
+            });
+
+        #[cfg(feature = "accessibility")]
+        let container = container.when_some(accessibility_on_click, |this, on_click| {
+            this.on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                on_click(&next_toggle_state, window, cx)
+            })
+        });
+
+        container
     }
 }
 

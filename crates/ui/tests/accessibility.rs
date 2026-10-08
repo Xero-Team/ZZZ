@@ -4,8 +4,8 @@ use gpui::{
 };
 use std::{cell::Cell, rc::Rc};
 use ui::{
-    AnnouncementToast, Button, ButtonCommon as _, Clickable as _, Disableable as _, ListItem,
-    Modal, ModalHeader, Tab, Toggleable as _, TreeViewItem,
+    AnnouncementToast, Button, ButtonCommon as _, Checkbox, Clickable as _, Disableable as _,
+    ListItem, Modal, ModalHeader, Switch, Tab, ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -26,6 +26,22 @@ impl Render for SemanticComponents {
             .child(
                 Button::new("action", "Action")
                     .track_focus(&self.target_button)
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(
+                Checkbox::new("checkbox", ToggleState::Selected)
+                    .label("Include diagnostics")
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(
+                Switch::new("switch", ToggleState::Indeterminate)
+                    .label("Enable previews")
                     .on_click({
                         let action_count = self.action_count.clone();
                         move |_, _, _| action_count.set(action_count.get() + 1)
@@ -122,6 +138,46 @@ fn components_emit_roles_labels_and_state() {
     })
     .expect("semantic test window should remain open");
     assert_eq!(action_count.get(), 1);
+
+    let (checkbox_id, checkbox) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::CheckBox
+                && node.label() == Some("Include diagnostics")
+        })
+        .expect("checkbox semantic node should exist");
+    assert_eq!(checkbox.toggled(), Some(gpui::accesskit::Toggled::True));
+    assert!(checkbox.supports_action(gpui::accesskit::Action::Click));
+
+    let (switch_id, switch) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Switch && node.label() == Some("Enable previews")
+        })
+        .expect("switch semantic node should exist");
+    assert_eq!(switch.toggled(), Some(gpui::accesskit::Toggled::Mixed));
+    assert!(switch.supports_action(gpui::accesskit::Action::Click));
+
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            *checkbox_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *switch_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+    })
+    .expect("semantic test window should remain open");
+    assert_eq!(action_count.get(), 3);
 
     cx.update_window(handle, |_, window, cx| {
         assert!(window.dispatch_accessibility_action(

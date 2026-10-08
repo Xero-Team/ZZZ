@@ -14,7 +14,7 @@ description: Execution ledger for the GPUI Qt Base gap completion program.
 | 项目           | 值                                                            |
 | -------------- | ------------------------------------------------------------- |
 | 计划状态       | `ACTIVE`                                                      |
-| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1 已启动    |
+| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1/2 已启动  |
 | 当前基线       | `434f808bc34b485368fe8927f5f91f774cc2931c` (`main`)           |
 | 启动时间       | 2026-10-08                                                    |
 | 旧基础设施计划 | 阶段 9 `COMPLETE`；不重新执行                                 |
@@ -127,3 +127,36 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 
 审计 semantic tree 的 focus、action、teardown 和 cached/overlay subtree 边界，选择一个
 尚未由真实 Element lifecycle 覆盖的可复现错误先加 regression，再考虑任何结构性 API。
+
+## 阶段 2：UI semantic audit 与组件 contract {#phase-2}
+
+状态：`ACTIVE`
+
+### 已完成 {#phase-2-completed}
+
+- `Checkbox` 与 `Switch` 现在将 visual state 映射到 `Role::CheckBox`/`Role::Switch`，
+  将 `ToggleState::{Unselected, Indeterminate, Selected}` 映射到
+  `Toggled::{False, Mixed, True}`，并在可用时提供 label、disabled state 和 Click action。
+- Checkbox 的 click listener 改为 `Rc`，使 mouse 与 a11y action 调用同一个 handler；
+  这避免两条路径拥有容易漂移的 state transition。
+- 扩展 UI semantic integration test：验证 checkbox/switch 的 role、label、三态和
+  AccessKit Click，并确认它们调用与鼠标相同的业务 action。
+- 已验证：
+
+  ```sh
+  cargo test --locked -p ui
+  cargo test --locked -p ui --features accessibility --test accessibility
+  cargo clippy -p ui --features accessibility --release --all-targets --all-features -- --deny warnings
+  script/check-philosophy
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+  结果：UI default `69 passed`、doc tests `41 passed`；UI semantic integration test
+  `1 passed`；release clippy 和 philosophy gate 通过。
+
+### 下一步 {#phase-2-next}
+
+继续按 interactive、structural、status、text input、decorative 分类审计组件；优先
+ContextMenu/DropdownMenu、ChoiceCard、data table 与 text input。每次只迁移一条完整的
+keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
