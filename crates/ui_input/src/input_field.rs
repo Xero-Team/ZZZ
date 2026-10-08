@@ -178,6 +178,8 @@ impl Render for InputField {
             .label
             .clone()
             .unwrap_or_else(|| self.placeholder.clone());
+        #[cfg(feature = "accessibility")]
+        let accessibility_value = (!self.masked.unwrap_or(false)).then(|| self.editor.text(cx));
         let control = h_flex()
             .id(("input-field-control", cx.entity_id()))
             .track_focus(&configured_handle)
@@ -230,7 +232,8 @@ impl Render for InputField {
         #[cfg(feature = "accessibility")]
         let control = control
             .role(gpui::accesskit::Role::TextInput)
-            .aria_label(accessibility_label);
+            .aria_label(accessibility_label)
+            .when_some(accessibility_value, |this, value| this.aria_value(value));
 
         v_flex()
             .id(self.placeholder.clone())
@@ -321,10 +324,12 @@ mod tests {
         cx.update(|cx| {
             let settings = settings::SettingsStore::test(cx);
             cx.set_global(settings);
+            i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
         let (_field, cx) = cx.add_window_view(|window, cx| {
             let field = InputField::new(window, cx, "Filter").label("Search");
+            field.set_text("workspace", window, cx);
             field.focus_handle(cx).focus(window, cx);
             field
         });
@@ -342,6 +347,41 @@ mod tests {
             .find(|(_, node)| node.role() == gpui::accesskit::Role::TextInput)
             .expect("text input semantic node should exist");
         assert_eq!(node.label(), Some("Search"));
+        assert_eq!(node.value(), Some("workspace"));
         assert_eq!(snapshot.focused_node, *node_id);
+    }
+
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn masked_input_field_omits_accessible_value(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            i18n::init(cx);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+        let (_field, cx) = cx.add_window_view(|window, cx| {
+            let field = InputField::new(window, cx, "API key")
+                .label("API key")
+                .masked(true);
+            field.set_text("secret-value", window, cx);
+            field
+        });
+        let snapshot = cx.update(|window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("masked input semantic snapshot should exist")
+        });
+        let (_, node) = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == gpui::accesskit::Role::TextInput && node.label() == Some("API key")
+            })
+            .expect("masked text input semantic node should exist");
+        assert_eq!(node.value(), None);
     }
 }

@@ -11,14 +11,14 @@ description: Execution ledger for the GPUI Qt Base gap completion program.
 
 ## 执行状态 {#status}
 
-| 项目           | 值                                                            |
-| -------------- | ------------------------------------------------------------- |
-| 计划状态       | `ACTIVE`                                                      |
-| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1/2 已启动  |
-| 当前基线       | `434f808bc34b485368fe8927f5f91f774cc2931c` (`main`)           |
-| 启动时间       | 2026-10-08                                                    |
-| 旧基础设施计划 | 阶段 9 `COMPLETE`；不重新执行                                 |
-| 当前工作树     | 本计划新增的 report、plan、goal、progress 和 SUMMARY 文档修改 |
+| 项目           | 值                                                             |
+| -------------- | -------------------------------------------------------------- |
+| 计划状态       | `ACTIVE`                                                       |
+| 当前阶段       | 阶段 0：Baseline、support matrix 与文档事实；阶段 1/2/4 已启动 |
+| 当前基线       | `434f808bc34b485368fe8927f5f91f774cc2931c` (`main`)            |
+| 启动时间       | 2026-10-08                                                     |
+| 旧基础设施计划 | 阶段 9 `COMPLETE`；不重新执行                                  |
+| 当前工作树     | 本计划新增的 report、plan、goal、progress 和 SUMMARY 文档修改  |
 
 ## 继承的事实 {#inherited-facts}
 
@@ -175,3 +175,35 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 继续按 interactive、structural、status、text input、decorative 分类审计组件；优先
 ContextMenu/DropdownMenu、ChoiceCard、data table 与 text input。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
+
+## 阶段 4：Text、IME 与 accessible editor boundary {#phase-4}
+
+状态：`ACTIVE`
+
+### 已完成 {#phase-4-completed}
+
+- `ui_input::InputField` 的 `TextInput` semantic node 现在在非 masked 场景投影当前
+  value；`masked(true)` 的字段刻意不导出 value，避免 API key 或 password 被辅助技术
+  snapshot 泄露。
+- 新增 accessibility regressions：普通 field 验证 label/value/focus；masked field 验证
+  secret text 不在 semantic value 中。masked fixture 初始化项目的 i18n service，保留
+  mask-toggle tooltip 的正常本地化行为。
+- 已验证：
+
+  ```sh
+  cargo test --locked -p ui_input
+  cargo test --locked -p ui_input --features accessibility
+  cargo clippy -p ui_input --features accessibility --release --all-targets --all-features -- --deny warnings
+  script/check-philosophy
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+  结果：default `1 passed`；accessibility `3 passed`；release clippy 和 philosophy gate
+  通过。
+
+### 下一步 {#phase-4-next}
+
+将 InputField semantic value 与底层 editor 的 UTF-16 selection、marked text、caret bounds
+和 AccessKit text action 的 authoritative owner 对齐；在此之前不复制第二份 editor text
+model 到 GPUI。
