@@ -288,6 +288,8 @@ model 到 GPUI。
   upstream `gpui.rs`、Zed Discord 和 Zed blog 链接；issues 指向本仓库。
 - `script/check-philosophy` 现在检查 GPUI README/manifest 不再回归到 upstream hosted
   support 或 upstream repository metadata。
+- `cargo check --locked -p gpui --examples` 通过，且已加入 `GPUI platform checks` CI job，
+  使 README 的 local example 入口持续可编译。
 
 ### 下一步 {#phase-6-next}
 

@@ -129,6 +129,9 @@ jobs:
       - name: Install GPUI cross targets
         run: rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu wasm32-unknown-unknown
 
+      - name: Check GPUI examples
+        run: CARGO_NET_OFFLINE=true cargo check --locked -p gpui --examples
+
       - name: Check GPUI macOS accessibility target
         run: >-
           CARGO_NET_OFFLINE=true cargo check --locked -p gpui_macos --tests
