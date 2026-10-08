@@ -1069,6 +1069,9 @@ impl VfsFile for EmulatedFsFile {
                 .with_path(self.path.clone())
                 .with_source(error)
         })?;
+        if contents.len() == len {
+            return Ok(());
+        }
         contents.resize(len, 0);
         self.provider
             .core

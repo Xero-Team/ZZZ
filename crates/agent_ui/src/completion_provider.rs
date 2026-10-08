@@ -568,14 +568,11 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let project = workspace.read(cx).project().clone();
 
         let (abs_path, file_name) = match &symbol.path {
-            SymbolLocation::InProject(project_path) => (
+            SymbolLocation::InProject { project_path, .. } => (
                 project.read(cx).absolute_path(&project_path, cx)?,
                 project_path.path.file_name()?.to_owned().into(),
             ),
-            SymbolLocation::OutsideProject {
-                abs_path,
-                signature: _,
-            } => (
+            SymbolLocation::OutsideProject { abs_path, .. } => (
                 PathBuf::from(abs_path.as_ref()),
                 abs_path.file_name().map(|f| f.to_string_lossy())?,
             ),
@@ -2037,7 +2034,7 @@ pub(crate) fn search_symbols(
                     .enumerate()
                     .map(|(id, symbol)| StringMatchCandidate::new(id, symbol.label.filter_text()))
                     .partition(|candidate| match &symbols[candidate.id].path {
-                        SymbolLocation::InProject(project_path) => project
+                        SymbolLocation::InProject { project_path, .. } => project
                             .entry_for_path(project_path, cx)
                             .is_some_and(|e| !e.is_ignored),
                         SymbolLocation::OutsideProject { .. } => false,

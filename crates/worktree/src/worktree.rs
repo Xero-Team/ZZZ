@@ -8069,7 +8069,10 @@ async fn write_rope_to_provider(
         )
         .await?;
     let mut offset = 0_u64;
-    if encoding == encoding_rs::UTF_8 {
+    if provider.capabilities().write.positioned == vfs::SupportLevel::Emulated {
+        let bytes = encode_rope_bytes(text, line_ending, encoding, has_bom);
+        write_all_at(file.as_ref(), &mut offset, &bytes).await?;
+    } else if encoding == encoding_rs::UTF_8 {
         if has_bom {
             write_all_at(file.as_ref(), &mut offset, &[0xEF, 0xBB, 0xBF]).await?;
         }
@@ -8186,7 +8189,7 @@ fn decode_byte_full(
     }
 
     fn detect_encoding(bytes: Vec<u8>) -> (String, &'static Encoding) {
-        let mut detector = EncodingDetector::new(Iso2022JpDetection::Deny);
+        let mut detector = EncodingDetector::new(Iso2022JpDetection::Allow);
         detector.feed(&bytes, true);
 
         let encoding = detector.guess(None, Utf8Detection::Allow); // Use None for TLD hint to ensure neutral detection logic.

@@ -235,9 +235,11 @@ impl PickerDelegate for ProjectSymbolsDelegate {
                             StringMatchCandidate::new(id, symbol.label.filter_text())
                         })
                         .partition(|candidate| {
-                            if let SymbolLocation::InProject(path) = &symbols[candidate.id].path {
+                            if let SymbolLocation::InProject { project_path, .. } =
+                                &symbols[candidate.id].path
+                            {
                                 project
-                                    .entry_for_path(path, cx)
+                                    .entry_for_path(project_path, cx)
                                     .is_some_and(|e| !e.is_ignored)
                             } else {
                                 false
@@ -269,7 +271,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         let syntax_runs = styled_runs_for_code_label(&symbol.label, theme.syntax(), &local_player);
 
         let path = match &symbol.path {
-            SymbolLocation::InProject(project_path) => {
+            SymbolLocation::InProject { project_path, .. } => {
                 let project = self.project.read(cx);
                 let mut path = project_path.path.clone();
                 if self.show_worktree_root_name
@@ -279,10 +281,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
                 }
                 path.display(path_style).into_owned().into()
             }
-            SymbolLocation::OutsideProject {
-                abs_path,
-                signature: _,
-            } => abs_path.to_string_lossy(),
+            SymbolLocation::OutsideProject { abs_path, .. } => abs_path.to_string_lossy(),
         };
         let label = symbol.label.text.clone();
         let line_number = symbol.range.start.0.row + 1;

@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -1121,11 +1121,19 @@ impl LspButton {
                 ..
             } => {
                 self.server_state.update(cx, |state, cx| {
+                    let Some(buffer_abs_path) = update
+                        .buffer_path_v2
+                        .as_ref()
+                        .and_then(|path| path.to_native_path().log_err())
+                        .and_then(|path| path.to_local_path_buf().log_err())
+                    else {
+                        return;
+                    };
                     let Ok(worktree) = state.workspace.update(cx, |workspace, cx| {
                         workspace
                             .project()
                             .read(cx)
-                            .find_worktree(Path::new(&update.buffer_abs_path), cx)
+                            .find_worktree(&buffer_abs_path, cx)
                             .map(|(worktree, _)| worktree.downgrade())
                     }) else {
                         return;
@@ -1133,7 +1141,7 @@ impl LspButton {
                     let entry = state
                         .language_servers
                         .servers_per_buffer_abs_path
-                        .entry(PathBuf::from(&update.buffer_abs_path))
+                        .entry(buffer_abs_path)
                         .or_insert_with(|| ServersForPath {
                             servers: HashMap::default(),
                             worktree: worktree.clone(),

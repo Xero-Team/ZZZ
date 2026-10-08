@@ -412,6 +412,9 @@ pub trait LspAdapterDelegate: Send + Sync {
     fn show_notification(&self, message: &str, cx: &mut App);
     fn http_client(&self) -> Arc<dyn HttpClient>;
     fn worktree_id(&self) -> WorktreeId;
+    fn worktree_vfs_root(&self) -> Option<vfs::VfsPath> {
+        None
+    }
     fn worktree_root_path(&self) -> &Path;
     fn resolve_relative_path(&self, path: PathBuf) -> PathBuf;
     fn update_status(&self, language: LanguageServerName, status: BinaryStatus);

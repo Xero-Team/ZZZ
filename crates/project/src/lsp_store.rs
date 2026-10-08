@@ -15666,7 +15666,7 @@ pub fn language_server_settings<'a>(
         SettingsLocation {
             worktree_id: delegate.worktree_id(),
             path: RelPath::empty(),
-            vfs_path: None,
+            vfs_path: delegate.worktree_vfs_root(),
         },
         language,
         cx,
@@ -15684,6 +15684,7 @@ pub fn language_server_settings_for<'a>(
 pub struct LocalLspAdapterDelegate {
     lsp_store: WeakEntity<LspStore>,
     worktree: worktree::Snapshot,
+    worktree_vfs_root: Option<vfs::VfsPath>,
     fs: Arc<dyn Fs>,
     http_client: Arc<dyn HttpClient>,
     language_registry: Arc<LanguageRegistry>,
@@ -15706,6 +15707,7 @@ impl LocalLspAdapterDelegate {
         Arc::new(Self {
             lsp_store,
             worktree: worktree.read(cx).snapshot(),
+            worktree_vfs_root: worktree.read(cx).vfs_path_for_path(RelPath::empty()),
             fs,
             http_client,
             language_registry,
@@ -15746,6 +15748,10 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
 
     fn worktree_id(&self) -> WorktreeId {
         self.worktree.id()
+    }
+
+    fn worktree_vfs_root(&self) -> Option<vfs::VfsPath> {
+        self.worktree_vfs_root.clone()
     }
 
     fn worktree_root_path(&self) -> &Path {

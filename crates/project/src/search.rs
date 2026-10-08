@@ -158,8 +158,7 @@ impl SearchQuery {
         match_full_paths: bool,
         buffers: Option<Vec<Entity<Buffer>>>,
     ) -> Result<Self> {
-        let mut query = query.to_string();
-        text::LineEnding::normalize(&mut query);
+        let query = query.to_string();
         let inner = SearchInputs {
             query: Arc::from(query.as_str()),
             files_to_include,
