@@ -1,18 +1,28 @@
 use gpui::{
-    AnyWindowHandle, AppContext as _, Context, FocusHandle, IntoElement, ParentElement as _,
-    Render, TestAppContext, Window, div,
+    AnyWindowHandle, AppContext as _, Context, Entity, FocusHandle, IntoElement,
+    ParentElement as _, Render, TestAppContext, Window, div,
 };
 use std::{cell::Cell, rc::Rc};
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
-    Disableable as _, ListItem, Modal, ModalHeader, Switch, Tab, ToggleState, Toggleable as _,
-    TreeViewItem,
+    ContextMenu, Disableable as _, IconPosition, ListItem, Modal, ModalHeader, Switch, Tab,
+    ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
     action_count: Rc<Cell<usize>>,
     focused_button: FocusHandle,
     target_button: FocusHandle,
+}
+
+struct SemanticContextMenu {
+    menu: Entity<ContextMenu>,
+}
+
+impl Render for SemanticContextMenu {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        self.menu.clone()
+    }
 }
 
 impl Render for SemanticComponents {
@@ -368,4 +378,96 @@ fn components_emit_roles_labels_and_state() {
         .map(|(_, node)| node)
         .expect("status semantic node should exist");
     assert_eq!(status.label(), Some("Update available"));
+}
+
+#[test]
+fn context_menu_emits_menu_and_item_semantics() {
+    let mut cx = TestAppContext::single();
+    cx.update(|cx| {
+        let settings = settings::SettingsStore::test(cx);
+        cx.set_global(settings);
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+    });
+
+    let action_count = Rc::new(Cell::new(0));
+    let window = cx.add_window({
+        let action_count = action_count.clone();
+        move |window, cx| {
+            let menu = ContextMenu::build(window, cx, move |menu, _, _| {
+                let open_action_count = action_count.clone();
+                menu.entry("Open project", None, move |_, _| {
+                    open_action_count.set(open_action_count.get() + 1);
+                })
+                .toggleable_entry(
+                    "Show hidden files",
+                    false,
+                    IconPosition::Start,
+                    None,
+                    move |_, _| {
+                        action_count.set(action_count.get() + 1);
+                    },
+                )
+            });
+            SemanticContextMenu { menu }
+        }
+    });
+    cx.run_until_parked();
+
+    let handle: AnyWindowHandle = window.into();
+    let snapshot = cx
+        .update_window(handle, |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("context menu should build a semantic snapshot")
+        })
+        .expect("context menu window should remain open");
+
+    assert!(
+        snapshot
+            .update
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == gpui::accesskit::Role::Menu)
+    );
+
+    let (open_item_id, open_item) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::MenuItem && node.label() == Some("Open project")
+        })
+        .expect("menu item semantic node should exist");
+    assert!(open_item.supports_action(gpui::accesskit::Action::Click));
+
+    let (toggle_item_id, toggle_item) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::MenuItemCheckBox
+                && node.label() == Some("Show hidden files")
+        })
+        .expect("checkbox menu item semantic node should exist");
+    assert_eq!(toggle_item.toggled(), Some(gpui::accesskit::Toggled::False));
+    assert!(toggle_item.supports_action(gpui::accesskit::Action::Click));
+
+    cx.update_window(handle, |_, window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            *open_item_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *toggle_item_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+    })
+    .expect("context menu window should remain open");
+    assert_eq!(action_count.get(), 2);
 }

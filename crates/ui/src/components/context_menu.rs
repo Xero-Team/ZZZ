@@ -717,11 +717,7 @@ impl ContextMenu {
         disabled: bool,
     ) -> Self {
         self.items.push(ContextMenuItem::Entry(ContextMenuEntry {
-            toggle: if checked {
-                Some((IconPosition::Start, true))
-            } else {
-                None
-            },
+            toggle: Some((IconPosition::Start, checked)),
             label: label.into(),
             action: Some(action.boxed_clone()),
             handler: Rc::new(move |context, window, cx| {
@@ -1543,6 +1539,16 @@ impl ContextMenu {
                 ListItem::new(ix)
                     .inset(true)
                     .toggle_state(toggle_state)
+                    .map(|item| {
+                        #[cfg(feature = "accessibility")]
+                        {
+                            item.accessibility_role(gpui::accesskit::Role::MenuItem)
+                                .aria_label(label.clone())
+                        }
+
+                        #[cfg(not(feature = "accessibility"))]
+                        item
+                    })
                     .child(
                         canvas(
                             {
@@ -2424,6 +2430,26 @@ mod tests {
                 context_menu.selected_index,
                 "Should wrap around to first selectable entry"
             );
+        });
+    }
+
+    #[gpui::test]
+    fn unchecked_action_retains_checkbox_metadata(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let context_menu = cx.update(|window, cx| {
+            ContextMenu::build(window, cx, |menu, _, _| {
+                menu.action_checked("Show hidden files", Box::new(SelectNext), false)
+            })
+        });
+
+        context_menu.update_in(cx, |context_menu, _, _| {
+            assert!(matches!(
+                context_menu.items.as_slice(),
+                [ContextMenuItem::Entry(ContextMenuEntry {
+                    toggle: Some((IconPosition::Start, false)),
+                    ..
+                })]
+            ));
         });
     }
 }

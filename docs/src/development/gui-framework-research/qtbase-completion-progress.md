@@ -148,9 +148,14 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `ListItem` 现在可声明特定 a11y role/toggled state，并复用 pointer Click handler
   注册 AccessKit Click。ContextMenu 使用该能力将根投影为 `Role::Menu`，将普通和
   checked entry 分别投影为 `Role::MenuItem`/`Role::MenuItemCheckBox`。
+- `ContextMenu::action_checked(..., false)` 现在保留 unchecked checkbox metadata，避免
+  将“可勾选但未选中”的条目退化为普通 menu item；submenu trigger 也使用
+  `Role::MenuItem`。
 - 扩展 UI semantic integration test：验证 checkbox/switch 的 role、label、三态和
   AccessKit Click；同时验证 ChoiceCard 的 description、state、Click 和 Focus，以及
-  ListItem 的 MenuItemCheckBox override，并确认它们调用与鼠标相同的业务 action。
+  ListItem 的 MenuItemCheckBox override。独立的真实 ContextMenu snapshot test 验证
+  Menu、普通 MenuItem、未勾选 MenuItemCheckBox 和 action routing，并确认它们调用与
+  鼠标相同的业务 action。
 - 已验证：
 
   ```sh
@@ -162,8 +167,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   git diff --check
   ```
 
-  结果：UI default `69 passed`、doc tests `41 passed`；UI semantic integration test
-  `1 passed`；release clippy 和 philosophy gate 通过。
+  结果：UI default `70 passed`、doc tests `41 passed`；UI semantic integration tests
+  `2 passed`；release clippy 和 philosophy gate 通过。
 
 ### 下一步 {#phase-2-next}
 
