@@ -59,6 +59,8 @@ contract、WGPU 模块化、platform capability/lifecycle、Editor IME 与最终
   `windows-core`/`windows-numerics`/`windows-registry` 0.100 混用。`http_client` 现在
   仅在 Windows 启用前一 feature；GPUI Windows crate 将后三个 crate 对齐到 Windows
   0.62 的 ABI generation。修复后 locked Windows accessibility cross-check 通过。
+- GitHub Actions 现在有 `GPUI platform checks` job，安装 macOS、Windows、WASM targets
+  后离线执行三条 cross-check。此 gate 防止 support matrix 退化为仅靠 README 的手工声明。
 - 已验证 Linux capability matrix：
 
   ```sh
