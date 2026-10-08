@@ -6079,6 +6079,8 @@ mod tests {
     use crate::RenderImage;
     #[cfg(feature = "accessibility")]
     use crate::StatefulInteractiveElement as _;
+    #[cfg(feature = "accessibility")]
+    use crate::util::FluentBuilder as _;
     #[cfg(feature = "frame-diagnostics")]
     use crate::{
         AnyView, App, Entity, FrameDirtyReason, FrameEvent, FrameInputProvenance,
@@ -6299,6 +6301,30 @@ mod tests {
                         .role(accesskit::Role::Button)
                         .aria_label("Sibling"),
                 )
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    struct RemovableAccessibilityView {
+        action_count: Rc<Cell<usize>>,
+        show_button: bool,
+    }
+
+    #[cfg(feature = "accessibility")]
+    impl Render for RemovableAccessibilityView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().when(self.show_button, |this| {
+                let action_count = self.action_count.clone();
+                this.child(
+                    div()
+                        .id("removable-accessibility-button")
+                        .role(accesskit::Role::Button)
+                        .aria_label("Removable action")
+                        .on_a11y_action(accesskit::Action::Click, move |_, _, _| {
+                            action_count.set(action_count.get() + 1);
+                        }),
+                )
+            })
         }
     }
 
@@ -6832,6 +6858,63 @@ mod tests {
 
         assert_eq!(first_group.children(), &[*first_child_id]);
         assert_eq!(root.1.children(), &[*first_group_id, *sibling_id]);
+    }
+
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn removed_semantic_nodes_drop_stale_actions(cx: &mut TestAppContext) {
+        let action_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let action_count = action_count.clone();
+            move |_, _| RemovableAccessibilityView {
+                action_count,
+                show_button: true,
+            }
+        });
+        let handle: AnyWindowHandle = window.into();
+        let button_id = cx
+            .update_window(handle, |_, window, cx| {
+                window.refresh();
+                window.draw(cx).clear();
+                window
+                    .accessibility_snapshot_for_test()
+                    .expect("completed frame should contain a semantic snapshot")
+                    .update
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| node.label() == Some("Removable action"))
+                    .map(|(node_id, _)| *node_id)
+                    .expect("removable semantic button should be present")
+            })
+            .expect("semantic test window should remain open");
+
+        window
+            .update(cx, |view, _, cx| {
+                view.show_button = false;
+                cx.notify();
+            })
+            .expect("semantic test window should remain open");
+        cx.update_window(handle, |_, window, cx| {
+            window.draw(cx).clear();
+            let snapshot = window
+                .accessibility_snapshot_for_test()
+                .expect("completed frame should contain a semantic snapshot");
+            assert!(
+                snapshot
+                    .update
+                    .nodes
+                    .iter()
+                    .all(|(_, node)| node.label() != Some("Removable action"))
+            );
+            assert!(!window.dispatch_accessibility_action(
+                button_id,
+                accesskit::Action::Click,
+                None,
+                cx,
+            ));
+        })
+        .expect("semantic test window should remain open");
+        assert_eq!(action_count.get(), 0);
     }
 
     #[cfg(feature = "accessibility")]

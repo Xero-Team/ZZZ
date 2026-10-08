@@ -143,6 +143,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   仍附着到 root。
 - 为真实 Element lifecycle 添加 regression：两个 sibling 重复语义 ID 时，重复 subtree
   不会将后代附着到第一个 sibling，且后续 sibling 仍在完整 snapshot 中。
+- 为 node removal 添加 regression：完成帧中的 semantic button 被下一帧移除后，使用旧
+  node ID 的 native Click 不再路由到旧 action handler。
 - 已验证：
 
   ```sh
@@ -154,7 +156,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   git diff --check
   ```
 
-  结果：default GPUI `259 passed`；accessibility GPUI `268 passed`；UI semantic
+  结果：default GPUI `259 passed`；accessibility GPUI `269 passed`；UI semantic
   smoke `1 passed`；clippy 和 philosophy gate 通过。
 
 ### 下一步 {#phase-1-next}
