@@ -210,6 +210,40 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 ContextMenu/DropdownMenu、ChoiceCard、data table 与 text input。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
 
+## 阶段 3：Model、selection、focus 与 virtualization 协议 {#phase-3}
+
+状态：`REJECTED FOR CURRENT CONSUMERS`
+
+### 设计实验结论 {#phase-3-decision}
+
+当前代码没有两个可诚实共享同一个模型 owner 的 consumer：
+
+- `TreeViewItem` 是无数据源的单项 visual component。它从 caller 接收 `label`、
+  selected、expanded、focus handle 和 callbacks，不拥有 parent/child、loading、move 或
+  selection model。
+- `Table` 接收 `AnyElement` headers/rows 或只按 `usize` 回调的虚拟行；它不拥有 cell
+  值、stable row identity、row selection 或 model mutation。
+- `ListState`/`UniformListScrollHandle` 正确地以 index 管理 measurement、scroll 和保持
+  offscreen focused item 的渲染，但没有业务 item identity，也不应成为通用数据 model。
+
+因此没有加入 `ItemKey`、`ItemModel`、`SelectionModel` 或公共 model/view trait。这样做
+会为一个不存在的 owner 发明 state，并把 table 的 `AnyElement` 表示、tree 的 product
+hierarchy和 editor buffer 强行耦合，违反双消费者 gate。
+
+### 重新开启条件 {#phase-3-reopen}
+
+只有同时出现一个拥有 parent/child/loading/expanded 的实际 tree owner 和一个拥有 stable
+row identity/selection 的实际 table 或 list owner 时才重开。届时 prototype 必须证明：
+
+1. opaque generation-safe identity 能跨 deletion/move/reload 防止 ABA；
+2. model delta、selection anchor、focus 和 scroll-to-item 各只有一个权威 owner；
+3. virtualized a11y 有 current viewport 或 active-descendant 策略，而不是虚假导出全部
+   离屏项；
+4. 两个 consumer 都减少重复且不泄漏 ZZZ theme、editor buffer 或 product command。
+
+在满足上述条件前，保持当前 List/UniformList 的 layout/focus 职责和产品层的数据职责，
+是更正确而非更小的设计。
+
 ## 阶段 4：Text、IME 与 accessible editor boundary {#phase-4}
 
 状态：`ACTIVE`
