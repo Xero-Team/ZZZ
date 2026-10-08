@@ -1206,6 +1206,13 @@ pub trait StatefulInteractiveElement: InteractiveElement {
         self
     }
 
+    /// Set the accessible description for this element.
+    #[cfg(feature = "accessibility")]
+    fn aria_description(mut self, description: impl Into<SharedString>) -> Self {
+        self.interactivity().accessibility_description = Some(description.into());
+        self
+    }
+
     /// Set whether this element is disabled for accessibility clients.
     #[cfg(feature = "accessibility")]
     fn aria_disabled(mut self, disabled: bool) -> Self {
@@ -1577,6 +1584,9 @@ impl Element for Div {
         if let Some(label) = &self.interactivity.accessibility_label {
             node.set_label(label.to_string());
         }
+        if let Some(description) = &self.interactivity.accessibility_description {
+            node.set_description(description.to_string());
+        }
         if self.interactivity.accessibility_disabled {
             node.set_disabled();
         }
@@ -1870,6 +1880,8 @@ pub struct Interactivity {
     pub(crate) accessibility_role: Option<accesskit::Role>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_description: Option<SharedString>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_disabled: bool,
     #[cfg(feature = "accessibility")]

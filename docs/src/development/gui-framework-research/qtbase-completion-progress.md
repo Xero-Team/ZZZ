@@ -105,6 +105,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `SemanticTreeBuilder::push_node` 拒绝重复 node ID，但没有抑制其后代；后代会挂到此前
   使用同一 ID 的 sibling。builder 现在以 frame-local suppressed scope 表达这个失败，
   并在该 scope 结束后恢复正常 parent。
+- 在 `StatefulInteractiveElement` 增加 `aria_description`，让组件能将辅助说明与 label
+  分开投影到 AccessKit；frame-level regression 验证完整 snapshot 保留 description。
 - 为 builder 添加 unit regression：重复 node 与其 child 不出现，之后的有效 sibling
   仍附着到 root。
 - 为真实 Element lifecycle 添加 regression：两个 sibling 重复语义 ID 时，重复 subtree

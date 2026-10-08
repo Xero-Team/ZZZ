@@ -6249,6 +6249,7 @@ mod tests {
                         .id("accessibility-button")
                         .role(accesskit::Role::Button)
                         .aria_label("Activate")
+                        .aria_description("Runs the configured action")
                         .aria_disabled(true)
                         .aria_selected(true)
                         .aria_expanded(false)
@@ -6742,6 +6743,7 @@ mod tests {
                 .expect("semantic button should be present");
             assert_eq!(group.children(), &[*button_id]);
             assert_eq!(button.label(), Some("Activate"));
+            assert_eq!(button.description(), Some("Runs the configured action"));
             assert!(button.is_disabled());
             assert_eq!(button.is_selected(), Some(true));
             assert_eq!(button.is_expanded(), Some(false));
