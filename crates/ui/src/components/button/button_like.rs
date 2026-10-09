@@ -364,6 +364,8 @@ pub struct ButtonLike {
     #[cfg(feature = "accessibility")]
     accessibility_label: Option<SharedString>,
     #[cfg(feature = "accessibility")]
+    accessibility_role: Option<gpui::accesskit::Role>,
+    #[cfg(feature = "accessibility")]
     accessibility_expanded: Option<bool>,
     #[cfg(feature = "accessibility")]
     decorative: bool,
@@ -394,6 +396,8 @@ impl ButtonLike {
             focus_handle: None,
             #[cfg(feature = "accessibility")]
             accessibility_label: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_role: None,
             #[cfg(feature = "accessibility")]
             accessibility_expanded: None,
             #[cfg(feature = "accessibility")]
@@ -439,6 +443,12 @@ impl ButtonLike {
     #[cfg(feature = "accessibility")]
     pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
         self.accessibility_label = Some(label.into());
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub(crate) fn accessibility_role(mut self, role: gpui::accesskit::Role) -> Self {
+        self.accessibility_role = Some(role);
         self
     }
 
@@ -575,18 +585,21 @@ impl RenderOnce for ButtonLike {
         let base = if self.decorative {
             base
         } else {
-            base.role(gpui::accesskit::Role::Button)
-                .aria_disabled(self.disabled)
-                .when(
-                    self.toggleable && self.accessibility_expanded.is_none(),
-                    |this| this.aria_toggled(self.selected.into()),
-                )
-                .when_some(self.accessibility_expanded, |this, expanded| {
-                    this.aria_expanded(expanded)
-                })
-                .when_some(self.accessibility_label, |this, label| {
-                    this.aria_label(label)
-                })
+            base.role(
+                self.accessibility_role
+                    .unwrap_or(gpui::accesskit::Role::Button),
+            )
+            .aria_disabled(self.disabled)
+            .when(
+                self.toggleable && self.accessibility_expanded.is_none(),
+                |this| this.aria_toggled(self.selected.into()),
+            )
+            .when_some(self.accessibility_expanded, |this, expanded| {
+                this.aria_expanded(expanded)
+            })
+            .when_some(self.accessibility_label, |this, label| {
+                this.aria_label(label)
+            })
         };
 
         base.when_some(self.tab_index, |this, tab_index| {

@@ -8,7 +8,7 @@ use std::{
     rc::Rc,
 };
 use ui::{
-    AlertModal, AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard,
+    AlertModal, AnnouncementToast, Button, ButtonCommon as _, ButtonLink, Checkbox, ChoiceCard,
     CircularProgress, Clickable as _, ContextMenu, Disableable as _, Disclosure, DropdownMenu,
     IconPosition, List, ListAccessibility, ListHeader, ListItem, Modal, ModalHeader, ProgressBar,
     ScrollAxes, Scrollbars, Switch, Tab, TabBar, Table, TableAccessibility, ToggleState,
@@ -102,6 +102,10 @@ impl Render for SemanticComponents {
                         move |_, _, _| action_count.set(action_count.get() + 1)
                     }),
             )
+            .child(ButtonLink::new(
+                "Open handbook",
+                "https://example.invalid/handbook",
+            ))
             .child(
                 Checkbox::new("checkbox", ToggleState::Selected)
                     .label("Include diagnostics")
@@ -337,6 +341,17 @@ fn components_emit_roles_labels_and_state() {
         .find(|(_, node)| node.label() == Some("Action"))
         .expect("action button semantic node should exist");
     assert_eq!(action_button.toggled(), None);
+
+    let link = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Link && node.label() == Some("Open handbook")
+        })
+        .map(|(_, node)| node)
+        .expect("button link semantic node should exist");
+    assert!(link.supports_action(gpui::accesskit::Action::Click));
     cx.update_window(handle, |_, window, cx| {
         assert!(window.dispatch_accessibility_action(
             *action_button_id,

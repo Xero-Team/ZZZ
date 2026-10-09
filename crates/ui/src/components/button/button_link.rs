@@ -51,8 +51,10 @@ impl ButtonLink {
 impl RenderOnce for ButtonLink {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let id = format!("{}-{}", self.label, self.link);
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self.label.clone();
 
-        ButtonLike::new(id)
+        let button = ButtonLike::new(id)
             .size(ButtonSize::None)
             .child(
                 h_flex()
@@ -71,8 +73,14 @@ impl RenderOnce for ButtonLink {
                         )
                     }),
             )
-            .on_click(move |_, _, cx| cx.open_url(&self.link))
-            .into_any_element()
+            .on_click(move |_, _, cx| cx.open_url(&self.link));
+
+        #[cfg(feature = "accessibility")]
+        let button = button
+            .accessibility_role(gpui::accesskit::Role::Link)
+            .aria_label(accessibility_label);
+
+        button.into_any_element()
     }
 }
 

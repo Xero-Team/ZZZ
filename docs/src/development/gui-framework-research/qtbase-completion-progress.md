@@ -224,6 +224,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `ButtonLike` 现在区分 visual selected state 与明确声明的 toggle control：只有调用
   `toggle_state` 的 button 才投影 `toggled`，普通 button 不再错误报告 `toggled=false`；
   popover trigger 继续优先使用独立的 `expanded` state。
+- `ButtonLink` 现在将可见 label 投影为 accessible name，并通过 ButtonLike 的窄 role override
+  使用 `Role::Link` 而非无名称 Button；Click 继续复用原 URL-open handler。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -263,6 +265,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   UI downstream check。
 - 扩展 component semantic regression：验证普通 button 没有 toggled state，显式 toggle button
   仍保留它。
+- 扩展 component semantic regression：验证 ButtonLink 的 Link role/name/Click。
 - 已验证：
 
   ```sh
