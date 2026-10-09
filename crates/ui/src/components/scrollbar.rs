@@ -963,10 +963,10 @@ fn scrollbar_painter_overlay<T: ScrollableHandle>(
     state: Entity<ScrollbarState<T>>,
     origin: Point<Pixels>,
 ) -> Div {
-    div().absolute().inset_0().child(ScrollbarElement {
-        state,
-        origin,
-    })
+    div()
+        .absolute()
+        .inset_0()
+        .child(ScrollbarElement { state, origin })
 }
 
 #[cfg(feature = "accessibility")]
