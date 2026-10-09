@@ -204,6 +204,11 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   item 保留 state 但不提供 action。`ListItem` 的 expandable variant 也以同一原则注册
   Expand/Collapse。两者的内部 Disclosure chevron 已是装饰，避免一个逻辑 item 被重复朗读为
   TreeItem/ListItem 加一个匿名的展开/收起 button。
+- GPUI `StatefulInteractiveElement` 现在能写入 finite numeric current/min/max range。线性和
+  圆形 determinate progress 组件要求稳定 ID 与 accessible name，在有效的 finite value 和
+  positive finite maximum 下投影为 `Role::ProgressIndicator`；current value 被 clamp 到
+  `[0, max]`，invalid range 不生成伪造 determinate node，视觉也安全退化。Agent token rings
+  已迁移到本地化的 Context/Input/Output name。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -230,12 +235,18 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   relationship；默认 build 和 accessibility build 均无 warning。
 - 扩展 component semantic regression：验证 parent/leaf/disabled TreeItem 的 expanded 与
   action contract、ListItem Collapse route，以及内部 Disclosure 没有重复 semantic button。
+- 扩展 component semantic regression：验证 linear/circular progress 的 role、name 和 numeric
+  min/current/max，超限值 clamp 与 invalid range omission；同时重跑 GPUI a11y suite 及 Agent
+  UI downstream check。
 - 已验证：
 
   ```sh
   cargo test --locked -p ui
   cargo test --locked -p ui --features accessibility --test accessibility
   cargo check --locked -p workspace
+  cargo check --locked -p agent_ui
+  cargo test --locked -p gpui --lib --features accessibility
+  ./script/clippy -p gpui --features accessibility
   cargo clippy -p ui --features accessibility --release --all-targets --all-features -- --deny warnings
   script/check-philosophy
   cargo fmt --all -- --check
@@ -243,7 +254,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   ```
 
   结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
-  `3 passed`；Workspace check、release clippy 和 philosophy gate 通过。
+  `3 passed`；Workspace/Agent UI check、GPUI accessibility `269 passed`、release clippy 和
+  philosophy gate 通过。
 
 ### Scrollbar 设计门 {#phase-2-scrollbar-gate}
 

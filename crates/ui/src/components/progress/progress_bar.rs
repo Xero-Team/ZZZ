@@ -4,12 +4,16 @@ use gpui::{Hsla, point};
 use crate::components::Label;
 use crate::prelude::*;
 
+use super::determinate_progress;
+
 /// A progress bar is a horizontal bar that communicates the status of a process.
 ///
 /// A progress bar should not be used to represent indeterminate progress.
 #[derive(IntoElement, RegisterComponent, Documented)]
 pub struct ProgressBar {
     id: ElementId,
+    #[cfg(feature = "accessibility")]
+    accessibility_label: SharedString,
     value: f32,
     max_value: f32,
     bg_color: Hsla,
@@ -18,9 +22,24 @@ pub struct ProgressBar {
 }
 
 impl ProgressBar {
-    pub fn new(id: impl Into<ElementId>, value: f32, max_value: f32, cx: &App) -> Self {
+    /// Creates a determinate progress bar with its accessible name.
+    ///
+    /// A semantic range is emitted only when `value` and `max_value` are finite and `max_value`
+    /// is positive.
+    pub fn new(
+        id: impl Into<ElementId>,
+        label: impl Into<SharedString>,
+        value: f32,
+        max_value: f32,
+        cx: &App,
+    ) -> Self {
+        #[cfg(not(feature = "accessibility"))]
+        let _ = label;
+
         Self {
             id: id.into(),
+            #[cfg(feature = "accessibility")]
+            accessibility_label: label.into(),
             value,
             max_value,
             bg_color: cx.theme().colors().background,
@@ -62,11 +81,22 @@ impl ProgressBar {
 
 impl RenderOnce for ProgressBar {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let fill_width = (self.value / self.max_value).clamp(0.02, 1.0);
+        let progress = determinate_progress(self.value, self.max_value);
+        let fill_width = progress.map_or(0.02, |progress| progress.fraction.clamp(0.02, 1.0));
 
-        div()
-            .id(self.id.clone())
-            .w_full()
+        let bar = div().id(self.id);
+        #[cfg(feature = "accessibility")]
+        let bar = if let Some(progress) = progress {
+            bar.role(gpui::accesskit::Role::ProgressIndicator)
+                .aria_label(self.accessibility_label)
+                .aria_min_numeric_value(0.)
+                .aria_numeric_value(progress.current_value)
+                .aria_max_numeric_value(progress.max_value)
+        } else {
+            bar
+        };
+
+        bar.w_full()
             .h_2()
             .p_0p5()
             .rounded_full()
@@ -81,8 +111,14 @@ impl RenderOnce for ProgressBar {
                 div()
                     .h_full()
                     .rounded_full()
-                    .when(self.value > self.max_value, |div| div.bg(self.over_color))
-                    .when(self.value <= self.max_value, |div| div.bg(self.fg_color))
+                    .when(
+                        progress.is_some_and(|progress| progress.exceeds_maximum),
+                        |div| div.bg(self.over_color),
+                    )
+                    .when(
+                        progress.is_none_or(|progress| !progress.exceeds_maximum),
+                        |div| div.bg(self.fg_color),
+                    )
                     .w(relative(fill_width)),
             )
     }
@@ -115,7 +151,7 @@ impl Component for ProgressBar {
                                     .child(Label::new("0%"))
                                     .child(Label::new("Empty")),
                             )
-                            .child(ProgressBar::new("empty", 0.0, max_value, cx)),
+                            .child(ProgressBar::new("empty", "Empty", 0.0, max_value, cx)),
                     )
                     .child(
                         container()
@@ -125,7 +161,13 @@ impl Component for ProgressBar {
                                     .child(Label::new("38%"))
                                     .child(Label::new("Partial")),
                             )
-                            .child(ProgressBar::new("partial", max_value * 0.35, max_value, cx)),
+                            .child(ProgressBar::new(
+                                "partial",
+                                "Partial",
+                                max_value * 0.35,
+                                max_value,
+                                cx,
+                            )),
                     )
                     .child(
                         container()
@@ -135,7 +177,9 @@ impl Component for ProgressBar {
                                     .child(Label::new("100%"))
                                     .child(Label::new("Complete")),
                             )
-                            .child(ProgressBar::new("filled", max_value, max_value, cx)),
+                            .child(ProgressBar::new(
+                                "filled", "Complete", max_value, max_value, cx,
+                            )),
                     )
                     .into_any_element(),
             )])

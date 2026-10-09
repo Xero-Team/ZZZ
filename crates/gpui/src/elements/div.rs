@@ -1248,6 +1248,27 @@ pub trait StatefulInteractiveElement: InteractiveElement {
         self
     }
 
+    /// Sets the current numeric value for an accessible range control.
+    #[cfg(feature = "accessibility")]
+    fn aria_numeric_value(mut self, value: f64) -> Self {
+        self.interactivity().accessibility_numeric_value = value.is_finite().then_some(value);
+        self
+    }
+
+    /// Sets the inclusive minimum numeric value for an accessible range control.
+    #[cfg(feature = "accessibility")]
+    fn aria_min_numeric_value(mut self, value: f64) -> Self {
+        self.interactivity().accessibility_min_numeric_value = value.is_finite().then_some(value);
+        self
+    }
+
+    /// Sets the inclusive maximum numeric value for an accessible range control.
+    #[cfg(feature = "accessibility")]
+    fn aria_max_numeric_value(mut self, value: f64) -> Self {
+        self.interactivity().accessibility_max_numeric_value = value.is_finite().then_some(value);
+        self
+    }
+
     /// Register a handler for an accessibility action on this element.
     #[cfg(feature = "accessibility")]
     fn on_a11y_action(
@@ -1602,6 +1623,15 @@ impl Element for Div {
         if let Some(value) = &self.interactivity.accessibility_value {
             node.set_value(value.to_string());
         }
+        if let Some(value) = self.interactivity.accessibility_numeric_value {
+            node.set_numeric_value(value);
+        }
+        if let Some(value) = self.interactivity.accessibility_min_numeric_value {
+            node.set_min_numeric_value(value);
+        }
+        if let Some(value) = self.interactivity.accessibility_max_numeric_value {
+            node.set_max_numeric_value(value);
+        }
         if self.interactivity.tracked_focus_handle.is_some() {
             node.add_action(accesskit::Action::Focus);
         }
@@ -1892,6 +1922,12 @@ pub struct Interactivity {
     pub(crate) accessibility_toggled: Option<accesskit::Toggled>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_value: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_numeric_value: Option<f64>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_min_numeric_value: Option<f64>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_max_numeric_value: Option<f64>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_action_listeners:
         Vec<(accesskit::Action, crate::SemanticActionListener)>,

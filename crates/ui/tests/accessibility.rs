@@ -1,16 +1,16 @@
 use gpui::{
     AnyWindowHandle, AppContext as _, Context, Entity, FocusHandle, IntoElement,
-    ParentElement as _, Render, TestAppContext, Window, div,
+    ParentElement as _, Render, TestAppContext, Window, div, px,
 };
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 use ui::{
-    AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
-    ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, List, ListAccessibility,
-    ListItem, Modal, ModalHeader, Switch, Tab, TabBar, Table, TableAccessibility, ToggleState,
-    Toggleable as _, TreeViewItem,
+    AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, CircularProgress,
+    Clickable as _, ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, List,
+    ListAccessibility, ListItem, Modal, ModalHeader, ProgressBar, Switch, Tab, TabBar, Table,
+    TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -40,7 +40,7 @@ impl Render for SemanticDropdown {
 }
 
 impl Render for SemanticComponents {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .child(
                 Button::new("save", "Save")
@@ -148,6 +148,36 @@ impl Render for SemanticComponents {
                     ))
                     .child(ListItem::new("recent-project").aria_label("Project sunrise")),
             )
+            .child(ProgressBar::new(
+                "workspace-progress",
+                "Workspace indexing",
+                3.0,
+                4.0,
+                cx,
+            ))
+            .child(CircularProgress::new(
+                "sync-progress",
+                "Synchronizing projects",
+                5.0,
+                4.0,
+                px(16.0),
+                cx,
+            ))
+            .child(ProgressBar::new(
+                "invalid-progress",
+                "Invalid progress",
+                1.0,
+                0.0,
+                cx,
+            ))
+            .child(CircularProgress::new(
+                "invalid-circular-progress",
+                "Invalid circular progress",
+                1.0,
+                0.0,
+                px(16.0),
+                cx,
+            ))
             .child(
                 Disclosure::new("advanced-options", true)
                     .aria_label("Advanced options")
@@ -479,6 +509,39 @@ fn components_emit_roles_labels_and_state() {
         .map(|(_, node)| node)
         .expect("semantic list node should exist");
     assert!(recent_projects.children().contains(recent_project_id));
+
+    let workspace_progress = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::ProgressIndicator
+                && node.label() == Some("Workspace indexing")
+        })
+        .map(|(_, node)| node)
+        .expect("progress bar semantic node should exist");
+    assert_eq!(workspace_progress.min_numeric_value(), Some(0.));
+    assert_eq!(workspace_progress.numeric_value(), Some(3.));
+    assert_eq!(workspace_progress.max_numeric_value(), Some(4.));
+    let sync_progress = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::ProgressIndicator
+                && node.label() == Some("Synchronizing projects")
+        })
+        .map(|(_, node)| node)
+        .expect("circular progress semantic node should exist");
+    assert_eq!(sync_progress.min_numeric_value(), Some(0.));
+    assert_eq!(sync_progress.numeric_value(), Some(4.));
+    assert_eq!(sync_progress.max_numeric_value(), Some(4.));
+    assert!(!snapshot.update.nodes.iter().any(|(_, node)| {
+        matches!(
+            node.label(),
+            Some("Invalid progress") | Some("Invalid circular progress")
+        )
+    }));
 
     let (menu_item_id, menu_item) = snapshot
         .update

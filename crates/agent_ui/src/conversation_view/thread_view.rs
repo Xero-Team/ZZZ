@@ -4094,6 +4094,8 @@ impl ThreadView {
                             )
                             .child(
                                 CircularProgress::new(
+                                    "input-token-usage",
+                                    tr(cx, "agent_ui.thread_view.input", "Input:"),
                                     usage.input_tokens as f32,
                                     input_max_raw as f32,
                                     ring_size,
@@ -4113,6 +4115,8 @@ impl ThreadView {
                             )
                             .child(
                                 CircularProgress::new(
+                                    "output-token-usage",
+                                    tr(cx, "agent_ui.thread_view.output", "Output:"),
                                     usage.output_tokens as f32,
                                     output_max_raw as f32,
                                     ring_size,
@@ -4133,6 +4137,8 @@ impl ThreadView {
                     .mr_1()
                     .child(
                         CircularProgress::new(
+                            "context-token-usage",
+                            tr(cx, "agent_ui.thread_view.context", "Context"),
                             usage.used_tokens as f32,
                             usage.max_tokens as f32,
                             ring_size,
