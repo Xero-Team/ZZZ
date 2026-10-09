@@ -5,6 +5,17 @@
 pub trait Toggleable {
     /// Sets whether the element is selected.
     fn toggle_state(self, selected: bool) -> Self;
+
+    /// Sets whether a controlled popup is expanded for accessibility clients.
+    ///
+    /// Components that do not expose their own accessibility node leave this as a no-op.
+    #[cfg(feature = "accessibility")]
+    fn accessibility_expanded(self, _expanded: bool) -> Self
+    where
+        Self: Sized,
+    {
+        self
+    }
 }
 
 /// Represents the selection status of an element.

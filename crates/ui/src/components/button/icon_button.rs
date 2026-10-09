@@ -116,6 +116,12 @@ impl Toggleable for IconButton {
         self.base = self.base.toggle_state(selected);
         self
     }
+
+    #[cfg(feature = "accessibility")]
+    fn accessibility_expanded(mut self, expanded: bool) -> Self {
+        self.base = self.base.accessibility_expanded(expanded);
+        self
+    }
 }
 
 impl SelectableButton for IconButton {

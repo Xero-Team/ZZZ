@@ -362,6 +362,8 @@ pub struct ButtonLike {
     focus_handle: Option<FocusHandle>,
     #[cfg(feature = "accessibility")]
     accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    accessibility_expanded: Option<bool>,
 }
 
 impl ButtonLike {
@@ -388,6 +390,8 @@ impl ButtonLike {
             focus_handle: None,
             #[cfg(feature = "accessibility")]
             accessibility_label: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_expanded: None,
         }
     }
 
@@ -451,6 +455,12 @@ impl Disableable for ButtonLike {
 impl Toggleable for ButtonLike {
     fn toggle_state(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn accessibility_expanded(mut self, expanded: bool) -> Self {
+        self.accessibility_expanded = Some(expanded);
         self
     }
 }
@@ -552,7 +562,12 @@ impl RenderOnce for ButtonLike {
         let base = base
             .role(gpui::accesskit::Role::Button)
             .aria_disabled(self.disabled)
-            .aria_toggled(self.selected.into())
+            .when(self.accessibility_expanded.is_none(), |this| {
+                this.aria_toggled(self.selected.into())
+            })
+            .when_some(self.accessibility_expanded, |this, expanded| {
+                this.aria_expanded(expanded)
+            })
             .when_some(self.accessibility_label, |this, label| {
                 this.aria_label(label)
             });

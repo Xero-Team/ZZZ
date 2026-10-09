@@ -185,6 +185,10 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `ContextMenu::action_checked(..., false)` 现在保留 unchecked checkbox metadata，避免
   将“可勾选但未选中”的条目退化为普通 menu item；submenu trigger 也使用
   `Role::MenuItem`。
+- `PopoverMenu`/`DropdownMenu` trigger 现在将 menu visibility 投影为 button 的
+  `expanded` state，而不是将“菜单展开”错误地报告为 toggle button 的 `toggled` state。
+  `Toggleable::accessibility_expanded` 对没有 semantic node 的自定义 trigger 默认 no-op；
+  `Button`、`ButtonLike` 与 `IconButton` 则将该 state 写入其既有 node，不创建平行控件。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -200,6 +204,9 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   鼠标相同的业务 action。
 - 扩展 semantic integration test：验证 opt-in table 的完整 role/name 层级，并新增 unit
   regression，拒绝列数与 header 数不一致的配置。
+- 增加 dropdown lifecycle regression：通过 AccessKit Click 验证 trigger 从
+  `expanded=false` 到 `true`、Menu 出现；收到真实 `DismissEvent` 后回到 `false`。测试还
+  验证 popup trigger 没有错误携带 `toggled` state。
 - 已验证：
 
   ```sh
@@ -212,13 +219,13 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   ```
 
   结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
-  `2 passed`；release clippy 和 philosophy gate 通过。
+  `3 passed`；release clippy 和 philosophy gate 通过。
 
 ### 下一步 {#phase-2-next}
 
 继续按 interactive、structural、status、text input、decorative 分类审计组件；优先
-DropdownMenu、scrollbar 与剩余 text surface。保持 DataTable 语义为有调用方提供可访问名称
-时的 opt-in，不能从 `AnyElement` 猜测 cell 内容。每次只迁移一条完整的
+scrollbar 与剩余 text surface。保持 DataTable 语义为有调用方提供可访问名称时的 opt-in，
+不能从 `AnyElement` 猜测 cell 内容。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
 
 ## 阶段 3：Model、selection、focus 与 virtualization 协议 {#phase-3}

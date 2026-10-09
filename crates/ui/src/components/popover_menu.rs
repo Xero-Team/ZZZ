@@ -30,6 +30,11 @@ impl<T: Toggleable + 'static> Toggleable for gpui::AnimationElement<T> {
     fn toggle_state(self, selected: bool) -> Self {
         self.map_element(|e| e.toggle_state(selected))
     }
+
+    #[cfg(feature = "accessibility")]
+    fn accessibility_expanded(self, expanded: bool) -> Self {
+        self.map_element(|element| element.accessibility_expanded(expanded))
+    }
 }
 
 pub struct PopoverMenuHandle<M>(Rc<RefCell<Option<PopoverMenuHandleState<M>>>>);
@@ -176,7 +181,10 @@ impl<M: ManagedView> PopoverMenu<M> {
     pub fn child<T: IntoElement + Toggleable + 'static>(mut self, t: T) -> Self {
         self.child_builder = Some(Box::new(move |menu, _builder| {
             let open = menu.borrow().is_some();
-            t.toggle_state(open).into_any_element()
+            let child = t.toggle_state(open);
+            #[cfg(feature = "accessibility")]
+            let child = child.accessibility_expanded(open);
+            child.into_any_element()
         }));
         self
     }
@@ -185,7 +193,10 @@ impl<M: ManagedView> PopoverMenu<M> {
         let on_open = self.on_open.clone();
         self.child_builder = Some(Box::new(move |menu, builder| {
             let open = menu.borrow().is_some();
-            t.toggle_state(open)
+            let trigger = t.toggle_state(open);
+            #[cfg(feature = "accessibility")]
+            let trigger = trigger.accessibility_expanded(open);
+            trigger
                 .when_some(builder, |el, builder| {
                     el.on_click(move |_event, window, cx| {
                         show_menu(&builder, &menu, on_open.clone(), window, cx)
@@ -205,7 +216,10 @@ impl<M: ManagedView> PopoverMenu<M> {
         let on_open = self.on_open.clone();
         self.child_builder = Some(Box::new(move |menu, builder| {
             let open = menu.borrow().is_some();
-            t.toggle_state(open)
+            let trigger = t.toggle_state(open);
+            #[cfg(feature = "accessibility")]
+            let trigger = trigger.accessibility_expanded(open);
+            trigger
                 .when_some(builder, |el, builder| {
                     el.on_click(move |_, window, cx| {
                         show_menu(&builder, &menu, on_open.clone(), window, cx)

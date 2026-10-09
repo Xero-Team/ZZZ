@@ -2,11 +2,14 @@ use gpui::{
     AnyWindowHandle, AppContext as _, Context, Entity, FocusHandle, IntoElement,
     ParentElement as _, Render, TestAppContext, Window, div,
 };
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
-    ContextMenu, Disableable as _, IconPosition, ListItem, Modal, ModalHeader, Switch, Tab, Table,
-    TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
+    ContextMenu, Disableable as _, DropdownMenu, IconPosition, ListItem, Modal, ModalHeader,
+    Switch, Tab, Table, TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -19,9 +22,19 @@ struct SemanticContextMenu {
     menu: Entity<ContextMenu>,
 }
 
+struct SemanticDropdown {
+    menu: Entity<ContextMenu>,
+}
+
 impl Render for SemanticContextMenu {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         self.menu.clone()
+    }
+}
+
+impl Render for SemanticDropdown {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        DropdownMenu::new("semantic-dropdown", "Project actions", self.menu.clone())
     }
 }
 
@@ -459,6 +472,113 @@ fn components_emit_roles_labels_and_state() {
         .map(|(_, node)| node)
         .expect("status semantic node should exist");
     assert_eq!(status.label(), Some("Update available"));
+}
+
+#[test]
+fn dropdown_trigger_reports_expanded_menu_state() {
+    let mut cx = TestAppContext::single();
+    cx.update(|cx| {
+        let settings = settings::SettingsStore::test(cx);
+        cx.set_global(settings);
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+    });
+
+    let menu_slot = Rc::new(RefCell::new(None));
+    let window = cx.add_window({
+        let menu_slot = menu_slot.clone();
+        move |window, cx| {
+            let menu = ContextMenu::build(window, cx, |menu, _, _| {
+                menu.entry("Open project", None, |_, _| {})
+            });
+            *menu_slot.borrow_mut() = Some(menu.clone());
+            SemanticDropdown { menu }
+        }
+    });
+    cx.run_until_parked();
+
+    let handle: AnyWindowHandle = window.into();
+    let snapshot = cx
+        .update_window(handle, |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("dropdown should build a semantic snapshot")
+        })
+        .expect("dropdown window should remain open");
+
+    let (trigger_id, trigger) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Project actions")
+        })
+        .expect("dropdown trigger semantic node should exist");
+    assert_eq!(trigger.is_expanded(), Some(false));
+    assert_eq!(trigger.toggled(), None);
+    assert!(trigger.supports_action(gpui::accesskit::Action::Click));
+
+    let expanded_snapshot = cx
+        .update_window(handle, |_, window, cx| {
+            assert!(window.dispatch_accessibility_action(
+                *trigger_id,
+                gpui::accesskit::Action::Click,
+                None,
+                cx,
+            ));
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("opened dropdown should build a semantic snapshot")
+        })
+        .expect("dropdown window should remain open");
+
+    let trigger = expanded_snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Project actions")
+        })
+        .map(|(_, node)| node)
+        .expect("opened dropdown trigger semantic node should exist");
+    assert_eq!(trigger.is_expanded(), Some(true));
+    assert_eq!(trigger.toggled(), None);
+    assert!(
+        expanded_snapshot
+            .update
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == gpui::accesskit::Role::Menu)
+    );
+
+    let menu = menu_slot
+        .borrow()
+        .clone()
+        .expect("dropdown should retain its context menu");
+    cx.update(|cx| {
+        menu.update(cx, |_, cx| cx.emit(gpui::DismissEvent));
+    });
+    let collapsed_snapshot = cx
+        .update_window(handle, |_, window, cx| {
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("dismissed dropdown should build a semantic snapshot")
+        })
+        .expect("dropdown window should remain open");
+    let trigger = collapsed_snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Project actions")
+        })
+        .map(|(_, node)| node)
+        .expect("dismissed dropdown trigger semantic node should exist");
+    assert_eq!(trigger.is_expanded(), Some(false));
+    assert_eq!(trigger.toggled(), None);
 }
 
 #[test]
