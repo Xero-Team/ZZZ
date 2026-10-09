@@ -31,6 +31,7 @@ struct SemanticDropdown {
 
 struct SemanticScrollbar {
     handle: ScrollHandle,
+    scrollable: bool,
 }
 
 struct SemanticDualScrollbar {
@@ -57,7 +58,7 @@ impl Render for SemanticScrollbar {
             .h(px(100.))
             .overflow_y_scroll()
             .track_scroll(&self.handle)
-            .child(div().h(px(400.)))
+            .child(div().h(if self.scrollable { px(400.) } else { px(100.) }))
             .custom_scrollbars(
                 Scrollbars::always_visible(ScrollAxes::Vertical)
                     .tracked_scroll_handle(&self.handle),
@@ -827,6 +828,7 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
 
     let (scrollbar, cx) = cx.add_window_view(|_, _| SemanticScrollbar {
         handle: ScrollHandle::new(),
+        scrollable: true,
     });
     let snapshot = cx.update(|window, cx| {
         window.refresh();
@@ -843,6 +845,7 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
         .iter()
         .find(|(_, node)| node.role() == gpui::accesskit::Role::ScrollBar)
         .expect("vertical scrollbar semantic node should exist");
+    let scrollbar_id = *scrollbar_id;
     assert_eq!(
         scrollbar_node.orientation(),
         Some(gpui::accesskit::Orientation::Vertical)
@@ -863,7 +866,7 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
 
     let updated_snapshot = cx.update(|window, cx| {
         assert!(window.dispatch_accessibility_action(
-            *scrollbar_id,
+            scrollbar_id,
             gpui::accesskit::Action::Increment,
             None,
             cx,
@@ -872,7 +875,7 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
 
         let action_data = gpui::accesskit::ActionData::NumericValue(50.);
         assert!(window.dispatch_accessibility_action(
-            *scrollbar_id,
+            scrollbar_id,
             gpui::accesskit::Action::SetValue,
             Some(&action_data),
             cx,
@@ -880,7 +883,7 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
         assert_eq!(scrollbar.read(cx).handle.offset().y, -px(50.));
 
         assert!(window.dispatch_accessibility_action(
-            *scrollbar_id,
+            scrollbar_id,
             gpui::accesskit::Action::Decrement,
             None,
             cx,
@@ -889,7 +892,7 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
 
         let action_data = gpui::accesskit::ActionData::NumericValue(max_value + 100.);
         assert!(window.dispatch_accessibility_action(
-            *scrollbar_id,
+            scrollbar_id,
             gpui::accesskit::Action::SetValue,
             Some(&action_data),
             cx,
@@ -911,6 +914,33 @@ fn scrollbar_emits_per_axis_range_semantics_and_actions() {
         .find(|(_, node)| node.role() == gpui::accesskit::Role::ScrollBar)
         .expect("updated vertical scrollbar semantic node should exist");
     assert_eq!(scrollbar_node.numeric_value(), Some(max_value));
+
+    cx.update(|_, cx| {
+        scrollbar.update(cx, |scrollbar, cx| {
+            scrollbar.scrollable = false;
+            cx.notify();
+        });
+    });
+    cx.update(|window, cx| {
+        window.draw(cx).clear();
+        window.draw(cx).clear();
+        let snapshot = window
+            .accessibility_snapshot_for_test()
+            .expect("collapsed scrollbar semantic snapshot should exist");
+        assert!(
+            !snapshot
+                .update
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == gpui::accesskit::Role::ScrollBar)
+        );
+        assert!(!window.dispatch_accessibility_action(
+            scrollbar_id,
+            gpui::accesskit::Action::Increment,
+            None,
+            cx,
+        ));
+    });
 }
 
 #[test]

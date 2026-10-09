@@ -964,7 +964,7 @@ fn scrollbar_painter_overlay<T: ScrollableHandle>(
     origin: Point<Pixels>,
 ) -> Div {
     div().absolute().inset_0().child(ScrollbarElement {
-        state: state.clone(),
+        state,
         origin,
     })
 }
@@ -1044,7 +1044,7 @@ fn semantic_scrollbar_axis<T: ScrollableHandle>(
     };
     let increment_state = state.clone();
     let decrement_state = state.clone();
-    let set_value_state = state.clone();
+    let set_value_state = state;
 
     node.role(gpui::accesskit::Role::ScrollBar)
         .aria_orientation(orientation)

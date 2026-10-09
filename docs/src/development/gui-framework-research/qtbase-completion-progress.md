@@ -297,11 +297,12 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   在持有 `&mut self` 时预先生成轴快照并将其传给 overlay；这避免了测试首次发现的同一 Entity
   re-entrant read。
 - semantic regression 分别验证单轴的 orientation/range、Increment/Decrement/SetValue/超限
-  clamp 与 value update，以及双轴 node identity 和 axis-local mutation。
+  clamp/value update/node removal/stale action rejection，以及双轴 node identity 和 axis-local
+  mutation。
 
-尚未将 mouse track click、thumb drag、autohide transition、UniformList runtime position 和 node
-removal 的组合纳入新的 accessibility fixture；这些仍是下一轮专门回归的范围。已有 painter
-逻辑未在本次重构中改变。
+尚未将 mouse track click、thumb drag、autohide transition 和 UniformList runtime position 的
+组合纳入新的 accessibility fixture；这些仍是下一轮专门回归的范围。已有 painter 逻辑未在
+本次重构中改变。
 
 ### 下一步 {#phase-2-next}
 
