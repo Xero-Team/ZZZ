@@ -377,6 +377,13 @@ mod tests {
             })
         );
 
+        builder
+            .set_children(ROOT_NODE_ID, [first_id])
+            .expect("removing a child from its old parent should succeed");
+        builder
+            .set_children(first_id, [second_id])
+            .expect("adding a removed child to its new parent should succeed");
+
         let root = builder
             .snapshot()
             .update
@@ -384,7 +391,15 @@ mod tests {
             .into_iter()
             .find(|(node_id, _)| *node_id == ROOT_NODE_ID)
             .expect("root should exist");
-        assert_eq!(root.1.children(), &[first_id, second_id]);
+        let first = builder
+            .snapshot()
+            .update
+            .nodes
+            .into_iter()
+            .find(|(node_id, _)| *node_id == first_id)
+            .expect("first node should exist");
+        assert_eq!(root.1.children(), &[first_id]);
+        assert_eq!(first.1.children(), &[second_id]);
     }
 
     #[test]

@@ -150,7 +150,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   AccessKit reference 或半更新 tree。
 - `set_children` 还拒绝 duplicate child、cycle 和已有其他 parent 的 child。reparent 现在是
   明确两步：先从旧 parent 移除，再添加到新 parent；unit regression 验证所有被拒绝的 mutation
-  都保留原 tree。
+  都保留原 tree，并验证两步 reparent 成功后 child 只属于新 parent。
 - 已验证：
 
   ```sh
