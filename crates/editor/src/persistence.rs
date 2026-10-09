@@ -226,6 +226,10 @@ impl Domain for EditorDb {
         sql! (
             ALTER TABLE editors RENAME COLUMN path TO native_file_path;
         ),
+        sql! (
+            CREATE INDEX editor_selections_editor_id_workspace_id
+            ON editor_selections (editor_id, workspace_id);
+        ),
     ];
 }
 
@@ -309,6 +313,7 @@ impl EditorDb {
             SELECT start, end
             FROM editor_selections
             WHERE editor_id = ?1 AND workspace_id = ?2
+            ORDER BY item_id
         }
     }
 
@@ -514,6 +519,41 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(have, serialized_editor);
+    }
+
+    #[gpui::test]
+    async fn test_editor_selections_restore_in_saved_order(cx: &mut gpui::TestAppContext) {
+        let db = cx.update(|cx| workspace::WorkspaceDb::global(cx));
+        let workspace_id = db.next_id().await.unwrap();
+        let editor_db = cx.update(|cx| EditorDb::global(cx));
+        let editor_id = 5678;
+        editor_db
+            .save_serialized_editor(
+                editor_id,
+                workspace_id,
+                SerializedEditor {
+                    native_file_path: None,
+                    vfs_path: None,
+                    contents: None,
+                    language: None,
+                    mtime: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let selections = vec![(12, 14), (4, 6), (21, 21)];
+        editor_db
+            .save_editor_selections(editor_id, workspace_id, selections.clone())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            editor_db
+                .get_editor_selections(editor_id, workspace_id)
+                .unwrap(),
+            selections
+        );
     }
 
     // NOTE: The fingerprint search logic (finding content at new offsets when file
