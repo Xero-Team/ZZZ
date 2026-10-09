@@ -4871,7 +4871,7 @@ async fn test_multiple_marked_entries(cx: &mut gpui::TestAppContext) {
             "v project_root",
             "    v dir_1",
             "        v nested_dir",
-            "              file_a.py",
+            "              file_a.py  <== marked",
             "      file_1.py  <== selected  <== marked",
         ]
     );
@@ -5248,6 +5248,64 @@ async fn test_drag_marked_entries_in_folded_directories(cx: &mut gpui::TestAppCo
             "        > f/g  <== selected  <== marked"
         ],
         "Should move 'b/c' and 'f/g' to target, leaving 'a' and 'e'"
+    );
+}
+
+#[gpui::test]
+async fn test_shift_selection_expands_intermediate_folded_directory(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    cx.update(|cx| {
+        let settings = *ProjectPanelSettings::get_global(cx);
+        ProjectPanelSettings::override_global(
+            ProjectPanelSettings {
+                auto_fold_dirs: true,
+                ..settings
+            },
+            cx,
+        );
+    });
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        "/root",
+        json!({
+            "a": { "b": { "c": {} } },
+            "d": { "e": { "f": {} } },
+            "target": {},
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs, ["/root".as_ref()], cx).await;
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let workspace = window
+        .read_with(cx, |workspace, _| workspace.workspace().clone())
+        .unwrap();
+    let cx = &mut VisualTestContext::from_window(window.into(), cx);
+    let panel = workspace.update_in(cx, ProjectPanel::new);
+    cx.run_until_parked();
+
+    select_folded_path_with_mark(&panel, "root/a/b/c", "root/a/b", cx);
+    set_folded_active_ancestor(&panel, "root/d/e/f", "root/d/e", cx);
+    cx.simulate_modifiers_change(gpui::Modifiers {
+        shift: true,
+        ..Default::default()
+    });
+    cx.update(|window, cx| {
+        panel.update(cx, |panel, cx| {
+            panel.select_next(&SelectNext, window, cx);
+            panel.select_next(&SelectNext, window, cx);
+        })
+    });
+    cx.simulate_modifiers_change(Default::default());
+
+    let intermediate = find_project_entry(&panel, "root/d/e/f", cx)
+        .expect("intermediate folded directory should exist");
+    let outermost =
+        find_project_entry(&panel, "root/d", cx).expect("outermost folded directory should exist");
+    assert_eq!(
+        panel.read_with(cx, |panel, _| panel.resolve_entry(intermediate)),
+        outermost,
     );
 }
 
