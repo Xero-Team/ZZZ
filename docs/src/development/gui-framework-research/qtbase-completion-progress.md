@@ -285,6 +285,23 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `5 passed`；Workspace/Agent UI check、GPUI accessibility `269 passed`、release clippy 和
   philosophy gate 通过。
 
+### 组件审计快照 {#phase-2-component-audit}
+
+| 分类                   | 组件/表面                                                   | 当前结论                   | 可观察证据或边界                                                                                                                                                 |
+| ---------------------- | ----------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| interactive            | Button、IconButton、ButtonLink                              | `VERIFIED`                 | ButtonLike 将普通 button、toggle 和 popup-expanded 分开；ButtonLink 为命名 Link，Click 复用 URL handler。                                                        |
+| interactive            | Checkbox、Switch、ChoiceCard                                | `VERIFIED`                 | name、disabled、三态/selected 与 Click；ChoiceCard 内部 indicator 是装饰。                                                                                       |
+| structural/interactive | List、ListItem、ListHeader、TreeViewItem                    | `VERIFIED/PARTIAL`         | List 需显式 opt-in；可展开 item/header 只有一个 semantic control；TreeViewItem 仍不是 tree model/container。                                                     |
+| structural/interactive | Tab、TabBar、DataTable                                      | `VERIFIED/PARTIAL`         | Tab 强制 name，TabBar 有 TabList；DataTable 需 caller 提供 header/cell labels。                                                                                  |
+| menu/popup             | ContextMenu、PopoverMenu、DropdownMenu                      | `VERIFIED`                 | Menu/MenuItem state/action 与 popup trigger expanded lifecycle 有 snapshot/action regression。                                                                   |
+| text input             | InputField                                                  | `VERIFIED/PARTIAL`         | 非 masked value/SetValue 走 ErasedEditor authority；selection、marked text、caret bounds 仍无 adapter protocol。                                                 |
+| status/range           | AnnouncementToast、ProgressBar、CircularProgress、Scrollbar | `VERIFIED/PARTIAL`         | status name/description、progress numeric range、Scrollbar per-axis range/action 已覆盖；Scrollbar UniformList/autohide/mouse-a11y 组合仍待 runtime regression。 |
+| dialogs                | Modal、AlertModal                                           | `VERIFIED/PARTIAL`         | Dialog/AlertDialog name/description 与 header controls 已覆盖；focus trap/restoration 属 product modal-manager owner。                                           |
+| display-only           | Banner、Callout、Chip、Avatar、Divider、Icon                | `AUDITED: NO DEFAULT ROLE` | 这些容器/visual 可含任意 children、actions 或产品文本，不能从外观猜 name/live priority；slot 内 interactive child 自己生成语义。                                 |
+
+本表只报告 in-tree semantic snapshot/action 证据，不等同于 VoiceOver、Narrator、Orca 或浏览器
+runtime 验收。后者仍按 platform matrix 与 runbook 分开记录。
+
 ### Scrollbar 轴级语义 {#phase-2-scrollbar-semantics}
 
 原先的静态审计结论已落地：不能直接给单个 painter `ScrollbarElement` 添加一个
