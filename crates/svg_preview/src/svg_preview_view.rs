@@ -209,8 +209,10 @@ impl SvgPreviewView {
 
     pub fn register(workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Workspace>) {
         workspace.register_action(move |workspace, _: &OpenPreview, window, cx| {
-            if let Some(buffer) = Self::resolve_active_item_as_svg_buffer(workspace, cx)
+            if let Some(item) = workspace.item_for_action(window, cx)
+                && let Some(buffer) = item.act_as::<MultiBuffer>(cx)
                 && Self::is_svg_file(&buffer, cx)
+                && let Some(pane) = workspace.pane_for_item_id(item.item_id())
             {
                 let view = Self::create_svg_view(
                     SvgPreviewMode::Default,
@@ -219,7 +221,7 @@ impl SvgPreviewView {
                     window,
                     cx,
                 );
-                workspace.active_pane().update(cx, |pane, cx| {
+                pane.update(cx, |pane, cx| {
                     if let Some(existing_view_idx) =
                         Self::find_existing_preview_item_idx(pane, &buffer, cx)
                     {

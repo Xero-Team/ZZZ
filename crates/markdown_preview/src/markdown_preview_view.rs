@@ -13,10 +13,10 @@ use editor::{
     Editor, EditorEvent, EditorSettingsScrollbarProxy, MultiBufferOffset, SelectionEffects,
 };
 use gpui::{
-    Action, App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable, ImageSource,
-    InteractiveElement, IntoElement, IsZero, Pixels, Render, Resource, RetainAllImageCache,
-    SMOOTH_SVG_SCALE_FACTOR, ScrollHandle, SharedString, SharedUri, Subscription, Task, WeakEntity,
-    Window, point,
+    Action, AnyElement, App, ClipboardItem, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    ImageSource, InteractiveElement, IntoElement, IsZero, Pixels, Render, Resource,
+    RetainAllImageCache, SMOOTH_SVG_SCALE_FACTOR, ScrollHandle, SharedString, SharedUri,
+    Subscription, Task, WeakEntity, Window, point,
 };
 use i18n::tr;
 use language::LanguageRegistry;
@@ -33,7 +33,9 @@ use ui::{ContextMenu, ScrollAxes, Scrollbars, WithScrollbar, prelude::*, right_c
 use util::{
     ResultExt, markdown::split_local_url_fragment, normalize_path, paths::PathWithPosition,
 };
-use workspace::item::{Item, ItemBufferKind, ItemHandle, SaveOptions, SerializableItem};
+use workspace::item::{
+    Item, ItemBufferKind, ItemHandle, SaveOptions, SerializableItem, TabContentParams,
+};
 use workspace::notifications::NotifyResultExt;
 use workspace::path_link::{PathMatching, resolve_open_target};
 use workspace::searchable::{
@@ -55,6 +57,7 @@ const REPARSE_DEBOUNCE: Duration = Duration::from_millis(200);
 
 pub struct MarkdownPreviewView {
     workspace: WeakEntity<Workspace>,
+    self_handle: WeakEntity<Self>,
     active_editor: Option<EditorState>,
     focus_handle: FocusHandle,
     markdown: Entity<Markdown>,
@@ -109,9 +112,13 @@ pub enum MarkdownPreviewEvent {
 impl MarkdownPreviewView {
     pub fn register(workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Workspace>) {
         workspace.register_action(move |workspace, _: &OpenPreview, window, cx| {
-            if let Some(editor) = Self::resolve_active_item_as_markdown_editor(workspace, cx) {
+            if let Some(item) = workspace.item_for_action(window, cx)
+                && let Some(editor) = item.act_as::<Editor>(cx)
+                && Self::is_markdown_file(&editor, cx)
+                && let Some(pane) = workspace.pane_for_item_id(item.item_id())
+            {
                 let view = Self::create_markdown_view(workspace, editor.clone(), window, cx);
-                workspace.active_pane().update(cx, |pane, cx| {
+                pane.update(cx, |pane, cx| {
                     if let Some(existing_view_idx) =
                         Self::find_existing_independent_preview_item_idx(pane, &editor, cx)
                     {
@@ -342,6 +349,7 @@ impl MarkdownPreviewView {
                 active_editor: None,
                 focus_handle: cx.focus_handle(),
                 workspace: workspace.clone(),
+                self_handle: cx.weak_entity(),
                 _markdown_subscription: cx.observe(
                     &markdown,
                     |this: &mut Self, markdown: Entity<Markdown>, cx| {
@@ -830,16 +838,25 @@ impl MarkdownPreviewView {
 
         window.defer(cx, move |window, cx| {
             workspace.update(cx, |workspace, cx| {
+                let Some(pane) = workspace.pane_for_item_id(preview_id) else {
+                    return;
+                };
                 if !workspace.activate_item(&editor, true, true, window, cx) {
-                    workspace.add_item_to_active_pane(Box::new(editor), None, true, window, cx);
+                    workspace.add_item(
+                        pane.clone(),
+                        Box::new(editor),
+                        None,
+                        true,
+                        true,
+                        window,
+                        cx,
+                    );
                 }
 
-                if let Some(pane) = workspace.pane_for_item_id(preview_id) {
-                    pane.update(cx, |pane, cx| {
-                        pane.close_item_by_id(preview_id, SaveIntent::Skip, window, cx)
-                    })
-                    .detach_and_log_err(cx);
-                }
+                pane.update(cx, |pane, cx| {
+                    pane.close_item_by_id(preview_id, SaveIntent::Skip, window, cx)
+                })
+                .detach_and_log_err(cx);
             });
         });
     }
@@ -1425,6 +1442,25 @@ impl Item for MarkdownPreviewView {
         Some(Icon::new(IconName::FileDoc))
     }
 
+    fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
+        let preview = self.self_handle.clone();
+        h_flex()
+            .when(!params.selected, |tab| tab.track_focus(&self.focus_handle))
+            .on_action(move |action: &CloseAndReturnToEditor, window, cx| {
+                preview
+                    .update(cx, |preview, cx| {
+                        preview.close_and_return_to_editor(action, window, cx);
+                    })
+                    .ok();
+            })
+            .child(
+                Label::new(self.tab_content_text(params.detail.unwrap_or_default(), cx))
+                    .single_line()
+                    .color(params.text_color()),
+            )
+            .into_any_element()
+    }
+
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         self.active_editor.as_ref().map_or_else(
             || tr(cx, "markdown_preview.tab_title", "Markdown Preview").into(),
@@ -1451,18 +1487,6 @@ impl Item for MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<(SharedString, Box<dyn Action>)> {
-        let preview_id = cx.entity_id();
-        // Inactive tabs aren't rendered, so the action can't be dispatched to them.
-        let is_active_in_pane = self
-            .workspace
-            .upgrade()
-            .and_then(|workspace| workspace.read(cx).pane_for_item_id(preview_id))
-            .and_then(|pane| pane.read(cx).active_item())
-            .is_some_and(|item| item.item_id() == preview_id);
-        if !is_active_in_pane {
-            return Vec::new();
-        }
-
         vec![(
             tr(cx, "markdown_preview.tab_menu.show_source", "Show Source").into(),
             Box::new(CloseAndReturnToEditor),
@@ -2601,7 +2625,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn tab_context_menu_hides_show_source_for_inactive_preview(cx: &mut TestAppContext) {
+    async fn tab_context_menu_offers_show_source_for_inactive_preview(cx: &mut TestAppContext) {
         let (multi_workspace, editor) =
             open_markdown_file(cx, "note.md", "# Note\n\nBody text\n").await;
         let preview = open_preview_for_active_editor(cx, &multi_workspace);
@@ -2616,13 +2640,17 @@ mod tests {
                 let actions = preview.update(cx, |preview, cx| {
                     preview.tab_extra_context_menu_actions(window, cx)
                 });
-                assert!(actions.is_empty());
+                let [(label, action)] = actions.as_slice() else {
+                    panic!("expected exactly one tab menu action");
+                };
+                assert_eq!(label.as_ref(), "Show Source");
+                assert!(action.as_any().is::<CloseAndReturnToEditor>());
             })
             .unwrap();
     }
 
     #[gpui::test]
-    async fn tab_context_menu_offers_open_preview_only_for_active_editor(cx: &mut TestAppContext) {
+    async fn tab_context_menu_offers_open_preview_for_inactive_editor(cx: &mut TestAppContext) {
         let (multi_workspace, editor) =
             open_markdown_file(cx, "note.md", "# Note\n\nBody text\n").await;
         editor.update(cx, |editor, cx| {
@@ -2658,7 +2686,10 @@ mod tests {
                 let actions = editor.update(cx, |editor, cx| {
                     editor.tab_extra_context_menu_actions(window, cx)
                 });
-                assert!(actions.is_empty());
+                let [(label, _)] = actions.as_slice() else {
+                    panic!("expected exactly one tab menu action");
+                };
+                assert_eq!(label.as_ref(), "Open Markdown Preview");
             })
             .unwrap();
     }
