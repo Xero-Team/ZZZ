@@ -2978,7 +2978,7 @@ impl Pane {
         let has_file_icon = icon.is_some();
 
         let capability = item.capability(cx);
-        let tab = Tab::new(ix)
+        let tab = Tab::new(ix, item.tab_content_text(detail, cx))
             .position(if is_first_item {
                 TabPosition::First
             } else if is_last_item {
@@ -5180,7 +5180,7 @@ impl Render for DraggedTab {
             self.pane
                 .read(cx)
                 .tab_icon_element(self.item.as_ref(), self.is_active, window, cx);
-        Tab::new("")
+        Tab::new("", self.item.tab_content_text(self.detail, cx))
             .toggle_state(self.is_active)
             .children(icon)
             .child(label)

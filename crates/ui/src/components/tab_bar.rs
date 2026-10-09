@@ -126,16 +126,17 @@ impl RenderOnce for TabBar {
                             .border_b_1()
                             .border_color(cx.theme().colors().border),
                     )
-                    .child(
-                        h_flex()
-                            .id("tabs")
-                            .flex_grow()
+                    .child({
+                        let tabs = h_flex().id("tabs");
+                        #[cfg(feature = "accessibility")]
+                        let tabs = tabs.role(gpui::accesskit::Role::TabList);
+                        tabs.flex_grow()
                             .overflow_x_scroll()
                             .when_some(self.scroll_handle, |cx, scroll_handle| {
                                 cx.track_scroll(&scroll_handle)
                             })
-                            .children(self.children),
-                    ),
+                            .children(self.children)
+                    }),
             )
             .when(!self.end_children.is_empty(), |this| {
                 this.child(
@@ -180,9 +181,9 @@ impl Component for TabBar {
                             single_example(
                                 "With Tabs",
                                 TabBar::new("tab_bar_with_tabs")
-                                    .child(Tab::new("tab1"))
-                                    .child(Tab::new("tab2"))
-                                    .child(Tab::new("tab3"))
+                                    .child(Tab::new("tab1", "Tab 1"))
+                                    .child(Tab::new("tab2", "Tab 2"))
+                                    .child(Tab::new("tab3", "Tab 3"))
                                     .into_any_element(),
                             ),
                         ],
@@ -193,9 +194,9 @@ impl Component for TabBar {
                             "Full TabBar",
                             TabBar::new("full_tab_bar")
                                 .start_child(Button::new("start_button", "Start"))
-                                .child(Tab::new("tab1"))
-                                .child(Tab::new("tab2"))
-                                .child(Tab::new("tab3"))
+                                .child(Tab::new("tab1", "Tab 1"))
+                                .child(Tab::new("tab2", "Tab 2"))
+                                .child(Tab::new("tab3", "Tab 3"))
                                 .end_child(Button::new("end_button", "End"))
                                 .into_any_element(),
                         )],

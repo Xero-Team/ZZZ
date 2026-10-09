@@ -9,7 +9,7 @@ use std::{
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
     ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, ListItem, Modal,
-    ModalHeader, Switch, Tab, Table, TableAccessibility, ToggleState, Toggleable as _,
+    ModalHeader, Switch, Tab, TabBar, Table, TableAccessibility, ToggleState, Toggleable as _,
     TreeViewItem,
 };
 
@@ -88,7 +88,13 @@ impl Render for SemanticComponents {
                         move |_, _, _| action_count.set(action_count.get() + 1)
                     }),
             )
-            .child(Tab::new("editor-tab").toggle_state(true).child("Editor"))
+            .child(
+                TabBar::new("semantic-tab-bar").child(
+                    Tab::new("editor-tab", "Editor")
+                        .toggle_state(true)
+                        .child("Editor"),
+                ),
+            )
             .child(
                 TreeViewItem::new("workspace-tree", "Workspace")
                     .expanded(true)
@@ -343,14 +349,23 @@ fn components_emit_roles_labels_and_state() {
     })
     .expect("semantic test window should remain open");
 
-    let tab = snapshot
+    let (tab_id, tab) = snapshot
         .update
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == gpui::accesskit::Role::Tab)
-        .map(|(_, node)| node)
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Tab && node.label() == Some("Editor")
+        })
         .expect("tab semantic node should exist");
     assert_eq!(tab.is_selected(), Some(true));
+    let tab_list = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::TabList)
+        .map(|(_, node)| node)
+        .expect("tab list semantic node should exist");
+    assert!(tab_list.children().contains(tab_id));
 
     let tree_item = snapshot
         .update

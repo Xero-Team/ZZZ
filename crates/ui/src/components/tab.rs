@@ -32,6 +32,8 @@ pub enum TabCloseSide {
 #[derive(IntoElement, RegisterComponent)]
 pub struct Tab {
     div: Stateful<Div>,
+    #[cfg(feature = "accessibility")]
+    accessibility_label: SharedString,
     selected: bool,
     position: TabPosition,
     close_side: TabCloseSide,
@@ -41,12 +43,18 @@ pub struct Tab {
 }
 
 impl Tab {
-    pub fn new(id: impl Into<ElementId>) -> Self {
+    /// Creates a tab with the accessible name announced to assistive technologies.
+    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
+        #[cfg(not(feature = "accessibility"))]
+        let _ = label;
+
         let id = id.into();
         Self {
             div: div()
                 .id(id.clone())
                 .debug_selector(|| format!("TAB-{}", id)),
+            #[cfg(feature = "accessibility")]
+            accessibility_label: label.into(),
             selected: false,
             position: TabPosition::First,
             close_side: TabCloseSide::End,
@@ -146,7 +154,8 @@ impl RenderOnce for Tab {
         let div = self
             .div
             .role(gpui::accesskit::Role::Tab)
-            .aria_selected(self.selected);
+            .aria_selected(self.selected)
+            .aria_label(self.accessibility_label);
         #[cfg(not(feature = "accessibility"))]
         let div = self.div;
 
@@ -208,32 +217,34 @@ impl Component for Tab {
                     vec![
                         single_example(
                             "Default",
-                            Tab::new("default").child("Default Tab").into_any_element(),
+                            Tab::new("default", "Default Tab")
+                                .child("Default Tab")
+                                .into_any_element(),
                         ),
                         single_example(
                             "Selected",
-                            Tab::new("selected")
+                            Tab::new("selected", "Selected Tab")
                                 .toggle_state(true)
                                 .child("Selected Tab")
                                 .into_any_element(),
                         ),
                         single_example(
                             "First",
-                            Tab::new("first")
+                            Tab::new("first", "First Tab")
                                 .position(TabPosition::First)
                                 .child("First Tab")
                                 .into_any_element(),
                         ),
                         single_example(
                             "Middle",
-                            Tab::new("middle")
+                            Tab::new("middle", "Middle Tab")
                                 .position(TabPosition::Middle(Ordering::Equal))
                                 .child("Middle Tab")
                                 .into_any_element(),
                         ),
                         single_example(
                             "Last",
-                            Tab::new("last")
+                            Tab::new("last", "Last Tab")
                                 .position(TabPosition::Last)
                                 .child("Last Tab")
                                 .into_any_element(),

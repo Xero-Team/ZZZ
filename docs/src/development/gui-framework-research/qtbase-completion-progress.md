@@ -192,6 +192,10 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `Disclosure` 现在以带 label 的 button 公开 `expanded` state，并将 AccessKit Click
   复用原有 toggle callback。它提供可覆盖的 contextual label；未提供时使用本地化的
   `Expand`/`Collapse` fallback。两个 locale catalog 已验证保持同一 key 集。
+- `Tab::new` 现在要求 caller 提供 accessible name，避免从任意 visual child 猜测文本。
+  `TabBar` 的实际 tab-scroll container 投影为 `Role::TabList`，而 start/end controls 不会
+  被错误纳入 tab relation。Workspace Pane 使用既有 `ItemHandle::tab_content_text` 作为
+  tab 与 drag preview 的单一语义名称来源。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -212,11 +216,14 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   验证 popup trigger 没有错误携带 `toggled` state。
 - 扩展 component semantic regression：验证 Disclosure 的 role、contextual label、expanded
   state 和 Click action，确保它与 pointer handler 共用同一 callback。
+- 扩展 component semantic regression：验证 named selected Tab 是 TabList 的 child；并以
+  `cargo check -p workspace` 验证这个有意的 Tab constructor migration 覆盖 Workspace Pane。
 - 已验证：
 
   ```sh
   cargo test --locked -p ui
   cargo test --locked -p ui --features accessibility --test accessibility
+  cargo check --locked -p workspace
   cargo clippy -p ui --features accessibility --release --all-targets --all-features -- --deny warnings
   script/check-philosophy
   cargo fmt --all -- --check
@@ -224,7 +231,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   ```
 
   结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
-  `3 passed`；release clippy 和 philosophy gate 通过。
+  `3 passed`；Workspace check、release clippy 和 philosophy gate 通过。
 
 ### Scrollbar 设计门 {#phase-2-scrollbar-gate}
 
