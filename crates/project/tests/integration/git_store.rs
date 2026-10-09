@@ -1474,7 +1474,7 @@ mod trust_tests {
 
     use serde_json::json;
     use settings::SettingsStore;
-    use util::path;
+    use util::{path, paths::PathStyle};
 
     use crate::Project;
 
@@ -1811,20 +1811,34 @@ mod resolve_worktree_tests {
             (
                 "/home/bob/zzz",
                 "/home/bob/worktrees/olivetti/zzz",
+                PathStyle::Posix,
                 Some("olivetti".into()),
             ),
-            ("/home/bob/zzz", "/home/bob/zzz2", Some("zzz2".into())),
+            (
+                "/home/bob/zzz",
+                "/home/bob/zzz2",
+                PathStyle::Posix,
+                Some("zzz2".into()),
+            ),
             (
                 "/home/bob/zzz",
                 "/home/bob/worktrees/zzz/selectric",
+                PathStyle::Posix,
                 Some("selectric".into()),
             ),
-            ("/home/bob/zzz", "/home/bob/zzz", None),
+            ("/home/bob/zzz", "/home/bob/zzz", PathStyle::Posix, None),
+            (
+                r"C:\Users\bob\dev\zzz",
+                r"C:\Users\bob\dev\worktrees\zzz\olivetti\zzz",
+                PathStyle::Windows,
+                Some("olivetti".into()),
+            ),
         ];
-        for (main_worktree_path, linked_worktree_path, expected) in examples {
+        for (main_worktree_path, linked_worktree_path, path_style, expected) in examples {
             let short_name = linked_worktree_short_name(
                 Path::new(main_worktree_path),
                 Path::new(linked_worktree_path),
+                path_style,
             );
             assert_eq!(
                 short_name, expected,
