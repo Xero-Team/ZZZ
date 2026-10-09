@@ -20,6 +20,8 @@ pub struct Disclosure {
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
     #[cfg(feature = "accessibility")]
     accessibility_label: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    decorative: bool,
 }
 
 impl Disclosure {
@@ -37,6 +39,8 @@ impl Disclosure {
             tooltip: None,
             #[cfg(feature = "accessibility")]
             accessibility_label: None,
+            #[cfg(feature = "accessibility")]
+            decorative: false,
         }
     }
 
@@ -72,6 +76,12 @@ impl Disclosure {
     #[cfg(feature = "accessibility")]
     pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
         self.accessibility_label = Some(label.into());
+        self
+    }
+
+    #[cfg(feature = "accessibility")]
+    pub(crate) fn decorative(mut self) -> Self {
+        self.decorative = true;
         self
     }
 }
@@ -118,21 +128,25 @@ impl RenderOnce for Disclosure {
         .toggle_state(self.selected);
 
         #[cfg(feature = "accessibility")]
-        let disclosure = disclosure
-            .aria_label(self.accessibility_label.unwrap_or_else(|| {
-                if i18n::is_initialized(_cx) {
-                    if self.is_open {
-                        tr(_cx, "ui.disclosure.collapse", "Collapse").into()
+        let disclosure = if self.decorative {
+            disclosure.decorative()
+        } else {
+            disclosure
+                .aria_label(self.accessibility_label.unwrap_or_else(|| {
+                    if i18n::is_initialized(_cx) {
+                        if self.is_open {
+                            tr(_cx, "ui.disclosure.collapse", "Collapse").into()
+                        } else {
+                            tr(_cx, "ui.disclosure.expand", "Expand").into()
+                        }
+                    } else if self.is_open {
+                        "Collapse".into()
                     } else {
-                        tr(_cx, "ui.disclosure.expand", "Expand").into()
+                        "Expand".into()
                     }
-                } else if self.is_open {
-                    "Collapse".into()
-                } else {
-                    "Expand".into()
-                }
-            }))
-            .accessibility_expanded(self.is_open);
+                }))
+                .accessibility_expanded(self.is_open)
+        };
 
         disclosure
             .when_some(self.visible_on_hover.clone(), |this, group_name| {

@@ -102,6 +102,12 @@ impl IconButton {
         self.base = self.base.aria_label(label);
         self
     }
+
+    #[cfg(feature = "accessibility")]
+    pub(crate) fn decorative(mut self) -> Self {
+        self.base = self.base.decorative();
+        self
+    }
 }
 
 impl Disableable for IconButton {

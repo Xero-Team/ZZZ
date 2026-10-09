@@ -266,6 +266,12 @@ impl ParentElement for ListItem {
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let on_click = self.on_click.clone().filter(|_| !self.disabled);
+        let on_toggle = self.on_toggle.clone();
+        #[cfg(feature = "accessibility")]
+        let accessibility_toggle = self
+            .toggle
+            .zip(on_toggle.clone())
+            .filter(|_| !self.disabled);
         let item = h_flex().id(self.id);
         #[cfg(feature = "accessibility")]
         let item = item
@@ -281,6 +287,20 @@ impl RenderOnce for ListItem {
             })
             .when_some(self.accessibility_label, |this, label| {
                 this.aria_label(label)
+            })
+            .when_some(accessibility_toggle, |this, (expanded, on_toggle)| {
+                let action = if expanded {
+                    gpui::accesskit::Action::Collapse
+                } else {
+                    gpui::accesskit::Action::Expand
+                };
+                this.on_a11y_action(action, move |_, window, cx| {
+                    on_toggle(
+                        &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                        window,
+                        cx,
+                    )
+                })
             });
 
         let item = item
@@ -369,6 +389,10 @@ impl RenderOnce for ListItem {
                         }
                     })
                     .children(self.toggle.map(|is_open| {
+                        let disclosure = Disclosure::new("toggle", is_open).disabled(self.disabled);
+                        #[cfg(feature = "accessibility")]
+                        let disclosure = disclosure.decorative();
+
                         div()
                             .flex()
                             .absolute()
@@ -376,10 +400,9 @@ impl RenderOnce for ListItem {
                             .when(is_open && !self.always_show_disclosure_icon, |this| {
                                 this.visible_on_hover("")
                             })
-                            .child(
-                                Disclosure::new("toggle", is_open)
-                                    .on_toggle_expanded(self.on_toggle),
-                            )
+                            .child(disclosure.when_some(on_toggle, |disclosure, on_toggle| {
+                                disclosure.on_toggle_expanded(on_toggle)
+                            }))
                     }))
                     .child(
                         h_flex()

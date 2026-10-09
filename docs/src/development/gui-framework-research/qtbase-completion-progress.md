@@ -199,6 +199,11 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `List` 的 child 可以是 header、placeholder、menu 或任意 visual element，因此不会默认
   伪装为 `Role::List`。`ListAccessibility` 是显式 opt-in，要求稳定 ID 与 list name；启用
   后才将承诺为 list item 的 semantic children 放进 `Role::List` parent。
+- `TreeViewItem` 现在只有 root/parent item 才报告 `expanded`；leaf 不再错误携带展开状态。
+  Row activation、Expand/Collapse 分别复用既有 `on_click`/`on_toggle` callback；disabled
+  item 保留 state 但不提供 action。`ListItem` 的 expandable variant 也以同一原则注册
+  Expand/Collapse。两者的内部 Disclosure chevron 已是装饰，避免一个逻辑 item 被重复朗读为
+  TreeItem/ListItem 加一个匿名的展开/收起 button。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -223,6 +228,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `cargo check -p workspace` 验证这个有意的 Tab constructor migration 覆盖 Workspace Pane。
 - 扩展 component semantic regression：验证 opt-in List 的 name、role 与直接 ListItem child
   relationship；默认 build 和 accessibility build 均无 warning。
+- 扩展 component semantic regression：验证 parent/leaf/disabled TreeItem 的 expanded 与
+  action contract、ListItem Collapse route，以及内部 Disclosure 没有重复 semantic button。
 - 已验证：
 
   ```sh

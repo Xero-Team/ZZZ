@@ -97,8 +97,24 @@ impl Render for SemanticComponents {
             )
             .child(
                 TreeViewItem::new("workspace-tree", "Workspace")
+                    .root_item(true)
                     .expanded(true)
-                    .toggle_state(true),
+                    .toggle_state(true)
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    })
+                    .on_toggle({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(TreeViewItem::new("settings-tree", "Settings"))
+            .child(
+                TreeViewItem::new("disabled-tree", "Unavailable")
+                    .root_item(true)
+                    .disabled(true)
+                    .on_toggle(|_, _, _| {}),
             )
             .child(
                 ListItem::new("list-item")
@@ -106,6 +122,10 @@ impl Render for SemanticComponents {
                     .toggle(true)
                     .toggle_state(true)
                     .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    })
+                    .on_toggle({
                         let action_count = self.action_count.clone();
                         move |_, _, _| action_count.set(action_count.get() + 1)
                     }),
@@ -379,12 +399,53 @@ fn components_emit_roles_labels_and_state() {
         .update
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == gpui::accesskit::Role::TreeItem)
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::TreeItem && node.label() == Some("Workspace")
+        })
         .map(|(_, node)| node)
         .expect("tree item semantic node should exist");
     assert_eq!(tree_item.label(), Some("Workspace"));
     assert_eq!(tree_item.is_expanded(), Some(true));
     assert_eq!(tree_item.is_selected(), Some(true));
+    assert!(tree_item.supports_action(gpui::accesskit::Action::Click));
+    assert!(tree_item.supports_action(gpui::accesskit::Action::Collapse));
+    assert!(!tree_item.supports_action(gpui::accesskit::Action::Expand));
+    assert!(!snapshot.update.nodes.iter().any(|(_, node)| {
+        node.role() == gpui::accesskit::Role::Button && node.label() == Some("Collapse")
+    }));
+    let (tree_item_id, _) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::TreeItem && node.label() == Some("Workspace")
+        })
+        .expect("expandable tree item semantic node should exist");
+    let leaf_tree_item = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::TreeItem && node.label() == Some("Settings")
+        })
+        .map(|(_, node)| node)
+        .expect("leaf tree item semantic node should exist");
+    assert_eq!(leaf_tree_item.is_expanded(), None);
+    assert!(!leaf_tree_item.supports_action(gpui::accesskit::Action::Expand));
+    assert!(!leaf_tree_item.supports_action(gpui::accesskit::Action::Collapse));
+    let disabled_tree_item = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::TreeItem && node.label() == Some("Unavailable")
+        })
+        .map(|(_, node)| node)
+        .expect("disabled tree item semantic node should exist");
+    assert!(disabled_tree_item.is_disabled());
+    assert_eq!(disabled_tree_item.is_expanded(), Some(false));
+    assert!(!disabled_tree_item.supports_action(gpui::accesskit::Action::Expand));
+    assert!(!disabled_tree_item.supports_action(gpui::accesskit::Action::Collapse));
 
     let (list_item_id, list_item) = snapshot
         .update
@@ -396,6 +457,8 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(list_item.is_expanded(), Some(true));
     assert_eq!(list_item.is_selected(), Some(true));
     assert!(list_item.supports_action(gpui::accesskit::Action::Click));
+    assert!(list_item.supports_action(gpui::accesskit::Action::Collapse));
+    assert!(!list_item.supports_action(gpui::accesskit::Action::Expand));
 
     let (recent_project_id, _) = snapshot
         .update
@@ -543,9 +606,27 @@ fn components_emit_roles_labels_and_state() {
             None,
             cx,
         ));
+        assert!(window.dispatch_accessibility_action(
+            *tree_item_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *tree_item_id,
+            gpui::accesskit::Action::Collapse,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *list_item_id,
+            gpui::accesskit::Action::Collapse,
+            None,
+            cx,
+        ));
     })
     .expect("semantic test window should remain open");
-    assert_eq!(action_count.get(), 9);
+    assert_eq!(action_count.get(), 12);
 
     let dialog = snapshot
         .update
