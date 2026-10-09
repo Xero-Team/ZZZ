@@ -4986,6 +4986,7 @@ impl ProjectPanel {
                     this.update_visible_entries_task.autoscroll = false;
                     this.autoscroll(cx);
                 }
+                this.preload_initial_entry_icons(window, cx);
                 cx.notify();
             })
             .log_err();
@@ -5043,6 +5044,90 @@ impl ProjectPanel {
             self.folded_directory_drag_target = Some(target);
         } else if self.folded_directory_drag_target == Some(target) {
             self.folded_directory_drag_target = None;
+        }
+    }
+
+    fn preload_initial_entry_icons(&self, window: &Window, cx: &mut Context<Self>) {
+        if self.state.edit_state.is_some() {
+            return;
+        }
+        {
+            let scroll = self.scroll_handle.0.borrow();
+            if scroll
+                .last_item_size
+                .is_some_and(|size| size.contents.height > Pixels::ZERO)
+                || scroll.base_handle.offset().y != Pixels::ZERO
+                || scroll.deferred_scroll_to_item.is_some()
+            {
+                return;
+            }
+        }
+
+        let Some(workspace) = Workspace::for_window(window, cx)
+            .filter(|workspace| workspace.entity_id() == self.workspace.entity_id())
+        else {
+            return;
+        };
+        let workspace = workspace.read(cx);
+        let panel_id = cx.entity_id();
+        if workspace
+            .zoomed_item()
+            .and_then(|view| view.upgrade())
+            .is_some_and(|view| view.entity_id() != panel_id)
+            || !workspace.all_docks().into_iter().any(|dock| {
+                dock.read(cx)
+                    .visible_panel()
+                    .is_some_and(|panel| panel.panel_id() == panel_id)
+            })
+        {
+            return;
+        }
+
+        let scale_factor = window.scale_factor();
+        if !scale_factor.is_finite() || scale_factor <= 0.0 {
+            return;
+        }
+        let font_size = ThemeSettings::get_global(cx).ui_font_size(cx).as_f32();
+        let minimum_row_height = (1.5 * font_size * scale_factor).floor() / scale_factor;
+        let row_count = (window.viewport_size().height.as_f32() / minimum_row_height).ceil();
+        if minimum_row_height <= 0.0 || !row_count.is_finite() || row_count <= 0.0 {
+            return;
+        }
+        let row_count = (row_count as usize).saturating_add(1);
+        let (show_file_icons, show_folder_icons) = {
+            let settings = ProjectPanelSettings::get_global(cx);
+            (settings.file_icons, settings.folder_icons)
+        };
+        for (worktree_id, entry) in self
+            .state
+            .visible_entries
+            .iter()
+            .flat_map(|worktree| {
+                worktree
+                    .entries
+                    .iter()
+                    .map(move |entry| (worktree.worktree_id, entry))
+            })
+            .take(row_count)
+        {
+            let is_expanded = self
+                .state
+                .expanded_dir_ids
+                .get(&worktree_id)
+                .is_some_and(|entries| entries.binary_search(&entry.id).is_ok());
+            let icon = match entry.kind {
+                EntryKind::File if show_file_icons => {
+                    FileIcons::get_icon(entry.path.as_std_path(), cx)
+                }
+                EntryKind::File => None,
+                _ if show_folder_icons => {
+                    FileIcons::get_folder_icon(is_expanded, entry.path.as_std_path(), cx)
+                }
+                _ => FileIcons::get_chevron_icon(is_expanded, cx),
+            };
+            if let Some(icon) = icon {
+                Icon::from_path(icon).preload(cx);
+            }
         }
     }
 
@@ -8218,6 +8303,14 @@ impl Panel for ProjectPanel {
                 .root_entry()
                 .is_some_and(|entry| entry.is_dir())
         })
+    }
+
+    fn set_active(&mut self, active: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if active {
+            cx.defer_in(window, |panel, window, cx| {
+                panel.preload_initial_entry_icons(window, cx);
+            });
+        }
     }
 
     fn activation_priority(&self) -> u32 {
