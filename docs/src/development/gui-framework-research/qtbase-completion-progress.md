@@ -145,6 +145,9 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   不会将后代附着到第一个 sibling，且后续 sibling 仍在完整 snapshot 中。
 - 为 node removal 添加 regression：完成帧中的 semantic button 被下一帧移除后，使用旧
   node ID 的 native Click 不再路由到旧 action handler。
+- `SemanticTreeBuilder::set_children` 现在先验证 parent 和每个 child 都在当前 frame 注册，
+  再修改 parent。未知 child 会返回 `MissingNode`，并保留此前 children，避免提交 dangling
+  AccessKit reference 或半更新 tree。
 - 已验证：
 
   ```sh
@@ -156,7 +159,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   git diff --check
   ```
 
-  结果：default GPUI `259 passed`；accessibility GPUI `269 passed`；UI semantic
+  结果：default GPUI `259 passed`；accessibility GPUI `270 passed`；UI semantic
   smoke `1 passed`；clippy 和 philosophy gate 通过。
 
 ### 下一步 {#phase-1-next}
@@ -282,7 +285,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   ```
 
   结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
-  `5 passed`；Workspace/Agent UI check、GPUI accessibility `269 passed`、release clippy 和
+  `5 passed`；Workspace/Agent UI check、GPUI accessibility `270 passed`、release clippy 和
   philosophy gate 通过。
 
 ### 组件审计快照 {#phase-2-component-audit}

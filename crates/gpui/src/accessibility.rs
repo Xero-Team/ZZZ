@@ -109,11 +109,22 @@ impl SemanticTreeBuilder {
         parent_id: NodeId,
         children: impl IntoIterator<Item = NodeId>,
     ) -> Result<(), SemanticTreeError> {
-        let parent = self
-            .nodes
-            .get_mut(&parent_id)
-            .ok_or(SemanticTreeError::MissingNode(parent_id))?;
-        parent.set_children(children.into_iter().collect::<Vec<_>>());
+        if !self.nodes.contains_key(&parent_id) {
+            return Err(SemanticTreeError::MissingNode(parent_id));
+        }
+
+        let children = children.into_iter().collect::<Vec<_>>();
+        if let Some(missing_id) = children
+            .iter()
+            .find(|child_id| !self.nodes.contains_key(child_id))
+        {
+            return Err(SemanticTreeError::MissingNode(*missing_id));
+        }
+
+        let Some(parent) = self.nodes.get_mut(&parent_id) else {
+            return Err(SemanticTreeError::MissingNode(parent_id));
+        };
+        parent.set_children(children);
         Ok(())
     }
 
@@ -243,6 +254,31 @@ mod tests {
         assert_eq!(snapshot.update.nodes[0].0, ROOT_NODE_ID);
         assert_eq!(snapshot.update.nodes[1].0, button_id);
         assert_eq!(snapshot.update.nodes[0].1.children(), &[button_id]);
+    }
+
+    #[test]
+    fn set_children_rejects_unknown_nodes_without_mutating_the_parent() {
+        let button_id = stable_semantic_node_id("button");
+        let missing_id = stable_semantic_node_id("missing");
+        let mut builder = SemanticTreeBuilder::new();
+        builder.set_node(button_id, Node::new(Role::Button));
+        builder
+            .set_children(ROOT_NODE_ID, [button_id])
+            .expect("known child should be accepted");
+
+        assert_eq!(
+            builder.set_children(ROOT_NODE_ID, [missing_id]),
+            Err(SemanticTreeError::MissingNode(missing_id))
+        );
+
+        let root = builder
+            .snapshot()
+            .update
+            .nodes
+            .into_iter()
+            .find(|(node_id, _)| *node_id == ROOT_NODE_ID)
+            .expect("root should exist");
+        assert_eq!(root.1.children(), &[button_id]);
     }
 
     #[test]
