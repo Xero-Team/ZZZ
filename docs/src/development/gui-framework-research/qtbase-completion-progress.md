@@ -226,11 +226,32 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
   `3 passed`；release clippy 和 philosophy gate 通过。
 
+### Scrollbar 设计门 {#phase-2-scrollbar-gate}
+
+已完成静态审计，结论是当前不能为 `ScrollbarElement` 直接添加一个
+`Role::ScrollBar`：
+
+- `ScrollbarState` 当前每帧只生成一个自绘 `ScrollbarElement`；该 element 在一次
+  prepaint/paint 中计算零到两个 `ScrollbarLayout`，并在同一 mouse dispatch 路径处理横、
+  纵轴的 track click 和 thumb drag。
+- GPUI `Element` contract 每个 element 只能返回一个 accessibility role、写入一个 node，并
+  为该 node 注册 action。因此现有单 element 只能诚实描述一个 axis；双轴场景若强行公开一个
+  ScrollBar，将失去 orientation、current value、range 和 action target 的对应关系。
+- AccessKit 已提供 `ScrollBar` role 与 `Increment`、`Decrement`、`SetValue` action，故缺口
+  不在 adapter vocabulary，而在 GPUI element tree 的轴级 ownership。
+
+后续实现必须先将 visual/layout 与每轴 semantic node 分开：每个可滚动 axis 需要稳定 ID、
+实际 track/thumb bounds、current/min/max value 和独立的 action route；action 必须调用既有
+scroll-handle state transition，不能伪造 mouse event。完成后至少覆盖 single-axis、dual-axis、
+autohide、track click、thumb drag、a11y increment/decrement/set-value 和 node removal。此前不
+添加不正确的单节点语义。
+
 ### 下一步 {#phase-2-next}
 
-继续按 interactive、structural、status、text input、decorative 分类审计组件；优先
-scrollbar 与剩余 text surface。保持 DataTable 语义为有调用方提供可访问名称时的 opt-in，
-不能从 `AnyElement` 猜测 cell 内容。每次只迁移一条完整的
+继续按 interactive、structural、status、text input、decorative 分类审计组件；先按上面的
+轴级 ownership 门为 scrollbar 写 layout/semantic 拆分设计和最小 regression，再审计剩余
+text surface。保持 DataTable 语义为有调用方提供可访问名称时的 opt-in，不能从
+`AnyElement` 猜测 cell 内容。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
 
 ## 阶段 3：Model、selection、focus 与 virtualization 协议 {#phase-3}
