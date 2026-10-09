@@ -386,6 +386,20 @@ row identity/selection 的实际 table 或 list owner 时才重开。届时 prot
   `EditorElement`，因此 InputField 外层是唯一的 `TextInput` semantic node，不会和 inner
   editor 重复。adapter 尚未公开 UTF-16 selection、marked range 或 caret bounds，故这些
   action/属性保持未实现，不能由 InputField 猜测。
+
+### Text selection 语义门 {#phase-4-text-selection-gate}
+
+AccessKit `TextSelection` 的 anchor/focus 都是 `TextPosition`，并且其 node 必须是
+`Role::TextRun`。当前 GPUI `Div`/`EditorElement` 只生成 TextInput/MultilineTextInput node，
+没有从 authoritative editor buffer 派生的 TextRun subtree。因此不能仅给 `ErasedEditor` 新增
+`UTF16Selection` getter，或将 offset 塞进 arbitrary node：那会生成 native adapter 无法解释的
+selection reference。
+
+后续 gate 是一个完整的 editor semantic-text vertical slice：稳定 text-run node identity、UTF-16
+character lengths、selection/caret update、range bounds、SetTextSelection/ReplaceSelectedText
+action 与 IME marked range 都必须来自同一 editor snapshot。InputField 必须等该 substrate 存在
+后再暴露 selection action；fallback adapter 也需显式 unsupported，不可虚构 caret。
+
 - 已验证：
 
   ```sh
@@ -402,9 +416,10 @@ row identity/selection 的实际 table 或 list owner 时才重开。届时 prot
 
 ### 下一步 {#phase-4-next}
 
-为 `ErasedEditor` 设计只读 UTF-16 selection、marked range、caret bounds 与对应 mutation 的
-窄协议，并以 real `Editor` 和 fallback adapter 双实现验证；在此之前不复制第二份 editor
-text model 到 GPUI，也不伪造 ReplaceSelectedText/SetTextSelection。
+先实现上述 editor semantic-text vertical slice，再为 `ErasedEditor` 设计只读 UTF-16
+selection、marked range、caret bounds 与对应 mutation 的窄协议，并以 real `Editor` 和 fallback
+adapter 双实现验证；在此之前不复制第二份 editor text model 到 GPUI，也不伪造
+ReplaceSelectedText/SetTextSelection。
 
 ## 阶段 6：API、examples、docs 与升级纪律 {#phase-6}
 
