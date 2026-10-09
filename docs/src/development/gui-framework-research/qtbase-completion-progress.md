@@ -210,6 +210,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `AlertModal` 在 explicit `aria_label` 或 title 可提供 name 时投影为
   `Role::AlertDialog`；这只描述组件自身，仍由产品 modal manager 负责 focus trap、dismiss 与
   focus restoration，避免两个 owner 竞争 lifecycle。
+- `Modal` 现在将 `ModalHeader` 的 headline 与 description 分别投影为 Dialog name 和
+  description，避免辅助技术丢失配置/确认对话框的关键说明文本。
 - GPUI `StatefulInteractiveElement` 现在能写入 finite numeric current/min/max range。线性和
   圆形 determinate progress 组件要求稳定 ID 与 accessible name，在有效的 finite value 和
   positive finite maximum 下投影为 `Role::ProgressIndicator`；current value 被 clamp 到
@@ -247,6 +249,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - 扩展 component semantic regression：验证 interactive ListHeader 的 name/expanded/Click
   contract 与内部 chevron 去重。
 - 扩展 component semantic regression：验证 titled AlertModal 的 AlertDialog role/name。
+- 扩展 component semantic regression：验证 Modal headline/description 到 Dialog name/description
+  的映射。
 - 扩展 component semantic regression：验证 linear/circular progress 的 role、name 和 numeric
   min/current/max，超限值 clamp 与 invalid range omission；同时重跑 GPUI a11y suite 及 Agent
   UI downstream check。

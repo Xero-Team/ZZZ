@@ -211,7 +211,11 @@ impl Render for SemanticComponents {
                     .row(vec!["Cargo.toml", "Modified"]),
             )
             .child(
-                Modal::new("preferences", None).header(ModalHeader::new().headline("Preferences")),
+                Modal::new("preferences", None).header(
+                    ModalHeader::new()
+                        .headline("Preferences")
+                        .description("Configure project-specific settings"),
+                ),
             )
             .child(AlertModal::new("replace-file").title("Replace file?"))
             .child(AnnouncementToast::new().heading("Update available"))
@@ -725,6 +729,10 @@ fn components_emit_roles_labels_and_state() {
         .map(|(_, node)| node)
         .expect("dialog semantic node should exist");
     assert_eq!(dialog.label(), Some("Preferences"));
+    assert_eq!(
+        dialog.description(),
+        Some("Configure project-specific settings")
+    );
 
     let alert_dialog = snapshot
         .update

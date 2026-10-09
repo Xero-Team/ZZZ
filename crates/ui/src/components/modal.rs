@@ -65,6 +65,8 @@ impl RenderOnce for Modal {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         #[cfg(feature = "accessibility")]
         let accessibility_label = self.header.headline.clone();
+        #[cfg(feature = "accessibility")]
+        let accessibility_description = self.header.description.clone();
         let modal = v_flex()
             .id(self.id.clone())
             .size_full()
@@ -90,7 +92,10 @@ impl RenderOnce for Modal {
         #[cfg(feature = "accessibility")]
         let modal = modal
             .role(gpui::accesskit::Role::Dialog)
-            .when_some(accessibility_label, |modal, label| modal.aria_label(label));
+            .when_some(accessibility_label, |modal, label| modal.aria_label(label))
+            .when_some(accessibility_description, |modal, description| {
+                modal.aria_description(description)
+            });
         modal
     }
 }
