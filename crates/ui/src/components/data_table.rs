@@ -1,4 +1,4 @@
-use std::{ops::Range, rc::Rc};
+use std::{fmt, ops::Range, rc::Rc};
 
 use crate::{
     ActiveTheme as _, AnyElement, App, Button, ButtonCommon as _, ButtonStyle, Color, Component,
@@ -26,6 +26,96 @@ mod tests;
 /// Represents an unchecked table row, which is a vector of elements.
 /// Will be converted into `TableRow<T>` internally
 pub type UncheckedTableRow<T> = Vec<T>;
+
+#[cfg(feature = "accessibility")]
+type TableCellLabel = dyn Fn(usize, usize, &App) -> SharedString + 'static;
+
+/// Semantic metadata for a table whose cell contents cannot be inferred from its elements.
+#[derive(Clone)]
+pub struct TableAccessibility {
+    #[cfg(feature = "accessibility")]
+    element_id: ElementId,
+    #[cfg(feature = "accessibility")]
+    label: SharedString,
+    headers: Vec<SharedString>,
+    #[cfg(feature = "accessibility")]
+    cell_label: Rc<TableCellLabel>,
+}
+
+impl TableAccessibility {
+    /// Creates the semantic labels for a table and its cells.
+    ///
+    /// `headers` must provide one accessible name for each table column. The cell-label resolver
+    /// must provide a meaningful name for every rendered row and column pair; table cells are
+    /// [`AnyElement`] values, so their visual content is not inspected automatically.
+    pub fn new(
+        id: impl Into<ElementId>,
+        label: impl Into<SharedString>,
+        headers: impl IntoIterator<Item = impl Into<SharedString>>,
+        cell_label: impl Fn(usize, usize, &App) -> SharedString + 'static,
+    ) -> Self {
+        #[cfg(not(feature = "accessibility"))]
+        std::mem::drop((id, label, cell_label));
+
+        Self {
+            #[cfg(feature = "accessibility")]
+            element_id: id.into(),
+            #[cfg(feature = "accessibility")]
+            label: label.into(),
+            headers: headers.into_iter().map(Into::into).collect(),
+            #[cfg(feature = "accessibility")]
+            cell_label: Rc::new(cell_label),
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn header(&self, column_index: usize) -> Option<&SharedString> {
+        self.headers.get(column_index)
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn cell_label(&self, row_index: usize, column_index: usize, cx: &App) -> SharedString {
+        (self.cell_label)(row_index, column_index, cx)
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn header_element_id(&self, column_index: usize) -> ElementId {
+        (self.element_id.clone(), format!("header-{column_index}")).into()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn header_row_element_id(&self) -> ElementId {
+        (self.element_id.clone(), "header-row").into()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn cell_element_id(&self, row_index: usize, column_index: usize) -> ElementId {
+        (
+            self.element_id.clone(),
+            format!("cell-{row_index}-{column_index}"),
+        )
+            .into()
+    }
+}
+
+/// The headers in [`TableAccessibility`] did not match the table's column count.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TableAccessibilityError {
+    expected_columns: usize,
+    actual_headers: usize,
+}
+
+impl fmt::Display for TableAccessibilityError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "table accessibility expected {} headers but received {}",
+            self.expected_columns, self.actual_headers
+        )
+    }
+}
+
+impl std::error::Error for TableAccessibilityError {}
 
 /// State for independently resizable columns (spreadsheet-style).
 ///
@@ -408,6 +498,7 @@ pub struct Table {
     map_row: Option<Rc<dyn Fn((usize, Stateful<Div>), &mut Window, &mut App) -> AnyElement>>,
     use_ui_font: bool,
     empty_table_callback: Option<Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>>,
+    accessibility: Option<TableAccessibility>,
     /// The number of columns in the table. Used to assert column numbers in `TableRow` collections
     cols: usize,
     disable_base_cell_style: bool,
@@ -428,6 +519,7 @@ impl Table {
             map_row: None,
             use_ui_font: true,
             empty_table_callback: None,
+            accessibility: None,
             disable_base_cell_style: false,
             column_width_config: ColumnWidthConfig::auto(),
             pinned_cols: 0,
@@ -527,6 +619,26 @@ impl Table {
         self
     }
 
+    /// Adds table semantics using caller-provided labels.
+    ///
+    /// The configuration is opt-in because a table's `AnyElement` cells do not necessarily carry
+    /// text that can be used as an accessible name. Supply a semantic label for each rendered
+    /// cell and use [`Self::header`] to render the matching visible column headers.
+    pub fn with_accessibility(
+        mut self,
+        accessibility: TableAccessibility,
+    ) -> Result<Self, TableAccessibilityError> {
+        let actual_headers = accessibility.headers.len();
+        if actual_headers != self.cols {
+            return Err(TableAccessibilityError {
+                expected_columns: self.cols,
+                actual_headers,
+            });
+        }
+        self.accessibility = Some(accessibility);
+        Ok(self)
+    }
+
     pub fn header(mut self, headers: UncheckedTableRow<impl IntoElement>) -> Self {
         self.headers = Some(
             headers
@@ -607,8 +719,15 @@ fn base_cell_style_text(width: Option<Length>, use_ui_font: bool, cx: &App) -> D
     base_cell_style(width).when(use_ui_font, |el| el.text_ui(cx))
 }
 
-fn render_cell(width: Option<Length>, cell: AnyElement, ctx: &TableRenderContext, cx: &App) -> Div {
-    if ctx.disable_base_cell_style {
+fn render_cell(
+    width: Option<Length>,
+    cell: AnyElement,
+    row_index: usize,
+    column_index: usize,
+    ctx: &TableRenderContext,
+    cx: &App,
+) -> AnyElement {
+    let cell = if ctx.disable_base_cell_style {
         div()
             .when_some(width, |this, width| this.w(width))
             .when(width.is_none(), |this| this.flex_1())
@@ -621,7 +740,21 @@ fn render_cell(width: Option<Length>, cell: AnyElement, ctx: &TableRenderContext
             .px_1()
             .py_0p5()
             .child(cell)
+    };
+
+    #[cfg(feature = "accessibility")]
+    if let Some(accessibility) = ctx.accessibility.as_ref() {
+        return cell
+            .id(accessibility.cell_element_id(row_index, column_index))
+            .role(gpui::accesskit::Role::Cell)
+            .aria_label(accessibility.cell_label(row_index, column_index, cx))
+            .into_any_element();
     }
+
+    #[cfg(not(feature = "accessibility"))]
+    let _ = (row_index, column_index);
+
+    cell.into_any_element()
 }
 
 fn render_header_cell(
@@ -630,17 +763,22 @@ fn render_header_cell(
     header_idx: usize,
     shared_element_id: &SharedString,
     resize_info: Option<&HeaderResizeInfo>,
+    accessibility: Option<&TableAccessibility>,
     use_ui_font: bool,
     cx: &App,
 ) -> Stateful<Div> {
-    base_cell_style_text(width, use_ui_font, cx)
+    #[cfg(feature = "accessibility")]
+    let element_id = accessibility.map_or_else(
+        || ElementId::NamedInteger(shared_element_id.clone(), header_idx as u64),
+        |accessibility| accessibility.header_element_id(header_idx),
+    );
+    #[cfg(not(feature = "accessibility"))]
+    let element_id = ElementId::NamedInteger(shared_element_id.clone(), header_idx as u64);
+    let cell = base_cell_style_text(width, use_ui_font, cx)
         .px_1()
         .py_0p5()
         .child(header)
-        .id(ElementId::NamedInteger(
-            shared_element_id.clone(),
-            header_idx as u64,
-        ))
+        .id(element_id)
         .when_some(resize_info.cloned(), |this, info| {
             if info.resize_behavior[header_idx].is_resizable() {
                 this.on_click(move |event, window, cx| {
@@ -651,7 +789,21 @@ fn render_header_cell(
             } else {
                 this
             }
-        })
+        });
+
+    #[cfg(feature = "accessibility")]
+    if let Some(accessibility) = accessibility
+        && let Some(label) = accessibility.header(header_idx)
+    {
+        return cell
+            .role(gpui::accesskit::Role::ColumnHeader)
+            .aria_label(label.clone());
+    }
+
+    #[cfg(not(feature = "accessibility"))]
+    let _ = accessibility;
+
+    cell
 }
 
 pub fn render_table_row(
@@ -692,6 +844,11 @@ pub fn render_table_row(
                 .when(!is_last, |row| row.border_color(cx.theme().colors().border))
         });
 
+    #[cfg(feature = "accessibility")]
+    if table_context.accessibility.is_some() {
+        row = row.role(gpui::accesskit::Role::Row);
+    }
+
     let pinned_cols = table_context.pinned_cols;
 
     if is_pinned_layout(pinned_cols, cols) {
@@ -706,12 +863,11 @@ pub fn render_table_row(
             .flex_row()
             .items_stretch()
             .flex_shrink_0()
-            .children(
-                items_vec
-                    .into_iter()
-                    .zip(widths_vec)
-                    .map(|(cell, width)| render_cell(width, cell, &table_context, cx)),
-            );
+            .children(items_vec.into_iter().zip(widths_vec).enumerate().map(
+                |(column_index, (cell, width))| {
+                    render_cell(width, cell, row_index, column_index, &table_context, cx)
+                },
+            ));
 
         // Scrollable section: overflow_x_scroll + track_scroll so GPUI handles the visual
         // shift natively without requiring per-scroll re-renders of list items.
@@ -727,7 +883,17 @@ pub fn render_table_row(
                     scrollable_items
                         .into_iter()
                         .zip(scrollable_widths)
-                        .map(|(cell, width)| render_cell(width, cell, &table_context, cx)),
+                        .enumerate()
+                        .map(|(relative_column_index, (cell, width))| {
+                            render_cell(
+                                width,
+                                cell,
+                                row_index,
+                                pinned_cols + relative_column_index,
+                                &table_context,
+                                cx,
+                            )
+                        }),
                 ),
             );
 
@@ -744,7 +910,10 @@ pub fn render_table_row(
                 .into_vec()
                 .into_iter()
                 .zip(column_widths.into_vec())
-                .map(|(cell, width)| render_cell(width, cell, &table_context, cx)),
+                .enumerate()
+                .map(|(column_index, (cell, width))| {
+                    render_cell(width, cell, row_index, column_index, &table_context, cx)
+                }),
         );
     }
 
@@ -789,7 +958,7 @@ pub fn render_table_header(
     let use_ui_font = table_context.use_ui_font;
     let resize_info_ref = resize_info.as_ref();
 
-    if is_pinned_layout(pinned_cols, cols) {
+    let outer = if is_pinned_layout(pinned_cols, cols) {
         let mut headers_vec: Vec<AnyElement> = headers
             .into_vec()
             .into_iter()
@@ -810,6 +979,7 @@ pub fn render_table_header(
                             header_idx,
                             &shared_element_id,
                             resize_info_ref,
+                            table_context.accessibility.as_ref(),
                             use_ui_font,
                             cx,
                         )
@@ -829,6 +999,7 @@ pub fn render_table_header(
                         pinned_cols + rel_idx,
                         &shared_element_id,
                         resize_info_ref,
+                        table_context.accessibility.as_ref(),
                         use_ui_font,
                         cx,
                     )
@@ -846,32 +1017,38 @@ pub fn render_table_header(
         }
         scrollable_section.style().restrict_scroll_to_axis = Some(true);
 
-        outer
-            .child(pinned_section)
-            .child(scrollable_section)
-            .into_any_element()
+        outer.child(pinned_section).child(scrollable_section)
     } else {
-        outer
-            .children(
-                headers
-                    .into_vec()
-                    .into_iter()
-                    .enumerate()
-                    .zip(column_widths.into_vec())
-                    .map(|((header_idx, h), width)| {
-                        render_header_cell(
-                            h.into_any_element(),
-                            width,
-                            header_idx,
-                            &shared_element_id,
-                            resize_info_ref,
-                            use_ui_font,
-                            cx,
-                        )
-                    }),
-            )
-            .into_any_element()
+        outer.children(
+            headers
+                .into_vec()
+                .into_iter()
+                .enumerate()
+                .zip(column_widths.into_vec())
+                .map(|((header_idx, h), width)| {
+                    render_header_cell(
+                        h.into_any_element(),
+                        width,
+                        header_idx,
+                        &shared_element_id,
+                        resize_info_ref,
+                        table_context.accessibility.as_ref(),
+                        use_ui_font,
+                        cx,
+                    )
+                }),
+        )
+    };
+
+    #[cfg(feature = "accessibility")]
+    if let Some(accessibility) = table_context.accessibility.as_ref() {
+        return outer
+            .id(accessibility.header_row_element_id())
+            .role(gpui::accesskit::Role::Row)
+            .into_any_element();
     }
+
+    outer.into_any_element()
 }
 
 #[derive(Clone)]
@@ -884,6 +1061,7 @@ pub struct TableRenderContext {
     pub map_row: Option<Rc<dyn Fn((usize, Stateful<Div>), &mut Window, &mut App) -> AnyElement>>,
     pub use_ui_font: bool,
     pub disable_base_cell_style: bool,
+    pub accessibility: Option<TableAccessibility>,
     pub pinned_cols: usize,
     /// Scroll handle shared by all scrollable sections in rows and headers.
     /// When `pinned_cols > 0`, each row's scrollable section tracks this handle so all rows
@@ -902,6 +1080,7 @@ impl TableRenderContext {
             map_row: table.map_row.clone(),
             use_ui_font: table.use_ui_font,
             disable_base_cell_style: table.disable_base_cell_style,
+            accessibility: table.accessibility.clone(),
             pinned_cols: table.pinned_cols,
             h_scroll_handle,
         }
@@ -917,6 +1096,7 @@ impl TableRenderContext {
             map_row: None,
             use_ui_font,
             disable_base_cell_style: false,
+            accessibility: None,
             pinned_cols: 0,
             h_scroll_handle: None,
         }
@@ -1354,11 +1534,28 @@ impl RenderOnce for Table {
             }
             content.style().restrict_scroll_to_axis = Some(true);
 
-            content
-                .track_focus(&state.read(cx).focus_handle)
-                .id(("table", state.entity_id()))
-                .into_any_element()
+            let content = content.track_focus(&state.read(cx).focus_handle);
+
+            #[cfg(feature = "accessibility")]
+            if let Some(accessibility) = self.accessibility.as_ref() {
+                return content
+                    .id(accessibility.element_id.clone())
+                    .role(gpui::accesskit::Role::Table)
+                    .aria_label(accessibility.label.clone())
+                    .into_any_element();
+            }
+
+            content.id(("table", state.entity_id())).into_any_element()
         } else {
+            #[cfg(feature = "accessibility")]
+            if let Some(accessibility) = self.accessibility.as_ref() {
+                return table
+                    .id(accessibility.element_id.clone())
+                    .role(gpui::accesskit::Role::Table)
+                    .aria_label(accessibility.label.clone())
+                    .into_any_element();
+            }
+
             table.into_any_element()
         }
     }

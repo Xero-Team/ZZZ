@@ -5,8 +5,8 @@ use gpui::{
 use std::{cell::Cell, rc::Rc};
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
-    ContextMenu, Disableable as _, IconPosition, ListItem, Modal, ModalHeader, Switch, Tab,
-    ToggleState, Toggleable as _, TreeViewItem,
+    ContextMenu, Disableable as _, IconPosition, ListItem, Modal, ModalHeader, Switch, Tab, Table,
+    TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -99,6 +99,22 @@ impl Render for SemanticComponents {
                         let action_count = self.action_count.clone();
                         move |_, _, _| action_count.set(action_count.get() + 1)
                     }),
+            )
+            .child(
+                Table::new(2)
+                    .with_accessibility(TableAccessibility::new(
+                        "recent-files-table",
+                        "Recent files",
+                        ["Name", "Status"],
+                        |row_index, column_index, _| match (row_index, column_index) {
+                            (0, 0) => "Cargo.toml".into(),
+                            (0, 1) => "Modified".into(),
+                            _ => "Unknown".into(),
+                        },
+                    ))
+                    .expect("table semantic headers should match its column count")
+                    .header(vec!["Name", "Status"])
+                    .row(vec!["Cargo.toml", "Modified"]),
             )
             .child(
                 Modal::new("preferences", None).header(ModalHeader::new().headline("Preferences")),
@@ -343,6 +359,71 @@ fn components_emit_roles_labels_and_state() {
         .expect("menu item semantic node should exist");
     assert_eq!(menu_item.toggled(), Some(gpui::accesskit::Toggled::True));
     assert!(menu_item.supports_action(gpui::accesskit::Action::Click));
+
+    let table = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Table && node.label() == Some("Recent files")
+        })
+        .map(|(_, node)| node)
+        .expect("table semantic node should exist");
+    assert_eq!(table.children().len(), 2);
+    let table_rows = table
+        .children()
+        .iter()
+        .map(|id| {
+            snapshot
+                .update
+                .nodes
+                .iter()
+                .find(|(node_id, _)| node_id == id)
+                .map(|(_, node)| node)
+                .expect("table child should have a semantic node")
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        table_rows
+            .iter()
+            .all(|node| node.role() == gpui::accesskit::Role::Row)
+    );
+    assert!(table_rows.iter().any(|row| {
+        row.children().iter().any(|id| {
+            snapshot.update.nodes.iter().any(|(node_id, node)| {
+                node_id == id
+                    && node.role() == gpui::accesskit::Role::ColumnHeader
+                    && node.label() == Some("Name")
+            })
+        })
+    }));
+    assert!(table_rows.iter().any(|row| {
+        row.children().iter().any(|id| {
+            snapshot.update.nodes.iter().any(|(node_id, node)| {
+                node_id == id
+                    && node.role() == gpui::accesskit::Role::ColumnHeader
+                    && node.label() == Some("Status")
+            })
+        })
+    }));
+    assert!(table_rows.iter().any(|row| {
+        row.children().iter().any(|id| {
+            snapshot.update.nodes.iter().any(|(node_id, node)| {
+                node_id == id
+                    && node.role() == gpui::accesskit::Role::Cell
+                    && node.label() == Some("Cargo.toml")
+            })
+        })
+    }));
+    assert!(table_rows.iter().any(|row| {
+        row.children().iter().any(|id| {
+            snapshot.update.nodes.iter().any(|(node_id, node)| {
+                node_id == id
+                    && node.role() == gpui::accesskit::Role::Cell
+                    && node.label() == Some("Modified")
+            })
+        })
+    }));
 
     cx.update_window(handle, |_, window, cx| {
         assert!(window.dispatch_accessibility_action(

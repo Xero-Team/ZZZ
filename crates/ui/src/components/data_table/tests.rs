@@ -1,5 +1,8 @@
 use super::table_row::TableRow;
-use crate::{RedistributableColumnsState, ResizableColumnsState, TableResizeBehavior};
+use crate::{
+    RedistributableColumnsState, ResizableColumnsState, Table, TableAccessibility,
+    TableResizeBehavior,
+};
 use gpui::{AbsoluteLength, px};
 
 fn is_almost_eq(a: &[f32], b: &[f32]) -> bool {
@@ -36,6 +39,24 @@ fn parse_resize_behavior(
         resize_behavior.len()
     );
     resize_behavior
+}
+
+#[test]
+fn accessibility_requires_one_header_per_column() {
+    let result = Table::new(2).with_accessibility(TableAccessibility::new(
+        "test-table",
+        "Test table",
+        ["First column"],
+        |_, _, _| "cell".into(),
+    ));
+    let Err(error) = result else {
+        panic!("table accessibility should reject a mismatched header count");
+    };
+
+    assert_eq!(
+        error.to_string(),
+        "table accessibility expected 2 headers but received 1"
+    );
 }
 
 mod reset_column_size {

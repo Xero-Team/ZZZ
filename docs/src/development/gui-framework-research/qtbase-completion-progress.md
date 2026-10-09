@@ -185,11 +185,21 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `ContextMenu::action_checked(..., false)` 现在保留 unchecked checkbox metadata，避免
   将“可勾选但未选中”的条目退化为普通 menu item；submenu trigger 也使用
   `Role::MenuItem`。
+- `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
+  标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
+  每列 header label 和按 row/column 解析 cell label 的 callback。
+  `Table::with_accessibility` 验证 header 数量必须与列数一致，并在不匹配时返回结构化错误。
+- 启用该 opt-in 后，Table、header row、column header、data row 和 cell 分别投影为
+  `Role::Table`、`Role::Row`、`Role::ColumnHeader`、`Role::Row` 和 `Role::Cell`。普通
+  rows、uniform list 与 variable-height list 共同经过相同的 row/cell 渲染路径；feature
+  关闭时不会投影 semantic node。
 - 扩展 UI semantic integration test：验证 checkbox/switch 的 role、label、三态和
   AccessKit Click；同时验证 ChoiceCard 的 description、state、Click 和 Focus，以及
   ListItem 的 MenuItemCheckBox override。独立的真实 ContextMenu snapshot test 验证
   Menu、普通 MenuItem、未勾选 MenuItemCheckBox 和 action routing，并确认它们调用与
   鼠标相同的业务 action。
+- 扩展 semantic integration test：验证 opt-in table 的完整 role/name 层级，并新增 unit
+  regression，拒绝列数与 header 数不一致的配置。
 - 已验证：
 
   ```sh
@@ -201,13 +211,14 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   git diff --check
   ```
 
-  结果：UI default `70 passed`、doc tests `41 passed`；UI semantic integration tests
+  结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
   `2 passed`；release clippy 和 philosophy gate 通过。
 
 ### 下一步 {#phase-2-next}
 
 继续按 interactive、structural、status、text input、decorative 分类审计组件；优先
-ContextMenu/DropdownMenu、ChoiceCard、data table 与 text input。每次只迁移一条完整的
+DropdownMenu、scrollbar 与剩余 text surface。保持 DataTable 语义为有调用方提供可访问名称
+时的 opt-in，不能从 `AnyElement` 猜测 cell 内容。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
 
 ## 阶段 3：Model、selection、focus 与 virtualization 协议 {#phase-3}
