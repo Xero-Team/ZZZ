@@ -101,6 +101,12 @@ impl RenderOnce for AnnouncementToast {
         let illustration = self.illustration;
         #[cfg(feature = "accessibility")]
         let accessibility_label = self.heading.clone().or_else(|| self.description.clone());
+        #[cfg(feature = "accessibility")]
+        let accessibility_description = self
+            .heading
+            .is_some()
+            .then(|| self.description.clone())
+            .flatten();
 
         let toast = v_flex()
             .id("announcement-toast")
@@ -157,7 +163,10 @@ impl RenderOnce for AnnouncementToast {
         #[cfg(feature = "accessibility")]
         let toast = toast
             .role(gpui::accesskit::Role::Status)
-            .when_some(accessibility_label, |toast, label| toast.aria_label(label));
+            .when_some(accessibility_label, |toast, label| toast.aria_label(label))
+            .when_some(accessibility_description, |toast, description| {
+                toast.aria_description(description)
+            });
         toast
     }
 }

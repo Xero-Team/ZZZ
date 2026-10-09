@@ -218,7 +218,11 @@ impl Render for SemanticComponents {
                 ),
             )
             .child(AlertModal::new("replace-file").title("Replace file?"))
-            .child(AnnouncementToast::new().heading("Update available"))
+            .child(
+                AnnouncementToast::new()
+                    .heading("Update available")
+                    .description("Restart to apply the update"),
+            )
     }
 }
 
@@ -751,6 +755,7 @@ fn components_emit_roles_labels_and_state() {
         .map(|(_, node)| node)
         .expect("status semantic node should exist");
     assert_eq!(status.label(), Some("Update available"));
+    assert_eq!(status.description(), Some("Restart to apply the update"));
 }
 
 #[test]
