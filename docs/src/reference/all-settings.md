@@ -247,6 +247,22 @@ Define extensions which should be installed (`true`) or never installed (`false`
 }
 ```
 
+## Suggest Extensions
+
+- Description: Whether to suggest installing extensions based on the files you open.
+- Setting: `suggest_extensions`
+- Default: `true`
+
+**Options**
+
+`boolean` values
+
+```json [settings]
+{
+  "suggest_extensions": false
+}
+```
+
 ## Autosave
 
 - Description: When to automatically save edited buffers.
