@@ -17,6 +17,8 @@ pub struct AlertModal {
     children: SmallVec<[AnyElement; 2]>,
     footer: Option<AnyElement>,
     title: Option<SharedString>,
+    #[cfg(feature = "accessibility")]
+    accessibility_label: Option<SharedString>,
     primary_action: Option<SharedString>,
     dismiss_label: Option<SharedString>,
     width: Option<DefiniteLength>,
@@ -33,6 +35,8 @@ impl AlertModal {
             children: smallvec![],
             footer: None,
             title: None,
+            #[cfg(feature = "accessibility")]
+            accessibility_label: None,
             primary_action: None,
             dismiss_label: None,
             width: None,
@@ -44,6 +48,13 @@ impl AlertModal {
 
     pub fn title(mut self, title: impl Into<SharedString>) -> Self {
         self.title = Some(title.into());
+        self
+    }
+
+    /// Sets the accessible name for this alert dialog when it differs from the title.
+    #[cfg(feature = "accessibility")]
+    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
         self
     }
 
@@ -96,8 +107,13 @@ impl RenderOnce for AlertModal {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let width = self.width.unwrap_or_else(|| px(440.).into());
         let has_default_footer = self.primary_action.is_some() || self.dismiss_label.is_some();
+        #[cfg(feature = "accessibility")]
+        let accessibility_label = self
+            .accessibility_label
+            .clone()
+            .or_else(|| self.title.clone());
 
-        let mut modal = v_flex()
+        let modal = v_flex()
             .when_some(self.key_context, |this, key_context| {
                 this.key_context(key_context.as_str())
             })
@@ -109,6 +125,17 @@ impl RenderOnce for AlertModal {
             .w(width)
             .bg(cx.theme().colors().elevated_surface_background)
             .overflow_hidden();
+
+        #[cfg(feature = "accessibility")]
+        let modal = if let Some(label) = accessibility_label {
+            modal
+                .role(gpui::accesskit::Role::AlertDialog)
+                .aria_label(label)
+        } else {
+            modal
+        };
+
+        let mut modal = modal;
 
         for handler in self.action_handlers {
             modal = handler(modal);

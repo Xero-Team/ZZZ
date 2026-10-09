@@ -7,10 +7,10 @@ use std::{
     rc::Rc,
 };
 use ui::{
-    AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, CircularProgress,
-    Clickable as _, ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, List,
-    ListAccessibility, ListHeader, ListItem, Modal, ModalHeader, ProgressBar, Switch, Tab, TabBar,
-    Table, TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
+    AlertModal, AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard,
+    CircularProgress, Clickable as _, ContextMenu, Disableable as _, Disclosure, DropdownMenu,
+    IconPosition, List, ListAccessibility, ListHeader, ListItem, Modal, ModalHeader, ProgressBar,
+    Switch, Tab, TabBar, Table, TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -213,6 +213,7 @@ impl Render for SemanticComponents {
             .child(
                 Modal::new("preferences", None).header(ModalHeader::new().headline("Preferences")),
             )
+            .child(AlertModal::new("replace-file").title("Replace file?"))
             .child(AnnouncementToast::new().heading("Update available"))
     }
 }
@@ -724,6 +725,15 @@ fn components_emit_roles_labels_and_state() {
         .map(|(_, node)| node)
         .expect("dialog semantic node should exist");
     assert_eq!(dialog.label(), Some("Preferences"));
+
+    let alert_dialog = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::AlertDialog)
+        .map(|(_, node)| node)
+        .expect("alert dialog semantic node should exist");
+    assert_eq!(alert_dialog.label(), Some("Replace file?"));
 
     let status = snapshot
         .update

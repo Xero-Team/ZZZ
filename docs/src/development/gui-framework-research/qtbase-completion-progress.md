@@ -207,6 +207,9 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - 可交互 `ListHeader` 现在是唯一的命名 `Button` semantic node，投影 header label 和
   `expanded`，AccessKit Click 与 label-area pointer click 复用同一个 `on_toggle` callback。
   其内部 Disclosure chevron 是装饰，static/non-interactive header 不伪装成可操作 button。
+- `AlertModal` 在 explicit `aria_label` 或 title 可提供 name 时投影为
+  `Role::AlertDialog`；这只描述组件自身，仍由产品 modal manager 负责 focus trap、dismiss 与
+  focus restoration，避免两个 owner 竞争 lifecycle。
 - GPUI `StatefulInteractiveElement` 现在能写入 finite numeric current/min/max range。线性和
   圆形 determinate progress 组件要求稳定 ID 与 accessible name，在有效的 finite value 和
   positive finite maximum 下投影为 `Role::ProgressIndicator`；current value 被 clamp 到
@@ -243,6 +246,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   action contract、ListItem Collapse route，以及内部 Disclosure 没有重复 semantic button。
 - 扩展 component semantic regression：验证 interactive ListHeader 的 name/expanded/Click
   contract 与内部 chevron 去重。
+- 扩展 component semantic regression：验证 titled AlertModal 的 AlertDialog role/name。
 - 扩展 component semantic regression：验证 linear/circular progress 的 role、name 和 numeric
   min/current/max，超限值 clamp 与 invalid range omission；同时重跑 GPUI a11y suite 及 Agent
   UI downstream check。
