@@ -9,8 +9,8 @@ use std::{
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, CircularProgress,
     Clickable as _, ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, List,
-    ListAccessibility, ListItem, Modal, ModalHeader, ProgressBar, Switch, Tab, TabBar, Table,
-    TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
+    ListAccessibility, ListHeader, ListItem, Modal, ModalHeader, ProgressBar, Switch, Tab, TabBar,
+    Table, TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -148,6 +148,10 @@ impl Render for SemanticComponents {
                     ))
                     .child(ListItem::new("recent-project").aria_label("Project sunrise")),
             )
+            .child(ListHeader::new("Recent files").toggle(true).on_toggle({
+                let action_count = self.action_count.clone();
+                move |_, _, _| action_count.set(action_count.get() + 1)
+            }))
             .child(ProgressBar::new(
                 "workspace-progress",
                 "Workspace indexing",
@@ -510,6 +514,21 @@ fn components_emit_roles_labels_and_state() {
         .expect("semantic list node should exist");
     assert!(recent_projects.children().contains(recent_project_id));
 
+    let (list_header_id, list_header) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Recent files")
+        })
+        .expect("expandable list header semantic node should exist");
+    assert_eq!(list_header.is_expanded(), Some(true));
+    assert_eq!(list_header.toggled(), None);
+    assert!(list_header.supports_action(gpui::accesskit::Action::Click));
+    assert!(!snapshot.update.nodes.iter().any(|(_, node)| {
+        node.role() == gpui::accesskit::Role::Button && node.label() == Some("Collapse")
+    }));
+
     let workspace_progress = snapshot
         .update
         .nodes
@@ -687,9 +706,15 @@ fn components_emit_roles_labels_and_state() {
             None,
             cx,
         ));
+        assert!(window.dispatch_accessibility_action(
+            *list_header_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
     })
     .expect("semantic test window should remain open");
-    assert_eq!(action_count.get(), 12);
+    assert_eq!(action_count.get(), 13);
 
     let dialog = snapshot
         .update

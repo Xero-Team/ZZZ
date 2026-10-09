@@ -81,61 +81,80 @@ impl Toggleable for ListHeader {
 impl RenderOnce for ListHeader {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let ui_density = theme::theme_settings(cx).ui_density(cx);
+        let on_toggle = self.on_toggle.clone();
+        #[cfg(feature = "accessibility")]
+        let accessibility_toggle = self.toggle.zip(on_toggle.clone());
 
-        h_flex()
-            .id(self.label.clone())
-            .w_full()
-            .relative()
-            .group("list_header")
-            .child(
-                div()
-                    .map(|this| match ui_density {
-                        UiDensity::Comfortable => this.h_5(),
-                        _ => this.h_7(),
-                    })
-                    .when(self.inset, |this| this.px_2())
-                    .when(self.selected, |this| {
-                        this.bg(cx.theme().colors().ghost_element_selected)
-                    })
-                    .flex()
-                    .flex_1()
-                    .items_center()
-                    .justify_between()
-                    .w_full()
-                    .gap(DynamicSpacing::Base04.rems(cx))
-                    .child(
-                        h_flex()
-                            .gap(DynamicSpacing::Base04.rems(cx))
-                            .children(self.toggle.map(|is_open| {
-                                Disclosure::new("toggle", is_open)
-                                    .on_toggle_expanded(self.on_toggle.clone())
-                            }))
-                            .child(
-                                div()
-                                    .id("label_container")
-                                    .flex()
-                                    .gap(DynamicSpacing::Base04.rems(cx))
-                                    .items_center()
-                                    .children(self.start_slot)
-                                    .child(Label::new(self.label.clone()).color(Color::Muted))
-                                    .when_some(self.on_toggle, |this, on_toggle| {
-                                        this.on_click(move |event, window, cx| {
-                                            on_toggle(event, window, cx)
-                                        })
-                                    }),
-                            ),
+        let header = h_flex().id(self.label.clone());
+        #[cfg(feature = "accessibility")]
+        let header = if let Some((expanded, on_toggle)) = accessibility_toggle {
+            let label = self.label.clone();
+            header
+                .role(gpui::accesskit::Role::Button)
+                .aria_label(label)
+                .aria_expanded(expanded)
+                .on_a11y_action(gpui::accesskit::Action::Click, move |_, window, cx| {
+                    on_toggle(
+                        &ClickEvent::Keyboard(gpui::KeyboardClickEvent::default()),
+                        window,
+                        cx,
                     )
-                    .child(h_flex().children(self.end_slot))
-                    .when_some(self.end_hover_slot, |this, end_hover_slot| {
-                        this.child(
+                })
+        } else {
+            header
+        };
+
+        header.w_full().relative().group("list_header").child(
+            div()
+                .map(|this| match ui_density {
+                    UiDensity::Comfortable => this.h_5(),
+                    _ => this.h_7(),
+                })
+                .when(self.inset, |this| this.px_2())
+                .when(self.selected, |this| {
+                    this.bg(cx.theme().colors().ghost_element_selected)
+                })
+                .flex()
+                .flex_1()
+                .items_center()
+                .justify_between()
+                .w_full()
+                .gap(DynamicSpacing::Base04.rems(cx))
+                .child(
+                    h_flex()
+                        .gap(DynamicSpacing::Base04.rems(cx))
+                        .children(self.toggle.map(|is_open| {
+                            let disclosure = Disclosure::new("toggle", is_open);
+                            #[cfg(feature = "accessibility")]
+                            let disclosure = disclosure.decorative();
+                            disclosure.on_toggle_expanded(on_toggle.clone())
+                        }))
+                        .child(
                             div()
-                                .absolute()
-                                .right_0()
-                                .visible_on_hover("list_header")
-                                .child(end_hover_slot),
-                        )
-                    }),
-            )
+                                .id("label_container")
+                                .flex()
+                                .gap(DynamicSpacing::Base04.rems(cx))
+                                .items_center()
+                                .children(self.start_slot)
+                                .child(Label::new(self.label.clone()).color(Color::Muted))
+                                .when_some(on_toggle, |this, on_toggle| {
+                                    this.on_click(move |event, window, cx| {
+                                        on_toggle(event, window, cx)
+                                    })
+                                }),
+                        ),
+                )
+                .child(h_flex().children(self.end_slot))
+                .when_some(self.end_hover_slot, |this, end_hover_slot| {
+                    this.child(
+                        div()
+                            .absolute()
+                            .right_0()
+                            .visible_on_hover("list_header")
+                            .child(end_hover_slot),
+                    )
+                }),
+        )
     }
 }
 
