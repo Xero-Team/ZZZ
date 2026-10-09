@@ -2115,7 +2115,7 @@ Inherited patterns are inserted at `"..."`, and duplicates keep their first occu
       "**/ZZZ/**/*.json",
       "**/.vscode/**/*.json"
     ],
-    "Shell Script": [".env.*"]
+    "Env": [".env.*"]
   }
 }
 ```
