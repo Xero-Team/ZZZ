@@ -189,6 +189,9 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `expanded` state，而不是将“菜单展开”错误地报告为 toggle button 的 `toggled` state。
   `Toggleable::accessibility_expanded` 对没有 semantic node 的自定义 trigger 默认 no-op；
   `Button`、`ButtonLike` 与 `IconButton` 则将该 state 写入其既有 node，不创建平行控件。
+- `Disclosure` 现在以带 label 的 button 公开 `expanded` state，并将 AccessKit Click
+  复用原有 toggle callback。它提供可覆盖的 contextual label；未提供时使用本地化的
+  `Expand`/`Collapse` fallback。两个 locale catalog 已验证保持同一 key 集。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -207,6 +210,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - 增加 dropdown lifecycle regression：通过 AccessKit Click 验证 trigger 从
   `expanded=false` 到 `true`、Menu 出现；收到真实 `DismissEvent` 后回到 `false`。测试还
   验证 popup trigger 没有错误携带 `toggled` state。
+- 扩展 component semantic regression：验证 Disclosure 的 role、contextual label、expanded
+  state 和 Click action，确保它与 pointer handler 共用同一 callback。
 - 已验证：
 
   ```sh

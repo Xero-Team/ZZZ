@@ -8,8 +8,9 @@ use std::{
 };
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
-    ContextMenu, Disableable as _, DropdownMenu, IconPosition, ListItem, Modal, ModalHeader,
-    Switch, Tab, Table, TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
+    ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, ListItem, Modal,
+    ModalHeader, Switch, Tab, Table, TableAccessibility, ToggleState, Toggleable as _,
+    TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -113,6 +114,18 @@ impl Render for SemanticComponents {
                         move |_, _, _| action_count.set(action_count.get() + 1)
                     }),
             )
+            .child(
+                Disclosure::new("advanced-options", true)
+                    .aria_label("Advanced options")
+                    .on_click({
+                        let action_count = self.action_count.clone();
+                        move |_, _, _| action_count.set(action_count.get() + 1)
+                    }),
+            )
+            .child(Disclosure::new("default-disclosure", false).on_click({
+                let action_count = self.action_count.clone();
+                move |_, _, _| action_count.set(action_count.get() + 1)
+            }))
             .child(
                 Table::new(2)
                     .with_accessibility(TableAccessibility::new(
@@ -373,6 +386,30 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(menu_item.toggled(), Some(gpui::accesskit::Toggled::True));
     assert!(menu_item.supports_action(gpui::accesskit::Action::Click));
 
+    let (disclosure_id, disclosure) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Advanced options")
+        })
+        .expect("disclosure semantic node should exist");
+    assert_eq!(disclosure.is_expanded(), Some(true));
+    assert_eq!(disclosure.toggled(), None);
+    assert!(disclosure.supports_action(gpui::accesskit::Action::Click));
+
+    let (default_disclosure_id, default_disclosure) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::Button && node.label() == Some("Expand")
+        })
+        .expect("default disclosure semantic node should exist");
+    assert_eq!(default_disclosure.is_expanded(), Some(false));
+    assert_eq!(default_disclosure.toggled(), None);
+    assert!(default_disclosure.supports_action(gpui::accesskit::Action::Click));
+
     let table = snapshot
         .update
         .nodes
@@ -451,9 +488,21 @@ fn components_emit_roles_labels_and_state() {
             None,
             cx,
         ));
+        assert!(window.dispatch_accessibility_action(
+            *disclosure_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
+        assert!(window.dispatch_accessibility_action(
+            *default_disclosure_id,
+            gpui::accesskit::Action::Click,
+            None,
+            cx,
+        ));
     })
     .expect("semantic test window should remain open");
-    assert_eq!(action_count.get(), 7);
+    assert_eq!(action_count.get(), 9);
 
     let dialog = snapshot
         .update
