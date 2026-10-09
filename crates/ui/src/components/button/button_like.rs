@@ -346,6 +346,7 @@ pub struct ButtonLike {
     pub(super) style: ButtonStyle,
     pub(super) disabled: bool,
     pub(super) selected: bool,
+    toggleable: bool,
     pub(super) selected_style: Option<ButtonStyle>,
     pub(super) width: Option<DefiniteLength>,
     pub(super) height: Option<DefiniteLength>,
@@ -376,6 +377,7 @@ impl ButtonLike {
             style: ButtonStyle::default(),
             disabled: false,
             selected: false,
+            toggleable: false,
             selected_style: None,
             width: None,
             height: None,
@@ -465,6 +467,7 @@ impl Disableable for ButtonLike {
 impl Toggleable for ButtonLike {
     fn toggle_state(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self.toggleable = true;
         self
     }
 
@@ -574,9 +577,10 @@ impl RenderOnce for ButtonLike {
         } else {
             base.role(gpui::accesskit::Role::Button)
                 .aria_disabled(self.disabled)
-                .when(self.accessibility_expanded.is_none(), |this| {
-                    this.aria_toggled(self.selected.into())
-                })
+                .when(
+                    self.toggleable && self.accessibility_expanded.is_none(),
+                    |this| this.aria_toggled(self.selected.into()),
+                )
                 .when_some(self.accessibility_expanded, |this, expanded| {
                     this.aria_expanded(expanded)
                 })

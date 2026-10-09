@@ -268,16 +268,16 @@ fn components_emit_roles_labels_and_state() {
         .expect("focused button semantic node should exist");
     assert_eq!(snapshot.focused_node, focused_button_id);
 
-    let action_button_id = snapshot
+    let (action_button_id, action_button) = snapshot
         .update
         .nodes
         .iter()
         .find(|(_, node)| node.label() == Some("Action"))
-        .map(|(node_id, _)| *node_id)
         .expect("action button semantic node should exist");
+    assert_eq!(action_button.toggled(), None);
     cx.update_window(handle, |_, window, cx| {
         assert!(window.dispatch_accessibility_action(
-            action_button_id,
+            *action_button_id,
             gpui::accesskit::Action::Click,
             None,
             cx,
@@ -398,7 +398,7 @@ fn components_emit_roles_labels_and_state() {
 
     cx.update_window(handle, |_, window, cx| {
         assert!(window.dispatch_accessibility_action(
-            action_button_id,
+            *action_button_id,
             gpui::accesskit::Action::Focus,
             None,
             cx,
@@ -539,7 +539,7 @@ fn components_emit_roles_labels_and_state() {
     assert!(!snapshot.update.nodes.iter().any(|(_, node)| {
         matches!(
             node.label(),
-            Some("Invalid progress") | Some("Invalid circular progress")
+            Some("Invalid progress" | "Invalid circular progress")
         )
     }));
 

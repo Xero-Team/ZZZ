@@ -209,6 +209,9 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   positive finite maximum 下投影为 `Role::ProgressIndicator`；current value 被 clamp 到
   `[0, max]`，invalid range 不生成伪造 determinate node，视觉也安全退化。Agent token rings
   已迁移到本地化的 Context/Input/Output name。
+- `ButtonLike` 现在区分 visual selected state 与明确声明的 toggle control：只有调用
+  `toggle_state` 的 button 才投影 `toggled`，普通 button 不再错误报告 `toggled=false`；
+  popover trigger 继续优先使用独立的 `expanded` state。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -238,6 +241,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - 扩展 component semantic regression：验证 linear/circular progress 的 role、name 和 numeric
   min/current/max，超限值 clamp 与 invalid range omission；同时重跑 GPUI a11y suite 及 Agent
   UI downstream check。
+- 扩展 component semantic regression：验证普通 button 没有 toggled state，显式 toggle button
+  仍保留它。
 - 已验证：
 
   ```sh
