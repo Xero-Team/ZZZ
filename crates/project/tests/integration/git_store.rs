@@ -1680,6 +1680,7 @@ mod resolve_worktree_tests {
     };
     use serde_json::json;
     use std::path::{Path, PathBuf};
+    use util::paths::PathStyle;
 
     #[gpui::test]
     async fn test_resolve_git_worktree_to_main_repo(cx: &mut TestAppContext) {
