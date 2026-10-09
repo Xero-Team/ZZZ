@@ -493,6 +493,22 @@ impl ConfigOptions {
             rx,
         }
     }
+
+    async fn set_config_option(
+        &self,
+        connection: &ConnectionTo<Agent>,
+        session_id: acp::SessionId,
+        config_id: acp::SessionConfigId,
+        value: acp::SessionConfigOptionValue,
+    ) -> Result<Vec<acp::SessionConfigOption>> {
+        let response = into_foreground_future(connection.send_request(
+            acp::SetSessionConfigOptionRequest::new(session_id, config_id, value),
+        ))
+        .await?;
+        *self.config_options.borrow_mut() = response.config_options.clone();
+        self.tx.borrow_mut().send(()).log_err();
+        Ok(response.config_options)
+    }
 }
 
 pub struct AcpSession {
@@ -500,6 +516,7 @@ pub struct AcpSession {
     suppress_abort_err: bool,
     session_modes: Option<Rc<RefCell<acp::SessionModeState>>>,
     config_options: Option<ConfigOptions>,
+    default_config_task: Option<Task<()>>,
     ref_count: usize,
 }
 
@@ -1221,6 +1238,7 @@ impl AcpConnection {
                             suppress_abort_err: false,
                             session_modes: None,
                             config_options: None,
+                            default_config_task: None,
                             ref_count: 1,
                         },
                     );
@@ -1239,10 +1257,10 @@ impl AcpConnection {
 
                     let (modes, config_options) =
                         config_state(response.modes, response.config_options);
-
-                    if let Some(config_opts) = config_options.as_ref() {
-                        this.apply_default_config_options(&session_id, config_opts, cx);
-                    }
+                    let config_options = config_options.map(ConfigOptions::new);
+                    let default_config_task = config_options.as_ref().map(|config_options| {
+                        this.apply_default_config_options(&session_id, config_options, cx)
+                    });
 
                     let ref_count = this
                         .pending_sessions
@@ -1263,7 +1281,8 @@ impl AcpConnection {
                             )));
                         };
                         session.session_modes = modes;
-                        session.config_options = config_options.map(ConfigOptions::new);
+                        session.config_options = config_options;
+                        session.default_config_task = default_config_task;
                         session.ref_count = ref_count;
                     }
 
@@ -1287,136 +1306,95 @@ impl AcpConnection {
     fn apply_default_config_options(
         &self,
         session_id: &acp::SessionId,
-        config_options: &Rc<RefCell<Vec<acp::SessionConfigOption>>>,
+        config_options: &ConfigOptions,
         cx: &mut AsyncApp,
-    ) {
+    ) -> Task<()> {
         let apply_boolean_defaults = cx.update(|cx| cx.has_flag::<AcpBetaFeatureFlag>());
         let id = self.id.clone();
-        let defaults_to_apply: Vec<_> = {
-            let config_opts_ref = config_options.borrow();
-            config_opts_ref
-                .iter()
-                .filter_map(|config_option| {
-                    let default_value = self.default_config_options.get(&*config_option.id.0)?;
+        let defaults = self.default_config_options.clone();
+        let session_id = session_id.clone();
+        let config_options = config_options.clone();
+        let connection = self.connection.clone();
+        cx.spawn(async move |_| {
+            let mut attempted_defaults = Vec::new();
+            loop {
+                let current_options = config_options.config_options.borrow().clone();
+                let next_default = current_options.iter().find_map(|config_option| {
+                    if attempted_defaults.iter().any(|(config_id, options)| {
+                        config_id == &config_option.id && options == &current_options
+                    }) {
+                        return None;
+                    }
 
-                    let value_to_apply = match &config_option.kind {
+                    let default_value = defaults.get(&*config_option.id.0)?;
+                    let already_set = match &config_option.kind {
                         acp::SessionConfigKind::Select(select) => {
-                            let value_id = default_value.as_value_id()?;
-                            match &select.options {
+                            default_value.as_value_id() == Some(&*select.current_value.0)
+                        }
+                        acp::SessionConfigKind::Boolean(boolean) => {
+                            default_value.as_bool() == Some(boolean.current_value)
+                        }
+                        _ => false,
+                    };
+                    (!already_set).then(|| (config_option.clone(), default_value.clone()))
+                });
+                let Some((config_option, default_value)) = next_default else {
+                    break;
+                };
+                attempted_defaults.push((config_option.id.clone(), current_options));
+
+                let value_to_apply = match &config_option.kind {
+                    acp::SessionConfigKind::Select(select) => {
+                        default_value
+                            .as_value_id()
+                            .and_then(|value_id| match &select.options {
                                 acp::SessionConfigSelectOptions::Ungrouped(options) => options
                                     .iter()
-                                    .any(|opt| &*opt.value.0 == value_id)
+                                    .any(|option| &*option.value.0 == value_id)
                                     .then(|| {
                                         acp::SessionConfigOptionValue::value_id(value_id.to_owned())
                                     }),
                                 acp::SessionConfigSelectOptions::Grouped(groups) => groups
                                     .iter()
                                     .any(|group| {
-                                        group.options.iter().any(|opt| &*opt.value.0 == value_id)
+                                        group
+                                            .options
+                                            .iter()
+                                            .any(|option| &*option.value.0 == value_id)
                                     })
                                     .then(|| {
                                         acp::SessionConfigOptionValue::value_id(value_id.to_owned())
                                     }),
                                 _ => None,
-                            }
-                        }
-                        acp::SessionConfigKind::Boolean(_) if !apply_boolean_defaults => {
-                            return None;
-                        }
-                        acp::SessionConfigKind::Boolean(_) => default_value
-                            .as_bool()
-                            .map(acp::SessionConfigOptionValue::boolean),
-                        _ => None,
-                    };
-
-                    if let Some(value_to_apply) = value_to_apply {
-                        let initial_value = match &config_option.kind {
-                            acp::SessionConfigKind::Select(select) => {
-                                acp::SessionConfigOptionValue::value_id(
-                                    select.current_value.clone(),
-                                )
-                            }
-                            acp::SessionConfigKind::Boolean(boolean) => {
-                                acp::SessionConfigOptionValue::boolean(boolean.current_value)
-                            }
-                            _ => return None,
-                        };
-
-                        Some((config_option.id.clone(), value_to_apply, initial_value))
-                    } else {
-                        log::warn!(
-                            "`{}` is not a valid value for config option `{}` in {}",
-                            default_value,
-                            config_option.id.0,
-                            id
-                        );
-                        None
+                            })
                     }
-                })
-                .collect()
-        };
+                    acp::SessionConfigKind::Boolean(_) if apply_boolean_defaults => default_value
+                        .as_bool()
+                        .map(acp::SessionConfigOptionValue::boolean),
+                    _ => None,
+                };
 
-        for (config_id, default_value, initial_value) in defaults_to_apply {
-            cx.spawn({
-                let default_value_for_request = default_value.clone();
-                let session_id = session_id.clone();
-                let config_id_clone = config_id.clone();
-                let config_opts = config_options.clone();
-                let conn = self.connection.clone();
-                async move |_| {
-                    let result = into_foreground_future(conn.send_request(
-                        acp::SetSessionConfigOptionRequest::new(
-                            session_id,
-                            config_id_clone.clone(),
-                            default_value_for_request,
-                        ),
-                    ))
+                let Some(value_to_apply) = value_to_apply else {
+                    log::warn!(
+                        "`{}` is not a valid value for config option `{}` in {}",
+                        default_value,
+                        config_option.id.0,
+                        id
+                    );
+                    continue;
+                };
+
+                config_options
+                    .set_config_option(
+                        &connection,
+                        session_id.clone(),
+                        config_option.id,
+                        value_to_apply,
+                    )
                     .await
                     .log_err();
-
-                    if result.is_none() {
-                        let mut opts = config_opts.borrow_mut();
-                        if let Some(opt) = opts.iter_mut().find(|o| o.id == config_id_clone) {
-                            match (&mut opt.kind, &initial_value) {
-                                (
-                                    acp::SessionConfigKind::Select(select),
-                                    acp::SessionConfigOptionValue::ValueId { value },
-                                ) => {
-                                    select.current_value = value.clone();
-                                }
-                                (
-                                    acp::SessionConfigKind::Boolean(boolean),
-                                    acp::SessionConfigOptionValue::Boolean { value },
-                                ) => {
-                                    boolean.current_value = *value;
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            })
-            .detach();
-
-            let mut opts = config_options.borrow_mut();
-            if let Some(opt) = opts.iter_mut().find(|o| o.id == config_id) {
-                match (&mut opt.kind, &default_value) {
-                    (
-                        acp::SessionConfigKind::Select(select),
-                        acp::SessionConfigOptionValue::ValueId { value },
-                    ) => {
-                        select.current_value = value.clone();
-                    }
-                    (
-                        acp::SessionConfigKind::Boolean(boolean),
-                        acp::SessionConfigOptionValue::Boolean { value },
-                    ) => {
-                        boolean.current_value = *value;
-                    }
-                    _ => {}
-                }
             }
-        }
+        })
     }
 }
 
@@ -1654,9 +1632,10 @@ impl AgentConnection for AcpConnection {
                 }
             }
 
-            if let Some(config_opts) = config_options.as_ref() {
-                self.apply_default_config_options(&response.session_id, config_opts, cx);
-            }
+            let config_options = config_options.map(ConfigOptions::new);
+            let default_config_task = config_options.as_ref().map(|config_options| {
+                self.apply_default_config_options(&response.session_id, config_options, cx)
+            });
 
             let action_log = cx.new(|_| ActionLog::new(project.clone()));
             let thread: Entity<AcpThread> = cx.new(|cx| {
@@ -1682,7 +1661,8 @@ impl AgentConnection for AcpConnection {
                     thread: thread.downgrade(),
                     suppress_abort_err: false,
                     session_modes: modes,
-                    config_options: config_options.map(ConfigOptions::new),
+                    config_options,
+                    default_config_task,
                     ref_count: 1,
                 },
             );
