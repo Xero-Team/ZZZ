@@ -2615,6 +2615,8 @@
     "ui.reveal_in_file_manager.finder": "在 Finder 中显示",
     "ui.disclosure.collapse": "收起",
     "ui.disclosure.expand": "展开",
+    "ui.modal.back": "返回",
+    "ui.modal.dismiss": "关闭",
     "project_panel.excluded_directory.created": "已在 {:?} 创建排除目录。\n修改设置中的 `file_scan_exclusions` 以在面板中显示它",
     "project_panel.error.disconnected_from_remote_project": "与远程项目的连接已断开",
     "project_panel.error.disconnected_from_ssh_host": "与 SSH 主机的连接已断开",

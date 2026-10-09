@@ -2615,6 +2615,8 @@
     "ui.reveal_in_file_manager.finder": "Reveal in Finder",
     "ui.disclosure.collapse": "Collapse",
     "ui.disclosure.expand": "Expand",
+    "ui.modal.back": "Back",
+    "ui.modal.dismiss": "Dismiss",
     "project_panel.excluded_directory.created": "Created an excluded directory at {:?}.\nAlter `file_scan_exclusions` in the settings to show it in the panel",
     "project_panel.error.disconnected_from_remote_project": "Disconnected from remote project",
     "project_panel.error.disconnected_from_ssh_host": "Disconnected from SSH host",

@@ -214,7 +214,9 @@ impl Render for SemanticComponents {
                 Modal::new("preferences", None).header(
                     ModalHeader::new()
                         .headline("Preferences")
-                        .description("Configure project-specific settings"),
+                        .description("Configure project-specific settings")
+                        .show_back_button(true)
+                        .show_dismiss_button(true),
                 ),
             )
             .child(AlertModal::new("replace-file").title("Replace file?"))
@@ -232,6 +234,7 @@ fn components_emit_roles_labels_and_state() {
     cx.update(|cx| {
         let settings = settings::SettingsStore::test(cx);
         cx.set_global(settings);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
     });
     let action_count = Rc::new(Cell::new(0));
@@ -737,6 +740,16 @@ fn components_emit_roles_labels_and_state() {
         dialog.description(),
         Some("Configure project-specific settings")
     );
+    assert!(snapshot.update.nodes.iter().any(|(_, node)| {
+        node.role() == gpui::accesskit::Role::Button
+            && node.label() == Some("Back")
+            && node.supports_action(gpui::accesskit::Action::Click)
+    }));
+    assert!(snapshot.update.nodes.iter().any(|(_, node)| {
+        node.role() == gpui::accesskit::Role::Button
+            && node.label() == Some("Dismiss")
+            && node.supports_action(gpui::accesskit::Action::Click)
+    }));
 
     let alert_dialog = snapshot
         .update

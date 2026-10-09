@@ -1,6 +1,8 @@
 use crate::{IconButtonShape, prelude::*};
 
 use gpui::{prelude::FluentBuilder, *};
+#[cfg(feature = "accessibility")]
+use i18n::tr;
 use smallvec::SmallVec;
 use theme::ActiveTheme;
 
@@ -188,13 +190,15 @@ impl RenderOnce for ModalHeader {
             .pb(DynamicSpacing::Base04.rems(cx))
             .gap(DynamicSpacing::Base08.rems(cx))
             .when(self.show_back_button, |this| {
-                this.child(
-                    IconButton::new("back", IconName::ArrowLeft)
-                        .shape(IconButtonShape::Square)
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::Cancel.boxed_clone(), cx);
-                        }),
-                )
+                let back_button = IconButton::new("back", IconName::ArrowLeft)
+                    .shape(IconButtonShape::Square)
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(menu::Cancel.boxed_clone(), cx);
+                    });
+                #[cfg(feature = "accessibility")]
+                let back_button = back_button.aria_label(tr(cx, "ui.modal.back", "Back"));
+
+                this.child(back_button)
             })
             .child(
                 v_flex()
@@ -212,13 +216,19 @@ impl RenderOnce for ModalHeader {
                                     .children(children),
                             )
                             .when(self.show_dismiss_button, |this| {
-                                this.child(
-                                    IconButton::new("dismiss", IconName::Close)
-                                        .icon_size(IconSize::Small)
-                                        .on_click(|_, window, cx| {
-                                            window.dispatch_action(menu::Cancel.boxed_clone(), cx);
-                                        }),
-                                )
+                                let dismiss_button = IconButton::new("dismiss", IconName::Close)
+                                    .icon_size(IconSize::Small)
+                                    .on_click(|_, window, cx| {
+                                        window.dispatch_action(menu::Cancel.boxed_clone(), cx);
+                                    });
+                                #[cfg(feature = "accessibility")]
+                                let dismiss_button = dismiss_button.aria_label(tr(
+                                    cx,
+                                    "ui.modal.dismiss",
+                                    "Dismiss",
+                                ));
+
+                                this.child(dismiss_button)
                             }),
                     )
                     .when_some(self.description, |this, description| {
