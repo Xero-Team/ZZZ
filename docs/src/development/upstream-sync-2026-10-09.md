@@ -318,3 +318,115 @@ commit. Each `B` commit has `Upstream`, `Retained`, and `Omitted` trailers.
 
 The general reviewed baseline advances to
 `73be6ac6b1975f428328bbf7fe185d3b671afec4`.
+
+## Continued Batch III
+
+### Scope
+
+- Target branch: `sync/upstream-2026-10-09`, continuing the same local base
+  `84356b5c210ae68e79f68a1ece2395779fe80d61`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `73be6ac6b1975f428328bbf7fe185d3b671afec4`
+- Reviewed head: `6110aa61e1da78837dd3f91d5323ce43f098779a`
+- Live upstream head queried: `129c68ff4bc136b3fac2557388321374b4e5c858`
+- Query time: `2026-10-09T17:10:22+02:00`
+- Reviewed range: the next 20 commits after `73be6ac6`, oldest first
+- Remaining after this batch: 38 commits through the queried live head
+
+The previous baseline and reviewed head are ancestors of `FETCH_HEAD`. This
+batch remains fixed at twenty commits; later commits remain queued.
+
+### Decisions
+
+| Upstream   | Class | Local commit           | Disposition                                                                                                                |
+| ---------- | ----- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| c3ab5564f8 | C     | --                     | Agent UI scrolling depends on v2 elicitation state and the excluded native-agent panel.                                    |
+| 6ec43d6319 | C     | --                     | Missing-parameter diagnostics modify the excluded native `agent` tool-input implementation.                                |
+| 72d073d642 | B     | 9180d796f0             | Preserved generic path-position parsing; omitted native-agent file-link UI and canonicalization protocol work.             |
+| b0d4fd203d | A     | 3f3ad14a92             | Clean absorption preventing body `---` rules from becoming YAML metadata.                                                  |
+| d6358b2d3c | A     | 832707f083             | Clean absorption retaining non-Latin and emoji fallback faces in the Linux font database.                                  |
+| 57df168fe7 | A     | d33cbe6e13             | Clean absorption rendering each font-picker result in its own family.                                                      |
+| eba6365025 | B     | b3b648a1df             | Shows completing which-key bindings before grouping longer continuations in ZZZ's local modal.                             |
+| 8323e23277 | B     | ca6ee187db             | Keeps remote buffer transfers alive after their caller is cancelled; search batching remains divergent.                    |
+| 98e168265b | C     | --                     | Redundant thread-save suppression belongs to the excluded native-agent persistence path.                                   |
+| e5ff5550e4 | A     | 9601add05b, c450c9da77 | Clean absorption fixing UTF-8-boundary panics in Tree-sitter parsing.                                                      |
+| 3190b1f5e3 | B     | 34bedb589b             | Range selection includes its start and complete intermediate folded directories.                                           |
+| dc000222a9 | B     | 2e8432c96f             | SSH-config updates rebuild ZZZ's state-machine picker and preserve its filter.                                             |
+| eb466341a6 | B     | 1a5fe98d21             | External drops on folded path components now target the hovered directory.                                                 |
+| 7262175465 | C     | --                     | Upstream release-version and `crates/zed` package metadata are not ZZZ release inputs.                                     |
+| 01f22d2d86 | C     | --                     | The new Windows child-job query has no current local caller, so it would be unused public API.                             |
+| 83b332342f | C     | --                     | Inlay-hint edits require an unisolatable editor/LSP/proto snapshot pipeline and excluded native-agent/collab integrations. |
+| 976ab33fb4 | C     | --                     | Bundle-size reduction changes upstream release configuration rather than a retained local runtime path.                    |
+| 56303a3372 | C     | --                     | Audio recovery requires broad CPAL lockfile churn and LiveKit collaboration compatibility changes.                         |
+| 786be276c7 | B     | 41588771cd             | Indexed restored selection lookup and preserved saved selection order after ZZZ VFS schema migrations.                     |
+| 6110aa61e1 | B     | 9969be003e             | Preloaded the initial project-panel icon assets without importing upstream `crates/zed` startup machinery.                 |
+
+Totals: four `A`, eight `B`, eight `C`.
+
+### Applied Work
+
+The four direct `A` changes used `git cherry-pick -x -s`. Every `B` commit has
+`Upstream`, `Retained`, and `Omitted` trailers.
+
+- `9180d796f0` parses position suffixes without corrupting parent path
+  components or filenames. Terminal, CLI, file-finder, and other existing
+  consumers retain their paths; agent-only navigation and protocol work remain
+  absent.
+- `b3b648a1df` preserves GPUI's first candidate for duplicate sequences and
+  leaves an immediately completing binding visible while grouping longer chords.
+- `c450c9da77` adapts the upstream UTF-8 parser regression to ZZZ's current
+  `QueryMatch::captures()` accessor; the absorbed product code is unchanged.
+- `ca6ee187db` stores transfer tasks on `BufferStore` until completion, so a
+  cancelled remote search cannot leave an already-shared buffer permanently
+  unavailable. The divergent VFS search pipeline keeps its existing batching.
+- `34bedb589b` updates ZZZ's local project-panel selection state for shift
+  movement and folded-directory ranges, with focused regressions for both
+  start entries and intermediate folds.
+- `2e8432c96f` binds SSH-config watchers to the active window, reconstructs the
+  local default server state after updates, and re-applies its current filter.
+- `1a5fe98d21` shares folded-directory drag-target bookkeeping between internal
+  and external drops, and verifies drops on `a`, `b`, and `c` land in the
+  intended directory.
+- `41588771cd` appends the selection lookup index after local VFS persistence
+  migrations and sorts restoration by insertion ID.
+- `9969be003e` preloads external assets for the initial visible project-panel
+  rows only when that panel is actually active and visible. The upstream theme
+  registry/startup cache changes tied to `crates/zed` were omitted.
+
+### Rejected Work
+
+- `c3ab5564f8`, `6ec43d6319`, and `98e168265b` target native-agent threads,
+  panels, and storage. ZZZ remains ACP-only and has no compatible native-agent
+  caller.
+- `7262175465` and `976ab33fb4` are upstream package or release/bundle
+  metadata. `01f22d2d86` exposes an otherwise-unused public Windows process
+  API, so it fails the current-caller isolation rule.
+- `83b332342f` is a coordinated inlay-hint-edit implementation across editor
+  rendering, LSP conversion, remote protocol snapshots, and command paths.
+  Removing its native-agent and collaboration integrations leaves no complete,
+  independently testable action path.
+- `56303a3372` couples the audio recovery behavior to a CPAL upgrade and
+  lockfile-wide changes that also require LiveKit collaboration code updates.
+  That dependency route is not a coherent local-only port.
+
+### Verification
+
+| Check                                               | Result  | Notes                                                                                                                                                                            |
+| --------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Live `git ls-remote` and `git fetch --no-tags`      | PASS    | `FETCH_HEAD=129c68ff4bc136b3fac2557388321374b4e5c858`                                                                                                                            |
+| Previous and new baseline ancestry                  | PASS    | `73be6ac6` and `6110aa61` are ancestors of `FETCH_HEAD`                                                                                                                          |
+| Targeted touched-crate checks                       | PASS    | `markdown`, `gpui_wgpu`, `settings_ui`, `which_key`, `remote_server`, `language`, `rope`, `project_panel`, `recent_projects`, `editor`, `ui`, and `util` compile with `--locked` |
+| Markdown YAML-frontmatter regressions               | PASS    | Focused `markdown` tests pass                                                                                                                                                    |
+| UTF-8 parser and rope regressions                   | PASS    | Both `language` parser tests and `rope::test_chunks_peek_bytes` pass                                                                                                             |
+| Which-key grouping regression                       | PASS    | Four focused grouping tests pass                                                                                                                                                 |
+| Remote transfer regression                          | PASS    | `test_remote_buffer_transfer_survives_dropping_its_caller` passes                                                                                                                |
+| Project-panel range and external-drop regressions   | PASS    | Three focused project-panel tests pass                                                                                                                                           |
+| SSH picker refresh regression                       | PASS    | `test_ssh_config_refresh_rebuilds_default_server_list` passes                                                                                                                    |
+| Restored selection ordering regression              | PASS    | `test_editor_selections_restore_in_saved_order` passes                                                                                                                           |
+| Path-position regressions                           | PASS    | Three focused `util` tests pass                                                                                                                                                  |
+| `git diff --check` and `cargo fmt --all -- --check` | PASS    | Final source checks                                                                                                                                                              |
+| macOS and Windows runtime checks                    | NOT RUN | Host is Linux                                                                                                                                                                    |
+| `cargo test --workspace`                            | NOT RUN | Not requested                                                                                                                                                                    |
+
+The general reviewed baseline advances to
+`6110aa61e1da78837dd3f91d5323ce43f098779a`.
