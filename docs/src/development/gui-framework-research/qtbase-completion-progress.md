@@ -336,6 +336,14 @@ row identity/selection 的实际 table 或 list owner 时才重开。届时 prot
 - 新增 accessibility regressions：普通 field 验证 label/value/focus；masked field 验证
   secret text 不在 semantic value 中。masked fixture 初始化项目的 i18n service，保留
   mask-toggle tooltip 的正常本地化行为。
+- 非 masked `InputField` 现在将 AccessKit `SetValue(Value)` 路由到
+  `ErasedEditor::set_text`，即现有 adapter 的权威整值 mutation；每次 mutation 刷新 window，
+  使下一帧 semantic value 与 editor text 一致。masked field 不注册此 action，避免以可写的
+  a11y surface 绕过 secret-value policy。
+- 已复核 editor adapter ownership：`ErasedEditorImpl` 直接渲染未装配 accessibility 的
+  `EditorElement`，因此 InputField 外层是唯一的 `TextInput` semantic node，不会和 inner
+  editor 重复。adapter 尚未公开 UTF-16 selection、marked range 或 caret bounds，故这些
+  action/属性保持未实现，不能由 InputField 猜测。
 - 已验证：
 
   ```sh
@@ -352,9 +360,9 @@ row identity/selection 的实际 table 或 list owner 时才重开。届时 prot
 
 ### 下一步 {#phase-4-next}
 
-将 InputField semantic value 与底层 editor 的 UTF-16 selection、marked text、caret bounds
-和 AccessKit text action 的 authoritative owner 对齐；在此之前不复制第二份 editor text
-model 到 GPUI。
+为 `ErasedEditor` 设计只读 UTF-16 selection、marked range、caret bounds 与对应 mutation 的
+窄协议，并以 real `Editor` 和 fallback adapter 双实现验证；在此之前不复制第二份 editor
+text model 到 GPUI，也不伪造 ReplaceSelectedText/SetTextSelection。
 
 ## 阶段 6：API、examples、docs 与升级纪律 {#phase-6}
 

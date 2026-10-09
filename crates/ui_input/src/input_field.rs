@@ -180,6 +180,8 @@ impl Render for InputField {
             .unwrap_or_else(|| self.placeholder.clone());
         #[cfg(feature = "accessibility")]
         let accessibility_value = (!self.masked.unwrap_or(false)).then(|| self.editor.text(cx));
+        #[cfg(feature = "accessibility")]
+        let accessibility_is_editable = !self.masked.unwrap_or(false);
         let control = h_flex()
             .id(("input-field-control", cx.entity_id()))
             .track_focus(&configured_handle)
@@ -233,7 +235,20 @@ impl Render for InputField {
         let control = control
             .role(gpui::accesskit::Role::TextInput)
             .aria_label(accessibility_label)
-            .when_some(accessibility_value, |this, value| this.aria_value(value));
+            .when_some(accessibility_value, |this, value| this.aria_value(value))
+            .when(accessibility_is_editable, |this| {
+                let editor = editor.clone();
+                this.on_a11y_action(
+                    gpui::accesskit::Action::SetValue,
+                    move |data, window, cx| {
+                        let Some(gpui::accesskit::ActionData::Value(value)) = data else {
+                            return;
+                        };
+                        editor.set_text(value.as_ref(), window, cx);
+                        window.refresh();
+                    },
+                )
+            });
 
         v_flex()
             .id(self.placeholder.clone())
@@ -327,7 +342,7 @@ mod tests {
             i18n::init(cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
         });
-        let (_field, cx) = cx.add_window_view(|window, cx| {
+        let (field, cx) = cx.add_window_view(|window, cx| {
             let field = InputField::new(window, cx, "Filter").label("Search");
             field.set_text("workspace", window, cx);
             field.focus_handle(cx).focus(window, cx);
@@ -349,6 +364,29 @@ mod tests {
         assert_eq!(node.label(), Some("Search"));
         assert_eq!(node.value(), Some("workspace"));
         assert_eq!(snapshot.focused_node, *node_id);
+        assert!(node.supports_action(gpui::accesskit::Action::SetValue));
+
+        let snapshot = cx.update(|window, cx| {
+            let action_data = gpui::accesskit::ActionData::Value("project".into());
+            assert!(window.dispatch_accessibility_action(
+                *node_id,
+                gpui::accesskit::Action::SetValue,
+                Some(&action_data),
+                cx,
+            ));
+            assert_eq!(field.read(cx).text(cx), "project");
+            window.draw(cx).clear();
+            window
+                .accessibility_snapshot_for_test()
+                .expect("updated input semantic snapshot should exist")
+        });
+        let (_, node) = snapshot
+            .update
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == gpui::accesskit::Role::TextInput)
+            .expect("updated text input semantic node should exist");
+        assert_eq!(node.value(), Some("project"));
     }
 
     #[cfg(feature = "accessibility")]
@@ -383,5 +421,6 @@ mod tests {
             })
             .expect("masked text input semantic node should exist");
         assert_eq!(node.value(), None);
+        assert!(!node.supports_action(gpui::accesskit::Action::SetValue));
     }
 }
