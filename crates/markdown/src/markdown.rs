@@ -2646,6 +2646,7 @@ impl Element for MarkdownElement {
             0
         };
         let mut code_block_ids = HashSet::default();
+        let mut current_code_block_text = None;
 
         let mut current_img_block_range: Option<Range<usize>> = None;
         let mut handled_html_block = false;
@@ -2878,6 +2879,16 @@ impl Element for MarkdownElement {
                                 rendered_mermaid_block = true;
                                 continue;
                             }
+
+                            current_code_block_text = match &self.code_block_renderer {
+                                CodeBlockRenderer::Default {
+                                    copy_button_visibility,
+                                    ..
+                                } if *copy_button_visibility != CopyButtonVisibility::Hidden => {
+                                    Some(String::new())
+                                }
+                                _ => None,
+                            };
 
                             let is_indented = matches!(kind, CodeBlockKind::Indented);
                             let scroll_handle = if self.style.code_block_overflow_x_scroll {
@@ -3200,6 +3211,8 @@ impl Element for MarkdownElement {
                         builder.pop_code_block();
                         builder.pop_text_style();
 
+                        let code = current_code_block_text.take().unwrap_or_default();
+
                         if let CodeBlockRenderer::Default {
                             copy_button_visibility,
                             wrap_button_visibility,
@@ -3211,14 +3224,6 @@ impl Element for MarkdownElement {
                             let copy_button_visibility = *copy_button_visibility;
                             let wrap_button_visibility = *wrap_button_visibility;
                             builder.modify_current_div(|el| {
-                                let content_range = parser::extract_code_block_content_range(
-                                    &parsed_markdown.source()[range.clone()],
-                                );
-                                let content_range = content_range.start + range.start
-                                    ..content_range.end + range.start;
-
-                                let code = parsed_markdown.source()[content_range].to_string();
-
                                 let any_hover = copy_button_visibility
                                     == CopyButtonVisibility::VisibleOnHover
                                     || wrap_button_visibility
@@ -3317,6 +3322,9 @@ impl Element for MarkdownElement {
                 },
                 MarkdownEvent::Text => {
                     let source = parsed_markdown.source.as_ref();
+                    if let Some(current_code_block_text) = &mut current_code_block_text {
+                        current_code_block_text.push_str(&source[range.clone()]);
+                    }
                     let math_slice = math_for_text_range(&parsed_markdown.math_expressions, range);
                     if math_slice.is_empty() {
                         builder.push_text(&source[range.clone()], range.clone());
@@ -3344,6 +3352,9 @@ impl Element for MarkdownElement {
                     }
                 }
                 MarkdownEvent::SubstitutedText(text) => {
+                    if let Some(current_code_block_text) = &mut current_code_block_text {
+                        current_code_block_text.push_str(text);
+                    }
                     builder.push_text(text, range.clone());
                 }
                 MarkdownEvent::Code => {
