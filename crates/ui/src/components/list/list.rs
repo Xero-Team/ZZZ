@@ -1,4 +1,4 @@
-use gpui::AnyElement;
+use gpui::{AnyElement, ElementId};
 use smallvec::SmallVec;
 use ui_component_registry::{Component, ComponentScope, example_group_with_title, single_example};
 
@@ -9,6 +9,33 @@ pub enum EmptyMessage {
     Element(AnyElement),
 }
 
+/// Semantic metadata for a list whose children are known to be list items.
+#[derive(Clone)]
+pub struct ListAccessibility {
+    #[cfg(feature = "accessibility")]
+    element_id: ElementId,
+    #[cfg(feature = "accessibility")]
+    label: SharedString,
+}
+
+impl ListAccessibility {
+    /// Creates the semantic identity and name for a list.
+    ///
+    /// This is opt-in because [`List`] may also contain structural content such as headers,
+    /// placeholders, menus, or non-list children.
+    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
+        #[cfg(not(feature = "accessibility"))]
+        let _ = (id, label);
+
+        Self {
+            #[cfg(feature = "accessibility")]
+            element_id: id.into(),
+            #[cfg(feature = "accessibility")]
+            label: label.into(),
+        }
+    }
+}
+
 #[derive(IntoElement, RegisterComponent)]
 pub struct List {
     /// Message to display when the list is empty
@@ -17,6 +44,8 @@ pub struct List {
     header: Option<ListHeader>,
     toggle: Option<bool>,
     children: SmallVec<[AnyElement; 2]>,
+    #[cfg(feature = "accessibility")]
+    accessibility: Option<ListAccessibility>,
 }
 
 impl Default for List {
@@ -32,6 +61,8 @@ impl List {
             header: None,
             toggle: None,
             children: SmallVec::new(),
+            #[cfg(feature = "accessibility")]
+            accessibility: None,
         }
     }
 
@@ -48,6 +79,21 @@ impl List {
     pub fn toggle(mut self, toggle: impl Into<Option<bool>>) -> Self {
         self.toggle = toggle.into();
         self
+    }
+
+    /// Adds `Role::List` semantics when every semantic child is a list item.
+    pub fn with_accessibility(self, accessibility: ListAccessibility) -> Self {
+        #[cfg(feature = "accessibility")]
+        {
+            let mut list = self;
+            list.accessibility = Some(accessibility);
+            list
+        }
+        #[cfg(not(feature = "accessibility"))]
+        {
+            std::mem::drop(accessibility);
+            self
+        }
     }
 }
 
@@ -77,7 +123,7 @@ impl From<AnyElement> for EmptyMessage {
 
 impl RenderOnce for List {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        v_flex()
+        let list = v_flex()
             .w_full()
             .py(DynamicSpacing::Base04.rems(cx))
             .children(self.header)
@@ -90,7 +136,18 @@ impl RenderOnce for List {
                     }
                     EmptyMessage::Element(element) => this.child(element),
                 },
-            })
+            });
+
+        #[cfg(feature = "accessibility")]
+        if let Some(accessibility) = self.accessibility {
+            return list
+                .id(accessibility.element_id)
+                .role(gpui::accesskit::Role::List)
+                .aria_label(accessibility.label)
+                .into_any_element();
+        }
+
+        list.into_any_element()
     }
 }
 

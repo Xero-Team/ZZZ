@@ -196,6 +196,9 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   `TabBar` 的实际 tab-scroll container 投影为 `Role::TabList`，而 start/end controls 不会
   被错误纳入 tab relation。Workspace Pane 使用既有 `ItemHandle::tab_content_text` 作为
   tab 与 drag preview 的单一语义名称来源。
+- `List` 的 child 可以是 header、placeholder、menu 或任意 visual element，因此不会默认
+  伪装为 `Role::List`。`ListAccessibility` 是显式 opt-in，要求稳定 ID 与 list name；启用
+  后才将承诺为 list item 的 semantic children 放进 `Role::List` parent。
 - `Table` 的 `AnyElement` cell 无法可靠推导可访问名称，因此没有把匿名视觉节点错误地
   标为 table cell。调用方可显式提供 `TableAccessibility`：稳定 table ID、table label、
   每列 header label 和按 row/column 解析 cell label 的 callback。
@@ -218,6 +221,8 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   state 和 Click action，确保它与 pointer handler 共用同一 callback。
 - 扩展 component semantic regression：验证 named selected Tab 是 TabList 的 child；并以
   `cargo check -p workspace` 验证这个有意的 Tab constructor migration 覆盖 Workspace Pane。
+- 扩展 component semantic regression：验证 opt-in List 的 name、role 与直接 ListItem child
+  relationship；默认 build 和 accessibility build 均无 warning。
 - 已验证：
 
   ```sh
@@ -256,9 +261,9 @@ autohide、track click、thumb drag、a11y increment/decrement/set-value 和 nod
 ### 下一步 {#phase-2-next}
 
 继续按 interactive、structural、status、text input、decorative 分类审计组件；先按上面的
-轴级 ownership 门为 scrollbar 写 layout/semantic 拆分设计和最小 regression，再审计剩余
-text surface。保持 DataTable 语义为有调用方提供可访问名称时的 opt-in，不能从
-`AnyElement` 猜测 cell 内容。每次只迁移一条完整的
+轴级 ownership 门为 scrollbar 写 layout/semantic 拆分设计和最小 regression，再审计 tree
+container 与剩余 text surface。保持 List/DataTable 语义为有调用方提供可访问名称时的
+opt-in，不能从 `AnyElement` 猜测内容。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
 
 ## 阶段 3：Model、selection、focus 与 virtualization 协议 {#phase-3}

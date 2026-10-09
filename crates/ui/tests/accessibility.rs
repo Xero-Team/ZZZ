@@ -8,9 +8,9 @@ use std::{
 };
 use ui::{
     AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard, Clickable as _,
-    ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, ListItem, Modal,
-    ModalHeader, Switch, Tab, TabBar, Table, TableAccessibility, ToggleState, Toggleable as _,
-    TreeViewItem,
+    ContextMenu, Disableable as _, Disclosure, DropdownMenu, IconPosition, List, ListAccessibility,
+    ListItem, Modal, ModalHeader, Switch, Tab, TabBar, Table, TableAccessibility, ToggleState,
+    Toggleable as _, TreeViewItem,
 };
 
 struct SemanticComponents {
@@ -119,6 +119,14 @@ impl Render for SemanticComponents {
                         let action_count = self.action_count.clone();
                         move |_, _, _| action_count.set(action_count.get() + 1)
                     }),
+            )
+            .child(
+                List::new()
+                    .with_accessibility(ListAccessibility::new(
+                        "recent-projects-list",
+                        "Recent projects",
+                    ))
+                    .child(ListItem::new("recent-project").aria_label("Project sunrise")),
             )
             .child(
                 Disclosure::new("advanced-options", true)
@@ -388,6 +396,26 @@ fn components_emit_roles_labels_and_state() {
     assert_eq!(list_item.is_expanded(), Some(true));
     assert_eq!(list_item.is_selected(), Some(true));
     assert!(list_item.supports_action(gpui::accesskit::Action::Click));
+
+    let (recent_project_id, _) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::ListItem
+                && node.label() == Some("Project sunrise")
+        })
+        .expect("semantic list item should exist");
+    let recent_projects = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::List && node.label() == Some("Recent projects")
+        })
+        .map(|(_, node)| node)
+        .expect("semantic list node should exist");
+    assert!(recent_projects.children().contains(recent_project_id));
 
     let (menu_item_id, menu_item) = snapshot
         .update
