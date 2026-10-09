@@ -2,7 +2,10 @@ use super::*;
 // use crate::undo::tests::{build_create_operation, build_rename_operation};
 use collections::HashSet;
 use editor::MultiBufferOffset;
-use gpui::{Bounds, Empty, Entity, Size, TestAppContext, VisualTestContext, point, px, size};
+use gpui::{
+    AnyWindowHandle, Bounds, Empty, Entity, FileDropEvent, Size, TestAppContext, VisualTestContext,
+    point, px, size,
+};
 use menu::Cancel;
 use pretty_assertions::assert_eq;
 use project::{FakeFs, ProjectPath};
@@ -2586,6 +2589,85 @@ async fn test_auto_open_on_drop_when_disabled(cx: &mut gpui::TestAppContext) {
         find_project_entry(&panel, "root/manual.rs", cx).is_some(),
         "Dropped entry should exist even when auto-open is disabled"
     );
+}
+
+#[gpui::test]
+async fn test_drop_external_files_on_folded_directory_components(cx: &mut gpui::TestAppContext) {
+    init_test_with_editor(cx);
+    cx.update(|cx| {
+        let settings = *ProjectPanelSettings::get_global(cx);
+        ProjectPanelSettings::override_global(
+            ProjectPanelSettings {
+                auto_fold_dirs: true,
+                ..settings
+            },
+            cx,
+        );
+    });
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/root"), json!({ "a": { "b": { "c": {} } } }))
+        .await;
+
+    let temp_dir = tempfile::tempdir().expect("temporary directory should be created");
+    let deepest_drop_path = temp_dir.path().join("deepest.txt");
+    let middle_drop_path = temp_dir.path().join("middle.txt");
+    let topmost_drop_path = temp_dir.path().join("topmost.txt");
+    for path in [&deepest_drop_path, &middle_drop_path, &topmost_drop_path] {
+        std::fs::write(path, "").expect("external file should be written");
+    }
+    fs.insert_tree_from_real_fs(temp_dir.path(), temp_dir.path())
+        .await;
+
+    let project = Project::test(fs.clone(), [path!("/root").as_ref()], cx).await;
+    let window = cx.open_window(size(px(800.), px(600.)), |window, cx| {
+        MultiWorkspace::test_new(project, window, cx)
+    });
+    let workspace = window
+        .read_with(cx, |workspace, _| workspace.workspace().clone())
+        .expect("window should be open");
+    let window = AnyWindowHandle::from(window);
+    let panel = cx
+        .update_window(window, |_, window, cx| {
+            workspace.update(cx, |workspace, cx| {
+                let panel = ProjectPanel::new(workspace, window, cx);
+                workspace.add_panel(panel.clone(), window, cx);
+                workspace.open_panel::<ProjectPanel>(window, cx);
+                panel
+            })
+        })
+        .expect("window should be open");
+    let cx = &mut VisualTestContext::from_window(window, cx);
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear());
+
+    for (selector, drop_path) in [
+        ("project_panel_path_component_c", &deepest_drop_path),
+        ("project_panel_path_component_b", &middle_drop_path),
+        ("project_panel_path_component_a", &topmost_drop_path),
+    ] {
+        let position = cx
+            .debug_bounds(selector)
+            .expect("folded path component should be rendered")
+            .center();
+        cx.simulate_event(FileDropEvent::Entered {
+            position,
+            paths: ExternalPaths([drop_path.clone()].into_iter().collect()),
+        });
+        cx.simulate_event(FileDropEvent::Submit { position });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear());
+
+        panel.read_with(cx, |panel, _| {
+            assert!(panel.drag_target_entry.is_none());
+            assert!(panel.folded_directory_drag_target.is_none());
+        });
+    }
+
+    assert!(find_project_entry(&panel, "root/a/b/c/deepest.txt", cx).is_some());
+    assert!(find_project_entry(&panel, "root/a/b/middle.txt", cx).is_some());
+    assert!(find_project_entry(&panel, "root/a/topmost.txt", cx).is_some());
+    assert!(find_project_entry(&panel, "root/a/b/c/topmost.txt", cx).is_none());
 }
 
 #[gpui::test]
