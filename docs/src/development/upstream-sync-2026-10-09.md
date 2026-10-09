@@ -215,3 +215,106 @@ has `Upstream`, `Retained`, and `Omitted` trailers.
 
 The general reviewed baseline advances to
 `aecb6364b3de29ff32ea9f26cb8d85f95969bc28`.
+
+## Continued Batch II
+
+### Scope
+
+- Target branch: `sync/upstream-2026-10-09`, continuing the same local base
+  `84356b5c210ae68e79f68a1ece2395779fe80d61`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `aecb6364b3de29ff32ea9f26cb8d85f95969bc28`
+- Reviewed head: `73be6ac6b1975f428328bbf7fe185d3b671afec4`
+- Live upstream head queried: `e778eec483d6420d09d9b7e401ceda3559daf7d9`
+- Query time: `2026-10-09T15:56:01+02:00`
+- Reviewed range: the next 20 commits after `aecb6364`, oldest first
+- Remaining after this batch: 54 commits through the queried live head
+
+The previous baseline and the new reviewed head are ancestors of `FETCH_HEAD`.
+This batch remains fixed at twenty commits; later commits remain queued.
+
+### Decisions
+
+| Upstream   | Class | Local commit           | Disposition                                                                                                         |
+| ---------- | ----- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 9df33dea42 | C     | --                     | The v2 shared-session migration has no negotiated v2 ACP handler and entangles local v1 title state with native UI. |
+| 0849124bc2 | C     | --                     | Cross-crate snapshot rewrite includes native-agent and Copilot paths; no coherent, independently testable slice.    |
+| c31280f1b8 | A     | --                     | Already equivalent: local `3dd96d70` already upgrades active `rustls` to 0.23.45.                                   |
+| 24aabd3fa6 | C     | --                     | Community-board label automation is upstream maintenance infrastructure.                                            |
+| 2a4326a256 | C     | --                     | Duplicate-issue bot tracking is upstream maintenance infrastructure.                                                |
+| 2239fa76b1 | C     | --                     | New `Label::text_center` public API has no current ZZZ caller.                                                      |
+| 7c7b171ff  | B     | db6e989c54             | Copy buttons now use parsed code text, excluding enclosing blockquote and list syntax.                              |
+| 403589312e | C     | --                     | ACP v2 prompt-capability models have no negotiated v2 caller and include native-agent producers.                    |
+| 78a0da201  | B     | 1b276e217f             | ACP defaults now apply sequentially from each complete server response and refresh local watchers.                  |
+| 53421b7f3  | A     | 68e5f2259f             | Clean absorption of Go package-level test gutter support.                                                           |
+| ba8159b4d3 | C     | --                     | Wezel binary-size measurements are upstream release/benchmark infrastructure.                                       |
+| 09745431b5 | C     | --                     | Hosted-model pricing documents a commercial hosted offering that ZZZ does not promote.                              |
+| ef33e891bf | B     | ffb1eec8b7             | Added localized `mermaid_font_family` configuration through ZZZ's flattened theme settings.                         |
+| fd1e8f04b6 | A     | --                     | Upstream has no tree delta; local `task_list_marker_for_item` already handles the loose-list Paragraph case.        |
+| 0418cb5b60 | B     | c246c4468f             | Single-file worktrees no longer register a file URI as an LSP workspace folder.                                     |
+| 85b3aa83a2 | C     | --                     | ACP v2 authentication definitions are preparatory shared models without a local v2 transport.                       |
+| fdc1005e71 | B     | 756b429b0e, 85ff165ec6 | Remote Windows linked-worktree paths and labels use their declared path style on Unix hosts.                        |
+| e7526b378a | B     | 7f404175fb             | Thinking-preview fade overlay no longer intercepts ACP Markdown selection or copying.                               |
+| f87356210a | C     | --                     | ACP v2 notice definitions add unused v2 shared state without a negotiated local v2 session.                         |
+| 73be6ac6b1 | C     | --                     | ACP v2 elicitation values require the unadopted v2 schema and native-agent producers.                               |
+
+Totals: three `A`, six `B`, eleven `C`.
+
+### Applied Work
+
+The direct `A` change used `git cherry-pick -x -s`. `c31280f1b8` and
+`fd1e8f04b6` are already-equivalent/no-tree-delta decisions and create no code
+commit. Each `B` commit has `Upstream`, `Retained`, and `Omitted` trailers.
+
+- `db6e989c54` collects text from parsed Markdown events while rendering a
+  copy-enabled code block, so copied nested code excludes surrounding Markdown
+  container syntax. The unrelated upstream test-suite reorganization was not
+  carried across ZZZ's renderer test layout.
+- `1b276e217f` applies ACP configuration defaults one at a time, replaces local
+  options with the server response, notifies watchers, prevents repeated
+  attempts in the same state, and keeps the task on the session. ZZZ retains
+  its v1 wire boundary and beta boolean-default policy.
+- `ffb1eec8b7` adds the nullable `mermaid_font_family` setting, its UI control,
+  settings import default, English and Simplified Chinese strings, and docs.
+  It falls back to the UI font.
+- `c246c4468f` derives LSP workspace folder URIs only from directory worktree
+  entries and adds a fake-Python-server regression for a file worktree.
+- `756b429b0e` and `85ff165ec6` use explicit remote path style for worktree
+  names and destination validation, including a Windows path regression on a
+  Unix host. ZZZ keeps its current `git_ui` location instead of importing the
+  upstream `git_ui_core` crate move.
+- `7f404175fb` removes the pointer-blocking behavior from the constrained
+  thinking-preview fade while preserving its visual gradient and scrolling.
+
+### Rejected Work
+
+- `9df33dea42`, `403589312e`, `85b3aa83a2`, `f87356210a`, and `73be6ac6b1`
+  are ACP v2 shared-model migrations. ZZZ's current ACP sessions intentionally
+  negotiate v1, so these introduce unused v2 state and, in several cases,
+  native-agent producers rather than complete ACP-only behavior.
+- `0849124bc2` combines fourteen independent snapshot rewrites across project,
+  editor, worktree, native-agent tooling, and Copilot. Dropping the excluded
+  paths leaves no coherent invariant to test.
+- `24aabd3fa6`, `2a4326a256`, and `ba8159b4d3` are community-bot, automation,
+  or benchmark/release infrastructure rather than shipped editor behavior.
+- `2239fa76b1` has no local consumer for its new public UI method.
+- `09745431b5` promotes hosted model pricing, contrary to ZZZ's silent manual
+  provider policy.
+
+### Verification
+
+| Check                                                                                              | Result  | Notes                                                                                               |
+| -------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| Live `git ls-remote` and `git fetch --no-tags`                                                     | PASS    | `FETCH_HEAD=e778eec483d6420d09d9b7e401ceda3559daf7d9`                                               |
+| Previous and new baseline ancestry                                                                 | PASS    | `aecb6364` and `73be6ac6` are ancestors of `FETCH_HEAD`                                             |
+| Go package gutter regression                                                                       | PASS    | `go::tests::test_go_package_test_detection` passes                                                  |
+| Single-file LSP workspace regression                                                               | PASS    | `test_single_file_worktree_is_not_an_lsp_workspace_folder` passes                                   |
+| `cargo check --locked -p agent_servers`                                                            | PASS    | ACP configuration-default B port                                                                    |
+| `cargo check --locked -p markdown -p project -p theme_settings -p settings_content -p settings_ui` | PASS    | Markdown, LSP, Mermaid, and remote-worktree B ports                                                 |
+| Windows remote-worktree regression                                                                 | PASS    | `git_store::tests::test_worktree_directory_uses_windows_style_for_remote_paths_on_unix_host` passes |
+| `git diff --check` and `cargo fmt --all -- --check`                                                | PASS    | Final source checks                                                                                 |
+| macOS and Windows runtime checks                                                                   | NOT RUN | Host is Linux                                                                                       |
+| `cargo test --workspace`                                                                           | NOT RUN | Not requested                                                                                       |
+
+The general reviewed baseline advances to
+`73be6ac6b1975f428328bbf7fe185d3b671afec4`.
