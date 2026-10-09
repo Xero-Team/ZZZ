@@ -104,6 +104,10 @@ impl SemanticTreeBuilder {
     }
 
     /// Sets the children of an existing node.
+    ///
+    /// Every child must be registered in the current frame, appear only once,
+    /// and not already belong to another parent. To reparent a child, first
+    /// remove it from its current parent in a separate call.
     pub fn set_children(
         &mut self,
         parent_id: NodeId,
@@ -120,12 +124,58 @@ impl SemanticTreeBuilder {
         {
             return Err(SemanticTreeError::MissingNode(*missing_id));
         }
+        let mut unique_children = HashSet::new();
+        if let Some(duplicate_id) = children
+            .iter()
+            .find(|child_id| !unique_children.insert(**child_id))
+        {
+            return Err(SemanticTreeError::DuplicateChild(*duplicate_id));
+        }
+        if let Some(child_id) = children
+            .iter()
+            .find(|child_id| self.node_reaches(**child_id, parent_id))
+        {
+            return Err(SemanticTreeError::CycleDetected {
+                parent: parent_id,
+                child: *child_id,
+            });
+        }
+        for child_id in &children {
+            if let Some(existing_parent_id) = self.nodes.iter().find_map(|(candidate_id, node)| {
+                (*candidate_id != parent_id && node.children().contains(child_id))
+                    .then_some(*candidate_id)
+            }) {
+                return Err(SemanticTreeError::ChildAlreadyHasParent {
+                    child: *child_id,
+                    parent: existing_parent_id,
+                });
+            }
+        }
 
         let Some(parent) = self.nodes.get_mut(&parent_id) else {
             return Err(SemanticTreeError::MissingNode(parent_id));
         };
         parent.set_children(children);
         Ok(())
+    }
+
+    fn node_reaches(&self, start_id: NodeId, target_id: NodeId) -> bool {
+        let mut pending = vec![start_id];
+        let mut visited = HashSet::new();
+
+        while let Some(node_id) = pending.pop() {
+            if node_id == target_id {
+                return true;
+            }
+            if !visited.insert(node_id) {
+                continue;
+            }
+            if let Some(node) = self.nodes.get(&node_id) {
+                pending.extend(node.children().iter().copied());
+            }
+        }
+
+        false
     }
 
     /// Sets the focused node for this frame.
@@ -167,6 +217,22 @@ impl SemanticTreeBuilder {
 pub enum SemanticTreeError {
     /// The referenced node was not registered in this frame.
     MissingNode(NodeId),
+    /// A parent contains the same child more than once.
+    DuplicateChild(NodeId),
+    /// Adding the child would make the semantic tree cyclic.
+    CycleDetected {
+        /// The parent receiving the child.
+        parent: NodeId,
+        /// The child that would close the cycle.
+        child: NodeId,
+    },
+    /// The child is already owned by another parent in this frame.
+    ChildAlreadyHasParent {
+        /// The child with an existing parent.
+        child: NodeId,
+        /// The existing parent that owns the child.
+        parent: NodeId,
+    },
 }
 
 /// Routes one AccessKit action to at most one registered handler.
@@ -279,6 +345,46 @@ mod tests {
             .find(|(node_id, _)| *node_id == ROOT_NODE_ID)
             .expect("root should exist");
         assert_eq!(root.1.children(), &[button_id]);
+    }
+
+    #[test]
+    fn set_children_preserves_tree_structure_invariants() {
+        let first_id = stable_semantic_node_id("first");
+        let second_id = stable_semantic_node_id("second");
+        let mut builder = SemanticTreeBuilder::new();
+        builder.set_node(first_id, Node::new(Role::Group));
+        builder.set_node(second_id, Node::new(Role::Button));
+        builder
+            .set_children(ROOT_NODE_ID, [first_id, second_id])
+            .expect("known siblings should be accepted");
+
+        assert_eq!(
+            builder.set_children(first_id, [second_id, second_id]),
+            Err(SemanticTreeError::DuplicateChild(second_id))
+        );
+        assert_eq!(
+            builder.set_children(first_id, [second_id]),
+            Err(SemanticTreeError::ChildAlreadyHasParent {
+                child: second_id,
+                parent: ROOT_NODE_ID,
+            })
+        );
+        assert_eq!(
+            builder.set_children(first_id, [ROOT_NODE_ID]),
+            Err(SemanticTreeError::CycleDetected {
+                parent: first_id,
+                child: ROOT_NODE_ID,
+            })
+        );
+
+        let root = builder
+            .snapshot()
+            .update
+            .nodes
+            .into_iter()
+            .find(|(node_id, _)| *node_id == ROOT_NODE_ID)
+            .expect("root should exist");
+        assert_eq!(root.1.children(), &[first_id, second_id]);
     }
 
     #[test]
