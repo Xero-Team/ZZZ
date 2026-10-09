@@ -1,19 +1,22 @@
 use std::any::TypeId;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow};
 use editor::{Editor, EditorEvent, EditorSettingsScrollbarProxy};
 use file_icons::FileIcons;
 use futures::future;
 use gpui::{
-    App, AsyncWindowContext, Context, Entity, EventEmitter, FocusHandle, Focusable, IsZero, Render,
-    RenderImage, ScrollHandle, SharedString, Subscription, Task, WeakEntity, Window, img, point,
+    App, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
+    IsZero, Render, RenderImage, ScrollHandle, SharedString, Subscription, Task, WeakEntity,
+    Window, img, point,
 };
 use i18n::tr;
 use project::{Project, ProjectPath, WorktreeId};
 use theme::GlobalTheme;
-use typst::syntax::package::PackageSpec;
+use typst::syntax::{VirtualPath, package::PackageSpec};
 use ui::{Banner, ScrollAxes, Scrollbars, Severity, WithScrollbar, prelude::*};
 use util::ResultExt as _;
 use util::paths::PathStyle;
@@ -32,6 +35,7 @@ use crate::{
 };
 
 const MAX_REMOTE_LOAD_PASSES: usize = 32;
+const DRAFT_PREVIEW_DEBOUNCE: Duration = Duration::from_millis(300);
 
 pub struct TypstPreviewView {
     workspace: WeakEntity<Workspace>,
@@ -45,9 +49,12 @@ pub struct TypstPreviewView {
     error: Option<SharedString>,
     warning: Option<SharedString>,
     is_compiling: bool,
-    is_stale: bool,
+    is_preview_stale: bool,
     requested_generation: u64,
     compile_task: Option<Task<()>>,
+    draft_refresh_task: Option<Task<()>>,
+    draft_editor_subscriptions: Vec<Subscription>,
+    draft_editor_ids: HashSet<EntityId>,
     package_download_task: Option<Task<()>>,
     offered_package: Option<PackageSpec>,
     focus_handle: FocusHandle,
@@ -325,9 +332,12 @@ impl TypstPreviewView {
                 error: None,
                 warning: None,
                 is_compiling: false,
-                is_stale: false,
+                is_preview_stale: false,
                 requested_generation: 0,
                 compile_task: None,
+                draft_refresh_task: None,
+                draft_editor_subscriptions: Vec::new(),
+                draft_editor_ids: HashSet::new(),
                 package_download_task: None,
                 offered_package: None,
                 focus_handle: cx.focus_handle(),
@@ -362,6 +372,7 @@ impl TypstPreviewView {
                                 {
                                     view.set_editor(editor, window, cx);
                                 }
+                                view.handle_draft_workspace_event(event, window, cx);
                             },
                         )
                         .detach();
@@ -380,6 +391,7 @@ impl TypstPreviewView {
                                 {
                                     view.set_editor(editor, window, cx);
                                 }
+                                view.handle_draft_workspace_event(event, window, cx);
                             },
                         )
                         .detach();
@@ -391,7 +403,7 @@ impl TypstPreviewView {
         })
     }
 
-    fn is_typst_file<V>(editor: &Entity<Editor>, cx: &mut Context<V>) -> bool {
+    fn is_typst_file(editor: &Entity<Editor>, cx: &App) -> bool {
         editor
             .read(cx)
             .buffer()
@@ -399,6 +411,116 @@ impl TypstPreviewView {
             .as_singleton()
             .and_then(|buffer| buffer.read(cx).language())
             .is_some_and(|language| language.name().as_ref() == "Typst")
+    }
+
+    fn is_draft_editor(&self, editor: &Entity<Editor>, cx: &App) -> bool {
+        let Some(source) = self.source.as_ref() else {
+            return false;
+        };
+        if !Self::is_typst_file(editor, cx) {
+            return false;
+        }
+
+        editor
+            .read(cx)
+            .buffer()
+            .read(cx)
+            .as_singleton()
+            .and_then(|buffer| buffer.read(cx).file().cloned())
+            .is_some_and(|file| file.worktree_id(cx) == source.worktree_id)
+    }
+
+    fn refresh_draft_editor_subscriptions(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.draft_editor_subscriptions.clear();
+        self.draft_editor_ids.clear();
+
+        let Some(workspace) = self.workspace.upgrade() else {
+            return;
+        };
+        let active_editor = self
+            .active_editor
+            .as_ref()
+            .map(|active| active.editor.clone());
+        let editors = workspace
+            .read(cx)
+            .items_of_type::<Editor>(cx)
+            .collect::<Vec<_>>();
+
+        for editor in editors {
+            if active_editor.as_ref() == Some(&editor) || !self.is_draft_editor(&editor, cx) {
+                continue;
+            }
+
+            self.draft_editor_ids.insert(editor.entity_id());
+            self.draft_editor_subscriptions.push(cx.subscribe_in(
+                &editor,
+                window,
+                |view, editor, event: &EditorEvent, window, cx| {
+                    if matches!(event, EditorEvent::FileHandleChanged) {
+                        view.refresh_draft_editor_subscriptions(window, cx);
+                        view.request_compile(window, cx);
+                    } else if view.is_draft_editor(editor, cx) {
+                        view.handle_draft_editor_event(editor, event, window, cx);
+                    }
+                },
+            ));
+        }
+    }
+
+    fn handle_draft_workspace_event(
+        &mut self,
+        event: &workspace::Event,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let refresh = match event {
+            workspace::Event::ItemAdded { item } => {
+                let Some(editor) = item.downcast::<Editor>() else {
+                    return;
+                };
+                if !self.is_draft_editor(&editor, cx) {
+                    return;
+                }
+                Self::editor_is_dirty(&editor, cx)
+            }
+            workspace::Event::ItemRemoved { item_id } => {
+                if !self.draft_editor_ids.remove(item_id) {
+                    return;
+                }
+                true
+            }
+            _ => return,
+        };
+
+        self.refresh_draft_editor_subscriptions(window, cx);
+        if refresh {
+            self.request_compile(window, cx);
+        }
+    }
+
+    fn handle_draft_editor_event(
+        &mut self,
+        editor: &Entity<Editor>,
+        event: &EditorEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            EditorEvent::Saved => self.request_compile(window, cx),
+            EditorEvent::Edited { .. }
+            | EditorEvent::BufferEdited { .. }
+            | EditorEvent::BuffersEdited { .. } => {
+                if Self::editor_is_dirty(editor, cx) {
+                    self.schedule_draft_compile(window, cx);
+                } else {
+                    self.request_compile(window, cx);
+                }
+            }
+            EditorEvent::DirtyChanged if Self::editor_is_dirty(editor, cx) => {
+                self.schedule_draft_compile(window, cx);
+            }
+            _ => {}
+        }
     }
 
     fn set_editor(&mut self, editor: Entity<Editor>, window: &mut Window, cx: &mut Context<Self>) {
@@ -415,26 +537,17 @@ impl TypstPreviewView {
             &editor,
             window,
             |view, editor, event: &EditorEvent, window, cx| match event {
-                EditorEvent::Saved | EditorEvent::FileHandleChanged => {
+                EditorEvent::Saved => {
                     view.refresh_source(editor, window, cx);
                     view.request_compile(window, cx);
-                    if matches!(event, EditorEvent::FileHandleChanged) {
-                        cx.emit(TypstPreviewEvent::SourceFileHandleChanged);
-                    }
                 }
-                EditorEvent::Edited { .. }
-                | EditorEvent::BufferEdited { .. }
-                | EditorEvent::BuffersEdited { .. }
-                | EditorEvent::DirtyChanged => {
-                    view.is_stale = editor
-                        .read(cx)
-                        .buffer()
-                        .read(cx)
-                        .as_singleton()
-                        .is_some_and(|buffer| buffer.read(cx).is_dirty());
-                    cx.notify();
+                EditorEvent::FileHandleChanged => {
+                    view.refresh_source(editor, window, cx);
+                    view.refresh_draft_editor_subscriptions(window, cx);
+                    view.request_compile(window, cx);
+                    cx.emit(TypstPreviewEvent::SourceFileHandleChanged);
                 }
-                _ => {}
+                _ => view.handle_draft_editor_event(editor, event, window, cx),
             },
         );
 
@@ -443,12 +556,8 @@ impl TypstPreviewView {
             _subscription: subscription,
         });
         self.refresh_source(&editor, window, cx);
-        self.is_stale = editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .is_some_and(|buffer| buffer.read(cx).is_dirty());
+        self.refresh_draft_editor_subscriptions(window, cx);
+        self.is_preview_stale = Self::editor_is_dirty(&editor, cx);
         self.request_compile(window, cx);
         if had_editor {
             cx.emit(TypstPreviewEvent::SourceEditorChanged);
@@ -499,16 +608,86 @@ impl TypstPreviewView {
     }
 
     fn request_compile(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.draft_refresh_task.take();
         self.requested_generation = self.requested_generation.wrapping_add(1);
-        self.is_stale = self
-            .active_editor
-            .as_ref()
-            .and_then(|active| active.editor.read(cx).buffer().read(cx).as_singleton())
-            .is_some_and(|buffer| buffer.read(cx).is_dirty());
+        self.is_preview_stale = true;
         if self.compile_task.is_some() {
             return;
         }
         self.start_compile(window, cx);
+    }
+
+    fn schedule_draft_compile(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.requested_generation = self.requested_generation.wrapping_add(1);
+        self.is_preview_stale = true;
+        let generation = self.requested_generation;
+        self.draft_refresh_task = Some(cx.spawn_in(window, async move |view, cx| {
+            cx.background_executor().timer(DRAFT_PREVIEW_DEBOUNCE).await;
+
+            view.update_in(cx, |view, window, cx| {
+                if view.requested_generation != generation {
+                    return;
+                }
+
+                view.draft_refresh_task = None;
+                if view.compile_task.is_none() {
+                    view.start_compile(window, cx);
+                }
+                cx.notify();
+            })
+            .log_err();
+        }));
+        cx.notify();
+    }
+
+    fn editor_is_dirty(editor: &Entity<Editor>, cx: &App) -> bool {
+        editor
+            .read(cx)
+            .buffer()
+            .read(cx)
+            .as_singleton()
+            .is_some_and(|buffer| buffer.read(cx).is_dirty())
+    }
+
+    fn open_drafts(&self, cx: &App) -> Result<HashMap<VirtualPath, String>> {
+        let mut editors = self
+            .active_editor
+            .as_ref()
+            .map(|active| vec![active.editor.clone()])
+            .unwrap_or_default();
+        if let Some(workspace) = self.workspace.upgrade() {
+            editors.extend(
+                workspace
+                    .read(cx)
+                    .items_of_type::<Editor>(cx)
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        let mut drafts = HashMap::new();
+        for editor in editors {
+            if !self.is_draft_editor(&editor, cx) {
+                continue;
+            }
+
+            let buffer = editor.read(cx).buffer().read(cx).as_singleton();
+            let Some(buffer) = buffer else {
+                continue;
+            };
+            let buffer = buffer.read(cx);
+            if !buffer.is_dirty() {
+                continue;
+            }
+
+            let Some(file) = buffer.file() else {
+                continue;
+            };
+
+            let path =
+                VirtualPath::new(file.path().as_unix_str()).context("invalid Typst draft path")?;
+            drafts.insert(path, buffer.text());
+        }
+        Ok(drafts)
     }
 
     fn preview_colors(cx: &App) -> PreviewColors {
@@ -528,6 +707,7 @@ impl TypstPreviewView {
                 .into(),
             );
             self.is_compiling = false;
+            self.is_preview_stale = false;
             cx.notify();
             return;
         };
@@ -536,11 +716,21 @@ impl TypstPreviewView {
             source: source.clone(),
             colors: self.preview_colors,
         };
+        let drafts = match self.open_drafts(cx) {
+            Ok(drafts) => drafts,
+            Err(error) => {
+                self.error = Some(error.to_string().into());
+                self.is_compiling = false;
+                self.is_preview_stale = false;
+                cx.notify();
+                return;
+            }
+        };
         let compiler = self
             .compiler
             .take()
             .filter(|_| self.compiler_key.as_ref() == Some(&compiler_key));
-        let compiler = match compiler.map_or_else(
+        let mut compiler = match compiler.map_or_else(
             || {
                 TypstCompiler::new(
                     source.root.clone(),
@@ -555,19 +745,21 @@ impl TypstPreviewView {
             Err(error) => {
                 self.error = Some(error.to_string().into());
                 self.is_compiling = false;
+                self.is_preview_stale = false;
                 cx.notify();
                 return;
             }
         };
 
         self.compiler_key = Some(compiler_key.clone());
+        compiler.set_draft_files(drafts);
         self.is_compiling = true;
         let generation = self.requested_generation;
         let project = self.project.clone();
         let renderer = cx.svg_renderer();
         self.compile_task = Some(cx.spawn_in(window, async move |view, cx| {
             let (compiler, result) =
-                compile_saved_document(compiler, source.clone(), project, renderer, &mut *cx).await;
+                compile_document(compiler, source.clone(), project, renderer, &mut *cx).await;
 
             view.update_in(cx, |view, window, cx| {
                 let compiler_is_current = view.source.as_ref() == Some(&source)
@@ -581,8 +773,11 @@ impl TypstPreviewView {
                 if compiler_is_current && view.requested_generation == generation {
                     view.apply_compile_result(result, window, cx);
                     view.is_compiling = false;
-                } else {
+                    view.is_preview_stale = false;
+                } else if view.draft_refresh_task.is_none() {
                     view.start_compile(window, cx);
+                } else {
+                    view.is_compiling = false;
                 }
                 cx.notify();
             })
@@ -823,7 +1018,7 @@ impl TypstPreviewView {
     }
 }
 
-async fn compile_saved_document(
+async fn compile_document(
     mut compiler: TypstCompiler,
     source: SourceDescriptor,
     project: Entity<Project>,
@@ -1026,14 +1221,10 @@ impl Item for TypstPreviewView {
 
 impl Render for TypstPreviewView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let status = if self.is_stale {
+        let status = if self.is_preview_stale {
             Some((
-                Severity::Warning,
-                tr(
-                    cx,
-                    "typst_preview.save_to_refresh",
-                    "Save the file to refresh the Typst preview.",
-                ),
+                Severity::Info,
+                tr(cx, "typst_preview.updating", "Updating Typst preview…"),
             ))
         } else if self.is_compiling && self.pages.is_empty() {
             Some((

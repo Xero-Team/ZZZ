@@ -30,7 +30,7 @@ use crate::{
     mouse_context_menu::{self, MenuPosition},
     scroll::{
         ActiveScrollbarState, Autoscroll, ScrollOffset, ScrollPixelOffset, ScrollbarThumbState,
-        scroll_amount::ScrollAmount,
+        autoscroll::NeedsHorizontalAutoscroll, scroll_amount::ScrollAmount,
     },
 };
 use buffer_diff::{DiffHunkStatus, DiffHunkStatusKind};
@@ -9873,6 +9873,558 @@ impl EditorElement {
             Some(self.editor.clone())
         }
     }
+
+    fn prepare_prepaint_geometry(
+        &self,
+        bounds: Bounds<Pixels>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> EditorPrepaintGeometry {
+        let (mut snapshot, is_read_only) = self.editor.update(cx, |editor, cx| {
+            (editor.snapshot(window, cx), editor.read_only(cx))
+        });
+        let style = &self.style;
+
+        let rem_size = window.rem_size();
+        let font_id = window.text_system().resolve_font(&style.text.font());
+        let font_size = style.text.font_size.to_pixels(rem_size);
+        let line_height = style.text.line_height_in_pixels(rem_size);
+        let em_width = window
+            .text_system()
+            .em_width(font_id, font_size)
+            .expect("em_width should be present");
+        let em_advance = window
+            .text_system()
+            .em_advance(font_id, font_size)
+            .expect("em_advance should be present");
+        let em_layout_width = window.text_system().em_layout_width(font_id, font_size);
+        let glyph_grid_cell = size(em_advance, line_height);
+
+        let gutter_dimensions = snapshot.gutter_dimensions(font_id, font_size, style, window, cx);
+        let text_width = bounds.size.width - gutter_dimensions.width;
+
+        let settings = EditorSettings::get_global(cx);
+        let scrollbars_shown = settings.scrollbar.show != ShowScrollbar::Never;
+        let vertical_scrollbar_width = if scrollbars_shown
+            && settings.scrollbar.axes.vertical
+            && self.editor.read(cx).show_scrollbars.vertical
+        {
+            style.scrollbar_width
+        } else {
+            Default::default()
+        };
+        let minimap_width = self
+            .get_minimap_width(
+                &settings.minimap,
+                scrollbars_shown,
+                text_width,
+                em_width,
+                font_size,
+                rem_size,
+                cx,
+            )
+            .unwrap_or_default();
+
+        let right_margin = minimap_width + vertical_scrollbar_width;
+        let extended_right = 2 * em_width + right_margin;
+        let editor_width = text_width - gutter_dimensions.margin - extended_right;
+        let editor_margins = EditorMargins {
+            gutter: gutter_dimensions,
+            right: right_margin,
+            extended_right,
+        };
+
+        snapshot = self.editor.update(cx, |editor, cx| {
+            editor.last_bounds = Some(bounds);
+            editor.gutter_dimensions = gutter_dimensions;
+            editor.set_visible_line_count((bounds.size.height / line_height) as f64, window, cx);
+            editor.set_visible_column_count(f64::from(editor_width / em_advance));
+
+            if let Some(target) = editor.scroll_manager.update_animation() {
+                editor.set_scroll_position_internal(target, true, false, window, cx);
+                window.request_animation_frame();
+            }
+
+            if matches!(
+                editor.mode,
+                EditorMode::AutoHeight { .. } | EditorMode::Minimap { .. }
+            ) {
+                snapshot
+            } else {
+                let wrap_width =
+                    calculate_wrap_width(editor.soft_wrap_mode(cx), editor_width, em_layout_width);
+
+                if editor.set_wrap_width(wrap_width, cx) {
+                    editor.snapshot(window, cx)
+                } else {
+                    snapshot
+                }
+            }
+        });
+
+        EditorPrepaintGeometry {
+            snapshot,
+            is_read_only,
+            font_size,
+            line_height,
+            em_width,
+            em_advance,
+            em_layout_width,
+            glyph_grid_cell,
+            gutter_dimensions,
+            text_width,
+            vertical_scrollbar_width,
+            minimap_width,
+            editor_width,
+            editor_margins,
+        }
+    }
+
+    fn add_diff_hunk_highlights(
+        &self,
+        row_infos: &[RowInfo],
+        start_row: DisplayRow,
+        snapshot: &EditorSnapshot,
+        highlighted_rows: &mut BTreeMap<DisplayRow, LineHighlight>,
+        cx: &mut App,
+    ) {
+        struct DiffHunkHighlightColors {
+            filled_background: Hsla,
+            hollow_background: Hsla,
+            hollow_border: Hsla,
+        }
+
+        let colors = cx.theme().colors();
+        let added_diff_hunk_colors = DiffHunkHighlightColors {
+            filled_background: colors.editor_diff_hunk_added_background,
+            hollow_background: colors.editor_diff_hunk_added_hollow_background,
+            hollow_border: colors.editor_diff_hunk_added_hollow_border,
+        };
+        let deleted_diff_hunk_colors = DiffHunkHighlightColors {
+            filled_background: colors.editor_diff_hunk_deleted_background,
+            hollow_background: colors.editor_diff_hunk_deleted_hollow_background,
+            hollow_border: colors.editor_diff_hunk_deleted_hollow_border,
+        };
+        let drag_highlight_color = colors.editor_active_line_background;
+        let drag_border_color = colors.border_focused;
+
+        for (index, row_info) in row_infos.iter().enumerate() {
+            let Some(diff_status) = row_info.diff_status else {
+                continue;
+            };
+
+            let diff_hunk_colors = match diff_status.kind {
+                DiffHunkStatusKind::Added => &added_diff_hunk_colors,
+                DiffHunkStatusKind::Deleted => &deleted_diff_hunk_colors,
+                DiffHunkStatusKind::Modified => {
+                    debug_panic!("modified diff status for row info");
+                    continue;
+                }
+            };
+
+            let background = if Self::diff_hunk_hollow(diff_status, cx) {
+                LineHighlight {
+                    background: diff_hunk_colors.hollow_background.into(),
+                    border: Some(diff_hunk_colors.hollow_border),
+                    include_gutter: true,
+                    type_id: None,
+                }
+            } else {
+                LineHighlight {
+                    background: solid_background(diff_hunk_colors.filled_background),
+                    border: None,
+                    include_gutter: true,
+                    type_id: None,
+                }
+            };
+
+            let display_point = DisplayPoint::new(start_row + DisplayRow(index as u32), 0);
+            highlighted_rows
+                .entry(display_point.row())
+                .or_insert(background);
+        }
+
+        if let Some(drag_state) = &self.editor.read(cx).diff_review_drag_state {
+            let range = drag_state.row_range(&snapshot.display_snapshot);
+            let drag_highlight = LineHighlight {
+                background: solid_background(drag_highlight_color),
+                border: Some(drag_border_color),
+                include_gutter: true,
+                type_id: None,
+            };
+            for row_number in range.start().0..=range.end().0 {
+                highlighted_rows
+                    .entry(DisplayRow(row_number))
+                    .or_insert(drag_highlight);
+            }
+        }
+    }
+
+    fn collect_local_selections(
+        &self,
+        start_anchor: Anchor,
+        end_anchor: Anchor,
+        snapshot: &EditorSnapshot,
+        cx: &mut App,
+    ) -> (
+        Vec<Selection<Point>>,
+        Vec<BufferId>,
+        HashMap<BufferId, Anchor>,
+    ) {
+        self.editor_with_selections(cx).map_or_else(
+            || (Vec::new(), Vec::new(), HashMap::default()),
+            |editor| {
+                editor.update(cx, |editor, cx| {
+                    let is_singleton = editor.buffer_kind(cx) == ItemBufferKind::Singleton;
+                    let selected_buffer_ids = if is_singleton {
+                        Vec::new()
+                    } else {
+                        let all_selections =
+                            editor.selections.all::<Point>(&snapshot.display_snapshot);
+                        let mut selected_buffer_ids = Vec::with_capacity(all_selections.len());
+
+                        for selection in all_selections {
+                            for buffer_id in snapshot
+                                .buffer_snapshot()
+                                .buffer_ids_for_range(selection.range())
+                            {
+                                if selected_buffer_ids.last() != Some(&buffer_id) {
+                                    selected_buffer_ids.push(buffer_id);
+                                }
+                            }
+                        }
+
+                        selected_buffer_ids
+                    };
+
+                    let mut selections = editor.selections.disjoint_in_row_range(
+                        start_anchor..end_anchor,
+                        &snapshot.display_snapshot,
+                    );
+                    selections.extend(editor.selections.pending(&snapshot.display_snapshot));
+
+                    let latest_selection_anchors = if is_singleton {
+                        let head = editor.selections.newest_anchor().head();
+                        snapshot
+                            .buffer_snapshot()
+                            .anchor_to_buffer_anchor(head)
+                            .map(|(text_anchor, _)| (text_anchor.buffer_id, head))
+                            .into_iter()
+                            .collect()
+                    } else {
+                        let all_anchor_selections =
+                            editor.selections.all_anchors(&snapshot.display_snapshot);
+                        let mut anchors_by_buffer: HashMap<BufferId, (usize, Anchor)> =
+                            HashMap::default();
+                        for selection in all_anchor_selections.iter() {
+                            let head = selection.head();
+                            if let Some((text_anchor, _)) =
+                                snapshot.buffer_snapshot().anchor_to_buffer_anchor(head)
+                            {
+                                anchors_by_buffer
+                                    .entry(text_anchor.buffer_id)
+                                    .and_modify(|(latest_id, latest_anchor)| {
+                                        if selection.id > *latest_id {
+                                            *latest_id = selection.id;
+                                            *latest_anchor = head;
+                                        }
+                                    })
+                                    .or_insert((selection.id, head));
+                            }
+                        }
+                        anchors_by_buffer
+                            .into_iter()
+                            .map(|(buffer_id, (_, anchor))| (buffer_id, anchor))
+                            .collect()
+                    };
+
+                    (selections, selected_buffer_ids, latest_selection_anchors)
+                })
+            },
+        )
+    }
+
+    fn insert_prepaint_hitboxes(
+        bounds: Bounds<Pixels>,
+        gutter_dimensions: GutterDimensions,
+        text_width: Pixels,
+        window: &mut Window,
+    ) -> EditorPrepaintHitboxes {
+        let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+        let gutter_hitbox = window.insert_hitbox(
+            gutter_bounds(bounds, gutter_dimensions),
+            HitboxBehavior::Normal,
+        );
+        let text_hitbox = window.insert_hitbox(
+            Bounds {
+                origin: gutter_hitbox.top_right(),
+                size: size(text_width, bounds.size.height),
+            },
+            HitboxBehavior::Normal,
+        );
+        let content_offset = point(gutter_dimensions.margin, Pixels::ZERO);
+        let content_origin = text_hitbox.origin + content_offset;
+
+        EditorPrepaintHitboxes {
+            hitbox,
+            gutter_hitbox,
+            text_hitbox,
+            content_offset,
+            content_origin,
+        }
+    }
+
+    fn current_selection_head(
+        &self,
+        snapshot: &EditorSnapshot,
+        cx: &mut App,
+    ) -> Option<DisplayRow> {
+        self.editor.update(cx, |editor, cx| {
+            (editor.selections.count() != 0).then(|| {
+                let newest = editor
+                    .selections
+                    .newest::<Point>(&editor.display_snapshot(cx));
+
+                SelectionLayout::new(
+                    newest,
+                    editor.selections.line_mode(),
+                    editor.cursor_offset_on_selection,
+                    editor.cursor_shape,
+                    snapshot,
+                    true,
+                    true,
+                    None,
+                )
+                .head
+                .row()
+            })
+        })
+    }
+
+    fn shape_invisible_symbols(
+        &self,
+        font_size: Pixels,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (ShapedLine, ShapedLine) {
+        let invisible_symbol_font_size = font_size / 2.;
+        let whitespace_map = &self
+            .editor
+            .read(cx)
+            .buffer
+            .read(cx)
+            .language_settings(cx)
+            .whitespace_map;
+        let color = cx.theme().colors().editor_invisible;
+        let font = self.style.text.font();
+
+        let tab_char = whitespace_map.tab.clone();
+        let tab_invisible = window.text_system().shape_line(
+            tab_char.clone(),
+            invisible_symbol_font_size,
+            &[TextRun {
+                len: tab_char.len(),
+                font: font.clone(),
+                color,
+                ..Default::default()
+            }],
+            None,
+        );
+
+        let space_char = whitespace_map.space.clone();
+        let space_invisible = window.text_system().shape_line(
+            space_char.clone(),
+            invisible_symbol_font_size,
+            &[TextRun {
+                len: space_char.len(),
+                font,
+                color,
+                ..Default::default()
+            }],
+            None,
+        );
+
+        (tab_invisible, space_invisible)
+    }
+
+    fn sticky_header_height(
+        blocks: &[BlockLayout],
+        sticky_headers: Option<&StickyHeaders>,
+        sticky_header_excerpt_id: Option<BufferId>,
+        sticky_buffer_header: Option<&AnyElement>,
+        line_height: Pixels,
+        scroll_position: gpui::Point<ScrollOffset>,
+        rem_size: Pixels,
+    ) -> Pixels {
+        let sticky_scroll_header_height = sticky_headers
+            .and_then(|headers| headers.lines.last())
+            .map_or(Pixels::ZERO, |last| last.offset + line_height);
+        let has_sticky_buffer_header =
+            sticky_buffer_header.is_some() || sticky_header_excerpt_id.is_some();
+        if !has_sticky_buffer_header {
+            return sticky_scroll_header_height;
+        }
+
+        let full_height = FILE_HEADER_HEIGHT as f32 * line_height;
+        let display_row = blocks
+            .iter()
+            .filter(|block| block.is_buffer_header)
+            .find_map(|block| block.row.filter(|row| row.0 > scroll_position.y as u32));
+        let offset = match display_row {
+            Some(display_row) => {
+                let max_row = display_row.0.saturating_sub(FILE_HEADER_HEIGHT);
+                let offset = (scroll_position.y - max_row as f64).max(0.0);
+                let slide_up = Pixels::from(offset * ScrollPixelOffset::from(line_height));
+
+                (full_height - slide_up).max(Pixels::ZERO)
+            }
+            None => full_height,
+        };
+        let header_bottom_padding = BUFFER_HEADER_PADDING.to_pixels(rem_size);
+        sticky_scroll_header_height + offset - header_bottom_padding
+    }
+
+    fn prepare_visible_rows(
+        &self,
+        mut snapshot: EditorSnapshot,
+        bounds: Bounds<Pixels>,
+        line_height: Pixels,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> EditorVisibleRows {
+        let height_in_lines = f64::from(bounds.size.height / line_height);
+        let max_row = snapshot.max_point().row().as_f64();
+        let visible_bounds = window.content_mask().bounds;
+        let visible_top = bounds.top().max(visible_bounds.top());
+        let visible_bottom = bounds.bottom().min(visible_bounds.bottom());
+        let clipped_top = (visible_top - bounds.top()).max(px(0.));
+        let visible_height = (visible_bottom - visible_top).max(px(0.));
+        let clipped_top_in_lines = f64::from(clipped_top / line_height);
+        let visible_height_in_lines = f64::from(visible_height / line_height);
+
+        let scroll_beyond_last_line = self.editor.read(cx).scroll_beyond_last_line(cx);
+        let max_scroll_top = match scroll_beyond_last_line {
+            ScrollBeyondLastLine::OnePage => max_row,
+            ScrollBeyondLastLine::Off => (max_row - height_in_lines + 1.).max(0.),
+            ScrollBeyondLastLine::VerticalScrollMargin => {
+                let settings = EditorSettings::get_global(cx);
+                (max_row - height_in_lines + 1. + settings.vertical_scroll_margin).max(0.)
+            }
+        };
+
+        let (autoscroll_request, autoscroll_containing_element, needs_horizontal_autoscroll) =
+            self.editor.update(cx, |editor, cx| {
+                let autoscroll_request = editor.scroll_manager.take_autoscroll_request();
+                let autoscroll_containing_element =
+                    autoscroll_request.is_some() || editor.has_pending_selection();
+                let (needs_horizontal_autoscroll, was_scrolled) = editor.autoscroll_vertically(
+                    bounds,
+                    line_height,
+                    max_scroll_top,
+                    autoscroll_request,
+                    window,
+                    cx,
+                );
+                if was_scrolled.0 {
+                    snapshot = editor.snapshot(window, cx);
+                }
+                (
+                    autoscroll_request,
+                    autoscroll_containing_element,
+                    needs_horizontal_autoscroll,
+                )
+            });
+
+        let mut scroll_position = snapshot.scroll_position();
+        if !line_height.is_zero() {
+            scroll_position.y = window.pixel_snap_f64(scroll_position.y * f64::from(line_height))
+                / f64::from(line_height);
+        }
+        let max_row = snapshot.max_point().row();
+        let start_row = cmp::min(
+            DisplayRow((scroll_position.y + clipped_top_in_lines).floor() as u32),
+            max_row,
+        );
+        let end_row = DisplayRow(cmp::min(
+            (scroll_position.y + clipped_top_in_lines + visible_height_in_lines).ceil() as u32,
+            max_row.next_row().0,
+        ));
+        let row_infos = snapshot
+            .row_infos(start_row)
+            .take((start_row..end_row).len())
+            .collect();
+        let start_anchor = if start_row == Default::default() {
+            Anchor::Min
+        } else {
+            snapshot
+                .buffer_snapshot()
+                .anchor_before(DisplayPoint::new(start_row, 0).to_offset(&snapshot, Bias::Left))
+        };
+        let end_anchor = if end_row > max_row {
+            Anchor::Max
+        } else {
+            snapshot
+                .buffer_snapshot()
+                .anchor_before(DisplayPoint::new(end_row, 0).to_offset(&snapshot, Bias::Right))
+        };
+
+        EditorVisibleRows {
+            snapshot,
+            scroll_beyond_last_line,
+            max_scroll_top,
+            autoscroll_request,
+            autoscroll_containing_element,
+            needs_horizontal_autoscroll,
+            scroll_position,
+            max_row,
+            start_row,
+            end_row,
+            row_infos,
+            start_anchor,
+            end_anchor,
+        }
+    }
+}
+
+struct EditorPrepaintGeometry {
+    snapshot: EditorSnapshot,
+    is_read_only: bool,
+    font_size: Pixels,
+    line_height: Pixels,
+    em_width: Pixels,
+    em_advance: Pixels,
+    em_layout_width: Pixels,
+    glyph_grid_cell: Size<Pixels>,
+    gutter_dimensions: GutterDimensions,
+    text_width: Pixels,
+    vertical_scrollbar_width: Pixels,
+    minimap_width: Pixels,
+    editor_width: Pixels,
+    editor_margins: EditorMargins,
+}
+
+struct EditorPrepaintHitboxes {
+    hitbox: Hitbox,
+    gutter_hitbox: Hitbox,
+    text_hitbox: Hitbox,
+    content_offset: gpui::Point<Pixels>,
+    content_origin: gpui::Point<Pixels>,
+}
+
+struct EditorVisibleRows {
+    snapshot: EditorSnapshot,
+    scroll_beyond_last_line: ScrollBeyondLastLine,
+    max_scroll_top: ScrollOffset,
+    autoscroll_request: Option<(Autoscroll, bool)>,
+    autoscroll_containing_element: bool,
+    needs_horizontal_autoscroll: NeedsHorizontalAutoscroll,
+    scroll_position: gpui::Point<ScrollOffset>,
+    max_row: DisplayRow,
+    start_row: DisplayRow,
+    end_row: DisplayRow,
+    row_infos: Vec<RowInfo>,
+    start_anchor: Anchor,
+    end_anchor: Anchor,
 }
 
 #[derive(Default)]
@@ -10058,215 +10610,57 @@ impl Element for EditorElement {
         window.with_rem_size(rem_size, |window| {
             window.with_text_style(Some(text_style), |window| {
                 window.with_content_mask(Some(ContentMask { bounds }), |window| {
-                    let (mut snapshot, is_read_only) = self.editor.update(cx, |editor, cx| {
-                        (editor.snapshot(window, cx), editor.read_only(cx))
-                    });
+                    let EditorPrepaintGeometry {
+                        snapshot,
+                        is_read_only,
+                        font_size,
+                        line_height,
+                        em_width,
+                        em_advance,
+                        em_layout_width,
+                        glyph_grid_cell,
+                        gutter_dimensions,
+                        text_width,
+                        vertical_scrollbar_width,
+                        minimap_width,
+                        editor_width,
+                        editor_margins,
+                    } = self.prepare_prepaint_geometry(bounds, window, cx);
                     let style = &self.style;
+                    let right_margin = editor_margins.right;
 
-                    let rem_size = window.rem_size();
-                    let font_id = window.text_system().resolve_font(&style.text.font());
-                    let font_size = style.text.font_size.to_pixels(rem_size);
-                    let line_height = style.text.line_height_in_pixels(rem_size);
-                    let em_width = window
-                        .text_system()
-                        .em_width(font_id, font_size)
-                        .expect("em_width should be present");
-                    let em_advance = window
-                        .text_system()
-                        .em_advance(font_id, font_size)
-                        .expect("em_advance should be present");
-                    let em_layout_width = window.text_system().em_layout_width(font_id, font_size);
-                    let glyph_grid_cell = size(em_advance, line_height);
-
-                    let gutter_dimensions =
-                        snapshot.gutter_dimensions(font_id, font_size, style, window, cx);
-                    let text_width = bounds.size.width - gutter_dimensions.width;
-
-                    let settings = EditorSettings::get_global(cx);
-                    let scrollbars_shown = settings.scrollbar.show != ShowScrollbar::Never;
-                    let vertical_scrollbar_width = if scrollbars_shown
-                        && settings.scrollbar.axes.vertical
-                        && self.editor.read(cx).show_scrollbars.vertical
-                    {
-                        style.scrollbar_width
-                    } else {
-                        Default::default()
-                    };
-                    let minimap_width = self
-                        .get_minimap_width(
-                            &settings.minimap,
-                            scrollbars_shown,
-                            text_width,
-                            em_width,
-                            font_size,
-                            rem_size,
-                            cx,
-                        )
-                        .unwrap_or_default();
-
-                    let right_margin = minimap_width + vertical_scrollbar_width;
-
-                    let extended_right = 2 * em_width + right_margin;
-                    let editor_width = text_width - gutter_dimensions.margin - extended_right;
-                    let editor_margins = EditorMargins {
-                        gutter: gutter_dimensions,
-                        right: right_margin,
-                        extended_right,
-                    };
-
-                    snapshot = self.editor.update(cx, |editor, cx| {
-                        editor.last_bounds = Some(bounds);
-                        editor.gutter_dimensions = gutter_dimensions;
-                        editor.set_visible_line_count(
-                            (bounds.size.height / line_height) as f64,
-                            window,
-                            cx,
-                        );
-                        editor.set_visible_column_count(f64::from(editor_width / em_advance));
-
-                        if let Some(target) = editor.scroll_manager.update_animation() {
-                            editor.set_scroll_position_internal(target, true, false, window, cx);
-                            window.request_animation_frame();
-                        }
-
-                        if matches!(
-                            editor.mode,
-                            EditorMode::AutoHeight { .. } | EditorMode::Minimap { .. }
-                        ) {
-                            snapshot
-                        } else {
-                            let wrap_width = calculate_wrap_width(
-                                editor.soft_wrap_mode(cx),
-                                editor_width,
-                                em_layout_width,
-                            );
-
-                            if editor.set_wrap_width(wrap_width, cx) {
-                                editor.snapshot(window, cx)
-                            } else {
-                                snapshot
-                            }
-                        }
-                    });
-
-                    let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
-                    let gutter_hitbox = window.insert_hitbox(
-                        gutter_bounds(bounds, gutter_dimensions),
-                        HitboxBehavior::Normal,
-                    );
-                    let text_hitbox = window.insert_hitbox(
-                        Bounds {
-                            origin: gutter_hitbox.top_right(),
-                            size: size(text_width, bounds.size.height),
-                        },
-                        HitboxBehavior::Normal,
+                    let EditorPrepaintHitboxes {
+                        hitbox,
+                        gutter_hitbox,
+                        text_hitbox,
+                        content_offset,
+                        content_origin,
+                    } = Self::insert_prepaint_hitboxes(
+                        bounds,
+                        gutter_dimensions,
+                        text_width,
+                        window,
                     );
 
-                    // Offset the content_bounds from the text_bounds by the gutter margin (which
-                    // is roughly half a character wide) to make hit testing work more like how we want.
-                    let content_offset = point(editor_margins.gutter.margin, Pixels::ZERO);
-                    let content_origin = text_hitbox.origin + content_offset;
-
-                    let height_in_lines = f64::from(bounds.size.height / line_height);
-                    let max_row = snapshot.max_point().row().as_f64();
-
-                    // Calculate how much of the editor is clipped by parent containers (e.g., List).
-                    // This allows us to only render lines that are actually visible, which is
-                    // critical for performance when large content-sized editors are inside Lists.
-                    let visible_bounds = window.content_mask().bounds;
-                    let visible_top = bounds.top().max(visible_bounds.top());
-                    let visible_bottom = bounds.bottom().min(visible_bounds.bottom());
-                    let clipped_top = (visible_top - bounds.top()).max(px(0.));
-                    let visible_height = (visible_bottom - visible_top).max(px(0.));
-                    let clipped_top_in_lines = f64::from(clipped_top / line_height);
-                    let visible_height_in_lines = f64::from(visible_height / line_height);
-
-                    // The max scroll position for the top of the window
-                    let scroll_beyond_last_line = self.editor.read(cx).scroll_beyond_last_line(cx);
-                    let max_scroll_top = match scroll_beyond_last_line {
-                        ScrollBeyondLastLine::OnePage => max_row,
-                        ScrollBeyondLastLine::Off => (max_row - height_in_lines + 1.).max(0.),
-                        ScrollBeyondLastLine::VerticalScrollMargin => {
-                            let settings = EditorSettings::get_global(cx);
-                            (max_row - height_in_lines + 1. + settings.vertical_scroll_margin)
-                                .max(0.)
-                        }
-                    };
-
-                    let (
+                    let EditorVisibleRows {
+                        snapshot,
+                        scroll_beyond_last_line,
+                        max_scroll_top,
                         autoscroll_request,
                         autoscroll_containing_element,
                         needs_horizontal_autoscroll,
-                    ) = self.editor.update(cx, |editor, cx| {
-                        let autoscroll_request = editor.scroll_manager.take_autoscroll_request();
-
-                        let autoscroll_containing_element =
-                            autoscroll_request.is_some() || editor.has_pending_selection();
-
-                        let (needs_horizontal_autoscroll, was_scrolled) = editor
-                            .autoscroll_vertically(
-                                bounds,
-                                line_height,
-                                max_scroll_top,
-                                autoscroll_request,
-                                window,
-                                cx,
-                            );
-                        if was_scrolled.0 {
-                            snapshot = editor.snapshot(window, cx);
-                        }
-                        (
-                            autoscroll_request,
-                            autoscroll_containing_element,
-                            needs_horizontal_autoscroll,
-                        )
-                    });
-
-                    let mut scroll_position = snapshot.scroll_position();
-                    if !line_height.is_zero() {
-                        scroll_position.y = window
-                            .pixel_snap_f64(scroll_position.y * f64::from(line_height))
-                            / f64::from(line_height);
-                    }
-                    // The scroll position is a fractional point, the whole number of which represents
-                    // the top of the window in terms of display rows.
-                    // We add clipped_top_in_lines to skip rows that are clipped by parent containers,
-                    // but we don't modify scroll_position itself since the parent handles positioning.
-                    let max_row = snapshot.max_point().row();
-                    let start_row = cmp::min(
-                        DisplayRow((scroll_position.y + clipped_top_in_lines).floor() as u32),
+                        mut scroll_position,
                         max_row,
-                    );
-                    let end_row = cmp::min(
-                        (scroll_position.y + clipped_top_in_lines + visible_height_in_lines).ceil()
-                            as u32,
-                        max_row.next_row().0,
-                    );
-                    let end_row = DisplayRow(end_row);
-
-                    let row_infos = snapshot // note we only get the visual range
-                        .row_infos(start_row)
-                        .take((start_row..end_row).len())
-                        .collect::<Vec<RowInfo>>();
+                        start_row,
+                        end_row,
+                        row_infos,
+                        start_anchor,
+                        end_anchor,
+                    } = self.prepare_visible_rows(snapshot, bounds, line_height, window, cx);
                     let is_row_soft_wrapped = |row: usize| {
                         row_infos
                             .get(row)
                             .is_none_or(|info| info.buffer_row.is_none())
-                    };
-
-                    let start_anchor = if start_row == Default::default() {
-                        Anchor::Min
-                    } else {
-                        snapshot.buffer_snapshot().anchor_before(
-                            DisplayPoint::new(start_row, 0).to_offset(&snapshot, Bias::Left),
-                        )
-                    };
-                    let end_anchor = if end_row > max_row {
-                        Anchor::Max
-                    } else {
-                        snapshot.buffer_snapshot().anchor_before(
-                            DisplayPoint::new(end_row, 0).to_offset(&snapshot, Bias::Right),
-                        )
                     };
 
                     let mut highlighted_rows =
@@ -10316,85 +10710,13 @@ impl Element for EditorElement {
                         })
                         .unwrap_or_default();
 
-                    struct DiffHunkHighlightColors {
-                        filled_background: Hsla,
-                        hollow_background: Hsla,
-                        hollow_border: Hsla,
-                    }
-
-                    let colors = cx.theme().colors();
-                    let added_diff_hunk_colors = DiffHunkHighlightColors {
-                        filled_background: colors.editor_diff_hunk_added_background,
-                        hollow_background: colors.editor_diff_hunk_added_hollow_background,
-                        hollow_border: colors.editor_diff_hunk_added_hollow_border,
-                    };
-                    let deleted_diff_hunk_colors = DiffHunkHighlightColors {
-                        filled_background: colors.editor_diff_hunk_deleted_background,
-                        hollow_background: colors.editor_diff_hunk_deleted_hollow_background,
-                        hollow_border: colors.editor_diff_hunk_deleted_hollow_border,
-                    };
-                    let drag_highlight_color = colors.editor_active_line_background;
-                    let drag_border_color = colors.border_focused;
-
-                    for (ix, row_info) in row_infos.iter().enumerate() {
-                        let Some(diff_status) = row_info.diff_status else {
-                            continue;
-                        };
-
-                        let diff_hunk_colors = match diff_status.kind {
-                            DiffHunkStatusKind::Added => &added_diff_hunk_colors,
-                            DiffHunkStatusKind::Deleted => &deleted_diff_hunk_colors,
-                            DiffHunkStatusKind::Modified => {
-                                debug_panic!("modified diff status for row info");
-                                continue;
-                            }
-                        };
-
-                        let hollow_highlight = LineHighlight {
-                            background: diff_hunk_colors.hollow_background.into(),
-                            border: Some(diff_hunk_colors.hollow_border),
-                            include_gutter: true,
-                            type_id: None,
-                        };
-
-                        let filled_highlight = LineHighlight {
-                            background: solid_background(diff_hunk_colors.filled_background),
-                            border: None,
-                            include_gutter: true,
-                            type_id: None,
-                        };
-
-                        let background = if Self::diff_hunk_hollow(diff_status, cx) {
-                            hollow_highlight
-                        } else {
-                            filled_highlight
-                        };
-
-                        let base_display_point =
-                            DisplayPoint::new(start_row + DisplayRow(ix as u32), 0);
-
-                        highlighted_rows
-                            .entry(base_display_point.row())
-                            .or_insert(background);
-                    }
-
-                    // Add diff review drag selection highlight to text area
-                    if let Some(drag_state) = &self.editor.read(cx).diff_review_drag_state {
-                        let range = drag_state.row_range(&snapshot.display_snapshot);
-                        let start_row = range.start().0;
-                        let end_row = range.end().0;
-                        let drag_highlight = LineHighlight {
-                            background: solid_background(drag_highlight_color),
-                            border: Some(drag_border_color),
-                            include_gutter: true,
-                            type_id: None,
-                        };
-                        for row_num in start_row..=end_row {
-                            highlighted_rows
-                                .entry(DisplayRow(row_num))
-                                .or_insert(drag_highlight);
-                        }
-                    }
+                    self.add_diff_hunk_highlights(
+                        &row_infos,
+                        start_row,
+                        &snapshot,
+                        &mut highlighted_rows,
+                        cx,
+                    );
 
                     let highlighted_gutter_ranges =
                         self.editor.read(cx).gutter_highlights_in_range(
@@ -10415,91 +10737,8 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    let (local_selections, selected_buffer_ids, latest_selection_anchors): (
-                        Vec<Selection<Point>>,
-                        Vec<BufferId>,
-                        HashMap<BufferId, Anchor>,
-                    ) = self.editor_with_selections(cx).map_or_else(
-                        || (Vec::new(), Vec::new(), HashMap::default()),
-                        |editor| {
-                            editor.update(cx, |editor, cx| {
-                                let is_singleton =
-                                    editor.buffer_kind(cx) == ItemBufferKind::Singleton;
-
-                                // Singleton buffers only need the newest selection anchor here.
-                                let selected_buffer_ids = if is_singleton {
-                                    Vec::new()
-                                } else {
-                                    let all_selections =
-                                        editor.selections.all::<Point>(&snapshot.display_snapshot);
-                                    let mut selected_buffer_ids =
-                                        Vec::with_capacity(all_selections.len());
-
-                                    for selection in all_selections {
-                                        for buffer_id in snapshot
-                                            .buffer_snapshot()
-                                            .buffer_ids_for_range(selection.range())
-                                        {
-                                            if selected_buffer_ids.last() != Some(&buffer_id) {
-                                                selected_buffer_ids.push(buffer_id);
-                                            }
-                                        }
-                                    }
-
-                                    selected_buffer_ids
-                                };
-
-                                let mut selections = editor.selections.disjoint_in_row_range(
-                                    start_anchor..end_anchor,
-                                    &snapshot.display_snapshot,
-                                );
-                                selections
-                                    .extend(editor.selections.pending(&snapshot.display_snapshot));
-
-                                let latest_selection_anchors: HashMap<BufferId, Anchor> =
-                                    if is_singleton {
-                                        let head = editor.selections.newest_anchor().head();
-                                        snapshot
-                                            .buffer_snapshot()
-                                            .anchor_to_buffer_anchor(head)
-                                            .map(|(text_anchor, _)| (text_anchor.buffer_id, head))
-                                            .into_iter()
-                                            .collect()
-                                    } else {
-                                        let all_anchor_selections = editor
-                                            .selections
-                                            .all_anchors(&snapshot.display_snapshot);
-                                        let mut anchors_by_buffer: HashMap<
-                                            BufferId,
-                                            (usize, Anchor),
-                                        > = HashMap::default();
-                                        for selection in all_anchor_selections.iter() {
-                                            let head = selection.head();
-                                            if let Some((text_anchor, _)) = snapshot
-                                                .buffer_snapshot()
-                                                .anchor_to_buffer_anchor(head)
-                                            {
-                                                anchors_by_buffer
-                                                    .entry(text_anchor.buffer_id)
-                                                    .and_modify(|(latest_id, latest_anchor)| {
-                                                        if selection.id > *latest_id {
-                                                            *latest_id = selection.id;
-                                                            *latest_anchor = head;
-                                                        }
-                                                    })
-                                                    .or_insert((selection.id, head));
-                                            }
-                                        }
-                                        anchors_by_buffer
-                                            .into_iter()
-                                            .map(|(buffer_id, (_, anchor))| (buffer_id, anchor))
-                                            .collect()
-                                    };
-
-                                (selections, selected_buffer_ids, latest_selection_anchors)
-                            })
-                        },
-                    );
+                    let (local_selections, selected_buffer_ids, latest_selection_anchors) =
+                        self.collect_local_selections(start_anchor, end_anchor, &snapshot, cx);
 
                     let (selections, mut active_rows, newest_selection_head) = self
                         .layout_selections(
@@ -10513,27 +10752,7 @@ impl Element for EditorElement {
                             cx,
                         );
 
-                    // relative rows are based on newest selection, even outside the visible area
-                    let current_selection_head = self.editor.update(cx, |editor, cx| {
-                        (editor.selections.count() != 0).then(|| {
-                            let newest = editor
-                                .selections
-                                .newest::<Point>(&editor.display_snapshot(cx));
-
-                            SelectionLayout::new(
-                                newest,
-                                editor.selections.line_mode(),
-                                editor.cursor_offset_on_selection,
-                                editor.cursor_shape,
-                                &snapshot,
-                                true,
-                                true,
-                                None,
-                            )
-                            .head
-                            .row()
-                        })
-                    });
+                    let current_selection_head = self.current_selection_head(&snapshot, cx);
 
                     let run_indicator_rows = self.editor.update(cx, |editor, cx| {
                         editor.active_run_indicators(start_row..end_row, window, cx)
@@ -11318,77 +11537,20 @@ impl Element for EditorElement {
                         )
                     });
 
-                    let invisible_symbol_font_size = font_size / 2.;
-                    let whitespace_map = &self
-                        .editor
-                        .read(cx)
-                        .buffer
-                        .read(cx)
-                        .language_settings(cx)
-                        .whitespace_map;
-
-                    let tab_char = whitespace_map.tab.clone();
-                    let tab_len = tab_char.len();
-                    let tab_invisible = window.text_system().shape_line(
-                        tab_char,
-                        invisible_symbol_font_size,
-                        &[TextRun {
-                            len: tab_len,
-                            font: self.style.text.font(),
-                            color: cx.theme().colors().editor_invisible,
-                            ..Default::default()
-                        }],
-                        None,
-                    );
-
-                    let space_char = whitespace_map.space.clone();
-                    let space_len = space_char.len();
-                    let space_invisible = window.text_system().shape_line(
-                        space_char,
-                        invisible_symbol_font_size,
-                        &[TextRun {
-                            len: space_len,
-                            font: self.style.text.font(),
-                            color: cx.theme().colors().editor_invisible,
-                            ..Default::default()
-                        }],
-                        None,
-                    );
+                    let (tab_invisible, space_invisible) =
+                        self.shape_invisible_symbols(font_size, window, cx);
 
                     let mode = snapshot.mode.clone();
 
-                    let sticky_scroll_header_height = sticky_headers
-                        .as_ref()
-                        .and_then(|headers| headers.lines.last())
-                        .map_or(Pixels::ZERO, |last| last.offset + line_height);
-
-                    let has_sticky_buffer_header =
-                        sticky_buffer_header.is_some() || sticky_header_excerpt_id.is_some();
-                    let sticky_header_height = if has_sticky_buffer_header {
-                        let full_height = FILE_HEADER_HEIGHT as f32 * line_height;
-                        let display_row = blocks
-                            .iter()
-                            .filter(|block| block.is_buffer_header)
-                            .find_map(|block| {
-                                block.row.filter(|row| row.0 > scroll_position.y as u32)
-                            });
-                        let offset = match display_row {
-                            Some(display_row) => {
-                                let max_row = display_row.0.saturating_sub(FILE_HEADER_HEIGHT);
-                                let offset = (scroll_position.y - max_row as f64).max(0.0);
-                                let slide_up =
-                                    Pixels::from(offset * ScrollPixelOffset::from(line_height));
-
-                                (full_height - slide_up).max(Pixels::ZERO)
-                            }
-                            None => full_height,
-                        };
-                        let header_bottom_padding =
-                            BUFFER_HEADER_PADDING.to_pixels(window.rem_size());
-                        sticky_scroll_header_height + offset - header_bottom_padding
-                    } else {
-                        sticky_scroll_header_height
-                    };
+                    let sticky_header_height = Self::sticky_header_height(
+                        &blocks,
+                        sticky_headers.as_ref(),
+                        sticky_header_excerpt_id,
+                        sticky_buffer_header.as_ref(),
+                        line_height,
+                        scroll_position,
+                        window.rem_size(),
+                    );
 
                     let (diff_hunk_controls, diff_hunk_control_bounds) =
                         if is_read_only && !self.editor.read(cx).delegate_stage_and_restore {

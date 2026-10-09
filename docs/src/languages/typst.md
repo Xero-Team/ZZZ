@@ -20,9 +20,9 @@ be easier to get started with. For more information see
 
 ## Preview {#preview}
 
-ZZZ compiles saved Typst documents with its built-in Typst compiler and shows
-all pages in a read-only preview. The preview works independently of Tinymist
-and supports local and remote projects.
+ZZZ compiles Typst documents with its built-in Typst compiler and shows all
+pages in a read-only preview. The preview works independently of Tinymist and
+supports local and remote projects.
 
 Open the command palette and run {#action typst::OpenPreview} or
 {#action typst::OpenPreviewToTheSide}. You can also use the preview button in
@@ -32,9 +32,10 @@ context menus.
 Run {#action typst::OpenFollowingPreview} to keep one preview attached to the
 most recently focused Typst editor.
 
-The preview renders the last saved version of the document. Save the main file
-to refresh it. Relative imports and assets are resolved from the worktree that
-contains the main file.
+Save the main file once before opening its preview. Afterwards, edits to open
+Typst files in the same project refresh the preview after a short delay without
+writing to disk. Other imports and assets are resolved from their saved
+contents in the worktree that contains the main file.
 
 The preview surface, default page and text colors, and status messages follow
 the active ZZZ theme. Colors explicitly set by the Typst document override

@@ -3702,62 +3702,7 @@ impl OutlinePanel {
                     depth: usize,
                 }
 
-                let search_precomputed =
-                    if let ItemsDisplayMode::Search(search_state) = &outline_panel.mode {
-                        let multi_buffer_snapshot =
-                            active_editor.read(cx).buffer().read(cx).snapshot(cx);
-                        let mut folded_buffers = HashSet::default();
-                        let mut not_folded_buffers = HashSet::default();
-                        let mut matches_by_buffer = HashMap::default();
-
-                        for (match_range, search_data) in &search_state.matches {
-                            let Some((start_anchor, _)) =
-                                multi_buffer_snapshot.anchor_to_buffer_anchor(match_range.start)
-                            else {
-                                continue;
-                            };
-                            let start_buffer_id = start_anchor.buffer_id;
-                            let end_buffer_id = multi_buffer_snapshot
-                                .anchor_to_buffer_anchor(match_range.end)
-                                .map(|(anchor, _)| anchor.buffer_id);
-
-                            let mut any_folded = false;
-                            #[allow(
-                                clippy::set_contains_or_insert,
-                                reason = "the `HashSet` entry API is unstable, so the `contains`/`insert` pair is required"
-                            )]
-                            for buffer_id in
-                                [Some(start_buffer_id), end_buffer_id].into_iter().flatten()
-                            {
-                                if folded_buffers.contains(&buffer_id) {
-                                    any_folded = true;
-                                } else if !not_folded_buffers.contains(&buffer_id) {
-                                    if active_editor.read(cx).is_buffer_folded(buffer_id, cx) {
-                                        folded_buffers.insert(buffer_id);
-                                        any_folded = true;
-                                    } else {
-                                        not_folded_buffers.insert(buffer_id);
-                                    }
-                                }
-                            }
-                            if any_folded {
-                                continue;
-                            }
-
-                            matches_by_buffer
-                                .entry(start_buffer_id)
-                                .or_insert_with(Vec::new)
-                                .push((match_range.clone(), Arc::clone(search_data)));
-                        }
-
-                        Some(SearchPrecomputed {
-                            multi_buffer_snapshot,
-                            matches_by_buffer,
-                            folded_buffers,
-                        })
-                    } else {
-                        None
-                    };
+                let search_precomputed = outline_panel.precompute_search(&active_editor, cx);
 
                 let mut parent_dirs = Vec::<ParentStats>::new();
                 for entry in outline_panel.fs_entries.clone() {
@@ -4118,6 +4063,65 @@ impl OutlinePanel {
                     .max_width_estimate_and_index
                     .map(|(_, index)| index),
             )
+        })
+    }
+
+    fn precompute_search(
+        &self,
+        active_editor: &Entity<Editor>,
+        cx: &mut Context<Self>,
+    ) -> Option<SearchPrecomputed> {
+        let ItemsDisplayMode::Search(search_state) = &self.mode else {
+            return None;
+        };
+
+        let multi_buffer_snapshot = active_editor.read(cx).buffer().read(cx).snapshot(cx);
+        let mut folded_buffers = HashSet::default();
+        let mut not_folded_buffers = HashSet::default();
+        let mut matches_by_buffer = HashMap::default();
+
+        for (match_range, search_data) in &search_state.matches {
+            let Some((start_anchor, _)) =
+                multi_buffer_snapshot.anchor_to_buffer_anchor(match_range.start)
+            else {
+                continue;
+            };
+            let start_buffer_id = start_anchor.buffer_id;
+            let end_buffer_id = multi_buffer_snapshot
+                .anchor_to_buffer_anchor(match_range.end)
+                .map(|(anchor, _)| anchor.buffer_id);
+
+            let mut any_folded = false;
+            #[allow(
+                clippy::set_contains_or_insert,
+                reason = "the `HashSet` entry API is unstable, so the `contains`/`insert` pair is required"
+            )]
+            for buffer_id in [Some(start_buffer_id), end_buffer_id].into_iter().flatten() {
+                if folded_buffers.contains(&buffer_id) {
+                    any_folded = true;
+                } else if !not_folded_buffers.contains(&buffer_id) {
+                    if active_editor.read(cx).is_buffer_folded(buffer_id, cx) {
+                        folded_buffers.insert(buffer_id);
+                        any_folded = true;
+                    } else {
+                        not_folded_buffers.insert(buffer_id);
+                    }
+                }
+            }
+            if any_folded {
+                continue;
+            }
+
+            matches_by_buffer
+                .entry(start_buffer_id)
+                .or_insert_with(Vec::new)
+                .push((match_range.clone(), Arc::clone(search_data)));
+        }
+
+        Some(SearchPrecomputed {
+            multi_buffer_snapshot,
+            matches_by_buffer,
+            folded_buffers,
         })
     }
 

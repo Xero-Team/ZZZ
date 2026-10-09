@@ -285,6 +285,14 @@ impl Deref for WrappedAction {
 }
 
 pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
+    register_options_and_prompts(editor, cx);
+    register_write_commands(editor, cx);
+    register_workspace_commands(editor, cx);
+    register_range_and_count_commands(editor, cx);
+    register_delegated_commands(editor, cx);
+}
+
+fn register_options_and_prompts(editor: &mut Editor, cx: &mut Context<Vim>) {
     Vim::action(editor, cx, |vim, action: &VimSet, _, cx| {
         for option in &action.options {
             vim.update_editor(cx, |_, editor, cx| match option {
@@ -347,7 +355,9 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
             cx,
         ));
     });
+}
 
+fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
     Vim::action(editor, cx, |vim, action: &VimSave, window, cx| {
         if let Some(range) = &action.range {
             vim.update_editor(cx, |vim, editor, cx| {
@@ -623,7 +633,9 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
             }
         });
     });
+}
 
+fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
     Vim::action(editor, cx, |vim, action: &VimSplit, window, cx| {
         let Some(workspace) = vim.workspace(window, cx) else {
             return;
@@ -655,74 +667,7 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
         })
     });
 
-    Vim::action(editor, cx, |vim, action: &DeleteMarks, window, cx| {
-        fn err(s: String, window: &mut Window, cx: &mut Context<Editor>) {
-            let prompt_message = tr(cx, "vim.command.invalid_argument", "Invalid argument: {}")
-                .replacen("{}", &s, 1);
-            let cancel = tr(cx, "prompt.common.cancel", "Cancel");
-            drop(window.prompt(
-                gpui::PromptLevel::Critical,
-                &prompt_message,
-                None,
-                &[cancel.as_str()],
-                cx,
-            ));
-        }
-        vim.update_editor(cx, |vim, editor, cx| match action {
-            DeleteMarks::Marks(s) => {
-                if s.starts_with('-') || s.ends_with('-') || s.contains(['\'', '`']) {
-                    err(s.clone(), window, cx);
-                    return;
-                }
-
-                let to_delete = if s.len() < 3 {
-                    Some(s.clone())
-                } else {
-                    s.chars()
-                        .tuple_windows::<(_, _, _)>()
-                        .map(|(a, b, c)| {
-                            if b == '-' {
-                                if match a {
-                                    'a'..='z' => a <= c && c <= 'z',
-                                    'A'..='Z' => a <= c && c <= 'Z',
-                                    '0'..='9' => a <= c && c <= '9',
-                                    _ => false,
-                                } {
-                                    Some((a..=c).collect_vec())
-                                } else {
-                                    None
-                                }
-                            } else if a == '-' {
-                                if c == '-' { None } else { Some(vec![c]) }
-                            } else if c == '-' {
-                                if a == '-' { None } else { Some(vec![a]) }
-                            } else {
-                                Some(vec![a, b, c])
-                            }
-                        })
-                        .fold_options(HashSet::<char>::default(), |mut set, chars| {
-                            set.extend(chars.iter().copied());
-                            set
-                        })
-                        .map(|set| set.iter().collect::<String>())
-                };
-
-                let Some(to_delete) = to_delete else {
-                    err(s.clone(), window, cx);
-                    return;
-                };
-
-                for c in to_delete.chars().filter(|c| !c.is_whitespace()) {
-                    vim.delete_mark(c.to_string(), editor, window, cx);
-                }
-            }
-            DeleteMarks::AllLocal => {
-                for s in 'a'..='z' {
-                    vim.delete_mark(s.to_string(), editor, window, cx);
-                }
-            }
-        });
-    });
+    register_delete_marks(editor, cx);
 
     Vim::action(editor, cx, |vim, action: &VimEdit, window, cx| {
         vim.update_editor(cx, |vim, editor, cx| {
@@ -850,7 +795,44 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
             .detach();
         });
     });
+}
 
+fn register_delete_marks(editor: &mut Editor, cx: &mut Context<Vim>) {
+    Vim::action(editor, cx, |vim, action: &DeleteMarks, window, cx| {
+        vim.update_editor(cx, |vim, editor, cx| match action {
+            DeleteMarks::Marks(mark_spec) => {
+                let Some(marks) = marks_to_delete(mark_spec) else {
+                    show_invalid_mark_spec(mark_spec, window, cx);
+                    return;
+                };
+
+                for mark in marks.chars().filter(|mark| !mark.is_whitespace()) {
+                    vim.delete_mark(mark.to_string(), editor, window, cx);
+                }
+            }
+            DeleteMarks::AllLocal => {
+                for mark in 'a'..='z' {
+                    vim.delete_mark(mark.to_string(), editor, window, cx);
+                }
+            }
+        });
+    });
+}
+
+fn show_invalid_mark_spec(mark_spec: &str, window: &mut Window, cx: &mut Context<Editor>) {
+    let prompt_message =
+        tr(cx, "vim.command.invalid_argument", "Invalid argument: {}").replacen("{}", mark_spec, 1);
+    let cancel = tr(cx, "prompt.common.cancel", "Cancel");
+    drop(window.prompt(
+        gpui::PromptLevel::Critical,
+        &prompt_message,
+        None,
+        &[cancel.as_str()],
+        cx,
+    ));
+}
+
+fn register_range_and_count_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
     Vim::action(editor, cx, |vim, action: &VimNorm, window, cx| {
         let keystrokes = action
             .command
@@ -1051,14 +1033,52 @@ pub fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
             });
         });
     });
+}
 
+fn register_delegated_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
     Vim::action(editor, cx, |vim, action: &OnMatchingLines, window, cx| {
         action.run(vim, window, cx)
     });
 
     Vim::action(editor, cx, |vim, action: &ShellExec, window, cx| {
         action.run(vim, window, cx)
-    })
+    });
+}
+
+fn marks_to_delete(mark_spec: &str) -> Option<String> {
+    if mark_spec.starts_with('-') || mark_spec.ends_with('-') || mark_spec.contains(['\'', '`']) {
+        return None;
+    }
+
+    if mark_spec.len() < 3 {
+        return Some(mark_spec.to_owned());
+    }
+
+    mark_spec
+        .chars()
+        .tuple_windows::<(_, _, _)>()
+        .map(|(start, separator, end)| {
+            if separator == '-' {
+                let is_valid_range = match start {
+                    'a'..='z' => start <= end && end <= 'z',
+                    'A'..='Z' => start <= end && end <= 'Z',
+                    '0'..='9' => start <= end && end <= '9',
+                    _ => false,
+                };
+                is_valid_range.then(|| (start..=end).collect_vec())
+            } else if start == '-' {
+                (end != '-').then_some(vec![end])
+            } else if end == '-' {
+                (start != '-').then_some(vec![start])
+            } else {
+                Some(vec![start, separator, end])
+            }
+        })
+        .fold_options(HashSet::<char>::default(), |mut marks, characters| {
+            marks.extend(characters.iter().copied());
+            marks
+        })
+        .map(|marks| marks.iter().collect())
 }
 
 #[derive(Default)]
@@ -2748,6 +2768,33 @@ mod test {
     use settings::Settings;
     use util::path;
     use workspace::{OpenOptions, Workspace};
+
+    #[test]
+    fn marks_to_delete_expands_valid_ranges_and_rejects_invalid_syntax() {
+        let alphabetic_marks = super::marks_to_delete("a-cx").unwrap();
+        assert_eq!(alphabetic_marks.len(), 4);
+        assert!(
+            ['a', 'b', 'c', 'x']
+                .iter()
+                .all(|mark| alphabetic_marks.contains(*mark))
+        );
+
+        let numeric_marks = super::marks_to_delete("1-3").unwrap();
+        assert_eq!(numeric_marks.len(), 3);
+        assert!(
+            ['1', '2', '3']
+                .iter()
+                .all(|mark| numeric_marks.contains(*mark))
+        );
+
+        assert_eq!(super::marks_to_delete("a-A"), None);
+        assert_eq!(super::marks_to_delete("-a"), None);
+        assert_eq!(super::marks_to_delete("a-"), None);
+        assert_eq!(super::marks_to_delete("a'b"), None);
+
+        assert_eq!(super::marks_to_delete(" "), Some(" ".to_owned()));
+        assert_eq!(super::marks_to_delete("a--b"), None);
+    }
 
     #[gpui::test]
     async fn test_command_basics(cx: &mut TestAppContext) {

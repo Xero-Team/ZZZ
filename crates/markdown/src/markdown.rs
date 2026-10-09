@@ -1702,6 +1702,70 @@ pub struct MarkdownElement {
     on_render: Option<Box<dyn Fn(RenderedText)>>,
 }
 
+struct MarkdownRenderInputs {
+    parsed_markdown: ParsedMarkdown,
+    images: HashMap<usize, Arc<Image>>,
+    active_root_block: Option<usize>,
+    render_mermaid_diagrams: bool,
+    mermaid_state: MermaidState,
+    math_state: MathState,
+    line_breaking: MarkdownLineBreaking,
+}
+
+#[derive(Default)]
+struct MarkdownEventState {
+    current_image_block_range: Option<Range<usize>>,
+    handled_html_block: bool,
+    rendered_mermaid_block: bool,
+    rendered_math_block: bool,
+    rendered_metadata_block: bool,
+    code_block_ids: HashSet<usize>,
+}
+
+impl MarkdownEventState {
+    fn should_skip(&mut self, range: &Range<usize>, event: &MarkdownEvent) -> bool {
+        if let Some(current_image_block_range) = &self.current_image_block_range
+            && current_image_block_range.end > range.end
+        {
+            return true;
+        }
+
+        if self.handled_html_block {
+            if matches!(event, MarkdownEvent::End(MarkdownTagEnd::HtmlBlock)) {
+                self.handled_html_block = false;
+            } else {
+                return true;
+            }
+        }
+
+        if self.rendered_mermaid_block {
+            if matches!(event, MarkdownEvent::End(MarkdownTagEnd::CodeBlock)) {
+                self.rendered_mermaid_block = false;
+            }
+            return true;
+        }
+
+        if self.rendered_math_block {
+            if matches!(
+                event,
+                MarkdownEvent::End(MarkdownTagEnd::CodeBlock | MarkdownTagEnd::Paragraph)
+            ) {
+                self.rendered_math_block = false;
+            }
+            return true;
+        }
+
+        if self.rendered_metadata_block {
+            if matches!(event, MarkdownEvent::End(MarkdownTagEnd::MetadataBlock(_))) {
+                self.rendered_metadata_block = false;
+            }
+            return true;
+        }
+
+        false
+    }
+}
+
 impl MarkdownElement {
     pub fn new(markdown: Entity<Markdown>, style: MarkdownStyle) -> Self {
         Self {
@@ -2584,6 +2648,256 @@ impl Styled for MarkdownElement {
     }
 }
 
+impl MarkdownElement {
+    fn ensure_math_rendered(&self, math_font_size: Pixels, math_color: Hsla, cx: &mut App) {
+        if self.markdown.read(cx).options.render_math {
+            self.markdown.update(cx, |markdown, cx| {
+                markdown.ensure_math_rendered(math_font_size, math_color, cx);
+            });
+        }
+    }
+
+    fn snapshot_render_inputs(&self, cx: &App) -> MarkdownRenderInputs {
+        let markdown = self.markdown.read(cx);
+        MarkdownRenderInputs {
+            parsed_markdown: markdown.parsed_markdown.clone(),
+            images: markdown.images_by_source_offset.clone(),
+            active_root_block: markdown.active_root_block,
+            render_mermaid_diagrams: markdown.options.render_mermaid_diagrams,
+            mermaid_state: markdown.mermaid_state.clone(),
+            math_state: markdown.math_state.clone(),
+            line_breaking: markdown.line_breaking,
+        }
+    }
+
+    fn push_block_math(
+        &self,
+        builder: &mut MarkdownElementBuilder,
+        math: &ParsedMarkdownMath,
+        math_state: &MathState,
+        math_font_size: Pixels,
+        math_color: Hsla,
+        cx: &mut App,
+    ) {
+        let element = render_math(math, math_state, math_font_size, math_color, cx);
+        builder.push_sourced_element(
+            math.source_range.clone(),
+            div()
+                .w_full()
+                .flex()
+                .justify_center()
+                .my(self.style.paragraph_spacing)
+                .child(element)
+                .into_any_element(),
+        );
+    }
+
+    fn push_markdown_image_block(
+        &self,
+        builder: &mut MarkdownElementBuilder,
+        state: &mut MarkdownEventState,
+        images: &HashMap<usize, Arc<Image>>,
+        range: &Range<usize>,
+        dest_url: &SharedString,
+        events: &[(Range<usize>, MarkdownEvent)],
+        source: &str,
+        cx: &mut App,
+    ) {
+        let alt_text = collect_image_alt_text(events, source);
+        let failed_to_load_label: SharedString =
+            tr(cx, "markdown.image.failed_to_load", "Failed to Load: {}").into();
+        let failed_to_load_tooltip: SharedString = tr(
+            cx,
+            "markdown.image.failed_to_load_tooltip",
+            "Image failed to load. Open `zzz: log` for more details.",
+        )
+        .into();
+
+        let image_source = images
+            .get(&range.start)
+            .cloned()
+            .map(ImageSource::from)
+            .or_else(|| {
+                self.image_resolver
+                    .as_ref()
+                    .and_then(|resolve| resolve(dest_url.as_ref()))
+            });
+        let Some(image_source) = image_source else {
+            return;
+        };
+
+        state.current_image_block_range = Some(range.clone());
+        self.push_markdown_image(
+            builder,
+            range,
+            dest_url.clone(),
+            image_source,
+            alt_text,
+            None,
+            None,
+            failed_to_load_label,
+            failed_to_load_tooltip,
+        );
+    }
+
+    fn push_markdown_code_block(
+        &self,
+        builder: &mut MarkdownElementBuilder,
+        state: &mut MarkdownEventState,
+        inputs: &MarkdownRenderInputs,
+        kind: &CodeBlockKind,
+        range: &Range<usize>,
+        markdown_end: usize,
+        math_font_size: Pixels,
+        math_color: Hsla,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if let Some(math) = fenced_math_at(&inputs.parsed_markdown.math_expressions, range.start) {
+            self.push_block_math(
+                builder,
+                math,
+                &inputs.math_state,
+                math_font_size,
+                math_color,
+                cx,
+            );
+            state.rendered_math_block = true;
+            return;
+        }
+
+        let language = match kind {
+            CodeBlockKind::Fenced => None,
+            CodeBlockKind::FencedLang(language) => inputs
+                .parsed_markdown
+                .languages_by_name
+                .get(language)
+                .cloned(),
+            CodeBlockKind::FencedSrc(path_range) => inputs
+                .parsed_markdown
+                .languages_by_path
+                .get(&path_range.path)
+                .cloned(),
+            _ => None,
+        };
+
+        if inputs.render_mermaid_diagrams
+            && let Some(mermaid_diagram) = inputs.parsed_markdown.mermaid_diagrams.get(&range.start)
+        {
+            let (showing_code, zoom) = self.markdown.update(cx, |markdown, cx| {
+                (
+                    markdown.is_mermaid_showing_code(range.start),
+                    markdown.effective_mermaid_zoom_level(range.start, cx),
+                )
+            });
+            let copy_button_visibility = match &self.code_block_renderer {
+                CodeBlockRenderer::Default {
+                    copy_button_visibility,
+                    ..
+                } => *copy_button_visibility,
+                _ => CopyButtonVisibility::VisibleOnHover,
+            };
+            builder.push_sourced_element(
+                mermaid_diagram.content_range.clone(),
+                render_mermaid_diagram(
+                    mermaid_diagram,
+                    &inputs.mermaid_state,
+                    &self.style,
+                    language,
+                    self.markdown.clone(),
+                    range.start,
+                    showing_code,
+                    zoom,
+                    copy_button_visibility,
+                    self.on_mermaid_zoom.clone(),
+                    window,
+                    cx,
+                ),
+            );
+            state.rendered_mermaid_block = true;
+            return;
+        }
+
+        let is_indented = matches!(kind, CodeBlockKind::Indented);
+        let scroll_handle = if self.style.code_block_overflow_x_scroll {
+            self.markdown.update(cx, |markdown, _| {
+                markdown.code_block_scroll_handle(range.start)
+            })
+        } else {
+            None
+        };
+        if scroll_handle.is_some() {
+            state.code_block_ids.insert(range.start);
+        }
+
+        match (&self.code_block_renderer, is_indented) {
+            (CodeBlockRenderer::Default { .. }, _) | (_, true) => {
+                let parent_container = div().group("code_block").relative().w_full();
+                let mut parent_container: AnyDiv =
+                    if let Some(scroll_handle) = scroll_handle.as_ref() {
+                        let scrollbars = Scrollbars::new(ScrollAxes::Horizontal)
+                            .id(("markdown-code-block-scrollbar", range.start))
+                            .tracked_scroll_handle(scroll_handle)
+                            .with_track_along(
+                                ScrollAxes::Horizontal,
+                                cx.theme().colors().editor_background,
+                            )
+                            .notify_content();
+
+                        parent_container
+                            .rounded_lg()
+                            .custom_scrollbars(scrollbars, window, cx)
+                            .into()
+                    } else {
+                        parent_container.into()
+                    };
+
+                if let CodeBlockRenderer::Default { border: true, .. } = &self.code_block_renderer {
+                    parent_container = parent_container
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().colors().border_variant);
+                }
+
+                parent_container.style().refine(&self.style.code_block);
+                builder.push_div(parent_container, range, markdown_end);
+
+                let code_block =
+                    div()
+                        .id(("code-block", range.start))
+                        .rounded_lg()
+                        .map(|mut code_block| {
+                            if let Some(scroll_handle) = scroll_handle.as_ref() {
+                                code_block.style().restrict_scroll_to_axis = Some(true);
+                                code_block
+                                    .flex()
+                                    .overflow_x_scroll()
+                                    .track_scroll(scroll_handle)
+                            } else {
+                                code_block.w_full()
+                            }
+                        });
+
+                builder.push_text_style(self.style.code_block.text.clone());
+                builder.push_code_block(language);
+                builder.push_div(code_block, range, markdown_end);
+            }
+            (CodeBlockRenderer::Custom { .. }, _) => {}
+        }
+    }
+
+    fn clean_up_code_block_scroll_handles(&self, code_block_ids: HashSet<usize>, cx: &mut App) {
+        if self.style.code_block_overflow_x_scroll {
+            self.markdown.update(cx, move |markdown, _| {
+                markdown.retain_code_block_scroll_handles(&code_block_ids);
+            });
+        } else {
+            self.markdown
+                .update(cx, |markdown, _| markdown.clear_code_block_scroll_handles());
+        }
+    }
+}
+
 impl Element for MarkdownElement {
     type RequestLayoutState = RenderedMarkdown;
     type PrepaintState = Hitbox;
@@ -2609,86 +2923,25 @@ impl Element for MarkdownElement {
             .font_size
             .to_pixels(window.rem_size());
         let math_color = self.style.base_text_style.color;
-        if self.markdown.read(cx).options.render_math {
-            self.markdown.update(cx, |markdown, cx| {
-                markdown.ensure_math_rendered(math_font_size, math_color, cx);
-            });
-        }
+        self.ensure_math_rendered(math_font_size, math_color, cx);
+
+        let render_inputs = self.snapshot_render_inputs(cx);
 
         let mut builder = MarkdownElementBuilder::new(
             &self.style.container_style,
             self.style.base_text_style.clone(),
             self.style.syntax.clone(),
-            self.line_breaking
-                .unwrap_or_else(|| self.markdown.read(cx).line_breaking),
+            self.line_breaking.unwrap_or(render_inputs.line_breaking),
         );
-        let (
-            parsed_markdown,
-            images,
-            active_root_block,
-            render_mermaid_diagrams,
-            mermaid_state,
-            math_state,
-        ) = {
-            let markdown = self.markdown.read(cx);
-            (
-                markdown.parsed_markdown.clone(),
-                markdown.images_by_source_offset.clone(),
-                markdown.active_root_block,
-                markdown.options.render_mermaid_diagrams,
-                markdown.mermaid_state.clone(),
-                markdown.math_state.clone(),
-            )
-        };
+        let parsed_markdown = &render_inputs.parsed_markdown;
         let markdown_end = if let Some(last) = parsed_markdown.events.last() {
             last.0.end
         } else {
             0
         };
-        let mut code_block_ids = HashSet::default();
-
-        let mut current_img_block_range: Option<Range<usize>> = None;
-        let mut handled_html_block = false;
-        let mut rendered_mermaid_block = false;
-        let mut rendered_math_block = false;
-        let mut rendered_metadata_block = false;
+        let mut event_state = MarkdownEventState::default();
         for (index, (range, event)) in parsed_markdown.events.iter().enumerate() {
-            // Skip alt text for images that rendered
-            if let Some(current_img_block_range) = &current_img_block_range
-                && current_img_block_range.end > range.end
-            {
-                continue;
-            }
-
-            if handled_html_block {
-                if matches!(event, MarkdownEvent::End(MarkdownTagEnd::HtmlBlock)) {
-                    handled_html_block = false;
-                } else {
-                    continue;
-                }
-            }
-
-            if rendered_mermaid_block {
-                if matches!(event, MarkdownEvent::End(MarkdownTagEnd::CodeBlock)) {
-                    rendered_mermaid_block = false;
-                }
-                continue;
-            }
-
-            if rendered_math_block {
-                if matches!(
-                    event,
-                    MarkdownEvent::End(MarkdownTagEnd::CodeBlock | MarkdownTagEnd::Paragraph)
-                ) {
-                    rendered_math_block = false;
-                }
-                continue;
-            }
-
-            if rendered_metadata_block {
-                if matches!(event, MarkdownEvent::End(MarkdownTagEnd::MetadataBlock(_))) {
-                    rendered_metadata_block = false;
-                }
+            if event_state.should_skip(range, event) {
                 continue;
             }
 
@@ -2701,478 +2954,294 @@ impl Element for MarkdownElement {
                 MarkdownEvent::RootEnd(root_block_index) => {
                     if self.show_root_block_markers {
                         builder.pop_root_block(
-                            active_root_block == Some(*root_block_index),
+                            render_inputs.active_root_block == Some(*root_block_index),
                             cx.theme().colors().border,
                             cx.theme().colors().border_variant,
                         );
                     }
                 }
-                MarkdownEvent::Start(tag) => {
-                    match tag {
-                        MarkdownTag::Image { dest_url, .. } => {
-                            let alt_text = collect_image_alt_text(
-                                &parsed_markdown.events[index..],
-                                parsed_markdown.source.as_ref(),
-                            );
-                            let failed_to_load_label: SharedString =
-                                tr(cx, "markdown.image.failed_to_load", "Failed to Load: {}")
-                                    .into();
-                            let failed_to_load_tooltip: SharedString = tr(
+                MarkdownEvent::Start(tag) => match tag {
+                    MarkdownTag::Image { dest_url, .. } => {
+                        self.push_markdown_image_block(
+                            &mut builder,
+                            &mut event_state,
+                            &render_inputs.images,
+                            range,
+                            dest_url,
+                            &parsed_markdown.events[index..],
+                            parsed_markdown.source.as_ref(),
+                            cx,
+                        );
+                    }
+                    MarkdownTag::Paragraph => {
+                        if let Some(math) = block_math_for_paragraph(
+                            parsed_markdown.source.as_ref(),
+                            &parsed_markdown.math_expressions,
+                            range,
+                        ) {
+                            self.push_block_math(
+                                &mut builder,
+                                math,
+                                &render_inputs.math_state,
+                                math_font_size,
+                                math_color,
                                 cx,
-                                "markdown.image.failed_to_load_tooltip",
-                                "Image failed to load. Open `zzz: log` for more details.",
+                            );
+                            event_state.rendered_math_block = true;
+                            continue;
+                        }
+                        let text_align_override = builder
+                            .table
+                            .current_cell_alignment()
+                            .and_then(alignment_to_text_align);
+                        self.push_markdown_paragraph(
+                            &mut builder,
+                            range,
+                            markdown_end,
+                            text_align_override,
+                        );
+                    }
+                    MarkdownTag::Heading { level, .. } => {
+                        let text_align_override = builder
+                            .table
+                            .current_cell_alignment()
+                            .and_then(alignment_to_text_align);
+                        self.push_markdown_heading(
+                            &mut builder,
+                            *level,
+                            range,
+                            markdown_end,
+                            text_align_override,
+                        );
+                    }
+                    MarkdownTag::BlockQuote(kind) => {
+                        self.push_markdown_block_quote(&mut builder, *kind, range, markdown_end);
+                    }
+                    MarkdownTag::CodeBlock { kind, .. } => {
+                        self.push_markdown_code_block(
+                            &mut builder,
+                            &mut event_state,
+                            &render_inputs,
+                            kind,
+                            range,
+                            markdown_end,
+                            math_font_size,
+                            math_color,
+                            window,
+                            cx,
+                        );
+                    }
+                    MarkdownTag::HtmlBlock => {
+                        builder.push_div(div(), range, markdown_end);
+                        if let Some(block) = parsed_markdown.html_blocks.get(&range.start) {
+                            self.render_html_block(block, &mut builder, markdown_end, cx);
+                            event_state.handled_html_block = true;
+                        }
+                    }
+                    MarkdownTag::List(bullet_index) => {
+                        builder.push_list(*bullet_index);
+                        builder.push_div(div().pl_2p5(), range, markdown_end);
+                    }
+                    MarkdownTag::Item => {
+                        let bullet = if let Some((task_range, checked)) =
+                            task_list_marker_for_item(&parsed_markdown.events, index)
+                        {
+                            let source = &parsed_markdown.source()[range.clone()];
+                            let toggle_state = if checked {
+                                ToggleState::Selected
+                            } else {
+                                ToggleState::Unselected
+                            };
+                            let checkbox = Checkbox::new(
+                                ElementId::Name(source.to_owned().into()),
+                                toggle_state,
                             )
-                            .into();
-                            if let Some(image) = images.get(&range.start) {
-                                current_img_block_range = Some(range.clone());
-                                self.push_markdown_image(
-                                    &mut builder,
-                                    range,
-                                    dest_url.clone(),
-                                    image.clone().into(),
-                                    alt_text.clone(),
-                                    None,
-                                    None,
-                                    failed_to_load_label,
-                                    failed_to_load_tooltip,
-                                );
-                            } else if let Some(source) = self
-                                .image_resolver
+                            .fill();
+
+                            if let Some(on_toggle) = self.on_checkbox_toggle.clone() {
+                                let task_source_range = task_range.clone();
+                                checkbox
+                                    .on_click(move |_state, window, cx| {
+                                        on_toggle(task_source_range.clone(), !checked, window, cx);
+                                    })
+                                    .into_any_element()
+                            } else {
+                                checkbox.visualization_only(true).into_any_element()
+                            }
+                        } else if let Some(bullet_index) = builder.next_bullet_index() {
+                            div().child(format!("{}.", bullet_index)).into_any_element()
+                        } else {
+                            div().child("•").into_any_element()
+                        };
+                        self.push_markdown_list_item(&mut builder, bullet, range, markdown_end);
+                    }
+                    MarkdownTag::Emphasis => builder.push_text_style(TextStyleRefinement {
+                        font_style: Some(FontStyle::Italic),
+                        ..Default::default()
+                    }),
+                    MarkdownTag::Strong => builder.push_text_style(TextStyleRefinement {
+                        font_weight: Some(FontWeight::BOLD),
+                        color: Some(cx.theme().colors().text),
+                        ..Default::default()
+                    }),
+                    MarkdownTag::Strikethrough => builder.push_text_style(TextStyleRefinement {
+                        strikethrough: Some(StrikethroughStyle {
+                            thickness: px(1.),
+                            color: None,
+                        }),
+                        ..Default::default()
+                    }),
+                    MarkdownTag::Link { dest_url, .. } => {
+                        if builder.code_block_stack.is_empty() {
+                            builder.link_depth += 1;
+                            builder.push_link(dest_url.clone(), range.clone());
+                            let style = self
+                                .style
+                                .link_callback
                                 .as_ref()
-                                .and_then(|resolve| resolve(dest_url.as_ref()))
-                            {
-                                current_img_block_range = Some(range.clone());
-                                self.push_markdown_image(
-                                    &mut builder,
-                                    range,
-                                    dest_url.clone(),
-                                    source,
-                                    alt_text,
-                                    None,
-                                    None,
-                                    failed_to_load_label,
-                                    failed_to_load_tooltip,
-                                );
-                            }
+                                .and_then(|callback| callback(dest_url, cx))
+                                .unwrap_or_else(|| self.style.link.clone());
+                            builder.push_text_style(style)
                         }
-                        MarkdownTag::Paragraph => {
-                            if let Some(math) = block_math_for_paragraph(
-                                parsed_markdown.source.as_ref(),
-                                &parsed_markdown.math_expressions,
-                                range,
-                            ) {
-                                let element =
-                                    render_math(math, &math_state, math_font_size, math_color, cx);
-                                builder.push_sourced_element(
-                                    math.source_range.clone(),
-                                    div()
-                                        .w_full()
-                                        .flex()
-                                        .justify_center()
-                                        .my(self.style.paragraph_spacing)
-                                        .child(element)
-                                        .into_any_element(),
-                                );
-                                rendered_math_block = true;
-                                continue;
-                            }
-                            let text_align_override = builder
-                                .table
-                                .current_cell_alignment()
-                                .and_then(alignment_to_text_align);
-                            self.push_markdown_paragraph(
-                                &mut builder,
-                                range,
-                                markdown_end,
-                                text_align_override,
-                            );
-                        }
-                        MarkdownTag::Heading { level, .. } => {
-                            let text_align_override = builder
-                                .table
-                                .current_cell_alignment()
-                                .and_then(alignment_to_text_align);
-                            self.push_markdown_heading(
-                                &mut builder,
-                                *level,
-                                range,
-                                markdown_end,
-                                text_align_override,
-                            );
-                        }
-                        MarkdownTag::BlockQuote(kind) => {
-                            self.push_markdown_block_quote(
-                                &mut builder,
-                                *kind,
+                    }
+                    MarkdownTag::FootnoteDefinition(label) => {
+                        if !builder.rendered_footnote_separator {
+                            builder.rendered_footnote_separator = true;
+                            builder.push_div(
+                                div()
+                                    .border_t_1()
+                                    .mt_2()
+                                    .border_color(self.style.rule_color),
                                 range,
                                 markdown_end,
                             );
+                            builder.pop_div();
                         }
-                        MarkdownTag::CodeBlock { kind, .. } => {
-                            if let Some(math) =
-                                fenced_math_at(&parsed_markdown.math_expressions, range.start)
-                            {
-                                let element =
-                                    render_math(math, &math_state, math_font_size, math_color, cx);
-                                builder.push_sourced_element(
-                                    math.source_range.clone(),
-                                    div()
-                                        .w_full()
-                                        .flex()
-                                        .justify_center()
-                                        .my(self.style.paragraph_spacing)
-                                        .child(element)
-                                        .into_any_element(),
-                                );
-                                rendered_math_block = true;
-                                continue;
-                            }
+                        builder.push_div(
+                            div()
+                                .pt_1()
+                                .mb_1()
+                                .line_height(rems(1.3))
+                                .text_size(rems(0.85))
+                                .h_flex()
+                                .items_start()
+                                .gap_2()
+                                .child(div().text_size(rems(0.85)).child(format!("{}.", label))),
+                            range,
+                            markdown_end,
+                        );
+                        builder.push_div(div().flex_1().w_0(), range, markdown_end);
+                    }
+                    MarkdownTag::MetadataBlock(_) => {
+                        if let Some(metadata_block) =
+                            parsed_markdown.metadata_blocks.get(&range.start)
+                        {
+                            self.push_metadata_block(
+                                &mut builder,
+                                &parsed_markdown.source,
+                                metadata_block,
+                                markdown_end,
+                                cx,
+                            );
+                            event_state.rendered_metadata_block = true;
+                        }
+                    }
+                    MarkdownTag::Table(alignments) => {
+                        builder.table.start(alignments.clone());
 
-                            let language = match kind {
-                                CodeBlockKind::Fenced => None,
-                                CodeBlockKind::FencedLang(language) => {
-                                    parsed_markdown.languages_by_name.get(language).cloned()
-                                }
-                                CodeBlockKind::FencedSrc(path_range) => parsed_markdown
-                                    .languages_by_path
-                                    .get(&path_range.path)
-                                    .cloned(),
-                                _ => None,
-                            };
-
-                            if render_mermaid_diagrams
-                                && let Some(mermaid_diagram) =
-                                    parsed_markdown.mermaid_diagrams.get(&range.start)
-                            {
-                                let (showing_code, zoom) =
-                                    self.markdown.update(cx, |markdown, cx| {
-                                        (
-                                            markdown.is_mermaid_showing_code(range.start),
-                                            markdown.effective_mermaid_zoom_level(range.start, cx),
-                                        )
-                                    });
-                                let copy_button_visibility = match &self.code_block_renderer {
-                                    CodeBlockRenderer::Default {
-                                        copy_button_visibility,
-                                        ..
-                                    } => *copy_button_visibility,
-                                    _ => CopyButtonVisibility::VisibleOnHover,
-                                };
-                                builder.push_sourced_element(
-                                    mermaid_diagram.content_range.clone(),
-                                    render_mermaid_diagram(
-                                        mermaid_diagram,
-                                        &mermaid_state,
-                                        &self.style,
-                                        language.clone(),
-                                        self.markdown.clone(),
-                                        range.start,
-                                        showing_code,
-                                        zoom,
-                                        copy_button_visibility,
-                                        self.on_mermaid_zoom.clone(),
-                                        window,
-                                        cx,
-                                    ),
-                                );
-                                rendered_mermaid_block = true;
-                                continue;
-                            }
-
-                            let is_indented = matches!(kind, CodeBlockKind::Indented);
-                            let scroll_handle = if self.style.code_block_overflow_x_scroll {
-                                self.markdown.update(cx, |markdown, _| {
-                                    markdown.code_block_scroll_handle(range.start)
+                        let column_count = alignments.len();
+                        builder.push_div(
+                            div()
+                                .id(("table", range.start))
+                                .grid()
+                                .grid_cols(column_count as u16)
+                                .when(self.style.table_columns_min_size, |this| {
+                                    this.grid_cols_min_content(column_count as u16)
                                 })
-                            } else {
-                                None
-                            };
-                            if scroll_handle.is_some() {
-                                code_block_ids.insert(range.start);
-                            }
-
-                            match (&self.code_block_renderer, is_indented) {
-                                (CodeBlockRenderer::Default { .. }, _) | (_, true) => {
-                                    // This is a parent container that we can position the copy button inside.
-                                    let parent_container =
-                                        div().group("code_block").relative().w_full();
-
-                                    let mut parent_container: AnyDiv = if let Some(scroll_handle) =
-                                        scroll_handle.as_ref()
-                                    {
-                                        let scrollbars = Scrollbars::new(ScrollAxes::Horizontal)
-                                            .id(("markdown-code-block-scrollbar", range.start))
-                                            .tracked_scroll_handle(scroll_handle)
-                                            .with_track_along(
-                                                ScrollAxes::Horizontal,
-                                                cx.theme().colors().editor_background,
-                                            )
-                                            .notify_content();
-
-                                        parent_container
-                                            .rounded_lg()
-                                            .custom_scrollbars(scrollbars, window, cx)
-                                            .into()
-                                    } else {
-                                        parent_container.into()
-                                    };
-
-                                    if let CodeBlockRenderer::Default { border: true, .. } =
-                                        &self.code_block_renderer
-                                    {
-                                        parent_container = parent_container
-                                            .rounded_md()
-                                            .border_1()
-                                            .border_color(cx.theme().colors().border_variant);
-                                    }
-
-                                    parent_container.style().refine(&self.style.code_block);
-                                    builder.push_div(parent_container, range, markdown_end);
-
-                                    let code_block = div()
-                                        .id(("code-block", range.start))
-                                        .rounded_lg()
-                                        .map(|mut code_block| {
-                                            if let Some(scroll_handle) = scroll_handle.as_ref() {
-                                                code_block.style().restrict_scroll_to_axis =
-                                                    Some(true);
-                                                code_block
-                                                    .flex()
-                                                    .overflow_x_scroll()
-                                                    .track_scroll(scroll_handle)
-                                            } else {
-                                                code_block.w_full()
-                                            }
-                                        });
-
-                                    builder.push_text_style(self.style.code_block.text.clone());
-                                    builder.push_code_block(language);
-                                    builder.push_div(code_block, range, markdown_end);
-                                }
-                                (CodeBlockRenderer::Custom { .. }, _) => {}
-                            }
-                        }
-                        MarkdownTag::HtmlBlock => {
-                            builder.push_div(div(), range, markdown_end);
-                            if let Some(block) = parsed_markdown.html_blocks.get(&range.start) {
-                                self.render_html_block(block, &mut builder, markdown_end, cx);
-                                handled_html_block = true;
-                            }
-                        }
-                        MarkdownTag::List(bullet_index) => {
-                            builder.push_list(*bullet_index);
-                            builder.push_div(div().pl_2p5(), range, markdown_end);
-                        }
-                        MarkdownTag::Item => {
-                            let bullet = if let Some((task_range, checked)) =
-                                task_list_marker_for_item(&parsed_markdown.events, index)
-                            {
-                                let source = &parsed_markdown.source()[range.clone()];
-                                let toggle_state = if checked {
-                                    ToggleState::Selected
-                                } else {
-                                    ToggleState::Unselected
-                                };
-                                let checkbox = Checkbox::new(
-                                    ElementId::Name(source.to_owned().into()),
-                                    toggle_state,
-                                )
-                                .fill();
-
-                                if let Some(on_toggle) = self.on_checkbox_toggle.clone() {
-                                    let task_source_range = task_range.clone();
-                                    checkbox
-                                        .on_click(move |_state, window, cx| {
-                                            on_toggle(
-                                                task_source_range.clone(),
-                                                !checked,
-                                                window,
-                                                cx,
-                                            );
-                                        })
-                                        .into_any_element()
-                                } else {
-                                    checkbox.visualization_only(true).into_any_element()
-                                }
-                            } else if let Some(bullet_index) = builder.next_bullet_index() {
-                                div().child(format!("{}.", bullet_index)).into_any_element()
-                            } else {
-                                div().child("•").into_any_element()
-                            };
-                            self.push_markdown_list_item(&mut builder, bullet, range, markdown_end);
-                        }
-                        MarkdownTag::Emphasis => builder.push_text_style(TextStyleRefinement {
-                            font_style: Some(FontStyle::Italic),
+                                .when(!self.style.table_columns_min_size, |this| {
+                                    this.grid_cols(column_count as u16)
+                                })
+                                .w_full()
+                                .mb_2()
+                                .border(px(1.5))
+                                .border_color(cx.theme().colors().border)
+                                .rounded_sm()
+                                .overflow_x_scroll(),
+                            range,
+                            markdown_end,
+                        );
+                    }
+                    MarkdownTag::TableHead => {
+                        builder.table.start_head();
+                        builder.push_text_style(TextStyleRefinement {
+                            font_weight: Some(FontWeight::SEMIBOLD),
                             ..Default::default()
-                        }),
-                        MarkdownTag::Strong => builder.push_text_style(TextStyleRefinement {
-                            font_weight: Some(FontWeight::BOLD),
-                            color: Some(cx.theme().colors().text),
-                            ..Default::default()
-                        }),
-                        MarkdownTag::Strikethrough => {
-                            builder.push_text_style(TextStyleRefinement {
-                                strikethrough: Some(StrikethroughStyle {
-                                    thickness: px(1.),
-                                    color: None,
-                                }),
-                                ..Default::default()
+                        });
+                    }
+                    MarkdownTag::TableRow => {
+                        builder.table.start_row();
+                    }
+                    MarkdownTag::TableCell => {
+                        builder.table.start_cell();
+                        let is_header = builder.table.in_head;
+                        let row_index = builder.table.row_index;
+                        let col_index = builder.table.col_index;
+                        let alignment = builder.table.current_cell_alignment();
+                        let text_align = alignment
+                            .and_then(alignment_to_text_align)
+                            .unwrap_or(self.style.base_text_style.text_align);
+
+                        let mut cell_div = div()
+                            .debug_selector(|| {
+                                if is_header {
+                                    format!("markdown_table_header_cell_{col_index}")
+                                } else {
+                                    format!("markdown_table_cell_{row_index}_{col_index}")
+                                }
                             })
-                        }
-                        MarkdownTag::Link { dest_url, .. } => {
-                            if builder.code_block_stack.is_empty() {
-                                builder.link_depth += 1;
-                                builder.push_link(dest_url.clone(), range.clone());
-                                let style = self
-                                    .style
-                                    .link_callback
-                                    .as_ref()
-                                    .and_then(|callback| callback(dest_url, cx))
-                                    .unwrap_or_else(|| self.style.link.clone());
-                                builder.push_text_style(style)
-                            }
-                        }
-                        MarkdownTag::FootnoteDefinition(label) => {
-                            if !builder.rendered_footnote_separator {
-                                builder.rendered_footnote_separator = true;
-                                builder.push_div(
-                                    div()
-                                        .border_t_1()
-                                        .mt_2()
-                                        .border_color(self.style.rule_color),
-                                    range,
-                                    markdown_end,
-                                );
-                                builder.pop_div();
-                            }
-                            builder.push_div(
-                                div()
-                                    .pt_1()
-                                    .mb_1()
-                                    .line_height(rems(1.3))
-                                    .text_size(rems(0.85))
-                                    .h_flex()
-                                    .items_start()
-                                    .gap_2()
-                                    .child(
-                                        div().text_size(rems(0.85)).child(format!("{}.", label)),
-                                    ),
-                                range,
-                                markdown_end,
-                            );
-                            builder.push_div(div().flex_1().w_0(), range, markdown_end);
-                        }
-                        MarkdownTag::MetadataBlock(_) => {
-                            if let Some(metadata_block) =
-                                parsed_markdown.metadata_blocks.get(&range.start)
-                            {
-                                self.push_metadata_block(
-                                    &mut builder,
-                                    &parsed_markdown.source,
-                                    metadata_block,
-                                    markdown_end,
-                                    cx,
-                                );
-                                rendered_metadata_block = true;
-                            }
-                        }
-                        MarkdownTag::Table(alignments) => {
-                            builder.table.start(alignments.clone());
-
-                            let column_count = alignments.len();
-                            builder.push_div(
-                                div()
-                                    .id(("table", range.start))
-                                    .grid()
-                                    .grid_cols(column_count as u16)
-                                    .when(self.style.table_columns_min_size, |this| {
-                                        this.grid_cols_min_content(column_count as u16)
-                                    })
-                                    .when(!self.style.table_columns_min_size, |this| {
-                                        this.grid_cols(column_count as u16)
-                                    })
-                                    .w_full()
-                                    .mb_2()
-                                    .border(px(1.5))
-                                    .border_color(cx.theme().colors().border)
-                                    .rounded_sm()
-                                    .overflow_x_scroll(),
-                                range,
-                                markdown_end,
-                            );
-                        }
-                        MarkdownTag::TableHead => {
-                            builder.table.start_head();
-                            builder.push_text_style(TextStyleRefinement {
-                                font_weight: Some(FontWeight::SEMIBOLD),
-                                ..Default::default()
+                            .flex()
+                            .flex_col()
+                            .h_full()
+                            .when(col_index > 0, |this| this.border_l_1())
+                            .when(row_index > 0, |this| this.border_t_1())
+                            .border_color(cx.theme().colors().border)
+                            .px(self.style.table_cell_padding.x)
+                            .py(self.style.table_cell_padding.y)
+                            .when(is_header, |this| {
+                                this.bg(cx.theme().colors().title_bar_background)
+                            })
+                            .when(!is_header && row_index % 2 == 1, |this| {
+                                this.bg(cx.theme().colors().panel_background)
                             });
-                        }
-                        MarkdownTag::TableRow => {
-                            builder.table.start_row();
-                        }
-                        MarkdownTag::TableCell => {
-                            builder.table.start_cell();
-                            let is_header = builder.table.in_head;
-                            let row_index = builder.table.row_index;
-                            let col_index = builder.table.col_index;
-                            let alignment = builder.table.current_cell_alignment();
-                            let text_align = alignment
-                                .and_then(alignment_to_text_align)
-                                .unwrap_or(self.style.base_text_style.text_align);
 
-                            let mut cell_div = div()
-                                .debug_selector(|| {
-                                    if is_header {
-                                        format!("markdown_table_header_cell_{col_index}")
-                                    } else {
-                                        format!("markdown_table_cell_{row_index}_{col_index}")
-                                    }
-                                })
+                        cell_div = match alignment {
+                            Some(Alignment::Center) => cell_div.items_center(),
+                            Some(Alignment::Right) => cell_div.items_end(),
+                            _ => cell_div,
+                        };
+
+                        builder.push_text_style(TextStyleRefinement {
+                            text_align: Some(text_align),
+                            ..Default::default()
+                        });
+                        builder.push_div(cell_div, range, markdown_end);
+                        builder.push_div(
+                            div()
                                 .flex()
                                 .flex_col()
-                                .h_full()
-                                .when(col_index > 0, |this| this.border_l_1())
-                                .when(row_index > 0, |this| this.border_t_1())
-                                .border_color(cx.theme().colors().border)
-                                .px(self.style.table_cell_padding.x)
-                                .py(self.style.table_cell_padding.y)
-                                .when(is_header, |this| {
-                                    this.bg(cx.theme().colors().title_bar_background)
-                                })
-                                .when(!is_header && row_index % 2 == 1, |this| {
-                                    this.bg(cx.theme().colors().panel_background)
-                                });
-
-                            cell_div = match alignment {
-                                Some(Alignment::Center) => cell_div.items_center(),
-                                Some(Alignment::Right) => cell_div.items_end(),
-                                _ => cell_div,
-                            };
-
-                            builder.push_text_style(TextStyleRefinement {
-                                text_align: Some(text_align),
-                                ..Default::default()
-                            });
-                            builder.push_div(cell_div, range, markdown_end);
-                            builder.push_div(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .flex_1()
-                                    .w_full()
-                                    .justify_center()
-                                    .text_align(text_align),
-                                range,
-                                markdown_end,
-                            );
-                        }
-                        _ => log::debug!("unsupported markdown tag {:?}", tag),
+                                .flex_1()
+                                .w_full()
+                                .justify_center()
+                                .text_align(text_align),
+                            range,
+                            markdown_end,
+                        );
                     }
-                }
+                    _ => log::debug!("unsupported markdown tag {:?}", tag),
+                },
                 MarkdownEvent::End(tag) => match tag {
                     MarkdownTagEnd::Image => {
-                        current_img_block_range.take();
+                        event_state.current_image_block_range.take();
                     }
                     MarkdownTagEnd::Paragraph => {
                         self.pop_markdown_paragraph(&mut builder);
@@ -3323,8 +3392,13 @@ impl Element for MarkdownElement {
                                     cursor..math.source_range.start,
                                 );
                             }
-                            let element =
-                                render_math(math, &math_state, math_font_size, math_color, cx);
+                            let element = render_math(
+                                math,
+                                &render_inputs.math_state,
+                                math_font_size,
+                                math_color,
+                                cx,
+                            );
                             builder.push_inline_sourced_element(math.source_range.clone(), element);
                             cursor = math.source_range.end;
                         }
@@ -3414,15 +3488,7 @@ impl Element for MarkdownElement {
                 }
             }
         }
-        if self.style.code_block_overflow_x_scroll {
-            let code_block_ids = code_block_ids;
-            self.markdown.update(cx, move |markdown, _| {
-                markdown.retain_code_block_scroll_handles(&code_block_ids);
-            });
-        } else {
-            self.markdown
-                .update(cx, |markdown, _| markdown.clear_code_block_scroll_handles());
-        }
+        self.clean_up_code_block_scroll_handles(event_state.code_block_ids, cx);
         let mut rendered_markdown = builder.build();
         #[cfg(test)]
         if let Some(on_render) = self.on_render.as_ref() {
