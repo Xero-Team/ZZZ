@@ -279,35 +279,36 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   ```
 
   结果：UI default `71 passed`、doc tests `41 passed`；UI semantic integration tests
-  `3 passed`；Workspace/Agent UI check、GPUI accessibility `269 passed`、release clippy 和
+  `5 passed`；Workspace/Agent UI check、GPUI accessibility `269 passed`、release clippy 和
   philosophy gate 通过。
 
-### Scrollbar 设计门 {#phase-2-scrollbar-gate}
+### Scrollbar 轴级语义 {#phase-2-scrollbar-semantics}
 
-已完成静态审计，结论是当前不能为 `ScrollbarElement` 直接添加一个
-`Role::ScrollBar`：
+原先的静态审计结论已落地：不能直接给单个 painter `ScrollbarElement` 添加一个
+`Role::ScrollBar`，因为它在一次 prepaint/paint 中处理零到两个轴。实现现在保留该 painter
+和 mouse hit-testing ownership，在同一 overlay 中加入每轴独立的无视觉 semantic strip：
 
-- `ScrollbarState` 当前每帧只生成一个自绘 `ScrollbarElement`；该 element 在一次
-  prepaint/paint 中计算零到两个 `ScrollbarLayout`，并在同一 mouse dispatch 路径处理横、
-  纵轴的 track click 和 thumb drag。
-- GPUI `Element` contract 每个 element 只能返回一个 accessibility role、写入一个 node，并
-  为该 node 注册 action。因此现有单 element 只能诚实描述一个 axis；双轴场景若强行公开一个
-  ScrollBar，将失去 orientation、current value、range 和 action target 的对应关系。
-- AccessKit 已提供 `ScrollBar` role 与 `Increment`、`Decrement`、`SetValue` action，故缺口
-  不在 adapter vocabulary，而在 GPUI element tree 的轴级 ownership。
+- GPUI `StatefulInteractiveElement` 新增 orientation property；每个滚动轴生成稳定 node，
+  使用 `Role::ScrollBar`、Horizontal/Vertical orientation、numeric `0..max` range。
+- `Increment`、`Decrement` 和 `SetValue(NumericValue)` 直接调用相同
+  `ScrollbarState::set_offset` transition；numeric values 在 max 前 clamp，绝不伪造 mouse
+  event。step 是当前 viewport 的 10%，范围为 `1px..max`。
+- normal `WithScrollbar` 与 `UniformListDecoration` 复用同一个 overlay builder。State Render
+  在持有 `&mut self` 时预先生成轴快照并将其传给 overlay；这避免了测试首次发现的同一 Entity
+  re-entrant read。
+- semantic regression 分别验证单轴的 orientation/range、Increment/Decrement/SetValue/超限
+  clamp 与 value update，以及双轴 node identity 和 axis-local mutation。
 
-后续实现必须先将 visual/layout 与每轴 semantic node 分开：每个可滚动 axis 需要稳定 ID、
-实际 track/thumb bounds、current/min/max value 和独立的 action route；action 必须调用既有
-scroll-handle state transition，不能伪造 mouse event。完成后至少覆盖 single-axis、dual-axis、
-autohide、track click、thumb drag、a11y increment/decrement/set-value 和 node removal。此前不
-添加不正确的单节点语义。
+尚未将 mouse track click、thumb drag、autohide transition、UniformList runtime position 和 node
+removal 的组合纳入新的 accessibility fixture；这些仍是下一轮专门回归的范围。已有 painter
+逻辑未在本次重构中改变。
 
 ### 下一步 {#phase-2-next}
 
-继续按 interactive、structural、status、text input、decorative 分类审计组件；先按上面的
-轴级 ownership 门为 scrollbar 写 layout/semantic 拆分设计和最小 regression，再审计 tree
-container 与剩余 text surface。保持 List/DataTable 语义为有调用方提供可访问名称时的
-opt-in，不能从 `AnyElement` 猜测内容。每次只迁移一条完整的
+继续为 Scrollbar 补齐 mouse/autohide/UniformList/node-removal accessibility regression，再按
+interactive、structural、status、text input、decorative 分类审计其余组件和阶段 4 的 UTF-16
+窄协议。保持 List/DataTable 语义为有调用方提供可访问名称时的 opt-in，不能从 `AnyElement`
+猜测内容。每次只迁移一条完整的
 keyboard/pointer/a11y action 路径，不为装饰元素添加 role。
 
 ## 阶段 3：Model、selection、focus 与 virtualization 协议 {#phase-3}

@@ -8,8 +8,8 @@ use gpui::{
     LayoutId, ListState, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement,
     Pixels, Point, Position, Render, ScrollHandle, ScrollWheelEvent, Size, Stateful,
     StatefulInteractiveElement, Style, Styled, Task, UniformListDecoration,
-    UniformListScrollHandle, Window, ease_in_out, prelude::FluentBuilder as _, px, quad, relative,
-    size,
+    UniformListScrollHandle, Window, div, ease_in_out, prelude::FluentBuilder as _, px, quad,
+    relative, size,
 };
 use gpui_util::ResultExt;
 use smallvec::SmallVec;
@@ -210,13 +210,21 @@ impl<T: ScrollableHandle> UniformListDecoration for ScrollbarStateWrapper<T> {
         _item_height: Pixels,
         _item_count: usize,
         _window: &mut Window,
-        _cx: &mut App,
+        cx: &mut App,
     ) -> gpui::AnyElement {
-        ScrollbarElement {
-            origin: -scroll_offset,
-            state: self.0.clone(),
-        }
-        .into_any()
+        #[cfg(not(feature = "accessibility"))]
+        let _ = cx;
+
+        #[cfg(feature = "accessibility")]
+        let (axes, style) = {
+            let state = self.0.read(cx);
+            (state.accessibility_axes(), state.style)
+        };
+        #[cfg(feature = "accessibility")]
+        return scrollbar_overlay(self.0.clone(), -scroll_offset, axes, style).into_any_element();
+
+        #[cfg(not(feature = "accessibility"))]
+        scrollbar_overlay(self.0.clone(), -scroll_offset).into_any_element()
     }
 }
 
@@ -832,6 +840,85 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
             })
     }
 
+    #[cfg(feature = "accessibility")]
+    fn accessibility_axes(&self) -> SmallVec<[ScrollbarAccessibilityAxis; 2]> {
+        if self.disabled() {
+            return SmallVec::new();
+        }
+
+        let max_offset = self.scroll_handle().max_offset();
+        let current_offset = self.scroll_handle().offset();
+        let viewport = self.scroll_handle().viewport().size;
+
+        [ScrollbarAxis::Horizontal, ScrollbarAxis::Vertical]
+            .into_iter()
+            .filter(|&axis| self.visibility.along(axis).is_visible())
+            .filter_map(|axis| {
+                let max_offset = max_offset.along(axis);
+                if max_offset <= Pixels::ZERO {
+                    return None;
+                }
+
+                let current_value = current_offset
+                    .along(axis)
+                    .clamp(-max_offset, Pixels::ZERO)
+                    .abs();
+                let step = (viewport.along(axis) / 10.).clamp(px(1.), max_offset);
+
+                Some(ScrollbarAccessibilityAxis {
+                    axis,
+                    current_value: f64::from(current_value),
+                    max_value: f64::from(max_offset),
+                    step: f64::from(step),
+                })
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn set_accessibility_value(&mut self, axis: ScrollbarAxis, value: f64, cx: &mut Context<Self>) {
+        if !value.is_finite() {
+            return;
+        }
+
+        let max_offset = self.scroll_handle().max_offset().along(axis);
+        if max_offset <= Pixels::ZERO {
+            return;
+        }
+
+        let value = Pixels::from(value.clamp(0., f64::from(max_offset)));
+        let offset = self.scroll_handle().offset().apply_along(axis, |_| -value);
+        self.set_offset(offset, cx);
+    }
+
+    #[cfg(feature = "accessibility")]
+    fn adjust_accessibility_value(
+        &mut self,
+        axis: ScrollbarAxis,
+        step: f64,
+        increment: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let max_offset = self.scroll_handle().max_offset().along(axis);
+        if max_offset <= Pixels::ZERO {
+            return;
+        }
+
+        let current_value = self
+            .scroll_handle()
+            .offset()
+            .along(axis)
+            .clamp(-max_offset, Pixels::ZERO)
+            .abs();
+        let step = Pixels::from(step).clamp(px(1.), max_offset);
+        let value = if increment {
+            current_value + step
+        } else {
+            current_value - step
+        };
+        self.set_accessibility_value(axis, f64::from(value), cx);
+    }
+
     fn visible(&self) -> bool {
         self.show_state.is_visible()
     }
@@ -850,11 +937,145 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
 
 impl<T: ScrollableHandle> Render for ScrollbarState<T> {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        ScrollbarElement {
-            state: cx.entity(),
-            origin: Default::default(),
-        }
+        #[cfg(feature = "accessibility")]
+        return scrollbar_overlay(
+            cx.entity(),
+            Default::default(),
+            self.accessibility_axes(),
+            self.style,
+        );
+
+        #[cfg(not(feature = "accessibility"))]
+        scrollbar_overlay(cx.entity(), Default::default())
     }
+}
+
+#[cfg(feature = "accessibility")]
+#[derive(Clone, Copy)]
+struct ScrollbarAccessibilityAxis {
+    axis: ScrollbarAxis,
+    current_value: f64,
+    max_value: f64,
+    step: f64,
+}
+
+fn scrollbar_painter_overlay<T: ScrollableHandle>(
+    state: Entity<ScrollbarState<T>>,
+    origin: Point<Pixels>,
+) -> Div {
+    div().absolute().inset_0().child(ScrollbarElement {
+        state: state.clone(),
+        origin,
+    })
+}
+
+#[cfg(feature = "accessibility")]
+fn scrollbar_overlay<T: ScrollableHandle>(
+    state: Entity<ScrollbarState<T>>,
+    origin: Point<Pixels>,
+    axes: SmallVec<[ScrollbarAccessibilityAxis; 2]>,
+    style: ScrollbarStyle,
+) -> Div {
+    let has_horizontal = axes
+        .iter()
+        .any(|axis| axis.axis == ScrollbarAxis::Horizontal);
+    let has_vertical = axes.iter().any(|axis| axis.axis == ScrollbarAxis::Vertical);
+
+    scrollbar_painter_overlay(state.clone(), origin).child(
+        div()
+            .relative()
+            .left(origin.x)
+            .top(origin.y)
+            .size_full()
+            .children(axes.into_iter().map(|axis| {
+                semantic_scrollbar_axis(state.clone(), axis, has_horizontal, has_vertical, style)
+            })),
+    )
+}
+
+#[cfg(not(feature = "accessibility"))]
+fn scrollbar_overlay<T: ScrollableHandle>(
+    state: Entity<ScrollbarState<T>>,
+    origin: Point<Pixels>,
+) -> Div {
+    scrollbar_painter_overlay(state, origin)
+}
+
+#[cfg(feature = "accessibility")]
+fn semantic_scrollbar_axis<T: ScrollableHandle>(
+    state: Entity<ScrollbarState<T>>,
+    axis: ScrollbarAccessibilityAxis,
+    has_horizontal: bool,
+    has_vertical: bool,
+    style: ScrollbarStyle,
+) -> gpui::AnyElement {
+    let axis_name = match axis.axis {
+        ScrollbarAxis::Horizontal => "horizontal",
+        ScrollbarAxis::Vertical => "vertical",
+    };
+    let id = format!("scrollbar-{}-{axis_name}", state.entity_id());
+    let track_width = style.to_pixels()
+        + match style {
+            ScrollbarStyle::Regular => 2 * SCROLLBAR_PADDING,
+            ScrollbarStyle::Editor => Pixels::ZERO,
+        };
+    let corner_width = style.to_pixels();
+    let node = match axis.axis {
+        ScrollbarAxis::Horizontal => div()
+            .id(id)
+            .absolute()
+            .left_0()
+            .bottom_0()
+            .h(track_width)
+            .when(has_vertical, |this| this.right(corner_width))
+            .when(!has_vertical, |this| this.right_0()),
+        ScrollbarAxis::Vertical => div()
+            .id(id)
+            .absolute()
+            .top_0()
+            .right_0()
+            .w(track_width)
+            .when(has_horizontal, |this| this.bottom(corner_width))
+            .when(!has_horizontal, |this| this.bottom_0()),
+    };
+    let orientation = match axis.axis {
+        ScrollbarAxis::Horizontal => gpui::accesskit::Orientation::Horizontal,
+        ScrollbarAxis::Vertical => gpui::accesskit::Orientation::Vertical,
+    };
+    let increment_state = state.clone();
+    let decrement_state = state.clone();
+    let set_value_state = state.clone();
+
+    node.role(gpui::accesskit::Role::ScrollBar)
+        .aria_orientation(orientation)
+        .aria_min_numeric_value(0.)
+        .aria_numeric_value(axis.current_value)
+        .aria_max_numeric_value(axis.max_value)
+        .on_a11y_action(gpui::accesskit::Action::Increment, move |_, window, cx| {
+            increment_state.update(cx, |state, cx| {
+                state.adjust_accessibility_value(axis.axis, axis.step, true, cx)
+            });
+            window.refresh();
+        })
+        .on_a11y_action(gpui::accesskit::Action::Decrement, move |_, window, cx| {
+            decrement_state.update(cx, |state, cx| {
+                state.adjust_accessibility_value(axis.axis, axis.step, false, cx)
+            });
+            window.refresh();
+        })
+        .on_a11y_action(
+            gpui::accesskit::Action::SetValue,
+            move |data, window, cx| {
+                let Some(gpui::accesskit::ActionData::NumericValue(value)) = data else {
+                    return;
+                };
+                set_value_state.update(cx, |state, cx| {
+                    state.set_accessibility_value(axis.axis, *value, cx)
+                });
+                window.refresh();
+            },
+        )
+        .into_any_element()
 }
 
 struct ScrollbarElement<T: ScrollableHandle> {

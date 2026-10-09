@@ -1,6 +1,7 @@
 use gpui::{
-    AnyWindowHandle, AppContext as _, Context, Entity, FocusHandle, IntoElement,
-    ParentElement as _, Render, TestAppContext, Window, div, px,
+    AnyWindowHandle, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _,
+    IntoElement, ParentElement as _, Pixels, Render, ScrollHandle, StatefulInteractiveElement as _,
+    Styled as _, TestAppContext, Window, div, point, px,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -10,7 +11,8 @@ use ui::{
     AlertModal, AnnouncementToast, Button, ButtonCommon as _, Checkbox, ChoiceCard,
     CircularProgress, Clickable as _, ContextMenu, Disableable as _, Disclosure, DropdownMenu,
     IconPosition, List, ListAccessibility, ListHeader, ListItem, Modal, ModalHeader, ProgressBar,
-    Switch, Tab, TabBar, Table, TableAccessibility, ToggleState, Toggleable as _, TreeViewItem,
+    ScrollAxes, Scrollbars, Switch, Tab, TabBar, Table, TableAccessibility, ToggleState,
+    Toggleable as _, TreeViewItem, WithScrollbar,
 };
 
 struct SemanticComponents {
@@ -27,6 +29,14 @@ struct SemanticDropdown {
     menu: Entity<ContextMenu>,
 }
 
+struct SemanticScrollbar {
+    handle: ScrollHandle,
+}
+
+struct SemanticDualScrollbar {
+    handle: ScrollHandle,
+}
+
 impl Render for SemanticContextMenu {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         self.menu.clone()
@@ -36,6 +46,41 @@ impl Render for SemanticContextMenu {
 impl Render for SemanticDropdown {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         DropdownMenu::new("semantic-dropdown", "Project actions", self.menu.clone())
+    }
+}
+
+impl Render for SemanticScrollbar {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("semantic-scrollbar-content")
+            .w(px(100.))
+            .h(px(100.))
+            .overflow_y_scroll()
+            .track_scroll(&self.handle)
+            .child(div().h(px(400.)))
+            .custom_scrollbars(
+                Scrollbars::always_visible(ScrollAxes::Vertical)
+                    .tracked_scroll_handle(&self.handle),
+                window,
+                cx,
+            )
+    }
+}
+
+impl Render for SemanticDualScrollbar {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("semantic-dual-scrollbar-content")
+            .w(px(100.))
+            .h(px(100.))
+            .overflow_scroll()
+            .track_scroll(&self.handle)
+            .child(div().w(px(400.)).h(px(400.)))
+            .custom_scrollbars(
+                Scrollbars::always_visible(ScrollAxes::Both).tracked_scroll_handle(&self.handle),
+                window,
+                cx,
+            )
     }
 }
 
@@ -769,6 +814,174 @@ fn components_emit_roles_labels_and_state() {
         .expect("status semantic node should exist");
     assert_eq!(status.label(), Some("Update available"));
     assert_eq!(status.description(), Some("Restart to apply the update"));
+}
+
+#[test]
+fn scrollbar_emits_per_axis_range_semantics_and_actions() {
+    let mut cx = TestAppContext::single();
+    cx.update(|cx| {
+        let settings = settings::SettingsStore::test(cx);
+        cx.set_global(settings);
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+    });
+
+    let (scrollbar, cx) = cx.add_window_view(|_, _| SemanticScrollbar {
+        handle: ScrollHandle::new(),
+    });
+    let snapshot = cx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear();
+        window.draw(cx).clear();
+        window
+            .accessibility_snapshot_for_test()
+            .expect("scrollbar semantic snapshot should exist")
+    });
+
+    let (scrollbar_id, scrollbar_node) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::ScrollBar)
+        .expect("vertical scrollbar semantic node should exist");
+    assert_eq!(
+        scrollbar_node.orientation(),
+        Some(gpui::accesskit::Orientation::Vertical)
+    );
+    assert_eq!(scrollbar_node.min_numeric_value(), Some(0.));
+    assert!(
+        scrollbar_node
+            .numeric_value()
+            .is_some_and(|value| value == 0.)
+    );
+    let max_value = scrollbar_node
+        .max_numeric_value()
+        .filter(|value| *value > 0.)
+        .expect("scrollbar should expose a positive maximum value");
+    assert!(scrollbar_node.supports_action(gpui::accesskit::Action::Increment));
+    assert!(scrollbar_node.supports_action(gpui::accesskit::Action::Decrement));
+    assert!(scrollbar_node.supports_action(gpui::accesskit::Action::SetValue));
+
+    let updated_snapshot = cx.update(|window, cx| {
+        assert!(window.dispatch_accessibility_action(
+            *scrollbar_id,
+            gpui::accesskit::Action::Increment,
+            None,
+            cx,
+        ));
+        assert!(scrollbar.read(cx).handle.offset().y < px(0.));
+
+        let action_data = gpui::accesskit::ActionData::NumericValue(50.);
+        assert!(window.dispatch_accessibility_action(
+            *scrollbar_id,
+            gpui::accesskit::Action::SetValue,
+            Some(&action_data),
+            cx,
+        ));
+        assert_eq!(scrollbar.read(cx).handle.offset().y, -px(50.));
+
+        assert!(window.dispatch_accessibility_action(
+            *scrollbar_id,
+            gpui::accesskit::Action::Decrement,
+            None,
+            cx,
+        ));
+        assert_eq!(scrollbar.read(cx).handle.offset().y, -px(40.));
+
+        let action_data = gpui::accesskit::ActionData::NumericValue(max_value + 100.);
+        assert!(window.dispatch_accessibility_action(
+            *scrollbar_id,
+            gpui::accesskit::Action::SetValue,
+            Some(&action_data),
+            cx,
+        ));
+        assert_eq!(
+            scrollbar.read(cx).handle.offset().y,
+            -Pixels::from(max_value)
+        );
+
+        window.draw(cx).clear();
+        window
+            .accessibility_snapshot_for_test()
+            .expect("updated scrollbar semantic snapshot should exist")
+    });
+    let (_, scrollbar_node) = updated_snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == gpui::accesskit::Role::ScrollBar)
+        .expect("updated vertical scrollbar semantic node should exist");
+    assert_eq!(scrollbar_node.numeric_value(), Some(max_value));
+}
+
+#[test]
+fn dual_axis_scrollbar_keeps_accessibility_actions_axis_local() {
+    let mut cx = TestAppContext::single();
+    cx.update(|cx| {
+        let settings = settings::SettingsStore::test(cx);
+        cx.set_global(settings);
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+    });
+
+    let (scrollbar, cx) = cx.add_window_view(|_, _| SemanticDualScrollbar {
+        handle: ScrollHandle::new(),
+    });
+    let snapshot = cx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear();
+        window.draw(cx).clear();
+        window
+            .accessibility_snapshot_for_test()
+            .expect("dual-axis scrollbar semantic snapshot should exist")
+    });
+
+    let (horizontal_id, horizontal) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::ScrollBar
+                && node.orientation() == Some(gpui::accesskit::Orientation::Horizontal)
+        })
+        .expect("horizontal scrollbar semantic node should exist");
+    let (vertical_id, vertical) = snapshot
+        .update
+        .nodes
+        .iter()
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::ScrollBar
+                && node.orientation() == Some(gpui::accesskit::Orientation::Vertical)
+        })
+        .expect("vertical scrollbar semantic node should exist");
+    assert_ne!(horizontal_id, vertical_id);
+    assert!(
+        horizontal
+            .max_numeric_value()
+            .is_some_and(|value| value > 0.)
+    );
+    assert!(vertical.max_numeric_value().is_some_and(|value| value > 0.));
+
+    cx.update(|window, cx| {
+        let horizontal_value = gpui::accesskit::ActionData::NumericValue(70.);
+        assert!(window.dispatch_accessibility_action(
+            *horizontal_id,
+            gpui::accesskit::Action::SetValue,
+            Some(&horizontal_value),
+            cx,
+        ));
+        assert_eq!(scrollbar.read(cx).handle.offset(), point(-px(70.), px(0.)));
+
+        let vertical_value = gpui::accesskit::ActionData::NumericValue(50.);
+        assert!(window.dispatch_accessibility_action(
+            *vertical_id,
+            gpui::accesskit::Action::SetValue,
+            Some(&vertical_value),
+            cx,
+        ));
+        assert_eq!(
+            scrollbar.read(cx).handle.offset(),
+            point(-px(70.), -px(50.))
+        );
+    });
 }
 
 #[test]

@@ -1269,6 +1269,13 @@ pub trait StatefulInteractiveElement: InteractiveElement {
         self
     }
 
+    /// Sets the orientation for an accessible control with horizontal or vertical behavior.
+    #[cfg(feature = "accessibility")]
+    fn aria_orientation(mut self, orientation: accesskit::Orientation) -> Self {
+        self.interactivity().accessibility_orientation = Some(orientation);
+        self
+    }
+
     /// Register a handler for an accessibility action on this element.
     #[cfg(feature = "accessibility")]
     fn on_a11y_action(
@@ -1632,6 +1639,9 @@ impl Element for Div {
         if let Some(value) = self.interactivity.accessibility_max_numeric_value {
             node.set_max_numeric_value(value);
         }
+        if let Some(orientation) = self.interactivity.accessibility_orientation {
+            node.set_orientation(orientation);
+        }
         if self.interactivity.tracked_focus_handle.is_some() {
             node.add_action(accesskit::Action::Focus);
         }
@@ -1928,6 +1938,8 @@ pub struct Interactivity {
     pub(crate) accessibility_min_numeric_value: Option<f64>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_max_numeric_value: Option<f64>,
+    #[cfg(feature = "accessibility")]
+    pub(crate) accessibility_orientation: Option<accesskit::Orientation>,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility_action_listeners:
         Vec<(accesskit::Action, crate::SemanticActionListener)>,
