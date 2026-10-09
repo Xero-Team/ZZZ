@@ -60,6 +60,7 @@ sha	class	reason_code	note	source
 1b572a2bd0	C	philosophy	`hang_telemetry` crate; telemetry is rejected in source.	upstream-sync-2026-09-30.md
 1b7318bf8b	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 1c9cbd3b	C	philosophy	Native agent terminal shrink.	upstream-sync-2026-08-18.md
+1dd9bbfd71	C	unisolatable	Global element-id caching is entangled with Zed's superseded Frame and AccessKit-writer architecture.	upstream-sync-2026-10-09.md
 1e2e422c	C	unisolatable	Broad remote extension-host/settings rewrite is not isolatable locally.	upstream-sync-2026-08-27.md
 1e7f1a11f9	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 1e9f1ef4	C	philosophy	Baseten uses cloud credentials and is not a silent manual provider.	upstream-sync-2026-08-27.md
@@ -90,6 +91,7 @@ sha	class	reason_code	note	source
 2936989f	C	absent-api	New GPUI `LineLayout` APIs have no ZZZ caller.	upstream-sync-2026-08-27.md
 2b37a3ed	C	untriaged	Upstream GitHub contributor-label link only.	upstream-sync-2026-08-27.md
 2c4bc2d7b2	C	absent-api	`data_table` separator fix needs the absent column-filter and row-border wiring.	upstream-sync-2026-09-24.md
+2ff34954a0	C	philosophy	Native-agent terminal-tool test only; the native agent path remains absent.	upstream-sync-2026-10-09.md
 300972be	C	upstream-infra	Upstream benchmark infrastructure.	upstream-sync-2026-08-07.md
 309f91f564	C	philosophy	Migrates Copilot enterprise authentication and subscription settings, which belong to an intentionally absent provider path.	upstream-sync-2026-10-05.md
 3135cdf8dc	C	upstream-infra	Random element-tree benchmarks and leak fixes on an absent GPUI benchmark harness.	upstream-sync-2026-09-30.md
@@ -168,6 +170,7 @@ sha	class	reason_code	note	source
 52b24181	C	unisolatable	`gpui_apple` crate split; macOS-only rewrite.	upstream-sync-2026-08-18.md
 52e0b848	C	philosophy	Threads Sidebar auto-open; native agent plus MultiWorkspace.	upstream-sync-2026-09-18.md
 5313741f	C	philosophy	Native agent session leak rewrite; `WeakEntry` and native `Thread` storage are absent.	upstream-sync-2026-09-17.md
+533fe08cf	C	philosophy	Broad TOML upgrade and `SharedString` migration is dependency churn and a preparatory cross-workspace type rewrite.	upstream-sync-2026-10-09.md
 534319bd	C	absent-api	Pending-keystrokes indicator file and timeout APIs are absent.	upstream-sync-2026-09-18.md
 538a4a26	C	upstream-infra	Wezel build scenario infrastructure.	upstream-sync-2026-08-07.md
 53dbfe40	C	unisolatable	Typed transport-error rewrite does not match ZZZ's OpenAI request APIs.	upstream-sync-2026-08-27.md
@@ -307,6 +310,7 @@ sha	class	reason_code	note	source
 95cd535a5f	C	upstream-infra	Production-wide GPUI `test-support` infrastructure has no current ZZZ caller, adds unused public test APIs, and includes the absent `gpui_apple` path.	upstream-sync-2026-10-05.md
 9677f83f	C	upstream-infra	Triage automation.	upstream-sync-2026-08-07.md
 968379f5a1	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+96dec006df	C	untriaged	Documents upstream Homebrew casks that do not ship ZZZ.	upstream-sync-2026-10-09.md
 975845875b	C	unisolatable	14k-line language-model architecture rewrite; unisolatable from the provider-crate surface and every caller site it reconfigures.	upstream-sync-2026-09-26.md
 9785475c	C	untriaged	Terminal Threads title editing belongs to the rejected native-agent/thread surface.	upstream-sync-2026-09-02.md
 97b1e64a	C	philosophy	Adds hang-trigger telemetry and release telemetry plumbing, rejected by ZZZ's no-telemetry boundary.	upstream-sync-2026-09-02.md
@@ -434,6 +438,7 @@ d1dae815	C	unisolatable	ACP compaction capability and native-agent compaction re
 d2074f4e	C	untriaged	`PowerRequest` UAF fix; ZZZ `gpui_windows` has no power-request path.	upstream-sync-2026-09-18.md
 d27fa556	C	absent-api	Outline-panel deleted-file tree rewrite; 13 conflicts plus local i18n.	upstream-sync-2026-09-18.md
 d284cbbc87	C	philosophy	Test-only change in the absent GPUI hang-profiler and hang-telemetry architecture.	upstream-sync-2026-10-04.md
+d32fa003ab	C	untriaged	Native-agent grep-tool configuration has no ACP-only ZZZ caller.	upstream-sync-2026-10-09.md
 d356b2f5	C	philosophy	Subscription OpenAI compaction and account-bound route.	upstream-sync-2026-08-07.md
 d3ccd57194	C	untriaged	Sidebar/`ThreadItem` theme colors; the local sidebar renders new-thread menus and thread entries differently, so the hunk is not isolatable.	upstream-sync-2026-09-30.md
 d3e54c97	C	absent-api	Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.	upstream-sync-2026-09-02.md
@@ -442,6 +447,7 @@ d4cd310e	C	absent-api	Modifies the deleted upstream action-profiler module.	upst
 d528c665e1	C	unisolatable	JSONL/NDJSON preview depends on the unabsorbed `TabularFormat` parser refactor.	upstream-sync-2026-09-24.md
 d56dca80	C	upstream-infra	GitHub issue-triage workflow only; no product behavior.	upstream-sync-2026-09-02.md
 d62802d4	C	unisolatable	Trunk README link exists only on the unabsorbed gpui_web gallery rewrite.	upstream-sync-2026-09-18.md
+d6b7f24b7	C	upstream-infra	Linux release and Sentry-symbol workflow change has no retained ZZZ release pipeline.	upstream-sync-2026-10-09.md
 d70c45e5	C	absent-api	Needs absent web clipboard and external-drag GPUI APIs.	upstream-sync-2026-08-27.md
 d71f1461	C	upstream-infra	`stacksafe` lockfile-only bump.	upstream-sync-2026-08-18.md
 d7f28899	C	untriaged	Buffer highlight cache depends on rejected `318c664e` `ResolvedHighlights`.	upstream-sync-2026-09-18.md
@@ -466,6 +472,7 @@ e0ae50d1	C	absent-api	Unused public `KeyBinding::default_visibility` with no ZZZ
 e0f913b0	C	untriaged	Targets upstream `tabular_data_preview`, replaced locally by `csv_preview`.	upstream-sync-2026-08-27.md
 e2c4075c	C	untriaged	Community PR-board reopen handling.	upstream-sync-2026-09-06.md
 e4671f71	C	diverged	Malformed-task toast conflicts in `zzz.rs`.	upstream-sync-2026-08-18.md
+e4945b5d09	C	untriaged	Reconnection reuse needs `RemoteConnection::remote_platform`, which ZZZ does not expose.	upstream-sync-2026-10-09.md
 e4ac280d	C	philosophy	Subscription provider extraction.	upstream-sync-2026-08-07.md
 e4d73588	C	untriaged	Guild `REVIEWERS.conl` removal.	upstream-sync-2026-09-18.md
 e5221fa2	C	philosophy	Native `spawn_agent` subagent model selection; the native agent tools are absent.	upstream-sync-2026-09-24.md
