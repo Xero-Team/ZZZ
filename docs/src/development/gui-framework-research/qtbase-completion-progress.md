@@ -151,6 +151,10 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
 - `set_children` 还拒绝 duplicate child、cycle 和已有其他 parent 的 child。reparent 现在是
   明确两步：先从旧 parent 移除，再添加到新 parent；unit regression 验证所有被拒绝的 mutation
   都保留原 tree，并验证两步 reparent 成功后 child 只属于新 parent。
+- cached parent 内的 deferred/anchored overlay 现在有完整 lifecycle regression：完成帧的
+  semantic snapshot 在 parent cache reuse 后保留同一 Button node ID，AccessKit Click 仍路由到
+  原 handler；overlay 被移除后 node 消失，旧 ID 的 action 被拒绝。测试只读取完成帧，不会在
+  root entity 的 update borrow 内重入 draw。
 - 已验证：
 
   ```sh
@@ -162,13 +166,14 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   git diff --check
   ```
 
-  结果：default GPUI `259 passed`；accessibility GPUI `271 passed`；UI semantic
+  结果：default GPUI `259 passed`；accessibility GPUI `272 passed`；UI semantic
   smoke `1 passed`；clippy 和 philosophy gate 通过。
 
 ### 下一步 {#phase-1-next}
 
-审计 semantic tree 的 focus、action、teardown 和 cached/overlay subtree 边界，选择一个
-尚未由真实 Element lifecycle 覆盖的可复现错误先加 regression，再考虑任何结构性 API。
+cached/deferred/anchored subtree 的 snapshot、action 和 teardown 已覆盖。下一步审计 overlay
+关闭或 reparent 时的 focus handoff 与 native bridge event ordering，选择一个尚未由真实 Element
+lifecycle 覆盖的可复现错误先加 regression，再考虑任何结构性 API。
 
 ## 阶段 2：UI semantic audit 与组件 contract {#phase-2}
 

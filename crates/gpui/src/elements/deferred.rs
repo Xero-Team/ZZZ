@@ -105,6 +105,10 @@ mod tests {
         AnyView, Context, Entity, StyleRefinement, TestAppContext, Window, anchored, deferred, div,
         point, prelude::*, px, size,
     };
+    #[cfg(feature = "accessibility")]
+    use crate::{StatefulInteractiveElement as _, accesskit};
+    #[cfg(feature = "accessibility")]
+    use std::{cell::Cell, rc::Rc};
 
     /// A stand-in for a dock panel hosting a popover (deferred draw) whose
     /// content opens another popover (a deferred draw created while
@@ -206,5 +210,144 @@ mod tests {
                 );
             })
             .unwrap();
+    }
+
+    #[cfg(feature = "accessibility")]
+    struct AccessibilityPanel {
+        action_count: Rc<Cell<usize>>,
+        show_overlay: bool,
+    }
+
+    #[cfg(feature = "accessibility")]
+    impl Render for AccessibilityPanel {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().children(self.show_overlay.then(|| {
+                deferred(
+                    anchored().position(point(px(16.), px(16.))).child(
+                        div()
+                            .id("cached-deferred-accessibility-action")
+                            .role(accesskit::Role::Button)
+                            .aria_label("Deferred overlay action")
+                            .on_a11y_action(accesskit::Action::Click, {
+                                let action_count = self.action_count.clone();
+                                move |_, _, _| action_count.set(action_count.get() + 1)
+                            })
+                            .w(px(120.))
+                            .h(px(32.)),
+                    ),
+                )
+                .with_priority(1)
+            }))
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    struct AccessibilityRoot {
+        panel: Entity<AccessibilityPanel>,
+    }
+
+    #[cfg(feature = "accessibility")]
+    impl Render for AccessibilityRoot {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child(
+                AnyView::from(self.panel.clone()).cached(StyleRefinement::default().size_full()),
+            )
+        }
+    }
+
+    #[cfg(feature = "accessibility")]
+    #[gpui::test]
+    fn cached_deferred_overlay_preserves_semantics_and_drops_stale_actions(
+        cx: &mut TestAppContext,
+    ) {
+        let action_count = Rc::new(Cell::new(0));
+        let window = cx.open_window(size(px(800.), px(600.)), {
+            let action_count = action_count.clone();
+            move |_, cx| {
+                let panel = cx.new(|_| AccessibilityPanel {
+                    action_count,
+                    show_overlay: true,
+                });
+                AccessibilityRoot { panel }
+            }
+        });
+        cx.run_until_parked();
+
+        let (node_id, panel) = window
+            .update(cx, |root, window, _cx| {
+                let snapshot = window
+                    .accessibility_snapshot_for_test()
+                    .expect("deferred overlay semantic snapshot should exist");
+                let node_id = snapshot
+                    .update
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| {
+                        node.role() == accesskit::Role::Button
+                            && node.label() == Some("Deferred overlay action")
+                    })
+                    .map(|(node_id, _)| *node_id)
+                    .expect("deferred overlay button should exist");
+                (node_id, root.panel.clone())
+            })
+            .expect("test window should remain open");
+
+        window
+            .update(cx, |_, window, cx| {
+                assert!(window.dispatch_accessibility_action(
+                    node_id,
+                    accesskit::Action::Click,
+                    None,
+                    cx,
+                ));
+            })
+            .expect("test window should remain open");
+        assert_eq!(action_count.get(), 1);
+
+        window
+            .update(cx, |_, _, cx| cx.notify())
+            .expect("test window should remain open");
+        cx.run_until_parked();
+        window
+            .update(cx, |_, window, _cx| {
+                let snapshot = window
+                    .accessibility_snapshot_for_test()
+                    .expect("cached semantic snapshot should exist");
+                assert!(snapshot.update.nodes.iter().any(|(candidate_id, node)| {
+                    *candidate_id == node_id
+                        && node.role() == accesskit::Role::Button
+                        && node.label() == Some("Deferred overlay action")
+                }));
+            })
+            .expect("test window should remain open");
+
+        cx.update(|cx| {
+            panel.update(cx, |panel, cx| {
+                panel.show_overlay = false;
+                cx.notify();
+            });
+        });
+        cx.run_until_parked();
+
+        window
+            .update(cx, |_, window, cx| {
+                let snapshot = window
+                    .accessibility_snapshot_for_test()
+                    .expect("overlay removal semantic snapshot should exist");
+                assert!(
+                    snapshot
+                        .update
+                        .nodes
+                        .iter()
+                        .all(|(candidate_id, _)| *candidate_id != node_id)
+                );
+                assert!(!window.dispatch_accessibility_action(
+                    node_id,
+                    accesskit::Action::Click,
+                    None,
+                    cx,
+                ));
+            })
+            .expect("test window should remain open");
     }
 }
