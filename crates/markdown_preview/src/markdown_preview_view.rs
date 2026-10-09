@@ -1617,6 +1617,7 @@ impl Item for MarkdownPreviewView {
             MarkdownPreviewMode::Default,
             active_editor.editor.clone(),
             self.workspace.clone(),
+            self.workspace_directory.clone(),
             language_registry,
             window,
             cx,
