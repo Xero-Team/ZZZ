@@ -34,6 +34,7 @@ runbooks under `docs/src/development/gui-framework-research/`. Keep a platform
 claim in your application tied to a tested target and feature set.
 
 - [Contexts](docs/contexts.md)
+- [Accessibility semantics](docs/accessibility.md)
 
 Everything in GPUI starts with an `Application`. You can create one with
 `Application::new()`, and kick off your application by passing a callback to

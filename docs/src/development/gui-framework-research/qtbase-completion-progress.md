@@ -435,8 +435,13 @@ ReplaceSelectedText/SetTextSelection。
   support 或 upstream repository metadata。
 - `cargo check --locked -p gpui --examples` 通过，且已加入 `GPUI platform checks` CI job，
   使 README 的 local example 入口持续可编译。
+- GPUI README 现在链接 in-tree `docs/accessibility.md`。该文档定义 feature gate、stable
+  semantic identity、frame-scoped action lifecycle、range/orientation、test snapshot contract、
+  platform capability boundary，以及 TextRun/UTF-16 selection 的实现前置条件；不将 feature
+  build 写成 native assistive-technology runtime 通过。
 
 ### 下一步 {#phase-6-next}
 
 审计 public GPUI docs/examples 的 ownership、capability、feature-gate、cancellation 和
-upgrade semantics；只在 target/build matrix 能验证时增加平台声明。
+upgrade semantics；继续补足 Entity/Window、IME/virtualization 与 migration 文档，只在
+target/build matrix 能验证时增加平台声明。
