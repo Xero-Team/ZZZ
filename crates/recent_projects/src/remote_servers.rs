@@ -1249,7 +1249,7 @@ impl RemoteServerProjects {
         });
         let mut read_ssh_config = RemoteSettings::get_global(cx).read_ssh_config;
         let ssh_config_updates = if read_ssh_config {
-            spawn_ssh_config_watch(fs.clone(), cx)
+            spawn_ssh_config_watch(fs.clone(), window, cx)
         } else {
             Task::ready(())
         };
@@ -1261,12 +1261,13 @@ impl RemoteServerProjects {
         });
 
         let settings_subscription =
-            cx.observe_global_in::<SettingsStore>(window, move |recent_projects, _, cx| {
+            cx.observe_global_in::<SettingsStore>(window, move |recent_projects, window, cx| {
                 let new_read_ssh_config = RemoteSettings::get_global(cx).read_ssh_config;
                 if read_ssh_config != new_read_ssh_config {
                     read_ssh_config = new_read_ssh_config;
                     if read_ssh_config {
-                        recent_projects.ssh_config_updates = spawn_ssh_config_watch(fs.clone(), cx);
+                        recent_projects.ssh_config_updates =
+                            spawn_ssh_config_watch(fs.clone(), window, cx);
                     } else {
                         recent_projects.ssh_config_servers.clear();
                         recent_projects.ssh_config_updates = Task::ready(());
@@ -1779,6 +1780,13 @@ impl RemoteServerProjects {
                 }
             });
         });
+    }
+
+    fn refresh_default_mode(&mut self, cx: &mut Context<Self>) {
+        if matches!(&self.mode, Mode::Default(_)) {
+            self.mode = Mode::default_mode(&self.ssh_config_servers, cx);
+            self.recompute_filter(cx);
+        }
     }
 
     fn render_remote_connection(
@@ -3564,7 +3572,11 @@ impl RemoteServerProjects {
     }
 }
 
-fn spawn_ssh_config_watch(fs: Arc<dyn Fs>, cx: &Context<RemoteServerProjects>) -> Task<()> {
+fn spawn_ssh_config_watch(
+    fs: Arc<dyn Fs>,
+    window: &mut Window,
+    cx: &Context<RemoteServerProjects>,
+) -> Task<()> {
     enum ConfigSource {
         User(String),
         Global(String),
@@ -3596,7 +3608,7 @@ fn spawn_ssh_config_watch(fs: Arc<dyn Fs>, cx: &Context<RemoteServerProjects>) -
     // Combine into a single stream so that only one is parsed at once.
     let mut merged_stream = futures::stream::select_all(streams);
 
-    cx.spawn(async move |remote_server_projects, cx| {
+    cx.spawn_in(window, async move |remote_server_projects, cx| {
         let _tasks = tasks; // Keeps the background watchers alive
         let mut global_hosts = BTreeSet::default();
         let mut user_hosts = BTreeSet::default();
@@ -3613,12 +3625,13 @@ fn spawn_ssh_config_watch(fs: Arc<dyn Fs>, cx: &Context<RemoteServerProjects>) -
 
             // Sync to Model
             if remote_server_projects
-                .update(cx, |project, cx| {
+                .update_in(cx, |project, _window, cx| {
                     project.ssh_config_servers = global_hosts
                         .iter()
                         .chain(user_hosts.iter())
                         .map(SharedString::from)
                         .collect();
+                    project.refresh_default_mode(cx);
                     cx.notify();
                 })
                 .is_err()
@@ -3813,6 +3826,37 @@ mod create_host_tests {
 
         assert_eq!(connections[0].projects.len(), 1);
         assert!(connections[new_index.0].projects.is_empty());
+    }
+
+    #[gpui::test]
+    async fn test_ssh_config_refresh_rebuilds_default_server_list(cx: &mut TestAppContext) {
+        let app_state = init_test(cx);
+        let fs: Arc<dyn Fs> = app_state.fs.clone();
+        let project = Project::test(fs.clone(), [], cx).await;
+        let (workspace, cx) =
+            cx.add_window_view(|window, cx| Workspace::test_new(project, window, cx));
+        let modal = workspace.update_in(cx, |_workspace, window, cx| {
+            let weak = cx.weak_entity();
+            cx.new(|cx| RemoteServerProjects::new(false, fs, window, weak, cx))
+        });
+
+        let hosts = modal.update(cx, |modal, cx| {
+            modal.ssh_config_servers = BTreeSet::from([SharedString::from("alpha")]);
+            modal.refresh_default_mode(cx);
+            let Mode::Default(state) = &modal.mode else {
+                panic!("remote projects should remain in default mode");
+            };
+            state
+                .visible_servers()
+                .into_iter()
+                .filter_map(|entry| match entry.server {
+                    RemoteEntry::SshConfig { host, .. } => Some(host.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        });
+
+        assert_eq!(hosts, [SharedString::from("alpha")]);
     }
 
     // Regression test for the modal body collapsing to zero height when the
