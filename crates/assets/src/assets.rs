@@ -17,6 +17,17 @@ use rust_embed::RustEmbed;
 #[exclude = "*.DS_Store"]
 pub struct Assets;
 
+const APPLICATION_FONT_PATHS: &[&str] = &[
+    "fonts/ibm-plex-sans/IBMPlexSans-Italic.ttf",
+    "fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf",
+    "fonts/ibm-plex-sans/IBMPlexSans-SemiBold.ttf",
+    "fonts/ibm-plex-sans/IBMPlexSans-SemiBoldItalic.ttf",
+    "fonts/lilex/Lilex-Bold.ttf",
+    "fonts/lilex/Lilex-BoldItalic.ttf",
+    "fonts/lilex/Lilex-Italic.ttf",
+    "fonts/lilex/Lilex-Regular.ttf",
+];
+
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
         Self::get(path)
@@ -38,18 +49,15 @@ impl AssetSource for Assets {
 }
 
 impl Assets {
-    /// Populate the [`TextSystem`] of the given [`AppContext`] with all `.ttf` fonts in the `fonts` directory.
+    /// Populate the [`TextSystem`] of the given [`AppContext`] with application fonts.
     pub fn load_fonts(&self, cx: &App) -> anyhow::Result<()> {
-        let font_paths = self.list("fonts")?;
-        let mut embedded_fonts = Vec::new();
-        for font_path in font_paths {
-            if font_path.ends_with(".ttf") {
-                let font_bytes = cx
-                    .asset_source()
-                    .load(&font_path)?
-                    .with_context(|| format!("font asset missing at path {font_path:?}"))?;
-                embedded_fonts.push(font_bytes);
-            }
+        let mut embedded_fonts = Vec::with_capacity(APPLICATION_FONT_PATHS.len());
+        for font_path in APPLICATION_FONT_PATHS {
+            let font_bytes = cx
+                .asset_source()
+                .load(font_path)?
+                .with_context(|| format!("font asset missing at path {font_path:?}"))?;
+            embedded_fonts.push(font_bytes);
         }
 
         cx.text_system().add_fonts(embedded_fonts)
@@ -115,7 +123,7 @@ pub fn lookup_docs_text(path: &str) -> Option<String> {
 mod tests {
     use gpui::AssetSource as _;
 
-    use super::Assets;
+    use super::{APPLICATION_FONT_PATHS, Assets};
 
     #[test]
     fn load_returns_embedded_asset_bytes() {
@@ -153,6 +161,16 @@ mod tests {
             fonts
                 .iter()
                 .all(|path| !path.as_ref().starts_with("icons/"))
+        );
+    }
+
+    #[test]
+    fn application_fonts_exclude_text_rendering_fixtures() {
+        assert_eq!(APPLICATION_FONT_PATHS.len(), 8);
+        assert!(
+            APPLICATION_FONT_PATHS
+                .iter()
+                .all(|path| !path.starts_with("fonts/text-rendering-fixtures/"))
         );
     }
 }

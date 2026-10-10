@@ -42,7 +42,6 @@ use reqwest_client::ReqwestClient;
 
 use assets::Assets;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
-use parking_lot::Mutex;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
 use recent_projects::{RemoteSettings, open_remote_project};
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
@@ -593,7 +592,7 @@ fn main() {
         recent_projects::init(cx);
         dev_container::init(cx);
 
-        load_embedded_fonts(cx);
+        Assets.load_fonts(cx).log_err();
         #[cfg(target_os = "linux")]
         prewarm_fonts(cx);
 
@@ -1605,33 +1604,6 @@ mod tests {
         let scheme = "zzz-cli:///tmp/socket";
         assert_eq!(parse_url_arg(scheme), scheme);
     }
-}
-
-fn load_embedded_fonts(cx: &App) {
-    let asset_source = cx.asset_source();
-    let font_paths = asset_source.list("fonts").expect("list should be present");
-    let embedded_fonts = Mutex::new(Vec::new());
-    let executor = cx.background_executor();
-
-    cx.foreground_executor().block_on(executor.scoped(|scope| {
-        for font_path in &font_paths {
-            if !font_path.ends_with(".ttf") {
-                continue;
-            }
-
-            scope.spawn(async {
-                let font_bytes = asset_source
-                    .load(font_path)
-                    .expect("load should be present")
-                    .expect("expect should be present");
-                embedded_fonts.lock().push(font_bytes);
-            });
-        }
-    }));
-
-    cx.text_system()
-        .add_fonts(embedded_fonts.into_inner())
-        .expect("value should be present");
 }
 
 #[cfg(target_os = "linux")]
