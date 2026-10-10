@@ -258,6 +258,9 @@ pub struct SettingsContent {
     /// Settings for developer-oriented instrumentation tools (profilers,
     /// tracers, etc.) that can be toggled at runtime.
     pub instrumentation: Option<InstrumentationSettingsContent>,
+
+    /// Settings for the FinalShell-style terminal mode.
+    pub terminal_mode: Option<TerminalModeSettingsContent>,
 }
 
 /// Configuration for developer-oriented instrumentation tools that collect

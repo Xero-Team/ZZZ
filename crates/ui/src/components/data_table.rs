@@ -48,15 +48,13 @@ impl TableAccessibility {
     /// `headers` must provide one accessible name for each table column. The cell-label resolver
     /// must provide a meaningful name for every rendered row and column pair; table cells are
     /// [`AnyElement`] values, so their visual content is not inspected automatically.
+    #[cfg_attr(not(feature = "accessibility"), allow(unused_variables))]
     pub fn new(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
         headers: impl IntoIterator<Item = impl Into<SharedString>>,
         cell_label: impl Fn(usize, usize, &App) -> SharedString + 'static,
     ) -> Self {
-        #[cfg(not(feature = "accessibility"))]
-        std::mem::drop((id, label, cell_label));
-
         Self {
             #[cfg(feature = "accessibility")]
             element_id: id.into(),

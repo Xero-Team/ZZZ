@@ -229,6 +229,12 @@ impl TerminalView {
         .detach_and_log_err(cx);
     }
 
+    /// The project this terminal belongs to (the session project for
+    /// terminal-mode terminals, otherwise the workspace project).
+    pub fn project(&self) -> WeakEntity<Project> {
+        self.project.clone()
+    }
+
     pub fn new(
         terminal: Entity<Terminal>,
         workspace: WeakEntity<Workspace>,
@@ -1204,9 +1210,11 @@ fn subscribe_for_terminal_events(
                                     .as_ref()
                                     .map(|hover| &hover.hovered_word)
                             {
+                                let project = terminal_view.project();
                                 terminal_view.hover = None;
                                 terminal_view.hover_tooltip_update = hover_path_like_target(
                                     &workspace,
+                                    project,
                                     hovered_word.clone(),
                                     path_like_target,
                                     cx,
@@ -1224,13 +1232,17 @@ fn subscribe_for_terminal_events(
 
                 Event::Open(maybe_navigation_target) => match maybe_navigation_target {
                     MaybeNavigationTarget::Url(url) => cx.open_url(url),
-                    MaybeNavigationTarget::PathLike(path_like_target) => open_path_like_target(
-                        &workspace,
-                        terminal_view,
-                        path_like_target,
-                        window,
-                        cx,
-                    ),
+                    MaybeNavigationTarget::PathLike(path_like_target) => {
+                        let project = terminal_view.project();
+                        open_path_like_target(
+                            &workspace,
+                            project,
+                            terminal_view,
+                            path_like_target,
+                            window,
+                            cx,
+                        )
+                    }
                 },
                 Event::BreadcrumbsChanged => cx.emit(ItemEvent::UpdateBreadcrumbs),
                 Event::CloseTerminal => cx.emit(ItemEvent::CloseItem),
@@ -2137,15 +2149,20 @@ impl SearchableItem for TerminalView {
 /// local `is_dir` checks) is skipped -- returning `None` lets the remote shell
 /// open in the remote user's home directory by default.
 pub(crate) fn default_working_directory(workspace: &Workspace, cx: &App) -> Option<PathBuf> {
-    let is_remote = workspace.project().read(cx).is_remote();
+    default_working_directory_for_project(workspace.project().read(cx), cx)
+}
+
+/// Like [`default_working_directory`], but resolves against an explicit project
+/// so terminal-mode session terminals use their own remote project rather than
+/// the workspace's primary project.
+pub fn default_working_directory_for_project(project: &Project, cx: &App) -> Option<PathBuf> {
+    let is_remote = project.is_remote();
     let directory = match &TerminalSettings::get_global(cx).working_directory {
-        WorkingDirectory::CurrentFileDirectory => workspace
-            .project()
-            .read(cx)
+        WorkingDirectory::CurrentFileDirectory => project
             .active_entry_directory(cx)
-            .or_else(|| current_project_directory(workspace, cx)),
-        WorkingDirectory::CurrentProjectDirectory => current_project_directory(workspace, cx),
-        WorkingDirectory::FirstProjectDirectory => first_project_directory(workspace, cx),
+            .or_else(|| current_project_directory(project, cx)),
+        WorkingDirectory::CurrentProjectDirectory => current_project_directory(project, cx),
+        WorkingDirectory::FirstProjectDirectory => first_project_directory(project, cx),
         WorkingDirectory::AlwaysHome => None,
         WorkingDirectory::Always { directory } if !is_remote => shellexpand::full(directory)
             .ok()
@@ -2161,19 +2178,17 @@ pub(crate) fn default_working_directory(workspace: &Workspace, cx: &App) -> Opti
     }
 }
 
-fn current_project_directory(workspace: &Workspace, cx: &App) -> Option<PathBuf> {
-    workspace
-        .project()
-        .read(cx)
+fn current_project_directory(project: &Project, cx: &App) -> Option<PathBuf> {
+    project
         .active_project_directory(cx)
         .as_deref()
         .map(Path::to_path_buf)
-        .or_else(|| first_project_directory(workspace, cx))
+        .or_else(|| first_project_directory(project, cx))
 }
 
 ///Gets the first project's home directory, or the home directory
-fn first_project_directory(workspace: &Workspace, cx: &App) -> Option<PathBuf> {
-    let worktree = workspace.worktrees(cx).next()?.read(cx);
+fn first_project_directory(project: &Project, cx: &App) -> Option<PathBuf> {
+    let worktree = project.worktrees(cx).next()?.read(cx);
     let worktree_path = worktree.abs_path();
     if worktree.root_entry()?.is_dir() {
         Some(worktree_path.to_path_buf())
@@ -2440,7 +2455,7 @@ mod tests {
 
             let res = default_working_directory(workspace, cx);
             assert_eq!(res, dirs::home_dir());
-            let res = first_project_directory(workspace, cx);
+            let res = first_project_directory(project.read(cx), cx);
             assert_eq!(res, None);
         });
     }
@@ -2477,7 +2492,7 @@ mod tests {
 
             let res = default_working_directory(workspace, cx);
             assert_eq!(res, Some(Path::new("/").to_path_buf()));
-            let res = first_project_directory(workspace, cx);
+            let res = first_project_directory(project.read(cx), cx);
             assert_eq!(res, Some(Path::new("/").to_path_buf()));
         });
     }
@@ -2497,7 +2512,7 @@ mod tests {
 
             let res = default_working_directory(workspace, cx);
             assert_eq!(res, Some(Path::new("/root/").to_path_buf()));
-            let res = first_project_directory(workspace, cx);
+            let res = first_project_directory(project.read(cx), cx);
             assert_eq!(res, Some(Path::new("/root/").to_path_buf()));
         });
     }
@@ -2519,7 +2534,7 @@ mod tests {
 
             let res = default_working_directory(workspace, cx);
             assert_eq!(res, Some(Path::new("/root1/").to_path_buf()));
-            let res = first_project_directory(workspace, cx);
+            let res = first_project_directory(project.read(cx), cx);
             assert_eq!(res, Some(Path::new("/root1/").to_path_buf()));
         });
     }
@@ -2541,7 +2556,7 @@ mod tests {
 
             let res = default_working_directory(workspace, cx);
             assert_eq!(res, Some(Path::new("/root2/").to_path_buf()));
-            let res = first_project_directory(workspace, cx);
+            let res = first_project_directory(project.read(cx), cx);
             assert_eq!(res, Some(Path::new("/root1/").to_path_buf()));
         });
     }

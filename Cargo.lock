@@ -16759,6 +16759,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "terminal_mode"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "collections",
+ "db",
+ "fs",
+ "futures 0.3.34",
+ "gpui",
+ "i18n",
+ "paths",
+ "project",
+ "project_panel",
+ "recent_projects",
+ "remote",
+ "remote_connection",
+ "serde",
+ "serde_json",
+ "settings",
+ "terminal",
+ "terminal_view",
+ "ui",
+ "util",
+ "vfs",
+ "workspace",
+ "worktree",
+]
+
+[[package]]
 name = "terminal_size"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -22070,6 +22099,7 @@ dependencies = [
  "tasks_ui",
  "telegram_ui",
  "tempfile",
+ "terminal_mode",
  "terminal_view",
  "theme",
  "theme_extension",

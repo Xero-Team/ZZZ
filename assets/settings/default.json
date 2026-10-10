@@ -2740,4 +2740,16 @@
       "enabled": false,
     },
   },
+
+  // Settings for the FinalShell-style terminal mode.
+  "terminal_mode": {
+    // Default width (in pixels) of the SSH session list panel on the left.
+    "session_list_default_width": 240,
+    // Default width (in pixels) of the session file panel on the right.
+    "file_panel_default_width": 320,
+    // Whether the lower-half file preview is shown in the session file panel.
+    "preview_enabled": true,
+    // Whether to automatically reconnect the last session on startup.
+    "auto_connect_last_session": false,
+  },
 }

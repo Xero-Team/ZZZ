@@ -1,7 +1,7 @@
 use crate::Workspace;
-use gpui::{App, AppContext, Task, WeakEntity};
+use gpui::{App, AppContext, Entity, Task, WeakEntity};
 use itertools::Itertools;
-use project::{Entry, Metadata};
+use project::{Entry, Metadata, Project};
 use std::path::{Path, PathBuf};
 use util::{
     paths::{PathStyle, PathWithPosition, normalize_lexically},
@@ -140,6 +140,27 @@ pub fn possible_open_target(
     resolve_open_target(workspace, PathMatching::Heuristic, maybe_path, cwd, cx)
 }
 
+/// Like [`possible_open_target`], but resolves against an explicit `project`
+/// rather than the workspace's primary project. Used by terminal-mode session
+/// terminals, whose worktrees live in a per-session remote project.
+pub fn possible_open_target_for_project(
+    workspace: &WeakEntity<Workspace>,
+    project: Entity<Project>,
+    maybe_path: &str,
+    cwd: Option<&Path>,
+    cx: &App,
+) -> Task<Option<OpenTarget>> {
+    possible_open_target_internal(
+        workspace,
+        PathMatching::Heuristic,
+        maybe_path,
+        cwd,
+        cx,
+        None,
+        Some(project),
+    )
+}
+
 pub fn resolve_open_target(
     workspace: &WeakEntity<Workspace>,
     matching: PathMatching,
@@ -147,7 +168,7 @@ pub fn resolve_open_target(
     cwd: Option<&Path>,
     cx: &App,
 ) -> Task<Option<OpenTarget>> {
-    possible_open_target_internal(workspace, matching, maybe_path, cwd, cx, None)
+    possible_open_target_internal(workspace, matching, maybe_path, cwd, cx, None, None)
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -184,6 +205,7 @@ pub fn resolve_open_target_with_fs_checks(
         cwd,
         cx,
         Some(background_fs_checks),
+        None,
     )
 }
 
@@ -194,15 +216,17 @@ fn possible_open_target_internal(
     cwd: Option<&Path>,
     cx: &App,
     background_fs_checks: Option<BackgroundFsChecks>,
+    project: Option<Entity<Project>>,
 ) -> Task<Option<OpenTarget>> {
     let Some(workspace) = workspace.upgrade() else {
         return Task::ready(None);
     };
+    let project = project.unwrap_or_else(|| workspace.read(cx).project().clone());
 
     let mut potential_paths = Vec::new();
     let original_path = PathWithPosition::from_path(PathBuf::from(maybe_path));
     let path_with_position = PathWithPosition::parse_str(maybe_path);
-    let worktree_candidates = workspace
+    let worktree_candidates = project
         .read(cx)
         .worktrees(cx)
         .sorted_by_key(|worktree| {
@@ -337,7 +361,7 @@ fn possible_open_target_internal(
     }
 
     let enable_background_fs_checks = background_fs_checks.map_or_else(
-        || workspace.read(cx).project().read(cx).is_local(),
+        || project.read(cx).is_local(),
         |background_fs_checks| background_fs_checks == BackgroundFsChecks::Enabled,
     );
 
@@ -412,7 +436,7 @@ fn possible_open_target_internal(
         Vec::new()
     };
 
-    let fs = workspace.read(cx).project().read(cx).fs().clone();
+    let fs = project.read(cx).fs().clone();
     let background_fs_checks_task = cx.background_spawn(async move {
         for mut path_to_check in fs_paths_to_check {
             if let Some(fs_path_to_check) = fs.canonicalize(&path_to_check.path).await.ok()

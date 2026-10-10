@@ -241,7 +241,10 @@ impl TestContext {
             .read_with(cx, |mw, _| mw.workspace().clone())
             .unwrap();
         let mut cx = VisualTestContext::from_window(window.into(), cx);
-        let panel = workspace.update_in(&mut cx, ProjectPanel::new);
+        let panel = workspace.update_in(&mut cx, |workspace, window, cx| {
+            let project = workspace.project().clone();
+            ProjectPanel::new(project, workspace, window, cx)
+        });
         cx.run_until_parked();
 
         TestContext { panel, fs, cx }

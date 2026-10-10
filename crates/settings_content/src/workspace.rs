@@ -1210,3 +1210,27 @@ pub struct FocusFollowsMouse {
     pub enabled: Option<bool>,
     pub debounce_ms: Option<u64>,
 }
+
+/// Settings for the FinalShell-style terminal mode.
+#[with_fallible_options]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
+pub struct TerminalModeSettingsContent {
+    /// Default width (in pixels) of the SSH session list panel on the left.
+    ///
+    /// Default: 240
+    #[serde(serialize_with = "serialize_optional_f32_with_two_decimal_places")]
+    pub session_list_default_width: Option<f32>,
+    /// Default width (in pixels) of the session file panel on the right.
+    ///
+    /// Default: 320
+    #[serde(serialize_with = "serialize_optional_f32_with_two_decimal_places")]
+    pub file_panel_default_width: Option<f32>,
+    /// Whether the lower-half file preview is shown in the session file panel.
+    ///
+    /// Default: true
+    pub preview_enabled: Option<bool>,
+    /// Whether to automatically reconnect the last session on startup.
+    ///
+    /// Default: false
+    pub auto_connect_last_session: Option<bool>,
+}

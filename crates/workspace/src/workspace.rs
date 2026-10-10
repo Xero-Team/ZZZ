@@ -4712,6 +4712,83 @@ impl Workspace {
         })
     }
 
+    /// Opens `path` into a specific `pane` using `project` (which may differ
+    /// from the workspace's primary project), mirroring [`Workspace::open_path`].
+    pub fn open_project_path_in_pane(
+        project: &Entity<Project>,
+        pane: &WeakEntity<Pane>,
+        path: ProjectPath,
+        focus_item: bool,
+        allow_preview: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Task<Result<Box<dyn ItemHandle>>> {
+        let registry = cx.default_global::<ProjectItemRegistry>().clone();
+        let task = registry.open_path(project, &path, window, cx);
+        let pane = pane.clone();
+        window.spawn(cx, async move |cx| {
+            let (project_entry_id, build_item) = task.await?;
+            pane.update_in(cx, |pane, window, cx| {
+                pane.open_item(
+                    project_entry_id,
+                    path,
+                    focus_item,
+                    allow_preview,
+                    true,
+                    None,
+                    window,
+                    cx,
+                    build_item,
+                )
+            })
+        })
+    }
+
+    /// Opens `path` from `project` into the workspace's active center pane.
+    pub fn open_project_path_in_active_pane(
+        &mut self,
+        project: &Entity<Project>,
+        path: ProjectPath,
+        focus_item: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Box<dyn ItemHandle>>> {
+        let pane = self.active_pane.clone();
+        Self::open_project_path_in_pane(
+            project,
+            &pane.downgrade(),
+            path,
+            focus_item,
+            false,
+            window,
+            cx,
+        )
+    }
+
+    /// Creates a detached [`Pane`] bound to an arbitrary `project`, used by
+    /// terminal-mode's session preview.
+    pub fn create_pane_for_project(
+        &self,
+        project: Entity<Project>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<Pane> {
+        cx.new(|cx| {
+            let mut pane = Pane::new(
+                self.weak_handle(),
+                project,
+                self.pane_history_timestamp.clone(),
+                None,
+                NewFile.boxed_clone(),
+                true,
+                window,
+                cx,
+            );
+            pane.set_can_split(Some(Arc::new(|_, _, _, _| true)));
+            pane
+        })
+    }
+
     fn pane_containing_project_item(
         &self,
         requested_pane: &WeakEntity<Pane>,
@@ -9299,6 +9376,29 @@ pub fn create_and_open_local_file(
     })
 }
 
+/// Builds a remote [`Project`] over an already-established [`RemoteClient`]
+/// without opening a workspace for it.
+///
+/// This is the "build the project only" step factored out of
+/// [`open_remote_project_with_new_connection`], so that terminal-mode sessions
+/// can create their own per-session projects.
+pub fn remote_project_from_client(
+    client: Entity<remote::RemoteClient>,
+    app_state: &Arc<AppState>,
+    cx: &mut App,
+) -> Entity<Project> {
+    project::Project::remote(
+        client,
+        app_state.client.clone(),
+        app_state.node_runtime.clone(),
+        app_state.user_store.clone(),
+        app_state.languages.clone(),
+        app_state.fs.clone(),
+        true,
+        cx,
+    )
+}
+
 pub fn open_remote_project_with_new_connection(
     window: WindowHandle<MultiWorkspace>,
     remote_connection: Arc<dyn RemoteConnection>,
@@ -9328,18 +9428,7 @@ pub fn open_remote_project_with_new_connection(
             return Ok(Vec::new());
         };
 
-        let project = cx.update(|cx| {
-            project::Project::remote(
-                session,
-                app_state.client.clone(),
-                app_state.node_runtime.clone(),
-                app_state.user_store.clone(),
-                app_state.languages.clone(),
-                app_state.fs.clone(),
-                true,
-                cx,
-            )
-        });
+        let project = cx.update(|cx| remote_project_from_client(session, &app_state, cx));
 
         open_remote_project_inner(
             project,

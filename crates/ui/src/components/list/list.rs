@@ -82,6 +82,7 @@ impl List {
     }
 
     /// Adds `Role::List` semantics when every semantic child is a list item.
+    #[cfg_attr(not(feature = "accessibility"), allow(unused_variables))]
     pub fn with_accessibility(self, accessibility: ListAccessibility) -> Self {
         #[cfg(feature = "accessibility")]
         {
@@ -91,7 +92,6 @@ impl List {
         }
         #[cfg(not(feature = "accessibility"))]
         {
-            std::mem::drop(accessibility);
             self
         }
     }

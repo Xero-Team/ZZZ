@@ -1,7 +1,8 @@
 use super::{HoverTarget, HoveredWord, TerminalView};
 use anyhow::{Context as _, Result};
 use editor::Editor;
-use gpui::{Context, Task, WeakEntity, Window};
+use gpui::{Context, Entity, Task, WeakEntity, Window};
+use project::Project;
 use std::path::PathBuf;
 use terminal::PathLikeTarget;
 use util::{ResultExt, debug_panic};
@@ -11,22 +12,40 @@ use workspace::path_link::possible_open_target;
 use workspace::path_link::{
     BackgroundFsChecks, OpenTargetFoundBy, possible_open_target_with_fs_checks,
 };
-use workspace::{OpenOptions, OpenVisible, Workspace, path_link::OpenTarget};
+use workspace::{
+    OpenOptions, OpenVisible, Workspace,
+    path_link::{OpenTarget, possible_open_target_for_project},
+};
+
+/// Returns the terminal's project when it differs from the workspace's primary
+/// project (i.e. a terminal-mode session terminal), so path resolution can use
+/// the correct remote project.
+fn terminal_project_for(
+    project: WeakEntity<Project>,
+    workspace: &WeakEntity<Workspace>,
+    cx: &gpui::App,
+) -> Option<Entity<Project>> {
+    let project = project.upgrade()?;
+    let workspace = workspace.upgrade()?;
+    (project.entity_id() != workspace.read(cx).project().entity_id()).then_some(project)
+}
 
 pub(super) fn hover_path_like_target(
     workspace: &WeakEntity<Workspace>,
+    project: WeakEntity<Project>,
     hovered_word: HoveredWord,
     path_like_target: &PathLikeTarget,
     cx: &mut Context<TerminalView>,
 ) -> Task<()> {
     #[cfg(not(test))]
     {
-        possible_hover_target(workspace, hovered_word, path_like_target, cx)
+        possible_hover_target(workspace, project, hovered_word, path_like_target, cx)
     }
     #[cfg(test)]
     {
         possible_hover_target(
             workspace,
+            project,
             hovered_word,
             path_like_target,
             cx,
@@ -37,26 +56,46 @@ pub(super) fn hover_path_like_target(
 
 fn possible_hover_target(
     workspace: &WeakEntity<Workspace>,
+    project: WeakEntity<Project>,
     hovered_word: HoveredWord,
     path_like_target: &PathLikeTarget,
     cx: &mut Context<TerminalView>,
     #[cfg(test)] background_fs_checks: BackgroundFsChecks,
 ) -> Task<()> {
+    let project = terminal_project_for(project, workspace, cx);
     #[cfg(not(test))]
-    let file_to_open_task = possible_open_target(
-        workspace,
-        &path_like_target.maybe_path,
-        path_like_target.terminal_dir.as_deref(),
-        cx,
-    );
+    let file_to_open_task = match project {
+        Some(project) => possible_open_target_for_project(
+            workspace,
+            project,
+            &path_like_target.maybe_path,
+            path_like_target.terminal_dir.as_deref(),
+            cx,
+        ),
+        None => possible_open_target(
+            workspace,
+            &path_like_target.maybe_path,
+            path_like_target.terminal_dir.as_deref(),
+            cx,
+        ),
+    };
     #[cfg(test)]
-    let file_to_open_task = possible_open_target_with_fs_checks(
-        workspace,
-        &path_like_target.maybe_path,
-        path_like_target.terminal_dir.as_deref(),
-        cx,
-        background_fs_checks,
-    );
+    let file_to_open_task = match project {
+        Some(project) => possible_open_target_for_project(
+            workspace,
+            project,
+            &path_like_target.maybe_path,
+            path_like_target.terminal_dir.as_deref(),
+            cx,
+        ),
+        None => possible_open_target_with_fs_checks(
+            workspace,
+            &path_like_target.maybe_path,
+            path_like_target.terminal_dir.as_deref(),
+            cx,
+            background_fs_checks,
+        ),
+    };
     cx.spawn(async move |terminal_view, cx| {
         let file_to_open = file_to_open_task.await;
         terminal_view
@@ -78,6 +117,7 @@ fn possible_hover_target(
 
 pub(super) fn open_path_like_target(
     workspace: &WeakEntity<Workspace>,
+    project: WeakEntity<Project>,
     terminal_view: &mut TerminalView,
     path_like_target: &PathLikeTarget,
     window: &mut Window,
@@ -85,13 +125,21 @@ pub(super) fn open_path_like_target(
 ) {
     #[cfg(not(test))]
     {
-        possibly_open_target(workspace, terminal_view, path_like_target, window, cx)
-            .detach_and_log_err(cx)
+        possibly_open_target(
+            workspace,
+            project,
+            terminal_view,
+            path_like_target,
+            window,
+            cx,
+        )
+        .detach_and_log_err(cx)
     }
     #[cfg(test)]
     {
         possibly_open_target(
             workspace,
+            project,
             terminal_view,
             path_like_target,
             window,
@@ -104,6 +152,7 @@ pub(super) fn open_path_like_target(
 
 fn possibly_open_target(
     workspace: &WeakEntity<Workspace>,
+    project: WeakEntity<Project>,
     terminal_view: &mut TerminalView,
     path_like_target: &PathLikeTarget,
     window: &mut Window,
@@ -113,6 +162,7 @@ fn possibly_open_target(
     if terminal_view.hover.is_none() {
         return Task::ready(Ok(None));
     }
+    let session_project = terminal_project_for(project, workspace, cx);
     let workspace = workspace.clone();
     let path_like_target = path_like_target.clone();
     cx.spawn_in(window, async move |terminal_view, cx| {
@@ -120,22 +170,40 @@ fn possibly_open_target(
             .update(cx, |_, cx| {
                 #[cfg(not(test))]
                 {
-                    possible_open_target(
-                        &workspace,
-                        &path_like_target.maybe_path,
-                        path_like_target.terminal_dir.as_deref(),
-                        cx,
-                    )
+                    match session_project.clone() {
+                        Some(project) => possible_open_target_for_project(
+                            &workspace,
+                            project,
+                            &path_like_target.maybe_path,
+                            path_like_target.terminal_dir.as_deref(),
+                            cx,
+                        ),
+                        None => possible_open_target(
+                            &workspace,
+                            &path_like_target.maybe_path,
+                            path_like_target.terminal_dir.as_deref(),
+                            cx,
+                        ),
+                    }
                 }
                 #[cfg(test)]
                 {
-                    possible_open_target_with_fs_checks(
-                        &workspace,
-                        &path_like_target.maybe_path,
-                        path_like_target.terminal_dir.as_deref(),
-                        cx,
-                        background_fs_checks,
-                    )
+                    match session_project.clone() {
+                        Some(project) => possible_open_target_for_project(
+                            &workspace,
+                            project,
+                            &path_like_target.maybe_path,
+                            path_like_target.terminal_dir.as_deref(),
+                            cx,
+                        ),
+                        None => possible_open_target_with_fs_checks(
+                            &workspace,
+                            &path_like_target.maybe_path,
+                            path_like_target.terminal_dir.as_deref(),
+                            cx,
+                            background_fs_checks,
+                        ),
+                    }
                 }
             })?
             .await
@@ -144,21 +212,68 @@ fn possibly_open_target(
         };
 
         let path_to_open = open_target.path();
-        let opened_items = workspace
-            .update_in(cx, |workspace, window, cx| {
-                workspace.open_paths(
-                    vec![path_to_open.path.clone()],
-                    OpenOptions {
-                        visible: Some(OpenVisible::OnlyDirectories),
-                        ..Default::default()
-                    },
-                    None,
-                    window,
-                    cx,
-                )
-            })
-            .context("workspace update")?
-            .await;
+
+        if open_target.is_dir()
+            && let Some(project) = session_project.as_ref()
+        {
+            let project_path_task = cx.update(|_window, cx| {
+                Workspace::project_path_for_path(project.clone(), &path_to_open.path, true, cx)
+            })?;
+            let (worktree, project_path) = project_path_task.await?;
+            let entry_id = worktree.read_with(cx, |worktree, _| {
+                if project_path.path.as_unix_str().is_empty() {
+                    worktree.root_entry().map(|entry| entry.id)
+                } else {
+                    worktree
+                        .entry_for_path(&project_path.path)
+                        .map(|entry| entry.id)
+                }
+            });
+            workspace.update(cx, |_workspace, cx| {
+                project.update(cx, |_, cx| {
+                    if let Some(entry_id) = entry_id {
+                        cx.emit(::project::Event::ActiveEntryChanged(Some(entry_id)));
+                    }
+                    cx.emit(::project::Event::ActivateProjectPanel);
+                })
+            })?;
+            return Ok(Some(open_target));
+        }
+
+        let opened_items = if let Some(project) = session_project {
+            let project_path_task = cx.update(|_window, cx| {
+                Workspace::project_path_for_path(project.clone(), &path_to_open.path, true, cx)
+            })?;
+            let (_worktree, project_path) = project_path_task.await?;
+            let item = workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.open_project_path_in_active_pane(
+                        &project,
+                        project_path,
+                        true,
+                        window,
+                        cx,
+                    )
+                })?
+                .await?;
+            vec![Some(Ok(item))]
+        } else {
+            workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.open_paths(
+                        vec![path_to_open.path.clone()],
+                        OpenOptions {
+                            visible: Some(OpenVisible::OnlyDirectories),
+                            ..Default::default()
+                        },
+                        None,
+                        window,
+                        cx,
+                    )
+                })
+                .context("workspace update")?
+                .await
+        };
         if opened_items.len() != 1 {
             debug_panic!(
                 "Received {} items for one path {path_to_open:?}",
@@ -284,6 +399,7 @@ mod tests {
                 .update(cx, |_, cx| {
                     possible_hover_target(
                         &workspace_a.downgrade(),
+                        project.downgrade(),
                         hovered_word,
                         &path_like_target,
                         cx,
@@ -299,6 +415,7 @@ mod tests {
                 .update_in(cx, |terminal_view, window, cx| {
                     possibly_open_target(
                         &workspace.downgrade(),
+                        project.downgrade(),
                         terminal_view,
                         &path_like_target,
                         window,

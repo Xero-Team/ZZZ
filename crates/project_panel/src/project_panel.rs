@@ -76,8 +76,8 @@ use util::{
     rel_path::{RelPath, RelPathBuf},
 };
 use workspace::{
-    DraggedSelection, OpenInTerminal, OpenMode, OpenOptions, OpenVisible, PreviewTabsSettings,
-    SelectedEntry, SplitDirection, Workspace, WorkspaceSettings,
+    DraggedSelection, OpenInTerminal, OpenMode, OpenOptions, OpenVisible, Pane,
+    PreviewTabsSettings, SelectedEntry, SplitDirection, Workspace, WorkspaceSettings,
     dock::{DockPosition, Panel, PanelEvent},
     focus_follows_mouse::FocusFollowsMouse as _,
     notifications::{DetachAndPromptErr, NotifyResultExt, NotifyTaskExt},
@@ -141,6 +141,9 @@ impl State {
 
 pub struct ProjectPanel {
     project: Entity<Project>,
+    /// When set, opened entries are routed into this pane instead of the
+    /// workspace center (used by the terminal-mode session file panel).
+    open_target: Option<WeakEntity<Pane>>,
     fs: Arc<dyn Fs>,
     focus_handle: FocusHandle,
     scroll_handle: UniformListScrollHandle,
@@ -635,12 +638,12 @@ enum DeleteEntryOutcome {
 }
 
 impl ProjectPanel {
-    fn new(
+    pub fn new(
+        project: Entity<Project>,
         workspace: &mut Workspace,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
-        let project = workspace.project().clone();
         let git_store = project.read(cx).git_store().clone();
         let path_style = project.read(cx).path_style(cx);
         let project_panel = cx.new(|cx| {
@@ -872,6 +875,7 @@ impl ProjectPanel {
             let weak_project_panel = cx.weak_entity();
             let mut this = Self {
                 project: project.clone(),
+                open_target: None,
                 hover_scroll_task: None,
                 fs: workspace.app_state().fs.clone(),
                 focus_handle,
@@ -924,6 +928,36 @@ impl ProjectPanel {
                             let file_path = entry.path.clone();
                             let worktree_id = worktree.read(cx).id();
                             let entry_id = entry.id;
+                            let project_path = ProjectPath {
+                                worktree_id,
+                                path: file_path.clone(),
+                            };
+
+                            let open_target = project_panel
+                                .upgrade()
+                                .and_then(|project_panel| project_panel.read(cx).open_target.clone());
+
+                            let open_task = if let Some(open_target) = open_target {
+                                Workspace::open_project_path_in_pane(
+                                    &project,
+                                    &open_target,
+                                    project_path,
+                                    focus_opened_item,
+                                    allow_preview,
+                                    window,
+                                    cx,
+                                )
+                            } else {
+                                workspace
+                                    .open_path_preview(
+                                        project_path,
+                                        None,
+                                        focus_opened_item,
+                                        allow_preview,
+                                        true,
+                                        window, cx,
+                                    )
+                            };
                             let is_via_ssh = project.read(cx).is_via_remote_server();
                             let disconnected_from_ssh_host = tr(
                                 cx,
@@ -935,43 +969,33 @@ impl ProjectPanel {
                                 "project_panel.error.disconnected_from_remote_project",
                                 "Disconnected from remote project",
                             );
-
-                            workspace
-                            .open_path_preview(
-                                    ProjectPath {
-                                        worktree_id,
-                                        path: file_path.clone(),
-                                    },
-                                    None,
-                                    focus_opened_item,
-                                    allow_preview,
-                                    true,
-                                    window, cx,
-                                )
-                                .detach_and_prompt_err(
-                                    &tr(cx, "project_panel.open_file.failed", "Failed to open file"),
-                                    window,
-                                    cx,
-                                    move |e, _, cx| match e.error_code() {
-                                        ErrorCode::Disconnected => if is_via_ssh {
-                                            Some(disconnected_from_ssh_host)
-                                        } else {
-                                            Some(disconnected_from_remote_project)
-                                        },
-                                        ErrorCode::UnsharedItem => Some(
-                                            tr(
-                                                cx,
-                                                "project_panel.open_file.unshared_item",
-                                                "{} is not shared by the host. This could be because it has been marked as `private`",
-                                            )
-                                            .replacen("{}", file_path.display(path_style).as_ref(), 1),
-                                        ),
-                                        // See note in worktree.rs where this error originates. Returning Some in this case prevents
-                                        // the error popup from saying "Try Again", which is a red herring in this case
-                                        ErrorCode::Internal if e.to_string().contains("File is too large to load") => Some(e.to_string()),
-                                        _ => None,
-                                    },
-                                );
+                            open_task.detach_and_prompt_err(
+                                &tr(cx, "project_panel.open_file.failed", "Failed to open file"),
+                                window,
+                                cx,
+                                move |error, _, cx| match error.error_code() {
+                                    ErrorCode::Disconnected => Some(if is_via_ssh {
+                                        disconnected_from_ssh_host
+                                    } else {
+                                        disconnected_from_remote_project
+                                    }),
+                                    ErrorCode::UnsharedItem => Some(
+                                        tr(
+                                            cx,
+                                            "project_panel.open_file.unshared_item",
+                                            "{} is not shared by the host. This could be because it has been marked as `private`",
+                                        )
+                                        .replacen("{}", file_path.display(path_style).as_ref(), 1),
+                                    ),
+                                    // Do not offer "Try Again" for a deterministic size limit.
+                                    ErrorCode::Internal
+                                        if error.to_string().contains("File is too large to load") =>
+                                    {
+                                        Some(error.to_string())
+                                    }
+                                    _ => None,
+                                },
+                            );
 
                             if let Some(project_panel) = project_panel.upgrade() {
                                 // Always select and mark the entry, regardless of whether it is opened or not.
@@ -1022,8 +1046,16 @@ impl ProjectPanel {
         mut cx: AsyncWindowContext,
     ) -> Result<Entity<Self>> {
         workspace.update_in(&mut cx, |workspace, window, cx| {
-            ProjectPanel::new(workspace, window, cx)
+            let project = workspace.project().clone();
+            ProjectPanel::new(project, workspace, window, cx)
         })
+    }
+
+    /// Routes entries opened in this panel into `pane` instead of the
+    /// workspace center.
+    pub fn set_open_target(&mut self, pane: WeakEntity<Pane>, cx: &mut Context<Self>) {
+        self.open_target = Some(pane);
+        cx.notify();
     }
 
     fn update_diagnostics(&mut self, cx: &mut Context<Self>) {
@@ -8153,6 +8185,20 @@ impl Panel for ProjectPanel {
 }
 
 impl ProjectPanel {
+    /// The currently selected entry as a project path, if any.
+    pub fn selected_path(&self, cx: &App) -> Option<ProjectPath> {
+        let selection = self.selection?;
+        let worktree = self
+            .project
+            .read(cx)
+            .worktree_for_id(selection.worktree_id, cx)?;
+        let entry = worktree.read(cx).entry_for_id(selection.entry_id)?;
+        Some(ProjectPath {
+            worktree_id: selection.worktree_id,
+            path: entry.path.clone(),
+        })
+    }
+
     pub fn select_path_for_test(&mut self, project_path: ProjectPath, cx: &App) {
         let Some(worktree) = self
             .project

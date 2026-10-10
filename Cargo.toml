@@ -168,6 +168,7 @@ members = [
     "crates/telegram",
     "crates/telegram_ui",
     "crates/terminal",
+    "crates/terminal_mode",
     "crates/terminal_view",
     "crates/text",
     "crates/theme",
@@ -428,6 +429,7 @@ tasks_ui = { path = "crates/tasks_ui" }
 telegram = { path = "crates/telegram" }
 telegram_ui = { path = "crates/telegram_ui" }
 terminal = { path = "crates/terminal" }
+terminal_mode = { path = "crates/terminal_mode" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }

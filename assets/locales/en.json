@@ -3577,6 +3577,19 @@
     "csv_preview.settings.custom_delimiter_placeholder": "Custom delimiter",
     "csv_preview.settings.delimiter.custom": "Custom",
     "csv_preview.settings.delimiter.space": "Space",
-    "csv_preview.settings.synthetic_column": "Column {}"
+    "csv_preview.settings.synthetic_column": "Column {}",
+    "terminal_mode.session_panel.title": "SSH Sessions",
+    "terminal_mode.session_panel.empty": "No saved SSH connections",
+    "terminal_mode.session_panel.from_ssh_config": "~/.ssh/config",
+    "terminal_mode.session_panel.disconnect": "Disconnect",
+    "terminal_mode.session_panel.reconnect": "Reconnect",
+    "terminal_mode.copy.action": "Copy to session…",
+    "terminal_mode.copy.in_progress": "Copying…",
+    "terminal_mode.copy.progress": "Copying {} of {} bytes…",
+    "terminal_mode.copy.succeeded": "Copied {} item(s) to the target session",
+    "terminal_mode.copy.failed": "Copy to session failed: {}",
+    "terminal_mode.connect.failed": "Connection failed: {}",
+    "terminal_mode.file_panel.title": "Session Files",
+    "terminal_mode.file_panel.empty": "No active session"
   }
 }

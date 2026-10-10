@@ -3577,6 +3577,19 @@
     "csv_preview.settings.custom_delimiter_placeholder": "自定义分隔符",
     "csv_preview.settings.delimiter.custom": "自定义",
     "csv_preview.settings.delimiter.space": "空格",
-    "csv_preview.settings.synthetic_column": "第 {} 列"
+    "csv_preview.settings.synthetic_column": "第 {} 列",
+    "terminal_mode.session_panel.title": "SSH 会话",
+    "terminal_mode.session_panel.empty": "没有已保存的 SSH 连接",
+    "terminal_mode.session_panel.from_ssh_config": "~/.ssh/config",
+    "terminal_mode.session_panel.disconnect": "断开连接",
+    "terminal_mode.session_panel.reconnect": "重新连接",
+    "terminal_mode.copy.action": "复制到会话…",
+    "terminal_mode.copy.in_progress": "正在复制…",
+    "terminal_mode.copy.progress": "正在复制 {} / {} 字节…",
+    "terminal_mode.copy.succeeded": "已将 {} 个项目复制到目标会话",
+    "terminal_mode.copy.failed": "复制到会话失败：{}",
+    "terminal_mode.connect.failed": "连接失败：{}",
+    "terminal_mode.file_panel.title": "会话文件",
+    "terminal_mode.file_panel.empty": "没有活动会话"
   }
 }
