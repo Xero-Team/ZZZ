@@ -5684,7 +5684,18 @@ mod tests {
             cx,
         );
         let window = cx.open_window(size(px(800.), px(600.)), |_, cx| {
-            let markdown = cx.new(|cx| Markdown::new(source.into(), None, None, cx));
+            let markdown = cx.new(|cx| {
+                Markdown::new_with_options(
+                    source.into(),
+                    None,
+                    None,
+                    MarkdownOptions {
+                        parse_html: true,
+                        ..Default::default()
+                    },
+                    cx,
+                )
+            });
             ImageLayoutView {
                 markdown,
                 icon,
@@ -5772,6 +5783,53 @@ mod tests {
             "images in a paragraph should stay top-aligned"
         );
         assert!(icon.left() < tall_image.left());
+    }
+
+    fn leading_image_and_container_bounds(
+        source: &'static str,
+        cx: &mut TestAppContext,
+    ) -> (Bounds<Pixels>, Bounds<Pixels>) {
+        let mut cx = render_image_layout(source, cx);
+        let image = cx
+            .debug_bounds("markdown_image_0")
+            .expect("image should be rendered");
+        let container = cx
+            .debug_bounds("inner")
+            .expect("markdown container should be rendered");
+        (image, container)
+    }
+
+    #[gpui::test]
+    fn test_images_in_html_blocks_follow_text_align(cx: &mut TestAppContext) {
+        for (source, expected_alignment) in [
+            (r#"<p><img src="icon.png"></p>"#, TextAlign::Left),
+            (
+                r#"<p align="center"><img src="icon.png"></p>"#,
+                TextAlign::Center,
+            ),
+            (
+                r#"<p align="right"><img src="icon.png"></p>"#,
+                TextAlign::Right,
+            ),
+            (
+                r#"<p style="text-align: center"><a href="https://zed.dev"><img src="icon.png"></a></p>"#,
+                TextAlign::Center,
+            ),
+        ] {
+            let (image, container) = leading_image_and_container_bounds(source, cx);
+            let left_gap = image.left() - container.left();
+            let right_gap = container.right() - image.right();
+            let aligned = match expected_alignment {
+                TextAlign::Left => left_gap < px(1.) && right_gap > px(100.),
+                TextAlign::Center => (left_gap - right_gap).abs() <= px(1.5) && left_gap > px(100.),
+                TextAlign::Right => right_gap < px(1.) && left_gap > px(100.),
+            };
+            assert!(
+                aligned,
+                "image in {source:?} should be {expected_alignment:?} aligned: \
+                 left gap {left_gap:?}, right gap {right_gap:?}"
+            );
+        }
     }
 
     #[test]
