@@ -351,6 +351,51 @@ impl ForegroundWorkItem for ForegroundBarrier {
     }
 }
 
+struct ElicitationDisconnectWork {
+    acknowledgment: futures::channel::oneshot::Sender<()>,
+}
+
+impl ForegroundWorkItem for ElicitationDisconnectWork {
+    fn run(self: Box<Self>, cx: &mut AsyncApp, context: &ClientContext) {
+        let threads = context
+            .sessions
+            .borrow()
+            .values()
+            .map(|session| session.thread.clone())
+            .collect::<Vec<_>>();
+        for thread in threads {
+            if let Some(thread) = thread.upgrade() {
+                thread.update(cx, |thread, cx| {
+                    thread.cancel_outstanding_elicitations(cx);
+                    cx.notify();
+                });
+            }
+        }
+        context.request_elicitations.update(cx, |store, cx| {
+            store.cancel_all(cx);
+        });
+        if self.acknowledgment.send(()).is_err() {
+            log::debug!("ACP disconnect cleanup waiter was cancelled before acknowledgment");
+        }
+    }
+
+    fn reject(self: Box<Self>) {
+        log::debug!("ACP foreground dispatch queue closed before disconnect cleanup");
+    }
+}
+
+async fn cancel_elicitations_after_disconnect(
+    dispatch_tx: mpsc::UnboundedSender<ForegroundWork>,
+) -> Result<(), acp::Error> {
+    let (acknowledgment, received) = futures::channel::oneshot::channel();
+    let work: ForegroundWork = Box::new(ElicitationDisconnectWork { acknowledgment });
+    if let Err(error) = dispatch_tx.unbounded_send(work) {
+        error.into_inner().reject();
+        return Err(dispatch_queue_closed_error());
+    }
+    received.await.map_err(|_| dispatch_queue_closed_error())
+}
+
 struct RequestForegroundWork<Req, Res>
 where
     Req: Send + 'static,
@@ -693,63 +738,80 @@ fn connect_client_future(
         }};
     }
 
-    Client
-        .builder()
-        .name(name)
-        .on_receive_request(
-            on_request!(handle_request_permission),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_write_text_file),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_read_text_file),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_create_terminal),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_kill_terminal),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_release_terminal),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_terminal_output),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_wait_for_terminal_exit),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            on_request!(handle_create_elicitation),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_notification(
-            on_notification!(handle_session_notification),
-            agent_client_protocol::on_receive_notification!(),
-        )
-        .on_receive_notification(
-            on_notification!(handle_complete_elicitation),
-            agent_client_protocol::on_receive_notification!(),
-        )
-        .connect_with(
-            transport,
-            move |connection: ConnectionTo<Agent>| async move {
-                if connection_tx.send(connection).is_err() {
-                    log::error!("failed to send ACP connection handle — receiver was dropped");
-                }
-                // Keep the connection alive until the transport closes.
-                futures::future::pending::<Result<(), acp::Error>>().await
-            },
-        )
+    async move {
+        // Transport failures can bypass `on_close`; both paths share the same foreground cleanup.
+        let cleanup = cancel_elicitations_after_disconnect(dispatch_tx.clone())
+            .boxed()
+            .shared();
+        let result = Client
+            .builder()
+            .name(name)
+            .on_receive_request(
+                on_request!(handle_request_permission),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_write_text_file),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_read_text_file),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_create_terminal),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_kill_terminal),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_release_terminal),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_terminal_output),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_wait_for_terminal_exit),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_request(
+                on_request!(handle_create_elicitation),
+                agent_client_protocol::on_receive_request!(),
+            )
+            .on_receive_notification(
+                on_notification!(handle_session_notification),
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_notification(
+                on_notification!(handle_complete_elicitation),
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_close({
+                let cleanup = cleanup.clone();
+                async move |_connection: ConnectionTo<Agent>| cleanup.await
+            })
+            .connect_with(
+                transport,
+                move |connection: ConnectionTo<Agent>| async move {
+                    if connection_tx.send(connection).is_err() {
+                        log::error!("failed to send ACP connection handle — receiver was dropped");
+                    }
+                    // Keep the connection alive until the transport closes.
+                    futures::future::pending::<Result<(), acp::Error>>().await
+                },
+            )
+            .await;
+        let cleanup_result = cleanup.await;
+        if let Err(error) = &cleanup_result {
+            log::warn!("ACP disconnect cleanup failed: {error}");
+        }
+        result?;
+        cleanup_result
+    }
 }
 
 fn client_capabilities_for_agent(agent_id: &AgentId) -> acp::ClientCapabilities {
@@ -4050,22 +4112,19 @@ fn handle_complete_elicitation(
         .values()
         .map(|session| session.thread.clone())
         .collect::<Vec<_>>();
-    let request_elicitations = ctx.request_elicitations.clone();
     let elicitation_id = args.elicitation_id;
 
-    cx.spawn(async move |cx| {
-        for thread in threads {
-            thread
-                .update(cx, |thread, cx| {
-                    thread.complete_url_elicitation(&elicitation_id, cx);
-                })
-                .log_err();
+    // Complete accepted notifications in queue order before disconnect cleanup can run.
+    for thread in threads {
+        if let Some(thread) = thread.upgrade() {
+            thread.update(cx, |thread, cx| {
+                thread.complete_url_elicitation(&elicitation_id, cx);
+            });
         }
-        request_elicitations.update(cx, |store, cx| {
-            store.complete_url_elicitation(&elicitation_id, cx);
-        });
-    })
-    .detach();
+    }
+    ctx.request_elicitations.update(cx, |store, cx| {
+        store.complete_url_elicitation(&elicitation_id, cx);
+    });
 }
 
 fn handle_write_text_file(
