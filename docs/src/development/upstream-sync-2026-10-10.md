@@ -117,3 +117,114 @@ has `Upstream`, `Retained`, and `Omitted` trailers.
 
 The general reviewed baseline advances to
 `cb981d5ac6ad8f491e86181a7b326342dc069206`.
+
+## Continued Batch
+
+### Scope
+
+- Target branch: `sync/upstream-2026-10-10`, continuing the same local base
+  `85d925f5d0`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `cb981d5ac6ad8f491e86181a7b326342dc069206`
+- Reviewed head: `df48a139ce9c292738b523252c12f044697e673f`
+- Live upstream head queried: `93d745668805029476e6d7fbb19652116fed51de`
+- Query time: `2026-10-11T11:05:57+02:00`
+- Reviewed range: the next 20 commits after `cb981d5a`, oldest first
+- Remaining after this batch: 8 commits through the queried live head
+
+The previous baseline is an ancestor of `FETCH_HEAD`. This batch stays fixed at
+twenty commits; the later commits remain queued.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                      |
+| ---------- | ----- | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| 9ab0715969 | C     | --           | Upgrades the ACP SDK to 3.2.0 and registers sessions through prepared-request and cancellation handles; ZZZ pins 2.2.0.          |
+| 95d35c6efd | C     | --           | Creates the absent `gpui_apple` crate and moves `SurfaceSource`, `PaintSurface`, and `paint_surface` to `objc2-core-video`.      |
+| 4f6d97b9de | C     | --           | Frame and hang telemetry measured against per-window refresh rates; needs the absent `hang_telemetry` crate and emits telemetry. |
+| d058ddbbc1 | C     | --           | Restyles the collaboration panel, which ZZZ does not ship.                                                                       |
+| b01d137ad7 | B     | c77eb6949e   | Text finder escapes selection-seeded raw text in regex mode; the `QuerySeed` move into `project_search.rs` was omitted.          |
+| 679ad7c304 | A     | a69f8f4c4e   | Clean absorption fixing `uniform_list` item layout far down long lists.                                                          |
+| a2a92fe7c4 | B     | ac53c1c55c   | `gpui_platform` forwards `gpui_web`'s `multithreaded` feature; the conflicting manifest pick was resolved onto ZZZ's crate list. |
+| 7230a5acc5 | B     | 6370af054a   | Markdown hit testing defers the inter-line gap fallback so later table cells still win; the wrapped-table suite was omitted.     |
+| 9f94d13160 | B     | c01da21cb6   | Markdown preview stores nav history so going back returns to it, and Vim binds `ctrl-o`/`ctrl-i`; the test was rewritten.        |
+| 41dfc9953b | A     | f8bd0f94df   | Clean absorption bumping the managed Node runtime to v24.21.0.                                                                   |
+| f0b38ac75e | C     | --           | Lockfile-only dependency bump with no independent ZZZ behavior.                                                                  |
+| 1c9dd3e70f | C     | --           | Moves shared agent state to ACP v2 session and tool IDs; ZZZ has no `acp_v2` usage.                                              |
+| 017c1398fd | C     | --           | Drops the min height of the upstream `default_picker`; ZZZ's remote-project picker is a different localized modal.               |
+| e778eec483 | C     | --           | Introduces a Zed-owned `ToolCallLocation` over `acp_v2` location types absent from ZZZ.                                          |
+| 089abd6917 | C     | --           | Adds Bedrock models and provider wiring for the absent `bedrock` crate.                                                          |
+| 90d8514059 | A     | 791f068ec4   | Clean absorption fixing blurred window backgrounds on macOS 27.                                                                  |
+| 93b4e5edec | C     | --           | Releases edit-prediction files in the absent `edit_prediction` crate.                                                            |
+| 129c68ff4b | C     | --           | Edit-prediction subscription messaging plus `client` plan helpers for Zed's hosted organizations.                                |
+| efed1f245a | C     | --           | FIM stop-sequence handling in the absent `edit_prediction` crate.                                                                |
+| df48a139ce | C     | --           | Adds Claude Opus 5.5 BYOK support for the absent `bedrock` crate.                                                                |
+
+Totals: three `A`, four `B`, thirteen `C`.
+
+### Applied Work
+
+The three direct `A` changes used `git cherry-pick -x -s`. Each `B` commit has
+`Upstream`, `Retained`, and `Omitted` trailers.
+
+- `a69f8f4c4e` computes the visible range and each item origin in `f64` before
+  converting the small offsets back to `Pixels`, so `uniform_list` no longer
+  drifts far down long lists.
+- `f8bd0f94df` bumps the managed Node runtime from v24.11.0 to v24.21.0.
+- `791f068ec4` uses the `UnderWindowBackground` visual-effect material and sets
+  the behind-window blending mode, restoring blur on macOS 27.
+- `ac53c1c55c` gives `gpui_platform` a `multithreaded` feature (on by default)
+  that forwards to `gpui_web`, and declares `gpui_web` without default features
+  in the workspace.
+- `c77eb6949e` tags each text-finder seed as query syntax or raw text and
+  escapes raw selections in regex mode. The enum lives in `text_finder.rs`
+  because ZZZ's project search never absorbed the earlier shared refactor.
+- `c01da21cb6` records a `MarkdownPreviewView` nav-history entry on
+  deactivation and binds `ctrl-o`/`ctrl-i` in the `MarkdownPreview` Vim
+  context.
+- `6370af054a` records the first inter-line gap and keeps scanning, so a
+  position inside a later overlapping table cell hits its text before the gap
+  fallback.
+
+### Rejected Work
+
+- `9ab0715969`, `1c9dd3e70f`, and `e778eec483` all build on ACP v2 and the ACP
+  SDK 3.x prepared-request API. ZZZ pins `agent-client-protocol = 2.2.0` and its
+  `acp_thread` has no `acp_v2` usage, so the v2 session, tool-ID, and location
+  models have no local transport.
+- `95d35c6efd` creates the absent `gpui_apple` crate and changes GPUI's public
+  surface API to `objc2-core-video`; ZZZ's `gpui_macos` keeps the `core-video`
+  shape.
+- `4f6d97b9de` depends on the absent `hang_telemetry` crate and is frame and
+  hang telemetry, which ZZZ keeps absent.
+- `d058ddbbc1` targets the collaboration panel, which is not shipped.
+- `089abd6917` and `df48a139ce` add models and provider wiring for the absent
+  `bedrock` crate.
+- `93b4e5edec`, `129c68ff4b`, and `efed1f245a` target the absent
+  `edit_prediction` crate; `129c68ff4b` also adds `client` subscription and
+  organization plan helpers for Zed's hosted plans.
+- `f0b38ac75e` is a lockfile-only bump with no independent local behavior.
+- `017c1398fd` removes the min height from the upstream `default_picker`; ZZZ's
+  remote-project picker is a different localized modal with no such component,
+  so there is no equivalent line to change.
+
+### Verification
+
+| Check                                                                | Result  | Notes                                                                          |
+| -------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------ |
+| Live `git ls-remote` and `git fetch --no-tags`                       | PASS    | `FETCH_HEAD=93d745668805029476e6d7fbb19652116fed51de`                          |
+| Previous baseline ancestry                                           | PASS    | `cb981d5a` is an ancestor of `FETCH_HEAD`                                      |
+| `cargo check --locked -p gpui -p gpui_platform -p node_runtime`      | PASS    | `uniform_list`, web feature, and Node-version ports                            |
+| `cargo check --locked -p gpui_macos`                                 | PASS    | macOS-27 blur port compiles; runtime NOT RUN                                   |
+| `cargo check --locked -p search` and `cargo test --locked -p search` | PASS    | `text_finder` regex-escape unit test and focused suite pass                    |
+| `cargo check --locked -p markdown_preview --tests` and focused test  | PASS    | `go_back_returns_to_preview_after_opening_another_file` passes                 |
+| `cargo check --locked -p markdown` and gap non-regression test       | PASS    | `test_hit_testing_outside_text_preserves_source_indices` passes                |
+| `cargo fmt --all -- --check` and `git diff --check`                  | PASS    | Final source checks                                                            |
+| Report Prettier                                                      | PASS    | `npx prettier --check src/development/upstream-sync-2026-10-10.md`             |
+| Rejection ledger backfill and check                                  | PASS    | `./script/backfill-upstream-ledger` and `./script/check-upstream-ledger` pass  |
+| `markdown` table hit-testing tests                                   | NOT RUN | Four table tests already panic on the clean baseline; not caused by this batch |
+| macOS and Windows runtime checks                                     | NOT RUN | Host is Linux                                                                  |
+| `cargo test --workspace`                                             | NOT RUN | Not requested                                                                  |
+
+The general reviewed baseline advances to
+`df48a139ce9c292738b523252c12f044697e673f`.
