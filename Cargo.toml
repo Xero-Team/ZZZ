@@ -25,6 +25,7 @@ members = [
     "crates/component",
     "crates/component_preview",
     "crates/context_server",
+    "crates/crashes",
     "crates/credentials_provider",
     "crates/csv_preview",
     "crates/dap",
@@ -279,6 +280,7 @@ ui_component_registry = { path = "crates/component" }
 component_preview = { path = "crates/component_preview" }
 console = "0.16"
 context_server = { path = "crates/context_server" }
+crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.5"
 csv_preview = { path = "crates/csv_preview"}
@@ -320,7 +322,7 @@ gpui_linux = { path = "crates/gpui_linux", default-features = false }
 gpui_macos = { path = "crates/gpui_macos", default-features = false }
 gpui_macros = { path = "crates/gpui_macros" }
 gpui_platform = { path = "crates/gpui_platform", default-features = false }
-gpui_web = { path = "crates/gpui_web" }
+gpui_web = { path = "crates/gpui_web", default-features = false }
 gpui_wgpu = { path = "crates/gpui_wgpu" }
 gpui_windows = { path = "crates/gpui_windows", default-features = false }
 gpui_tokio = { path = "crates/gpui_tokio" }

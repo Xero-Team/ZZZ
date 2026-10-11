@@ -14,6 +14,8 @@ sha	class	reason_code	note	source
 00382632	C	absent-api	Manage-skills command filtering targets an action surface absent from ZZZ's ACP-only agent UI.	upstream-sync-2026-09-02.md
 00c0e96e	C	diverged	`LoadedFile` Rope rewrite conflicts on local worktree decode.	upstream-sync-2026-08-27.md
 00def035de	C	absent-api	`which_key::ShowPendingBindings` depends on the deleted `pending_keystrokes_indicator.rs`.	upstream-sync-2026-09-30.md
+017c1398fd	C	untriaged	Drops the min height of the upstream `default_picker`; ZZZ's remote-project picker is a different localized modal.	upstream-sync-2026-10-10.md
+01f22d2d86	C	untriaged	The new Windows child-job query has no current local caller, so it would be unused public API.	upstream-sync-2026-10-09.md
 0307288d	C	upstream-infra	Unused benchmark/threaded-dispatcher API.	upstream-sync-2026-08-18.md
 037f32aef0	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 05473ed8	C	diverged	`csv_preview` rename; local crate already diverged.	upstream-sync-2026-08-27.md
@@ -23,7 +25,10 @@ sha	class	reason_code	note	source
 07a0bd12	C	untriaged	Unused frame-time debug overlay.	upstream-sync-2026-08-18.md
 07df438626	C	upstream-infra	Upstream-only GPUI tracing cleanup; the Mermaid migration has no dependency on this change.	upstream-sync-2026-10-02.md
 0812d210	C	untriaged	GPT-5.6 Sol default mixed with subscribed provider.	upstream-sync-2026-08-18.md
+0849124bc2	C	philosophy	Cross-crate snapshot rewrite includes native-agent and Copilot paths; no coherent, independently testable slice.	upstream-sync-2026-10-09.md
 0855410c	C	untriaged	Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.	upstream-sync-2026-09-02.md
+089abd6917	C	absent-api	Adds Bedrock models and provider wiring for the absent `bedrock` crate.	upstream-sync-2026-10-10.md
+09745431b5	C	philosophy	Hosted-model pricing documents a commercial hosted offering that ZZZ does not promote.	upstream-sync-2026-10-09.md
 098e4407	C	untriaged	OpenAI subscribed ungated catalog.	upstream-sync-2026-08-18.md
 0a7c84bc37	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 0ad5441b	C	diverged	Display-position selections; editor conflict.	upstream-sync-2026-08-18.md
@@ -38,6 +43,7 @@ sha	class	reason_code	note	source
 107ee1a6	C	unisolatable	Large terminal/dock restoration rewrite is unisolatable from ZZZ layout.	upstream-sync-2026-08-27.md
 10b0795183	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 1271f8b0	C	philosophy	rustc 1.97 bump is 66-file lockfile/agent/collab churn.	upstream-sync-2026-08-18.md
+129c68ff4b	C	philosophy	Edit-prediction subscription messaging plus `client` plan helpers for Zed's hosted organizations.	upstream-sync-2026-10-10.md
 12a19dcc	C	philosophy	Native agent sandbox.	upstream-sync-2026-08-07.md
 12ef40c3	C	diverged	Broad LSP diagnostic message/protocol rewrite conflicts with local diagnostics.	upstream-sync-2026-08-27.md
 12f79c0aeb	C	philosophy	`cloud_api_client` crate and cloud websocket path are absent.	upstream-sync-2026-09-30.md
@@ -53,6 +59,7 @@ sha	class	reason_code	note	source
 184e124b	C	diverged	Per-line terminal CWD resolver requires a divergent terminal path model.	upstream-sync-2026-08-07.md
 1861e58f	C	philosophy	Telemetry/hang journaling violates the no-telemetry boundary.	upstream-sync-2026-08-27.md
 18be72fd	C	diverged	File-scanner rewrite; settings/worktree conflict.	upstream-sync-2026-08-18.md
+19c69782eb	C	upstream-infra	Dependency and lockfile pin for a `khronos-egl` fork; dependency churn without independent local behavior.	upstream-sync-2026-10-10.md
 1a28cff4b4	C	untriaged	Commit reads off the serial job queue; built on the unabsorbed #62536 `object_read_limiter` architecture, which local `git_store` lacks.	upstream-sync-2026-09-30.md
 1a84d5d9	C	absent-api	Folder-drag highlight fix needs absent external-drag APIs and new `on_file_drop_exit`.	upstream-sync-2026-09-18.md
 1a89a92e	C	unisolatable	Unpaced renderer sessions rewrite a much larger upstream `bench_context`.	upstream-sync-2026-09-18.md
@@ -60,6 +67,8 @@ sha	class	reason_code	note	source
 1b572a2bd0	C	philosophy	`hang_telemetry` crate; telemetry is rejected in source.	upstream-sync-2026-09-30.md
 1b7318bf8b	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 1c9cbd3b	C	philosophy	Native agent terminal shrink.	upstream-sync-2026-08-18.md
+1c9dd3e70f	C	untriaged	Moves shared agent state to ACP v2 session and tool IDs; ZZZ has no `acp_v2` usage.	upstream-sync-2026-10-10.md
+1dd9bbfd71	C	unisolatable	Global element-id caching is entangled with Zed's superseded Frame and AccessKit-writer architecture.	upstream-sync-2026-10-09.md
 1e2e422c	C	unisolatable	Broad remote extension-host/settings rewrite is not isolatable locally.	upstream-sync-2026-08-27.md
 1e7f1a11f9	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 1e9f1ef4	C	philosophy	Baseten uses cloud credentials and is not a silent manual provider.	upstream-sync-2026-08-27.md
@@ -67,10 +76,14 @@ sha	class	reason_code	note	source
 1f7eae7f	C	upstream-infra	Benchmark/test-support and upstream skill scaffolding only.	upstream-sync-2026-08-27.md
 200fb85c	C	untriaged	Depends on unabsorbed bracket-cache and boundary-query architecture.	upstream-sync-2026-08-07.md
 2040e0de	C	upstream-infra	`spawn_dedicated` / scheduler rewrite plus lockfile churn.	upstream-sync-2026-08-27.md
+204362325c	C	upstream-infra	Upstream release, Sentry, bundling, and `zed` package tooling are not a retained local pipeline.	upstream-sync-2026-10-09.md
 206a863a	C	diverged	gpui_web example-only `run_embedded` migration; no product caller and the local example already diverged.	upstream-sync-2026-09-04.md
+20aff31323	C	absent-api	Updates a fixture in the absent `edit_prediction` crate's test suite.	upstream-sync-2026-10-10.md
 20e3812408	C	untriaged	Atomic tool presentation built on the unabsorbed v2 content-value model.	upstream-sync-2026-09-30.md
 20fa2fa8	C	untriaged	Cross-crate LLVM IR reduction; not one isolatable local behavior.	upstream-sync-2026-09-17.md
 21f16f7b	C	upstream-infra	Broad crate-graph/lockfile refactor has no independent product behavior.	upstream-sync-2026-08-07.md
+2239fa76b1	C	untriaged	New `Label::text_center` public API has no current ZZZ caller.	upstream-sync-2026-10-09.md
+2240542744	C	diverged	Single-file matching depends on upstream's divergent `File` and language-registry path architecture.	upstream-sync-2026-10-09.md
 224373ab	C	diverged	Web IME/input rewrite conflicts with ZZZ's web window path.	upstream-sync-2026-08-27.md
 22945084	C	diverged	Broad BufferDiff/GitStore/editor hunk-operation refactor is not isolatable onto ZZZ's divergent diff architecture.	upstream-sync-2026-09-02.md
 22e92168	C	philosophy	Concurrent peer LSP requests through the collab RPC path.	upstream-sync-2026-09-17.md
@@ -80,6 +93,7 @@ sha	class	reason_code	note	source
 23aca989	C	diverged	Dynamic LSP document-selector support is a broad capability/protocol rewrite across divergent ZZZ APIs.	upstream-sync-2026-09-02.md
 23d10a4754	C	untriaged	Adds a typed ACP v2 streamed tool-content append API but explicitly adds no wire handler; production has no caller, so this is future scaffolding.	upstream-sync-2026-10-05.md
 2440236055	C	upstream-infra	GPUI seeded benchmarks and heap-allocation metrics; benchmark plumbing.	upstream-sync-2026-09-30.md
+24aabd3fa6	C	upstream-infra	Community-board label automation is upstream maintenance infrastructure.	upstream-sync-2026-10-09.md
 25185402	C	philosophy	Native Agent Panel terminal-thread renaming.	upstream-sync-2026-09-18.md
 2551721a	C	absent-api	Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.	upstream-sync-2026-09-02.md
 26b6a267	C	untriaged	Upstream GitHub Actions / xtask Miri pin.	upstream-sync-2026-09-18.md
@@ -88,8 +102,10 @@ sha	class	reason_code	note	source
 284c7240	C	untriaged	Document-highlight dynamic registration needs upstream `dynamic_registration.rs`.	upstream-sync-2026-09-18.md
 2890c340	C	untriaged	Upstream `.rules` instruction is repository scaffolding, not ZZZ product behavior.	upstream-sync-2026-09-02.md
 2936989f	C	absent-api	New GPUI `LineLayout` APIs have no ZZZ caller.	upstream-sync-2026-08-27.md
+2a4326a256	C	upstream-infra	Duplicate-issue bot tracking is upstream maintenance infrastructure.	upstream-sync-2026-10-09.md
 2b37a3ed	C	untriaged	Upstream GitHub contributor-label link only.	upstream-sync-2026-08-27.md
 2c4bc2d7b2	C	absent-api	`data_table` separator fix needs the absent column-filter and row-border wiring.	upstream-sync-2026-09-24.md
+2ff34954a0	C	philosophy	Native-agent terminal-tool test only; the native agent path remains absent.	upstream-sync-2026-10-09.md
 300972be	C	upstream-infra	Upstream benchmark infrastructure.	upstream-sync-2026-08-07.md
 309f91f564	C	philosophy	Migrates Copilot enterprise authentication and subscription settings, which belong to an intentionally absent provider path.	upstream-sync-2026-10-05.md
 3135cdf8dc	C	upstream-infra	Random element-tree benchmarks and leak fixes on an absent GPUI benchmark harness.	upstream-sync-2026-09-30.md
@@ -112,6 +128,7 @@ sha	class	reason_code	note	source
 3794e5e979	C	absent-api	Keyed message upserts stacked on `ee43be113e`; touches the deleted `eval_cli`.	upstream-sync-2026-09-30.md
 381953d4	C	philosophy	Collaboration panel.	upstream-sync-2026-08-07.md
 38df25d5	C	upstream-infra	Benchmark-only dispatcher readiness API; no product behavior.	upstream-sync-2026-08-07.md
+3914477312	C	absent-api	ACP v2 compaction sharing needs v2 wire handling absent from ZZZ's negotiated v1 sessions.	upstream-sync-2026-10-10.md
 395def7a	C	upstream-infra	Upstream merge-queue CI plumbing; workflow files are absent locally.	upstream-sync-2026-09-24.md
 395fbd11	C	absent-api	Auto-update title-bar feedback; `auto_update` and `UpdateVersion` are absent.	upstream-sync-2026-09-18.md
 397cbc84de	C	upstream-infra	Guild PR-labeling workflow lives only in `.github/`, which ZZZ does not carry.	upstream-sync-2026-09-24.md
@@ -129,6 +146,7 @@ sha	class	reason_code	note	source
 3e442f25	C	untriaged	First-class ACP tool-call names need ACP 2.1; ZZZ is on 0.12.0.	upstream-sync-2026-09-18.md
 3fec483014	C	upstream-infra	First of an eight-part tabular-selection series, deliberately disabled in release builds until later copy/menu work; importing it alone would be staged future scaffolding.	upstream-sync-2026-10-05.md
 40180d9c40	C	upstream-infra	Upcoming iOS backend infrastructure depends on the absent `gpui_apple` crate and broad Apple renderer/Cargo reshaping.	upstream-sync-2026-10-04.md
+403589312e	C	untriaged	ACP v2 prompt-capability models have no negotiated v2 caller and include native-agent producers.	upstream-sync-2026-10-09.md
 414428c592	C	upstream-infra	Requires the absent `ThreadMetadata.title_override` persistence architecture; ZZZ currently makes titles read-only when an ACP agent cannot set them.	upstream-sync-2026-10-04.md
 424a6824	C	untriaged	wasm_thread fork-only dependency redirect; no behavior to retain.	upstream-sync-2026-08-07.md
 431734c9	C	philosophy	Collaboration contact finder.	upstream-sync-2026-08-07.md
@@ -138,11 +156,13 @@ sha	class	reason_code	note	source
 4601ead4	C	untriaged	Large WebGL backend and shader/dependency port exceeds isolated scope.	upstream-sync-2026-08-07.md
 4612aa2f	C	philosophy	Collab selection broadcast skip needs `Project::is_shared` and deleted `editor/src/input.rs`.	upstream-sync-2026-09-18.md
 4668a4bf09	C	philosophy	LSP log-stream reference counting needs the unabsorbed log-store refactor and absent collaborator events.	upstream-sync-2026-09-24.md
+46b11cc550	C	absent-api	Settings sidebar scrolling needs `container_query`, a GPUI layout API absent from ZZZ.	upstream-sync-2026-10-10.md
 46ee98a8	C	philosophy	Stop events for Zed-hosted Gemini via `language_models_cloud`.	upstream-sync-2026-09-18.md
 471fb15d7a	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 479bce0995	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 47b8ea58	C	absent-api	Reveal-in-panel needs `Item::active_project_path` and missing DiffMultibuffer.	upstream-sync-2026-09-18.md
 480d81bf	C	philosophy	ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.	upstream-sync-2026-09-02.md
+4882254fae	C	absent-api	Batched SSH environment probe depends on the absent local `RemoteEnvironment`, `os_version`, and `home_dir` machinery.	upstream-sync-2026-10-10.md
 49276a3d	C	untriaged	GitHub Actions / xtask gate tests on check_style.	upstream-sync-2026-09-18.md
 492acd6c	C	unisolatable	Process-group revert unisolatable from local terminal.	upstream-sync-2026-08-18.md
 49469000	C	unisolatable	Large multibuffer anchor/display rewrite is not isolatable from ZZZ's local layout.	upstream-sync-2026-09-02.md
@@ -158,6 +178,7 @@ sha	class	reason_code	note	source
 4e76d6ef82	C	philosophy	Authenticated ChatGPT subscription catalog loading belongs to the absent commercial `openai_subscribed` provider.	upstream-sync-2026-10-05.md
 4e8057d7	C	philosophy	CI assignee workflow.	upstream-sync-2026-08-18.md
 4f047acc	C	absent-api	V4 cursor-marker route is absent from ZZZ's edit_prediction API.	upstream-sync-2026-08-07.md
+4f6d97b9de	C	philosophy	Frame and hang telemetry measured against per-window refresh rates; needs the absent `hang_telemetry` crate and emits telemetry.	upstream-sync-2026-10-10.md
 506beb34de	C	upstream-infra	Release-build selector optimization depends on the rejected production `test-support` change and has no current ZZZ production path.	upstream-sync-2026-10-05.md
 50e6411571	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 5218009a	C	untriaged	Depends on the rejected Web IME implementation.	upstream-sync-2026-08-27.md
@@ -168,6 +189,7 @@ sha	class	reason_code	note	source
 52b24181	C	unisolatable	`gpui_apple` crate split; macOS-only rewrite.	upstream-sync-2026-08-18.md
 52e0b848	C	philosophy	Threads Sidebar auto-open; native agent plus MultiWorkspace.	upstream-sync-2026-09-18.md
 5313741f	C	philosophy	Native agent session leak rewrite; `WeakEntry` and native `Thread` storage are absent.	upstream-sync-2026-09-17.md
+533fe08cf	C	philosophy	Broad TOML upgrade and `SharedString` migration is dependency churn and a preparatory cross-workspace type rewrite.	upstream-sync-2026-10-09.md
 534319bd	C	absent-api	Pending-keystrokes indicator file and timeout APIs are absent.	upstream-sync-2026-09-18.md
 538a4a26	C	upstream-infra	Wezel build scenario infrastructure.	upstream-sync-2026-08-07.md
 53dbfe40	C	unisolatable	Typed transport-error rewrite does not match ZZZ's OpenAI request APIs.	upstream-sync-2026-08-27.md
@@ -178,6 +200,7 @@ sha	class	reason_code	note	source
 550ddc9405	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 557f85d25e	C	absent-api	Tool-output ownership fix needs the absent `new_label` refactor and the deleted `agent/src/thread.rs`.	upstream-sync-2026-09-24.md
 5618f439	C	untriaged	GitHub Actions Wezel runner.	upstream-sync-2026-09-18.md
+56303a3372	C	philosophy	Audio recovery requires broad CPAL lockfile churn and LiveKit collaboration compatibility changes.	upstream-sync-2026-10-09.md
 5631830c	C	untriaged	Depends on the unabsorbed Bedrock Mantle model surface.	upstream-sync-2026-08-27.md
 5638be1f	C	philosophy	ChatGPT subscription authentication.	upstream-sync-2026-08-07.md
 5786fee5	C	untriaged	Community automation.	upstream-sync-2026-08-07.md
@@ -197,6 +220,7 @@ sha	class	reason_code	note	source
 5e1fd392	C	untriaged	Depends on the unabsorbed diff-base protocol and broad editor/project graph changes.	upstream-sync-2026-08-07.md
 5e28272c	C	unisolatable	Touch-axis locking depends on the unabsorbed gesture physics rewrite.	upstream-sync-2026-09-02.md
 5ed5bf95	C	absent-api	Stream-mapping rewrite spans deleted and conflicting provider APIs.	upstream-sync-2026-08-27.md
+5f08939a5d	C	absent-api	Documents Bedrock custom endpoints in a gateway doc ZZZ does not ship; the `bedrock` crate is absent.	upstream-sync-2026-10-10.md
 5f1a6530	C	untriaged	SuperGrok OAuth / subscribed xAI provider.	upstream-sync-2026-09-18.md
 5f1f7e63	C	diverged	Web IME architecture conflicts with ZZZ's input path.	upstream-sync-2026-08-27.md
 5f2d7ad7	C	untriaged	Extension CLI validation depends on the unabsorbed `language::QueryFile` parser; no safe isolated equivalent exists in ZZZ's current extension tooling.	upstream-sync-2026-09-02.md
@@ -212,8 +236,10 @@ sha	class	reason_code	note	source
 66ed3027	C	philosophy	Native agent panel UI; no ACP-only surface.	upstream-sync-2026-08-07.md
 6721ea2e	C	diverged	Reset dock panels; workspace conflict.	upstream-sync-2026-08-18.md
 674dd790	C	unisolatable	Pure ACP stdio/debug-log refactor into new `acp/` submodules; local `acp.rs` is consolidated, so the extraction is an unisolatable rewrite.	upstream-sync-2026-09-24.md
+67b41bf976	C	upstream-infra	Dependency and lockfile bump of the ACP SDK with no independent ZZZ behavior.	upstream-sync-2026-10-10.md
 6840b8d2	C	philosophy	Repository Danger CI and mixed upstream documentation; the documentation also retains hosted-service and telemetry guidance outside ZZZ's boundary.	upstream-sync-2026-09-02.md
 6872711f	C	philosophy	Native Agent Panel terminal-thread double spawn.	upstream-sync-2026-09-18.md
+687d662a0b	C	philosophy	Upgrades `agent-client-protocol` to 3.3.0 and rewrites session and compaction handling for v2; ZZZ pins 2.2.0.	upstream-sync-2026-10-10.md
 68b65045	C	diverged	Bundle scripts have diverged substantially; Rust bootstrap/config plumbing is not isolatable.	upstream-sync-2026-09-02.md
 69164008	C	untriaged	Community PR-board platform mapping.	upstream-sync-2026-09-17.md
 6943d736	C	philosophy	Copilot OAuth cleanup.	upstream-sync-2026-08-07.md
@@ -229,17 +255,20 @@ sha	class	reason_code	note	source
 6e0a0835	C	untriaged	CI-only `gh` toolchain acquisition.	upstream-sync-2026-08-27.md
 6e2fae61	C	upstream-infra	Wasmtime/lockfile-only dependency update.	upstream-sync-2026-08-27.md
 6e368ab5	C	untriaged	Proto extension version-only bump; local is still 0.3.2.	upstream-sync-2026-09-18.md
+6ec43d6319	C	absent-api	Missing-parameter diagnostics modify the excluded native `agent` tool-input implementation.	upstream-sync-2026-10-09.md
 6efd4950	C	upstream-infra	Upstream-only lint-creator fixture guidance.	upstream-sync-2026-08-27.md
 6f73c7d0	C	untriaged	Replaces `GlobalWatcher` with `OsWatcher`; depends on rejected `db10a8dd`.	upstream-sync-2026-09-17.md
 6fff327a	C	philosophy	rustc 1.98.1 bump; prior 1.97 bump was C, plus collab Docker and flake lock.	upstream-sync-2026-09-18.md
 70a74b87	C	untriaged	GitHub Actions / xtask remote-server check on each commit.	upstream-sync-2026-09-18.md
 70e686c2a3	C	absent-api	Feature upsell rendering optimization targets upsell machinery that is absent locally; rejected on philosophy grounds.	upstream-sync-2026-09-27.md
 7232ba04ef	C	absent-api	GPUI profiler `journal` module and its dependency are absent locally.	upstream-sync-2026-09-30.md
+7262175465	C	upstream-infra	Upstream release-version and `crates/zed` package metadata are not ZZZ release inputs.	upstream-sync-2026-10-09.md
 72b060af	C	absent-api	Incremental git diffs need absent `DiffMultibuffer`.	upstream-sync-2026-09-18.md
 72c53bf0	C	absent-api	`start_external_drag` GPUI API is absent.	upstream-sync-2026-09-18.md
 72d28c32c2	C	untriaged	Shared plan state built on the unabsorbed ACP v2 content-value model (`acp_v2`).	upstream-sync-2026-09-30.md
 7316cf77	C	absent-api	Depends on deleted foreground profiler journal and bench machinery.	upstream-sync-2026-08-27.md
 739fdbef	C	philosophy	Copilot token-limit metadata.	upstream-sync-2026-09-18.md
+73be6ac6b1	C	untriaged	ACP v2 elicitation values require the unadopted v2 schema and native-agent producers.	upstream-sync-2026-10-09.md
 73ee8fa038	C	philosophy	Native agent `ask_user` option wrapping.	upstream-sync-2026-09-22-acp-elicitation.md
 749a1df41d	C	philosophy	Delta promotional announcement, external links, telemetry events, and the absent `auto_update_ui` surface.	upstream-sync-2026-10-04.md
 7604aa3f19	C	untriaged	Removes the visual test binary CI build.	upstream-sync-2026-09-30.md
@@ -261,10 +290,12 @@ sha	class	reason_code	note	source
 7aa903ef	C	absent-api	Adds keybindings for the deleted `tabular_data_preview` product surface.	upstream-sync-2026-09-02.md
 7b73d5ccc3	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 7bbd162ddf	C	untriaged	Adds a context-menu spacing API without a current ZZZ caller; importing it would be unused scaffolding.	upstream-sync-2026-10-05.md
+7ca96c2a58	C	diverged	Broad remote secret-transport rewrite across divergent remote, shell, and server modules; no coherent isolatable slice.	upstream-sync-2026-10-10.md
 7e0b34ba	C	absent-api	Anthropic `ProviderErrorCategory::PaymentRequired` is absent.	upstream-sync-2026-09-18.md
 7ea5428f0c	C	absent-api	Targets the absent in-tree Amazon Bedrock provider and `language_models` integration; rebuilding those deleted provider crates is outside this isolated commit.	upstream-sync-2026-10-05.md
 7ecab315	C	unisolatable	Depends on the rejected project-search rewrite from `1475887f`.	upstream-sync-2026-08-27.md
 7f2a2c3c	C	absent-api	Requires deleted `crashes` sidecar and cross-platform quit API rewrite.	upstream-sync-2026-08-27.md
+7fb155e9a2	C	untriaged	Native-agent ACP v2 tool events and permission choices need the ACP 3.x v2 schema; ZZZ pins `agent-client-protocol` 2.2.0.	upstream-sync-2026-10-10.md
 7fc2cf9b84	C	untriaged	opencode dynamic model catalog; the same default network surface rejected in Run 3.	upstream-sync-2026-09-24.md
 7fdb97cad5	C	philosophy	`yawc` 0.4.2 bump belongs to the absent `cloud_api_client` crate; lockfile-only churn with no local behavior.	upstream-sync-2026-09-24.md
 7fecbb2c4b	C	unisolatable	which-key and pending-indicator unification rewrites a module ZZZ has trimmed.	upstream-sync-2026-09-24.md
@@ -276,10 +307,12 @@ sha	class	reason_code	note	source
 82aef443	C	untriaged	Unused cross-platform idle scheduler API is too broad to add.	upstream-sync-2026-08-07.md
 8372eb1b13	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 839ab7a9	C	absent-api	Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.	upstream-sync-2026-08-27.md
+83b332342f	C	philosophy	Inlay-hint edits require an unisolatable editor/LSP/proto snapshot pipeline and excluded native-agent/collab integrations.	upstream-sync-2026-10-09.md
 83f3a8e3	C	philosophy	ChatGPT Subscription Responses transport; `HttpSend` absent.	upstream-sync-2026-08-27.md
 849ec589	C	philosophy	Native agent terminal path.	upstream-sync-2026-08-07.md
 84aaa525	C	upstream-infra	Upstream GitHub triage-project workflow and script removal.	upstream-sync-2026-08-27.md
 8514ce3b	C	absent-api	Broad language-model stream/schema rewrite conflicts across ZZZ's provider APIs and deleted test surfaces; not isolatable in this batch.	upstream-sync-2026-09-02.md
+85b3aa83a2	C	untriaged	ACP v2 authentication definitions are preparatory shared models without a local v2 transport.	upstream-sync-2026-10-09.md
 86b2cf96	C	untriaged	Screen-capture `get_sources` needs new `objc2-screen-capture-kit` and `MacPlatform` marker field.	upstream-sync-2026-09-18.md
 87324045	C	upstream-infra	Lockfile-only `async-tar` fork for Cursor ACP download.	upstream-sync-2026-08-27.md
 875e2a1c	C	upstream-infra	Publishing docs target deleted ZZZ extension-publishing pages.	upstream-sync-2026-08-27.md
@@ -293,35 +326,47 @@ sha	class	reason_code	note	source
 8bbcd83968	C	diverged	Unisolatable file-content/search rewrite: it conflicts across 10 files with ZZZ's worktree-owned decoding, custom encoding policy, and `LineHint` search API.	upstream-sync-2026-10-04.md
 8c259313	C	untriaged	External-agent promotional documentation.	upstream-sync-2026-08-07.md
 8cfa848c	C	philosophy	Broad provider-schema rewrite spans cloud/Copilot paths and ZZZ's divergent language-model APIs.	upstream-sync-2026-09-02.md
+8eb2fd211f	C	absent-api	`tabular_data_preview` is absent locally, so there is no current caller for the comparator.	upstream-sync-2026-10-09.md
+8f41da2520	C	absent-api	Threads-sidebar theme fix depends on the absent `panel_background_for_overlay` color API.	upstream-sync-2026-10-10.md
 8fc1a8a0	C	diverged	Web text-input/IME architecture conflicts with ZZZ's input path.	upstream-sync-2026-08-27.md
+8fda6e4653	C	untriaged	Requires the rejected v2 content-source definitions from `dff535449c`.	upstream-sync-2026-10-09.md
 90eb566f	C	diverged	Sidebar reorder; MultiWorkspace conflict.	upstream-sync-2026-08-18.md
 91a6890d	C	philosophy	Sidebar onboarding title wrap.	upstream-sync-2026-08-18.md
 9307bb7dc5	C	untriaged	macOS PR runner sizing in CI.	upstream-sync-2026-09-30.md
 933c85b1	C	untriaged	ZZZ has no upstream MCP or external-agent server-list settings UI.	upstream-sync-2026-08-07.md
 933d8d9381	C	unisolatable	Follow-up to 975845875b `LanguageModelClient` split; unisolatable from that architecture rewrite.	upstream-sync-2026-09-26.md
+93a9c1a0bc	C	philosophy	Nix WebRTC update is collaboration infrastructure, which ZZZ does not ship.	upstream-sync-2026-10-09.md
+93b4e5edec	C	upstream-infra	Releases edit-prediction files in the absent `edit_prediction` crate.	upstream-sync-2026-10-10.md
 93c87da195	C	absent-api	`tabular_data_preview` crate is absent locally.	upstream-sync-2026-09-30.md
 93f6b2e5	C	upstream-infra	Python shim + lockfile conflict.	upstream-sync-2026-08-18.md
 93f9fce1	C	upstream-infra	Require GPUI release notes in Dangerfile; follows unabsorbed ee1c6f8c.	upstream-sync-2026-09-18.md
 95106f9c	C	untriaged	Staff/server-gated project-panel behavior is unavailable in ZZZ.	upstream-sync-2026-08-07.md
 956a49e4	C	diverged	Touch/Web IME and gesture architecture conflicts with ZZZ's existing web input path.	upstream-sync-2026-09-02.md
 95cd535a5f	C	upstream-infra	Production-wide GPUI `test-support` infrastructure has no current ZZZ caller, adds unused public test APIs, and includes the absent `gpui_apple` path.	upstream-sync-2026-10-05.md
+95d35c6efd	C	absent-api	Creates the absent `gpui_apple` crate and moves `SurfaceSource`, `PaintSurface`, and `paint_surface` to `objc2-core-video`.	upstream-sync-2026-10-10.md
 9677f83f	C	upstream-infra	Triage automation.	upstream-sync-2026-08-07.md
 968379f5a1	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+96984225ab	C	absent-api	Fixes fallback values in ZZZ's absent markdown preview font settings section.	upstream-sync-2026-10-10.md
+96dec006df	C	untriaged	Documents upstream Homebrew casks that do not ship ZZZ.	upstream-sync-2026-10-09.md
 975845875b	C	unisolatable	14k-line language-model architecture rewrite; unisolatable from the provider-crate surface and every caller site it reconfigures.	upstream-sync-2026-09-26.md
+976ab33fb4	C	upstream-infra	Bundle-size reduction changes upstream release configuration rather than a retained local runtime path.	upstream-sync-2026-10-09.md
 9785475c	C	untriaged	Terminal Threads title editing belongs to the rejected native-agent/thread surface.	upstream-sync-2026-09-02.md
 97b1e64a	C	philosophy	Adds hang-trigger telemetry and release telemetry plumbing, rejected by ZZZ's no-telemetry boundary.	upstream-sync-2026-09-02.md
 984bf4d4	C	diverged	Anthropic compaction; provider conflict.	upstream-sync-2026-08-18.md
 986828d157	C	absent-api	Shared tool-call state and diff previews stacked on the unabsorbed v2 work; touches deleted paths.	upstream-sync-2026-09-30.md
+98e168265b	C	untriaged	Redundant thread-save suppression belongs to the excluded native-agent persistence path.	upstream-sync-2026-10-09.md
 98f39bfc	C	untriaged	Community automation.	upstream-sync-2026-08-07.md
 98f75a23bc	C	untriaged	Dependency-removal churn with no independent local behavior.	upstream-sync-2026-09-30.md
 9930d2c2	C	absent-api	Bundle-config / share-generics follow-up; `.cargo/bundle-config.toml` is absent.	upstream-sync-2026-09-18.md
 99f4c21c	C	philosophy	OpenCode Go/Zen subscription-model catalog and settings.	upstream-sync-2026-08-27.md
 99f947e5f6	C	absent-api	Plan-card removal depends on the absent `ContextCompaction` surface.	upstream-sync-2026-09-24.md
 9a631e54	C	absent-api	Upstream `path` crate is absent; local `paths` has separate GPL scope.	upstream-sync-2026-08-07.md
+9ab0715969	C	philosophy	Upgrades the ACP SDK to 3.2.0 and registers sessions through prepared-request and cancellation handles; ZZZ pins 2.2.0.	upstream-sync-2026-10-10.md
 9b5b5860	C	untriaged	`.rules` and Danger self-review automation are repository administration.	upstream-sync-2026-08-27.md
 9d272b03	C	upstream-infra	GitHub Actions / xtask macOS SDK printing for release bundling.	upstream-sync-2026-09-18.md
 9d956a09	C	untriaged	GitHub Actions / xtask license-check frequency.	upstream-sync-2026-09-18.md
 9decdcc1	C	diverged	GPUI web IME mirror-focus rewrite depends on the divergent touch/IME architecture.	upstream-sync-2026-09-02.md
+9df33dea42	C	unisolatable	The v2 shared-session migration has no negotiated v2 ACP handler and entangles local v1 title state with native UI.	upstream-sync-2026-10-09.md
 9e236090	C	untriaged	Unused per-window histogram APIs.	upstream-sync-2026-08-18.md
 9e6e1416	C	untriaged	Dynamic font APIs plus gpui_web; depends on Canvas fallback.	upstream-sync-2026-09-18.md
 9e9b13c5	C	absent-api	Requires upstream Markdown code-chip machinery absent from ZZZ.	upstream-sync-2026-09-02.md
@@ -330,7 +375,9 @@ a034d870	C	diverged	Canceled worktree leak; tests conflict.	upstream-sync-2026-0
 a12e3c06	C	untriaged	Feature-flag removal is coupled to upstream project-panel flag policy.	upstream-sync-2026-08-07.md
 a1510de5	C	philosophy	Native agent permission runtime.	upstream-sync-2026-08-07.md
 a1860ac1	C	philosophy	Hosted Claude pricing docs.	upstream-sync-2026-08-18.md
+a1b71072e5	C	upstream-infra	Lockfile-only cleanup depends on the omitted upstream `crates/zed` Nix dependency change.	upstream-sync-2026-10-09.md
 a21007b7	C	unisolatable	Unused profiler rewrite.	upstream-sync-2026-08-18.md
+a34a062bb7	C	philosophy	Free-plan edit-prediction messaging targets the absent `edit_prediction` and `ai_onboarding` crates and Zed's hosted plans.	upstream-sync-2026-10-10.md
 a3ccafef66	C	absent-api	Unisolatable ACP session-notice feature depends on absent idle-sleep and compaction surfaces.	upstream-sync-2026-09-24.md
 a3d65153	C	philosophy	Encrypted-content error factored for native agent thread.	upstream-sync-2026-08-18.md
 a3f6b96c	C	absent-api	Optimization targets deleted `editor/src/input.rs`, absent `git_ui_core`, and a divergent toolchain selector.	upstream-sync-2026-09-02.md
@@ -365,6 +412,7 @@ ae394f3d	C	untriaged	Staff-only edit-prediction policy.	upstream-sync-2026-08-07
 aec7395e	C	philosophy	cargo-shear across 159 files including telemetry, Copilot, and `crates/path`.	upstream-sync-2026-09-18.md
 aef893e2	C	philosophy	Native Agent Panel Threads Sidebar width setting.	upstream-sync-2026-09-18.md
 af431aee	C	absent-api	Requires the absent `editor::DiffStyleControls` widget.	upstream-sync-2026-09-24.md
+b0048cde74	C	upstream-infra	Browser-only Fetch path in the unshipped web target; also adds example and npm test scaffolding.	upstream-sync-2026-10-10.md
 b036368c	C	philosophy	Native agent sidebar UI, outside ACP-only scope.	upstream-sync-2026-08-07.md
 b2131e9d	C	diverged	Cross-thread GPUI Web dispatcher APIs diverge locally.	upstream-sync-2026-08-07.md
 b2d9c2e1	C	philosophy	Native agent panel rewind.	upstream-sync-2026-08-18.md
@@ -382,6 +430,7 @@ b9301f5c	C	philosophy	Native agent thread workflow.	upstream-sync-2026-08-07.md
 ba0e2a94	C	untriaged	OpenAI subscribed compaction logs.	upstream-sync-2026-08-18.md
 ba2b48461d	C	upstream-infra	Security-version churn is confined to the `update_top_ranking_issues` automation lockfile and changes no shipped ZZZ behavior.	upstream-sync-2026-10-05.md
 ba6b83f8	C	philosophy	Window-title template rewrite spans collab indicators, MultiWorkspace-divergent workspace.rs, and lockfile churn.	upstream-sync-2026-09-06.md
+ba8159b4d3	C	upstream-infra	Wezel binary-size measurements are upstream release/benchmark infrastructure.	upstream-sync-2026-10-09.md
 baacd359	C	untriaged	Call diagnostics.	upstream-sync-2026-08-07.md
 bb7751c379	C	absent-api	The LM Studio provider crate is absent locally, so the one-line compatibility variant has no ZZZ caller.	upstream-sync-2026-10-04.md
 bbd198f5	C	absent-api	Large semantic-token ordering rewrite requires absent server-order plumbing.	upstream-sync-2026-08-07.md
@@ -399,6 +448,7 @@ c24358d9	C	upstream-infra	Dependency/lockfile bump and broad warning-only churn.
 c2451489	C	upstream-infra	xtask GPUI crate-graph walker plus lockfile churn.	upstream-sync-2026-09-18.md
 c305d68c01	C	upstream-infra	Intermediate dependency and lockfile-only bump to `merman` 0.7; superseded by `ec18126b1d`.	upstream-sync-2026-10-02.md
 c32938c34c	C	absent-api	`open_ai` provider crate is absent locally.	upstream-sync-2026-09-30.md
+c3ab5564f8	C	untriaged	Agent UI scrolling depends on v2 elicitation state and the excluded native-agent panel.	upstream-sync-2026-10-09.md
 c3b365d2	C	philosophy	Native Agent inline assistant is outside ZZZ's ACP-only boundary.	upstream-sync-2026-08-27.md
 c4bc69e5	C	upstream-infra	Corgi sandbox/glob and bootstrap configuration is upstream build infrastructure without independent ZZZ product behavior.	upstream-sync-2026-09-02.md
 c55693876e	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
@@ -414,10 +464,12 @@ c9827338	C	untriaged	GitHub Actions Wezel Linux deps.	upstream-sync-2026-09-18.m
 c9d1d0dd	C	untriaged	Dependency-only helper relocation has no independent behavior.	upstream-sync-2026-08-07.md
 ca2b5741	C	upstream-infra	New upstream lint/test infrastructure only; no independent product behavior.	upstream-sync-2026-09-02.md
 ca49b5da	C	absent-api	Requires absent display-terminal APIs from the rejected lifecycle work.	upstream-sync-2026-09-24.md
+cac9d17a6c	C	absent-api	The upstream commit-context-menu component has no local caller; importing it would add an unused public menu path.	upstream-sync-2026-10-09.md
 cbffa0f5	C	absent-api	`snapshot_with_edits` / `EditedBufferSnapshot` are absent.	upstream-sync-2026-09-18.md
 cc053a4a	C	absent-api	AccessKit accessibility chain is absent from current ZZZ GPUI.	upstream-sync-2026-08-07.md
 ccadf399	C	untriaged	GitHub Actions / xtask Miri and migration-check runner sizes.	upstream-sync-2026-09-18.md
 cd4fc8de4c	C	absent-api	Broad platform frame journaling depends on the absent GPUI hang-profiler and journal architecture.	upstream-sync-2026-10-05.md
+cd5bdc41c4	C	philosophy	Moves terminal tabs into the deliberately absent native Agent Panel.	upstream-sync-2026-10-09.md
 cd6d7055	C	upstream-infra	Extension publishing docs split.	upstream-sync-2026-08-18.md
 cd78c2db	C	upstream-infra	Flaky bracket test does not exist locally.	upstream-sync-2026-09-18.md
 cd8c467418	C	absent-api	Adds schema completion for the same upstream native-agent built-in tool inventory and would preserve an absent tool catalog as public settings scaffolding.	upstream-sync-2026-10-05.md
@@ -427,6 +479,7 @@ cdf3ccd0	C	philosophy	Extension refactor introduces telemetry events.	upstream-s
 ce6f3af5	C	diverged	SCP/SFTP transport argument model diverges; safe port requires the larger remote rewrite.	upstream-sync-2026-08-07.md
 cef06d35	C	unisolatable	Depends on the rejected worktree streaming rewrite.	upstream-sync-2026-08-27.md
 cff4edce	C	untriaged	Nix/Corgi build-source plumbing with no independent ZZZ product behavior.	upstream-sync-2026-09-02.md
+d058ddbbc1	C	philosophy	Restyles the collaboration panel, which ZZZ does not ship.	upstream-sync-2026-10-10.md
 d0ae2f05	C	untriaged	Native-agent sidebar terminal-thread selection flicker.	upstream-sync-2026-09-18.md
 d0bfe0a4	C	absent-api	Single-hunk nav; staged/unstaged_diff deleted.	upstream-sync-2026-08-18.md
 d132afe9fc	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
@@ -434,14 +487,17 @@ d1dae815	C	unisolatable	ACP compaction capability and native-agent compaction re
 d2074f4e	C	untriaged	`PowerRequest` UAF fix; ZZZ `gpui_windows` has no power-request path.	upstream-sync-2026-09-18.md
 d27fa556	C	absent-api	Outline-panel deleted-file tree rewrite; 13 conflicts plus local i18n.	upstream-sync-2026-09-18.md
 d284cbbc87	C	philosophy	Test-only change in the absent GPUI hang-profiler and hang-telemetry architecture.	upstream-sync-2026-10-04.md
+d32fa003ab	C	untriaged	Native-agent grep-tool configuration has no ACP-only ZZZ caller.	upstream-sync-2026-10-09.md
 d356b2f5	C	philosophy	Subscription OpenAI compaction and account-bound route.	upstream-sync-2026-08-07.md
 d3ccd57194	C	untriaged	Sidebar/`ThreadItem` theme colors; the local sidebar renders new-thread menus and thread entries differently, so the hunk is not isolatable.	upstream-sync-2026-09-30.md
 d3e54c97	C	absent-api	Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.	upstream-sync-2026-09-02.md
 d4010e91	C	unisolatable	Project-panel undo trash confirm unisolatable.	upstream-sync-2026-08-18.md
 d4cd310e	C	absent-api	Modifies the deleted upstream action-profiler module.	upstream-sync-2026-08-27.md
 d528c665e1	C	unisolatable	JSONL/NDJSON preview depends on the unabsorbed `TabularFormat` parser refactor.	upstream-sync-2026-09-24.md
+d544470d1d	C	philosophy	Workspace-wide dependency and lockfile rewrite includes absent commercial, collaboration, and native-agent surfaces.	upstream-sync-2026-10-09.md
 d56dca80	C	upstream-infra	GitHub issue-triage workflow only; no product behavior.	upstream-sync-2026-09-02.md
 d62802d4	C	unisolatable	Trunk README link exists only on the unabsorbed gpui_web gallery rewrite.	upstream-sync-2026-09-18.md
+d6b7f24b7	C	upstream-infra	Linux release and Sentry-symbol workflow change has no retained ZZZ release pipeline.	upstream-sync-2026-10-09.md
 d70c45e5	C	absent-api	Needs absent web clipboard and external-drag GPUI APIs.	upstream-sync-2026-08-27.md
 d71f1461	C	upstream-infra	`stacksafe` lockfile-only bump.	upstream-sync-2026-08-18.md
 d7f28899	C	untriaged	Buffer highlight cache depends on rejected `318c664e` `ResolvedHighlights`.	upstream-sync-2026-09-18.md
@@ -459,13 +515,16 @@ dc339e4f	C	absent-api	LLVM IR adapter sharing; conflicts plus deleted picker win
 dd04a229	C	untriaged	Unused `Animation` max-FPS API.	upstream-sync-2026-08-18.md
 dd510f99e0	C	philosophy	`language_models_cloud` provider crate is absent locally.	upstream-sync-2026-09-30.md
 ded896cc	C	diverged	Depends on an unabsorbed incremental-search architecture and divergent editor APIs; not isolatable onto the current search implementation.	upstream-sync-2026-09-02.md
+df48a139ce	C	absent-api	Adds Claude Opus 5.5 BYOK support for the absent `bedrock` crate.	upstream-sync-2026-10-10.md
 df673c1b	C	unisolatable	`MessageContent` rewrite is entangled with unabsorbed `ContextCompaction`.	upstream-sync-2026-09-24.md
 dfec59fb	C	untriaged	Filesystem debug window needs upstream `OsWatcher`; ZZZ still uses `GlobalWatcher`.	upstream-sync-2026-09-18.md
+dff535449c	C	untriaged	Preparatory ACP v2 source plumbing has no negotiated v2 ACP caller and crosses native-agent persistence and adapter paths.	upstream-sync-2026-10-09.md
 e0931d5a	C	upstream-infra	Invisibles reuse; display_map/benchmarks deleted.	upstream-sync-2026-08-18.md
 e0ae50d1	C	absent-api	Unused public `KeyBinding::default_visibility` with no ZZZ caller.	upstream-sync-2026-09-06.md
 e0f913b0	C	untriaged	Targets upstream `tabular_data_preview`, replaced locally by `csv_preview`.	upstream-sync-2026-08-27.md
 e2c4075c	C	untriaged	Community PR-board reopen handling.	upstream-sync-2026-09-06.md
 e4671f71	C	diverged	Malformed-task toast conflicts in `zzz.rs`.	upstream-sync-2026-08-18.md
+e4945b5d09	C	untriaged	Reconnection reuse needs `RemoteConnection::remote_platform`, which ZZZ does not expose.	upstream-sync-2026-10-09.md
 e4ac280d	C	philosophy	Subscription provider extraction.	upstream-sync-2026-08-07.md
 e4d73588	C	untriaged	Guild `REVIEWERS.conl` removal.	upstream-sync-2026-09-18.md
 e5221fa2	C	philosophy	Native `spawn_agent` subagent model selection; the native agent tools are absent.	upstream-sync-2026-09-24.md
@@ -475,6 +534,7 @@ e6690f38	C	absent-api	Targets the deleted `tabular_data_preview` crate and canno
 e683fd7b46	C	upstream-infra	New `bench_metrics` crate and GPUI benchmark harness; benchmark plumbing is absent locally.	upstream-sync-2026-09-30.md
 e717010c	C	untriaged	WSL streaming fallback is coupled to upstream remote transport lifecycle.	upstream-sync-2026-08-07.md
 e773a56d6c	C	upstream-infra	gpui_web iOS keyboard/browser-activity fix uses absent `touch_input`/`ime_mirror` infrastructure.	upstream-sync-2026-09-30.md
+e778eec483	C	absent-api	Introduces a Zed-owned `ToolCallLocation` over `acp_v2` location types absent from ZZZ.	upstream-sync-2026-10-10.md
 e8041cce	C	untriaged	GLSL extension version-only bump; local is still 0.2.3.	upstream-sync-2026-09-18.md
 e8c6c67fad	C	untriaged	ACP v2 terminal ingress depends on rejected `39b5329322` and `f2cdf3d5bd`; the new v2 builder is deliberately not selected by an application connection.	upstream-sync-2026-10-04.md
 e8fbacb6	C	diverged	Large outline-panel rewrite is not isolatable from ZZZ's divergent panel implementation.	upstream-sync-2026-09-02.md
@@ -494,21 +554,29 @@ ee43be113e	C	absent-api	ACP v2 content-value migration; local keeps the `schema:
 ee6badf4	C	upstream-infra	Corgi build support is upstream build/release infrastructure with no ZZZ product behavior.	upstream-sync-2026-09-02.md
 ee7af091	C	philosophy	New unused `count_input_tokens` API plus hosted-cloud consent.	upstream-sync-2026-09-18.md
 ee8dd5f861	C	philosophy	ChatGPT subscription model picker; the account-bound provider is absent.	upstream-sync-2026-09-24.md
+eec3376016	C	absent-api	The capability check needs `Anchor::buffer_id`, absent from ZZZ's consolidated editor implementation.	upstream-sync-2026-10-09.md
 eef824cce5	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 ef075910	C	unisolatable	Web font ownership rewrite is coupled to upstream examples and has no independent ZZZ web caller; local examples are intentionally removed.	upstream-sync-2026-09-02.md
 ef50ad95	C	untriaged	GitHub CLA/draft pull-request cleanup automation.	upstream-sync-2026-08-27.md
+efed1f245a	C	absent-api	FIM stop-sequence handling in the absent `edit_prediction` crate.	upstream-sync-2026-10-10.md
 f0685e0a	C	diverged	Parent-revision blame; git/proto conflict.	upstream-sync-2026-08-18.md
 f092e5e9	C	untriaged	Rescan diagnostics need upstream `OsWatcher`; ZZZ still uses `GlobalWatcher`.	upstream-sync-2026-09-18.md
+f0b38ac75e	C	upstream-infra	Lockfile-only dependency bump with no independent ZZZ behavior.	upstream-sync-2026-10-10.md
 f0d8b0b0	C	untriaged	New `HoverListenerMode` API with no current ZZZ caller once the which-key indicator is rejected.	upstream-sync-2026-09-04.md
 f0fb48c7	C	philosophy	ForegroundJournal sleep/visibility needs unabsorbed Window APIs and hang telemetry.	upstream-sync-2026-09-18.md
+f16f9652ec	C	philosophy	Uses ACP v2 content for native prompts; native agent plus the absent v2 transport.	upstream-sync-2026-10-10.md
+f1a10a5227	C	philosophy	Adds checkpoint-action telemetry to the agent panel.	upstream-sync-2026-10-10.md
 f2cdf3d5bd	C	untriaged	V2 authoritative terminal display machinery depends on rejected `39b5329322` and adds terminal replacement APIs with no current ZZZ caller.	upstream-sync-2026-10-04.md
 f36aec82	C	absent-api	`ask_user` tool/default is absent from ZZZ's ACP surface.	upstream-sync-2026-08-27.md
 f37989fbdf	C	unisolatable	Broad cross-platform headless/windowed GPUI rewrite whose new switching API is called only by its example and platform tests in this commit.	upstream-sync-2026-10-05.md
+f495dd0f77	C	absent-api	Adds a broad connected-display API across every GPUI platform backend with no ZZZ caller.	upstream-sync-2026-10-10.md
 f50ebf29	C	untriaged	Tool-name fallbacks depend on unabsorbed first-class ACP names.	upstream-sync-2026-09-18.md
 f52fd9ac	C	untriaged	Broad macOS outbound-drag framework cannot be safely isolated.	upstream-sync-2026-08-07.md
+f54e09c151	C	philosophy	Publishes native slash commands as ACP v2 values; native agent plus the absent v2 transport.	upstream-sync-2026-10-10.md
 f595fd84	C	upstream-infra	Upstream-only lint-creator skill documentation.	upstream-sync-2026-08-27.md
 f620cbc0	C	philosophy	Native agent sandbox bundling.	upstream-sync-2026-08-07.md
 f792c2d7	C	untriaged	New unused `ShapedLineCursor` public API.	upstream-sync-2026-09-18.md
+f87356210a	C	untriaged	ACP v2 notice definitions add unused v2 shared state without a negotiated local v2 session.	upstream-sync-2026-10-09.md
 f8c27835	C	diverged	Large git-panel multi-select rewrite conflicts with ZZZ's divergent panel and is not safely isolatable in this batch.	upstream-sync-2026-09-02.md
 f99aad78	C	upstream-infra	Guild labeling workflow.	upstream-sync-2026-08-18.md
 f99da3a4	C	philosophy	GPT subscription provider icon.	upstream-sync-2026-08-07.md

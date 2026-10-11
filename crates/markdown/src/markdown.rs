@@ -2832,25 +2832,11 @@ impl MarkdownElement {
 
         match (&self.code_block_renderer, is_indented) {
             (CodeBlockRenderer::Default { .. }, _) | (_, true) => {
-                let parent_container = div().group("code_block").relative().w_full();
-                let mut parent_container: AnyDiv =
-                    if let Some(scroll_handle) = scroll_handle.as_ref() {
-                        let scrollbars = Scrollbars::new(ScrollAxes::Horizontal)
-                            .id(("markdown-code-block-scrollbar", range.start))
-                            .tracked_scroll_handle(scroll_handle)
-                            .with_track_along(
-                                ScrollAxes::Horizontal,
-                                cx.theme().colors().editor_background,
-                            )
-                            .notify_content();
-
-                        parent_container
-                            .rounded_lg()
-                            .custom_scrollbars(scrollbars, window, cx)
-                            .into()
-                    } else {
-                        parent_container.into()
-                    };
+                let mut parent_container = div()
+                    .group("code_block")
+                    .relative()
+                    .w_full()
+                    .when(scroll_handle.is_some(), |this| this.rounded_lg());
 
                 if let CodeBlockRenderer::Default { border: true, .. } = &self.code_block_renderer {
                     parent_container = parent_container
@@ -2859,7 +2845,31 @@ impl MarkdownElement {
                         .border_color(cx.theme().colors().border_variant);
                 }
 
+                // Styles must be final before `custom_scrollbars`, which reads the
+                // corner radii and borders to round the scrollbar track.
                 parent_container.style().refine(&self.style.code_block);
+
+                let parent_container: AnyDiv = if let Some(scroll_handle) = scroll_handle.as_ref() {
+                    let scrollbars = Scrollbars::new(ScrollAxes::Horizontal)
+                        .id(("markdown-code-block-scrollbar", range.start))
+                        .tracked_scroll_handle(scroll_handle)
+                        .with_track_along(
+                            ScrollAxes::Horizontal,
+                            cx.theme().colors().editor_background,
+                        )
+                        .notify_content();
+
+                    let mut parent_container =
+                        parent_container.custom_scrollbars(scrollbars, window, cx);
+                    // Keep the code block's padding over the space reserved for the scrollbar track.
+                    parent_container
+                        .style()
+                        .padding
+                        .refine(&self.style.code_block.padding);
+                    parent_container.into()
+                } else {
+                    parent_container.into()
+                };
                 builder.push_div(parent_container, range, markdown_end);
 
                 let code_block =
@@ -3058,16 +3068,30 @@ impl Element for MarkdownElement {
                             )
                             .fill();
 
-                            if let Some(on_toggle) = self.on_checkbox_toggle.clone() {
+                            let checkbox = if let Some(on_toggle) = self.on_checkbox_toggle.clone()
+                            {
                                 let task_source_range = task_range.clone();
-                                checkbox
-                                    .on_click(move |_state, window, cx| {
-                                        on_toggle(task_source_range.clone(), !checked, window, cx);
-                                    })
-                                    .into_any_element()
+                                checkbox.on_click(move |_state, window, cx| {
+                                    on_toggle(task_source_range.clone(), !checked, window, cx);
+                                })
                             } else {
-                                checkbox.visualization_only(true).into_any_element()
-                            }
+                                checkbox.visualization_only(true)
+                            };
+
+                            let line_height = self
+                                .style
+                                .paragraph_line_height
+                                .to_pixels(builder.text_style().font_size, window.rem_size());
+                            // List items top-align their bullet, which suits text bullets
+                            // but leaves the taller checkbox sitting above the text.
+                            // Centering it in a slot one line tall aligns it with the
+                            // first line, even when the item wraps.
+                            div()
+                                .h(line_height)
+                                .flex()
+                                .items_center()
+                                .child(checkbox)
+                                .into_any_element()
                         } else if let Some(bullet_index) = builder.next_bullet_index() {
                             div().child(format!("{}.", bullet_index)).into_any_element()
                         } else {
@@ -4704,6 +4728,7 @@ impl RenderedText {
     fn source_index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize> {
         let mut lines = self.lines.iter().peekable();
         let mut fallback_line: Option<&RenderedLine> = None;
+        let mut gap_source_index: Option<usize> = None;
 
         while let Some(line) = lines.next() {
             let line_bounds = line.layout.bounds();
@@ -4722,10 +4747,16 @@ impl RenderedText {
             if position.y > line_bounds.bottom() {
                 if let Some(next_line) = lines.peek()
                     && position.y < next_line.layout.bounds().top()
+                    && gap_source_index.is_none()
                 {
-                    return Err(line.source_end);
+                    // A later table cell may contain the position, so defer the gap fallback.
+                    gap_source_index = Some(line.source_end);
                 }
             }
+        }
+
+        if let Some(source_index) = gap_source_index {
+            return Err(source_index);
         }
 
         // Fall back to Y-coordinate matched line
@@ -4996,6 +5027,34 @@ mod tests {
 
     fn render_markdown(markdown: &str, cx: &mut TestAppContext) -> RenderedText {
         render_markdown_with_language_registry(markdown, None, cx)
+    }
+
+    #[gpui::test]
+    fn test_code_block_highlights_with_partial_tabs(cx: &mut TestAppContext) {
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+        language_registry.add(Arc::new(Language::new(
+            LanguageConfig {
+                name: "Rust".into(),
+                ..LanguageConfig::default()
+            },
+            None,
+        )));
+
+        for (source, expected) in [
+            (" ```rust\n\tfn main() {}\n ```\n", "   fn main() {}"),
+            ("  ```rust\n\tfn café() {}\n  ```\n", "  fn café() {}"),
+            ("   ```rust\r\n\tfn 界() {}\r\n   ```\r\n", " fn 界() {}"),
+            ("- ```rust\n\tfn main() {}\n  ```\n", "  fn main() {}"),
+            (" ```rust\n\tfn main() {}", "   fn main() {}"),
+        ] {
+            let rendered =
+                render_markdown_with_language_registry(source, Some(language_registry.clone()), cx);
+            assert_eq!(
+                rendered.text_for_range(0..source.len()),
+                expected,
+                "source: {source:?}"
+            );
+        }
     }
 
     #[gpui::test]
@@ -5635,6 +5694,53 @@ mod tests {
         assert!((header_start..header_end).contains(&index));
     }
 
+    #[gpui::test]
+    fn test_hit_testing_outside_text_preserves_source_indices(cx: &mut TestAppContext) {
+        let empty = render_markdown("", cx);
+        assert_eq!(
+            empty.source_index_for_position(point(px(0.), px(0.))),
+            Err(0)
+        );
+
+        let rendered = render_markdown("First\n\nSecond", cx);
+        let mut lines = rendered.lines.iter();
+        let first = lines.next().expect("first paragraph should be rendered");
+        let second = lines.next().expect("second paragraph should be rendered");
+        let first_bounds = first.layout.bounds();
+        let second_bounds = second.layout.bounds();
+        assert!(first_bounds.bottom() < second_bounds.top());
+        for (position, source_index) in [
+            (
+                point(first_bounds.center().x, first_bounds.top() - px(1.)),
+                0,
+            ),
+            (
+                point(first_bounds.left() - px(1.), first_bounds.center().y),
+                0,
+            ),
+            (
+                point(first_bounds.right() + px(1.), first_bounds.center().y),
+                5,
+            ),
+            (
+                point(
+                    first_bounds.center().x,
+                    (first_bounds.bottom() + second_bounds.top()) / 2.,
+                ),
+                5,
+            ),
+            (
+                point(second_bounds.center().x, second_bounds.bottom() + px(1.)),
+                13,
+            ),
+        ] {
+            assert_eq!(
+                rendered.source_index_for_position(position),
+                Err(source_index)
+            );
+        }
+    }
+
     #[test]
     fn test_table_state_current_cell_alignment_centers_headers() {
         let mut table = TableState::default();
@@ -5729,7 +5835,18 @@ mod tests {
             cx,
         );
         let window = cx.open_window(size(px(800.), px(600.)), |_, cx| {
-            let markdown = cx.new(|cx| Markdown::new(source.into(), None, None, cx));
+            let markdown = cx.new(|cx| {
+                Markdown::new_with_options(
+                    source.into(),
+                    None,
+                    None,
+                    MarkdownOptions {
+                        parse_html: true,
+                        ..Default::default()
+                    },
+                    cx,
+                )
+            });
             ImageLayoutView {
                 markdown,
                 icon,
@@ -5817,6 +5934,53 @@ mod tests {
             "images in a paragraph should stay top-aligned"
         );
         assert!(icon.left() < tall_image.left());
+    }
+
+    fn leading_image_and_container_bounds(
+        source: &'static str,
+        cx: &mut TestAppContext,
+    ) -> (Bounds<Pixels>, Bounds<Pixels>) {
+        let mut cx = render_image_layout(source, cx);
+        let image = cx
+            .debug_bounds("markdown_image_0")
+            .expect("image should be rendered");
+        let container = cx
+            .debug_bounds("inner")
+            .expect("markdown container should be rendered");
+        (image, container)
+    }
+
+    #[gpui::test]
+    fn test_images_in_html_blocks_follow_text_align(cx: &mut TestAppContext) {
+        for (source, expected_alignment) in [
+            (r#"<p><img src="icon.png"></p>"#, TextAlign::Left),
+            (
+                r#"<p align="center"><img src="icon.png"></p>"#,
+                TextAlign::Center,
+            ),
+            (
+                r#"<p align="right"><img src="icon.png"></p>"#,
+                TextAlign::Right,
+            ),
+            (
+                r#"<p style="text-align: center"><a href="https://zed.dev"><img src="icon.png"></a></p>"#,
+                TextAlign::Center,
+            ),
+        ] {
+            let (image, container) = leading_image_and_container_bounds(source, cx);
+            let left_gap = image.left() - container.left();
+            let right_gap = container.right() - image.right();
+            let aligned = match expected_alignment {
+                TextAlign::Left => left_gap < px(1.) && right_gap > px(100.),
+                TextAlign::Center => (left_gap - right_gap).abs() <= px(1.5) && left_gap > px(100.),
+                TextAlign::Right => right_gap < px(1.) && left_gap > px(100.),
+            };
+            assert!(
+                aligned,
+                "image in {source:?} should be {expected_alignment:?} aligned: \
+                 left gap {left_gap:?}, right gap {right_gap:?}"
+            );
+        }
     }
 
     #[test]

@@ -4587,8 +4587,10 @@ impl RepositorySnapshot {
     /// common Git directory is the main worktree's `.git` directory.
     pub fn main_worktree_abs_path(&self) -> Option<&Path> {
         if self.is_linked_worktree() {
-            if self.common_dir_abs_path.file_name()? == std::ffi::OsStr::new(".git") {
-                self.common_dir_abs_path.parent()
+            if path_style_file_name(&self.common_dir_abs_path, self.path_style)
+                == Some(std::ffi::OsStr::new(".git"))
+            {
+                path_style_parent(&self.common_dir_abs_path, self.path_style)
             } else {
                 None
             }
@@ -7253,8 +7255,7 @@ impl Repository {
         worktree_directory_setting: &str,
     ) -> Result<PathBuf> {
         let repository_anchor = self.linked_worktree_anchor_path();
-        let project_name = repository_anchor
-            .file_name()
+        let project_name = path_style_file_name(repository_anchor, self.path_style)
             .and_then(|name| name.to_str())
             .ok_or_else(|| anyhow!("git repo must have a directory name"))?;
         let directory = worktrees_directory_for_repo(
@@ -8794,22 +8795,20 @@ pub fn worktrees_directory_for_repo(
     } else {
         util::normalize_path(&joined)
     };
-    let resolved = if resolved.starts_with(repository_anchor_path) {
+    let resolved = if path_style_starts_with(&resolved, repository_anchor_path, path_style) {
         resolved
-    } else if let Some(repo_dir_name) = repository_anchor_path
-        .file_name()
-        .and_then(|name| name.to_str())
+    } else if let Some(repo_dir_name) =
+        path_style_file_name(repository_anchor_path, path_style).and_then(|name| name.to_str())
     {
         path_style.join_path(&resolved, repo_dir_name)?
     } else {
         resolved
     };
 
-    let parent = repository_anchor_path
-        .parent()
-        .unwrap_or(repository_anchor_path);
+    let parent =
+        path_style_parent(repository_anchor_path, path_style).unwrap_or(repository_anchor_path);
 
-    if !resolved.starts_with(parent) {
+    if !path_style_starts_with(&resolved, parent, path_style) {
         anyhow::bail!(
             "git.worktree_directory resolved to {resolved:?}, which is outside \
              the project root and its parent directory. It must resolve to a \
@@ -8818,6 +8817,52 @@ pub fn worktrees_directory_for_repo(
     }
 
     Ok(resolved)
+}
+
+fn path_style_file_name(path: &Path, path_style: PathStyle) -> Option<&std::ffi::OsStr> {
+    let path = path.to_str()?.trim_end_matches(path_style.separators_ch());
+    let file_name = path.rsplit(path_style.separators_ch()).next()?;
+    (!file_name.is_empty()).then(|| std::ffi::OsStr::new(file_name))
+}
+
+fn path_style_parent(path: &Path, path_style: PathStyle) -> Option<&Path> {
+    let path = path.to_str()?.trim_end_matches(path_style.separators_ch());
+    let separator_index = path.rfind(path_style.separators_ch())?;
+    let parent_end =
+        if path_style.is_windows() && separator_index == 2 && path.as_bytes().get(1) == Some(&b':')
+        {
+            separator_index + 1
+        } else if separator_index == 0 {
+            1
+        } else {
+            separator_index
+        };
+    Some(Path::new(&path[..parent_end]))
+}
+
+fn path_style_starts_with(path: &Path, prefix: &Path, path_style: PathStyle) -> bool {
+    let Some(path) = path.to_str() else {
+        return false;
+    };
+    let Some(prefix) = prefix.to_str() else {
+        return false;
+    };
+    let path = path_style.normalize(path);
+    let prefix = path_style
+        .normalize(prefix)
+        .trim_end_matches(path_style.separators_ch())
+        .to_owned();
+    let is_prefix = if path_style.is_windows() {
+        path.eq_ignore_ascii_case(&prefix)
+            || path
+                .get(..prefix.len())
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(&prefix))
+    } else {
+        path.starts_with(&prefix)
+    };
+    is_prefix
+        && (path.len() == prefix.len()
+            || path[prefix.len()..].starts_with(path_style.separators_ch()))
 }
 
 async fn remove_empty_managed_worktree_ancestors(fs: &dyn Fs, child_path: &Path, base_path: &Path) {
@@ -8917,19 +8962,21 @@ pub fn is_submodule_git_dir(git_dir: &Path) -> bool {
 pub fn linked_worktree_short_name(
     main_worktree_path: &Path,
     linked_worktree_path: &Path,
+    path_style: PathStyle,
 ) -> Option<SharedString> {
     if main_worktree_path == linked_worktree_path {
         return None;
     }
 
-    let project_name = main_worktree_path.file_name()?.to_str()?;
-    let directory_name = linked_worktree_path.file_name()?.to_str()?;
+    let project_name = path_style_file_name(main_worktree_path, path_style)?.to_str()?;
+    let directory_name = path_style_file_name(linked_worktree_path, path_style)?.to_str()?;
     let name = if directory_name == project_name {
-        linked_worktree_path
-            .parent()?
-            .file_name()?
-            .to_str()?
-            .to_owned()
+        path_style_file_name(
+            path_style_parent(linked_worktree_path, path_style)?,
+            path_style,
+        )?
+        .to_str()?
+        .to_owned()
     } else {
         directory_name.to_owned()
     };
@@ -9463,6 +9510,22 @@ mod tests {
         assert_eq!(
             path,
             PathBuf::from("/home/user/dev/worktrees/lsp-tests/nimble-sky/lsp-tests")
+        );
+    }
+
+    #[test]
+    fn test_worktree_directory_uses_windows_style_for_remote_paths_on_unix_host() {
+        let work_dir = Path::new(r"C:\Users/user/dev\lsp-tests");
+
+        assert_eq!(
+            worktrees_directory_for_repo(work_dir, "../worktrees", PathStyle::Windows)
+                .expect("Windows-style sibling worktree path should resolve"),
+            PathBuf::from(r"C:\Users\user\dev\worktrees\lsp-tests")
+        );
+        assert_eq!(
+            worktrees_directory_for_repo(work_dir, ".git\\zzz-worktrees", PathStyle::Windows)
+                .expect("Windows-style nested worktree path should resolve"),
+            PathBuf::from(r"C:\Users\user\dev\lsp-tests\.git\zzz-worktrees")
         );
     }
 

@@ -29,7 +29,10 @@ include = [
     "build.rs",
     "src",
 ]
-patches = ["vendor/patches/font-kit/0001-zzz-integration.patch"]
+patches = [
+    "vendor/patches/font-kit/0001-zzz-integration.patch",
+    "vendor/patches/font-kit/0002-zzz-clippy-and-import-fixes.patch",
+]
 
 [[package]]
 name = "gh-workflow"
@@ -37,7 +40,10 @@ repository = "https://github.com/tailcallhq/gh-workflow.git"
 source_ref = "refs/tags/gh-workflow-v0.8.1"
 revision = "ef51106c4c4152f595dc6d18295d78a5ca3c54f9"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE", "README.md", "crates"]
-patches = ["vendor/patches/gh-workflow/0001-zzz-integration.patch"]
+patches = [
+    "vendor/patches/gh-workflow/0001-zzz-integration.patch",
+    "vendor/patches/gh-workflow/0002-zzz-merge-derive-fix.patch",
+]
 
 [[package]]
 name = "lsp-types"

@@ -7,7 +7,6 @@ use gpui::{
 };
 use i18n::tr;
 use settings::Settings;
-use std::collections::{HashMap, HashSet};
 use theme_settings::ThemeSettings;
 use ui::{
     Divider, DividerColor, DynamicSpacing, LabelSize, WithScrollbar, prelude::*,
@@ -281,40 +280,58 @@ fn group_bindings(
     binding_data: Vec<(Vec<KeybindingKeystroke>, SharedString)>,
     group_label: &str,
 ) -> Vec<(Vec<KeybindingKeystroke>, SharedString)> {
-    let mut groups: HashMap<
-        Option<KeybindingKeystroke>,
-        Vec<(Vec<KeybindingKeystroke>, SharedString)>,
-    > = HashMap::new();
+    let mut groups: Vec<Vec<(Vec<KeybindingKeystroke>, SharedString)>> = Vec::new();
 
-    // Group bindings by their first keystroke
+    // Keep the candidate order from GPUI. When multiple bindings have the
+    // same sequence, dispatch tries the first one and the later bindings are
+    // shadowed.
     for (remaining_keystrokes, action_name) in binding_data {
-        let first_key = remaining_keystrokes.first().cloned();
-        groups
-            .entry(first_key)
-            .or_default()
-            .push((remaining_keystrokes, action_name));
+        let first_key = remaining_keystrokes.first();
+        if let Some(group) = groups.iter_mut().find(|group| {
+            group
+                .first()
+                .is_some_and(|(keystrokes, _)| keystrokes.first() == first_key)
+        }) {
+            if group
+                .iter()
+                .any(|(keystrokes, _)| *keystrokes == remaining_keystrokes)
+            {
+                continue;
+            }
+            group.push((remaining_keystrokes, action_name));
+        } else {
+            groups.push(vec![(remaining_keystrokes, action_name)]);
+        }
     }
 
     let mut result = Vec::new();
 
-    for (first_key, mut group_bindings) in groups {
-        // Remove duplicate key sequences within each group regardless of insertion order.
-        let mut seen_keystrokes = HashSet::new();
-        group_bindings.retain(|(keystrokes, _)| seen_keystrokes.insert(keystrokes.clone()));
+    for group in groups {
+        let longer_count = group
+            .iter()
+            .filter(|(keystrokes, _)| keystrokes.len() > 1)
+            .count();
 
-        if let Some(first_key) = first_key
-            && group_bindings.len() > 1
+        if longer_count > 1
+            && let Some(first_key) = group
+                .first()
+                .and_then(|(keystrokes, _)| keystrokes.first())
+                .cloned()
         {
-            // This is a group - create a single entry with just the first keystroke
-            let first_keystroke = vec![first_key];
-            let count = group_bindings.len();
+            // A group row must not hide the action that the next keystroke
+            // completes. Keep that action visible and collapse only longer
+            // continuations.
+            result.extend(
+                group
+                    .into_iter()
+                    .filter(|(keystrokes, _)| keystrokes.len() <= 1),
+            );
             result.push((
-                first_keystroke,
-                group_label.replace("{}", &count.to_string()).into(),
+                vec![first_key],
+                group_label.replace("{}", &longer_count.to_string()).into(),
             ));
         } else {
-            // Not a group or empty keystrokes - add all bindings as-is
-            result.append(&mut group_bindings);
+            result.extend(group);
         }
     }
 
@@ -351,6 +368,46 @@ mod tests {
         assert!(grouped.contains(&(parse_keystrokes("a"), "+2 keybinds".into())));
         assert!(grouped.contains(&(parse_keystrokes("z"), "Standalone".into())));
         assert_eq!(grouped.len(), 2);
+    }
+
+    #[test]
+    fn group_bindings_shows_completed_binding_before_continuations() {
+        let grouped = group_bindings(
+            vec![
+                (parse_keystrokes("a"), "Complete".into()),
+                (parse_keystrokes("a b"), "Continue One".into()),
+                (parse_keystrokes("a c"), "Continue Two".into()),
+            ],
+            "+{} keybinds",
+        );
+
+        assert_eq!(
+            grouped,
+            vec![
+                (parse_keystrokes("a"), "Complete".into()),
+                (parse_keystrokes("a"), "+2 keybinds".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn group_bindings_keeps_the_first_binding_for_duplicate_sequences() {
+        let grouped = group_bindings(
+            vec![
+                (parse_keystrokes("a"), "First".into()),
+                (parse_keystrokes("a b"), "Continuation".into()),
+                (parse_keystrokes("a"), "Shadowed".into()),
+            ],
+            "+{} keybinds",
+        );
+
+        assert_eq!(
+            grouped,
+            vec![
+                (parse_keystrokes("a"), "First".into()),
+                (parse_keystrokes("a b"), "Continuation".into()),
+            ]
+        );
     }
 
     #[cfg(target_os = "windows")]
