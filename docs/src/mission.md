@@ -42,8 +42,8 @@ that is local-first by construction.
 ## What is absent
 
 - Telemetry and product analytics.
-- Crash reporting. Minidumps and Sentry symbol uploads are opt-in only,
-  behind explicit environment variables.
+- Crash report uploads. Minidump generation is opt-in and stays on disk;
+  Sentry symbol uploads require explicit environment variables.
 - Accounts, subscriptions, trials, billing, and upgrade prompts.
 - Hosted collaboration and its server component.
 - The native Zed agent and its configuration target.

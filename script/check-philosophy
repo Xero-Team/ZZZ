@@ -389,9 +389,17 @@ check_no_internal_user_api() {
             "$root/crates/cloud_api_types" --glob '*.rs'
 }
 
-check_orphan_and_telemetry_dirs_absent() {
-    ! test -d "$root/crates/crashes" \
-        && ! test -f "$root/crates/client/src/telemetry.rs"
+check_telemetry_dirs_absent() {
+    ! test -f "$root/crates/client/src/telemetry.rs"
+}
+
+# Crash reporting stays local-first: the crashes crate may generate minidumps
+# for the logs directory, but it must not acquire a network, account, or
+# telemetry surface.
+check_crash_reporting_is_local() {
+    rg -q 'ZZZ_GENERATE_MINIDUMPS' "$root/crates/crashes/src/crashes.rs" \
+        && ! rg -n 'sentry|telemetry|metrics_id|is_staff|cloud_api|reqwest|http_client' \
+            "$root/crates/crashes/src/crashes.rs"
 }
 
 check_allowlisted_hosts() {
@@ -471,7 +479,8 @@ check "inline prompt rating actions are absent" check_no_inline_rating_actions
 check "account sign-in flow is absent" check_no_account_signin_flow
 check "cloud API client crate is absent" check_no_cloud_api_client
 check "internal user search API is absent" check_no_internal_user_api
-check "orphan and telemetry directories are absent" check_orphan_and_telemetry_dirs_absent
+check "telemetry directories are absent" check_telemetry_dirs_absent
+check "crash reporting is local-only" check_crash_reporting_is_local
 check "network hosts are allowlisted" check_allowlisted_hosts
 
 if (( failures > 0 )); then

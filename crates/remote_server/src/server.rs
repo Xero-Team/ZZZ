@@ -40,6 +40,7 @@ use rpc::AnyProtoClient;
 use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
 use settings::{Settings, SettingsStore, watch_config_file};
 use smol::{
+    Timer,
     channel::{Receiver, Sender},
     io::AsyncReadExt,
     stream::StreamExt as _,
@@ -403,6 +404,22 @@ pub fn execute_run(
     let startup_time = Instant::now();
     let app = gpui_platform::headless();
     let pid = std::process::id();
+    let id = pid.to_string();
+    crashes::init(
+        crashes::InitCrashHandler {
+            session_id: id,
+            zzz_version: VERSION.to_owned(),
+            binary: "zzz-remote-server".to_string(),
+            release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
+            commit_sha: option_env!("ZZZ_COMMIT_SHA").unwrap_or("no_sha").to_owned(),
+        },
+        |task| {
+            app.background_executor().spawn(task).detach();
+        },
+        // We are running outside gpui.
+        #[allow(clippy::disallowed_methods)]
+        |duration| FutureExt::map(Timer::after(duration), |_| ()),
+    );
     let log_rx = init_logging_server(&log_file)?;
     log::info!(
         "starting up with PID {}:\npid_file: {:?}, log_file: {:?}, stdin_socket: {:?}, stdout_socket: {:?}, stderr_socket: {:?}",
@@ -647,6 +664,23 @@ pub(crate) fn execute_proxy(
     init_logging_proxy();
 
     let server_paths = ServerPaths::new(&identifier)?;
+
+    let id = std::process::id().to_string();
+    crashes::init(
+        crashes::InitCrashHandler {
+            session_id: id,
+            zzz_version: VERSION.to_owned(),
+            binary: "zzz-remote-server".to_string(),
+            release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
+            commit_sha: option_env!("ZZZ_COMMIT_SHA").unwrap_or("no_sha").to_owned(),
+        },
+        |task| {
+            smol::spawn(task).detach();
+        },
+        // We are running outside gpui.
+        #[allow(clippy::disallowed_methods)]
+        |duration| FutureExt::map(Timer::after(duration), |_| ()),
+    );
 
     log::info!("starting proxy process. PID: {}", std::process::id());
     let server_pid = {

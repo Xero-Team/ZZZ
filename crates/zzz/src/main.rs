@@ -20,6 +20,7 @@ use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use client::{Client, ProxySettings, UserStore};
 use collections::HashMap;
+use crashes::InitCrashHandler;
 use db::kvp::KeyValueStore;
 use editor::Editor;
 use extension::ExtensionHostProxy;
@@ -204,6 +205,12 @@ fn main() {
         return;
     }
 
+    // `zzz --crash-handler` makes zzz run as the local minidump sidecar process.
+    if let Some(socket) = &args.crash_handler {
+        crashes::crash_server(socket.as_path());
+        return;
+    }
+
     #[cfg(target_os = "windows")]
     if args.record_etw_trace {
         let Some(etw_socket) = args.etw_socket else {
@@ -329,9 +336,32 @@ fn main() {
         .spawn(installation_id(KeyValueStore::from_app_db(&app_db)));
     let session_id = Uuid::new_v4().to_string();
     let session = app.background_executor().spawn(Session::new(
-        session_id,
+        session_id.clone(),
         KeyValueStore::from_app_db(&app_db),
     ));
+    let background_executor = app.background_executor();
+    crashes::init(
+        InitCrashHandler {
+            session_id,
+            // Strip the build and channel information from the version string;
+            // they are sent separately.
+            zzz_version: semver::Version::new(
+                app_version.major,
+                app_version.minor,
+                app_version.patch,
+            )
+            .to_string(),
+            binary: "zzz".to_string(),
+            release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
+            commit_sha: app_commit_sha
+                .as_ref()
+                .map_or_else(|| "no sha".to_owned(), |sha| sha.full()),
+        },
+        |task| {
+            app.background_executor().spawn(task).detach();
+        },
+        move |duration| background_executor.timer(duration),
+    );
     let (open_listener, mut open_rx) = OpenListener::new();
 
     let failed_single_instance_check = if *zzz_env_vars::ZZZ_STATELESS
@@ -1540,6 +1570,11 @@ struct Args {
     #[cfg(not(target_os = "windows"))]
     #[arg(hide = true)]
     askpass: Option<String>,
+
+    /// Used for recording minidumps on crashes by having ZZZ run a separate
+    /// process communicating over a socket.
+    #[arg(long, hide = true)]
+    crash_handler: Option<PathBuf>,
 
     #[arg(long, hide = true)]
     dump_all_actions: bool,

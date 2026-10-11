@@ -25,6 +25,7 @@ members = [
     "crates/component",
     "crates/component_preview",
     "crates/context_server",
+    "crates/crashes",
     "crates/credentials_provider",
     "crates/csv_preview",
     "crates/dap",
@@ -279,6 +280,7 @@ ui_component_registry = { path = "crates/component" }
 component_preview = { path = "crates/component_preview" }
 console = "0.16"
 context_server = { path = "crates/context_server" }
+crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
 crossbeam = "0.8.5"
 csv_preview = { path = "crates/csv_preview"}

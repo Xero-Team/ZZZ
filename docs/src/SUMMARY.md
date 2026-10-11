@@ -191,6 +191,7 @@
   - [Windows](./development/windows.md)
   - [FreeBSD](./development/freebsd.md)
   - [Using Debuggers](./development/debuggers.md)
+  - [Debugging Crashes](./development/debugging-crashes.md)
   - [Performance](./performance.md)
   - [Glossary](./development/glossary.md)
   - [Keeping ZZZ Lean](./development/bloat.md)

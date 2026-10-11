@@ -45,8 +45,8 @@ removed surface, such as auto-update or a hosted provider, have no effect.
 These surfaces do not exist in ZZZ and cannot be enabled:
 
 - Product telemetry and analytics.
-- Crash reporting. Minidumps and Sentry symbol uploads are opt-in, behind
-  explicit environment variables.
+- Crash report uploads. Minidump generation is opt-in and stays on disk; see
+  [Debugging Crashes](../development/debugging-crashes.md).
 - Accounts, sign-in, subscriptions, trials, and billing.
 - Hosted collaboration and the proprietary server component.
 - The native Zed agent. ZZZ speaks the open Agent Client Protocol (ACP)

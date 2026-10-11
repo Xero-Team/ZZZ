@@ -522,7 +522,8 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
-            show_software_emulation_warning_if_needed(specs, window, cx);
+            show_software_emulation_warning_if_needed(specs.clone(), window, cx);
+            crashes::set_gpu_info(specs);
         }
 
         let search_button = cx.new(|_| search::search_status_button::SearchButton::new());

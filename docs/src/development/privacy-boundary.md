@@ -29,7 +29,8 @@ hosted ZZZ service, send telemetry, or upload crash data.
 
 - Hosted collaboration, cloud AI, account, subscription, billing, and trial
   requests.
-- Telemetry, Anthropic behavior logging, Sentry uploads, and crash reporting.
+- Telemetry, Anthropic behavior logging, and Sentry uploads.
+- Crash report uploads. Local minidump generation is opt-in and stays on disk.
 - Automatic application updates.
 - Automatic Agent Registry downloads.
 
@@ -38,6 +39,10 @@ hosted ZZZ service, send telemetry, or upload crash data.
 Set a remote `server_url` manually to enable cloud compatibility. OpenCode is
 available only when configured by the user. Sentry symbol uploads additionally
 require `ZZZ_ENABLE_SENTRY_UPLOAD=1` and a valid `SENTRY_AUTH_TOKEN`.
+
+Local crash reports require `ZZZ_GENERATE_MINIDUMPS=1`. ZZZ writes the minidump
+and its metadata to its logs directory and never uploads them. See
+[Debugging Crashes](./debugging-crashes.md).
 
 The Telegram panel is opt-in. Nothing connects to Telegram until you open the
 panel and sign in. After that, ZZZ connects to Telegram, which is a
