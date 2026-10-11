@@ -53,6 +53,12 @@ You can install a local build on your machine with:
 
 This builds `~/.local/bin/zzz` and the `cli` in release mode, installs the binary at `~/.local/bin/zzz`, and installs `.desktop` files to `~/.local/share`.
 
+To reinstall an existing bundle without rebuilding it, pass `--skip-build`:
+
+```sh
+./script/install-linux --skip-build
+```
+
 To create distribution packages from the same build, install the packaging
 tools first and pass one or both options to the bundle script:
 
@@ -86,6 +92,7 @@ script/bundle-all-linux
 
 The wrapper checks all required packagers before starting the build and prints
 the exact missing-tool command if the environment is incomplete. Use
+`--skip-build` to reuse existing artifacts without rebuilding, or
 `--skip-flatpak`, `--skip-snap`, or `--skip-appimage` when only selected
 formats are needed.
 

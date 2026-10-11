@@ -2,10 +2,38 @@
 
 set -euxo pipefail
 
-if [ "$#" -ne 1 ]; then
-  echo "Usage: $0 <release_version>"
+skip_build=false
+positional=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      echo "Usage: $0 [--skip-build] <release_version>"
+      echo
+      echo "  --skip-build   Reuse an existing bundle instead of running script/bundle-linux"
+      exit 0
+      ;;
+    --skip-build)
+      skip_build=true
+      shift
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      echo "Usage: $0 [--skip-build] <release_version>" >&2
+      exit 1
+      ;;
+    *)
+      positional+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [ "${#positional[@]}" -ne 1 ]; then
+  echo "Usage: $0 [--skip-build] <release_version>"
   exit 1
 fi
+release_version="${positional[0]}"
 
 if ! command -v snapcraft >/dev/null 2>&1; then
   echo "Error: Snap packaging requires snapcraft on PATH." >&2
@@ -15,7 +43,9 @@ fi
 
 workspace_root="$(pwd)"
 if [[ -z "${ZZZ_SNAP_ARCHIVE:-}" ]]; then
-  script/bundle-linux
+  if [[ "$skip_build" == false ]]; then
+    script/bundle-linux
+  fi
   snap_arch="$(uname -m)"
   ZZZ_SNAP_ARCHIVE="${workspace_root}/target/release/zzz-linux-${snap_arch}.tar.gz"
 fi
@@ -35,7 +65,7 @@ export APP_ARGS="%U"
 envsubst < "crates/zzz/resources/zzz.desktop.in" > "snap/gui/zzz.desktop"
 cp "crates/zzz/resources/app-icon.png" "snap/gui/zzz.png"
 
-RELEASE_VERSION="$1" SNAP_ARCHIVE="$ZZZ_SNAP_ARCHIVE" envsubst < crates/zzz/resources/snap/snapcraft.yaml.in > snap/snapcraft.yaml
+RELEASE_VERSION="$release_version" SNAP_ARCHIVE="$ZZZ_SNAP_ARCHIVE" envsubst < crates/zzz/resources/snap/snapcraft.yaml.in > snap/snapcraft.yaml
 
 # Clean seems to be needed to actually check that the snapcraft.yaml
 # works.  For example, when a `stage-package` is removed, it will

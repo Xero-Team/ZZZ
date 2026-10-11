@@ -8,8 +8,9 @@ usage() {
   Builds and installs zzz onto your system into ~/.local, making it available as ~/.local/bin/zzz.
 
   Options:
-    -h, --help   Show this help and exit
-    -i, --native Build the local app with the linux-native profile and target-cpu=native
+    -h, --help     Show this help and exit
+    -i, --native   Build the local app with the linux-native profile and target-cpu=native
+    --skip-build   Install an existing bundle instead of rebuilding it
 
   Environment:
     ZZZ_PGO_GENERATE_DIR=/abs/dir   Build an instrumented native binary for PGO training
@@ -25,6 +26,7 @@ usage() {
 
 host_build_profile=release
 bundle_args=()
+skip_build=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -37,6 +39,10 @@ while [[ $# -gt 0 ]]; do
       bundle_args+=(--native)
       shift
       ;;
+    --skip-build)
+      skip_build=true
+      shift
+      ;;
     *)
       usage
       exit 1
@@ -46,7 +52,9 @@ done
 
 export ZZZ_CHANNEL=$(<crates/zzz/RELEASE_CHANNEL)
 export ZZZ_UPDATE_EXPLANATION="You need to fetch and rebuild zzz in $(pwd)"
-script/bundle-linux "${bundle_args[@]}"
+if [[ "$skip_build" == false ]]; then
+  script/bundle-linux "${bundle_args[@]}"
+fi
 
 arch="$(uname -m)"
 commit=$(git rev-parse HEAD | cut -c 1-7)

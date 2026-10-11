@@ -4,6 +4,25 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 shopt -s extglob
 
+for arg in "$@"; do
+    case "$arg" in
+        --skip-build)
+            export ZZZ_SKIP_BUNDLE=1
+            ;;
+        -h|--help)
+            echo "Usage: ${0##*/} [--skip-build]"
+            echo
+            echo "  --skip-build   Reuse an existing bundle instead of running script/bundle-linux"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg" >&2
+            echo "Usage: ${0##*/} [--skip-build]" >&2
+            exit 1
+            ;;
+    esac
+done
+
 for required_tool in flatpak flatpak-builder envsubst; do
     if ! command -v "$required_tool" >/dev/null 2>&1; then
         echo "Error: Flatpak packaging requires '$required_tool' on PATH." >&2

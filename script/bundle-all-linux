@@ -8,6 +8,7 @@ cd "$workspace_root"
 skip_appimage=false
 skip_flatpak=false
 skip_snap=false
+skip_build=false
 
 help_info() {
     cat <<'EOF'
@@ -19,6 +20,7 @@ Build all supported Linux package formats from one release build:
 
 Options:
   -h, --help       Show this help.
+  --skip-build     Reuse existing build artifacts instead of rebuilding.
   --skip-appimage  Do not build the AppImage.
   --skip-flatpak   Do not build the Flatpak.
   --skip-snap      Do not build the Snap.
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             help_info
             exit 0
+            ;;
+        --skip-build)
+            skip_build=true
+            shift
             ;;
         --skip-appimage)
             skip_appimage=true
@@ -76,14 +82,17 @@ require_command() {
 
 require_command cargo "rustup/toolchain setup"
 require_command nproc "coreutils"
-require_command tree-sitter "cargo install --locked --version 0.27.0 tree-sitter-cli"
 require_command cargo-deb "cargo install cargo-deb --version 3.8.0 --locked"
 require_command cargo-generate-rpm "cargo install cargo-generate-rpm --version 0.21.0 --locked"
 
-if [[ "$(tree-sitter --version | awk '{print $2}')" != "$(sed -n 's/^tree-sitter-cli-version = "\([^"]*\)"/\1/p' crates/grammars/vendor/manifest.toml)" ]]; then
-    echo "Error: tree-sitter 0.27.0 is required; install it with:" >&2
-    echo "cargo install --locked --version 0.27.0 tree-sitter-cli" >&2
-    exit 1
+if [[ "$skip_build" == false ]]; then
+    require_command tree-sitter "cargo install --locked --version 0.27.0 tree-sitter-cli"
+
+    if [[ "$(tree-sitter --version | awk '{print $2}')" != "$(sed -n 's/^tree-sitter-cli-version = "\([^"]*\)"/\1/p' crates/grammars/vendor/manifest.toml)" ]]; then
+        echo "Error: tree-sitter 0.27.0 is required; install it with:" >&2
+        echo "cargo install --locked --version 0.27.0 tree-sitter-cli" >&2
+        exit 1
+    fi
 fi
 
 if [[ "$(cargo-deb --version | awk '{print $2}')" != "${ZZZ_CARGO_DEB_VERSION:-3.8.0}" ]]; then
@@ -110,11 +119,19 @@ fi
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(nproc)}"
 export ZZZ_CROSS_BUILD_JOBS="${ZZZ_CROSS_BUILD_JOBS:-$(( (CARGO_BUILD_JOBS + 1) / 2 ))}"
 
-echo "==> Fetching locked Cargo dependencies"
-cargo fetch --locked
+if [[ "$skip_build" == false ]]; then
+    echo "==> Fetching locked Cargo dependencies"
+    cargo fetch --locked
+fi
 
-echo "==> Building tar.gz, DEB, and RPM"
-CARGO_NET_OFFLINE=true ./script/bundle-linux --deb --rpm
+bundle_args=(--deb --rpm)
+if [[ "$skip_build" == true ]]; then
+    echo "==> Reusing existing tar.gz, DEB, and RPM"
+    bundle_args+=(--skip-build)
+else
+    echo "==> Building tar.gz, DEB, and RPM"
+fi
+CARGO_NET_OFFLINE=true ./script/bundle-linux "${bundle_args[@]}"
 
 architecture="$(uname -m)"
 archive="${workspace_root}/target/release/zzz-linux-${architecture}.tar.gz"

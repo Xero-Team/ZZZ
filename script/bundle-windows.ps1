@@ -3,7 +3,8 @@ Param(
     [Parameter()][Alias('i')][switch]$Install,
     [Parameter()][Alias('h')][switch]$Help,
     [Parameter()][Alias('a')][string]$Architecture,
-    [Parameter()][string]$Name
+    [Parameter()][string]$Name,
+    [Parameter()][switch]$SkipBuild
 )
 
 . "$PSScriptRoot/lib/workspace.ps1"
@@ -269,15 +270,18 @@ if ($Help) {
     Write-Output "Options:"
     Write-Output "  -Architecture, -a Which architecture to build (x86_64 or aarch64)"
     Write-Output "  -Install, -i      Run the installer after building."
+    Write-Output "  -SkipBuild        Reuse existing binaries instead of compiling them."
     Write-Output "  -Help, -h         Show this help message."
     exit 0
 }
 
-Invoke-NativeCommand -FilePath "cargo" -ArgumentList @(
-    'xtask',
-    'grammars',
-    'generate'
-) -Description "Generate Tree-sitter parsers and Rust bindings"
+if (-not $SkipBuild) {
+    Invoke-NativeCommand -FilePath "cargo" -ArgumentList @(
+        'xtask',
+        'grammars',
+        'generate'
+    ) -Description "Generate Tree-sitter parsers and Rust bindings"
+}
 
 Push-Location -Path crates/zzz
 $channel = Get-Content "RELEASE_CHANNEL"
@@ -327,19 +331,23 @@ function BuildZZZAndItsFriends {
     Write-Output "Building ZZZ and its friends, for channel: $channel"
     # Build zzz.exe and cli.exe after remote_server so the archive can be embedded.
     $env:ZZZ_EMBED_REMOTE_SERVER_DIR = Join-Path $env:ZZZ_WORKSPACE 'target'
-    Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'zzz', '--package', 'cli', '--target', $target)) -Description "Build zzz and cli for $target"
+    if (-not $SkipBuild) {
+        Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'zzz', '--package', 'cli', '--target', $target)) -Description "Build zzz and cli for $target"
+    }
     Copy-Item -Path ".\$CargoOutDir\zzz.exe" -Destination "$innoDir\ZZZ.exe" -Force
     Copy-Item -Path ".\$CargoOutDir\cli.exe" -Destination "$innoDir\cli.exe" -Force
     # Build explorer_command_injector.dll
-    switch ($channel) {
-        "stable" {
-            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--features', 'stable', '--no-default-features', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for stable $target"
-        }
-        "preview" {
-            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--features', 'preview', '--no-default-features', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for preview $target"
-        }
-        default {
-            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for $target"
+    if (-not $SkipBuild) {
+        switch ($channel) {
+            "stable" {
+                Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--features', 'stable', '--no-default-features', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for stable $target"
+            }
+            "preview" {
+                Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--features', 'preview', '--no-default-features', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for preview $target"
+            }
+            default {
+                Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'explorer_command_injector', '--target', $target)) -Description "Build explorer_command_injector for $target"
+            }
         }
     }
     Copy-Item -Path ".\$CargoOutDir\explorer_command_injector.dll" -Destination "$innoDir\zzz_explorer_command_injector.dll" -Force
@@ -347,13 +355,15 @@ function BuildZZZAndItsFriends {
 }
 
 function BuildRemoteServer {
-    Write-Output "Building remote_server for $target"
-    $env:ZZZ_BUILDING_REMOTE_SERVER = '1'
-    try {
-        Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'remote_server', '--target', $target)) -Description "Build remote_server for $target"
-    }
-    finally {
-        Remove-Item Env:ZZZ_BUILDING_REMOTE_SERVER -ErrorAction SilentlyContinue
+    if (-not $SkipBuild) {
+        Write-Output "Building remote_server for $target"
+        $env:ZZZ_BUILDING_REMOTE_SERVER = '1'
+        try {
+            Invoke-NativeCommand -FilePath 'cargo' -ArgumentList (Get-CargoBuildArguments -Arguments @('build', '--release', '--package', 'remote_server', '--target', $target)) -Description "Build remote_server for $target"
+        }
+        finally {
+            Remove-Item Env:ZZZ_BUILDING_REMOTE_SERVER -ErrorAction SilentlyContinue
+        }
     }
 
     # Create zipped remote server binary
