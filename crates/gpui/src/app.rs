@@ -749,7 +749,6 @@ pub struct App {
     pub(crate) mode: GpuiMode,
     pub(crate) cursor_hide_mode: CursorHideMode,
     pub(crate) synced_animation_epoch: Instant,
-    flushing_effects: bool,
     pending_updates: usize,
     quit_mode: QuitMode,
     quitting: bool,
@@ -791,7 +790,6 @@ impl App {
                 text_rendering_mode: Rc::new(Cell::new(TextRenderingMode::default())),
                 mode: GpuiMode::Production,
                 actions: Rc::new(ActionRegistry::default()),
-                flushing_effects: false,
                 pending_updates: 0,
                 active_drag: None,
                 background_executor,
@@ -1036,10 +1034,8 @@ impl App {
     }
 
     pub(crate) fn finish_update(&mut self) {
-        if !self.flushing_effects && self.pending_updates == 1 {
-            self.flushing_effects = true;
+        if self.pending_updates == 1 {
             self.flush_effects();
-            self.flushing_effects = false;
         }
         self.pending_updates -= 1;
     }

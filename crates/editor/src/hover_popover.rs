@@ -16,10 +16,10 @@ use gpui::{
 };
 use i18n::tr;
 use itertools::Itertools;
-use language::{DiagnosticEntry, Language, LanguageRegistry};
+use language::{CharKind, DiagnosticEntry, Language, LanguageRegistry};
 use lsp::DiagnosticSeverity;
 use markdown::{CopyButtonVisibility, Markdown, MarkdownElement, MarkdownStyle};
-use multi_buffer::{MultiBufferOffset, ToOffset, ToPoint};
+use multi_buffer::{MultiBufferOffset, MultiBufferSnapshot, ToOffset, ToPoint};
 use project::{HoverBlock, HoverBlockKind, InlayHintLabelPart};
 use settings::Settings;
 use std::{
@@ -223,6 +223,7 @@ pub fn hover_at_inlay(
 
                 let hover_popover = InfoPopover {
                     symbol_range: RangeInEditor::Inlay(inlay_hover.range.clone()),
+                    fallback_state: None,
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(false)),
@@ -496,6 +497,7 @@ fn show_hover(
                     .flatten();
                 info_popovers.push(InfoPopover {
                     symbol_range: RangeInEditor::Text(range),
+                    fallback_state: None,
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(ignore_timeout)),
@@ -526,22 +528,19 @@ fn show_hover(
                 None => Vec::new(),
             };
 
+            let buffer_snapshot = snapshot.buffer_snapshot();
             for hover_result in hovers_response {
                 // Create symbol range of anchors for highlighting and filtering of future requests.
-                let range = hover_result
+                let (range, fallback_state) = hover_result
                     .range
-                    .and_then(|range| {
-                        let range = snapshot
-                            .buffer_snapshot()
-                            .buffer_anchor_range_to_anchor_range(range)?;
-                        Some(range)
-                    })
-                    .or_else(|| {
-                        let snapshot = &snapshot.buffer_snapshot();
-                        let range = snapshot.syntax_ancestor(anchor..anchor)?.1;
-                        Some(snapshot.anchor_before(range.start)..snapshot.anchor_after(range.end))
-                    })
-                    .unwrap_or(anchor..anchor);
+                    .and_then(|range| buffer_snapshot.buffer_anchor_range_to_anchor_range(range))
+                    .filter(|range| !range.to_offset(buffer_snapshot).is_empty())
+                    .map(|range| (range, None))
+                    .unwrap_or_else(|| {
+                        let range = fallback_hover_range(buffer_snapshot, anchor);
+                        let fallback_state = FallbackHoverState::new(buffer_snapshot, &range);
+                        (range, Some(fallback_state))
+                    });
 
                 let blocks = hover_result.contents;
                 let language = hover_result.language;
@@ -559,6 +558,7 @@ fn show_hover(
                     .flatten();
                 info_popovers.push(InfoPopover {
                     symbol_range: RangeInEditor::Text(range),
+                    fallback_state,
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(ignore_timeout)),
@@ -585,6 +585,7 @@ fn show_hover(
                     .flatten();
                 info_popovers.push(InfoPopover {
                     symbol_range: RangeInEditor::Text(multi_buffer_range),
+                    fallback_state: None,
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(ignore_timeout)),
@@ -622,20 +623,83 @@ fn show_hover(
     None
 }
 
-fn same_info_hover(editor: &Editor, snapshot: &EditorSnapshot, anchor: Anchor) -> bool {
-    editor
-        .hover_state
-        .info_popovers
-        .iter()
-        .any(|InfoPopover { symbol_range, .. }| {
-            symbol_range.as_text_range().is_some_and(|range| {
-                let hover_range = range.to_offset(&snapshot.buffer_snapshot());
-                let offset = anchor.to_offset(&snapshot.buffer_snapshot());
-                // LSP returns a hover result for the end index of ranges that should be hovered, so we need to
-                // use an inclusive range here to check if we should dismiss the popover
-                (hover_range.start..=hover_range.end).contains(&offset)
-            })
-        })
+/// The range to use for a hover result whose language server reported no usable range.
+fn fallback_hover_range(buffer_snapshot: &MultiBufferSnapshot, anchor: Anchor) -> Range<Anchor> {
+    let offset = anchor.to_offset(buffer_snapshot);
+    let syntax_offset = if offset == buffer_snapshot.len()
+        || buffer_snapshot
+            .chars_at(offset)
+            .next()
+            .is_some_and(char::is_whitespace)
+    {
+        match buffer_snapshot.reversed_chars_at(offset).next() {
+            Some(character) if !character.is_whitespace() => offset - character.len_utf8(),
+            _ if offset == buffer_snapshot.len() => return anchor..anchor,
+            _ => offset,
+        }
+    } else {
+        offset
+    };
+    if buffer_snapshot
+        .chars_at(syntax_offset)
+        .next()
+        .is_some_and(|character| !character.is_whitespace())
+        && let Some((_, range)) = buffer_snapshot.syntax_ancestor(syntax_offset..syntax_offset)
+        && !range.is_empty()
+        && (syntax_offset == offset || range.end == offset)
+    {
+        return buffer_snapshot.anchor_after(range.start)..buffer_snapshot.anchor_before(range.end);
+    }
+
+    let classifier = buffer_snapshot.char_classifier_at(offset);
+    if buffer_snapshot
+        .chars_at(offset)
+        .next()
+        .is_some_and(|character| classifier.kind(character) == CharKind::Punctuation)
+    {
+        return anchor..anchor;
+    }
+
+    let (range, kind) = buffer_snapshot.surrounding_word(offset, None);
+    if kind != Some(CharKind::Word) {
+        return anchor..anchor;
+    }
+    buffer_snapshot.anchor_after(range.start)..buffer_snapshot.anchor_before(range.end)
+}
+
+fn same_info_hover(editor: &mut Editor, snapshot: &EditorSnapshot, anchor: Anchor) -> bool {
+    editor.hover_state.info_popovers.iter_mut().any(
+        |InfoPopover {
+             symbol_range,
+             fallback_state,
+             ..
+         }| {
+            symbol_range
+                .as_text_range()
+                .map(|range| {
+                    let buffer_snapshot = snapshot.buffer_snapshot();
+                    let hover_range = range.to_offset(buffer_snapshot);
+                    let offset = anchor.to_offset(buffer_snapshot);
+                    if let Some(fallback_state) = fallback_state {
+                        if fallback_state.edit_count != buffer_snapshot.edit_count() {
+                            return false;
+                        }
+                        if offset == hover_range.end {
+                            if fallback_state.non_text_state_update_count
+                                != buffer_snapshot.non_text_state_update_count()
+                            {
+                                *fallback_state = FallbackHoverState::new(buffer_snapshot, &range);
+                            }
+                            return fallback_state.includes_end;
+                        }
+                    }
+                    // LSP returns a hover result for the end index of ranges that should be hovered, so we need to
+                    // use an inclusive range here to check if we should dismiss the popover
+                    (hover_range.start..=hover_range.end).contains(&offset)
+                })
+                .unwrap_or(false)
+        },
+    )
 }
 
 fn same_diagnostic_hover(editor: &Editor, snapshot: &EditorSnapshot, anchor: Anchor) -> bool {
@@ -1048,7 +1112,28 @@ pub struct InfoPopover {
     pub keyboard_grace: Rc<RefCell<bool>>,
     pub anchor: Option<Anchor>,
     pub last_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    fallback_state: Option<FallbackHoverState>,
     _subscription: Option<Subscription>,
+}
+
+struct FallbackHoverState {
+    edit_count: usize,
+    non_text_state_update_count: usize,
+    includes_end: bool,
+}
+
+impl FallbackHoverState {
+    fn new(buffer_snapshot: &MultiBufferSnapshot, range: &Range<Anchor>) -> Self {
+        let offsets = range.to_offset(buffer_snapshot);
+        let includes_end = offsets.end == buffer_snapshot.len()
+            || fallback_hover_range(buffer_snapshot, range.end).to_offset(buffer_snapshot)
+                == offsets;
+        Self {
+            edit_count: buffer_snapshot.edit_count(),
+            non_text_state_update_count: buffer_snapshot.non_text_state_update_count(),
+            includes_end,
+        }
+    }
 }
 
 impl InfoPopover {

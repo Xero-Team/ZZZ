@@ -406,7 +406,9 @@ fn is_active_in_some_pane(workspace: &Workspace, buffer: &Entity<Buffer>, cx: &A
 }
 
 fn should_skip_suggestion(workspace: &Workspace, extension_id: &str, cx: &App) -> bool {
-    if workspace.has_notification(&notification_id(extension_id)) {
+    if !ExtensionSettings::get_global(cx).suggest_extensions
+        || workspace.has_notification(&notification_id(extension_id))
+    {
         return true;
     }
 
@@ -493,6 +495,10 @@ fn suggest_emmet_for_buffer(
 }
 
 pub(crate) fn suggest(buffer: Entity<Buffer>, window: &mut Window, cx: &mut Context<Workspace>) {
+    if !ExtensionSettings::get_global(cx).suggest_extensions {
+        return;
+    }
+
     let Some(file) = buffer.read(cx).file().cloned() else {
         return;
     };

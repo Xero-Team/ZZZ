@@ -155,6 +155,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
+            name: "env",
+            adapters: vec![],
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "go",
             adapters: vec![go_lsp_adapter.clone()],
             context: Some(go_context_provider.clone()),
@@ -829,6 +834,30 @@ mod tests {
                 .await
                 .expect("Dockerfile language should load with built-in queries");
             assert_eq!(loaded_language.name(), "Dockerfile");
+        }
+    }
+
+    #[gpui::test]
+    async fn test_env_registered_without_shell_language_servers(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        let settings = cx.update(SettingsStore::test);
+        cx.set_global(settings);
+
+        let languages = Arc::new(LanguageRegistry::new(cx.executor()));
+        cx.update(|cx| init(languages.clone(), fs, NodeRuntime::unavailable(), cx));
+
+        for (path, expected_language) in [
+            (".env", "Env"),
+            (".envrc", "Shell Script"),
+            ("deploy.sh", "Shell Script"),
+        ] {
+            assert_eq!(
+                languages
+                    .language_for_file_path(Path::new(path))
+                    .map(|language| language.name()),
+                Some(expected_language.into()),
+                "{path} should use {expected_language}"
+            );
         }
     }
 

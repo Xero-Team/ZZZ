@@ -9,6 +9,7 @@ use languages::rust_lang;
 
 use extension::ExtensionHostProxy;
 use fs::{FakeFs, Fs};
+use futures::FutureExt as _;
 use git::repository::Worktree as GitWorktree;
 use gpui::{AppContext as _, Entity, SharedString, TestAppContext};
 use http_client::{BlockedHttpClient, FakeHttpClient};
@@ -434,6 +435,38 @@ async fn test_remote_project_search(cx: &mut TestAppContext, server_cx: &mut Tes
         cx.clone(),
     )
     .await;
+}
+
+#[gpui::test]
+async fn test_remote_buffer_transfer_survives_dropping_its_caller(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    let (project, headless) = init_test(&fs, cx, server_cx).await;
+    let buffer_store = headless.read_with(server_cx, |headless, _| headless.buffer_store.clone());
+    let buffer = buffer_store.update(server_cx, |store, cx| {
+        store.create_local_buffer("needle", None, false, cx)
+    });
+    let buffer_id = buffer.read_with(server_cx, |buffer, _| buffer.remote_id());
+    buffer.update(server_cx, |buffer, cx| buffer.edit([(6..6, "!")], None, cx));
+    let remote_buffer = project.update(cx, |project, cx| {
+        project
+            .buffer_store()
+            .update(cx, |store, cx| store.wait_for_remote_buffer(buffer_id, cx))
+    });
+    let transfer = buffer_store.update(server_cx, |store, cx| {
+        store.create_buffer_for_peer(&buffer, proto::REMOTE_SERVER_PEER_ID, cx)
+    });
+    drop(transfer);
+    server_cx.update(|_| drop(buffer));
+    cx.run_until_parked();
+
+    let remote_buffer = remote_buffer
+        .now_or_never()
+        .expect("the transfer should survive dropping its caller")
+        .expect("the transferred buffer should load");
+    remote_buffer.read_with(cx, |buffer, _| assert_eq!(buffer.text(), "needle!"));
 }
 
 #[gpui::test]

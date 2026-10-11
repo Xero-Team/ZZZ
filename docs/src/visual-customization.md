@@ -76,7 +76,11 @@ If you would like to use distinct themes for light mode/dark mode that can be se
   "agent_buffer_font_family": "Berkeley Mono",
   // Controls the font size for the agent panel's message editor, user message,
   // and any other snippet of code.
-  "agent_buffer_font_size": 12
+  "agent_buffer_font_size": 12,
+
+  // Controls the font family for Mermaid diagrams in the agent panel and
+  // markdown preview. If not specified, it falls back to the UI font family.
+  "mermaid_font_family": "Inter"
 ```
 
 Markdown preview headings use a semibold weight by default. To change all

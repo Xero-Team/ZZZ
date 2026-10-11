@@ -3399,6 +3399,7 @@ impl AcpThread {
         let git_store = self.project.read(cx).git_store().clone();
 
         let message_id = UserMessageId::new();
+        let should_checkpoint = self.supports_truncate(cx) && self.parent_session_id.is_none();
 
         self.run_turn(cx, async move |this, cx| {
             this.update(cx, |this, cx| {
@@ -3417,18 +3418,23 @@ impl AcpThread {
             })
             .ok();
 
-            let old_checkpoint = git_store
-                .update(cx, |git, cx| git.checkpoint(cx))
-                .await
-                .context("failed to get old checkpoint")
-                .log_err();
+            if should_checkpoint {
+                let old_checkpoint = git_store
+                    .update(cx, |git, cx| git.checkpoint(cx))
+                    .await
+                    .context("failed to get old checkpoint")
+                    .log_err();
+                this.update(cx, |this, _cx| {
+                    if let Some((_ix, message)) = this.last_user_message() {
+                        message.checkpoint = old_checkpoint.map(|git_checkpoint| Checkpoint {
+                            git_checkpoint,
+                            show: false,
+                        });
+                    }
+                })
+                .ok();
+            }
             this.update(cx, |this, cx| {
-                if let Some((_ix, message)) = this.last_user_message() {
-                    message.checkpoint = old_checkpoint.map(|git_checkpoint| Checkpoint {
-                        git_checkpoint,
-                        show: false,
-                    });
-                }
                 this.connection.prompt(message_id, request, cx)
             })?
             .await
@@ -3617,7 +3623,7 @@ impl AcpThread {
         cx.background_spawn(turn.send_task)
     }
 
-    fn cancel_outstanding_elicitations(&mut self, cx: &mut Context<Self>) {
+    pub fn cancel_outstanding_elicitations(&mut self, cx: &mut Context<Self>) {
         for ix in 0..self.entries.len() {
             let Some(AgentThreadEntry::Elicitation(elicitation_id)) = self.entries.get(ix) else {
                 continue;

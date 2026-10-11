@@ -12,7 +12,10 @@ workspace = true
 path = "src/gpui_platform.rs"
 
 [features]
-default = []
+default = ["multithreaded"]
+# Threads in the browser: needs a nightly toolchain and a cross-origin-isolated
+# page. Off, gpui_web builds on stable.
+multithreaded = ["gpui_web/multithreaded"]
 accessibility = [
     "gpui/accessibility",
     "gpui_linux/accessibility",
