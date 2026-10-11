@@ -146,6 +146,7 @@ pub struct AgentSettings {
     pub single_file_review: bool,
     pub expand_edit_card: bool,
     pub expand_terminal_card: bool,
+    pub terminal_init_command: Option<String>,
     pub thinking_display: ThinkingBlockDisplay,
     pub cancel_generation_on_terminal_stop: bool,
     pub use_modifier_to_send: bool,
@@ -387,6 +388,9 @@ impl Settings for AgentSettings {
             expand_terminal_card: agent
                 .expand_terminal_card
                 .expect("expand_terminal_card should be present"),
+            terminal_init_command: agent
+                .terminal_init_command
+                .filter(|command| !command.trim().is_empty()),
             thinking_display: agent
                 .thinking_display
                 .expect("thinking_display should be present"),

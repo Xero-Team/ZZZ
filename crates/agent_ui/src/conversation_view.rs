@@ -2795,7 +2795,9 @@ impl ConversationView {
                             dismiss_if_visible(this, window, cx);
                         }
                         AgentPanelEvent::RetainedThreadChanged
-                        | AgentPanelEvent::ThreadInteracted { .. } => {}
+                        | AgentPanelEvent::ThreadInteracted { .. }
+                        | AgentPanelEvent::EntryChanged
+                        | AgentPanelEvent::TerminalCloseRequested { .. } => {}
                     },
                 ));
             }

@@ -1610,7 +1610,7 @@ impl Terminal {
         self.keyboard_input_sent
     }
 
-    fn start_init_command_startup_handshake(&mut self, input: Vec<u8>) {
+    pub fn start_init_command_startup_handshake(&mut self, input: Vec<u8>) {
         if !self.is_pty() || self.child_exited.is_some() {
             return;
         }

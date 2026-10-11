@@ -30,6 +30,7 @@ fn init_test(cx: &mut TestAppContext) {
         editor::init(cx);
         ThreadStore::init_global(cx);
         ThreadMetadataStore::init_global(cx);
+        agent_ui::terminal_thread_metadata_store::init(cx);
         prompt_store::init(cx);
     });
 }
@@ -148,6 +149,7 @@ fn assert_remote_project_integration_sidebar_state(
                     title
                 );
             }
+            ListEntry::Terminal(_) => {}
         }
     }
 
@@ -507,6 +509,10 @@ fn visible_entries_as_strings(
                             };
                             format!("  {title}{worktree}{live}{status_str}{notified}{selected}")
                         }
+                    }
+                    ListEntry::Terminal(terminal) => {
+                        let title = terminal.metadata.display_title();
+                        format!("  {title}{selected}")
                     }
                 }
             })
@@ -3861,6 +3867,7 @@ async fn test_clicking_worktree_thread_does_not_briefly_render_as_separate_proje
                         title, worktree_name
                     );
                 }
+                ListEntry::Terminal(_) => {}
             }
         }
 
@@ -9882,9 +9889,10 @@ mod property_test {
                 ),
             ));
 
-            ThreadStore::init_global(cx);
-            ThreadMetadataStore::init_global(cx);
-            prompt_store::init(cx);
+        ThreadStore::init_global(cx);
+        ThreadMetadataStore::init_global(cx);
+        agent_ui::terminal_thread_metadata_store::init(cx);
+        prompt_store::init(cx);
 
             // Auto-add an AgentPanel to every workspace so that implicitly
             // created workspaces (e.g. from thread activation) also have one.
