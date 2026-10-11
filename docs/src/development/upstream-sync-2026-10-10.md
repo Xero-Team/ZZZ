@@ -228,3 +228,83 @@ The three direct `A` changes used `git cherry-pick -x -s`. Each `B` commit has
 
 The general reviewed baseline advances to
 `df48a139ce9c292738b523252c12f044697e673f`.
+
+## Continued Batch 3
+
+### Scope
+
+- Target branch: `sync/upstream-2026-10-10`, continuing the same local base
+  `85d925f5d0`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `df48a139ce9c292738b523252c12f044697e673f`
+- Reviewed head: `93d745668805029476e6d7fbb19652116fed51de`
+- Live upstream head queried: `93d745668805029476e6d7fbb19652116fed51de`
+- Query time: `2026-10-11T19:11:58+02:00`
+- Reviewed range: the final 8 commits after `df48a139`, oldest first
+- Remaining after this batch: 0 commits through the queried live head
+
+The previous baseline is an ancestor of `FETCH_HEAD`. This batch reaches the
+queried live head, so the queued commits are drained.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                           |
+| ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 5f08939a5d | C     | --           | Documents Bedrock custom endpoints in a gateway doc ZZZ does not ship; the `bedrock` crate is absent.                                 |
+| 2c99f547cc | A     | c86cb17af5   | Already equivalent: ZZZ highlights code blocks at render time, so tab expansion cannot collide on a shared source offset; test added. |
+| 7fb155e9a2 | C     | --           | Native-agent ACP v2 tool events and permission choices need the ACP 3.x v2 schema; ZZZ pins `agent-client-protocol` 2.2.0.            |
+| 687d662a0b | C     | --           | Upgrades `agent-client-protocol` to 3.3.0 and rewrites session and compaction handling for v2; ZZZ pins 2.2.0.                        |
+| f54e09c151 | C     | --           | Publishes native slash commands as ACP v2 values; native agent plus the absent v2 transport.                                          |
+| f16f9652ec | C     | --           | Uses ACP v2 content for native prompts; native agent plus the absent v2 transport.                                                    |
+| 96984225ab | C     | --           | Fixes fallback values in ZZZ's absent markdown preview font settings section.                                                         |
+| 93d7456688 | B     | db5eccdf1f   | Conflicting A: hover colors move into `IconButton` and `Icon`; re-applied onto ZZZ's divergent component preview.                     |
+
+Totals: one `A`, one `B`, six `C`.
+
+### Applied Work
+
+- `c86cb17af5` is an already-equivalent `A`. ZZZ computes code block
+  highlights at render time in `MarkdownElementBuilder::push_text`, keyed by the
+  text segment being pushed, so tab-expanded events never collide on a shared
+  source offset. The upstream regression test was adapted to ZZZ's markdown test
+  helpers; the `MarkdownEventIndex` cache and `compute_code_block_highlights`
+  product change were not needed.
+- `db5eccdf1f` is a `B` port. `IconButton` gains a `hover_color` option and
+  `Icon` gains a `group_hover_color` that responds to the enclosing unnamed
+  group, so the git commit editor buttons brighten only while individually
+  hovered. The git panel uses `Color::Hidden` at rest and `Color::Muted` on
+  hover. The conflicting upstream preview hunk was re-applied onto ZZZ's
+  divergent component preview layout.
+
+### Rejected Work
+
+- `5f08939a5d` documents Bedrock gateway `endpoint_url` behavior in
+  `docs/src/ai/use-a-gateway.md`, which ZZZ does not ship; the `bedrock` crate
+  and its provider wiring are absent.
+- `7fb155e9a2`, `687d662a0b`, `f54e09c151`, and `f16f9652ec` all build on ACP
+  v2 and the `agent-client-protocol` 3.x schema. ZZZ pins
+  `agent-client-protocol = 2.2.0` and `acp_thread` imports only
+  `schema::v1 as acp`, so the v2 tool events, permission choices, session
+  handling, and content models have no local transport. `f54e09c151` and
+  `f16f9652ec` also target the native agent.
+- `96984225ab` adds `.or(...)` fallbacks inside the upstream
+  `markdown_preview_font_section`. ZZZ's settings UI has no markdown preview
+  font section, so there is no equivalent line to change.
+
+### Verification
+
+| Check                                               | Result  | Notes                                                                          |
+| --------------------------------------------------- | ------- | ------------------------------------------------------------------------------ |
+| Live `git ls-remote` and `git fetch --no-tags`      | PASS    | `FETCH_HEAD=93d745668805029476e6d7fbb19652116fed51de`                          |
+| Previous baseline ancestry                          | PASS    | `df48a139` is an ancestor of `FETCH_HEAD`                                      |
+| Markdown tab-indented code block regression         | PASS    | `cargo test --locked -p markdown test_code_block_highlights_with_partial_tabs` |
+| `cargo check --locked -p ui -p git_ui`              | PASS    | Hover-color port compiles                                                      |
+| `cargo test --locked -p ui --lib`                   | PASS    | 69 passed                                                                      |
+| `cargo fmt --all -- --check` and `git diff --check` | PASS    | Final source checks                                                            |
+| Report Prettier                                     | PASS    | `npx prettier --check src/development/upstream-sync-2026-10-10.md`             |
+| Rejection ledger backfill and check                 | PASS    | `./script/backfill-upstream-ledger` and `./script/check-upstream-ledger` pass  |
+| macOS and Windows runtime checks                    | NOT RUN | Host is Linux                                                                  |
+| `cargo test --workspace`                            | NOT RUN | Not requested                                                                  |
+
+The general reviewed baseline advances to
+`93d745668805029476e6d7fbb19652116fed51de`, the queried live head.
