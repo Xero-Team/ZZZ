@@ -2092,20 +2092,20 @@ impl PickerDelegate for BranchListDelegate {
                         |this| {
                             this.child(
                                 Button::new("delete-branch", delete_label)
-                                .key_binding(
-                                    KeyBinding::for_action_in(
-                                        &branch_picker::DeleteBranch,
-                                        &focus_handle,
-                                        cx,
+                                    .key_binding(
+                                        KeyBinding::for_action_in(
+                                            &branch_picker::DeleteBranch,
+                                            &focus_handle,
+                                            cx,
+                                        )
+                                        .map(|kb| kb.size(rems_from_px(12.))),
                                     )
-                                    .map(|kb| kb.size(rems_from_px(12.))),
-                                )
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(
-                                        branch_picker::DeleteBranch.boxed_clone(),
-                                        cx,
-                                    );
-                                }),
+                                    .on_click(|_, window, cx| {
+                                        window.dispatch_action(
+                                            branch_picker::DeleteBranch.boxed_clone(),
+                                            cx,
+                                        );
+                                    }),
                             )
                         },
                     )
