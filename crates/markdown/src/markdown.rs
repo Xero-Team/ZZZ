@@ -4970,6 +4970,34 @@ mod tests {
     }
 
     #[gpui::test]
+    fn test_code_block_highlights_with_partial_tabs(cx: &mut TestAppContext) {
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+        language_registry.add(Arc::new(Language::new(
+            LanguageConfig {
+                name: "Rust".into(),
+                ..LanguageConfig::default()
+            },
+            None,
+        )));
+
+        for (source, expected) in [
+            (" ```rust\n\tfn main() {}\n ```\n", "   fn main() {}"),
+            ("  ```rust\n\tfn café() {}\n  ```\n", "  fn café() {}"),
+            ("   ```rust\r\n\tfn 界() {}\r\n   ```\r\n", " fn 界() {}"),
+            ("- ```rust\n\tfn main() {}\n  ```\n", "  fn main() {}"),
+            (" ```rust\n\tfn main() {}", "   fn main() {}"),
+        ] {
+            let rendered =
+                render_markdown_with_language_registry(source, Some(language_registry.clone()), cx);
+            assert_eq!(
+                rendered.text_for_range(0..source.len()),
+                expected,
+                "source: {source:?}"
+            );
+        }
+    }
+
+    #[gpui::test]
     fn test_active_search_highlight_uses_match_index(cx: &mut TestAppContext) {
         let markdown = cx.new(|cx| Markdown::new("zero one two".into(), None, None, cx));
 
