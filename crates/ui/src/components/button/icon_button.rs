@@ -20,6 +20,7 @@ pub struct IconButton {
     icon: IconName,
     icon_size: IconSize,
     icon_color: Color,
+    hover_color: Option<Color>,
     selected_icon: Option<IconName>,
     selected_icon_color: Option<Color>,
     selected_style: Option<ButtonStyle>,
@@ -36,6 +37,7 @@ impl IconButton {
             icon,
             icon_size: IconSize::default(),
             icon_color: Color::Default,
+            hover_color: None,
             selected_icon: None,
             selected_icon_color: None,
             selected_style: None,
@@ -59,6 +61,12 @@ impl IconButton {
 
     pub fn icon_color(mut self, icon_color: Color) -> Self {
         self.icon_color = icon_color;
+        self
+    }
+
+    /// Sets the icon color used while the button is hovered.
+    pub fn hover_color(mut self, color: Color) -> Self {
+        self.hover_color = Some(color);
         self
     }
 
@@ -220,7 +228,15 @@ impl RenderOnce for IconButton {
             Color::Custom(base_color.opacity(self.alpha.unwrap_or(1.0)))
         };
 
-        let icon_element = Icon::new(icon).size(self.icon_size).color(icon_color);
+        let hover_color = self
+            .hover_color
+            .filter(|_| !is_disabled && !is_selected)
+            .map(|color| Color::Custom(color.color(cx).opacity(self.alpha.unwrap_or(1.0))));
+
+        let icon_element = Icon::new(icon)
+            .size(self.icon_size)
+            .color(icon_color)
+            .group_hover_color(hover_color);
 
         self.base
             .map(|this| match self.shape {
@@ -395,6 +411,14 @@ impl Component for IconButton {
                                 IconButton::new("alpha", IconName::Check)
                                     .alpha(0.5)
                                     .style(ButtonStyle::Filled)
+                                    .layer(ElevationIndex::Background)
+                                    .into_any_element(),
+                            ),
+                            single_example(
+                                "With Hover Color",
+                                IconButton::new("hover_color", IconName::Check)
+                                    .icon_color(Color::Muted)
+                                    .hover_color(Color::Default)
                                     .layer(ElevationIndex::Background)
                                     .into_any_element(),
                             ),
