@@ -1233,4 +1233,24 @@ pub struct TerminalModeSettingsContent {
     ///
     /// Default: false
     pub auto_connect_last_session: Option<bool>,
+    /// Whether to automatically reconnect a session after an unexpected drop.
+    ///
+    /// Default: false
+    pub auto_reconnect: Option<bool>,
+    /// Upper bound (in milliseconds) for the exponential reconnect backoff.
+    ///
+    /// Default: 30000
+    pub reconnect_max_backoff_ms: Option<u64>,
+    /// Shell commands offered in the session panel's quick-command menu.
+    ///
+    /// Default: []
+    pub quick_commands: Option<Vec<String>>,
+    /// Command typed into each newly opened session terminal.
+    ///
+    /// Default: null
+    pub session_starting_command: Option<String>,
+    /// Working directory for newly opened session terminals.
+    ///
+    /// Default: null
+    pub session_working_directory: Option<String>,
 }

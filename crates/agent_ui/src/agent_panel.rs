@@ -41,9 +41,9 @@ use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadata
 use crate::ui::{AgentNotification, AgentNotificationEvent};
 use crate::{
     AddContextServer, AgentDiffPane, ConversationView, CopyThreadToClipboard, Follow,
-    LoadThreadFromClipboard, NewTerminalThread, NewThread, OpenActiveThreadAsMarkdown, OpenAgentDiff,
-    ResetTrialEndUpsell, ResetTrialUpsell, ShowAllSidebarThreadMetadata, ShowThreadMetadata,
-    ToggleNewThreadMenu, ToggleOptionsMenu,
+    LoadThreadFromClipboard, NewTerminalThread, NewThread, OpenActiveThreadAsMarkdown,
+    OpenAgentDiff, ResetTrialEndUpsell, ResetTrialUpsell, ShowAllSidebarThreadMetadata,
+    ShowThreadMetadata, ToggleNewThreadMenu, ToggleOptionsMenu,
     agent_configuration::AgentConfiguration,
     conversation_view::{AcpThreadViewEvent, ThreadView},
 };
@@ -74,8 +74,8 @@ use ui::{
     prelude::*, utils::WithRemSize,
 };
 use util::ResultExt as _;
-use workspace::item::{ItemEvent, ItemHandle};
 use workspace::ToolbarItemView;
+use workspace::item::{ItemEvent, ItemHandle};
 use workspace::{
     CollaboratorId, DraggedSelection, DraggedTab, MultiWorkspace, NotificationWindowData,
     NotificationWindowDisplay, NotificationWindowManager, PathList, SerializedPathList,
@@ -1529,8 +1529,9 @@ impl AgentPanel {
             allow_concurrent_runs: true,
             ..Default::default()
         };
-        self.project
-            .update(cx, |project, cx| project.create_terminal_task(spawn_task, cx))
+        self.project.update(cx, |project, cx| {
+            project.create_terminal_task(spawn_task, cx)
+        })
     }
 
     fn terminal_init_command(run_init_command: bool, cx: &App) -> Option<String> {
@@ -1831,7 +1832,8 @@ impl AgentPanel {
         let Some(terminal) = self.terminals.get_mut(&terminal_id) else {
             return;
         };
-        let custom_title = normalize_terminal_custom_title(terminal.terminal_title(cx).as_ref(), title);
+        let custom_title =
+            normalize_terminal_custom_title(terminal.terminal_title(cx).as_ref(), title);
         terminal.view.update(cx, |view, cx| {
             view.set_custom_title(custom_title.map(|title| title.to_string()), cx);
         });
@@ -2082,15 +2084,14 @@ impl AgentPanel {
                             source_window: &mut Window,
                             cx: &mut Context<AgentPanel>| {
             let pop_up_weak = pop_up.downgrade();
-            let dismiss_if_visible = move |this: &AgentPanel,
-                                           window: &mut Window,
-                                           cx: &mut Context<AgentPanel>| {
-                if this.active_terminal_visible(terminal_id, window, cx)
-                    && let Some(pop_up) = pop_up_weak.upgrade()
-                {
-                    pop_up.update(cx, |notification, cx| notification.dismiss(cx));
-                }
-            };
+            let dismiss_if_visible =
+                move |this: &AgentPanel, window: &mut Window, cx: &mut Context<AgentPanel>| {
+                    if this.active_terminal_visible(terminal_id, window, cx)
+                        && let Some(pop_up) = pop_up_weak.upgrade()
+                    {
+                        pop_up.update(cx, |notification, cx| notification.dismiss(cx));
+                    }
+                };
             let mut subscriptions = vec![cx.observe_window_activation(source_window, {
                 let dismiss_if_visible = dismiss_if_visible.clone();
                 move |this, window, cx| dismiss_if_visible(this, window, cx)
@@ -3442,12 +3443,16 @@ pub enum AgentPanelEvent {
     ActiveViewChanged,
     ThreadFocused,
     RetainedThreadChanged,
-    ThreadInteracted { thread_id: ThreadId },
+    ThreadInteracted {
+        thread_id: ThreadId,
+    },
     /// A sidebar entry (thread or terminal) changed in a way that should
     /// refresh its list row, for example a title or notification change.
     EntryChanged,
     /// A terminal requested to be closed, typically from a shell `exit`.
-    TerminalCloseRequested { metadata: TerminalThreadMetadata },
+    TerminalCloseRequested {
+        metadata: TerminalThreadMetadata,
+    },
 }
 
 impl EventEmitter<PanelEvent> for AgentPanel {}
@@ -4360,13 +4365,15 @@ impl AgentPanel {
                         .size_full()
                         .gap(DynamicSpacing::Base04.rems(cx))
                         .pl(DynamicSpacing::Base04.rems(cx))
-                        .child(if self.is_overlay_open()
-                            || matches!(self.base_view, BaseView::Terminal { .. })
-                        {
-                            self.render_toolbar_back_button(cx).into_any_element()
-                        } else {
-                            selected_agent.into_any_element()
-                        })
+                        .child(
+                            if self.is_overlay_open()
+                                || matches!(self.base_view, BaseView::Terminal { .. })
+                            {
+                                self.render_toolbar_back_button(cx).into_any_element()
+                            } else {
+                                selected_agent.into_any_element()
+                            },
+                        )
                         .child(self.render_title_view(window, cx)),
                 )
                 .child(

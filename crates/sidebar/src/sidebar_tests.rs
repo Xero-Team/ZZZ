@@ -9889,10 +9889,10 @@ mod property_test {
                 ),
             ));
 
-        ThreadStore::init_global(cx);
-        ThreadMetadataStore::init_global(cx);
-        agent_ui::terminal_thread_metadata_store::init(cx);
-        prompt_store::init(cx);
+            ThreadStore::init_global(cx);
+            ThreadMetadataStore::init_global(cx);
+            agent_ui::terminal_thread_metadata_store::init(cx);
+            prompt_store::init(cx);
 
             // Auto-add an AgentPanel to every workspace so that implicitly
             // created workspaces (e.g. from thread activation) also have one.

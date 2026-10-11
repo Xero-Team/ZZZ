@@ -2751,5 +2751,15 @@
     "preview_enabled": true,
     // Whether to automatically reconnect the last session on startup.
     "auto_connect_last_session": false,
+    // Whether to automatically reconnect a session after an unexpected drop.
+    "auto_reconnect": false,
+    // Upper bound (in milliseconds) for the exponential reconnect backoff.
+    "reconnect_max_backoff_ms": 30000,
+    // Shell commands offered in the session panel's quick-command menu.
+    "quick_commands": [],
+    // Command typed into each newly opened session terminal.
+    "session_starting_command": null,
+    // Working directory for newly opened session terminals.
+    "session_working_directory": null
   },
 }

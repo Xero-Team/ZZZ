@@ -17,11 +17,11 @@ mod mode_selector;
 mod model_selector;
 mod model_selector_popover;
 mod profile_selector;
+pub mod terminal_thread_metadata_store;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 mod thread_import;
 pub mod thread_metadata_store;
-pub mod terminal_thread_metadata_store;
 pub mod thread_worktree_archive;
 mod unicode_confusables;
 

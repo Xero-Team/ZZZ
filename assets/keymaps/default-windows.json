@@ -930,6 +930,15 @@
     },
   },
   {
+    "context": "SshSessionPanel && not_editing",
+    "bindings": {
+      "down": "terminal_mode::SelectNextConnection",
+      "up": "terminal_mode::SelectPreviousConnection",
+      "enter": "terminal_mode::ConfirmConnection",
+      "space": "terminal_mode::ConfirmConnection"
+    }
+  },
+  {
     "context": "ProjectPanel",
     "use_key_equivalents": true,
     "bindings": {

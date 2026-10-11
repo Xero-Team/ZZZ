@@ -23,6 +23,19 @@ pub fn mount_id_for_session(session_id: usize) -> MountId {
     MountId::new(session_id as u64 + 1)
 }
 
+/// A mount id for one of a session's alternate roots.
+///
+/// Session home mounts use small ids; alternate roots live in a disjoint high
+/// range so the two can never collide.
+pub fn mount_id_for_session_root(session_id: usize, root: crate::session::SessionRoot) -> MountId {
+    match root {
+        crate::session::SessionRoot::Home => mount_id_for_session(session_id),
+        crate::session::SessionRoot::Filesystem => {
+            MountId::new((1u64 << 32).saturating_add(session_id as u64))
+        }
+    }
+}
+
 /// Registers the session worktree's remote VFS provider with `manager`,
 /// idempotently. Returns the registered snapshot.
 pub async fn ensure_session_snapshot(
@@ -49,7 +62,7 @@ pub async fn ensure_session_snapshot(
     Ok(snapshot)
 }
 
-fn session_vfs_path(
+pub(crate) fn session_vfs_path(
     worktree: &gpui::Entity<Worktree>,
     mount_id: MountId,
     relative_path: &RelPath,
@@ -76,6 +89,58 @@ pub async fn copy_between_sessions(
     progress: Option<VfsTransferProgressCallback>,
     cx: &mut AsyncApp,
 ) -> anyhow::Result<VfsTransferOutcome> {
+    transfer_between_sessions(
+        manager,
+        source_worktree,
+        source_mount_id,
+        source_relative_path,
+        target_worktree,
+        target_mount_id,
+        false,
+        progress,
+        cx,
+    )
+    .await
+}
+
+/// Moves `source_relative_path` from the source session into the target
+/// session's home root, relaying through the local process.
+pub async fn move_between_sessions(
+    manager: &VfsManager,
+    source_worktree: &gpui::Entity<Worktree>,
+    source_mount_id: MountId,
+    source_relative_path: &RelPath,
+    target_worktree: &gpui::Entity<Worktree>,
+    target_mount_id: MountId,
+    progress: Option<VfsTransferProgressCallback>,
+    cx: &mut AsyncApp,
+) -> anyhow::Result<VfsTransferOutcome> {
+    transfer_between_sessions(
+        manager,
+        source_worktree,
+        source_mount_id,
+        source_relative_path,
+        target_worktree,
+        target_mount_id,
+        true,
+        progress,
+        cx,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn transfer_between_sessions(
+    manager: &VfsManager,
+    source_worktree: &gpui::Entity<Worktree>,
+    source_mount_id: MountId,
+    source_relative_path: &RelPath,
+    target_worktree: &gpui::Entity<Worktree>,
+    target_mount_id: MountId,
+    move_source: bool,
+    progress: Option<VfsTransferProgressCallback>,
+    cx: &mut AsyncApp,
+) -> anyhow::Result<VfsTransferOutcome> {
     ensure_session_snapshot(manager, source_mount_id, source_worktree, cx).await?;
     ensure_session_snapshot(manager, target_mount_id, target_worktree, cx).await?;
 
@@ -94,8 +159,15 @@ pub async fn copy_between_sessions(
         progress,
         ..Default::default()
     };
-    manager
-        .copy_path(&source_path, &target_path, options)
-        .await
-        .map_err(|error| anyhow!("cross-host copy failed: {error:?}"))
+    if move_source {
+        manager
+            .move_path(&source_path, &target_path, options)
+            .await
+            .map_err(|error| anyhow!("cross-host move failed: {error:?}"))
+    } else {
+        manager
+            .copy_path(&source_path, &target_path, options)
+            .await
+            .map_err(|error| anyhow!("cross-host copy failed: {error:?}"))
+    }
 }

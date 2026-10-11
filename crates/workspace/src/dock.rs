@@ -9,9 +9,9 @@ use db::kvp::KeyValueStore;
 
 use gpui::{
     Action, Anchor, AnyView, App, Axis, Context, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, IntoElement, KeyContext, MouseButton, MouseDownEvent, MouseUpEvent, ParentElement,
-    Render, SharedString, StyleRefinement, Styled, Subscription, WeakEntity, Window, deferred, div,
-    px,
+    Focusable, Global, IntoElement, KeyContext, MouseButton, MouseDownEvent, MouseUpEvent,
+    ParentElement, Render, SharedString, StyleRefinement, Styled, Subscription, WeakEntity, Window,
+    deferred, div, px,
 };
 use i18n::tr;
 use serde::{Deserialize, Serialize};
@@ -393,6 +393,41 @@ struct PanelEntry {
 pub struct PanelButtons {
     dock: Entity<Dock>,
     _settings_subscription: Subscription,
+}
+
+/// Decides which dock buttons are shown, so a mode (such as terminal mode) can
+/// present only the panels that are relevant to it. By default every registered
+/// panel shows its button.
+pub trait PanelButtonVisibilityFilter: 'static {
+    /// Returns `false` to hide the dock button for `panel_key` in `workspace`.
+    fn is_panel_button_visible(
+        &self,
+        workspace: &Workspace,
+        panel_key: &'static str,
+        cx: &App,
+    ) -> bool;
+}
+
+#[derive(Default)]
+struct PanelButtonVisibility(Option<Arc<dyn PanelButtonVisibilityFilter>>);
+
+impl Global for PanelButtonVisibility {}
+
+/// Installs the dock-button visibility filter, or clears it with `None`.
+pub fn set_panel_button_visibility_filter(
+    filter: Option<Arc<dyn PanelButtonVisibilityFilter>>,
+    cx: &mut App,
+) {
+    if cx.has_global::<PanelButtonVisibility>() {
+        cx.global_mut::<PanelButtonVisibility>().0 = filter;
+    } else {
+        cx.set_global(PanelButtonVisibility(filter));
+    }
+}
+
+fn panel_button_visibility_filter(cx: &App) -> Option<Arc<dyn PanelButtonVisibilityFilter>> {
+    cx.try_global::<PanelButtonVisibility>()
+        .and_then(|visibility| visibility.0.clone())
 }
 
 pub(crate) const PANEL_SIZE_STATE_KEY: &str = "dock_panel_size";
@@ -1449,11 +1484,31 @@ impl Render for PanelButtons {
 
         let dock_entity = self.dock.clone();
         let workspace = dock.workspace.clone();
+        let hidden_panel_keys: Vec<&'static str> = {
+            let filter = panel_button_visibility_filter(cx);
+            let workspace_entity = workspace.upgrade();
+            match (filter, workspace_entity) {
+                (Some(filter), Some(workspace_entity)) => {
+                    let workspace_ref = workspace_entity.read(cx);
+                    dock.panel_entries
+                        .iter()
+                        .map(|entry| entry.panel.panel_key())
+                        .filter(|panel_key| {
+                            !filter.is_panel_button_visible(workspace_ref, panel_key, cx)
+                        })
+                        .collect()
+                }
+                _ => Vec::new(),
+            }
+        };
         let mut buttons: Vec<_> = dock
             .panel_entries
             .iter()
             .enumerate()
             .filter_map(|(i, entry)| {
+                if hidden_panel_keys.contains(&entry.panel.panel_key()) {
+                    return None;
+                }
                 let icon = entry.panel.icon(window, cx)?;
                 let icon_tooltip = entry
                     .panel

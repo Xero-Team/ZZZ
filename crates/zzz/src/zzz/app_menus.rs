@@ -79,6 +79,18 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             terminal_panel::ToggleFocus,
         ),
         MenuItem::action(
+            tr(cx, "menu.view.toggle_terminal_mode", "Terminal Mode"),
+            terminal_mode::ToggleTerminalMode,
+        ),
+        MenuItem::action(
+            tr(cx, "menu.view.ssh_sessions_panel", "SSH Sessions Panel"),
+            terminal_mode::ToggleSessionPanel,
+        ),
+        MenuItem::action(
+            tr(cx, "menu.view.session_files_panel", "Session Files Panel"),
+            terminal_mode::ToggleFilePanel,
+        ),
+        MenuItem::action(
             tr(cx, "menu.view.debugger_panel", "Debugger Panel"),
             debug_panel::ToggleFocus,
         ),

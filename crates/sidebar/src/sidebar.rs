@@ -4,11 +4,11 @@ use acp_thread::ThreadStatus;
 use action_log::DiffStats;
 use agent_client_protocol::schema::v1 as acp;
 use agent_settings::AgentSettings;
-use agent_ui::thread_metadata_store::{
-    ThreadMetadata, ThreadMetadataStore, WorktreePaths, worktree_info_from_thread_paths,
-};
 use agent_ui::terminal_thread_metadata_store::{
     TerminalThreadMetadata, TerminalThreadMetadataStore,
+};
+use agent_ui::thread_metadata_store::{
+    ThreadMetadata, ThreadMetadataStore, WorktreePaths, worktree_info_from_thread_paths,
 };
 use agent_ui::thread_worktree_archive;
 use agent_ui::threads_archive_view::{
@@ -1243,11 +1243,7 @@ impl Sidebar {
                 AgentPanelEvent::TerminalCloseRequested { metadata } => {
                     let terminal_id = metadata.terminal_id;
                     agent_panel.update(cx, |panel, cx| {
-                        panel.close_terminal_without_activating_draft(
-                            terminal_id,
-                            window,
-                            cx,
-                        );
+                        panel.close_terminal_without_activating_draft(terminal_id, window, cx);
                     });
                     if this.active_terminal_id == Some(terminal_id) {
                         this.active_terminal_id = None;
@@ -1614,8 +1610,11 @@ impl Sidebar {
                     }
                 }
             }
-            current_terminal_ids
-                .extend(terminals.iter().map(|terminal| terminal.metadata.terminal_id));
+            current_terminal_ids.extend(
+                terminals
+                    .iter()
+                    .map(|terminal| terminal.metadata.terminal_id),
+            );
             notified_terminals.extend(terminals.iter().filter_map(|terminal| {
                 terminal
                     .has_notification

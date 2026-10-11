@@ -1,9 +1,16 @@
 use gpui::{AppContext as _, TestAppContext, WeakEntity};
 
-use crate::session::{SessionId, SessionStore};
+use crate::session::{ConnectionCancelled, SessionId, SessionStore, is_connection_cancelled};
 
 fn test_store(cx: &mut TestAppContext) -> gpui::Entity<SessionStore> {
     cx.new(|_| SessionStore::new(WeakEntity::new_invalid(), None))
+}
+
+#[test]
+fn cancellation_errors_are_distinguished_from_failures() {
+    let cancelled = anyhow::Error::new(ConnectionCancelled);
+    assert!(is_connection_cancelled(&cancelled));
+    assert!(!is_connection_cancelled(&anyhow::anyhow!("boom")));
 }
 
 #[gpui::test]

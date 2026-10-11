@@ -31,6 +31,7 @@ use project::{
 };
 use remote::RemoteConnectionOptions;
 use settings::{Settings as _, SettingsStore};
+use terminal_mode::ToggleTerminalMode;
 
 use std::any::TypeId;
 use std::sync::Arc;
@@ -1142,6 +1143,7 @@ impl TitleBar {
         let trigger = ButtonLike::new("user-menu")
             .child(Icon::new(IconName::ChevronDown).size(IconSize::Small));
 
+        let workspace_handle = self.workspace.clone();
         PopoverMenu::new("user-menu")
             .trigger(trigger)
             .menu(move |window, cx| {
@@ -1150,6 +1152,9 @@ impl TitleBar {
                 let is_editor = matches!(current_layout, WindowLayout::Editor(_));
                 let is_agent = matches!(current_layout, WindowLayout::Agent(_));
                 let is_custom = matches!(current_layout, WindowLayout::Custom(_));
+                let is_terminal = workspace_handle.upgrade().is_some_and(|workspace| {
+                    terminal_mode::is_terminal_mode_active(workspace.read(cx), cx)
+                });
                 ContextMenu::build(window, cx, |menu, _, cx| {
                     menu.action(
                         tr(cx, "menu.settings", "Settings"),
@@ -1175,20 +1180,21 @@ impl TitleBar {
                         tr(cx, "menu.extensions", "Extensions"),
                         zzz_actions::Extensions::default().boxed_clone(),
                     )
-                    .when(ai_enabled, |menu| {
-                        menu.separator().submenu(
-                            tr(cx, "title_bar.panel_layout", "Panel Layout"),
-                            move |menu, _window, cx| {
+                    .separator()
+                    .submenu_indented(
+                        tr(cx, "title_bar.panel_layout", "Panel Layout"),
+                        move |menu, _window, cx| {
+                            menu.toggleable_entry(
+                                tr(cx, "title_bar.layout.classic", "Classic"),
+                                is_editor,
+                                IconPosition::Start,
+                                Some(UseClassicLayout.boxed_clone()),
+                                move |window, cx| {
+                                    window.dispatch_action(UseClassicLayout.boxed_clone(), cx);
+                                },
+                            )
+                            .when(ai_enabled, |menu| {
                                 menu.toggleable_entry(
-                                    tr(cx, "title_bar.layout.classic", "Classic"),
-                                    is_editor,
-                                    IconPosition::Start,
-                                    Some(UseClassicLayout.boxed_clone()),
-                                    move |window, cx| {
-                                        window.dispatch_action(UseClassicLayout.boxed_clone(), cx);
-                                    },
-                                )
-                                .toggleable_entry(
                                     tr(cx, "title_bar.layout.agentic", "Agentic"),
                                     is_agent,
                                     IconPosition::Start,
@@ -1197,20 +1203,29 @@ impl TitleBar {
                                         window.dispatch_action(UseAgenticLayout.boxed_clone(), cx);
                                     },
                                 )
-                                .when(is_custom, |menu| {
-                                    menu.item(
-                                        ContextMenuEntry::new(tr(
-                                            cx,
-                                            "title_bar.layout.custom",
-                                            "Custom",
-                                        ))
-                                        .toggleable(IconPosition::Start, true)
-                                        .disabled(true),
-                                    )
-                                })
-                            },
-                        )
-                    })
+                            })
+                            .when(is_custom, |menu| {
+                                menu.item(
+                                    ContextMenuEntry::new(tr(
+                                        cx,
+                                        "title_bar.layout.custom",
+                                        "Custom",
+                                    ))
+                                    .toggleable(IconPosition::Start, true)
+                                    .disabled(true),
+                                )
+                            })
+                        },
+                    )
+                    .toggleable_entry(
+                        tr(cx, "menu.view.toggle_terminal_mode", "Terminal Mode"),
+                        is_terminal,
+                        IconPosition::Start,
+                        Some(ToggleTerminalMode.boxed_clone()),
+                        move |window, cx| {
+                            window.dispatch_action(ToggleTerminalMode.boxed_clone(), cx);
+                        },
+                    )
                 })
                 .into()
             })

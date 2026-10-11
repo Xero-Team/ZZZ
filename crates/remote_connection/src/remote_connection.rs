@@ -657,7 +657,39 @@ pub fn connect_reusing_pool(
     connection_options: RemoteConnectionOptions,
     cx: &mut App,
 ) -> Task<Result<Option<Entity<RemoteClient>>>> {
-    let delegate: Arc<dyn remote::RemoteClientDelegate> = Arc::new(BackgroundRemoteClientDelegate);
+    connect_with_delegate(connection_options, None, cx)
+}
+
+/// Establishes a remote connection without showing any interactive UI.
+///
+/// Intended for background flows (restoring saved sessions, automatic
+/// reconnection) where opening a modal would be intrusive. A stored
+/// password is reused silently; a connection that would require an
+/// interactive prompt fails instead of blocking on UI that is never shown.
+pub fn connect_in_background(
+    connection_options: RemoteConnectionOptions,
+    cx: &mut App,
+) -> Task<Result<Option<Entity<RemoteClient>>>> {
+    if remote::has_active_connection(&connection_options, cx) {
+        return connect_reusing_pool(connection_options, cx);
+    }
+    let known_password = match &connection_options {
+        RemoteConnectionOptions::Ssh(options) => options
+            .password
+            .as_deref()
+            .and_then(|pw| pw.try_into().ok()),
+        _ => None,
+    };
+    connect_with_delegate(connection_options, known_password, cx)
+}
+
+fn connect_with_delegate(
+    connection_options: RemoteConnectionOptions,
+    known_password: Option<EncryptedPassword>,
+    cx: &mut App,
+) -> Task<Result<Option<Entity<RemoteClient>>>> {
+    let delegate: Arc<dyn remote::RemoteClientDelegate> =
+        Arc::new(BackgroundRemoteClientDelegate { known_password });
 
     cx.spawn(async move |cx| {
         let connection = remote::connect(connection_options, delegate.clone(), cx).await?;
@@ -676,22 +708,29 @@ pub fn connect_reusing_pool(
     })
 }
 
-/// Delegate for remote connections that reuse an existing pooled
-/// connection. Password prompts are not expected (the SSH transport
-/// is already established).
-struct BackgroundRemoteClientDelegate;
+/// Delegate for remote connections established without interactive UI
+/// (pooled reuse, background reconnect). A stored password is reused
+/// when present; otherwise password prompts are logged and ignored,
+/// since there is no UI to show them.
+struct BackgroundRemoteClientDelegate {
+    known_password: Option<EncryptedPassword>,
+}
 
 impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
     fn ask_password(
         &self,
         prompt: String,
-        _tx: oneshot::Sender<EncryptedPassword>,
+        tx: oneshot::Sender<EncryptedPassword>,
         _cx: &mut AsyncApp,
     ) {
-        log::warn!(
-            "Pooled remote connection unexpectedly requires a password \
-             (prompt: {prompt})"
-        );
+        if let Some(password) = self.known_password.clone() {
+            send_password(tx, password);
+        } else {
+            log::warn!(
+                "Background remote connection unexpectedly requires a password \
+                 (prompt: {prompt})"
+            );
+        }
     }
 
     fn set_status(&self, _status: Option<RemoteConnectionStatus>, _cx: &mut AsyncApp) {}

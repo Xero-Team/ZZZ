@@ -43,6 +43,7 @@ schemars.workspace = true
 serde.workspace = true
 settings.workspace = true
 smallvec.workspace = true
+terminal_mode.workspace = true
 theme.workspace = true
 ui.workspace = true
 util.workspace = true

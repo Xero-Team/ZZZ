@@ -62,6 +62,7 @@ pub enum ContextMenuItem {
         label: SharedString,
         icon: Option<IconName>,
         icon_color: Option<Color>,
+        reserve_icon_slot: bool,
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
     },
 }
@@ -820,6 +821,24 @@ impl ContextMenu {
             label: label.into(),
             icon: None,
             icon_color: None,
+            reserve_icon_slot: false,
+            builder: Rc::new(builder),
+        });
+        self
+    }
+
+    /// A submenu whose label is indented by an icon-sized slot, so it lines up
+    /// with sibling toggleable or icon entries that reserve a leading icon.
+    pub fn submenu_indented(
+        mut self,
+        label: impl Into<SharedString>,
+        builder: impl Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu + 'static,
+    ) -> Self {
+        self.items.push(ContextMenuItem::Submenu {
+            label: label.into(),
+            icon: None,
+            icon_color: None,
+            reserve_icon_slot: true,
             builder: Rc::new(builder),
         });
         self
@@ -835,6 +854,7 @@ impl ContextMenu {
             label: label.into(),
             icon: Some(icon),
             icon_color: None,
+            reserve_icon_slot: true,
             builder: Rc::new(builder),
         });
         self
@@ -851,6 +871,7 @@ impl ContextMenu {
             label: label.into(),
             icon: Some(icon),
             icon_color: Some(icon_color),
+            reserve_icon_slot: true,
             builder: Rc::new(builder),
         });
         self
@@ -1492,9 +1513,17 @@ impl ContextMenu {
                 label,
                 icon,
                 icon_color,
+                reserve_icon_slot,
                 ..
             } => self
-                .render_submenu_item_trigger(ix, label.clone(), *icon, *icon_color, cx)
+                .render_submenu_item_trigger(
+                    ix,
+                    label.clone(),
+                    *icon,
+                    *icon_color,
+                    *reserve_icon_slot,
+                    cx,
+                )
                 .into_any_element(),
         }
     }
@@ -1505,6 +1534,7 @@ impl ContextMenu {
         label: SharedString,
         icon: Option<IconName>,
         icon_color: Option<Color>,
+        reserve_icon_slot: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let toggle_state = Some(ix) == self.selected_index
@@ -1539,6 +1569,14 @@ impl ContextMenu {
                 ListItem::new(ix)
                     .inset(true)
                     .toggle_state(toggle_state)
+                    .when(reserve_icon_slot && icon.is_none(), |item| {
+                        item.start_slot(
+                            div()
+                                .flex_none()
+                                .child(Icon::new(IconName::Check).size(IconSize::Small))
+                                .invisible(),
+                        )
+                    })
                     .map(|item| {
                         #[cfg(feature = "accessibility")]
                         {
