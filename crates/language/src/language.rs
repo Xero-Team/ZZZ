@@ -1575,6 +1575,18 @@ pub fn rust_lang() -> Arc<Language> {
                 ..Default::default()
             },
             line_comments: vec!["// ".into(), "/// ".into(), "//! ".into()],
+            block_comment: Some(BlockCommentConfig {
+                start: "/*".into(),
+                end: "*/".into(),
+                prefix: "* ".into(),
+                tab_size: 1,
+            }),
+            documentation_comment: Some(BlockCommentConfig {
+                start: "/*".into(),
+                end: "*/".into(),
+                prefix: "* ".into(),
+                tab_size: 1,
+            }),
             brackets: BracketPairConfig {
                 pairs: vec![
                     BracketPair {

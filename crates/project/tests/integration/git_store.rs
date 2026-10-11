@@ -1474,7 +1474,7 @@ mod trust_tests {
 
     use serde_json::json;
     use settings::SettingsStore;
-    use util::{path, paths::PathStyle};
+    use util::path;
 
     use crate::Project;
 

@@ -8819,13 +8819,13 @@ pub fn worktrees_directory_for_repo(
     Ok(resolved)
 }
 
-fn path_style_file_name<'a>(path: &'a Path, path_style: PathStyle) -> Option<&'a std::ffi::OsStr> {
+fn path_style_file_name(path: &Path, path_style: PathStyle) -> Option<&std::ffi::OsStr> {
     let path = path.to_str()?.trim_end_matches(path_style.separators_ch());
     let file_name = path.rsplit(path_style.separators_ch()).next()?;
     (!file_name.is_empty()).then(|| std::ffi::OsStr::new(file_name))
 }
 
-fn path_style_parent<'a>(path: &'a Path, path_style: PathStyle) -> Option<&'a Path> {
+fn path_style_parent(path: &Path, path_style: PathStyle) -> Option<&Path> {
     let path = path.to_str()?.trim_end_matches(path_style.separators_ch());
     let separator_index = path.rfind(path_style.separators_ch())?;
     let parent_end =

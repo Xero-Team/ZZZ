@@ -1,0 +1,287 @@
+diff -ruN a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	2025-11-18 10:35:06.000000000 +0100
++++ b/Cargo.toml	2026-10-11 17:39:33.459304491 +0200
+@@ -10,7 +10,7 @@
+ derive_setters = "0.1.8"
+ heck = "0.5.0"
+ indexmap = { version = "2.12.0", features = ["serde"] }
+-merge = "0.2.0"
++merge = { version = "0.2.0", default-features = false, features = ["std"] }
+ quote = "1.0.42"
+ serde = { version = "1.0.228", features = ["derive"] }
+ serde_json = "1.0.145"
+diff -ruN a/crates/gh-workflow/src/event.rs b/crates/gh-workflow/src/event.rs
+--- a/crates/gh-workflow/src/event.rs	2026-10-11 17:39:33.457885607 +0200
++++ b/crates/gh-workflow/src/event.rs	2026-10-11 17:39:33.459187971 +0200
+@@ -10,107 +10,116 @@
+ 
+ /// Represents all possible webhook events that can trigger a workflow
+ /// See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
+-#[derive(Default, Debug, Clone, Deserialize, Serialize, Merge, Setters, PartialEq, Eq)]
++#[derive(Default, Debug, Clone, Deserialize, Serialize, Setters, PartialEq, Eq)]
+ #[setters(strip_option, into)]
+ pub struct Event {
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub branch_protection_rule: Option<BranchProtectionRule>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub check_run: Option<CheckRun>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub check_suite: Option<CheckSuite>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub create: Option<Create>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub delete: Option<Delete>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub deployment: Option<Deployment>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub deployment_status: Option<DeploymentStatus>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub discussion: Option<Discussion>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub discussion_comment: Option<DiscussionComment>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub fork: Option<bool>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub gollum: Option<bool>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub issue_comment: Option<IssueComment>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub issues: Option<Issues>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub label: Option<Label>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub merge_group: Option<MergeGroup>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub milestone: Option<Milestone>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub page_build: Option<bool>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub public: Option<bool>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub pull_request: Option<PullRequest>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub pull_request_review: Option<PullRequestReview>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub pull_request_review_comment: Option<PullRequestReviewComment>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub pull_request_target: Option<PullRequestTarget>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub push: Option<Push>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub registry_package: Option<RegistryPackage>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub release: Option<Release>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub repository_dispatch: Option<RepositoryDispatch>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub schedule: Option<Vec<Schedule>>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub status: Option<bool>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub watch: Option<Watch>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub workflow_call: Option<WorkflowCall>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub workflow_dispatch: Option<WorkflowDispatch>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub workflow_run: Option<WorkflowRun>,
+ }
+ 
++impl Merge for Event {
++    fn merge(&mut self, other: Self) {
++        merge_option_fields!(
++            self,
++            other,
++            branch_protection_rule,
++            check_run,
++            check_suite,
++            create,
++            delete,
++            deployment,
++            deployment_status,
++            discussion,
++            discussion_comment,
++            fork,
++            gollum,
++            issue_comment,
++            issues,
++            label,
++            merge_group,
++            milestone,
++            page_build,
++            public,
++            pull_request,
++            pull_request_review,
++            pull_request_review_comment,
++            pull_request_target,
++            push,
++            registry_package,
++            release,
++            repository_dispatch,
++            schedule,
++            status,
++            watch,
++            workflow_call,
++            workflow_dispatch,
++            workflow_run,
++        );
++    }
++}
++
+ impl Event {
+     pub fn add_schedule(mut self, schedule: impl Into<Schedule>) -> Self {
+         if let Some(list) = self.schedule.as_mut() {
+diff -ruN a/crates/gh-workflow/src/lib.rs b/crates/gh-workflow/src/lib.rs
+--- a/crates/gh-workflow/src/lib.rs	2025-11-18 10:35:06.000000000 +0100
++++ b/crates/gh-workflow/src/lib.rs	2026-10-11 17:39:33.459204102 +0200
+@@ -1,5 +1,11 @@
+ extern crate proc_macro;
+ 
++macro_rules! merge_option_fields {
++    ($target:ident, $source:ident, $($field:ident),+ $(,)?) => {
++        $(merge::option::overwrite_none(&mut $target.$field, $source.$field);)+
++    };
++}
++
+ mod artifacts;
+ mod cargo;
+ mod concurrency;
+diff -ruN a/crates/gh-workflow/src/step.rs b/crates/gh-workflow/src/step.rs
+--- a/crates/gh-workflow/src/step.rs	2026-10-11 17:39:33.457964325 +0200
++++ b/crates/gh-workflow/src/step.rs	2026-10-11 17:39:33.459216465 +0200
+@@ -99,7 +99,7 @@
+ 
+ /// Represents a step value in the workflow.
+ #[allow(clippy::duplicated_attributes)]
+-#[derive(Debug, Setters, Serialize, Deserialize, Clone, Default, PartialEq, Eq, Merge)]
++#[derive(Debug, Setters, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+ #[serde(rename_all = "kebab-case")]
+ #[setters(
+     strip_option,
+@@ -110,72 +110,81 @@
+ pub struct StepValue {
+     /// The ID of the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub id: Option<String>,
+ 
+     /// The name of the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub name: Option<String>,
+ 
+     /// The condition under which the step runs.
+     #[serde(skip_serializing_if = "Option::is_none", rename = "if")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub if_condition: Option<Expression>,
+ 
+     /// The action to use in the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+     #[setters(skip)]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub uses: Option<String>,
+ 
+     /// Input parameters for the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub with: Option<Input>,
+ 
+     /// The command to run in the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+     #[setters(skip)]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub run: Option<String>,
+ 
+     /// Shell to run with
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub shell: Option<String>,
+ 
+     /// Environment variables for the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub env: Option<Env>,
+ 
+     /// The timeout for the step in minutes.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub timeout_minutes: Option<u32>,
+ 
+     /// Whether to continue on error.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub continue_on_error: Option<bool>,
+ 
+     /// The working directory for the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub working_directory: Option<String>,
+ 
+     /// The retry strategy for the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub retry: Option<RetryStrategy>,
+ 
+     /// Artifacts produced by the step.
+     #[serde(skip_serializing_if = "Option::is_none")]
+-    #[merge(strategy = merge::option::overwrite_none)]
+     pub artifacts: Option<Artifacts>,
+ }
+ 
++impl Merge for StepValue {
++    fn merge(&mut self, other: Self) {
++        merge_option_fields!(
++            self,
++            other,
++            id,
++            name,
++            if_condition,
++            uses,
++            with,
++            run,
++            shell,
++            env,
++            timeout_minutes,
++            continue_on_error,
++            working_directory,
++            retry,
++            artifacts,
++        );
++    }
++}
++
+ impl StepValue {
+     /// Creates a new `StepValue` that runs the provided shell command.
+     pub fn run<T: ToString>(cmd: T) -> Self {

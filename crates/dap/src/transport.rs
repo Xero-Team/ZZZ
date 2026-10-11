@@ -1081,7 +1081,7 @@ mod tests {
     #[test]
     fn test_interpolate_message() {
         let variables = serde_json::Map::from_iter([
-            ("".into(), json!("wrong")),
+            (String::new(), json!("wrong")),
             ("{name".into(), json!("wrong")),
             ("msg".into(), json!("boom")),
             ("name".into(), json!("zed")),

@@ -2687,7 +2687,7 @@ async fn test_drop_external_files_on_folded_directory_components(cx: &mut gpui::
 
     let project = Project::test(fs.clone(), [path!("/root").as_ref()], cx).await;
     let window = cx.open_window(size(px(800.), px(600.)), |window, cx| {
-        MultiWorkspace::test_new(project, window, cx)
+        MultiWorkspace::test_new(project.clone(), window, cx)
     });
     let workspace = window
         .read_with(cx, |workspace, _| workspace.workspace().clone())
@@ -2696,7 +2696,7 @@ async fn test_drop_external_files_on_folded_directory_components(cx: &mut gpui::
     let panel = cx
         .update_window(window, |_, window, cx| {
             workspace.update(cx, |workspace, cx| {
-                let panel = ProjectPanel::new(workspace, window, cx);
+                let panel = ProjectPanel::new(project.clone(), workspace, window, cx);
                 workspace.add_panel(panel.clone(), window, cx);
                 workspace.open_panel::<ProjectPanel>(window, cx);
                 panel
@@ -5481,7 +5481,9 @@ async fn test_shift_selection_expands_intermediate_folded_directory(cx: &mut gpu
         .read_with(cx, |workspace, _| workspace.workspace().clone())
         .unwrap();
     let cx = &mut VisualTestContext::from_window(window.into(), cx);
-    let panel = workspace.update_in(cx, ProjectPanel::new);
+    let panel = workspace.update_in(cx, |workspace, window, cx| {
+        ProjectPanel::new(project.clone(), workspace, window, cx)
+    });
     cx.run_until_parked();
 
     select_folded_path_with_mark(&panel, "root/a/b/c", "root/a/b", cx);

@@ -155,10 +155,9 @@ impl Render for RunningState {
         });
         let outer = cx
             .try_global::<workspace::PaneSearchBarCallbacks>()
-            .map(|callbacks| {
+            .map_or_else(div, |callbacks| {
                 (callbacks.wrap_div_with_search_actions)(div(), self.active_pane.clone())
-            })
-            .unwrap_or_else(div);
+            });
         outer
             .v_flex()
             .size_full()

@@ -28,6 +28,7 @@ yanked = "deny"
 unmaintained = "workspace"
 ignore = [
   { id = "RUSTSEC-2023-0071", reason = "ZZZ only reaches rsa through zpdf's public-key PDF signature verification; it does not call the advisory's affected private-key decryption operations" },
+  { id = "RUSTSEC-2025-0052", reason = "async-std is only pulled in on Windows to enable async-tar's symlink extraction path (async_std::os::windows::fs behind the unstable feature); ZZZ's own code never calls async-std, and no async-tar release has dropped the dependency" },
 ]
 
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html

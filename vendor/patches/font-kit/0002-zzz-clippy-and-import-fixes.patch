@@ -1,0 +1,26 @@
+diff -ruN a/src/loaders/core_text.rs b/src/loaders/core_text.rs
+--- a/src/loaders/core_text.rs	2026-10-11 17:39:32.130959480 +0200
++++ b/src/loaders/core_text.rs	2026-10-11 17:39:32.141402542 +0200
+@@ -299,7 +299,7 @@
+             Err(_) => {
+                 // This will happen if the path is empty (rdar://42832439). To distinguish this
+                 // case from the case in which the glyph does not exist, call another API.
+-                drop(self.typographic_bounds(glyph_id)?);
++                self.typographic_bounds(glyph_id)?;
+                 return Ok(());
+             }
+         };
+diff -ruN a/src/sources/core_text.rs b/src/sources/core_text.rs
+--- a/src/sources/core_text.rs	2026-10-11 17:39:32.131123168 +0200
++++ b/src/sources/core_text.rs	2026-10-11 17:39:32.141558747 +0200
+@@ -19,10 +19,8 @@
+ use core_text::font_descriptor::{self, CTFontDescriptor};
+ use core_text::font_manager;
+ use std::any::Any;
+-use std::collections::HashMap;
+ use std::f32;
+ use std::fs::File;
+-use std::path::PathBuf;
+ use std::sync::Arc;
+ 
+ use crate::error::SelectionError;

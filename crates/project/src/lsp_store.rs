@@ -398,12 +398,11 @@ fn workspace_folder_uri(worktree: &Worktree, path: &RelPath) -> Option<Uri> {
     }
 
     let absolute_path = worktree.absolutize(path);
-    match Uri::from_file_path(&absolute_path) {
-        Ok(uri) => Some(uri),
-        Err(()) => {
-            log::error!("{absolute_path:?} is not a valid URI");
-            None
-        }
+    if let Ok(uri) = Uri::from_file_path(&absolute_path) {
+        Some(uri)
+    } else {
+        log::error!("{absolute_path:?} is not a valid URI");
+        None
     }
 }
 

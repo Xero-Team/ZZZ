@@ -535,12 +535,14 @@ fn show_hover(
                     .range
                     .and_then(|range| buffer_snapshot.buffer_anchor_range_to_anchor_range(range))
                     .filter(|range| !range.to_offset(buffer_snapshot).is_empty())
-                    .map(|range| (range, None))
-                    .unwrap_or_else(|| {
-                        let range = fallback_hover_range(buffer_snapshot, anchor);
-                        let fallback_state = FallbackHoverState::new(buffer_snapshot, &range);
-                        (range, Some(fallback_state))
-                    });
+                    .map_or_else(
+                        || {
+                            let range = fallback_hover_range(buffer_snapshot, anchor);
+                            let fallback_state = FallbackHoverState::new(buffer_snapshot, &range);
+                            (range, Some(fallback_state))
+                        },
+                        |range| (range, None),
+                    );
 
                 let blocks = hover_result.contents;
                 let language = hover_result.language;
@@ -674,30 +676,27 @@ fn same_info_hover(editor: &mut Editor, snapshot: &EditorSnapshot, anchor: Ancho
              fallback_state,
              ..
          }| {
-            symbol_range
-                .as_text_range()
-                .map(|range| {
-                    let buffer_snapshot = snapshot.buffer_snapshot();
-                    let hover_range = range.to_offset(buffer_snapshot);
-                    let offset = anchor.to_offset(buffer_snapshot);
-                    if let Some(fallback_state) = fallback_state {
-                        if fallback_state.edit_count != buffer_snapshot.edit_count() {
-                            return false;
-                        }
-                        if offset == hover_range.end {
-                            if fallback_state.non_text_state_update_count
-                                != buffer_snapshot.non_text_state_update_count()
-                            {
-                                *fallback_state = FallbackHoverState::new(buffer_snapshot, &range);
-                            }
-                            return fallback_state.includes_end;
-                        }
+            symbol_range.as_text_range().is_some_and(|range| {
+                let buffer_snapshot = snapshot.buffer_snapshot();
+                let hover_range = range.to_offset(buffer_snapshot);
+                let offset = anchor.to_offset(buffer_snapshot);
+                if let Some(fallback_state) = fallback_state {
+                    if fallback_state.edit_count != buffer_snapshot.edit_count() {
+                        return false;
                     }
-                    // LSP returns a hover result for the end index of ranges that should be hovered, so we need to
-                    // use an inclusive range here to check if we should dismiss the popover
-                    (hover_range.start..=hover_range.end).contains(&offset)
-                })
-                .unwrap_or(false)
+                    if offset == hover_range.end {
+                        if fallback_state.non_text_state_update_count
+                            != buffer_snapshot.non_text_state_update_count()
+                        {
+                            *fallback_state = FallbackHoverState::new(buffer_snapshot, &range);
+                        }
+                        return fallback_state.includes_end;
+                    }
+                }
+                // LSP returns a hover result for the end index of ranges that should be hovered, so we need to
+                // use an inclusive range here to check if we should dismiss the popover
+                (hover_range.start..=hover_range.end).contains(&offset)
+            })
         },
     )
 }
