@@ -42,7 +42,7 @@ use workspace::searchable::{
     Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
 };
 use workspace::{
-    ItemId, OpenOptions, OpenVisible, Pane, SaveIntent, Workspace, WorkspaceId,
+    ItemId, ItemNavHistory, OpenOptions, OpenVisible, Pane, SaveIntent, Workspace, WorkspaceId,
     delete_unloaded_items,
 };
 
@@ -72,6 +72,7 @@ pub struct MarkdownPreviewView {
     /// Search results depend on the parsed markdown, which lags behind the source while a
     /// background parse is in flight. Tracked so matches can be invalidated once it lands.
     markdown_parse_pending: bool,
+    nav_history: Option<ItemNavHistory>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -370,6 +371,7 @@ impl MarkdownPreviewView {
                 pending_update_task: None,
                 mode,
                 markdown_parse_pending: false,
+                nav_history: None,
             };
 
             this.set_editor(active_editor, window, cx);
@@ -1622,6 +1624,21 @@ impl Item for MarkdownPreviewView {
             window,
             cx,
         )))
+    }
+
+    fn set_nav_history(
+        &mut self,
+        history: ItemNavHistory,
+        _window: &mut Window,
+        _: &mut Context<Self>,
+    ) {
+        self.nav_history = Some(history);
+    }
+
+    fn deactivated(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(nav_history) = self.nav_history.as_mut() {
+            nav_history.push::<()>(None, None, cx);
+        }
     }
 }
 
@@ -3183,6 +3200,69 @@ mod tests {
             preview.read_with(cx, |preview, cx| preview.tab_tooltip_text(cx)),
             source_tooltip
         );
+    }
+
+    #[gpui::test]
+    async fn go_back_returns_to_preview_after_opening_another_file(cx: &mut TestAppContext) {
+        let app_state = init_test(cx);
+        app_state
+            .fs
+            .as_fake()
+            .insert_tree(
+                path!("/dir"),
+                json!({"note.md": "# Note\n", "other.txt": "Other File\n"}),
+            )
+            .await;
+
+        cx.update(|cx| {
+            open_paths(
+                &[PathBuf::from(path!("/dir/note.md"))],
+                app_state.clone(),
+                workspace::OpenOptions::default(),
+                cx,
+            )
+        })
+        .await
+        .unwrap();
+
+        let multi_workspace = cx.update(|cx| cx.windows()[0].downcast::<MultiWorkspace>().unwrap());
+        let preview = open_preview_for_active_editor(cx, &multi_workspace);
+
+        cx.update(|cx| {
+            open_paths(
+                &[PathBuf::from(path!("/dir/other.txt"))],
+                app_state.clone(),
+                workspace::OpenOptions::default(),
+                cx,
+            )
+        })
+        .await
+        .unwrap();
+        cx.run_until_parked();
+
+        let go_back = multi_workspace
+            .update(cx, |multi_workspace, window, cx| {
+                multi_workspace.workspace().update(cx, |workspace, cx| {
+                    let pane = workspace.active_pane().downgrade();
+                    workspace.go_back(pane, window, cx)
+                })
+            })
+            .unwrap();
+        go_back.await.unwrap();
+        cx.run_until_parked();
+
+        multi_workspace
+            .update(cx, |multi_workspace, _, cx| {
+                assert_eq!(
+                    multi_workspace
+                        .workspace()
+                        .read(cx)
+                        .active_item_as::<MarkdownPreviewView>(cx),
+                    Some(preview.clone()),
+                    "going back should return to the preview"
+                );
+            })
+            .unwrap();
     }
 
     async fn open_markdown_file(
