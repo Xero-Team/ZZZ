@@ -136,6 +136,23 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | Toolchain native-path string wire/DB            | Existing   | Toolchain RPC and SQLite persistence require exact `NativePathV2`/BLOB; legacy strings and old rows are removed or explicitly invalidated                                                                           | Phase 9       | REMOVED   |
 | Native/OS action host checks                    | Existing   | `NativeExecutionContext` gates Git/LSP/task/debugger/terminal; reveal/open-system, system prompts, external drag and broken-item fallback remain                                                                    | Phase 9       | MIGRATING |
 
+## 深度审计剩余项处置 {#audit-disposition}
+
+深度审计在
+`7f9ca54848`（"Complete VFS provider capabilities and fix audited defects"）中修复了
+大部分缺陷；下表记录剩余项的处理方式和理由，避免它们被当作未处理缺陷反复审计。
+
+| Finding                           | 位置                                     | 状态       | 处置与理由                                                                                                                                                                                                                                                                   |
+| --------------------------------- | ---------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D5 `MemoryProvider` children 索引 | `crates/vfs/src/memory_provider.rs`      | FIXED      | 每个 `MemoryNode` 用 `BTreeSet<ExactComponent>` 保存子项名称。`read_dir` 由全表扫描变为按子项计数分页；重命名/复制子树只改被移动根的父链接，不需要重映射整棵子树。已由 `memory_provider_children_index_tracks_rename_copy_and_remove` 覆盖。                                 |
+| C3 Snapshot 目录加载峰值内存      | `crates/vfs/src/snapshot.rs`             | DEFERRED   | `load_directory_for_reconciliation` 必须聚齐整目录条目才能在单次锁内原子发布。增量协调会在加载期间暴露部分目录状态，与"一次发布一致快照"的语义冲突，需要专门的协调设计；当前接受按目录大小的有界峰值，不引入语义回归。                                                       |
+| D8 Archive 部分读 CRC             | `crates/vfs/src/archive_provider.rs`     | FIXED      | 成员句柄增加有界成员缓存：首次读取解压到 EOF 以触发 CRC/尺寸校验，成员不大于 8 MiB 时缓存字节，超过时只记 `Validated` 并逐次流式读取。部分读也会排空到 EOF 校验。已由 `archive_provider_validates_crc_on_partial_reads` 覆盖。                                               |
+| D11 Subtree TOCTOU / 硬链接       | `crates/vfs/src/composition_provider.rs` | DEFERRED   | 祖先符号链接校验与内层操作之间存在 TOCTOU 窗口，消除它需要 provider 契约未暴露的原子 open-beneath 原语；子树内的硬链接也无法与普通文件区分，需要 inode 归属校验。已把 `links.hard_links` 降级为 `Unsupported` 并在 `SubtreeProvider` 文档中写明限制，改动面与 ADR 结论一致。 |
+| RPC `close_handle` 死路径         | `crates/rpc/src/vfs.rs`                  | DOCUMENTED | 客户端在 `RemoteVfsFile::drop` 走单向 `release_handle`；`close_handle` 请求/响应保留给需要观测关闭结果的传输，两条路径共享句柄表和 journal 失效，均安全幂等。已在方法文档中说明，保留 wire 兼容。                                                                            |
+| `native_path` 契约                | `crates/vfs/src/provider.rs`             | DOCUMENTED | 在 trait 方法上明确：native path 仅 data-local，不是身份、不上 wire/持久化、不用于比较；虚拟/归档/远端/子树资源返回 `Unsupported`，不伪造路径；返回即可能失效，调用方自负竞态。                                                                                              |
+| 协议降级策略                      | `crates/proto/proto/vfs.proto`           | DOCUMENTED | 保留 v1 单向消息与 v2 请求/响应双通道；能力通过 `ProviderCapabilities` 逐项声明，包装层只降不升，未知字段按保留处理。详见本账本"兼容 adapter 清单"。                                                                                                                         |
+| Consumer 迁移残留                 | `crates/worktree/src/worktree.rs`        | ACTIVE     | `Worktree::Local/Remote` 行为分支与 `RelPath`/`ProjectPath` 旧模型仍在 Phase 9/10 迁移中；下一步按 `Next action` 推进，不作为本轮修复项。                                                                                                                                    |
+
 ## 实验结果 {#experiments}
 
 结果定义在
@@ -396,6 +413,8 @@ All entries reproduce on the clean implementation baseline before VFS code chang
 | 2026-10-08 | 9E    | `./script/clippy -p project`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                                  | 0 each      | PASS: no implicit ProjectPath-to-text-settings identity remains; no new P0/P1/P2 finding                                                                        | No                                                                            |
 | 2026-10-08 | 9E    | `cargo check --offline -p worktree -p remote_server`; local write/version/encoding and loopback remote VFS load+write regressions                                              | 0 each      | PASS: remote text save uses positioned VFS write with expected version and refreshed metadata; no specialized save RPC                                          | No                                                                            |
 | 2026-10-08 | 9E    | `./script/clippy -p worktree -p remote_server`, `cargo fmt --all -- --check`, `git diff --check`, P0 detectors and `hunting-code-smells` review                                | 0 each      | PASS: removed remote write rejection without new P0/P1/P2 finding                                                                                               | No                                                                            |
+| 2026-10-11 | 9F    | `cargo test -p vfs --lib`; `cargo test -p rpc --lib`                                                                                                                           | 0 each      | PASS: 57 vfs and 20 rpc tests, including new children-index and partial-read CRC regressions                                                                    | No                                                                            |
+| 2026-10-11 | 9F    | `./script/clippy -p vfs -p rpc`, `cargo fmt --all`, docs Prettier and `git diff --check`                                                                                       | 0 each      | PASS: D5/D8 fixed; C3/D11/native_path/protocol/`close_handle` dispositions recorded with no new finding                                                         | No                                                                            |
 
 ## 提交记录 {#commit-log}
 

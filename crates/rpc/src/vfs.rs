@@ -1687,6 +1687,14 @@ impl VfsService {
         }
     }
 
+    /// Closes a handle through a request/response exchange.
+    ///
+    /// The live client path is the fire-and-forget [`Self::release_handle`]
+    /// message that [`RemoteVfsFile`] sends on drop; this request form is kept
+    /// so transports without one-way messages (or callers that need to observe
+    /// the close result) can release a handle without relying on message
+    /// delivery. Both paths share the same handle table and journal
+    /// invalidation, so using either is safe and idempotent.
     pub async fn close_handle(&self, request: VfsCloseHandleRequestV2) -> VfsOperationResponseV2 {
         let result =
             required_mount_id(request.mount_id.as_ref(), VfsOperation::Open).and_then(|mount_id| {

@@ -121,10 +121,18 @@ pub struct WatchCapabilities {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LinkCapabilities {
+    /// Whether the provider exposes symbolic links as first-class entries.
     pub symbolic_links: SupportLevel,
+    /// Whether the provider can report hard links distinctly.
+    ///
+    /// A provider that cannot distinguish a hard link from an ordinary file
+    /// must report this as unsupported: callers may not assume that an entry's
+    /// identity is confined to the provider root when the host filesystem can
+    /// alias it through a hard link.
     pub hard_links: SupportLevel,
     pub permissions: SupportLevel,
     pub extended_attributes: SupportLevel,
+    /// Whether [`VfsProvider::native_path`] can return a host path.
     pub native_path: SupportLevel,
 }
 
@@ -906,6 +914,23 @@ pub trait VfsProvider: Send + Sync {
         request: WatchRequest,
     ) -> VfsResult<BoxStream<'static, VfsResult<EventBatch>>>;
 
+    /// Resolves `path` to a host-native path.
+    ///
+    /// Contract:
+    ///
+    /// - A native path is data-local only. It is never resource identity, never
+    ///   written to the wire or to persistence, and never compared for equality;
+    ///   callers must keep using [`ProviderPath`]/[`VfsPath`] as the source of
+    ///   truth.
+    /// - The provider returns [`VfsErrorCode::Unsupported`] when the path has no
+    ///   data-local representation (virtual, archive, remote, or subtree
+    ///   resources) instead of inventing a placeholder path that a host tool
+    ///   could act on.
+    /// - A returned path may become stale the moment it is returned; the caller
+    ///   owns any race and must re-validate through the provider before
+    ///   mutating through the native path.
+    /// - Hosts must not follow native paths across a provider boundary that the
+    ///   provider itself would reject (for example a symlink escape).
     async fn native_path(
         &self,
         _path: &ProviderPath,

@@ -1,13 +1,13 @@
 use crate::{
     Atomicity, CaseSensitivity, CollisionPolicy, CopyOptions, CreateDirOptions, CreateDisposition,
     CreateParents, DirCursor, DirEntry, DirPage, DirPageRequest, DirectoryCapabilities, EntryKind,
-    EntryMetadata, EntryName, EntryPermissions, EventBatch, FileAccess, LinkCapabilities,
-    MutationCapabilities, OpenOptions, OperationContext, PathEncoding, ProviderCapabilities,
-    ProviderDescriptor, ProviderFileKey, ProviderId, ProviderLimits, ProviderPath,
-    ReadCapabilities, RemoveKind, RemoveOptions, RemoveOutcome, RemovedEntryCount, RenameOptions,
-    StatOptions, SupportLevel, TrashCapabilities, VfsError, VfsErrorCode, VfsEvent, VfsEventKind,
-    VfsFile, VfsOperation, VfsProvider, VfsResult, VfsVersion, WatchCapabilities, WatchDepth,
-    WatchRequest, WriteAtOptions, WriteCapabilities,
+    EntryMetadata, EntryName, EntryPermissions, EventBatch, ExactComponent, FileAccess,
+    LinkCapabilities, MutationCapabilities, OpenOptions, OperationContext, PathEncoding,
+    ProviderCapabilities, ProviderDescriptor, ProviderFileKey, ProviderId, ProviderLimits,
+    ProviderPath, ReadCapabilities, RemoveKind, RemoveOptions, RemoveOutcome, RemovedEntryCount,
+    RenameOptions, StatOptions, SupportLevel, TrashCapabilities, VfsError, VfsErrorCode, VfsEvent,
+    VfsEventKind, VfsFile, VfsOperation, VfsProvider, VfsResult, VfsVersion, WatchCapabilities,
+    WatchDepth, WatchRequest, WriteAtOptions, WriteCapabilities,
 };
 use async_trait::async_trait;
 use futures::{
@@ -17,7 +17,7 @@ use futures::{
 };
 use parking_lot::Mutex;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     num::{NonZeroU32, NonZeroU64},
     sync::Arc,
     time::SystemTime,
@@ -57,6 +57,11 @@ struct MemoryNode {
     content_version: VfsVersion,
     structure_version: VfsVersion,
     modified_at: SystemTime,
+    /// Direct children keyed by their exact component. Storing names relative
+    /// to the owning node keeps `read_dir` proportional to the child count and
+    /// lets a subtree rename or copy move directories without rewriting any
+    /// descendant index entry: only the moved root's parent link changes.
+    children: BTreeSet<ExactComponent>,
 }
 
 struct MemoryWatchSubscription {
@@ -89,6 +94,7 @@ impl MemoryProvider {
             content_version: version_from_u64(1),
             structure_version: version_from_u64(1),
             modified_at: SystemTime::now(),
+            children: BTreeSet::new(),
         };
         Self {
             descriptor,
@@ -175,6 +181,7 @@ impl MemoryProvider {
             content_version: version.clone(),
             structure_version: version,
             modified_at: SystemTime::now(),
+            children: BTreeSet::new(),
         })
     }
 
@@ -276,6 +283,7 @@ impl MemoryProvider {
     }
 
     fn remove_subtree(state: &mut MemoryProviderState, path: &ProviderPath) -> u64 {
+        detach_child(state, path);
         let paths = state
             .nodes
             .keys()
@@ -287,6 +295,29 @@ impl MemoryProvider {
             state.nodes.remove(&path);
         }
         removed_count
+    }
+}
+
+/// Record `child_path`'s final component in its parent directory's index.
+///
+/// Every insertion into `MemoryProviderState::nodes` must be paired with a
+/// call so `read_dir` never has to scan the whole node table.
+fn attach_child(state: &mut MemoryProviderState, child_path: &ProviderPath) {
+    let (Some(parent), Some(name)) = (child_path.parent(), child_path.file_name()) else {
+        return;
+    };
+    if let Some(parent_node) = state.nodes.get_mut(&parent) {
+        parent_node.children.insert(name.clone());
+    }
+}
+
+/// Remove `child_path`'s final component from its parent directory's index.
+fn detach_child(state: &mut MemoryProviderState, child_path: &ProviderPath) {
+    let (Some(parent), Some(name)) = (child_path.parent(), child_path.file_name()) else {
+        return;
+    };
+    if let Some(parent_node) = state.nodes.get_mut(&parent) {
+        parent_node.children.remove(name);
     }
 }
 
@@ -417,11 +448,7 @@ impl VfsProvider for MemoryProvider {
                 .error(VfsErrorCode::NotDirectory, VfsOperation::ReadDirectory)
                 .with_path(path.clone()));
         }
-        let child_count = state
-            .nodes
-            .iter()
-            .filter(|(candidate, _)| candidate.parent().as_ref() == Some(path))
-            .count();
+        let child_count = directory.children.len();
         if start > child_count {
             return Err(self
                 .error(VfsErrorCode::InvalidArgument, VfsOperation::ReadDirectory)
@@ -429,17 +456,27 @@ impl VfsProvider for MemoryProvider {
                 .with_detail("directory cursor is past the end of the listing"));
         }
         let page_limit = request.limit.get() as usize;
-        let entries = state
-            .nodes
-            .iter()
-            .filter(|(candidate, _)| candidate.parent().as_ref() == Some(path))
-            .skip(start)
-            .take(page_limit)
-            .map(|(path, node)| DirEntry {
-                path: path.clone(),
-                metadata: self.metadata_for(path, node),
-            })
-            .collect::<Vec<_>>();
+        let mut entries = Vec::with_capacity(page_limit.min(child_count.saturating_sub(start)));
+        for name in directory.children.iter().skip(start).take(page_limit) {
+            request
+                .context
+                .cancellation
+                .check(VfsOperation::ReadDirectory, &self.descriptor.id)?;
+            let child_path = path.join_component(name.clone()).map_err(|error| {
+                self.error(VfsErrorCode::Internal, VfsOperation::ReadDirectory)
+                    .with_path(path.clone())
+                    .with_detail(error.to_string())
+            })?;
+            let child = state.nodes.get(&child_path).ok_or_else(|| {
+                self.error(VfsErrorCode::Internal, VfsOperation::ReadDirectory)
+                    .with_path(child_path.clone())
+                    .with_detail("directory index references a missing child")
+            })?;
+            entries.push(DirEntry {
+                path: child_path.clone(),
+                metadata: self.metadata_for(&child_path, child),
+            });
+        }
         let next_index = start.saturating_add(entries.len());
         let next_cursor = (next_index < child_count).then(|| encode_cursor(next_index));
         Ok(DirPage {
@@ -477,6 +514,7 @@ impl VfsProvider for MemoryProvider {
                 self.ensure_parent_directory(&state, path, VfsOperation::Open)?;
                 let node = self.create_node(&mut state, EntryKind::File, VfsOperation::Open)?;
                 state.nodes.insert(path.clone(), node);
+                attach_child(&mut state, path);
                 self.bump_parent_structure_version(&mut state, path, VfsOperation::Open)?;
                 self.emit_events(
                     &mut state,
@@ -603,6 +641,7 @@ impl VfsProvider for MemoryProvider {
                 VfsOperation::CreateDirectory,
             )?;
             state.nodes.insert(directory_path.clone(), node);
+            attach_child(&mut state, &directory_path);
             self.bump_parent_structure_version(
                 &mut state,
                 &directory_path,
@@ -728,6 +767,10 @@ impl VfsProvider for MemoryProvider {
                 }
             }
         }
+        // The moved subtree keeps every descendant's child index intact because
+        // children are stored by name relative to their owning node. Only the
+        // moved root's parent links change.
+        detach_child(&mut state, source);
         let moved_nodes = state
             .nodes
             .iter()
@@ -748,6 +791,7 @@ impl VfsProvider for MemoryProvider {
             })?;
             state.nodes.insert(target_path, node);
         }
+        attach_child(&mut state, target);
         self.bump_parent_structure_version(&mut state, source, VfsOperation::Rename)?;
         self.bump_parent_structure_version(&mut state, target, VfsOperation::Rename)?;
         self.emit_events(
@@ -830,6 +874,7 @@ impl VfsProvider for MemoryProvider {
             node.modified_at = SystemTime::now();
             state.nodes.insert(target_path, node);
         }
+        attach_child(&mut state, target);
         self.bump_parent_structure_version(&mut state, target, VfsOperation::Copy)?;
         self.emit_events(
             &mut state,
@@ -1371,6 +1416,141 @@ mod tests {
             Ok(())
         });
         assert!(result.is_ok(), "size cap failed: {result:?}");
+    }
+
+    async fn child_names(
+        provider: &MemoryProvider,
+        directory: &ProviderPath,
+    ) -> Result<Vec<String>, String> {
+        let page = provider
+            .read_dir(
+                directory,
+                DirPageRequest {
+                    cursor: None,
+                    limit: NonZeroU32::new(64).unwrap_or(NonZeroU32::MIN),
+                    context: OperationContext::default(),
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(page
+            .entries
+            .iter()
+            .map(|entry| {
+                entry
+                    .path
+                    .file_name()
+                    .map(|name| String::from_utf8_lossy(name.as_bytes()).into_owned())
+                    .unwrap_or_default()
+            })
+            .collect())
+    }
+
+    #[test]
+    fn memory_provider_children_index_tracks_rename_copy_and_remove() {
+        let provider = MemoryProvider::new("memory-children-index", PathEncoding::PortableUtf8);
+        let result = block_on(async {
+            let path = |components: &[&[u8]]| {
+                ProviderPath::from_byte_components(PathEncoding::PortableUtf8, components)
+                    .map_err(|error| error.to_string())
+            };
+            let expected = |names: &[&str]| {
+                names
+                    .iter()
+                    .map(|name| name.to_string())
+                    .collect::<Vec<_>>()
+            };
+            let root = ProviderPath::root(PathEncoding::PortableUtf8);
+            let a = path(&[b"a"])?;
+            let a_one = path(&[b"a", b"one"])?;
+            let a_two = path(&[b"a", b"two"])?;
+            let a_sub = path(&[b"a", b"sub"])?;
+            let a_sub_three = path(&[b"a", b"sub", b"three"])?;
+            let b = path(&[b"b"])?;
+            let c = path(&[b"c"])?;
+            let d = path(&[b"d"])?;
+
+            provider
+                .create_dir(&a, CreateDirOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            provider
+                .create_dir(&a_sub, CreateDirOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            for file in [&a_one, &a_two, &a_sub_three] {
+                provider
+                    .open(
+                        file,
+                        OpenOptions {
+                            access: FileAccess::ReadWrite,
+                            create: CreateDisposition::CreateNew,
+                            ..OpenOptions::default()
+                        },
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?;
+            }
+            provider
+                .create_dir(&b, CreateDirOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+
+            if child_names(&provider, &root).await? != expected(&["a", "b"]) {
+                return Err(String::from("root listing before mutations is wrong"));
+            }
+            if child_names(&provider, &a).await? != expected(&["one", "sub", "two"]) {
+                return Err(String::from("directory listing is not name-sorted"));
+            }
+
+            provider
+                .rename(&a, &c, RenameOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            if child_names(&provider, &root).await? != expected(&["b", "c"]) {
+                return Err(String::from("root listing did not track the rename"));
+            }
+            if child_names(&provider, &c).await? != expected(&["one", "sub", "two"]) {
+                return Err(String::from("renamed directory lost its children index"));
+            }
+            if child_names(&provider, &path(&[b"c", b"sub"])?).await? != expected(&["three"]) {
+                return Err(String::from("renamed descendant lost its children index"));
+            }
+
+            provider
+                .copy(&c, &d, CopyOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            if child_names(&provider, &root).await? != expected(&["b", "c", "d"]) {
+                return Err(String::from("root listing did not track the copy"));
+            }
+            if child_names(&provider, &path(&[b"d", b"sub"])?).await? != expected(&["three"]) {
+                return Err(String::from("copied descendant lost its children index"));
+            }
+
+            provider
+                .remove(
+                    &c,
+                    RemoveOptions {
+                        kind: RemoveKind::Recursive,
+                        ..RemoveOptions::default()
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            if child_names(&provider, &root).await? != expected(&["b", "d"]) {
+                return Err(String::from(
+                    "root listing did not drop the removed subtree",
+                ));
+            }
+            if child_names(&provider, &path(&[b"d", b"sub"])?).await? != expected(&["three"]) {
+                return Err(String::from(
+                    "removing a sibling subtree corrupted the index",
+                ));
+            }
+            Ok(())
+        });
+        assert!(result.is_ok(), "children index failed: {result:?}");
     }
 
     #[test]

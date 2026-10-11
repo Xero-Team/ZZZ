@@ -19,6 +19,7 @@ use async_zip::{
 };
 use binrw::BinWrite as _;
 use futures::{AsyncReadExt as _, FutureExt as _, io::BufReader, stream::BoxStream};
+use parking_lot::Mutex;
 
 use crate::{
     Atomicity, CaseSensitivity, CopyOptions, CreateDirOptions, CreateDisposition, DirCursor,
@@ -34,6 +35,11 @@ use crate::{
 const ARCHIVE_FORMAT_VERSION: u8 = 1;
 const MEMBER_READ_CHUNK_SIZE: usize = 64 * 1024;
 const MAXIMUM_MEMBER_RANGE_SIZE: usize = 8 * 1024 * 1024;
+
+/// Largest decompressed member kept in memory so a positioned read can serve
+/// later ranges without re-decompressing. Members above this size are validated
+/// once and then streamed per read.
+const MEMBER_CACHE_LIMIT: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 /// Resource and time limits applied while indexing and reading an archive.
@@ -708,6 +714,7 @@ impl VfsProvider for ArchiveProvider {
             source_version: self.source_version.clone(),
             version_probe: self.version_probe.clone(),
             deadline: self.limits.operation_deadline,
+            member_cache: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -778,6 +785,15 @@ impl VfsProvider for ArchiveProvider {
 }
 
 #[derive(Clone)]
+enum ArchiveMemberCache {
+    /// The whole decompressed member, already validated against its CRC.
+    Bytes(Arc<[u8]>),
+    /// The member's CRC and size were validated but the bytes were too large to
+    /// retain; later reads stream without re-validating.
+    Validated,
+}
+
+#[derive(Clone)]
 struct ArchiveMemberFile {
     provider_id: ProviderId,
     path: ProviderPath,
@@ -788,6 +804,7 @@ struct ArchiveMemberFile {
     source_version: VfsVersion,
     version_probe: Option<Arc<dyn ArchiveVersionProbe>>,
     deadline: Duration,
+    member_cache: Arc<Mutex<Option<ArchiveMemberCache>>>,
 }
 
 #[async_trait]
@@ -827,12 +844,117 @@ impl VfsFile for ArchiveMemberFile {
                 .min(u64::try_from(buffer.len()).unwrap_or(u64::MAX)),
         )
         .unwrap_or(buffer.len());
+
+        let cached = self.member_cache.lock().clone();
+        match cached {
+            Some(ArchiveMemberCache::Bytes(bytes)) => {
+                Ok(copy_cached_range(&bytes, offset, buffer, maximum_read))
+            }
+            Some(ArchiveMemberCache::Validated) => {
+                let read = self
+                    .stream_member(offset, buffer, maximum_read, false, &context)
+                    .await?;
+                self.ensure_source_version(context).await?;
+                Ok(read)
+            }
+            None => {
+                let cacheable = self.record.metadata.uncompressed_size
+                    <= u64::try_from(MEMBER_CACHE_LIMIT).unwrap_or(u64::MAX);
+                if cacheable {
+                    let length = usize::try_from(self.record.metadata.uncompressed_size)
+                        .unwrap_or(MEMBER_CACHE_LIMIT);
+                    let mut bytes = vec![0; length];
+                    let read = self
+                        .stream_member(0, &mut bytes, length, true, &context)
+                        .await?;
+                    bytes.truncate(read);
+                    let bytes: Arc<[u8]> = bytes.into();
+                    *self.member_cache.lock() = Some(ArchiveMemberCache::Bytes(bytes.clone()));
+                    self.ensure_source_version(context).await?;
+                    Ok(copy_cached_range(&bytes, offset, buffer, maximum_read))
+                } else {
+                    let read = self
+                        .stream_member(offset, buffer, maximum_read, true, &context)
+                        .await?;
+                    *self.member_cache.lock() = Some(ArchiveMemberCache::Validated);
+                    self.ensure_source_version(context).await?;
+                    Ok(read)
+                }
+            }
+        }
+    }
+
+    async fn write_at(
+        &self,
+        _offset: u64,
+        _buffer: &[u8],
+        options: WriteAtOptions,
+    ) -> VfsResult<usize> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Write, &self.provider_id)?;
+        Err(self.read_only_error(VfsOperation::Write))
+    }
+
+    async fn set_len(&self, _len: u64, options: WriteAtOptions) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::SetLength, &self.provider_id)?;
+        Err(self.read_only_error(VfsOperation::SetLength))
+    }
+
+    async fn flush(&self, context: OperationContext) -> VfsResult<()> {
+        context
+            .cancellation
+            .check(VfsOperation::Flush, &self.provider_id)?;
+        Err(self.read_only_error(VfsOperation::Flush))
+    }
+
+    async fn sync(&self, context: OperationContext) -> VfsResult<()> {
+        context
+            .cancellation
+            .check(VfsOperation::Sync, &self.provider_id)?;
+        Err(self.read_only_error(VfsOperation::Sync))
+    }
+}
+
+impl ArchiveMemberFile {
+    async fn ensure_source_version(&self, context: OperationContext) -> VfsResult<()> {
+        let Some(version_probe) = &self.version_probe else {
+            return Ok(());
+        };
+        if version_probe.current_version(context).await? != self.source_version {
+            return Err(VfsError::new(
+                VfsErrorCode::StaleVersion,
+                VfsOperation::Read,
+                self.provider_id.clone(),
+            )
+            .with_path(self.path.clone())
+            .with_detail("archive source version changed; remount is required"));
+        }
+        Ok(())
+    }
+
+    /// Decompress `buffer.len()` bytes at `offset` from the member.
+    ///
+    /// When `validate` is set the member is drained to EOF, which makes the
+    /// decompressor verify the member CRC and declared uncompressed size even
+    /// for a partial positioned read.
+    async fn stream_member(
+        &self,
+        offset: u64,
+        buffer: &mut [u8],
+        maximum_read: usize,
+        validate: bool,
+        context: &OperationContext,
+    ) -> VfsResult<usize> {
         let provider_id = self.provider_id.clone();
         let member_path = self.path.clone();
         let source = self.source.clone();
         let inner = self.archive_inner.clone();
         let index = self.record.metadata.entry_index;
-        let expected_length = self.record.metadata.uncompressed_size;
         let operation_context = context.clone();
         let read = async move {
             let cursor = BufReader::new(VfsFileCursor::new(source, operation_context.clone()));
@@ -893,96 +1015,30 @@ impl VfsFile for ArchiveMemberFile {
                 }
                 total += read;
             }
-            let total_u64 = u64::try_from(total).map_err(|_| {
-                VfsError::new(
-                    VfsErrorCode::Internal,
-                    VfsOperation::Read,
-                    provider_id.clone(),
-                )
-                .with_path(member_path.clone())
-                .with_detail("archive read byte count overflowed")
-            })?;
-            if offset.saturating_add(total_u64) >= expected_length {
-                let mut end_probe = [0; 1];
-                let read = member
-                    .read(&mut end_probe)
-                    .await
-                    .map_err(|error| map_member_io_error(&provider_id, &member_path, error))?;
-                if read != 0 {
-                    return Err(VfsError::new(
-                        VfsErrorCode::CorruptData,
-                        VfsOperation::Read,
-                        provider_id,
-                    )
-                    .with_path(member_path)
-                    .with_detail("archive member exceeded its declared uncompressed size"));
+            if validate {
+                loop {
+                    operation_context
+                        .cancellation
+                        .check(VfsOperation::Read, &provider_id)?;
+                    let read = member
+                        .read(&mut discard)
+                        .await
+                        .map_err(|error| map_member_io_error(&provider_id, &member_path, error))?;
+                    if read == 0 {
+                        break;
+                    }
                 }
             }
             Ok(total)
         };
-        let bytes_read = run_with_deadline(
+        run_with_deadline(
             &self.provider_id,
             VfsOperation::Read,
-            &context,
+            context,
             self.deadline,
             read,
         )
-        .await?;
-        self.ensure_source_version(context).await?;
-        Ok(bytes_read)
-    }
-
-    async fn write_at(
-        &self,
-        _offset: u64,
-        _buffer: &[u8],
-        options: WriteAtOptions,
-    ) -> VfsResult<usize> {
-        options
-            .context
-            .cancellation
-            .check(VfsOperation::Write, &self.provider_id)?;
-        Err(self.read_only_error(VfsOperation::Write))
-    }
-
-    async fn set_len(&self, _len: u64, options: WriteAtOptions) -> VfsResult<()> {
-        options
-            .context
-            .cancellation
-            .check(VfsOperation::SetLength, &self.provider_id)?;
-        Err(self.read_only_error(VfsOperation::SetLength))
-    }
-
-    async fn flush(&self, context: OperationContext) -> VfsResult<()> {
-        context
-            .cancellation
-            .check(VfsOperation::Flush, &self.provider_id)?;
-        Err(self.read_only_error(VfsOperation::Flush))
-    }
-
-    async fn sync(&self, context: OperationContext) -> VfsResult<()> {
-        context
-            .cancellation
-            .check(VfsOperation::Sync, &self.provider_id)?;
-        Err(self.read_only_error(VfsOperation::Sync))
-    }
-}
-
-impl ArchiveMemberFile {
-    async fn ensure_source_version(&self, context: OperationContext) -> VfsResult<()> {
-        let Some(version_probe) = &self.version_probe else {
-            return Ok(());
-        };
-        if version_probe.current_version(context).await? != self.source_version {
-            return Err(VfsError::new(
-                VfsErrorCode::StaleVersion,
-                VfsOperation::Read,
-                self.provider_id.clone(),
-            )
-            .with_path(self.path.clone())
-            .with_detail("archive source version changed; remount is required"));
-        }
-        Ok(())
+        .await
     }
 
     fn read_only_error(&self, operation: VfsOperation) -> VfsError {
@@ -993,6 +1049,16 @@ impl ArchiveMemberFile {
                 self.version
             ))
     }
+}
+
+fn copy_cached_range(bytes: &[u8], offset: u64, buffer: &mut [u8], maximum_read: usize) -> usize {
+    let start = usize::try_from(offset).unwrap_or(bytes.len());
+    let available = bytes.get(start..).unwrap_or_default();
+    let length = available.len().min(maximum_read);
+    if let (Some(target), Some(source)) = (buffer.get_mut(..length), available.get(..length)) {
+        target.copy_from_slice(source);
+    }
+    length
 }
 
 fn zip_options(limits: &ArchiveLimits) -> ZipOptions {
@@ -2034,6 +2100,39 @@ mod tests {
                 "timed out mount should reject",
             );
             assert_eq!(error.code(), VfsErrorCode::Timeout);
+        });
+    }
+
+    #[test]
+    fn archive_provider_validates_crc_on_partial_reads() {
+        futures::executor::block_on(async {
+            let mut corrupted = zip_bytes(
+                vec![(
+                    "partial-crc".into(),
+                    Compression::Stored,
+                    b"partial-crc-payload".to_vec(),
+                    None,
+                )],
+                false,
+            )
+            .await;
+            let payload_offset = corrupted
+                .windows(b"partial-crc-payload".len())
+                .position(|window| window == b"partial-crc-payload")
+                .expect("stored payload should be present");
+            corrupted[payload_offset] ^= 0xff;
+            let provider = mount_bytes(corrupted).await;
+            let file = provider
+                .open(&path(&[b"partial-crc"]), OpenOptions::default())
+                .await
+                .expect("corrupt member metadata should still open");
+            let mut contents = vec![0; 4];
+            let error = expect_vfs_error(
+                file.read_at(0, &mut contents, OperationContext::default())
+                    .await,
+                "a partial read must still detect a CRC mismatch",
+            );
+            assert_eq!(error.code(), VfsErrorCode::CorruptData);
         });
     }
 

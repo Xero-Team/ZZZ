@@ -21,6 +21,23 @@ const DEFAULT_RANGE_CACHE_BYTES: usize = 128 * 1024 * 1024;
 const DEFAULT_RANGE_CACHE_ENTRIES: usize = 4_096;
 const DEFAULT_MAXIMUM_CACHEABLE_RANGE: u64 = 1024 * 1024;
 
+/// Confines an inner provider to a prefix and rejects symlink escapes.
+///
+/// Containment is enforced by re-validating the prefix root's stable file key
+/// and by walking every ancestor in `DoNotFollow` mode before each operation.
+/// Two residual limitations are documented rather than silently accepted:
+///
+/// - **TOCTOU:** the ancestor walk and the inner operation are separate steps,
+///   so a concurrent writer that swaps an ancestor for a symlink between the
+///   two can still escape. Eliminating the window needs an atomic
+///   open-beneath primitive the provider contract does not expose, so callers
+///   that mount untrusted trees must not rely on this provider for security
+///   isolation against a hostile writer.
+/// - **Hard links:** a hard link inside the prefix that aliases an inode outside
+///   it is indistinguishable from an ordinary file through the provider API, so
+///   it is served. Because the provider cannot confine hard links, it reports
+///   `links.hard_links` as unsupported rather than inheriting the inner level;
+///   a future inode-ownership check would need new provider surface.
 #[derive(Clone)]
 pub struct SubtreeProvider {
     descriptor: Arc<ProviderDescriptor>,
@@ -318,6 +335,7 @@ impl VfsProvider for SubtreeProvider {
     fn capabilities(&self) -> ProviderCapabilities {
         let mut capabilities = self.inner.capabilities();
         capabilities.links.symbolic_links = SupportLevel::Unsupported;
+        capabilities.links.hard_links = SupportLevel::Unsupported;
         capabilities.links.native_path = SupportLevel::Unsupported;
         capabilities
     }
