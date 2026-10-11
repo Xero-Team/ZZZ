@@ -354,6 +354,11 @@ impl HeadlessProject {
         session.add_entity_request_handler(Self::handle_vfs_remove);
         session.add_entity_request_handler(Self::handle_vfs_rename);
         session.add_entity_request_handler(Self::handle_vfs_copy);
+        session.add_entity_request_handler(Self::handle_vfs_read_link);
+        session.add_entity_request_handler(Self::handle_vfs_symlink);
+        session.add_entity_request_handler(Self::handle_vfs_set_permissions);
+        session.add_entity_request_handler(Self::handle_vfs_trash);
+        session.add_entity_request_handler(Self::handle_vfs_restore);
         session.add_entity_stream_request_handler(Self::handle_vfs_watch);
         session.add_entity_request_handler(Self::handle_vfs_cancel_operation);
 
@@ -541,6 +546,36 @@ impl HeadlessProject {
         proto::VfsCopyRequestV2,
         proto::VfsOperationResponseV2,
         copy
+    );
+    vfs_headless_request_handler!(
+        handle_vfs_read_link,
+        proto::VfsReadLinkRequestV2,
+        proto::VfsReadLinkResponseV2,
+        read_link
+    );
+    vfs_headless_request_handler!(
+        handle_vfs_symlink,
+        proto::VfsSymlinkRequestV2,
+        proto::VfsOperationResponseV2,
+        symlink
+    );
+    vfs_headless_request_handler!(
+        handle_vfs_set_permissions,
+        proto::VfsSetPermissionsRequestV2,
+        proto::VfsOperationResponseV2,
+        set_permissions
+    );
+    vfs_headless_request_handler!(
+        handle_vfs_trash,
+        proto::VfsTrashRequestV2,
+        proto::VfsTrashResponseV2,
+        trash
+    );
+    vfs_headless_request_handler!(
+        handle_vfs_restore,
+        proto::VfsRestoreRequestV2,
+        proto::VfsRestoreResponseV2,
+        restore
     );
     vfs_headless_request_handler!(
         handle_vfs_cancel_operation,

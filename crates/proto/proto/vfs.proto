@@ -135,6 +135,12 @@ enum VfsOperationV2 {
   VFS_OPERATION_V2_COPY = 12;
   VFS_OPERATION_V2_WATCH = 13;
   VFS_OPERATION_V2_NATIVE_PATH = 14;
+  VFS_OPERATION_V2_STAT_MANY = 15;
+  VFS_OPERATION_V2_READ_LINK = 16;
+  VFS_OPERATION_V2_SYMLINK = 17;
+  VFS_OPERATION_V2_SET_PERMISSIONS = 18;
+  VFS_OPERATION_V2_TRASH = 19;
+  VFS_OPERATION_V2_RESTORE = 20;
 }
 
 enum VfsFileAccessV2 {
@@ -529,6 +535,61 @@ message VfsCopyRequestV2 {
   VfsCollisionPolicyV2 collision = 5;
   optional bytes expected_version = 6;
   uint64 operation_id = 7;
+}
+
+message VfsReadLinkRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  uint64 operation_id = 4;
+}
+
+message VfsReadLinkResponseV2 {
+  ProviderPathV2 target = 1;
+  VfsErrorV2 error = 2;
+}
+
+message VfsSymlinkRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 target = 3;
+  ProviderPathV2 link_path = 4;
+  uint64 operation_id = 5;
+}
+
+message VfsSetPermissionsRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  optional bool writable = 4;
+  optional bool executable = 5;
+  uint64 operation_id = 6;
+}
+
+message VfsTrashRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 path = 3;
+  uint64 operation_id = 4;
+}
+
+message VfsTrashResponseV2 {
+  ProviderPathV2 original_path = 1;
+  bytes restore_token = 2;
+  VfsErrorV2 error = 3;
+}
+
+message VfsRestoreRequestV2 {
+  uint64 project_id = 1;
+  MountIdV2 mount_id = 2;
+  ProviderPathV2 original_path = 3;
+  bytes restore_token = 4;
+  uint64 operation_id = 5;
+}
+
+message VfsRestoreResponseV2 {
+  ProviderPathV2 restored_path = 1;
+  VfsErrorV2 error = 2;
 }
 
 message VfsWatchRequestV2 {

@@ -833,6 +833,12 @@ fn encode_operation(operation: VfsOperation) -> VfsOperationV2 {
         VfsOperation::Copy => VfsOperationV2::Copy,
         VfsOperation::Watch => VfsOperationV2::Watch,
         VfsOperation::NativePath => VfsOperationV2::NativePath,
+        VfsOperation::StatMany => VfsOperationV2::StatMany,
+        VfsOperation::ReadLink => VfsOperationV2::ReadLink,
+        VfsOperation::Symlink => VfsOperationV2::Symlink,
+        VfsOperation::SetPermissions => VfsOperationV2::SetPermissions,
+        VfsOperation::Trash => VfsOperationV2::Trash,
+        VfsOperation::Restore => VfsOperationV2::Restore,
     }
 }
 
@@ -852,6 +858,12 @@ fn decode_operation(operation: i32) -> Result<VfsOperation, VfsWireError> {
         Ok(VfsOperationV2::Copy) => Ok(VfsOperation::Copy),
         Ok(VfsOperationV2::Watch) => Ok(VfsOperation::Watch),
         Ok(VfsOperationV2::NativePath) => Ok(VfsOperation::NativePath),
+        Ok(VfsOperationV2::StatMany) => Ok(VfsOperation::StatMany),
+        Ok(VfsOperationV2::ReadLink) => Ok(VfsOperation::ReadLink),
+        Ok(VfsOperationV2::Symlink) => Ok(VfsOperation::Symlink),
+        Ok(VfsOperationV2::SetPermissions) => Ok(VfsOperation::SetPermissions),
+        Ok(VfsOperationV2::Trash) => Ok(VfsOperation::Trash),
+        Ok(VfsOperationV2::Restore) => Ok(VfsOperation::Restore),
         Ok(VfsOperationV2::Unspecified) | Err(_) => Err(VfsWireError::UnknownOperation(operation)),
     }
 }

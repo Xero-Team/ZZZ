@@ -20,9 +20,9 @@ use util::path;
 use vfs::{
     CancellationToken, CaseSensitivity, CopyOptions as VfsCopyOptions, CreateDisposition,
     EntryKind as VfsEntryKind, FileAccess, OpenOptions, OperationContext, OperationId,
-    ProviderPath, RenameOptions as VfsRenameOptions, StatOptions, SymbolicLinkMode, VfsErrorCode,
-    VfsEventKind, VfsProvider, WatchDepth, WatchRequest, WriteAtOptions,
-    test_support::run_provider_conformance,
+    PermissionsUpdate, ProviderPath, RenameOptions as VfsRenameOptions, SetPermissionsOptions,
+    StatOptions, SymbolicLinkMode, SymlinkOptions, TrashOptions, VfsErrorCode, VfsEventKind,
+    VfsProvider, WatchDepth, WatchRequest, WriteAtOptions, test_support::run_provider_conformance,
 };
 
 #[gpui::test]
@@ -263,6 +263,104 @@ async fn test_local_provider_conformance(executor: BackgroundExecutor, cx: &mut 
     assert!(
         result.is_ok(),
         "local provider conformance failed: {result:?}"
+    );
+}
+
+#[gpui::test]
+async fn test_local_provider_links_permissions_and_trash(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new().unwrap();
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let provider = LocalProvider::new(
+        "local-links",
+        Arc::<Path>::from(temporary_directory.path()),
+        filesystem,
+    )
+    .await
+    .unwrap();
+
+    let file_path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"file.txt".as_slice()],
+    )
+    .unwrap();
+    let link_path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        [b"link.txt".as_slice()],
+    )
+    .unwrap();
+
+    provider
+        .open(
+            &file_path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::CreateNew,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await
+        .unwrap();
+
+    provider
+        .symlink(&file_path, &link_path, SymlinkOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        provider
+            .read_link(&link_path, OperationContext::default())
+            .await
+            .unwrap(),
+        file_path
+    );
+
+    provider
+        .set_permissions(
+            &file_path,
+            SetPermissionsOptions {
+                permissions: PermissionsUpdate {
+                    writable: Some(false),
+                    executable: None,
+                },
+                context: OperationContext::default(),
+            },
+        )
+        .await
+        .unwrap();
+    let metadata = provider
+        .stat(&file_path, StatOptions::default())
+        .await
+        .unwrap();
+    assert!(!metadata.permissions.writable);
+
+    let trashed = provider
+        .trash(&file_path, TrashOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(trashed.original_path, file_path);
+    assert!(
+        provider
+            .stat(&file_path, StatOptions::default())
+            .await
+            .is_err()
+    );
+
+    assert_eq!(
+        provider
+            .restore(trashed, TrashOptions::default())
+            .await
+            .unwrap(),
+        file_path
+    );
+    assert!(
+        provider
+            .stat(&file_path, StatOptions::default())
+            .await
+            .is_ok()
     );
 }
 
@@ -1103,6 +1201,40 @@ async fn test_copy_recursive_with_ignoring(executor: BackgroundExecutor) {
             .await
             .unwrap(),
         "B"
+    );
+}
+
+#[gpui::test]
+async fn test_copy_recursive_preserves_symlinks(executor: BackgroundExecutor) {
+    let fs = FakeFs::new(executor.clone());
+    fs.insert_tree(path!("/src"), json!({ "real.txt": "content" }))
+        .await;
+    fs.create_symlink(path!("/src/link.txt").as_ref(), "real.txt".into())
+        .await
+        .unwrap();
+
+    copy_recursive(
+        fs.as_ref(),
+        Path::new(path!("/src")),
+        Path::new(path!("/dst")),
+        CopyOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    let metadata = fs
+        .metadata(path!("/dst/link.txt").as_ref())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(metadata.is_symlink);
+    assert_eq!(
+        fs.read_link(path!("/dst/link.txt").as_ref()).await.unwrap(),
+        PathBuf::from("real.txt")
+    );
+    assert_eq!(
+        fs.load(path!("/dst/link.txt").as_ref()).await.unwrap(),
+        "content"
     );
 }
 

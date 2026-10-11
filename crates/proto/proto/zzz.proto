@@ -419,7 +419,15 @@ message Envelope {
     VfsStatManyResponseV2 vfs_stat_many_response_v2 = 493;
     VfsReleaseHandleV2 vfs_release_handle_v2 = 494;
     VfsMountArchiveRequestV2 vfs_mount_archive_request_v2 = 495;
-    VfsMountArchiveResponseV2 vfs_mount_archive_response_v2 = 496; // current max
+    VfsMountArchiveResponseV2 vfs_mount_archive_response_v2 = 496;
+    VfsReadLinkRequestV2 vfs_read_link_request_v2 = 497;
+    VfsReadLinkResponseV2 vfs_read_link_response_v2 = 498;
+    VfsSymlinkRequestV2 vfs_symlink_request_v2 = 499;
+    VfsSetPermissionsRequestV2 vfs_set_permissions_request_v2 = 500;
+    VfsTrashRequestV2 vfs_trash_request_v2 = 501;
+    VfsTrashResponseV2 vfs_trash_response_v2 = 502;
+    VfsRestoreRequestV2 vfs_restore_request_v2 = 503;
+    VfsRestoreResponseV2 vfs_restore_response_v2 = 504; // current max
   }
 
   reserved 87 to 88;

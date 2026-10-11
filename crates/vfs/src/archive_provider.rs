@@ -46,8 +46,15 @@ pub struct ArchiveLimits {
     pub maximum_central_directory_bytes: u64,
     /// Maximum uncompressed size of one member.
     pub maximum_uncompressed_member_bytes: u64,
+    /// Maximum compressed size of one member, bounding decompressor input.
+    pub maximum_compressed_member_bytes: u64,
     /// Maximum sum of declared uncompressed member sizes.
     pub maximum_total_uncompressed_bytes: u64,
+    /// Maximum sum of all member path bytes, bounding index memory amplification
+    /// from archives with many short components.
+    pub maximum_total_path_bytes: u64,
+    /// Maximum number of index nodes created while building the member tree.
+    pub maximum_index_nodes: u64,
     /// Maximum declared uncompressed-to-compressed size ratio.
     pub maximum_compression_ratio: u64,
     /// Maximum caller-managed nesting depth.
@@ -63,7 +70,10 @@ impl Default for ArchiveLimits {
             maximum_name_bytes: 16 * 1024,
             maximum_central_directory_bytes: 256 * 1024 * 1024,
             maximum_uncompressed_member_bytes: 4 * 1024 * 1024 * 1024,
+            maximum_compressed_member_bytes: 1024 * 1024 * 1024,
             maximum_total_uncompressed_bytes: 16 * 1024 * 1024 * 1024,
+            maximum_total_path_bytes: 64 * 1024 * 1024,
+            maximum_index_nodes: 1_000_000,
             maximum_compression_ratio: 1_000,
             maximum_nested_depth: 4,
             operation_deadline: Duration::from_secs(30),
@@ -988,7 +998,7 @@ impl ArchiveMemberFile {
 fn zip_options(limits: &ArchiveLimits) -> ZipOptions {
     ZipOptions {
         max_uncompressed_size_per_file: limits.maximum_uncompressed_member_bytes,
-        max_compressed_size_per_file: limits.maximum_uncompressed_member_bytes,
+        max_compressed_size_per_file: limits.maximum_compressed_member_bytes,
         max_cd_num_files: limits.maximum_entry_count,
         max_cd_num_files_load: limits.maximum_entry_count,
         max_cd_size_in_bytes: limits.maximum_central_directory_bytes,
@@ -1007,6 +1017,7 @@ fn build_index(
     let mut nodes = BTreeMap::from([(root, ArchiveNode::implicit_directory())]);
     let mut records = Vec::with_capacity(central_directory_records.len());
     let mut total_uncompressed_bytes = 0_u64;
+    let mut total_path_bytes = 0_u64;
 
     for (entry_index, central_directory_record) in central_directory_records.iter().enumerate() {
         context
@@ -1022,6 +1033,28 @@ fn build_index(
         }
         let raw_name = central_directory_record.insecure_file_name.as_bytes();
         let (path, directory_by_name) = archive_member_path(provider_id, raw_name, limits)?;
+        total_path_bytes = total_path_bytes
+            .checked_add(
+                path.components()
+                    .map(|component| component.as_bytes().len() as u64)
+                    .sum(),
+            )
+            .ok_or_else(|| {
+                VfsError::new(
+                    VfsErrorCode::TooLarge,
+                    VfsOperation::Open,
+                    provider_id.clone(),
+                )
+                .with_detail("archive total path bytes overflowed")
+            })?;
+        if total_path_bytes > limits.maximum_total_path_bytes {
+            return Err(VfsError::new(
+                VfsErrorCode::TooLarge,
+                VfsOperation::Open,
+                provider_id.clone(),
+            )
+            .with_detail("archive exceeds the configured total path-byte limit"));
+        }
         let uncompressed_size = central_directory_record
             .uncompressed_size()
             .map_err(|error| map_zip_error(provider_id, VfsOperation::Open, Some(&path), error))?;
@@ -1087,7 +1120,7 @@ fn build_index(
             )
             .with_path(path.clone())
             .with_detail(detail)
-        })? & 1
+        })? & 0b0100_0001
             != 0;
         let record = ArchiveRecord {
             metadata: ArchiveRecordMetadata {
@@ -1104,6 +1137,14 @@ fn build_index(
         };
         records.push(record.clone());
         insert_archive_record(provider_id, &mut nodes, &record)?;
+        if nodes.len() as u64 > limits.maximum_index_nodes {
+            return Err(VfsError::new(
+                VfsErrorCode::TooLarge,
+                VfsOperation::Open,
+                provider_id.clone(),
+            )
+            .with_detail("archive exceeds the configured index-node limit"));
+        }
     }
 
     Ok((nodes, records))
@@ -1132,9 +1173,10 @@ fn insert_archive_record(
             .with_detail(error.to_string())
         })?;
         let is_member = component_index + 1 == components.len();
-        nodes
-            .entry(path.clone())
-            .or_insert_with(ArchiveNode::implicit_directory);
+        // Nodes start without a kind assumption. A path becomes a directory
+        // either by being a parent of another member (set below) or by an
+        // explicit directory record, so file leaves are never misclassified.
+        nodes.entry(path.clone()).or_default();
         let parent_node = nodes.get_mut(&parent).ok_or_else(|| {
             VfsError::new(
                 VfsErrorCode::Internal,
@@ -1154,11 +1196,9 @@ fn insert_archive_record(
                 )
                 .with_detail("archive index lost a member node")
             })?;
-            if record.metadata.kind != EntryKind::Directory
-                && node.explicit_entry_indices.is_empty()
-            {
-                node.has_directory = false;
-            }
+            // A node with children is always a directory. Never clear that flag
+            // based on insertion order, so a file that also has children is a
+            // deterministic collision (Special) regardless of entry order.
             node.add_record(record);
         }
         parent = path;
@@ -1748,6 +1788,14 @@ mod tests {
                 },
                 ArchiveLimits {
                     maximum_name_bytes: 2,
+                    ..ArchiveLimits::default()
+                },
+                ArchiveLimits {
+                    maximum_total_path_bytes: 1,
+                    ..ArchiveLimits::default()
+                },
+                ArchiveLimits {
+                    maximum_index_nodes: 1,
                     ..ArchiveLimits::default()
                 },
             ] {

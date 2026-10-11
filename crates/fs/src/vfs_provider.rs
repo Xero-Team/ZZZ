@@ -1,7 +1,8 @@
 use crate::{
     CopyOptions as LegacyCopyOptions, CreateOptions as LegacyCreateOptions, Fs, Metadata,
     PathEventKind, RemoveOptions as LegacyRemoveOptions, RenameOptions as LegacyRenameOptions,
-    Watcher, copy_recursive,
+    SetPermissions as LegacySetPermissions, TrashedEntry as LegacyTrashedEntry, Watcher,
+    copy_recursive,
 };
 use anyhow::Error as AnyhowError;
 use async_lock::Mutex as AsyncMutex;
@@ -9,6 +10,7 @@ use async_trait::async_trait;
 use futures::{StreamExt as _, stream, stream::BoxStream};
 use std::{
     collections::BTreeMap,
+    ffi::{OsStr, OsString},
     io,
     num::{NonZeroU32, NonZeroU64},
     path::{Path, PathBuf},
@@ -25,10 +27,10 @@ use vfs::{
     LinkCapabilities, MutationCapabilities, NativePath, NativePathRoot, OpenOptions,
     OperationContext, PathEncoding, ProviderCapabilities, ProviderDescriptor, ProviderFileKey,
     ProviderId, ProviderLimits, ProviderPath, ReadCapabilities, RemoveKind, RemoveOptions,
-    RemoveOutcome, RemovedEntryCount, RenameOptions, StatOptions, SupportLevel, SymbolicLinkMode,
-    TrashCapabilities, VfsError, VfsErrorCode, VfsEvent, VfsEventKind, VfsFile, VfsOperation,
-    VfsProvider, VfsResult, VfsVersion, WatchCapabilities, WatchDepth, WatchRequest,
-    WriteAtOptions, WriteCapabilities,
+    RemoveOutcome, RemovedEntryCount, RenameOptions, SetPermissionsOptions, StatOptions,
+    SupportLevel, SymbolicLinkMode, SymlinkOptions, TrashCapabilities, TrashOptions, TrashedEntry,
+    VfsError, VfsErrorCode, VfsEvent, VfsEventKind, VfsFile, VfsOperation, VfsProvider, VfsResult,
+    VfsVersion, WatchCapabilities, WatchDepth, WatchRequest, WriteAtOptions, WriteCapabilities,
 };
 
 const WATCH_LATENCY: Duration = Duration::from_millis(10);
@@ -237,6 +239,138 @@ impl FsProviderCore {
                 .with_path(path.clone())
                 .with_detail(error.to_string())
         })
+    }
+
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        context
+            .cancellation
+            .check(VfsOperation::ReadLink, &self.descriptor.id)?;
+        let absolute_path = self.absolute_path(path, VfsOperation::ReadLink)?;
+        self.ensure_contained(&absolute_path, false, VfsOperation::ReadLink)
+            .await?;
+        let link_target = self
+            .filesystem
+            .read_link(&absolute_path)
+            .await
+            .map_err(|error| self.map_error(VfsOperation::ReadLink, Some(path), error))?;
+        let target_absolute = if link_target.is_absolute() {
+            link_target
+        } else {
+            absolute_path
+                .parent()
+                .unwrap_or(self.root.as_ref())
+                .join(link_target)
+        };
+        self.visible_provider_path(&target_absolute, VfsOperation::ReadLink)?
+            .ok_or_else(|| {
+                self.error(VfsErrorCode::NotFound, VfsOperation::ReadLink)
+                    .with_path(path.clone())
+                    .with_detail("symbolic link target is outside the provider root")
+            })
+    }
+
+    async fn symlink(
+        &self,
+        target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Symlink, &self.descriptor.id)?;
+        let target_absolute = self.absolute_path(target, VfsOperation::Symlink)?;
+        let link_absolute = self.absolute_path(link_path, VfsOperation::Symlink)?;
+        self.ensure_contained(&target_absolute, false, VfsOperation::Symlink)
+            .await?;
+        self.ensure_contained(&link_absolute, false, VfsOperation::Symlink)
+            .await?;
+        self.filesystem
+            .create_symlink(&link_absolute, target_absolute)
+            .await
+            .map_err(|error| self.map_error(VfsOperation::Symlink, Some(link_path), error))
+    }
+
+    async fn set_permissions(
+        &self,
+        path: &ProviderPath,
+        options: SetPermissionsOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::SetPermissions, &self.descriptor.id)?;
+        let absolute_path = self.absolute_path(path, VfsOperation::SetPermissions)?;
+        self.ensure_contained(&absolute_path, false, VfsOperation::SetPermissions)
+            .await?;
+        self.filesystem
+            .set_permissions(
+                &absolute_path,
+                LegacySetPermissions {
+                    writable: options.permissions.writable,
+                    executable: options.permissions.executable,
+                },
+            )
+            .await
+            .map_err(|error| self.map_error(VfsOperation::SetPermissions, Some(path), error))
+    }
+
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Trash, &self.descriptor.id)?;
+        let absolute_path = self.absolute_path(path, VfsOperation::Trash)?;
+        self.ensure_contained(&absolute_path, false, VfsOperation::Trash)
+            .await?;
+        let trashed = self
+            .filesystem
+            .trash(
+                &absolute_path,
+                LegacyRemoveOptions {
+                    recursive: true,
+                    ignore_if_not_exists: false,
+                },
+            )
+            .await
+            .map_err(|error| self.map_error(VfsOperation::Trash, Some(path), error))?;
+        Ok(TrashedEntry {
+            original_path: path.clone(),
+            restore_token: encode_trashed_entry(&trashed).into(),
+        })
+    }
+
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Restore, &self.descriptor.id)?;
+        let trashed = decode_trashed_entry(&entry.restore_token).map_err(|detail| {
+            self.error(VfsErrorCode::InvalidArgument, VfsOperation::Restore)
+                .with_path(entry.original_path.clone())
+                .with_detail(detail)
+        })?;
+        let restored = self
+            .filesystem
+            .restore(trashed)
+            .await
+            .map_err(|error| match error {
+                crate::TrashRestoreError::NotFound { .. } => self
+                    .error(VfsErrorCode::NotFound, VfsOperation::Restore)
+                    .with_path(entry.original_path.clone()),
+                crate::TrashRestoreError::Collision { .. } => self
+                    .error(VfsErrorCode::AlreadyExists, VfsOperation::Restore)
+                    .with_path(entry.original_path.clone()),
+                other => self
+                    .error(VfsErrorCode::Internal, VfsOperation::Restore)
+                    .with_path(entry.original_path.clone())
+                    .with_detail(other.to_string()),
+            })?;
+        self.provider_path(&restored, VfsOperation::Restore)
     }
 
     async fn metadata(
@@ -663,7 +797,11 @@ impl VfsProvider for EmulatedFsProvider {
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
-        filesystem_capabilities(false, self.core.descriptor.case_sensitivity)
+        filesystem_capabilities(
+            false,
+            self.core.descriptor.case_sensitivity,
+            SupportLevel::Emulated,
+        )
     }
 
     async fn stat(&self, path: &ProviderPath, options: StatOptions) -> VfsResult<EntryMetadata> {
@@ -794,6 +932,31 @@ impl VfsProvider for EmulatedFsProvider {
     ) -> VfsResult<NativePath> {
         self.core.native_path(path, context).await
     }
+
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        self.core.read_link(path, context).await
+    }
+
+    async fn symlink(
+        &self,
+        target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        self.core.symlink(target, link_path, options).await
+    }
+
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        self.core.trash(path, options).await
+    }
+
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        self.core.restore(entry, options).await
+    }
 }
 
 #[async_trait]
@@ -803,7 +966,11 @@ impl VfsProvider for LocalProvider {
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
-        filesystem_capabilities(true, self.core.descriptor.case_sensitivity)
+        filesystem_capabilities(
+            true,
+            self.core.descriptor.case_sensitivity,
+            SupportLevel::Native,
+        )
     }
 
     async fn stat(&self, path: &ProviderPath, options: StatOptions) -> VfsResult<EntryMetadata> {
@@ -819,9 +986,6 @@ impl VfsProvider for LocalProvider {
             .context
             .cancellation
             .check(VfsOperation::Open, &self.core.descriptor.id)?;
-        self.core
-            .check_expected_version(path, options.expected_version.as_ref(), VfsOperation::Open)
-            .await?;
         let absolute_path = self.core.absolute_path(path, VfsOperation::Open)?;
         let existing_metadata = self
             .core
@@ -834,6 +998,14 @@ impl VfsProvider for LocalProvider {
                 .core
                 .error(VfsErrorCode::IsDirectory, VfsOperation::Open)
                 .with_path(path.clone()));
+        }
+        // `expected_version` describes an existing file. It is meaningless for
+        // `CreateNew` and for an `OpenOrCreate` that will create the file, so
+        // only enforce it when the file already exists.
+        if options.create != CreateDisposition::CreateNew && existing_metadata.is_some() {
+            self.core
+                .check_expected_version(path, options.expected_version.as_ref(), VfsOperation::Open)
+                .await?;
         }
         let follows_existing = matches!(
             options.create,
@@ -922,6 +1094,39 @@ impl VfsProvider for LocalProvider {
         context: OperationContext,
     ) -> VfsResult<NativePath> {
         self.core.native_path(path, context).await
+    }
+
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        self.core.read_link(path, context).await
+    }
+
+    async fn symlink(
+        &self,
+        target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        self.core.symlink(target, link_path, options).await
+    }
+
+    async fn set_permissions(
+        &self,
+        path: &ProviderPath,
+        options: SetPermissionsOptions,
+    ) -> VfsResult<()> {
+        self.core.set_permissions(path, options).await
+    }
+
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        self.core.trash(path, options).await
+    }
+
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        self.core.restore(entry, options).await
     }
 }
 
@@ -1274,6 +1479,94 @@ impl VfsFile for LocalVfsFile {
     }
 }
 
+const TRASHED_ENTRY_TOKEN_VERSION: u8 = 1;
+
+#[cfg(unix)]
+fn os_str_to_token_bytes(value: &OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt as _;
+    value.as_bytes().to_vec()
+}
+
+#[cfg(unix)]
+fn os_string_from_token_bytes(bytes: &[u8]) -> OsString {
+    use std::os::unix::ffi::OsStringExt as _;
+    OsString::from_vec(bytes.to_vec())
+}
+
+#[cfg(windows)]
+fn os_str_to_token_bytes(value: &OsStr) -> Vec<u8> {
+    use std::os::windows::ffi::OsStrExt as _;
+    value.encode_wide().flat_map(u16::to_le_bytes).collect()
+}
+
+#[cfg(windows)]
+fn os_string_from_token_bytes(bytes: &[u8]) -> OsString {
+    use std::os::windows::ffi::OsStringExt as _;
+    let units = bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect::<Vec<_>>();
+    OsString::from_wide(&units)
+}
+
+fn push_token_field(bytes: &mut Vec<u8>, value: &OsStr) {
+    let encoded = os_str_to_token_bytes(value);
+    let length = u32::try_from(encoded.len()).unwrap_or(u32::MAX);
+    bytes.extend_from_slice(&length.to_le_bytes());
+    bytes.extend_from_slice(&encoded);
+}
+
+fn read_token_field(bytes: &[u8], cursor: &mut usize) -> Result<OsString, String> {
+    let length_end = cursor
+        .checked_add(4)
+        .ok_or_else(|| String::from("trash token length overflow"))?;
+    let length_bytes = bytes
+        .get(*cursor..length_end)
+        .ok_or_else(|| String::from("trash token is truncated"))?;
+    let length = u32::from_le_bytes(
+        length_bytes
+            .try_into()
+            .map_err(|_| String::from("invalid trash token field length"))?,
+    ) as usize;
+    *cursor = length_end;
+    let field_end = cursor
+        .checked_add(length)
+        .ok_or_else(|| String::from("trash token field overflow"))?;
+    let field = bytes
+        .get(*cursor..field_end)
+        .ok_or_else(|| String::from("trash token field is truncated"))?;
+    *cursor = field_end;
+    Ok(os_string_from_token_bytes(field))
+}
+
+fn encode_trashed_entry(entry: &LegacyTrashedEntry) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.push(TRASHED_ENTRY_TOKEN_VERSION);
+    push_token_field(&mut bytes, &entry.id);
+    push_token_field(&mut bytes, &entry.name);
+    push_token_field(&mut bytes, entry.original_parent.as_os_str());
+    bytes
+}
+
+fn decode_trashed_entry(bytes: &[u8]) -> Result<LegacyTrashedEntry, String> {
+    let version = bytes
+        .first()
+        .copied()
+        .ok_or_else(|| String::from("trash token is empty"))?;
+    if version != TRASHED_ENTRY_TOKEN_VERSION {
+        return Err(format!("unsupported trash token version {version}"));
+    }
+    let mut cursor = 1usize;
+    let id = read_token_field(bytes, &mut cursor)?;
+    let name = read_token_field(bytes, &mut cursor)?;
+    let original_parent = read_token_field(bytes, &mut cursor)?;
+    Ok(LegacyTrashedEntry {
+        id,
+        name,
+        original_parent: PathBuf::from(original_parent),
+    })
+}
+
 fn metadata_to_entry(
     path: &ProviderPath,
     metadata: &Metadata,
@@ -1290,6 +1583,17 @@ fn metadata_to_entry(
         EntryKind::File
     };
     let version = metadata_version(metadata);
+    // The target kind is reported whenever the entry is a symlink, even when
+    // the target itself is outside the provider root. The worktree uses it to
+    // classify a link to an outside directory as an unloaded directory that can
+    // still be expanded.
+    let symbolic_link_target_kind = metadata.is_symlink.then_some(if metadata.is_dir {
+        EntryKind::Directory
+    } else if metadata.is_fifo {
+        EntryKind::Special
+    } else {
+        EntryKind::File
+    });
     EntryMetadata {
         name: path.file_name().cloned().map(EntryName::from_exact),
         kind,
@@ -1302,24 +1606,28 @@ fn metadata_to_entry(
             private: false,
             hidden: false,
         },
-        provider_file_key: Some(ProviderFileKey::new(metadata.inode.to_be_bytes().to_vec())),
+        provider_file_key: Some(ProviderFileKey::new(provider_file_key_bytes(metadata))),
         content_version: version.clone(),
         structure_version: version,
         symbolic_link_target,
-        symbolic_link_target_kind: metadata.is_symlink.then_some(if metadata.is_dir {
-            EntryKind::Directory
-        } else if metadata.is_fifo {
-            EntryKind::Special
-        } else {
-            EntryKind::File
-        }),
+        symbolic_link_target_kind,
         case_sensitivity,
     }
 }
 
-fn metadata_version(metadata: &Metadata) -> VfsVersion {
-    let mut bytes = Vec::with_capacity(46);
+fn provider_file_key_bytes(metadata: &Metadata) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(17);
+    bytes.extend_from_slice(&metadata.dev.to_be_bytes());
     bytes.extend_from_slice(&metadata.inode.to_be_bytes());
+    bytes.push(u8::from(metadata.is_symlink));
+    bytes
+}
+
+fn metadata_version(metadata: &Metadata) -> VfsVersion {
+    let mut bytes = Vec::with_capacity(60);
+    bytes.extend_from_slice(&metadata.dev.to_be_bytes());
+    bytes.extend_from_slice(&metadata.inode.to_be_bytes());
+    bytes.push(u8::from(metadata.is_symlink));
     bytes.extend_from_slice(&metadata.len.to_be_bytes());
     match metadata
         .mtime
@@ -1351,6 +1659,7 @@ fn metadata_version(metadata: &Metadata) -> VfsVersion {
 fn filesystem_capabilities(
     native_positioned_io: bool,
     case_sensitivity: CaseSensitivity,
+    permissions: SupportLevel,
 ) -> ProviderCapabilities {
     ProviderCapabilities {
         read: ReadCapabilities {
@@ -1412,13 +1721,13 @@ fn filesystem_capabilities(
         links: LinkCapabilities {
             symbolic_links: SupportLevel::Native,
             hard_links: SupportLevel::Unsupported,
-            permissions: SupportLevel::Native,
+            permissions,
             extended_attributes: SupportLevel::Unsupported,
             native_path: SupportLevel::Native,
         },
         trash: TrashCapabilities {
-            trash: SupportLevel::Unsupported,
-            restore: SupportLevel::Unsupported,
+            trash: SupportLevel::Native,
+            restore: SupportLevel::Native,
         },
         stable_file_key: SupportLevel::Native,
         case_sensitivity,
@@ -1503,6 +1812,12 @@ fn map_anyhow_error(
                 io::ErrorKind::NotFound => VfsErrorCode::NotFound,
                 io::ErrorKind::AlreadyExists => VfsErrorCode::AlreadyExists,
                 io::ErrorKind::PermissionDenied => VfsErrorCode::PermissionDenied,
+                io::ErrorKind::NotADirectory => VfsErrorCode::NotDirectory,
+                io::ErrorKind::IsADirectory => VfsErrorCode::IsDirectory,
+                io::ErrorKind::DirectoryNotEmpty => VfsErrorCode::Conflict,
+                io::ErrorKind::ReadOnlyFilesystem => VfsErrorCode::ReadOnly,
+                io::ErrorKind::StorageFull => VfsErrorCode::Quota,
+                io::ErrorKind::Unsupported => VfsErrorCode::Unsupported,
                 io::ErrorKind::InvalidInput | io::ErrorKind::InvalidData => {
                     VfsErrorCode::InvalidArgument
                 }

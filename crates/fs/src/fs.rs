@@ -167,6 +167,7 @@ pub trait Fs: Send + Sync + ArchiveService + GitService + ProcessService {
     async fn is_dir(&self, path: &Path) -> bool;
     async fn metadata(&self, path: &Path) -> Result<Option<Metadata>>;
     async fn read_link(&self, path: &Path) -> Result<PathBuf>;
+    async fn set_permissions(&self, path: &Path, permissions: SetPermissions) -> Result<()>;
     async fn read_dir(
         &self,
         path: &Path,
@@ -283,6 +284,13 @@ pub struct CreateOptions {
     pub ignore_if_exists: bool,
 }
 
+/// A partial permission update. `None` leaves the corresponding flag unchanged.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct SetPermissions {
+    pub writable: Option<bool>,
+    pub executable: Option<bool>,
+}
+
 #[derive(Copy, Clone, Default)]
 pub struct CopyOptions {
     pub overwrite: bool,
@@ -306,6 +314,10 @@ pub struct RemoveOptions {
 #[derive(Copy, Clone, Debug)]
 pub struct Metadata {
     pub inode: u64,
+    /// Device identifier for the inode, used to distinguish identical inode
+    /// numbers on different filesystems. Zero where the platform does not
+    /// expose one.
+    pub dev: u64,
     pub mtime: MTime,
     pub is_symlink: bool,
     pub is_dir: bool,
@@ -1080,6 +1092,12 @@ impl Fs for RealFs {
         let inode = metadata.ino();
 
         #[cfg(unix)]
+        let dev = metadata.dev();
+
+        #[cfg(windows)]
+        let dev = 0;
+
+        #[cfg(unix)]
         let change_token = {
             let mut token = [0; 16];
             token[..8].copy_from_slice(&metadata.ctime().to_be_bytes());
@@ -1117,6 +1135,7 @@ impl Fs for RealFs {
 
         Ok(Some(Metadata {
             inode,
+            dev,
             mtime: MTime(metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH)),
             len: metadata.len(),
             is_symlink,
@@ -1135,6 +1154,44 @@ impl Fs for RealFs {
             .spawn(async move { std::fs::read_link(&path) })
             .await?;
         Ok(path)
+    }
+
+    async fn set_permissions(&self, path: &Path, permissions: SetPermissions) -> Result<()> {
+        let path = path.to_owned();
+        self.executor
+            .spawn(async move {
+                let metadata = std::fs::metadata(&path)?;
+                let mut native = metadata.permissions();
+
+                #[cfg(unix)]
+                {
+                    let mut mode = native.mode();
+                    if let Some(writable) = permissions.writable {
+                        if writable {
+                            mode |= 0o200;
+                        } else {
+                            mode &= !0o200;
+                        }
+                    }
+                    if let Some(executable) = permissions.executable {
+                        if executable {
+                            mode |= 0o111;
+                        } else {
+                            mode &= !0o111;
+                        }
+                    }
+                    native.set_mode(mode);
+                }
+
+                #[cfg(not(unix))]
+                if let Some(writable) = permissions.writable {
+                    native.set_readonly(!writable);
+                }
+
+                std::fs::set_permissions(&path, native)?;
+                Ok(())
+            })
+            .await
     }
 
     async fn read_dir(
@@ -3269,6 +3326,7 @@ impl Fs for FakeFs {
                     inode, mtime, len, ..
                 } => Metadata {
                     inode: *inode,
+                    dev: 0,
                     mtime: *mtime,
                     len: *len,
                     is_dir: false,
@@ -3282,6 +3340,7 @@ impl Fs for FakeFs {
                     inode, mtime, len, ..
                 } => Metadata {
                     inode: *inode,
+                    dev: 0,
                     mtime: *mtime,
                     len: *len,
                     is_dir: true,
@@ -3310,6 +3369,16 @@ impl Fs for FakeFs {
         } else {
             anyhow::bail!("not a symlink: {path:?}")
         }
+    }
+
+    async fn set_permissions(&self, path: &Path, _permissions: SetPermissions) -> Result<()> {
+        self.simulate_random_delay().await;
+        let path = normalize_path(path);
+        let mut state = self.state.lock();
+        state
+            .try_entry(&path, false)
+            .with_context(|| format!("path does not exist: {path:?}"))?;
+        anyhow::bail!("set_permissions is not supported in fake Fs")
     }
 
     async fn read_dir(
@@ -3502,22 +3571,54 @@ impl ProcessService for FakeFs {
     }
 }
 
+struct CopyEntry {
+    path: PathBuf,
+    is_dir: bool,
+    symlink_target: Option<PathBuf>,
+}
+
 pub async fn copy_recursive<'a>(
     fs: &'a dyn Fs,
     source: &'a Path,
     target: &'a Path,
     options: CopyOptions,
 ) -> Result<()> {
-    for (item, is_dir) in read_dir_items(fs, source).await? {
-        let Ok(item_relative_path) = item.strip_prefix(source) else {
+    // Snapshot the source tree before mutating the target. The target may live
+    // inside the source (an overwrite copy onto a subdirectory), so a lazy walk
+    // would descend into entries it is itself creating and never terminate.
+    let mut entries = Vec::new();
+    collect_copy_entries(fs, source, &mut entries).await?;
+    for entry in entries {
+        let Ok(relative) = entry.path.strip_prefix(source) else {
             continue;
         };
-        let target_item = if item_relative_path == Path::new("") {
+        let target_item = if relative == Path::new("") {
             target.to_path_buf()
         } else {
-            target.join(item_relative_path)
+            target.join(relative)
         };
-        if is_dir {
+        if let Some(link_target) = entry.symlink_target {
+            // Preserve symbolic links instead of following them. Following a
+            // link would let the copy escape the source tree and can recurse
+            // forever on a link cycle.
+            if !options.overwrite && fs.metadata(&target_item).await.is_ok_and(|m| m.is_some()) {
+                if options.ignore_if_exists {
+                    continue;
+                }
+                anyhow::bail!("{target_item:?} already exists");
+            }
+            if fs.metadata(&target_item).await.is_ok_and(|m| m.is_some()) {
+                fs.remove_file(
+                    &target_item,
+                    RemoveOptions {
+                        recursive: true,
+                        ignore_if_not_exists: true,
+                    },
+                )
+                .await?;
+            }
+            fs.create_symlink(&target_item, link_target).await?;
+        } else if entry.is_dir {
             if !options.overwrite && fs.metadata(&target_item).await.is_ok_and(|m| m.is_some()) {
                 if options.ignore_if_exists {
                     continue;
@@ -3534,10 +3635,56 @@ pub async fn copy_recursive<'a>(
             .await?;
             fs.create_dir(&target_item).await?;
         } else {
-            fs.copy_file(&item, &target_item, options).await?;
+            fs.copy_file(&entry.path, &target_item, options).await?;
         }
     }
     Ok(())
+}
+
+fn collect_copy_entries<'a>(
+    fs: &'a dyn Fs,
+    source: &'a Path,
+    output: &'a mut Vec<CopyEntry>,
+) -> BoxFuture<'a, Result<()>> {
+    use futures::future::FutureExt;
+
+    async move {
+        // A resolvable `read_link` means `source` is a symbolic link; record it
+        // as a link and do not descend into its target.
+        if let Ok(link_target) = fs.read_link(source).await {
+            output.push(CopyEntry {
+                path: source.to_path_buf(),
+                is_dir: false,
+                symlink_target: Some(link_target),
+            });
+            return Ok(());
+        }
+        let metadata = fs
+            .metadata(source)
+            .await?
+            .with_context(|| format!("path does not exist: {source:?}"))?;
+        if metadata.is_dir {
+            output.push(CopyEntry {
+                path: source.to_path_buf(),
+                is_dir: true,
+                symlink_target: None,
+            });
+            let mut children = fs.read_dir(source).await?;
+            while let Some(child_path) = children.next().await {
+                if let Ok(child_path) = child_path {
+                    collect_copy_entries(fs, &child_path, output).await?;
+                }
+            }
+        } else {
+            output.push(CopyEntry {
+                path: source.to_path_buf(),
+                is_dir: false,
+                symlink_target: None,
+            });
+        }
+        Ok(())
+    }
+    .boxed()
 }
 
 /// Recursively reads all of the paths in the given directory.

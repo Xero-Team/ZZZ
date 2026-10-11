@@ -350,6 +350,10 @@ impl ResourceRegistry {
                     state.ids_by_path.remove(&path);
                 }
             }
+            let removed_path = state
+                .records
+                .get(&removed_id)
+                .map(|record| record.path.clone());
             if let Some(record) = state.records.get_mut(&removed_id) {
                 record.freshness = ResourceFreshness::Tombstone;
                 record.metadata = None;
@@ -360,6 +364,12 @@ impl ResourceRegistry {
                     path: record.path.clone(),
                     kind: ResourceChangeKind::Removed,
                 });
+            }
+            // A removed directory's materialized descendants would otherwise
+            // linger as unreachable fresh records. Tombstone them too so the
+            // reclamation pass can bound them.
+            if let Some(removed_path) = removed_path {
+                tombstone_descendants(&mut state, &removed_path);
             }
         }
 
@@ -430,6 +440,11 @@ impl ResourceRegistry {
         for (file_key, resource_id) in tombstones {
             remove_file_key_mapping(&mut state, &file_key, resource_id);
         }
+    }
+
+    fn reclaim_tombstone_records(&self) {
+        let mut state = self.inner.lock();
+        reclaim_tombstones(&mut state);
     }
 
     fn complete_rescan(&self, sequence: u64) {
@@ -639,6 +654,10 @@ impl VfsSnapshot {
             )
             .await?;
         if current_metadata.content_version != source_version {
+            // Reflect the newer metadata before failing so the registry never
+            // advertises the stale pre-read version as fresh.
+            self.registry
+                .intern_metadata(path.clone(), current_metadata)?;
             return Err(self.provider_error(VfsErrorCode::StaleVersion, VfsOperation::Read, path));
         }
         self.registry
@@ -673,6 +692,7 @@ impl VfsSnapshot {
         let _event_reconciliation_guard = self.event_reconciliation_lock.read().await;
         let result = self.load_directory_for_reconciliation(path).await;
         self.registry.prune_tombstone_file_keys();
+        self.registry.reclaim_tombstone_records();
         result
     }
 
@@ -764,9 +784,20 @@ impl VfsSnapshot {
         new_path: ProviderPath,
     ) -> VfsResult<SnapshotDelta> {
         let _event_reconciliation_guard = self.event_reconciliation_lock.write().await;
-        let mut rescan_roots = BTreeSet::new();
-        rescan_roots.extend(old_path.parent());
-        rescan_roots.extend(new_path.parent());
+        // Rescan the old parent before the new parent. Releasing the old
+        // identity (tombstone) first is what lets the new directory re-adopt
+        // the same `ResourceId`; a sorted set would process the parents in
+        // lexicographic order and lose rename identity when the new parent
+        // sorts first.
+        let mut rescan_roots = Vec::new();
+        if let Some(parent) = old_path.parent() {
+            rescan_roots.push(parent);
+        }
+        if let Some(parent) = new_path.parent() {
+            if !rescan_roots.contains(&parent) {
+                rescan_roots.push(parent);
+            }
+        }
         if !rescan_roots.is_empty() {
             self.registry.set_rescan_state(SnapshotRescanState::Running);
         }
@@ -788,6 +819,7 @@ impl VfsSnapshot {
         }
         coalesce_delta_changes(&mut delta);
         self.registry.prune_tombstone_file_keys();
+        self.registry.reclaim_tombstone_records();
         self.registry.set_rescan_state(SnapshotRescanState::Idle);
         Ok(delta)
     }
@@ -819,6 +851,7 @@ impl VfsSnapshot {
         }
         coalesce_delta_changes(&mut delta);
         self.registry.prune_tombstone_file_keys();
+        self.registry.reclaim_tombstone_records();
         self.registry.complete_rescan(batch.last_sequence);
         Ok(delta)
     }
@@ -1162,6 +1195,60 @@ fn remove_file_key_mapping(
     }
 }
 
+/// Marks every identity strictly beneath `root_path` as tombstoned.
+///
+/// Used when a directory is removed so its materialized descendants do not
+/// remain reachable fresh records that leak. The subtree root itself is
+/// tombstoned by the caller.
+fn tombstone_descendants(state: &mut ResourceRegistryState, root_path: &ProviderPath) {
+    let targets = state
+        .records
+        .iter()
+        .filter(|(_, record)| record.path != *root_path && record.path.starts_with(root_path))
+        .map(|(resource_id, record)| (*resource_id, record.path.clone()))
+        .collect::<Vec<_>>();
+    for (resource_id, path) in &targets {
+        if state.ids_by_path.get(path) == Some(resource_id) {
+            state.ids_by_path.remove(path);
+        }
+        if let Some(record) = state.records.get_mut(resource_id) {
+            record.freshness = ResourceFreshness::Tombstone;
+            record.metadata = None;
+            record.directory_state = record.directory_state.map(|_| DirectoryLoadState::Stale);
+            record.children = None;
+        }
+    }
+}
+
+/// Bounds the number of retained tombstone records. Tombstones are kept briefly
+/// so a rename can re-adopt the old identity, but they must not accumulate
+/// without limit across the lifetime of a long-running snapshot.
+const MAXIMUM_TOMBSTONES: usize = 8_192;
+
+fn reclaim_tombstones(state: &mut ResourceRegistryState) {
+    let mut tombstones = state
+        .records
+        .iter()
+        .filter(|(_, record)| record.freshness == ResourceFreshness::Tombstone)
+        .map(|(resource_id, record)| (record.last_access, *resource_id))
+        .collect::<Vec<_>>();
+    if tombstones.len() <= MAXIMUM_TOMBSTONES {
+        return;
+    }
+    tombstones.sort_unstable();
+    let excess = tombstones.len() - MAXIMUM_TOMBSTONES;
+    for (_, resource_id) in tombstones.into_iter().take(excess) {
+        if let Some(record) = state.records.remove(&resource_id) {
+            if let Some(file_key) = record.provider_file_key {
+                remove_file_key_mapping(state, &file_key, resource_id);
+            }
+            if state.ids_by_path.get(&record.path) == Some(&resource_id) {
+                state.ids_by_path.remove(&record.path);
+            }
+        }
+    }
+}
+
 fn allocate_resource_id(state: &mut ResourceRegistryState) -> VfsResult<ResourceId> {
     let resource_id = ResourceId::new(state.mount_id, state.next_node_id, 0);
     state.next_node_id = state.next_node_id.checked_add(1).ok_or_else(|| {
@@ -1229,6 +1316,7 @@ fn enforce_budgets(state: &mut ResourceRegistryState) {
     let mut metadata_bytes = state
         .records
         .values()
+        .filter(|record| record.metadata.is_some())
         .map(estimated_metadata_bytes)
         .sum::<usize>();
     if metadata_bytes > state.budgets.metadata_bytes {
@@ -2180,6 +2268,89 @@ mod tests {
     }
 
     #[test]
+    fn known_rename_preserves_identity_when_new_parent_sorts_first() {
+        let result = block_on(async {
+            let provider = Arc::new(MemoryProvider::new(
+                "snapshot-reverse-order-rename",
+                crate::PathEncoding::PortableUtf8,
+            ));
+            let root = ProviderPath::root(crate::PathEncoding::PortableUtf8);
+            let source_directory = test_provider_path([b"zsource".as_slice()]);
+            let target_directory = test_provider_path([b"atarget".as_slice()]);
+            let source_path = test_provider_path([b"zsource".as_slice(), b"entry.rs".as_slice()]);
+            let target_path = test_provider_path([b"atarget".as_slice(), b"entry.rs".as_slice()]);
+            provider
+                .create_dir(&source_directory, CreateDirOptions::default())
+                .await?;
+            provider
+                .create_dir(&target_directory, CreateDirOptions::default())
+                .await?;
+            provider
+                .open(
+                    &source_path,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await?;
+            let snapshot = VfsSnapshot::new(
+                MountId::new(26),
+                provider.clone(),
+                SnapshotBudgets::default(),
+            );
+            snapshot.load_directory(&root).await?;
+            snapshot.load_directory(&source_directory).await?;
+            snapshot.load_directory(&target_directory).await?;
+            let source_id = snapshot
+                .registry()
+                .id_for_path(&source_path)
+                .ok_or_else(|| {
+                    VfsError::new(
+                        VfsErrorCode::Internal,
+                        VfsOperation::Stat,
+                        provider.descriptor().id.clone(),
+                    )
+                })?;
+
+            provider
+                .rename(&source_path, &target_path, RenameOptions::default())
+                .await?;
+            let delta = snapshot
+                .reconcile_known_rename(source_path.clone(), target_path.clone())
+                .await?;
+            if snapshot.registry().id_for_path(&target_path) != Some(source_id)
+                || !delta.changes.iter().any(|change| {
+                    change.resource_id == source_id
+                        && matches!(
+                            &change.kind,
+                            ResourceChangeKind::Renamed { old_path }
+                                if old_path == &source_path
+                        )
+                })
+                || delta.changes.iter().any(|change| {
+                    change.resource_id == source_id
+                        && matches!(&change.kind, ResourceChangeKind::Removed)
+                })
+            {
+                return Err(VfsError::new(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Rename,
+                    provider.descriptor().id.clone(),
+                )
+                .with_detail("reverse-order cross-directory rename lost snapshot identity"));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(
+            result.is_ok(),
+            "reverse-order rename reconciliation failed: {result:?}"
+        );
+    }
+
+    #[test]
     fn directory_rename_preserves_materialized_descendant_identities() {
         let result = block_on(async {
             let provider = Arc::new(MemoryProvider::new(
@@ -2245,6 +2416,69 @@ mod tests {
             result.is_ok(),
             "directory rename reconciliation failed: {result:?}"
         );
+    }
+
+    #[test]
+    fn deleting_a_directory_releases_descendant_identities() {
+        let result = block_on(async {
+            let provider = Arc::new(MemoryProvider::new(
+                "snapshot-delete-descendants",
+                crate::PathEncoding::PortableUtf8,
+            ));
+            let root = ProviderPath::root(crate::PathEncoding::PortableUtf8);
+            let directory = test_provider_path([b"dir".as_slice()]);
+            let child = test_provider_path([b"dir".as_slice(), b"child.rs".as_slice()]);
+            provider
+                .create_dir(&directory, CreateDirOptions::default())
+                .await?;
+            provider
+                .open(
+                    &child,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await?;
+            let snapshot = VfsSnapshot::new(
+                MountId::new(27),
+                provider.clone(),
+                SnapshotBudgets::default(),
+            );
+            snapshot.load_directory(&root).await?;
+            snapshot.load_directory(&directory).await?;
+            if snapshot.registry().id_for_path(&child).is_none() {
+                return Err(VfsError::new(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Stat,
+                    provider.descriptor().id.clone(),
+                )
+                .with_detail("descendant was not materialized before deletion"));
+            }
+
+            provider
+                .remove(
+                    &directory,
+                    RemoveOptions {
+                        kind: RemoveKind::Recursive,
+                        ..RemoveOptions::default()
+                    },
+                )
+                .await?;
+            snapshot.load_directory(&root).await?;
+            if snapshot.registry().id_for_path(&child).is_some() {
+                return Err(VfsError::new(
+                    VfsErrorCode::Internal,
+                    VfsOperation::Remove,
+                    provider.descriptor().id.clone(),
+                )
+                .with_detail("descendant identity leaked after directory removal"));
+            }
+            Ok::<_, VfsError>(())
+        });
+        assert!(result.is_ok(), "descendant reclamation failed: {result:?}");
     }
 
     #[test]

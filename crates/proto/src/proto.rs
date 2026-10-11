@@ -328,6 +328,14 @@ messages!(
     (VfsCancelOperationRequestV2, Background),
     (VfsStatManyRequestV2, Background),
     (VfsStatManyResponseV2, Background),
+    (VfsReadLinkRequestV2, Background),
+    (VfsReadLinkResponseV2, Background),
+    (VfsSymlinkRequestV2, Background),
+    (VfsSetPermissionsRequestV2, Background),
+    (VfsTrashRequestV2, Background),
+    (VfsTrashResponseV2, Background),
+    (VfsRestoreRequestV2, Background),
+    (VfsRestoreResponseV2, Background),
     (VfsReleaseHandleV2, Background),
 );
 
@@ -520,6 +528,11 @@ request_messages!(
     (VfsWatchRequestV2, VfsWatchResponseV2),
     (VfsCancelOperationRequestV2, VfsOperationResponseV2),
     (VfsStatManyRequestV2, VfsStatManyResponseV2),
+    (VfsReadLinkRequestV2, VfsReadLinkResponseV2),
+    (VfsSymlinkRequestV2, VfsOperationResponseV2),
+    (VfsSetPermissionsRequestV2, VfsOperationResponseV2),
+    (VfsTrashRequestV2, VfsTrashResponseV2),
+    (VfsRestoreRequestV2, VfsRestoreResponseV2),
 );
 
 lsp_messages!(
@@ -733,6 +746,11 @@ entity_messages!(
     VfsWatchRequestV2,
     VfsCancelOperationRequestV2,
     VfsStatManyRequestV2,
+    VfsReadLinkRequestV2,
+    VfsSymlinkRequestV2,
+    VfsSetPermissionsRequestV2,
+    VfsTrashRequestV2,
+    VfsRestoreRequestV2,
     VfsReleaseHandleV2
 );
 

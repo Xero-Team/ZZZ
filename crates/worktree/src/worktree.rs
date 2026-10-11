@@ -7853,22 +7853,36 @@ fn parse_gitfile(content: &str) -> anyhow::Result<&Path> {
 }
 
 fn legacy_metadata_from_vfs(metadata: &VfsEntryMetadata) -> Metadata {
-    let inode = metadata.provider_file_key.as_ref().map_or(0, |file_key| {
-        if let Ok(bytes) = <[u8; 8]>::try_from(file_key.as_bytes()) {
-            u64::from_be_bytes(bytes)
-        } else {
-            let mut hasher = DefaultHasher::new();
-            file_key.as_bytes().hash(&mut hasher);
-            hasher.finish()
-        }
-    });
-    let change_token = metadata.content_version.as_bytes().get(..16).map(|bytes| {
-        let mut token = [0; 16];
-        token.copy_from_slice(bytes);
-        token
-    });
+    // Provider file keys are `dev (8) || inode (8) || symlink flag (1)` for the
+    // filesystem providers. Recover the device and inode when that shape is
+    // present and fall back to hashing otherwise.
+    let (dev, inode) = metadata
+        .provider_file_key
+        .as_ref()
+        .map_or((0, 0), |file_key| {
+            let bytes = file_key.as_bytes();
+            if bytes.len() >= 17 {
+                let mut dev_bytes = [0u8; 8];
+                dev_bytes.copy_from_slice(&bytes[..8]);
+                let mut inode_bytes = [0u8; 8];
+                inode_bytes.copy_from_slice(&bytes[8..16]);
+                (
+                    u64::from_be_bytes(dev_bytes),
+                    u64::from_be_bytes(inode_bytes),
+                )
+            } else if bytes.len() == 8 {
+                let mut inode_bytes = [0u8; 8];
+                inode_bytes.copy_from_slice(bytes);
+                (0, u64::from_be_bytes(inode_bytes))
+            } else {
+                let mut hasher = DefaultHasher::new();
+                bytes.hash(&mut hasher);
+                (0, hasher.finish())
+            }
+        });
     Metadata {
         inode,
+        dev,
         mtime: MTime::from_system_time(metadata.modified_at.unwrap_or(UNIX_EPOCH)),
         is_symlink: metadata.kind == vfs::EntryKind::SymbolicLink,
         is_dir: metadata.kind == vfs::EntryKind::Directory
@@ -7877,7 +7891,9 @@ fn legacy_metadata_from_vfs(metadata: &VfsEntryMetadata) -> Metadata {
         is_fifo: metadata.kind == vfs::EntryKind::Special,
         is_executable: metadata.permissions.executable,
         is_writable: metadata.permissions.writable,
-        change_token,
+        // `content_version` is not a real change token; reporting one here
+        // would pollute the legacy field with a value that is not a ctime.
+        change_token: None,
     }
 }
 

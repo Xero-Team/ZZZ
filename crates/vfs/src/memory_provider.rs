@@ -12,7 +12,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{
     StreamExt as _,
-    channel::mpsc::{self, UnboundedSender},
+    channel::mpsc::{self, Sender},
     stream::{self, BoxStream},
 };
 use parking_lot::Mutex;
@@ -24,6 +24,14 @@ use std::{
 };
 
 const DEFAULT_JOURNAL_CAPACITY: usize = 1_024;
+
+/// Upper bound on a single in-memory file so a hostile or buggy caller cannot
+/// trigger an out-of-memory abort through `write_at`/`set_len`.
+const MAXIMUM_FILE_BYTES: usize = 256 * 1024 * 1024;
+
+/// Bounded per-subscription queue. A consumer that cannot keep up is dropped
+/// instead of allowing unbounded buffering.
+const WATCH_QUEUE_CAPACITY: usize = 1_024;
 
 #[derive(Clone)]
 pub struct MemoryProvider {
@@ -54,7 +62,7 @@ struct MemoryNode {
 struct MemoryWatchSubscription {
     path: ProviderPath,
     depth: WatchDepth,
-    sender: UnboundedSender<VfsResult<EventBatch>>,
+    sender: Sender<VfsResult<EventBatch>>,
 }
 
 impl MemoryProvider {
@@ -229,14 +237,14 @@ impl MemoryProvider {
         while state.journal.len() > self.journal_capacity {
             state.journal.pop_front();
         }
-        state.subscriptions.retain(|subscription| {
+        state.subscriptions.retain_mut(|subscription| {
             if !batch.events.iter().any(|event| subscription.matches(event)) {
                 return true;
             }
-            subscription
-                .sender
-                .unbounded_send(Ok(batch.clone()))
-                .is_ok()
+            // A bounded queue means a consumer that falls behind is dropped
+            // rather than growing memory without bound. The consumer observes
+            // the stream ending and can resubscribe with a resume sequence.
+            subscription.sender.try_send(Ok(batch.clone())).is_ok()
         });
         Ok(())
     }
@@ -528,9 +536,20 @@ impl VfsProvider for MemoryProvider {
                 )?;
             }
         }
+        // Bind the handle to the node identity so that a later delete/recreate
+        // or rename cannot silently redirect the handle to a different file.
+        let file_key = state
+            .nodes
+            .get(path)
+            .map(|node| node.file_key.clone())
+            .ok_or_else(|| {
+                self.error(VfsErrorCode::NotFound, VfsOperation::Open)
+                    .with_path(path.clone())
+            })?;
         Ok(Arc::new(MemoryFile {
             provider: self.clone(),
             path: path.clone(),
+            file_key,
             access: options.access,
         }))
     }
@@ -676,7 +695,11 @@ impl VfsProvider for MemoryProvider {
             .check(VfsOperation::Rename, &self.descriptor.id)?;
         self.validate_path(source, VfsOperation::Rename)?;
         self.validate_path(target, VfsOperation::Rename)?;
-        if source.is_root() || target.is_root() || target.starts_with(source) {
+        if source.is_root()
+            || target.is_root()
+            || target.starts_with(source)
+            || source.starts_with(target)
+        {
             return Err(self
                 .error(VfsErrorCode::InvalidPath, VfsOperation::Rename)
                 .with_path(target.clone()));
@@ -752,7 +775,11 @@ impl VfsProvider for MemoryProvider {
             .check(VfsOperation::Copy, &self.descriptor.id)?;
         self.validate_path(source, VfsOperation::Copy)?;
         self.validate_path(target, VfsOperation::Copy)?;
-        if source.is_root() || target.is_root() || target.starts_with(source) {
+        if source.is_root()
+            || target.is_root()
+            || target.starts_with(source)
+            || source.starts_with(target)
+        {
             return Err(self
                 .error(VfsErrorCode::InvalidPath, VfsOperation::Copy)
                 .with_path(target.clone()));
@@ -824,7 +851,7 @@ impl VfsProvider for MemoryProvider {
             .cancellation
             .check(VfsOperation::Watch, &self.descriptor.id)?;
         self.validate_path(&request.path, VfsOperation::Watch)?;
-        let (sender, receiver) = mpsc::unbounded();
+        let (sender, receiver) = mpsc::channel(WATCH_QUEUE_CAPACITY);
         let mut state = self.state.lock();
         let mut initial_batches = Vec::new();
         if let Some(resume_after_sequence) = request.resume_after_sequence {
@@ -872,10 +899,36 @@ impl VfsProvider for MemoryProvider {
 struct MemoryFile {
     provider: MemoryProvider,
     path: ProviderPath,
+    file_key: ProviderFileKey,
     access: FileAccess,
 }
 
 impl MemoryFile {
+    fn resolve_node<'a>(
+        &self,
+        state: &'a MemoryProviderState,
+        operation: VfsOperation,
+    ) -> VfsResult<&'a MemoryNode> {
+        let node = state.nodes.get(&self.path).ok_or_else(|| {
+            self.provider
+                .error(VfsErrorCode::NotFound, operation)
+                .with_path(self.path.clone())
+        })?;
+        self.check_node_identity(node, operation)?;
+        Ok(node)
+    }
+
+    fn check_node_identity(&self, node: &MemoryNode, operation: VfsOperation) -> VfsResult<()> {
+        if node.file_key != self.file_key {
+            return Err(self
+                .provider
+                .error(VfsErrorCode::StaleVersion, operation)
+                .with_path(self.path.clone())
+                .with_detail("the file at this path was replaced after the handle was opened"));
+        }
+        Ok(())
+    }
+
     fn check_read_access(&self) -> VfsResult<()> {
         if self.access.can_read() {
             Ok(())
@@ -906,11 +959,7 @@ impl VfsFile for MemoryFile {
             .cancellation
             .check(VfsOperation::Stat, &self.provider.descriptor.id)?;
         let state = self.provider.state.lock();
-        let node = state.nodes.get(&self.path).ok_or_else(|| {
-            self.provider
-                .error(VfsErrorCode::NotFound, VfsOperation::Stat)
-                .with_path(self.path.clone())
-        })?;
+        let node = self.resolve_node(&state, VfsOperation::Stat)?;
         Ok(node.contents.len() as u64)
     }
 
@@ -925,11 +974,7 @@ impl VfsFile for MemoryFile {
             .check(VfsOperation::Read, &self.provider.descriptor.id)?;
         self.check_read_access()?;
         let state = self.provider.state.lock();
-        let node = state.nodes.get(&self.path).ok_or_else(|| {
-            self.provider
-                .error(VfsErrorCode::NotFound, VfsOperation::Read)
-                .with_path(self.path.clone())
-        })?;
+        let node = self.resolve_node(&state, VfsOperation::Read)?;
         let Ok(offset) = usize::try_from(offset) else {
             return Ok(0);
         };
@@ -966,12 +1011,20 @@ impl VfsFile for MemoryFile {
                 .error(VfsErrorCode::TooLarge, VfsOperation::Write)
                 .with_path(self.path.clone())
         })?;
+        if end > MAXIMUM_FILE_BYTES {
+            return Err(self
+                .provider
+                .error(VfsErrorCode::TooLarge, VfsOperation::Write)
+                .with_path(self.path.clone())
+                .with_detail("write would exceed the maximum in-memory file size"));
+        }
         let mut state = self.provider.state.lock();
         let node = state.nodes.get(&self.path).cloned().ok_or_else(|| {
             self.provider
                 .error(VfsErrorCode::NotFound, VfsOperation::Write)
                 .with_path(self.path.clone())
         })?;
+        self.check_node_identity(&node, VfsOperation::Write)?;
         self.provider.check_expected_version(
             &self.path,
             &node,
@@ -987,6 +1040,13 @@ impl VfsFile for MemoryFile {
                 .with_path(self.path.clone())
         })?;
         if node.contents.len() < end {
+            let additional = end - node.contents.len();
+            node.contents.try_reserve(additional).map_err(|error| {
+                self.provider
+                    .error(VfsErrorCode::TooLarge, VfsOperation::Write)
+                    .with_path(self.path.clone())
+                    .with_source(error)
+            })?;
             node.contents.resize(end, 0);
         }
         if let Some(target) = node.contents.get_mut(offset..end) {
@@ -1017,12 +1077,20 @@ impl VfsFile for MemoryFile {
                 .with_path(self.path.clone())
                 .with_source(error)
         })?;
+        if len > MAXIMUM_FILE_BYTES {
+            return Err(self
+                .provider
+                .error(VfsErrorCode::TooLarge, VfsOperation::SetLength)
+                .with_path(self.path.clone())
+                .with_detail("length would exceed the maximum in-memory file size"));
+        }
         let mut state = self.provider.state.lock();
         let node = state.nodes.get(&self.path).cloned().ok_or_else(|| {
             self.provider
                 .error(VfsErrorCode::NotFound, VfsOperation::SetLength)
                 .with_path(self.path.clone())
         })?;
+        self.check_node_identity(&node, VfsOperation::SetLength)?;
         self.provider.check_expected_version(
             &self.path,
             &node,
@@ -1037,6 +1105,15 @@ impl VfsFile for MemoryFile {
                 .error(VfsErrorCode::NotFound, VfsOperation::SetLength)
                 .with_path(self.path.clone())
         })?;
+        if len > node.contents.len() {
+            let additional = len - node.contents.len();
+            node.contents.try_reserve(additional).map_err(|error| {
+                self.provider
+                    .error(VfsErrorCode::TooLarge, VfsOperation::SetLength)
+                    .with_path(self.path.clone())
+                    .with_source(error)
+            })?;
+        }
         node.contents.resize(len, 0);
         node.content_version = version;
         node.modified_at = SystemTime::now();
@@ -1101,6 +1178,199 @@ mod tests {
             result.is_ok(),
             "memory provider conformance failed: {result:?}"
         );
+    }
+
+    #[test]
+    fn memory_provider_rejects_rename_and_copy_into_ancestor() {
+        let provider = MemoryProvider::new("memory-ancestor", PathEncoding::PortableUtf8);
+        let result = block_on(async {
+            let parent =
+                ProviderPath::from_byte_components(PathEncoding::PortableUtf8, [b"a".as_slice()])
+                    .map_err(|error| error.to_string())?;
+            let child = ProviderPath::from_byte_components(
+                PathEncoding::PortableUtf8,
+                [b"a".as_slice(), b"b".as_slice()],
+            )
+            .map_err(|error| error.to_string())?;
+            provider
+                .create_dir(&parent, CreateDirOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            provider
+                .create_dir(&child, CreateDirOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+
+            let rename = provider
+                .rename(
+                    &child,
+                    &parent,
+                    RenameOptions {
+                        collision: CollisionPolicy::Replace,
+                        ..RenameOptions::default()
+                    },
+                )
+                .await;
+            if !matches!(rename, Err(ref error) if error.code() == VfsErrorCode::InvalidPath) {
+                return Err(String::from("rename into ancestor was not rejected"));
+            }
+
+            let copy = provider
+                .copy(
+                    &child,
+                    &parent,
+                    CopyOptions {
+                        collision: CollisionPolicy::Replace,
+                        ..CopyOptions::default()
+                    },
+                )
+                .await;
+            if !matches!(copy, Err(ref error) if error.code() == VfsErrorCode::InvalidPath) {
+                return Err(String::from("copy into ancestor was not rejected"));
+            }
+
+            // The ancestor subtree must be intact after the rejected mutations.
+            provider
+                .stat(&parent, StatOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            provider
+                .stat(&child, StatOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        });
+        assert!(result.is_ok(), "ancestor guard failed: {result:?}");
+    }
+
+    #[test]
+    fn memory_provider_handle_does_not_follow_recreated_path() {
+        let provider = MemoryProvider::new("memory-handle-identity", PathEncoding::PortableUtf8);
+        let result = block_on(async {
+            let path = ProviderPath::from_byte_components(
+                PathEncoding::PortableUtf8,
+                [b"file".as_slice()],
+            )
+            .map_err(|error| error.to_string())?;
+            let file = provider
+                .open(
+                    &path,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            provider
+                .remove(
+                    &path,
+                    RemoveOptions {
+                        kind: RemoveKind::File,
+                        ..RemoveOptions::default()
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            provider
+                .open(
+                    &path,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let length = file.len(OperationContext::default()).await;
+            if !matches!(length, Err(ref error) if error.code() == VfsErrorCode::StaleVersion) {
+                return Err(String::from(
+                    "handle followed a recreated path instead of reporting StaleVersion",
+                ));
+            }
+            Ok(())
+        });
+        assert!(result.is_ok(), "handle identity failed: {result:?}");
+    }
+
+    #[test]
+    fn memory_provider_batch_stat_reports_per_path_results() {
+        let provider: Arc<dyn VfsProvider> = Arc::new(MemoryProvider::new(
+            "memory-stat-many",
+            PathEncoding::PortableUtf8,
+        ));
+        let result = block_on(async {
+            let existing = ProviderPath::from_byte_components(
+                PathEncoding::PortableUtf8,
+                [b"present".as_slice()],
+            )
+            .map_err(|error| error.to_string())?;
+            let missing = ProviderPath::from_byte_components(
+                PathEncoding::PortableUtf8,
+                [b"absent".as_slice()],
+            )
+            .map_err(|error| error.to_string())?;
+            provider
+                .open(
+                    &existing,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::CreateNew,
+                        expected_version: None,
+                        context: OperationContext::default(),
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let results = provider
+                .stat_many(&[existing, missing], StatOptions::default())
+                .await
+                .map_err(|error| error.to_string())?;
+            if results.len() != 2 {
+                return Err(String::from("batch stat returned the wrong result count"));
+            }
+            if results[0].is_err() {
+                return Err(String::from("batch stat failed for an existing path"));
+            }
+            if !matches!(&results[1], Err(error) if error.code() == VfsErrorCode::NotFound) {
+                return Err(String::from("batch stat did not report NotFound per path"));
+            }
+            Ok(())
+        });
+        assert!(result.is_ok(), "batch stat failed: {result:?}");
+    }
+
+    #[test]
+    fn memory_provider_rejects_oversized_writes() {
+        let provider = MemoryProvider::new("memory-size", PathEncoding::PortableUtf8);
+        let result = block_on(async {
+            let path =
+                ProviderPath::from_byte_components(PathEncoding::PortableUtf8, [b"big".as_slice()])
+                    .map_err(|error| error.to_string())?;
+            let file = provider
+                .open(
+                    &path,
+                    OpenOptions {
+                        access: FileAccess::ReadWrite,
+                        create: CreateDisposition::OpenOrCreate,
+                        ..OpenOptions::default()
+                    },
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let set_len = file
+                .set_len((MAXIMUM_FILE_BYTES as u64) + 1, WriteAtOptions::default())
+                .await;
+            if !matches!(set_len, Err(ref error) if error.code() == VfsErrorCode::TooLarge) {
+                return Err(String::from("oversized set_len was not rejected"));
+            }
+            Ok(())
+        });
+        assert!(result.is_ok(), "size cap failed: {result:?}");
     }
 
     #[test]

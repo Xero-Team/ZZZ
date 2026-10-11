@@ -186,6 +186,7 @@ pub enum VfsErrorCode {
 #[serde(rename_all = "snake_case")]
 pub enum VfsOperation {
     Stat,
+    StatMany,
     ReadDirectory,
     Open,
     Read,
@@ -198,6 +199,11 @@ pub enum VfsOperation {
     Rename,
     Copy,
     Watch,
+    ReadLink,
+    Symlink,
+    SetPermissions,
+    Trash,
+    Restore,
     NativePath,
 }
 
@@ -689,6 +695,40 @@ pub struct WriteAtOptions {
     pub context: OperationContext,
 }
 
+#[derive(Clone, Default)]
+pub struct SymlinkOptions {
+    pub context: OperationContext,
+}
+
+/// A partial permission update. `None` leaves the corresponding flag unchanged.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PermissionsUpdate {
+    pub writable: Option<bool>,
+    pub executable: Option<bool>,
+}
+
+#[derive(Clone, Default)]
+pub struct SetPermissionsOptions {
+    pub permissions: PermissionsUpdate,
+    pub context: OperationContext,
+}
+
+#[derive(Clone, Default)]
+pub struct TrashOptions {
+    pub context: OperationContext,
+}
+
+/// An entry that was moved to the provider's trash, retaining enough
+/// information to restore it.
+///
+/// `restore_token` is opaque provider-specific data; callers must pass the
+/// token back to the same provider unchanged.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TrashedEntry {
+    pub original_path: ProviderPath,
+    pub restore_token: Arc<[u8]>,
+}
+
 #[async_trait]
 pub trait VfsFile: Send + Sync {
     async fn len(&self, context: OperationContext) -> VfsResult<u64>;
@@ -716,6 +756,63 @@ pub trait VfsProvider: Send + Sync {
 
     async fn stat(&self, path: &ProviderPath, options: StatOptions) -> VfsResult<EntryMetadata>;
 
+    /// Stats several paths in one call.
+    ///
+    /// The default implementation issues one `stat` per path so that every
+    /// provider honours the `directories.stat_many` capability; providers with a
+    /// genuinely batched implementation may override it. Per-path failures are
+    /// returned in place so one missing path does not fail the whole batch.
+    async fn stat_many(
+        &self,
+        paths: &[ProviderPath],
+        options: StatOptions,
+    ) -> VfsResult<Vec<VfsResult<EntryMetadata>>> {
+        let mut results = Vec::with_capacity(paths.len());
+        for path in paths {
+            results.push(self.stat(path, options.clone()).await);
+        }
+        Ok(results)
+    }
+
+    /// Reads the target of a symbolic link.
+    ///
+    /// The default implementation derives the target from `stat` in
+    /// `DoNotFollow` mode, so providers that expose symlink targets through
+    /// metadata do not need a bespoke implementation.
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        let metadata = self
+            .stat(
+                path,
+                StatOptions {
+                    symbolic_link_mode: SymbolicLinkMode::DoNotFollow,
+                    context,
+                },
+            )
+            .await?;
+        if metadata.kind != EntryKind::SymbolicLink {
+            return Err(VfsError::new(
+                VfsErrorCode::InvalidArgument,
+                VfsOperation::ReadLink,
+                self.descriptor().id.clone(),
+            )
+            .with_path(path.clone())
+            .with_detail("path is not a symbolic link"));
+        }
+        metadata.symbolic_link_target.ok_or_else(|| {
+            VfsError::new(
+                VfsErrorCode::NotFound,
+                VfsOperation::ReadLink,
+                self.descriptor().id.clone(),
+            )
+            .with_path(path.clone())
+            .with_detail("symbolic link target is not visible within the provider root")
+        })
+    }
+
     async fn read_dir(&self, path: &ProviderPath, request: DirPageRequest) -> VfsResult<DirPage>;
 
     async fn open(&self, path: &ProviderPath, options: OpenOptions) -> VfsResult<Arc<dyn VfsFile>>;
@@ -738,6 +835,71 @@ pub trait VfsProvider: Send + Sync {
         target: &ProviderPath,
         options: CopyOptions,
     ) -> VfsResult<()>;
+
+    /// Creates a symbolic link at `link_path` pointing at `target`.
+    async fn symlink(
+        &self,
+        _target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Symlink, &self.descriptor().id)?;
+        Err(VfsError::new(
+            VfsErrorCode::Unsupported,
+            VfsOperation::Symlink,
+            self.descriptor().id.clone(),
+        )
+        .with_path(link_path.clone()))
+    }
+
+    /// Updates the mutable permission flags of an entry.
+    async fn set_permissions(
+        &self,
+        path: &ProviderPath,
+        options: SetPermissionsOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::SetPermissions, &self.descriptor().id)?;
+        Err(VfsError::new(
+            VfsErrorCode::Unsupported,
+            VfsOperation::SetPermissions,
+            self.descriptor().id.clone(),
+        )
+        .with_path(path.clone()))
+    }
+
+    /// Moves an entry to the provider's trash and returns a restorable handle.
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Trash, &self.descriptor().id)?;
+        Err(VfsError::new(
+            VfsErrorCode::Unsupported,
+            VfsOperation::Trash,
+            self.descriptor().id.clone(),
+        )
+        .with_path(path.clone()))
+    }
+
+    /// Restores an entry previously returned by [`VfsProvider::trash`].
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Restore, &self.descriptor().id)?;
+        Err(VfsError::new(
+            VfsErrorCode::Unsupported,
+            VfsOperation::Restore,
+            self.descriptor().id.clone(),
+        )
+        .with_path(entry.original_path))
+    }
 
     async fn watch(
         &self,

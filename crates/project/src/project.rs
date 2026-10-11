@@ -1228,6 +1228,11 @@ impl Project {
         client.add_entity_request_handler(Self::handle_vfs_remove);
         client.add_entity_request_handler(Self::handle_vfs_rename);
         client.add_entity_request_handler(Self::handle_vfs_copy);
+        client.add_entity_request_handler(Self::handle_vfs_read_link);
+        client.add_entity_request_handler(Self::handle_vfs_symlink);
+        client.add_entity_request_handler(Self::handle_vfs_set_permissions);
+        client.add_entity_request_handler(Self::handle_vfs_trash);
+        client.add_entity_request_handler(Self::handle_vfs_restore);
         client.add_entity_stream_request_handler(Self::handle_vfs_watch);
         client.add_entity_request_handler(Self::handle_vfs_cancel_operation);
         context_server_store::init(cx);
@@ -4889,6 +4894,36 @@ impl Project {
         proto::VfsCopyRequestV2,
         proto::VfsOperationResponseV2,
         copy
+    );
+    vfs_project_request_handler!(
+        handle_vfs_read_link,
+        proto::VfsReadLinkRequestV2,
+        proto::VfsReadLinkResponseV2,
+        read_link
+    );
+    vfs_project_request_handler!(
+        handle_vfs_symlink,
+        proto::VfsSymlinkRequestV2,
+        proto::VfsOperationResponseV2,
+        symlink
+    );
+    vfs_project_request_handler!(
+        handle_vfs_set_permissions,
+        proto::VfsSetPermissionsRequestV2,
+        proto::VfsOperationResponseV2,
+        set_permissions
+    );
+    vfs_project_request_handler!(
+        handle_vfs_trash,
+        proto::VfsTrashRequestV2,
+        proto::VfsTrashResponseV2,
+        trash
+    );
+    vfs_project_request_handler!(
+        handle_vfs_restore,
+        proto::VfsRestoreRequestV2,
+        proto::VfsRestoreResponseV2,
+        restore
     );
     vfs_project_request_handler!(
         handle_vfs_cancel_operation,

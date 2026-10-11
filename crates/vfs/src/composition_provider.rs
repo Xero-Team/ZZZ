@@ -2,9 +2,10 @@ use crate::{
     Atomicity, CopyOptions, CreateDirOptions, CreateDisposition, DirPage, DirPageRequest,
     EntryKind, EntryMetadata, EventBatch, FileAccess, MountId, NativePath, OpenOptions,
     OperationContext, ProviderCapabilities, ProviderDescriptor, ProviderFileKey, ProviderId,
-    ProviderPath, RemoveOptions, RemoveOutcome, RenameOptions, StatOptions, SupportLevel,
-    SymbolicLinkMode, VfsError, VfsErrorCode, VfsEvent, VfsEventKind, VfsFile, VfsOperation,
-    VfsProvider, VfsResult, VfsVersion, WatchRequest, WriteAtOptions,
+    ProviderPath, RemoveOptions, RemoveOutcome, RenameOptions, SetPermissionsOptions, StatOptions,
+    SupportLevel, SymbolicLinkMode, SymlinkOptions, TrashOptions, TrashedEntry, VfsError,
+    VfsErrorCode, VfsEvent, VfsEventKind, VfsFile, VfsOperation, VfsProvider, VfsResult,
+    VfsVersion, WatchRequest, WriteAtOptions,
 };
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
@@ -291,20 +292,19 @@ impl SubtreeProvider {
         }
     }
 
-    fn translate_batch(&self, batch: EventBatch) -> Option<EventBatch> {
+    fn translate_batch(&self, batch: EventBatch) -> EventBatch {
         let events = batch
             .events
             .into_iter()
             .filter_map(|event| self.translate_event(event))
             .collect::<Vec<_>>();
-        if events.is_empty() {
-            None
-        } else {
-            Some(EventBatch {
-                first_sequence: batch.first_sequence,
-                last_sequence: batch.last_sequence,
-                events,
-            })
+        // Always forward the batch, even when every event falls outside the
+        // subtree, so a consumer's sequence watermark advances instead of
+        // seeing a gap that looks like a dropped batch.
+        EventBatch {
+            first_sequence: batch.first_sequence,
+            last_sequence: batch.last_sequence,
+            events,
         }
     }
 }
@@ -544,6 +544,153 @@ impl VfsProvider for SubtreeProvider {
             .map_err(|error| self.map_inner_error(error))
     }
 
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        context
+            .cancellation
+            .check(VfsOperation::ReadLink, &self.descriptor.id)?;
+        let inner_path = self
+            .ensure_path_has_no_symlink(path, true, false, VfsOperation::ReadLink, context.clone())
+            .await?;
+        let target = self
+            .inner
+            .read_link(&inner_path, context)
+            .await
+            .map_err(|error| self.map_inner_error(error))?;
+        self.exposed_path(&target).ok_or_else(|| {
+            self.error(VfsErrorCode::NotFound, VfsOperation::ReadLink)
+                .with_path(path.clone())
+                .with_detail("symbolic link target is outside the subtree")
+        })
+    }
+
+    async fn symlink(
+        &self,
+        target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Symlink, &self.descriptor.id)?;
+        let inner_target = self
+            .ensure_path_has_no_symlink(
+                target,
+                false,
+                true,
+                VfsOperation::Symlink,
+                options.context.clone(),
+            )
+            .await?;
+        let inner_link_path = self
+            .ensure_path_has_no_symlink(
+                link_path,
+                false,
+                true,
+                VfsOperation::Symlink,
+                options.context.clone(),
+            )
+            .await?;
+        self.inner
+            .symlink(&inner_target, &inner_link_path, options)
+            .await
+            .map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn set_permissions(
+        &self,
+        path: &ProviderPath,
+        options: SetPermissionsOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::SetPermissions, &self.descriptor.id)?;
+        let inner_path = self
+            .ensure_path_has_no_symlink(
+                path,
+                true,
+                false,
+                VfsOperation::SetPermissions,
+                options.context.clone(),
+            )
+            .await?;
+        self.inner
+            .set_permissions(&inner_path, options)
+            .await
+            .map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Trash, &self.descriptor.id)?;
+        if path.is_root() {
+            return Err(self
+                .error(VfsErrorCode::InvalidPath, VfsOperation::Trash)
+                .with_path(path.clone())
+                .with_detail("subtree root cannot be trashed"));
+        }
+        let inner_path = self
+            .ensure_path_has_no_symlink(
+                path,
+                false,
+                false,
+                VfsOperation::Trash,
+                options.context.clone(),
+            )
+            .await?;
+        let entry = self
+            .inner
+            .trash(&inner_path, options)
+            .await
+            .map_err(|error| self.map_inner_error(error))?;
+        let original_path = self.exposed_path(&entry.original_path).ok_or_else(|| {
+            self.error(VfsErrorCode::Internal, VfsOperation::Trash)
+                .with_detail("trashed entry is outside the subtree")
+        })?;
+        Ok(TrashedEntry {
+            original_path,
+            restore_token: entry.restore_token,
+        })
+    }
+
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Restore, &self.descriptor.id)?;
+        let inner_path = self
+            .ensure_path_has_no_symlink(
+                &entry.original_path,
+                false,
+                true,
+                VfsOperation::Restore,
+                options.context.clone(),
+            )
+            .await?;
+        let restored = self
+            .inner
+            .restore(
+                TrashedEntry {
+                    original_path: inner_path,
+                    restore_token: entry.restore_token,
+                },
+                options,
+            )
+            .await
+            .map_err(|error| self.map_inner_error(error))?;
+        self.exposed_path(&restored).ok_or_else(|| {
+            self.error(VfsErrorCode::Internal, VfsOperation::Restore)
+                .with_detail("restored entry is outside the subtree")
+        })
+    }
+
     async fn watch(
         &self,
         request: WatchRequest,
@@ -576,7 +723,7 @@ impl VfsProvider for SubtreeProvider {
             let provider = provider.clone();
             async move {
                 match result {
-                    Ok(batch) => provider.translate_batch(batch).map(Ok),
+                    Ok(batch) => Some(Ok(provider.translate_batch(batch))),
                     Err(error) => Some(Err(provider.map_inner_error(error))),
                 }
             }
@@ -844,6 +991,49 @@ impl VfsProvider for ReadOnlyProvider {
         options: CopyOptions,
     ) -> VfsResult<()> {
         Err(self.read_only_error(source, VfsOperation::Copy, &options.context))
+    }
+
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        context
+            .cancellation
+            .check(VfsOperation::ReadLink, &self.descriptor.id)?;
+        self.inner
+            .read_link(path, context)
+            .await
+            .map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn symlink(
+        &self,
+        _target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        Err(self.read_only_error(link_path, VfsOperation::Symlink, &options.context))
+    }
+
+    async fn set_permissions(
+        &self,
+        path: &ProviderPath,
+        options: SetPermissionsOptions,
+    ) -> VfsResult<()> {
+        Err(self.read_only_error(path, VfsOperation::SetPermissions, &options.context))
+    }
+
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        Err(self.read_only_error(path, VfsOperation::Trash, &options.context))
+    }
+
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        Err(self.read_only_error(
+            &entry.original_path,
+            VfsOperation::Restore,
+            &options.context,
+        ))
     }
 
     async fn watch(
@@ -1196,6 +1386,69 @@ impl VfsProvider for CacheProvider {
             .cancellation
             .check(VfsOperation::Copy, &self.descriptor.id)?;
         let result = self.inner.copy(source, target, options).await;
+        self.invalidate_all();
+        result.map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn read_link(
+        &self,
+        path: &ProviderPath,
+        context: OperationContext,
+    ) -> VfsResult<ProviderPath> {
+        context
+            .cancellation
+            .check(VfsOperation::ReadLink, &self.descriptor.id)?;
+        self.inner
+            .read_link(path, context)
+            .await
+            .map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn symlink(
+        &self,
+        target: &ProviderPath,
+        link_path: &ProviderPath,
+        options: SymlinkOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Symlink, &self.descriptor.id)?;
+        let result = self.inner.symlink(target, link_path, options).await;
+        self.invalidate_all();
+        result.map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn set_permissions(
+        &self,
+        path: &ProviderPath,
+        options: SetPermissionsOptions,
+    ) -> VfsResult<()> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::SetPermissions, &self.descriptor.id)?;
+        let result = self.inner.set_permissions(path, options).await;
+        self.invalidate_all();
+        result.map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn trash(&self, path: &ProviderPath, options: TrashOptions) -> VfsResult<TrashedEntry> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Trash, &self.descriptor.id)?;
+        let result = self.inner.trash(path, options).await;
+        self.invalidate_all();
+        result.map_err(|error| self.map_inner_error(error))
+    }
+
+    async fn restore(&self, entry: TrashedEntry, options: TrashOptions) -> VfsResult<ProviderPath> {
+        options
+            .context
+            .cancellation
+            .check(VfsOperation::Restore, &self.descriptor.id)?;
+        let result = self.inner.restore(entry, options).await;
         self.invalidate_all();
         result.map_err(|error| self.map_inner_error(error))
     }
