@@ -370,6 +370,64 @@ For advanced keybinding customization, you can send raw text or keystrokes to th
 }
 ```
 
+## SSH Terminal Mode {#ssh-terminal-mode}
+
+Terminal mode turns ZZZ into an SSH workspace, similar to FinalShell or Xshell. Toggle it from the command palette with `terminal mode: toggle`, or from the title bar.
+
+While terminal mode is active, two panels open:
+
+- **SSH Sessions** (left) lists saved connections and hosts from `~/.ssh/config`. Search the list, press `Enter` to connect, and right-click a connection to disconnect, reconnect, or open the server manager.
+- **Session Files** (right) shows the active session's remote file tree with a preview pane below it.
+
+### Transfers {#ssh-terminal-mode-transfers}
+
+With a session active you can move files between hosts and your machine:
+
+- **Download** copies the selected remote entry to a local folder.
+- **Upload** copies local files into the selected remote folder.
+- **Copy to session** and **Move to session** relay an entry to another connected session.
+
+Each transfer reports progress in a notification.
+
+### Broadcast and Quick Commands {#ssh-terminal-mode-broadcast}
+
+Broadcast sends one command to every connected session at once. Turn it on with the **Broadcast** button, then type in any session terminal, or use **Send to All** to send a single command without typing it into a terminal. The quick-command menu sends a saved command to the active session, or to every session while broadcast is on.
+
+### Server Monitor {#ssh-terminal-mode-monitor}
+
+The **Server Monitor** section at the bottom of the Session Files panel samples each connected session and shows CPU, memory, swap, disk, load, uptime, and network throughput. Toggle it with the **Show Monitor**/**Hide Monitor** button, or with `terminal mode: toggle monitor panel`.
+
+The monitor reads `/proc` and `df` over the session's own connection, so it works on Linux hosts. On hosts that do not expose `/proc`, the disk, host, and uptime readings still appear.
+
+```json [settings]
+{
+  "terminal_mode": {
+    "monitor_enabled": true,
+    "monitor_refresh_interval_ms": 2000
+  }
+}
+```
+
+### Terminal Mode Settings {#ssh-terminal-mode-settings}
+
+```json [settings]
+{
+  "terminal_mode": {
+    "session_list_default_width": 240,
+    "file_panel_default_width": 320,
+    "preview_enabled": true,
+    "auto_connect_last_session": false,
+    "auto_reconnect": false,
+    "reconnect_max_backoff_ms": 30000,
+    "quick_commands": [],
+    "session_starting_command": null,
+    "session_working_directory": null
+  }
+}
+```
+
+Set `quick_commands` to a list of commands offered in the session panel's quick-command menu. `session_starting_command` types a command into each new session terminal, and `session_working_directory` sets its working directory.
+
 ## All Terminal Settings
 
 For the complete list of terminal settings, see the [Terminal section in All Settings](./reference/all-settings.md#terminal).

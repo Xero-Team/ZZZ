@@ -91,6 +91,10 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             terminal_mode::ToggleFilePanel,
         ),
         MenuItem::action(
+            tr(cx, "menu.view.server_monitor_panel", "Server Monitor"),
+            terminal_mode::ToggleMonitorPanel,
+        ),
+        MenuItem::action(
             tr(cx, "menu.view.debugger_panel", "Debugger Panel"),
             debug_panel::ToggleFocus,
         ),

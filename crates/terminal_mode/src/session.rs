@@ -7,8 +7,8 @@ use anyhow::{Context as _, anyhow};
 use collections::{HashMap, HashSet};
 use db::kvp::KeyValueStore;
 use gpui::{
-    App, AppContext as _, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, Global,
-    Subscription, Task, WeakEntity, Window,
+    App, AppContext as _, AsyncApp, AsyncWindowContext, Context, Entity, EntityId, EventEmitter,
+    Global, Subscription, Task, WeakEntity, Window,
 };
 use project::Project;
 use remote::{RemoteClient, RemoteConnectionOptions};
@@ -21,6 +21,7 @@ use workspace::Workspace;
 use workspace::dock::DockPosition;
 use worktree::Worktree;
 
+use crate::metrics::{ServerMetrics, parse_metrics, sampling_command};
 use crate::{ReconnectSession, TerminalModeSettings};
 
 /// Key-value store key prefix for terminal-mode session persistence.
@@ -31,6 +32,15 @@ const BASE_RECONNECT_BACKOFF_MS: u64 = 1_000;
 
 /// Maximum number of consecutive automatic reconnect attempts per session.
 const MAX_RECONNECT_ATTEMPTS: u32 = 5;
+
+/// How long to wait for a metrics sample command to finish before reading the
+/// monitor terminal's output. The command itself sleeps for
+/// [`crate::metrics::SAMPLE_INTERVAL_SECS`], so this covers that plus the
+/// remote round-trip.
+const METRICS_SETTLE_MS: u64 = 900;
+
+/// Maximum number of trailing terminal lines scanned for a metrics sample.
+const METRICS_SCAN_LINES: usize = 512;
 
 fn serialized_session_is_active(
     saved_session_id: Option<usize>,
@@ -130,6 +140,11 @@ pub struct SshSession {
     pub filesystem_worktree: Option<Entity<Worktree>>,
     /// Current connection lifecycle state.
     pub status: SessionStatus,
+    /// Hidden terminal used to sample server metrics, created lazily the first
+    /// time monitoring runs for this session.
+    pub monitor_terminal: Option<Entity<Terminal>>,
+    /// Most recent resource sample, if one has been parsed.
+    pub metrics: Option<ServerMetrics>,
     /// Keeps the session's disconnect handler alive for exactly as long as the
     /// session exists, so it is dropped when the session is removed.
     project_subscription: Option<Subscription>,
@@ -140,6 +155,8 @@ pub struct SshSession {
 pub enum Event {
     SessionActivated(SessionId),
     SessionsChanged,
+    /// A new resource sample was parsed for the given session.
+    MetricsUpdated(SessionId),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -185,6 +202,10 @@ pub struct SessionStore {
     pub bottom_dock_hidden: bool,
     /// Whether input is mirrored to every session terminal.
     pub broadcast_enabled: bool,
+    /// Whether the server monitor section is shown in the session file panel.
+    pub monitor_visible: bool,
+    /// Whether the background metrics sampling loop is running.
+    monitor_running: bool,
     restore_started: bool,
     next_session_id: usize,
     /// Consecutive automatic reconnect attempts, keyed by session id.
@@ -217,6 +238,8 @@ impl SessionStore {
             terminal_mode_active: false,
             bottom_dock_hidden: false,
             broadcast_enabled: false,
+            monitor_visible: true,
+            monitor_running: false,
             restore_started: false,
             next_session_id: 0,
             reconnect_attempts: HashMap::default(),
@@ -371,6 +394,7 @@ impl SessionStore {
 
         self.sessions.push(session);
         cx.emit(Event::SessionsChanged);
+        self.start_monitor(cx);
         self.serialize(cx);
     }
 
@@ -527,6 +551,9 @@ impl SessionStore {
             return;
         }
         self.terminal_mode_active = active;
+        if active {
+            self.start_monitor(cx);
+        }
         self.serialize(cx);
     }
 
@@ -560,7 +587,10 @@ impl SessionStore {
             };
 
             if serialized.terminal_mode_active {
-                store.update(cx, |store, _| store.terminal_mode_active = true)?;
+                store.update(cx, |store, cx| {
+                    store.terminal_mode_active = true;
+                    store.start_monitor(cx);
+                })?;
                 let bottom_dock_was_open = workspace.update_in(cx, |workspace, window, cx| {
                     let bottom_dock = workspace.dock_at_position(DockPosition::Bottom).clone();
                     let was_open = bottom_dock.read(cx).is_open();
@@ -710,6 +740,8 @@ impl SessionStore {
                             home_worktree: Some(home_worktree),
                             filesystem_worktree: None,
                             status: SessionStatus::Connected,
+                            monitor_terminal: None,
+                            metrics: None,
                             project_subscription: None,
                         },
                         cx,
@@ -885,6 +917,154 @@ impl SessionStore {
         cx.emit(Event::SessionsChanged);
         cx.notify();
     }
+}
+
+impl SessionStore {
+    /// Returns the most recent resource sample for `id`, if any.
+    pub fn metrics(&self, id: SessionId) -> Option<&ServerMetrics> {
+        self.sessions
+            .iter()
+            .find(|session| session.id == id)?
+            .metrics
+            .as_ref()
+    }
+
+    /// Shows or hides the server monitor section, starting sampling when it
+    /// becomes visible.
+    pub fn set_monitor_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        if self.monitor_visible == visible {
+            return;
+        }
+        self.monitor_visible = visible;
+        if visible {
+            self.start_monitor(cx);
+        }
+        cx.emit(Event::SessionsChanged);
+        cx.notify();
+    }
+
+    /// Records a fresh sample for `id` and notifies observers.
+    fn set_metrics(
+        &mut self,
+        id: SessionId,
+        metrics: Option<ServerMetrics>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session) = self.sessions.iter_mut().find(|session| session.id == id) else {
+            return;
+        };
+        if session.metrics == metrics {
+            return;
+        }
+        session.metrics = metrics;
+        cx.emit(Event::MetricsUpdated(id));
+    }
+
+    /// Starts the background metrics loop, if it is not already running and both
+    /// terminal mode and monitoring are enabled.
+    ///
+    /// The loop stops on its own once terminal mode is left or monitoring is
+    /// disabled in settings, so it never outlives the feature that needs it.
+    pub fn start_monitor(&mut self, cx: &mut Context<Self>) {
+        if self.monitor_running || !self.terminal_mode_active {
+            return;
+        }
+        if !TerminalModeSettings::get_global(cx).monitor_enabled {
+            return;
+        }
+        self.monitor_running = true;
+        cx.spawn(async move |store, cx| {
+            loop {
+                let should_run = store
+                    .update(cx, |store, cx| {
+                        store.terminal_mode_active
+                            && TerminalModeSettings::get_global(cx).monitor_enabled
+                    })
+                    .unwrap_or(false);
+                if !should_run {
+                    break;
+                }
+
+                let session_ids: Vec<SessionId> = store
+                    .update(cx, |store, _| {
+                        store
+                            .sessions
+                            .iter()
+                            .filter(|session| session.status == SessionStatus::Connected)
+                            .map(|session| session.id)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                for id in session_ids {
+                    sample_session_metrics(&store, id, cx).await.log_err();
+                }
+
+                let refresh_interval = store
+                    .update(cx, |_, cx| {
+                        TerminalModeSettings::get_global(cx).monitor_refresh_interval_ms
+                    })
+                    .unwrap_or(2_000);
+                cx.background_executor()
+                    .timer(Duration::from_millis(refresh_interval))
+                    .await;
+            }
+            store
+                .update(cx, |store, _| store.monitor_running = false)
+                .ok();
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+    }
+
+    /// Returns the session's hidden monitor terminal, creating it on first use.
+    fn ensure_monitor_terminal(
+        &mut self,
+        id: SessionId,
+        cx: &mut Context<Self>,
+    ) -> Task<anyhow::Result<Entity<Terminal>>> {
+        let Some(session) = self.sessions.iter().find(|session| session.id == id) else {
+            return Task::ready(Err(anyhow!("no such session")));
+        };
+        if let Some(terminal) = session.monitor_terminal.clone() {
+            return Task::ready(Ok(terminal));
+        }
+        let project = session.project.clone();
+        cx.spawn(async move |store, cx| {
+            let terminal = project
+                .update(cx, |project, cx| project.create_terminal_shell(None, cx))
+                .await?;
+            store.update(cx, |store, _| {
+                if let Some(session) = store.sessions.iter_mut().find(|session| session.id == id) {
+                    session.monitor_terminal = Some(terminal.clone());
+                }
+            })?;
+            Ok(terminal)
+        })
+    }
+}
+
+/// Runs one metrics sample for `id`: writes the sampling command into the
+/// session's hidden terminal, waits for it to finish, then parses the output.
+async fn sample_session_metrics(
+    store: &WeakEntity<SessionStore>,
+    id: SessionId,
+    cx: &mut AsyncApp,
+) -> anyhow::Result<()> {
+    let terminal = store
+        .update(cx, |store, cx| store.ensure_monitor_terminal(id, cx))?
+        .await?;
+    terminal.update(cx, |terminal, _| {
+        terminal.input(sampling_command().into_bytes());
+    });
+    cx.background_executor()
+        .timer(Duration::from_millis(METRICS_SETTLE_MS))
+        .await;
+    let lines = terminal.read_with(cx, |terminal, _| {
+        terminal.last_n_non_empty_lines(METRICS_SCAN_LINES)
+    });
+    let metrics = parse_metrics(&lines);
+    store.update(cx, |store, cx| store.set_metrics(id, metrics, cx))?;
+    Ok(())
 }
 
 /// Spawns a terminal bound to `project` and adds it to the active center pane.

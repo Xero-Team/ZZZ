@@ -10,6 +10,8 @@ pub struct TerminalModeSettings {
     pub auto_connect_last_session: bool,
     pub auto_reconnect: bool,
     pub reconnect_max_backoff_ms: u64,
+    pub monitor_enabled: bool,
+    pub monitor_refresh_interval_ms: u64,
     pub quick_commands: Vec<String>,
     pub session_starting_command: Option<String>,
     pub session_working_directory: Option<String>,
@@ -40,6 +42,12 @@ impl Settings for TerminalModeSettings {
             reconnect_max_backoff_ms: terminal_mode
                 .reconnect_max_backoff_ms
                 .expect("reconnect_max_backoff_ms should be present"),
+            monitor_enabled: terminal_mode
+                .monitor_enabled
+                .expect("monitor_enabled should be present"),
+            monitor_refresh_interval_ms: terminal_mode
+                .monitor_refresh_interval_ms
+                .expect("monitor_refresh_interval_ms should be present"),
             quick_commands: terminal_mode.quick_commands.clone().unwrap_or_default(),
             session_starting_command: terminal_mode.session_starting_command.clone(),
             session_working_directory: terminal_mode.session_working_directory.clone(),

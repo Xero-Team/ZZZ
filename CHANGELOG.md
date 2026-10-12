@@ -40,6 +40,9 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 - Add built-in Typst support, including syntax highlighting, outlines,
   and the tinymist language server (gram#517).
 - Show local and remote branch names on entries in the git history list.
+- Add a server monitor to terminal mode that samples each connected SSH
+  session and shows CPU, memory, swap, disk, load, uptime and network
+  throughput in the session file panel.
 - Add local crash reporting. Set `ZZZ_GENERATE_MINIDUMPS=1` to have ZZZ write
   a minidump and metadata to its logs directory after a panic. Nothing is
   uploaded; see [Debugging Crashes](./docs/src/development/debugging-crashes.md).

@@ -54,6 +54,7 @@
     "menu.view.toggle_terminal_mode": "Terminal Mode",
     "menu.view.ssh_sessions_panel": "SSH Sessions Panel",
     "menu.view.session_files_panel": "Session Files Panel",
+    "menu.view.server_monitor_panel": "Server Monitor",
     "menu.view.debugger_panel": "Debugger Panel",
     "menu.view.diagnostics": "Diagnostics",
     "menu.view.toggle_gpui_inspector": "Toggle GPUI Inspector",
@@ -3642,6 +3643,18 @@
     "terminal_mode.reconnect.failed": "Reconnect failed: {}",
     "terminal_mode.file_panel.title": "Session Files",
     "terminal_mode.file_panel.empty": "No active session",
-    "terminal_mode.file_panel.connect": "Connect to a Server…"
+    "terminal_mode.file_panel.connect": "Connect to a Server…",
+    "terminal_mode.monitor.title": "Server Monitor",
+    "terminal_mode.monitor.waiting": "Collecting metrics…",
+    "terminal_mode.monitor.disabled": "Monitoring is disabled in settings",
+    "terminal_mode.monitor.show": "Show Monitor",
+    "terminal_mode.monitor.hide": "Hide Monitor",
+    "terminal_mode.monitor.tooltip": "Toggle live CPU, memory, disk and network usage for the session",
+    "terminal_mode.monitor.cpu": "CPU",
+    "terminal_mode.monitor.memory": "Memory",
+    "terminal_mode.monitor.swap": "Swap",
+    "terminal_mode.monitor.disk": "Disk",
+    "terminal_mode.monitor.load": "Load",
+    "terminal_mode.monitor.uptime": "Uptime"
   }
 }

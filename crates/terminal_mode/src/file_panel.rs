@@ -7,8 +7,8 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{
     Action, App, AppContext as _, AsyncWindowContext, Context, Entity, EventEmitter, FocusHandle,
-    Focusable, IntoElement, ParentElement, PathPromptOptions, Pixels, Render, SharedString, Styled,
-    WeakEntity, Window, div,
+    Focusable, InteractiveElement, IntoElement, ParentElement, PathPromptOptions, Pixels, Render,
+    SharedString, StatefulInteractiveElement, Styled, WeakEntity, Window, div,
 };
 use i18n::tr;
 use project::ProjectPath;
@@ -25,6 +25,7 @@ use worktree::Worktree;
 
 use crate::ToggleFilePanel;
 use crate::local_transfer::{download_from_session, upload_to_session};
+use crate::monitor::render_monitor;
 use crate::session::{Event as SessionEvent, SessionId, SessionRoot, SessionStore};
 use crate::transfer::{
     copy_between_sessions, mount_id_for_session, mount_id_for_session_root, move_between_sessions,
@@ -182,14 +183,15 @@ impl SessionFilePanel {
                     }
                     SessionEvent::SessionsChanged => {
                         let active = store.read(cx).active_session;
-                        if active == panel.active_session {
-                            return;
+                        if active != panel.active_session {
+                            match active {
+                                Some(id) => panel.on_session_activated(id, window, cx),
+                                None => panel.clear(cx),
+                            }
                         }
-                        match active {
-                            Some(id) => panel.on_session_activated(id, window, cx),
-                            None => panel.clear(cx),
-                        }
+                        cx.notify();
                     }
+                    SessionEvent::MetricsUpdated(_) => cx.notify(),
                 },
             )
             .detach();
@@ -656,6 +658,17 @@ impl Render for SessionFilePanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut column = v_flex().size_full().overflow_hidden();
 
+        let monitor_visible = self
+            .store
+            .upgrade()
+            .is_some_and(|store| store.read(cx).monitor_visible);
+        let metrics = self.active_session.and_then(|id| {
+            self.store
+                .upgrade()
+                .and_then(|store| store.read(cx).metrics(id).cloned())
+        });
+        let monitor_enabled = crate::TerminalModeSettings::get_global(cx).monitor_enabled;
+
         let other_sessions: Vec<(SessionId, SharedString)> = self
             .store
             .upgrade()
@@ -675,7 +688,7 @@ impl Render for SessionFilePanel {
             })
             .unwrap_or_default();
 
-        let mut toolbar = h_flex().p_1().gap_1();
+        let mut toolbar = h_flex().flex_wrap().p_1().gap_1();
         let mut has_toolbar = false;
 
         if self.active_session.is_some() {
@@ -734,6 +747,29 @@ impl Render for SessionFilePanel {
                         "Upload files from this machine to the session",
                     )))
                     .on_click(cx.listener(|panel, _event, _window, cx| panel.upload_files(cx))),
+                )
+                .child(
+                    Button::new(
+                        "session-file-monitor-toggle",
+                        if monitor_visible {
+                            tr(cx, "terminal_mode.monitor.hide", "Hide Monitor")
+                        } else {
+                            tr(cx, "terminal_mode.monitor.show", "Show Monitor")
+                        },
+                    )
+                    .tooltip(Tooltip::text(tr(
+                        cx,
+                        "terminal_mode.monitor.tooltip",
+                        "Toggle live CPU, memory, disk and network usage for the session",
+                    )))
+                    .on_click(cx.listener(|panel, _event, _window, cx| {
+                        if let Some(store) = panel.store.upgrade() {
+                            store.update(cx, |store, cx| {
+                                let visible = !store.monitor_visible;
+                                store.set_monitor_visible(visible, cx);
+                            });
+                        }
+                    })),
                 );
         }
 
@@ -870,6 +906,17 @@ impl Render for SessionFilePanel {
                         ),
                 );
             }
+        }
+
+        if monitor_visible && self.active_session.is_some() {
+            column = column.child(
+                div()
+                    .id("terminal-mode-monitor-scroll")
+                    .flex_shrink_0()
+                    .max_h(px(260.))
+                    .overflow_y_scroll()
+                    .child(render_monitor(metrics.as_ref(), monitor_enabled, cx)),
+            );
         }
 
         column

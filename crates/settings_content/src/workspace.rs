@@ -1241,6 +1241,14 @@ pub struct TerminalModeSettingsContent {
     ///
     /// Default: 30000
     pub reconnect_max_backoff_ms: Option<u64>,
+    /// Whether the server resource monitor samples connected sessions.
+    ///
+    /// Default: true
+    pub monitor_enabled: Option<bool>,
+    /// How often (in milliseconds) the server monitor samples each session.
+    ///
+    /// Default: 2000
+    pub monitor_refresh_interval_ms: Option<u64>,
     /// Shell commands offered in the session panel's quick-command menu.
     ///
     /// Default: []

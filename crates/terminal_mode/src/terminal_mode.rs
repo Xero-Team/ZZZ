@@ -1,6 +1,8 @@
 mod broadcast;
 mod file_panel;
 mod local_transfer;
+mod metrics;
+mod monitor;
 mod session;
 mod session_panel;
 mod settings;
@@ -37,6 +39,8 @@ actions!(
         ToggleSessionPanel,
         /// Toggles focus on the session file panel.
         ToggleFilePanel,
+        /// Toggles the server resource monitor for the active session.
+        ToggleMonitorPanel,
         /// Selects the next connection in the SSH session list.
         SelectNextConnection,
         /// Selects the previous connection in the SSH session list.
@@ -93,6 +97,14 @@ pub fn init(cx: &mut App) {
         workspace.register_action(|workspace, _: &ToggleFilePanel, window, cx| {
             ensure_terminal_mode_active(workspace, window, cx);
             workspace.toggle_panel_focus::<SessionFilePanel>(window, cx);
+        });
+        workspace.register_action(|workspace, _: &ToggleMonitorPanel, window, cx| {
+            ensure_terminal_mode_active(workspace, window, cx);
+            let store = SessionStore::for_workspace(workspace, cx);
+            store.update(cx, |store, cx| {
+                let visible = !store.monitor_visible;
+                store.set_monitor_visible(visible, cx);
+            });
         });
         workspace.register_action(|workspace, action: &DisconnectSession, window, cx| {
             let store = SessionStore::for_workspace(workspace, cx);

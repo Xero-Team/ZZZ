@@ -2760,6 +2760,10 @@
     "auto_reconnect": false,
     // Upper bound (in milliseconds) for the exponential reconnect backoff.
     "reconnect_max_backoff_ms": 30000,
+    // Whether the server resource monitor samples connected sessions.
+    "monitor_enabled": true,
+    // How often (in milliseconds) the server monitor samples each session.
+    "monitor_refresh_interval_ms": 2000,
     // Shell commands offered in the session panel's quick-command menu.
     "quick_commands": [],
     // Command typed into each newly opened session terminal.
