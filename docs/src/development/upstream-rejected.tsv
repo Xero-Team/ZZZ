@@ -181,6 +181,7 @@ sha	class	reason_code	note	source
 4f6d97b9de	C	philosophy	Frame and hang telemetry measured against per-window refresh rates; needs the absent `hang_telemetry` crate and emits telemetry.	upstream-sync-2026-10-10.md
 506beb34de	C	upstream-infra	Release-build selector optimization depends on the rejected production `test-support` change and has no current ZZZ production path.	upstream-sync-2026-10-05.md
 50e6411571	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+51a3a0e971	C	absent-api	Rewrites `PathStyle::is_absolute`/`has_root` on the absent `crates/path` `Components` API; unisolatable refactor.	upstream-sync-2026-10-12.md
 5218009a	C	untriaged	Depends on the rejected Web IME implementation.	upstream-sync-2026-08-27.md
 5255bd7f	C	absent-api	Needs absent `PaymentRequired` completion-error API.	upstream-sync-2026-08-27.md
 526c95d4	C	philosophy	Documentation link pass for removed account and native agent pages is not isolatable.	upstream-sync-2026-09-24.md
@@ -582,6 +583,7 @@ f99aad78	C	upstream-infra	Guild labeling workflow.	upstream-sync-2026-08-18.md
 f99da3a4	C	philosophy	GPT subscription provider icon.	upstream-sync-2026-08-07.md
 f9a1fc89	C	untriaged	New `watch::snapshot` public API with no current ZZZ caller.	upstream-sync-2026-09-18.md
 fa00dccc	C	diverged	Large `crates/path` migration conflicts with ZZZ `paths`.	upstream-sync-2026-08-27.md
+fa1b94c6b9	C	upstream-infra	Adds a first-contribution GitHub workflow and comment script; community automation ZZZ does not ship.	upstream-sync-2026-10-12.md
 fa6aeecf2a	C	absent-api	`google_ai` and `language_models` provider crates are absent locally.	upstream-sync-2026-09-30.md
 fa8d0b77	C	philosophy	Targets the deleted crashes/telemetry crate.	upstream-sync-2026-08-27.md
 fbb313eb33	C	upstream-infra	CI workflow Danger runner profile.	upstream-sync-2026-09-24.md
