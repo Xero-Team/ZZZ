@@ -189,6 +189,22 @@ impl ContextMenuEntry {
         self
     }
 
+    /// Whether this entry already renders something in the leading (start) slot,
+    /// either a start-position toggle or a start-position icon. Entries that do
+    /// not still need a placeholder when a sibling reserves the slot so that all
+    /// labels line up.
+    fn has_leading_slot(&self) -> bool {
+        if matches!(self.toggle, Some((IconPosition::Start, _))) {
+            return true;
+        }
+
+        self.toggle.is_none()
+            && self.icon_position == IconPosition::Start
+            && (self.icon.is_some()
+                || self.custom_icon_path.is_some()
+                || self.custom_icon_svg.is_some())
+    }
+
     pub fn documentation_aside(
         mut self,
         side: DocumentationSide,
@@ -1399,10 +1415,27 @@ impl ContextMenu {
         self
     }
 
+    /// Whether any item in this menu renders a leading (start) icon slot, either
+    /// because it is a checkbox-style action, has a start-position icon, or is a
+    /// submenu that reserves the slot. When true, every entry reserves the same
+    /// slot so labels stay aligned.
+    fn needs_leading_slot(&self) -> bool {
+        self.items.iter().any(|item| match item {
+            ContextMenuItem::Entry(entry) => entry.has_leading_slot(),
+            ContextMenuItem::Submenu {
+                icon,
+                reserve_icon_slot,
+                ..
+            } => icon.is_some() || *reserve_icon_slot,
+            _ => false,
+        })
+    }
+
     fn render_menu_item(
         &self,
         ix: usize,
         item: &ContextMenuItem,
+        reserve_leading_slot: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
@@ -1435,9 +1468,9 @@ impl ContextMenu {
                 .disabled(true)
                 .child(Label::new(label.clone()))
                 .into_any_element(),
-            ContextMenuItem::Entry(entry) => {
-                self.render_menu_entry(ix, entry, cx).into_any_element()
-            }
+            ContextMenuItem::Entry(entry) => self
+                .render_menu_entry(ix, entry, reserve_leading_slot, cx)
+                .into_any_element(),
             ContextMenuItem::CustomEntry {
                 entry_render,
                 handler,
@@ -1521,7 +1554,7 @@ impl ContextMenu {
                     label.clone(),
                     *icon,
                     *icon_color,
-                    *reserve_icon_slot,
+                    *reserve_icon_slot || reserve_leading_slot,
                     cx,
                 )
                 .into_any_element(),
@@ -1764,8 +1797,10 @@ impl ContextMenu {
         &self,
         ix: usize,
         entry: &ContextMenuEntry,
+        reserve_leading_slot: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let entry_has_leading_slot = entry.has_leading_slot();
         let ContextMenuEntry {
             toggle,
             label,
@@ -2014,6 +2049,17 @@ impl ContextMenu {
                             IconPosition::End => list_item.end_slot(contents),
                         }
                     })
+                    .when(
+                        reserve_leading_slot && !entry_has_leading_slot,
+                        |list_item| {
+                            list_item.start_slot(
+                                div()
+                                    .flex_none()
+                                    .child(Icon::new(IconName::Check).size(*icon_size))
+                                    .invisible(),
+                            )
+                        },
+                    )
                     .child(
                         h_flex()
                             .w_full()
@@ -2192,6 +2238,7 @@ impl Render for ContextMenu {
         };
 
         let render_menu = |cx: &mut Context<Self>, window: &mut Window| {
+            let reserve_leading_slot = self.needs_leading_slot();
             let bounds_cell = self.main_menu_observed_bounds.clone();
             let menu_bounds_measure = canvas(
                 {
@@ -2299,14 +2346,11 @@ impl Render for ContextMenu {
                             }
                             el
                         })
-                        .child(
-                            List::new().children(
-                                self.items
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(ix, item)| self.render_menu_item(ix, item, window, cx)),
-                            ),
-                        ),
+                        .child(List::new().children(self.items.iter().enumerate().map(
+                            |(ix, item)| {
+                                self.render_menu_item(ix, item, reserve_leading_slot, window, cx)
+                            },
+                        ))),
                 )
         };
 
@@ -2488,6 +2532,50 @@ mod tests {
                     ..
                 })]
             ));
+        });
+    }
+
+    #[gpui::test]
+    fn disabled_actions_reserve_the_same_leading_slot(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let context_menu = cx.update(|window, cx| {
+            ContextMenu::build(window, cx, |menu, _, _| {
+                menu.action("Cut", Box::new(SelectNext))
+                    .action_disabled_when(true, "Redo", Box::new(SelectPrevious))
+            })
+        });
+
+        context_menu.update_in(cx, |context_menu, _, _| {
+            assert!(
+                context_menu.needs_leading_slot(),
+                "A checkbox-style action should make the menu reserve a leading slot"
+            );
+
+            let ContextMenuItem::Entry(redo) = &context_menu.items[1] else {
+                panic!("expected the redo entry to be a plain entry");
+            };
+            assert!(
+                !redo.has_leading_slot(),
+                "A plain action should get its leading slot from the menu, not itself"
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn menus_without_leading_slots_stay_flush(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let context_menu = cx.update(|window, cx| {
+            ContextMenu::build(window, cx, |menu, _, _| {
+                menu.action_disabled_when(true, "Undo", Box::new(SelectNext))
+                    .action_disabled_when(false, "Redo", Box::new(SelectPrevious))
+            })
+        });
+
+        context_menu.update_in(cx, |context_menu, _, _| {
+            assert!(
+                !context_menu.needs_leading_slot(),
+                "A menu with only plain actions should not reserve a leading slot"
+            );
         });
     }
 }
