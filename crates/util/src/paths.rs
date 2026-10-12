@@ -1835,13 +1835,16 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_str_treats_paren_suffix_as_position() {
-        // This documents the behavior that causes the folder-drop bug: a name ending in
-        // `(N)` is parsed as `name ` + row N. The fix lives in `derive_paths_with_position`,
-        // which restores the original path when it exists on disk (file or directory).
+    fn test_parse_str_keeps_parenthesized_name_with_leading_whitespace() {
+        // A trailing ` (N)` preceded by whitespace is treated as a literal path
+        // component rather than a `row` position, so folder names like
+        // `New Folder (2)` survive parsing instead of being dropped.
+        // Parenthesized positions without a leading space (e.g.
+        // `file.rs(7,15)`) are still parsed as positions; see
+        // `path_with_position_preserves_repeated_filename`.
         let parsed = PathWithPosition::parse_str("/root/Test (3)");
-        assert_eq!(parsed.path, PathBuf::from("/root/Test "));
-        assert_eq!(parsed.row, Some(3));
+        assert_eq!(parsed.path, PathBuf::from("/root/Test (3)"));
+        assert_eq!(parsed.row, None);
     }
 
     #[test]

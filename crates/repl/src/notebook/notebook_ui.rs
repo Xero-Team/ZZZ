@@ -2163,6 +2163,7 @@ mod tests {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
+            i18n::init(cx);
             editor::init(cx);
         });
 
@@ -2278,7 +2279,7 @@ mod tests {
                     assert_eq!(error.ename, "Kernel Error");
                     let traceback = error.traceback.join("\n");
                     assert!(
-                        traceback.contains("the kernel failed to launch"),
+                        traceback.contains("kernel failed to launch"),
                         "error output should explain why the cell could not run, got: {traceback}"
                     );
                 }
@@ -2296,6 +2297,7 @@ mod tests {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
+            i18n::init(cx);
             editor::init(cx);
         });
 
@@ -2357,6 +2359,7 @@ mod tests {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
+            i18n::init(cx);
             editor::init(cx);
         });
 

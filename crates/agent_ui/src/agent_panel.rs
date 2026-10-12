@@ -1257,7 +1257,18 @@ impl AgentPanel {
             pending_serialization: None,
             persist_selected_agent_task: Task::ready(()),
             thread_store,
-            selected_agent: Agent::default(),
+            selected_agent: {
+                // The production default (`Agent::Absent`) has no backing
+                // server, so tests use the stub agent as their default.
+                #[cfg(any(test, feature = "test-support"))]
+                {
+                    Agent::Stub
+                }
+                #[cfg(not(any(test, feature = "test-support")))]
+                {
+                    Agent::default()
+                }
+            },
             _thread_view_subscription: None,
             _active_thread_focus_subscription: None,
             new_user_onboarding_upsell_dismissed: AtomicBool::new(OnboardingUpsell::dismissed(cx)),
@@ -3281,6 +3292,15 @@ impl AgentPanel {
                 return;
             }
         }
+
+        // Threads persisted while the in-tree native agent existed store its
+        // id, which now maps to `Agent::Absent` and has no backing server. Load
+        // them with the panel's currently selected agent instead of failing.
+        let agent = if matches!(agent, Agent::Absent) {
+            self.selected_agent(cx)
+        } else {
+            agent
+        };
 
         self.external_thread(
             Some(agent),

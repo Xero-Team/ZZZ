@@ -2544,6 +2544,7 @@ mod tests {
                     format: false,
                     force_format: false,
                     autosave: false,
+                    force: false,
                 },
                 project.clone(),
                 window,

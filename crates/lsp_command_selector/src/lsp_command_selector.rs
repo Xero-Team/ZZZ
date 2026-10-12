@@ -1044,6 +1044,7 @@ mod tests {
         let app_state = cx.update(|cx| {
             let app_state = AppState::test(cx);
             settings::init(cx);
+            i18n::init(cx);
             super::init(cx);
             editor::init(cx);
             app_state

@@ -446,16 +446,16 @@ async fn test_inventory_static_task_filters(cx: &mut TestAppContext) {
         (
             TaskSourceKind::Worktree {
                 id: worktree_1,
-                directory_in_worktree: rel_path(".zzz").into(),
-                id_base: "local worktree tasks from directory \".zzz\"".into(),
+                directory_in_worktree: rel_path(".ZZZ").into(),
+                id_base: "local worktree tasks from directory \".ZZZ\"".into(),
             },
             common_name.to_string(),
         ),
         (
             TaskSourceKind::Worktree {
                 id: worktree_1,
-                directory_in_worktree: rel_path(".zzz").into(),
-                id_base: "local worktree tasks from directory \".zzz\"".into(),
+                directory_in_worktree: rel_path(".ZZZ").into(),
+                id_base: "local worktree tasks from directory \".ZZZ\"".into(),
             },
             "worktree_1".to_string(),
         ),
@@ -464,16 +464,16 @@ async fn test_inventory_static_task_filters(cx: &mut TestAppContext) {
         (
             TaskSourceKind::Worktree {
                 id: worktree_2,
-                directory_in_worktree: rel_path(".zzz").into(),
-                id_base: "local worktree tasks from directory \".zzz\"".into(),
+                directory_in_worktree: rel_path(".ZZZ").into(),
+                id_base: "local worktree tasks from directory \".ZZZ\"".into(),
             },
             common_name.to_string(),
         ),
         (
             TaskSourceKind::Worktree {
                 id: worktree_2,
-                directory_in_worktree: rel_path(".zzz").into(),
-                id_base: "local worktree tasks from directory \".zzz\"".into(),
+                directory_in_worktree: rel_path(".ZZZ").into(),
+                id_base: "local worktree tasks from directory \".ZZZ\"".into(),
             },
             "worktree_2".to_string(),
         ),
@@ -494,7 +494,7 @@ async fn test_inventory_static_task_filters(cx: &mut TestAppContext) {
             .update_file_based_tasks(
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id: worktree_1,
-                    path: rel_path(".zzz"),
+                    path: rel_path(".ZZZ"),
                     vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(
@@ -506,7 +506,7 @@ async fn test_inventory_static_task_filters(cx: &mut TestAppContext) {
             .update_file_based_tasks(
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id: worktree_2,
-                    path: rel_path(".zzz"),
+                    path: rel_path(".ZZZ"),
                     vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(
@@ -592,7 +592,7 @@ async fn test_zzz_tasks_take_precedence_over_vscode(cx: &mut TestAppContext) {
             .update_file_based_tasks(
                 TaskSettingsLocation::Worktree(SettingsLocation {
                     worktree_id,
-                    path: rel_path(".zzz"),
+                    path: rel_path(".ZZZ"),
                     vfs_path: None,
                 }),
                 Some(&mock_tasks_from_names(["zzz_task"])),
@@ -602,14 +602,14 @@ async fn test_zzz_tasks_take_precedence_over_vscode(cx: &mut TestAppContext) {
     assert_eq!(
         task_template_names(&inventory, Some(worktree_id), cx).await,
         vec!["zzz_task"],
-        "With both .zzz and .vscode tasks, only .zzz tasks should appear"
+        "With both .ZZZ and .vscode tasks, only .ZZZ tasks should appear"
     );
 
     register_worktree_task_used(&inventory, worktree_id, "zzz_task", cx).await;
     let resolved = resolved_task_names(&inventory, Some(worktree_id), cx).await;
     assert!(
         !resolved.iter().any(|name| name == "vscode_task"),
-        "Previously used .vscode tasks should not appear when .zzz tasks exist, got: {resolved:?}"
+        "Previously used .vscode tasks should not appear when .ZZZ tasks exist, got: {resolved:?}"
     );
 }
 

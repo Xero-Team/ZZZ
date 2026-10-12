@@ -996,7 +996,7 @@ impl Item for Editor {
             if !buffers_to_save.is_empty() {
                 project
                     .update(cx, |project, cx| {
-                        project.save_buffers(buffers_to_save.clone(), cx)
+                        project.save_buffers(buffers_to_save.clone(), options.force, cx)
                     })
                     .await?;
             }

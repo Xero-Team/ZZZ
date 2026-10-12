@@ -1356,11 +1356,12 @@ impl Worktree {
         line_ending: LineEnding,
         encoding: &'static Encoding,
         has_bom: bool,
+        force: bool,
         cx: &Context<Worktree>,
     ) -> Task<Result<Arc<File>>> {
         match self {
             Worktree::Local(this) => {
-                this.write_file(path, text, line_ending, encoding, has_bom, cx)
+                this.write_file(path, text, line_ending, encoding, has_bom, force, cx)
             }
             Worktree::Remote(remote_worktree) => {
                 let Some(provider_task) = self.remote_vfs_provider(cx) else {
@@ -1398,7 +1399,11 @@ impl Worktree {
                         line_ending,
                         encoding,
                         has_bom,
-                        Some(metadata.content_version),
+                        if force {
+                            None
+                        } else {
+                            Some(metadata.content_version)
+                        },
                     )
                     .await?;
                     let metadata = provider
@@ -2292,6 +2297,7 @@ impl LocalWorktree {
         line_ending: LineEnding,
         encoding: &'static Encoding,
         has_bom: bool,
+        force: bool,
         cx: &Context<Worktree>,
     ) -> Task<Result<Arc<File>>> {
         let fs = self.fs.clone();
@@ -2302,12 +2308,16 @@ impl LocalWorktree {
             let provider_path =
                 provider_path_from_rel_path(&path, snapshot.provider().descriptor().path_encoding)
                     .ok()?;
-            let expected_version = snapshot
-                .registry()
-                .id_for_path(&provider_path)
-                .and_then(|resource_id| snapshot.registry().record(resource_id))
-                .and_then(|record| record.metadata)
-                .map(|metadata| metadata.content_version);
+            let expected_version = if force {
+                None
+            } else {
+                snapshot
+                    .registry()
+                    .id_for_path(&provider_path)
+                    .and_then(|resource_id| snapshot.registry().record(resource_id))
+                    .and_then(|record| record.metadata)
+                    .map(|metadata| metadata.content_version)
+            };
             Some((snapshot.clone(), provider_path, expected_version))
         });
 

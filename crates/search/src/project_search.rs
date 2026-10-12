@@ -1510,6 +1510,7 @@ impl ProjectSearchView {
                                 format: true,
                                 force_format: false,
                                 autosave: false,
+                                force: false,
                             },
                             project,
                             window,

@@ -793,7 +793,7 @@ mod tests {
         fs.insert_tree(
             path!("/dir"),
             json!({
-                ".zzz": {
+                ".ZZZ": {
                     "tasks.json": r#"[
                         {
                             "label": "example task",
@@ -966,7 +966,7 @@ mod tests {
         fs.insert_tree(
             path!("/dir"),
             json!({
-                ".zzz": {
+                ".ZZZ": {
                     "tasks.json": r#"[
                         {
                             "label": "hello from $ZZZ_FILE:$ZZZ_ROW:$ZZZ_COLUMN",

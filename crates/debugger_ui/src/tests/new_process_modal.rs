@@ -419,7 +419,10 @@ async fn test_debug_modal_subtitles_with_multiple_worktrees(
         modal.debug_picker_candidate_subtitles(cx)
     });
 
-    assert_eq!(subtitles.as_slice(), [path!(".ZZZ"), path!(".ZZZ")]);
+    assert_eq!(
+        subtitles.as_slice(),
+        [path!(".ZZZ/debug.json"), path!(".ZZZ/debug.json")]
+    );
 }
 
 #[gpui::test]

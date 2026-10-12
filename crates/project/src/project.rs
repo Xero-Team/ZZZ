@@ -2814,11 +2814,12 @@ impl Project {
     pub fn save_buffers(
         &self,
         buffers: HashSet<Entity<Buffer>>,
+        force: bool,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         cx.spawn(async move |this, cx| {
             let save_tasks = buffers.into_iter().filter_map(|buffer| {
-                this.update(cx, |this, cx| this.save_buffer(buffer, cx))
+                this.update(cx, |this, cx| this.save_buffer_with_force(buffer, force, cx))
                     .ok()
             });
             try_join_all(save_tasks).await?;
@@ -2827,8 +2828,18 @@ impl Project {
     }
 
     pub fn save_buffer(&self, buffer: Entity<Buffer>, cx: &mut Context<Self>) -> Task<Result<()>> {
-        self.buffer_store
-            .update(cx, |buffer_store, cx| buffer_store.save_buffer(buffer, cx))
+        self.save_buffer_with_force(buffer, false, cx)
+    }
+
+    fn save_buffer_with_force(
+        &self,
+        buffer: Entity<Buffer>,
+        force: bool,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        self.buffer_store.update(cx, |buffer_store, cx| {
+            buffer_store.save_buffer(buffer, force, cx)
+        })
     }
 
     pub fn save_buffer_as(

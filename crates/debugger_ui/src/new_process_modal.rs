@@ -1197,7 +1197,7 @@ impl DebugDelegate {
                     };
 
                     match path.components().next_back() {
-                        Some(".zzz") => {
+                        Some(".ZZZ") => {
                             path.push(
                                 RelPath::unix("debug.json")
                                     .expect("path should be a valid relative path"),
@@ -1301,7 +1301,7 @@ impl DebugDelegate {
                         directory_in_worktree: dir,
                         id_base: _,
                     } => dir.ends_with(
-                        RelPath::unix(".zzz").expect("path should be a valid relative path"),
+                        RelPath::unix(".ZZZ").expect("path should be a valid relative path"),
                     ),
                     _ => false,
                 });

@@ -495,6 +495,7 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                         });
                         let filename = filename.clone();
                         cx.spawn_in(window, async move |this, cx| {
+                            let force_replace = rx.is_some();
                             if let Some(rx) = rx
                                 && Ok(0) != rx.await
                             {
@@ -511,7 +512,7 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                                     "Failed to write lines",
                                 );
                                 worktree
-                                    .write_file(path.into_arc(), text.clone(), line_ending, encoding, has_bom, cx)
+                                    .write_file(path.into_arc(), text.clone(), line_ending, encoding, has_bom, force_replace, cx)
                                     .detach_and_prompt_err(
                                         &failed_to_write_lines,
                                         window,

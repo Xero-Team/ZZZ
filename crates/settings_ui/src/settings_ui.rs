@@ -4389,7 +4389,7 @@ impl ProjectSettingsUpdateQueue {
         });
 
         buffer_store
-            .update(cx, |store, cx| store.save_buffer(buffer, cx))
+            .update(cx, |store, cx| store.save_buffer(buffer, false, cx))
             .await
             .context("Failed to save settings file")?;
 

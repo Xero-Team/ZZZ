@@ -908,25 +908,33 @@ impl VisualTestContext {
     where
         E: Element,
     {
-        self.update(|window, cx| {
-            let _arena_scope = ElementArenaScope::enter(&cx.element_arena);
+        let space = space.into();
+        self.cx
+            .update_window(self.window, |root_view, window, cx| {
+                let current_view = root_view.entity_id();
+                window.with_rendered_view(current_view, |window| {
+                    let _arena_scope = ElementArenaScope::enter(&cx.element_arena);
 
-            window.invalidator.set_phase(DrawPhase::Prepaint);
-            let mut element = Drawable::new(f(window, cx));
-            element.layout_as_root(space.into(), window, cx);
-            window.with_absolute_element_offset(origin, |window| element.prepaint(window, cx));
+                    window.invalidator.set_phase(DrawPhase::Prepaint);
+                    let mut element = Drawable::new(f(window, cx));
+                    element.layout_as_root(space, window, cx);
+                    window.with_absolute_element_offset(origin, |window| {
+                        element.prepaint(window, cx)
+                    });
 
-            window.invalidator.set_phase(DrawPhase::Paint);
-            let (request_layout_state, prepaint_state) = element.paint(window, cx);
+                    window.invalidator.set_phase(DrawPhase::Paint);
+                    let (request_layout_state, prepaint_state) = element.paint(window, cx);
 
-            window.invalidator.set_phase(DrawPhase::None);
-            window.refresh();
+                    window.invalidator.set_phase(DrawPhase::None);
+                    window.refresh();
 
-            drop(element);
-            cx.element_arena.borrow_mut().clear();
+                    drop(element);
+                    cx.element_arena.borrow_mut().clear();
 
-            (request_layout_state, prepaint_state)
-        })
+                    (request_layout_state, prepaint_state)
+                })
+            })
+            .expect("value should be present")
     }
 
     /// Simulate an event from the platform, e.g. a ScrollWheelEvent

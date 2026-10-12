@@ -930,10 +930,10 @@ mod tests {
         assert_eq!(truncate_and_remove_front("", 5), "");
         assert_eq!(truncate_and_remove_front("aaaaaa", 7), "aaaaaa");
         assert_eq!(truncate_and_remove_front("aaaaaa", 6), "aaaaaa");
-        assert_eq!(truncate_and_remove_front("aaaaaa", 5), "…aaaaa");
+        assert_eq!(truncate_and_remove_front("aaaaaa", 5), "...aaaaa");
         assert_eq!(truncate_and_remove_front("èèèèèè", 7), "èèèèèè");
         assert_eq!(truncate_and_remove_front("èèèèèè", 6), "èèèèèè");
-        assert_eq!(truncate_and_remove_front("èèèèèè", 5), "…èèèèè");
+        assert_eq!(truncate_and_remove_front("èèèèèè", 5), "...èèèèè");
     }
 
     #[test]

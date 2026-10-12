@@ -610,6 +610,7 @@ mod tests {
             let store = SettingsStore::test(cx);
             cx.set_global(store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
+            i18n::init(cx);
             release_channel::init(semver::Version::new(0, 0, 0), cx);
             editor::init(cx);
         });

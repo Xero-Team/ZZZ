@@ -17308,7 +17308,7 @@ impl Editor {
         }
 
         if let Some(project) = &self.project {
-            project.update(cx, |project, cx| project.save_buffers(buffers, cx))
+            project.update(cx, |project, cx| project.save_buffers(buffers, false, cx))
         } else {
             Task::ready(Ok(()))
         }
@@ -17464,6 +17464,7 @@ impl Editor {
                     format: true,
                     force_format: false,
                     autosave: false,
+                    force: false,
                 },
                 project,
                 window,
@@ -17513,6 +17514,7 @@ impl Editor {
                     format: true,
                     force_format: false,
                     autosave: false,
+                    force: false,
                 },
                 project,
                 window,

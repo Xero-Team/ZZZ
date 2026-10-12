@@ -89,7 +89,7 @@ impl<T: InventoryContents> InventoryFor<T> {
         let worktree_dirs = self.worktree.get(&worktree);
         let has_zzz_dir = worktree_dirs.is_some_and(|dirs| {
             dirs.keys()
-                .any(|dir| dir.file_name().is_some_and(|name| name == ".zzz"))
+                    .any(|dir| dir.file_name().is_some_and(|name| name == ".ZZZ"))
         });
 
         worktree_dirs
@@ -495,7 +495,7 @@ impl Inventory {
             .iter()
             .filter(|(_, dirs)| {
                 dirs.keys()
-                    .any(|dir| dir.file_name().is_some_and(|name| name == ".zzz"))
+                .any(|dir| dir.file_name().is_some_and(|name| name == ".ZZZ"))
             })
             .map(|(id, _)| *id)
             .collect();

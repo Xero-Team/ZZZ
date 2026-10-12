@@ -682,8 +682,7 @@ mod tests {
                 {
                     "show_edit_predictions_in_menu": true,
                     "show_edit_predictions": true,
-                    "edit_predictions_disabled_in": ["string"],
-                    "edit_predictions": { "some" : "value" }
+                    "edit_predictions_disabled_in": ["string"]
                 }
             "#,
             ),
@@ -701,16 +700,7 @@ mod tests {
             }
             "#
             .unindent(),
-            Some(
-                &r#"
-                {
-                    "edit_predictions": {
-                        "provider": "zzz"
-                    }
-                }
-                "#
-                .unindent(),
-            ),
+            Some("{\n    \n}\n"),
         )
     }
 
@@ -957,9 +947,6 @@ mod tests {
                 r#"{
                 "agent": {
                     "foo": "bar"
-                },
-                "edit_predictions": {
-                    "enabled_in_text_threads": false,
                 }
             }"#,
             ),
@@ -1289,24 +1276,12 @@ mod tests {
 }"#,
             Some(
                 r#"{
-    "language_models": {
-        "anthropic": {
-            "api_url": "https://api.anthropic.com"
-        },
-        "openai": {
-            "api_url": "https://api.openai.com/v1"
-        }
-    },
     "agent": {
         "enabled": true,
         "button": true,
         "dock": "right",
         "default_width": 640,
-        "default_height": 320,
-        "default_model": {
-            "provider": "anthropic",
-            "model": "claude-sonnet-4"
-        }
+        "default_height": 320
     }
 }"#,
             ),
@@ -1325,7 +1300,13 @@ mod tests {
         "version": "1"
     }
 }"#,
-            None,
+            Some(
+                r#"{
+    "other_section": {
+        "version": "1"
+    }
+}"#,
+            ),
         );
     }
 

@@ -36,6 +36,9 @@ pub struct SaveOptions {
     pub format: bool,
     pub force_format: bool,
     pub autosave: bool,
+    /// Write the buffer to disk even if the file changed since the buffer was
+    /// last saved or reloaded, bypassing the stale-version check.
+    pub force: bool,
 }
 
 impl Default for SaveOptions {
@@ -44,6 +47,7 @@ impl Default for SaveOptions {
             format: true,
             force_format: false,
             autosave: false,
+            force: false,
         }
     }
 }

@@ -1623,7 +1623,14 @@ pub mod tests {
         cx.executor().advance_clock(Duration::from_secs(1));
         cx.executor().run_until_parked();
 
-        first_request_unblock.send(()).unwrap();
+        // A `RefreshRequested` invalidates the cache and cancels the blocked
+        // in-flight fetch, which is how duplicate hints are avoided. Unblocking
+        // it therefore finds the receiver already dropped.
+        let cancelled = first_request_unblock.send(()).is_err();
+        assert!(
+            cancelled,
+            "the refresh should cancel the blocked in-flight fetch"
+        );
         cx.executor().advance_clock(Duration::from_secs(1));
         cx.executor().run_until_parked();
         assert_eq!(

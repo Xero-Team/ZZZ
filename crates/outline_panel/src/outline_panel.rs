@@ -5538,7 +5538,8 @@ mod tests {
                     outline_panel.selected_entry(),
                     cx,
                 ),
-                r#"rust-analyzer/
+                format!(
+                    r#"rust-analyzer/
   crates/
     ide/src/
       inlay_hints/
@@ -5554,7 +5555,7 @@ mod tests {
           search: «param_names_for_lifetime_elision_hints»: true,
       config.rs
         search: «param_names_for_lifetime_elision_hints»: self"#
-                    .to_string()
+                )
             );
         });
 
@@ -5607,7 +5608,8 @@ mod tests {
                     outline_panel.selected_entry(),
                     cx,
                 ),
-                r#"rust-analyzer/
+                format!(
+                    r#"rust-analyzer/
   crates/
     ide/src/{SELECTED_MARKER}
     rust-analyzer/src/
@@ -5616,7 +5618,7 @@ mod tests {
           search: «param_names_for_lifetime_elision_hints»: true,
       config.rs
         search: «param_names_for_lifetime_elision_hints»: self"#
-                    .to_string()
+                )
             );
         });
         outline_panel.update_in(cx, |outline_panel, window, cx| {
@@ -6592,7 +6594,7 @@ outline: struct OutlineEntryExcerpt
                 r#"frontend-project/
   public/lottie/
     syntax-tree.json
-      search: {{ "something": "«static»" }}  <==== selected
+      search: { "something": "«static»" }  <==== selected
   src/
     app/(site)/
       (about)/jobs/[slug]/
@@ -6630,7 +6632,7 @@ outline: struct OutlineEntryExcerpt
                 r#"frontend-project/
   public/lottie/
     syntax-tree.json
-      search: {{ "something": "«static»" }}
+      search: { "something": "«static»" }
   src/
     app/(site)/  <==== selected
     components/
@@ -6659,7 +6661,7 @@ outline: struct OutlineEntryExcerpt
                 r#"frontend-project/
   public/lottie/
     syntax-tree.json
-      search: {{ "something": "«static»" }}
+      search: { "something": "«static»" }
   src/
     app/(site)/
     components/
@@ -6692,7 +6694,7 @@ outline: struct OutlineEntryExcerpt
                 r#"frontend-project/
   public/lottie/
     syntax-tree.json
-      search: {{ "something": "«static»" }}
+      search: { "something": "«static»" }
   src/
     app/(site)/
     components/
@@ -6724,7 +6726,7 @@ outline: struct OutlineEntryExcerpt
                 r#"frontend-project/
   public/lottie/
     syntax-tree.json
-      search: {{ "something": "«static»" }}
+      search: { "something": "«static»" }
   src/
     app/(site)/
     components/
@@ -6771,7 +6773,7 @@ outline: struct OutlineEntryExcerpt
                 r#"frontend-project/
   public/lottie/
     syntax-tree.json
-      search: {{ "something": "«static»" }}
+      search: { "something": "«static»" }
   src/
     app/(site)/
       (about)/jobs/[slug]/

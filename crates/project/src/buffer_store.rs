@@ -387,6 +387,7 @@ impl LocalBufferStore {
         worktree: Entity<Worktree>,
         path: Arc<RelPath>,
         mut has_changed_file: bool,
+        force: bool,
         cx: &mut Context<BufferStore>,
     ) -> Task<Result<()>> {
         let buffer = buffer_handle.read(cx);
@@ -406,7 +407,7 @@ impl LocalBufferStore {
         }
 
         let save = worktree.update(cx, |worktree, cx| {
-            worktree.write_file(path, text, line_ending, encoding, has_bom, cx)
+            worktree.write_file(path, text, line_ending, encoding, has_bom, force, cx)
         });
 
         cx.spawn(async move |this, cx| {
@@ -617,13 +618,14 @@ impl LocalBufferStore {
     fn save_buffer(
         &self,
         buffer: Entity<Buffer>,
+        force: bool,
         cx: &mut Context<BufferStore>,
     ) -> Task<Result<()>> {
         let Some(file) = File::from_dyn(buffer.read(cx).file()) else {
             return Task::ready(Err(anyhow!("buffer doesn't have a file")));
         };
         let worktree = file.worktree.clone();
-        self.save_local_buffer(buffer, worktree, file.path.clone(), false, cx)
+        self.save_local_buffer(buffer, worktree, file.path.clone(), false, force, cx)
     }
 
     fn save_buffer_as(
@@ -639,7 +641,7 @@ impl LocalBufferStore {
         else {
             return Task::ready(Err(anyhow!("no such worktree")));
         };
-        self.save_local_buffer(buffer, worktree, path.path, true, cx)
+        self.save_local_buffer(buffer, worktree, path.path, true, false, cx)
     }
 
     #[ztracing::instrument(skip_all)]
@@ -953,10 +955,11 @@ impl BufferStore {
     pub fn save_buffer(
         &mut self,
         buffer: Entity<Buffer>,
+        force: bool,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         match &mut self.state {
-            BufferStoreState::Local(this) => this.save_buffer(buffer, cx),
+            BufferStoreState::Local(this) => this.save_buffer(buffer, force, cx),
             BufferStoreState::Remote(this) => this.save_remote_buffer(buffer, None, cx),
         }
     }
@@ -1519,7 +1522,7 @@ impl BufferStore {
             })
             .await?;
         } else {
-            this.update(&mut cx, |this, cx| this.save_buffer(buffer.clone(), cx))
+            this.update(&mut cx, |this, cx| this.save_buffer(buffer.clone(), false, cx))
                 .await?;
         }
 

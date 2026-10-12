@@ -1520,6 +1520,7 @@ async fn test_write_file(cx: &mut TestAppContext) {
                 Default::default(),
                 encoding_rs::UTF_8,
                 false,
+                false,
                 cx,
             )
         })
@@ -1532,6 +1533,7 @@ async fn test_write_file(cx: &mut TestAppContext) {
                 "world".into(),
                 Default::default(),
                 encoding_rs::UTF_8,
+                false,
                 false,
                 cx,
             )
@@ -1573,6 +1575,7 @@ async fn test_write_file_rejects_stale_vfs_version(cx: &mut TestAppContext) {
                 "local-change".into(),
                 text::LineEnding::Unix,
                 encoding_rs::UTF_8,
+                false,
                 false,
                 cx,
             )
@@ -3341,6 +3344,7 @@ fn randomly_mutate_worktree(
                     "".into(),
                     Default::default(),
                     encoding_rs::UTF_8,
+                    false,
                     false,
                     cx,
                 );
@@ -6150,6 +6154,7 @@ async fn test_write_file_encoding(cx: &mut gpui::TestAppContext) {
                 text::LineEnding::Unix,
                 case.encoding,
                 case.has_bom,
+                false,
                 cx,
             )
         });
