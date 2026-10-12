@@ -123,8 +123,9 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     wait_timer: impl (Fn(Duration) -> F) + Send + Sync + 'static,
 ) {
     // Leak the handler so that its `Drop` (which detaches the signal handlers)
-    // never runs while the process is alive.
-    let handler = std::mem::ManuallyDrop::new(handler);
+    // never runs while the process is alive. The binding is only read on Linux,
+    // so it is intentionally underscore-prefixed to stay alive without warning.
+    let _handler = std::mem::ManuallyDrop::new(handler);
     let exe = env::current_exe().expect("unable to find ourselves");
     let zzz_pid = process::id();
     let socket_name = paths::temp_dir().join(format!("zzz-crash-handler-{zzz_pid}"));
@@ -160,7 +161,7 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     let client = Arc::new(client);
 
     #[cfg(target_os = "linux")]
-    handler.set_ptracer(Some(_crash_handler.id()));
+    _handler.set_ptracer(Some(_crash_handler.id()));
 
     // Publishing the client to the OnceLock makes it visible to the signal
     // handler callback installed earlier.
@@ -178,7 +179,7 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn suspend_all_other_threads() {
+fn suspend_all_other_threads() {
     let task = unsafe { mach2::traps::current_task() };
     let mut threads: mach2::mach_types::thread_act_array_t = std::ptr::null_mut();
     let mut count = 0;
@@ -188,7 +189,8 @@ unsafe fn suspend_all_other_threads() {
     let current = unsafe { mach2::mach_init::mach_thread_self() };
     let panic_thread = PANIC_THREAD_ID.load(Ordering::SeqCst);
     for i in 0..count {
-        let t = unsafe { *threads.add(i as usize) };
+        let thread_ptr = unsafe { threads.add(i as usize) };
+        let t = unsafe { *thread_ptr };
         if t != current && t != panic_thread {
             unsafe { mach2::thread_act::thread_suspend(t) };
         }
