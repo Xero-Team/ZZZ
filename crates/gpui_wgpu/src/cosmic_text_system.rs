@@ -1263,10 +1263,11 @@ fn render_colrv1_glyph(
                 y: top as f32,
             }]
             .into_iter(),
-        );
+        )
+        .context("failed to rasterize COLRv1 glyph run")?;
     render_context.flush();
     let mut pixmap = VelloPixmap::new(width, height);
-    render_context.render_to_pixmap(&mut resources, &mut pixmap);
+    render_context.render(&mut pixmap, &mut resources);
 
     let (minimum_x, minimum_y, maximum_x, maximum_y) =
         visible_pixel_bounds(pixmap.data_as_u8_slice(), width, height)

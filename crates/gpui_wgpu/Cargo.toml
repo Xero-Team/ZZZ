@@ -45,7 +45,7 @@ pollster.workspace = true
 resvg = { version = "0.48.1", default-features = false }
 skrifa.workspace = true
 usvg = { version = "0.48.1", default-features = false, features = ["svgz"] }
-vello_cpu = { version = "0.0.9", default-features = false, features = [
+vello_cpu = { version = "0.3.0", default-features = false, features = [
     "std",
     "text",
     "u8_pipeline",
