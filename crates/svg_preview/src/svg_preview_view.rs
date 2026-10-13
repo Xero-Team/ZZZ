@@ -1,4 +1,5 @@
 use std::mem;
+use std::path::Path;
 use std::sync::Arc;
 
 use file_icons::FileIcons;
@@ -9,8 +10,10 @@ use gpui::{
 use i18n::tr;
 use language::{Buffer, BufferEvent};
 use multi_buffer::MultiBuffer;
+use project::ProjectPath;
 use ui::prelude::*;
 use workspace::item::Item;
+use workspace::notifications::NotifyResultExt;
 use workspace::{Pane, Workspace};
 
 use crate::{OpenFollowingPreview, OpenPreview, OpenPreviewToTheSide};
@@ -102,6 +105,35 @@ impl SvgPreviewView {
         )
     }
 
+    pub fn open_for_project_path(
+        project_path: ProjectPath,
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let open_buffer = workspace
+            .project()
+            .update(cx, |project, cx| project.open_buffer(project_path, cx));
+
+        cx.spawn_in(window, async move |workspace, cx| {
+            let Some(buffer) = open_buffer
+                .await
+                .notify_workspace_async_err(workspace.clone(), cx)
+            else {
+                return;
+            };
+
+            workspace
+                .update_in(cx, |workspace, window, cx| {
+                    let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
+                    let pane = workspace.active_pane().clone();
+                    Self::open_preview_in_pane(workspace, buffer, pane, window, cx);
+                })
+                .ok();
+        })
+        .detach();
+    }
+
     fn render_image(&mut self, window: &Window, cx: &mut Context<Self>) {
         let Some(buffer) = self.buffer.as_ref() else {
             return;
@@ -157,6 +189,24 @@ impl SvgPreviewView {
             .and_then(|view| pane.index_for_item(&view))
     }
 
+    pub fn open_preview_in_pane(
+        workspace: &mut Workspace,
+        buffer: Entity<MultiBuffer>,
+        pane: Entity<Pane>,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let existing_view_idx = Self::find_existing_preview_item_idx(pane.read(cx), &buffer, cx);
+        let view = Self::create_svg_view(SvgPreviewMode::Default, workspace, buffer, window, cx);
+        pane.update(cx, |pane, cx| {
+            if let Some(existing_view_idx) = existing_view_idx {
+                pane.activate_item(existing_view_idx, true, true, window, cx);
+            } else {
+                pane.add_item(Box::new(view), true, true, None, window, cx);
+            }
+        });
+    }
+
     pub fn resolve_active_item_as_svg_buffer(
         workspace: &Workspace,
         cx: &mut Context<Workspace>,
@@ -195,16 +245,17 @@ impl SvgPreviewView {
         )
     }
 
+    pub fn is_svg_path(path: &Path) -> bool {
+        path.extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
+    }
+
     pub fn is_svg_file(buffer: &Entity<MultiBuffer>, cx: &App) -> bool {
         buffer
             .read(cx)
             .as_singleton()
             .and_then(|buffer| buffer.read(cx).file())
-            .is_some_and(|file| {
-                std::path::Path::new(file.file_name(cx))
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
-            })
+            .is_some_and(|file| Self::is_svg_path(Path::new(file.file_name(cx))))
     }
 
     pub fn register(workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Workspace>) {
