@@ -26,6 +26,10 @@ fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
     app_i18n::tr(cx, key, fallback)
 }
 
+/// Top padding, in rems, inside agent terminals. The tool card adds it to the
+/// scrollable terminal's height so the number of visible rows doesn't change.
+pub(crate) const TERMINAL_CONTENT_TOP_PADDING: f32 = 0.5;
+
 pub struct EntryViewState {
     workspace: WeakEntity<Workspace>,
     project: WeakEntity<Project>,
@@ -447,6 +451,7 @@ fn create_terminal(
             cx,
         );
 
+        view.set_content_top_padding(gpui::rems(TERMINAL_CONTENT_TOP_PADDING), cx);
         view.set_embedded_mode(Some(1000), cx);
         view
     })
