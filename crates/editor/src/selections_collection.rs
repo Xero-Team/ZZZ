@@ -91,6 +91,15 @@ impl SelectionsCollection {
         (0..disjoint.len()).map(move |ix| disjoint[ix].range())
     }
 
+    /// Disjoint selection ranges plus the pending selection's range, if any.
+    ///
+    /// Jumps that unfold folded destinations include the pending anchor so the
+    /// deferred selection is revealed before it is resolved.
+    pub fn anchor_ranges_with_pending(&self) -> impl Iterator<Item = Range<Anchor>> + '_ {
+        self.disjoint_anchor_ranges()
+            .chain(self.pending_anchor().map(|selection| selection.range()))
+    }
+
     /// Non-overlapping selections using anchors, including the pending selection.
     pub fn all_anchors(&self, snapshot: &DisplaySnapshot) -> Arc<[Selection<Anchor>]> {
         if self.pending.is_none() {
@@ -669,6 +678,7 @@ impl fmt::Debug for MutableSelectionsCollection<'_, '_> {
         f.debug_struct("MutableSelectionsCollection")
             .field("collection", &self.collection)
             .field("selections_changed", &self.selections_changed)
+            .field("preserve_buffer_positions", &self.preserve_buffer_positions)
             .finish()
     }
 }

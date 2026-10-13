@@ -799,12 +799,7 @@ impl Editor {
         let snapshot = self.buffer.read(cx).snapshot(cx);
         let buffer_ids: HashSet<BufferId> = self
             .selections
-            .disjoint_anchor_ranges()
-            .chain(
-                self.selections
-                    .pending_anchor()
-                    .map(|selection| selection.range()),
-            )
+            .anchor_ranges_with_pending()
             .flat_map(|range| snapshot.buffer_ids_for_range(range))
             .collect();
         for buffer_id in buffer_ids {

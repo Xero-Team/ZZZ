@@ -875,12 +875,7 @@ impl Editor {
             self.unfold_buffers_with_selections(cx);
             let ranges = self
                 .selections
-                .disjoint_anchor_ranges()
-                .chain(
-                    self.selections
-                        .pending_anchor()
-                        .map(|selection| selection.range()),
-                )
+                .anchor_ranges_with_pending()
                 .collect::<Vec<_>>();
             self.unfold_ranges(&ranges, false, false, cx);
         }
