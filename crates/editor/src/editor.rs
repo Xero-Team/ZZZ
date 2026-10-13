@@ -1413,13 +1413,14 @@ struct HoveredCursor {
 /// in vim mode we never do.
 ///
 /// Similarly, you might want to disable scrolling if you don't want the viewport to
-/// move.
+/// move. Explicit jumps can opt into revealing folded destinations with [`Self::unfold`].
 #[derive(Clone)]
 pub struct SelectionEffects {
     nav_history: Option<bool>,
     completions: bool,
     scroll: Option<Autoscroll>,
     from_search: bool,
+    unfold: bool,
 }
 
 impl Default for SelectionEffects {
@@ -1429,10 +1430,20 @@ impl Default for SelectionEffects {
             completions: true,
             scroll: Some(Autoscroll::fit()),
             from_search: false,
+            unfold: false,
         }
     }
 }
 impl SelectionEffects {
+    /// Reveals the selected ranges and their folded buffers before scrolling.
+    /// Also applies when selections are unchanged; deferred changes reveal the final selections.
+    pub fn unfold(self) -> Self {
+        Self {
+            unfold: true,
+            ..self
+        }
+    }
+
     pub fn scroll(scroll: Autoscroll) -> Self {
         Self {
             scroll: Some(scroll),
@@ -15036,7 +15047,8 @@ impl Editor {
                 self.cursor_top_offset(cx),
                 cx,
             ))
-            .nav_history(record_nav_history),
+            .nav_history(record_nav_history)
+            .unfold(),
             window,
             cx,
             |s| s.select_anchor_ranges([start..end]),
@@ -15271,6 +15283,10 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(text_anchor) = position.raw_text_anchor() {
+            self.unfold_buffer(text_anchor.buffer_id, cx);
+        }
+        self.unfold_ranges(&[position..position], false, false, cx);
         let snapshot = self.snapshot(window, cx).display_snapshot;
         let position = position.to_point(&snapshot.buffer_snapshot());
         let start = snapshot
@@ -15736,7 +15752,8 @@ impl Editor {
                                 editor.cursor_top_offset(cx),
                                 cx,
                             ))
-                            .nav_history(true),
+                            .nav_history(true)
+                            .unfold(),
                             window,
                             cx,
                             |s| s.select_anchor_ranges(target_ranges),
@@ -15820,7 +15837,8 @@ impl Editor {
                                     SelectionEffects::scroll(Autoscroll::for_go_to_definition(
                                         offset, cx,
                                     ))
-                                    .nav_history(true),
+                                    .nav_history(true)
+                                    .unfold(),
                                     window,
                                     cx,
                                     |s| s.select_anchor_ranges(target_ranges),
@@ -15996,7 +16014,7 @@ impl Editor {
                 if let Some(editor) = editor.upgrade() {
                     editor.update(cx, |editor, cx| {
                         editor.change_selections(
-                            SelectionEffects::scroll(Autoscroll::newest()),
+                            SelectionEffects::scroll(Autoscroll::newest()).unfold(),
                             window,
                             cx,
                             |selections| selections.select_ranges(selection),
@@ -16384,7 +16402,7 @@ impl Editor {
             MultibufferSelectionMode::First => {
                 if let Some(first_range) = ranges.first() {
                     editor.change_selections(
-                        SelectionEffects::no_scroll(),
+                        SelectionEffects::no_scroll().unfold(),
                         window,
                         cx,
                         |selections| {
@@ -16401,10 +16419,15 @@ impl Editor {
                 );
             }
             MultibufferSelectionMode::All => {
-                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
-                    selections.clear_disjoint();
-                    selections.select_anchor_ranges(ranges);
-                });
+                editor.change_selections(
+                    SelectionEffects::no_scroll().unfold(),
+                    window,
+                    cx,
+                    |selections| {
+                        selections.clear_disjoint();
+                        selections.select_anchor_ranges(ranges);
+                    },
+                );
             }
         });
 
