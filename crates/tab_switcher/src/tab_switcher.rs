@@ -17,7 +17,6 @@ use project::Project;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::Settings;
-use std::time::Duration;
 use std::{cmp::Reverse, sync::Arc};
 use ui::{
     DecoratedIcon, IconDecoration, IconDecorationKind, ListItem, ListItemSpacing, Tooltip,
@@ -31,7 +30,6 @@ use workspace::{
 };
 
 const PANEL_WIDTH_REMS: f32 = 28.;
-const POPOVER_DELAY: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TabSwitcherMode {
@@ -64,8 +62,6 @@ actions!(
 pub struct TabSwitcher {
     picker: Entity<Picker<TabSwitcherDelegate>>,
     init_modifiers: Option<Modifiers>,
-    visible: bool,
-    _show_task: Option<Task<()>>,
 }
 
 impl ModalView for TabSwitcher {}
@@ -194,17 +190,6 @@ impl TabSwitcher {
         } else {
             window.modifiers().modified().then_some(window.modifiers())
         };
-        let has_modifiers = init_modifiers.is_some();
-        let _show_task = has_modifiers.then(|| {
-            cx.spawn_in(window, async move |this, cx| {
-                cx.background_executor().timer(POPOVER_DELAY).await;
-                this.update_in(cx, |this, _window, cx| {
-                    this.visible = true;
-                    cx.notify();
-                })
-                .log_err();
-            })
-        });
         Self {
             picker: cx.new(|cx| {
                 if is_global {
@@ -214,8 +199,6 @@ impl TabSwitcher {
                 }
             }),
             init_modifiers,
-            visible: !has_modifiers,
-            _show_task,
         }
     }
 
@@ -232,12 +215,8 @@ impl TabSwitcher {
             self.init_modifiers = None;
             if self.picker.read(cx).delegate.matches.is_empty() {
                 cx.emit(DismissEvent)
-            } else if self.visible {
-                window.dispatch_action(menu::Confirm.boxed_clone(), cx);
             } else {
-                self.picker.update(cx, |picker, cx| {
-                    picker.delegate.confirm(false, window, cx);
-                });
+                window.dispatch_action(menu::Confirm.boxed_clone(), cx);
             }
         }
     }
@@ -266,16 +245,12 @@ impl Focusable for TabSwitcher {
 
 impl Render for TabSwitcher {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let picker = self.picker.clone();
         v_flex()
             .key_context("TabSwitcher")
             .w(rems(PANEL_WIDTH_REMS))
             .on_modifiers_changed(cx.listener(Self::handle_modifiers_changed))
             .on_action(cx.listener(Self::handle_close_selected_item))
-            .when(self.visible, |element| element.child(picker.clone()))
-            .when(!self.visible, |element| {
-                element.child(div().size_0().overflow_hidden().child(picker.clone()))
-            })
+            .child(self.picker.clone())
     }
 }
 
@@ -751,6 +726,10 @@ impl PickerDelegate for TabSwitcherDelegate {
         self.selected_index
     }
 
+    fn select_on_hover(&self) -> bool {
+        false
+    }
+
     fn set_selected_index(
         &mut self,
         index: usize,
@@ -897,7 +876,16 @@ impl PickerDelegate for TabSwitcherDelegate {
                 .spacing(ListItemSpacing::Sparse)
                 .inset(true)
                 .toggle_state(selected)
-                .child(h_flex().w_full().min_w_0().overflow_hidden().child(label))
+                .child(
+                    h_flex()
+                        .when(index == 0, |row| {
+                            row.debug_selector(|| "tab-switcher-first-item".into())
+                        })
+                        .w_full()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .child(label),
+                )
                 .start_slot::<DecoratedIcon>(icon)
                 .map(|element| {
                     if self.selected_index == index {

@@ -3395,6 +3395,7 @@
     "project_panel.empty_state.or": "或",
     "project_panel.menu.expand_all": "全部展开",
     "project_panel.menu.open_markdown_preview": "打开 Markdown 预览",
+    "project_panel.menu.open_svg_preview": "打开 SVG 预览",
     "project_panel.menu.open_typst_preview": "打开 Typst 预览",
     "title_bar.application_menu.open_application_menu": "打开应用程序菜单",
     "workspace.invalid_item.could_not_open_file": "无法打开文件",

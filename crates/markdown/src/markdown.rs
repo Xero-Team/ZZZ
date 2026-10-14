@@ -2680,7 +2680,7 @@ impl MarkdownElement {
         cx: &mut App,
     ) {
         let element = render_math(math, math_state, math_font_size, math_color, cx);
-        builder.push_sourced_element(
+        builder.push_full_width_sourced_element(
             math.source_range.clone(),
             div()
                 .w_full()
@@ -3416,14 +3416,29 @@ impl Element for MarkdownElement {
                                     cursor..math.source_range.start,
                                 );
                             }
-                            let element = render_math(
-                                math,
-                                &render_inputs.math_state,
-                                math_font_size,
-                                math_color,
-                                cx,
-                            );
-                            builder.push_inline_sourced_element(math.source_range.clone(), element);
+                            if math.contents.display {
+                                builder.begin_inline_flow();
+                                self.push_block_math(
+                                    &mut builder,
+                                    math,
+                                    &render_inputs.math_state,
+                                    math_font_size,
+                                    math_color,
+                                    cx,
+                                );
+                            } else {
+                                let element = render_math(
+                                    math,
+                                    &render_inputs.math_state,
+                                    math_font_size,
+                                    math_color,
+                                    cx,
+                                );
+                                builder.push_inline_sourced_element(
+                                    math.source_range.clone(),
+                                    element,
+                                );
+                            }
                             cursor = math.source_range.end;
                         }
                         if cursor < range.end {
@@ -4109,29 +4124,67 @@ impl MarkdownElementBuilder {
     }
 
     fn push_sourced_element(&mut self, source_range: Range<usize>, element: impl Into<AnyElement>) {
+        self.push_sourced_element_sized(source_range, false, element);
+    }
+
+    /// Like [`Self::push_sourced_element`], but the wrapper spans the full
+    /// container width. A centered display formula needs this so its inner
+    /// `w_full` content is sized against the container even when the
+    /// surrounding row is a flex container.
+    fn push_full_width_sourced_element(
+        &mut self,
+        source_range: Range<usize>,
+        element: impl Into<AnyElement>,
+    ) {
+        self.push_sourced_element_sized(source_range, true, element);
+    }
+
+    fn push_sourced_element_sized(
+        &mut self,
+        source_range: Range<usize>,
+        full_width: bool,
+        element: impl Into<AnyElement>,
+    ) {
         self.flush_text();
         let anchor = self.render_source_anchor(source_range);
+        let wrapper = div()
+            .relative()
+            .when(full_width, |wrapper| wrapper.w_full());
         self.append_child(
-            div()
-                .relative()
+            wrapper
                 .child(anchor)
                 .child(element.into())
                 .into_any_element(),
         );
     }
 
+    /// Switch the current container to a wrapping flex row so text and the
+    /// inline elements that interrupt it share a line, matching how inline
+    /// images are laid out. Text flushed after this point is allowed to shrink
+    /// and wrap instead of overflowing the row.
+    fn begin_inline_flow(&mut self) {
+        let align = self.text_style().text_align;
+        if let Some(entry) = self.div_stack.last_mut() {
+            entry.line_break_mode = LineBreakMode::FlexWrap;
+        }
+        self.modify_current_div(|el| {
+            let el = el.flex().flex_row().flex_wrap().items_baseline();
+            match align {
+                TextAlign::Left => el.justify_start(),
+                TextAlign::Center => el.justify_center(),
+                TextAlign::Right => el.justify_end(),
+            }
+        });
+    }
+
     /// Append a sourced element that should flow inline with surrounding text,
-    /// such as an inline equation. This switches the current container to
-    /// flex-wrap so the element sits on the text baseline's line, matching how
-    /// inline images are laid out.
+    /// such as an inline equation.
     fn push_inline_sourced_element(
         &mut self,
         source_range: Range<usize>,
         element: impl Into<AnyElement>,
     ) {
-        if let Some(entry) = self.div_stack.last_mut() {
-            entry.line_break_mode = LineBreakMode::FlexWrap;
-        }
+        self.begin_inline_flow();
         self.push_sourced_element(source_range, element);
     }
 
@@ -4330,7 +4383,11 @@ impl MarkdownElementBuilder {
             language: self.code_block_stack.last().cloned().flatten(),
             text_align,
         });
-        self.append_child(text.into_any());
+        if self.uses_flex_line_breaks() {
+            self.append_child(div().max_w_full().min_w_0().child(text).into_any_element());
+        } else {
+            self.append_child(text.into_any());
+        }
     }
 
     fn build(mut self) -> RenderedMarkdown {

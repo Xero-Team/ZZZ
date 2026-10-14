@@ -309,13 +309,18 @@ pub(crate) fn render_math(
     match state.get(&key).and_then(|cached| cached.render_image.get()) {
         Some(Ok(image)) => {
             let image = image.clone();
-            img(ImageSource::Render(image))
-                .max_w_full()
-                .with_fallback(move || {
-                    div()
-                        .child(Label::new(failed.clone()).color(Color::Muted))
-                        .into_any_element()
-                })
+            let source_start = math.source_range.start;
+            div()
+                .debug_selector(move || format!("markdown_math_{source_start}"))
+                .child(
+                    img(ImageSource::Render(image))
+                        .max_w_full()
+                        .with_fallback(move || {
+                            div()
+                                .child(Label::new(failed.clone()).color(Color::Muted))
+                                .into_any_element()
+                        }),
+                )
                 .into_any_element()
         }
         Some(Err(_)) => fallback_formula(math),
@@ -991,8 +996,10 @@ fn exclusion_end(excluded: &[Range<usize>], position: usize) -> Option<usize> {
 mod tests {
     use super::*;
     use crate::parser::{MarkdownTagEnd, parse_markdown_with_options};
-    use crate::{MarkdownElement, MarkdownOptions, MarkdownStyle};
-    use gpui::{IntoElement, Render, TestAppContext, Window, size};
+    use crate::{MarkdownElement, MarkdownOptions, MarkdownStyle, RenderedText};
+    use gpui::{IntoElement, Render, TestAppContext, VisualTestContext, Window, px, size};
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn ensure_theme_initialized(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -1527,6 +1534,191 @@ mod tests {
             formulas("$$\\eqref{eq:test}$$"),
             vec![("\\text{(eq:test)}".to_string(), true)]
         );
+    }
+
+    const VIEWPORT: f32 = 800.0;
+
+    struct MathLayoutView {
+        markdown: gpui::Entity<Markdown>,
+        captured: Rc<RefCell<Option<RenderedText>>>,
+    }
+
+    impl Render for MathLayoutView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let captured = self.captured.clone();
+            div().size_full().child(
+                MarkdownElement::new(self.markdown.clone(), MarkdownStyle::default())
+                    .on_render(move |text| *captured.borrow_mut() = Some(text)),
+            )
+        }
+    }
+
+    /// Lay out `source` and return the drawn context alongside the rendered
+    /// text, so tests can inspect both element bounds and text lines.
+    fn render_math_layout(
+        source: &str,
+        cx: &mut TestAppContext,
+    ) -> (VisualTestContext, RenderedText) {
+        ensure_theme_initialized(cx);
+        let captured = Rc::new(RefCell::new(None));
+        let window = cx.open_window(size(px(VIEWPORT), px(600.)), |_, cx| {
+            let markdown = cx.new(|cx| {
+                Markdown::new_with_options(
+                    source.into(),
+                    None,
+                    None,
+                    MarkdownOptions {
+                        render_math: true,
+                        ..Default::default()
+                    },
+                    cx,
+                )
+            });
+            MathLayoutView {
+                markdown,
+                captured: captured.clone(),
+            }
+        });
+        cx.run_until_parked();
+        let cx = VisualTestContext::from_window(window.into(), cx);
+        let text = captured
+            .borrow_mut()
+            .take()
+            .expect("markdown element should have been laid out");
+        (cx, text)
+    }
+
+    fn math_selector(offset: usize) -> &'static str {
+        format!("markdown_math_{offset}").leak()
+    }
+
+    #[gpui::test]
+    fn inline_math_flows_on_the_text_line(cx: &mut TestAppContext) {
+        let source = "before $x^2$ after";
+        let (mut cx, text) = render_math_layout(source, cx);
+        let math = cx
+            .debug_bounds(math_selector(source.find('$').unwrap()))
+            .expect("math should render");
+        let inner = cx.debug_bounds("inner").expect("inner should render");
+
+        assert!(
+            math.left() > inner.left(),
+            "inline math should not start at the container edge: {math:?}"
+        );
+        assert!(
+            math.right() < inner.right(),
+            "inline math should not span the whole container: {math:?}"
+        );
+
+        let first_line = text.lines[0].layout.bounds();
+        assert!(
+            math.top() < first_line.bottom() && math.bottom() > first_line.top(),
+            "inline math should share a line with the surrounding text: math={math:?} line={first_line:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn display_math_in_a_paragraph_breaks_and_centers(cx: &mut TestAppContext) {
+        let source = "text $$x^2$$ more";
+        let (mut cx, text) = render_math_layout(source, cx);
+        let math = cx
+            .debug_bounds(math_selector(source.find('$').unwrap()))
+            .expect("math should render");
+        let inner = cx.debug_bounds("inner").expect("inner should render");
+
+        let center = (math.left() + math.right()) / 2.0;
+        let container_center = (inner.left() + inner.right()) / 2.0;
+        assert!(
+            (center - container_center).abs() <= px(1.5),
+            "display math should be horizontally centered: math={math:?} inner={inner:?}"
+        );
+
+        let first_line = text.lines[0].layout.bounds();
+        assert!(
+            math.top() >= first_line.bottom(),
+            "display math should break onto its own line: math={math:?} line={first_line:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn display_math_between_text_lines_is_centered(cx: &mut TestAppContext) {
+        let source = "Some text\n$$x^2$$\nMore text";
+        let (mut cx, _) = render_math_layout(source, cx);
+        let math = cx
+            .debug_bounds(math_selector(source.find('$').unwrap()))
+            .expect("math should render");
+        let inner = cx.debug_bounds("inner").expect("inner should render");
+
+        let center = (math.left() + math.right()) / 2.0;
+        let container_center = (inner.left() + inner.right()) / 2.0;
+        assert!(
+            (center - container_center).abs() <= px(1.5),
+            "display math between text lines should be centered: math={math:?} inner={inner:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn standalone_display_math_is_centered(cx: &mut TestAppContext) {
+        let source = "$$x^2$$";
+        let (mut cx, _) = render_math_layout(source, cx);
+        let math = cx
+            .debug_bounds(math_selector(source.find('$').unwrap()))
+            .expect("math should render");
+        let inner = cx.debug_bounds("inner").expect("inner should render");
+
+        let center = (math.left() + math.right()) / 2.0;
+        let container_center = (inner.left() + inner.right()) / 2.0;
+        assert!(
+            (center - container_center).abs() <= px(1.5),
+            "standalone display math should be centered: math={math:?} inner={inner:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn mixed_inline_and_display_math_in_one_paragraph(cx: &mut TestAppContext) {
+        let source = "start $a$ mid $$b^2$$ end";
+        let inline_offset = source.find('$').unwrap();
+        let display_offset = source[inline_offset..].find("$$").unwrap() + inline_offset;
+        let (mut cx, text) = render_math_layout(source, cx);
+        let inline = cx
+            .debug_bounds(math_selector(inline_offset))
+            .expect("inline math should render");
+        let display = cx
+            .debug_bounds(math_selector(display_offset))
+            .expect("display math should render");
+        let inner = cx.debug_bounds("inner").expect("inner should render");
+
+        let first_line = text.lines[0].layout.bounds();
+        assert!(
+            inline.top() < first_line.bottom() && inline.bottom() > first_line.top(),
+            "inline math should share a line with the leading text: math={inline:?} line={first_line:?}"
+        );
+
+        let center = (display.left() + display.right()) / 2.0;
+        let container_center = (inner.left() + inner.right()) / 2.0;
+        assert!(
+            (center - container_center).abs() <= px(1.5),
+            "display math in a mixed paragraph should stay centered: math={display:?} inner={inner:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn long_paragraph_with_inline_math_does_not_overflow(cx: &mut TestAppContext) {
+        let source = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod \
+                      tempor incididunt ut labore et dolore magna aliqua $x^2$ ut enim ad minim \
+                      veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea \
+                      commodo consequat duis aute irure dolor.";
+        let (mut cx, text) = render_math_layout(source, cx);
+        let inner = cx.debug_bounds("inner").expect("inner should render");
+
+        for line in text.lines.iter() {
+            let bounds = line.layout.bounds();
+            assert!(
+                bounds.right() <= inner.right() + px(1.0),
+                "text line overflows the container: {:?} (line {bounds:?}, inner {inner:?})",
+                line.layout.wrapped_text()
+            );
+        }
     }
 
     #[test]

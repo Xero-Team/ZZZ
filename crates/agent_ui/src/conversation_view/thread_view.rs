@@ -1,7 +1,8 @@
 use crate::{
     DEFAULT_THREAD_TITLE, SelectPermissionGranularity,
     agent_configuration::configure_context_server_modal::default_markdown_style,
-    default_thread_title, open_abs_path_at_point, thread_title_from_prompt,
+    default_thread_title, entry_view_state::TERMINAL_CONTENT_TOP_PADDING, open_abs_path_at_point,
+    thread_title_from_prompt,
 };
 use agent_client_protocol::schema::v1 as acp;
 use std::cell::RefCell;
@@ -6609,11 +6610,9 @@ impl ThreadView {
             .when(is_expanded && terminal_view.is_some(), |this| {
                 this.child(
                     div()
-                        .pt_2()
                         .border_t_1()
                         .when(tool_failed || command_failed, |card| card.border_dashed())
                         .border_color(border_color)
-                        .bg(cx.theme().colors().terminal_background)
                         .rounded_b_md()
                         .text_ui_sm(cx)
                         .h_full()
@@ -6623,7 +6622,10 @@ impl ThreadView {
                                 .content_mode(window, cx)
                                 .is_scrollable()
                             {
-                                div().h_72().child(terminal_view).into_any_element()
+                                div()
+                                    .h(rems(18. + TERMINAL_CONTENT_TOP_PADDING))
+                                    .child(terminal_view)
+                                    .into_any_element()
                             } else {
                                 terminal_view.into_any_element()
                             };
