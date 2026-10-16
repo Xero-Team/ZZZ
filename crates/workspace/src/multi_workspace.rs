@@ -924,6 +924,7 @@ impl MultiWorkspace {
 
         self.remove(
             [workspace.clone()],
+            false,
             move |this, window, cx| {
                 if let Some(workspace) = this
                     .workspaces_for_project_group(&group_key, cx)
@@ -1036,13 +1037,12 @@ impl MultiWorkspace {
                 .map(|group| group.key.clone())
         });
 
-        // Now remove the group.
-        self.project_groups.retain(|group| group.key != *group_key);
-        cx.emit(MultiWorkspaceEvent::ProjectGroupsChanged);
-
+        // The group is removed inside `remove` only after the save prompt is
+        // confirmed, so a cancelled prompt keeps the project in the list.
         let excluded_workspaces = workspaces.clone();
         self.remove(
             workspaces,
+            true,
             move |this, window, cx| {
                 if let Some(neighbor_key) = neighbor_key
                     && neighbor_key.host().is_none()
@@ -1908,9 +1908,13 @@ impl MultiWorkspace {
     /// workspaces being removed.
     ///
     /// Returns `true` if any workspaces were actually removed.
+    ///
+    /// When `remove_project_groups` is set, the project groups for the removed
+    /// workspaces are dropped only after the save prompt is confirmed.
     pub fn remove(
         &mut self,
         workspaces: impl IntoIterator<Item = Entity<Workspace>>,
+        remove_project_groups: bool,
         fallback_workspace: impl FnOnce(
             &mut Self,
             &mut Window,
@@ -1971,6 +1975,19 @@ impl MultiWorkspace {
             // Actually remove the workspaces.
             this.update_in(cx, |this, _, cx| {
                 let mut removed_any = false;
+
+                // The save prompt has been confirmed, so it is now safe to drop
+                // the project groups for the workspaces being removed.
+                if remove_project_groups {
+                    let workspace_to_delete_keys = workspaces
+                        .iter()
+                        .map(|workspace| workspace.read(cx).project_group_key(cx))
+                        .collect::<Vec<_>>();
+
+                    this.project_groups
+                        .retain(|group| !workspace_to_delete_keys.contains(&group.key));
+                    cx.emit(MultiWorkspaceEvent::ProjectGroupsChanged);
+                }
 
                 for workspace in &workspaces {
                     let was_retained = this.is_workspace_retained(workspace);

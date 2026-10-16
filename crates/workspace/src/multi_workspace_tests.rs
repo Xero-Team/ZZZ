@@ -533,6 +533,7 @@ async fn test_remove_fallback_via_find_or_create_skips_removed_workspaces(cx: &m
             let excluded = vec![workspace_a.clone()];
             mw.remove(
                 excluded.clone(),
+                false,
                 move |this, window, cx| {
                     this.find_or_create_workspace(
                         PathList::new(&[PathBuf::from("/root_a")]),

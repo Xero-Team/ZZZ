@@ -4174,6 +4174,7 @@ impl Sidebar {
             let remove_task = multi_workspace.update(cx, |mw, cx| {
                 mw.remove(
                     workspaces_to_remove,
+                    false,
                     move |this, window, cx| {
                         let active_workspace = this.workspace().clone();
                         this.find_or_create_workspace(
@@ -5499,7 +5500,11 @@ impl Sidebar {
                     )
             })
             .when(right_window_controls, |this| {
-                this.children(Self::render_right_window_controls(window, cx))
+                this
+                    // Without projects, nothing flex-grows to push right-side window controls
+                    // to the edge.
+                    .when(no_open_projects, |this| this.justify_end())
+                    .children(Self::render_right_window_controls(window, cx))
             })
     }
 

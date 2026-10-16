@@ -5434,6 +5434,7 @@ async fn test_restore_worktree_thread_uses_main_repo_project_group_key(cx: &mut 
     let remove_task = multi_workspace.update_in(cx, |mw, window, cx| {
         mw.remove(
             vec![worktree_workspace],
+            false,
             move |_this, _window, _cx| Task::ready(Ok(main_workspace)),
             window,
             cx,

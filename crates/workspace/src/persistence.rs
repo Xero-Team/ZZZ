@@ -2989,7 +2989,7 @@ mod tests {
                 .workspaces()
                 .find(|ws| *ws != &active)
                 .expect("should have a non-active workspace");
-            mw.remove([ws.clone()], |_, _, _| unreachable!(), _window, cx)
+            mw.remove([ws.clone()], false, |_, _, _| unreachable!(), _window, cx)
                 .detach_and_log_err(cx);
         });
 
@@ -5089,7 +5089,7 @@ mod tests {
         // Remove workspace at index 1 (the second workspace).
         multi_workspace.update_in(cx, |mw, window, cx| {
             let ws = mw.workspaces().nth(1).unwrap().clone();
-            mw.remove([ws], |_, _, _| unreachable!(), window, cx)
+            mw.remove([ws], false, |_, _, _| unreachable!(), window, cx)
                 .detach_and_log_err(cx);
         });
 
@@ -5201,7 +5201,7 @@ mod tests {
         // Remove workspace2 (index 1).
         multi_workspace.update_in(cx, |mw, window, cx| {
             let ws = mw.workspaces().nth(1).unwrap().clone();
-            mw.remove([ws], |_, _, _| unreachable!(), window, cx)
+            mw.remove([ws], false, |_, _, _| unreachable!(), window, cx)
                 .detach_and_log_err(cx);
         });
 
@@ -5283,7 +5283,7 @@ mod tests {
         // Remove workspace2 — this pushes a task to pending_removal_tasks.
         multi_workspace.update_in(cx, |mw, window, cx| {
             let ws = mw.workspaces().nth(1).unwrap().clone();
-            mw.remove([ws], |_, _, _| unreachable!(), window, cx)
+            mw.remove([ws], false, |_, _, _| unreachable!(), window, cx)
                 .detach_and_log_err(cx);
         });
 
@@ -6240,6 +6240,7 @@ mod tests {
         multi_workspace.update_in(cx, |mw, window, cx| {
             mw.remove(
                 vec![workspace_a.clone()],
+                false,
                 move |this, window, cx| {
                     this.find_or_create_local_workspace(
                         path_list,

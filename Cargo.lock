@@ -14216,7 +14216,6 @@ dependencies = [
  "uuid",
  "vfs",
  "watch",
- "windows 0.62.2",
  "worktree",
  "zlog",
 ]
