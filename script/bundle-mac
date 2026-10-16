@@ -145,7 +145,10 @@ if [[ "$skip_build" == false ]]; then
             exit 1
         fi
 
-        export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+        # Keep the Zig cache out of /tmp: macOS's tmp_cleaner purges files older
+        # than three days there, leaving empty cache directories that make Zig
+        # link against missing objects.
+        export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zzz-zig-cache}"
         export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
         mkdir -p "${ZIG_LOCAL_CACHE_DIR}"
 
