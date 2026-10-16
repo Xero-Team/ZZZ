@@ -11,7 +11,7 @@ description: Selective Zed upstream sync audit.
   `9269d59448`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline: `36682547bea1c3d4fa60c08d341cf60081853941`
-- Reviewed head: `5504e87bfdaa90b3b4852a814940ece148f5fe1d`
+- Reviewed head: `780ac03c02ab79ea616b4e327434df768a8b61d6`
 - Live upstream head queried: `5504e87bfdaa90b3b4852a814940ece148f5fe1d`
 - Query time: `2026-10-16T14:38:00+02:00`
 - Reviewed range: the twenty oldest commits after `36682547be`, oldest
@@ -211,4 +211,139 @@ function, so the pick applied cleanly with its new unit test.
 | `cargo test --workspace`                                                                | NOT RUN | not requested                                                         |
 
 The general reviewed baseline advances to
-`5504e87bfdaa90b3b4852a814940ece148f5fe1d`.
+`780ac03c02ab79ea616b4e327434df768a8b61d6`.
+
+## Continued Batch 2
+
+### Scope
+
+- Target branch: `sync/upstream-2026-10-16`, continuing the same local base
+  `9269d59448`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `780ac03c02ab79ea616b4e327434df768a8b61d6`
+- Reviewed head: `32b16ce2ada96ba86c9052e456a2642102b39b7a`
+- Live upstream head queried: `d678e7de4d9d2448f67d44b1c19e827257b40223`
+- Query time: `2026-10-16T19:03:35+02:00`
+- Reviewed range: the next twenty commits after `780ac03c02`, oldest first
+- Remaining after this batch: 9 commits through the queried live head
+
+The previous baseline is an ancestor of `FETCH_HEAD`. This batch stays fixed
+at twenty commits; the nine later commits remain queued.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                 |
+| ---------- | ----- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| 4a8ccb3d44 | A     | 49a4e55c4c   | Installs `@vscode/dwarf-debugging` for the JS debug adapter; direct cherry-pick.                            |
+| 5a5fbe7991 | A     | af894e377b   | Right-docked sidebar header keeps window controls at the edge with no projects; direct cherry-pick.         |
+| 953ac75529 | B     | 7fa5257c4c   | Adds the builtin Pyrefly LSP; resolves the venv binary via ZZZ's `Toolchain::execution_path`.               |
+| 21001b273f | C     | --           | Converts the iOS example to a Cargo example target; ZZZ has no `gpui_ios` backend.                          |
+| 402675e805 | C     | --           | Pins `wgpu`/`naga` to a git revision with an API migration across the divergent renderer; dependency churn. |
+| e93e6eae8f | C     | --           | Adds inactive ACP v2 initial sessions and config; ZZZ has no `acp/v2.rs`.                                   |
+| a598842e88 | C     | --           | Routes v2 reported session state; no local ACP v2 transport.                                                |
+| 23772fa6ef | C     | --           | Adds inactive v2 prompt receipt requests; absent ACP v2.                                                    |
+| 9be5cb6139 | C     | --           | Settles receipt submissions after disconnect; `acp_thread/src/submission.rs` and ACP v2 are absent.         |
+| 7fa2adbe08 | C     | --           | Broad markdown-parsing allocation refactor across divergent and locally deleted modules; not isolatable.    |
+| 28d0a3547f | C     | --           | Integrates inactive v2 receipt submissions; absent ACP v2 and native-agent receipts.                        |
+| 636924f6d4 | A     | 4a3fba83a5   | Injects HTML into `svg`/`mathml`/`raw` templates and CSS into `css({ ... })`; direct cherry-pick.           |
+| 664935cb5e | B     | 4e6e98d556   | Clipboard bitmap takes priority over image files in the agent panel; inline-assistant hunks omitted.        |
+| 8a21d136a7 | B     | af85c9eb71   | Queued message rows wrap so text stays readable in narrow panels.                                           |
+| 80f1bb45fa | A     | df274ac7c0   | Resolves file icons for stem-based names like `Dockerfile.prod`; direct cherry-pick.                        |
+| 7699cb8bb8 | C     | --           | Reworks the touch fling recognizer; ZZZ has no `crates/gpui/src/gestures.rs`.                               |
+| 97511be201 | B     | 6523363819   | Defers project-group removal until the save prompt is confirmed.                                            |
+| 9535c9d29d | B     | 7e4899351b   | Normalizes line endings in mention links and renders control chars in creases.                              |
+| 2be002692f | A     | 0f332f3fd8   | Derives Rust task variables from an ancestor manifest for files outside Cargo projects; direct cherry-pick. |
+| 32b16ce2ad | A     | --           | Already equivalent: local `9daa4e7901` corrected the same inverted ordering invariant.                      |
+
+Totals: six `A` (five with code changes, one already equivalent), five `B`,
+nine `C` across twenty commits.
+
+### Applied Work
+
+The five direct `A` changes used `git cherry-pick -x -s`. `32b16ce2ad` is
+already equivalent in product code. Each `B` commit has `Upstream`, `Retained`,
+and `Omitted` trailers.
+
+- `49a4e55c4c` installs `@vscode/dwarf-debugging` alongside `vscode-js-debug`
+  so WebAssembly sources can be debugged, factoring the installed-version
+  lookup into `installed_version_directory` and logging install failures
+  without aborting.
+- `af894e377b` adds a `justify_end` spacer when no project is open, so the
+  right-docked sidebar header pushes the window controls to the edge.
+- `4a3fba83a5` widens the `html` template injections to `svg`, `mathml`, and
+  `raw`, and adds CSS injection for `css({ ... })` object property templates.
+- `df274ac7c0` checks a file's stem before its suffixes, so `Dockerfile.prod`
+  and `Podfile.lock` resolve their icons.
+- `0f332f3fd8` returns no Cargo target information when a Rust file has no
+  ancestor `Cargo.toml`, so generic task and debugger variables still resolve.
+- `7fa5257c4c` registers the Pyrefly Python language server. The in-venv binary
+  is resolved through ZZZ's `Toolchain::execution_path` because the upstream
+  `Toolchain::path` accessor is not present locally.
+- `6523363819` moves project-group removal out of `remove_project_group` into
+  `MultiWorkspace::remove`, gated by a new `remove_project_groups` flag, so the
+  group is dropped only after the save prompt is confirmed. `close_workspace`,
+  the sidebar archive flow, and the test callers pass `false`.
+- `af85c9eb71` lets the queued-message row wrap, gives the editor `flex_1` with
+  a 120px floor, and replaces the fixed action-group width with `ml_auto`.
+- `7e4899351b` normalizes `\r\n` and `\r` in mention link names and renders
+  control characters in mention creases, with acp_thread and message_editor
+  regression tests.
+- `4e6e98d556` skips image files in `resolve_pasted_context_items` when the
+  clipboard also carries a bitmap, so a screenshot is inserted once.
+
+### Rejected Work
+
+- `21001b273f` converts the iOS example to a Cargo example target. ZZZ has no
+  `crates/gpui_ios` backend, so the crate and its example are absent.
+- `402675e805` pins `wgpu` and `naga` to a `gfx-rs/wgpu` git revision and
+  migrates descriptor, color-space, and present APIs. It is dominated by
+  dependency and lockfile churn, touches the locally divergent
+  `wgpu_renderer.rs`, and its Vulkan surface-teardown fix cannot be exercised
+  on this host.
+- `e93e6eae8f`, `a598842e88`, `23772fa6ef`, and `28d0a3547f` add and route ACP
+  v2 sessions, reported state, and receipt submissions. ZZZ has no
+  `crates/agent_servers/src/acp/v2.rs`, imports only `schema::v1 as acp`, and
+  keeps its ACP server in a flat `acp.rs`, so there is no v2 transport.
+- `9be5cb6139` settles receipt submissions after disconnect through
+  `crates/acp_thread/src/submission.rs` and `acp/v1.rs`, neither of which exists
+  locally; the receipt lifecycle depends on the absent v2 machinery.
+- `7fa2adbe08` is a broad markdown-parsing allocation refactor that changes the
+  `language_core` cache types and ripples through editor, languages, and
+  markdown. It conflicts with the locally deleted `crates/benchmarks`,
+  `call_hierarchy`, and `editor/src/inline_input.rs`, so no coherent slice is
+  isolatable.
+- `7699cb8bb8` reworks `TouchGestureRecognizer` in
+  `crates/gpui/src/gestures.rs`, which ZZZ does not have; its `gpui` ships no
+  touch gesture recognizer.
+
+### Verification
+
+| Check                                                                                    | Result  | Notes                                                                          |
+| ---------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------ |
+| Live `git ls-remote` and `git fetch --no-tags`                                           | PASS    | `FETCH_HEAD=d678e7de4d9d2448f67d44b1c19e827257b40223`                          |
+| Previous baseline ancestry                                                               | PASS    | `780ac03c02` is an ancestor of `FETCH_HEAD`                                    |
+| `cargo check --locked -p dap_adapters -p sidebar -p languages -p file_icons`             | PASS    | four `A` cherry-picks compile                                                  |
+| `cargo check --locked -p workspace`                                                      | PASS    | project-group removal port                                                     |
+| `cargo check --locked -p agent_ui -p acp_thread`                                         | PASS    | agent-panel ports compile                                                      |
+| `cargo check --locked --tests -p agent_ui -p acp_thread`                                 | PASS    | ported tests compile                                                           |
+| `cargo check --locked --tests -p workspace -p sidebar`                                   | PASS    | updated test callers compile                                                   |
+| `cargo test --locked -p acp_thread test_link_normalizes_line_endings_in_name`            | PASS    | 1 test passes                                                                  |
+| `cargo test --locked -p agent_ui test_paste_external_file_path_with_line_breaks_in_name` | PASS    | 1 test passes                                                                  |
+| `cargo test --locked -p workspace --lib remove`                                          | PASS    | 12 tests pass, including `test_remove_project_group_falls_back_to_neighbor`    |
+| `cargo test --locked -p languages --lib rust`                                            | PASS    | 11 tests pass, including the three `target_info_from_abs_path` cases           |
+| `cargo test --locked -p file_icons --lib`                                                | PASS    | no test module; icon resolution is not covered by a unit test                  |
+| `./script/check-philosophy`                                                              | PASS    | philosophy gate                                                                |
+| clippy `--all-targets` on the touched crates                                             | PASS    | clean                                                                          |
+| `./script/clippy` full passes on the sidebar/agent_ui set                                | BLOCKED | Pre-existing `recent_projects` feature-unification failure; also fails at base |
+| `git diff --check` and `cargo fmt --all -- --check`                                      | PASS    | only pre-existing `crates/project` baseline drift remains                      |
+| Windows and macOS runtime checks                                                         | NOT RUN | host is Linux                                                                  |
+| `cargo test --workspace`                                                                 | NOT RUN | not requested                                                                  |
+
+The general reviewed baseline advances to
+`32b16ce2ada96ba86c9052e456a2642102b39b7a`.
+
+The full `./script/clippy` run on a package set that pulls in `recent_projects`
+fails on a pre-existing non-exhaustive match over
+`RemoteConnectionOptions::Mock`; the same failure reproduces on the batch base
+`818f06038a`, so it is a baseline defect rather than a regression from this
+batch.
