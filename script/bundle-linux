@@ -367,7 +367,10 @@ if [[ "$remote_server_triple" != "aarch64-unknown-linux-musl" ]] \
     if ! rust_target_is_installed aarch64-unknown-linux-musl; then
         echo "Info: skipped aarch64 remote_server embed; Rust target is not installed."
     else
-        export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+        # Keep the Zig cache out of /tmp: macOS's tmp_cleaner purges files older
+        # than three days there, leaving empty cache directories that make Zig
+        # link against missing objects.
+        export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zzz-zig-cache}"
         aarch64_zig_local_cache_dir="${ZIG_GLOBAL_CACHE_DIR}/aarch64-unknown-linux-musl"
         mkdir -p "$aarch64_zig_local_cache_dir"
         rm -rf "${target_dir}/aarch64-unknown-linux-musl/release/build"/aws-lc-sys-*
@@ -415,7 +418,10 @@ build_macos_remote_server() {
 }
 
 if command -v zig >/dev/null 2>&1 && command -v cargo-zigbuild >/dev/null 2>&1; then
-    export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+    # Keep the Zig cache out of /tmp: macOS's tmp_cleaner purges files older
+    # than three days there, leaving empty cache directories that make Zig
+    # link against missing objects.
+    export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zzz-zig-cache}"
     mkdir -p "${ZIG_GLOBAL_CACHE_DIR}"
 
     saved_cxxflags="${CXXFLAGS:-}"
