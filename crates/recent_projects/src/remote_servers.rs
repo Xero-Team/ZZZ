@@ -540,6 +540,12 @@ impl ProjectPicker {
                 connection_string: format!("mock-{}", options.id).into(),
                 nickname: None,
             },
+            #[cfg(not(any(test, feature = "test-support")))]
+            #[allow(unreachable_patterns)]
+            _ => ProjectPickerData::Ssh {
+                connection_string: "".into(),
+                nickname: None,
+            },
         };
         let _path_task = cx
             .spawn_in(window, {

@@ -336,6 +336,13 @@ pub async fn open_remote_project(
                                 "recent_projects.remote_connections.failed_mock_server",
                                 "Failed to connect to mock server",
                             ),
+                            #[cfg(not(any(test, feature = "test-support")))]
+                            #[allow(unreachable_patterns)]
+                            _ => i18n::tr(
+                                cx,
+                                "recent_projects.remote_connections.failed_mock_server",
+                                "Failed to connect to mock server",
+                            ),
                         };
                         window.prompt(
                             PromptLevel::Critical,
@@ -417,6 +424,13 @@ pub async fn open_remote_project(
                             ),
                             #[cfg(any(test, feature = "test-support"))]
                             RemoteConnectionOptions::Mock(_) => i18n::tr(
+                                cx,
+                                "recent_projects.remote_connections.failed_mock_server",
+                                "Failed to connect to mock server",
+                            ),
+                            #[cfg(not(any(test, feature = "test-support")))]
+                            #[allow(unreachable_patterns)]
+                            _ => i18n::tr(
                                 cx,
                                 "recent_projects.remote_connections.failed_mock_server",
                                 "Failed to connect to mock server",
