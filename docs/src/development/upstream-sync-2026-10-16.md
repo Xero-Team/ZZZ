@@ -456,6 +456,20 @@ Threads a thinking-disable capability through `language_models` providers,
 `copilot_chat`, `cloud_llm_client`, and `language_models_cloud`. ZZZ has none
 of those crates; its AI surface is ACP-only.
 
+### Local Fix
+
+`ed08b99257` repairs the pre-existing feature-unification defect recorded at
+the end of Batch 2. `remote::RemoteConnectionOptions::Mock` exists whenever
+`remote/test-support` is enabled, which can leak into a build through another
+crate (`agent_ui/test-support` -> `workspace/test-support`) while
+`recent_projects/test-support` stays off. The Mock match arms in
+`recent_projects` are gated on that crate's own `test-support`, so a targeted
+`./script/clippy -p sidebar -p agent_ui` run failed with a non-exhaustive
+match. The fix mirrors the `cfg(not(any(test, feature = "test-support")))`
+wildcard already used in `crates/project/src/trusted_worktrees.rs`, keeping
+the matches exhaustive in both feature configurations without changing the
+production `remote` API.
+
 ### Verification
 
 | Check                                                       | Result  | Notes                                                   |
@@ -468,7 +482,8 @@ of those crates; its AI surface is ACP-only.
 | `cargo test --locked -p workspace --lib security_modal`     | PASS    | 6 tests pass, including the cross-platform Windows case |
 | `./script/check-philosophy`                                 | PASS    | philosophy gate                                         |
 | `git diff --check`                                          | PASS    | clean                                                   |
-| `./script/clippy`                                           | PASS    | after the batch-2 `recent_projects` baseline fix        |
+| `./script/clippy` (workspace)                               | PASS    | full `--workspace --all-features` run                   |
+| `./script/clippy -p sidebar -p agent_ui`                    | PASS    | after the `ed08b99257` local fix                        |
 | Windows and macOS runtime checks                            | NOT RUN | host is Linux                                           |
 | `cargo test --workspace`                                    | NOT RUN | not requested                                           |
 
