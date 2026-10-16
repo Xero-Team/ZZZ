@@ -6187,7 +6187,9 @@ mod tests {
         });
         for window in &windows[..3] {
             window
-                .update(cx, |_, window, _| assert_eq!(window.interaction.focus, None))
+                .update(cx, |_, window, _| {
+                    assert_eq!(window.interaction.focus, None)
+                })
                 .expect("window exists");
         }
         windows[3]
