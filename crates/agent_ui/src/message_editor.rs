@@ -256,6 +256,11 @@ async fn resolve_pasted_context_items(
     let default_image_name: SharedString = cx
         .update(|_, cx| app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into())
         .unwrap_or_else(|_| SharedString::from("Image"));
+    // A bitmap and image files in the clipboard are usually the same image (e.g. a
+    // screenshot saved to a temporary file), so skip image files when there's a bitmap.
+    let has_clipboard_image = entries
+        .iter()
+        .any(|entry| matches!(entry, ClipboardEntry::Image(_)));
 
     for entry in entries {
         match entry {
@@ -283,7 +288,7 @@ async fn resolve_pasted_context_items(
                         })
                         .await
                     {
-                        if supports_images {
+                        if supports_images && !has_clipboard_image {
                             items.push(ResolvedPastedContextItem::Image(image, name));
                         }
                         continue;
