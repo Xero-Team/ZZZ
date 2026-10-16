@@ -256,6 +256,11 @@ async fn resolve_pasted_context_items(
     let default_image_name: SharedString = cx
         .update(|_, cx| app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into())
         .unwrap_or_else(|_| SharedString::from("Image"));
+    // A bitmap and image files in the clipboard are usually the same image (e.g. a
+    // screenshot saved to a temporary file), so skip image files when there's a bitmap.
+    let has_clipboard_image = entries
+        .iter()
+        .any(|entry| matches!(entry, ClipboardEntry::Image(_)));
 
     for entry in entries {
         match entry {
@@ -283,7 +288,7 @@ async fn resolve_pasted_context_items(
                         })
                         .await
                     {
-                        if supports_images {
+                        if supports_images && !has_clipboard_image {
                             items.push(ResolvedPastedContextItem::Image(image, name));
                         }
                         continue;
@@ -4583,6 +4588,40 @@ mod tests {
             uri,
             &MentionUri::File {
                 abs_path: path!("/project/file.txt").into(),
+            }
+        );
+    }
+
+    #[gpui::test]
+    async fn test_paste_external_file_path_with_line_breaks_in_name(cx: &mut TestAppContext) {
+        init_test(cx);
+        let (message_editor, editor, mut cx) =
+            setup_paste_test_message_editor(json!({"a\r\nb.txt": "content"}), cx).await;
+        paste_external_paths(
+            &message_editor,
+            vec![PathBuf::from(path!("/project/a\r\nb.txt"))],
+            &mut cx,
+        );
+
+        let expected_uri = MentionUri::File {
+            abs_path: path!("/project/a\r\nb.txt").into(),
+        }
+        .to_uri()
+        .to_string();
+
+        editor.update(&mut cx, |editor, cx| {
+            assert_eq!(editor.text(cx), format!("[@a\nb.txt]({expected_uri}) "));
+        });
+
+        let contents = mention_contents(&message_editor, &mut cx).await;
+        let [(uri, Mention::Text { content, .. })] = contents.as_slice() else {
+            panic!("Unexpected mentions");
+        };
+        assert_eq!(content, "content");
+        assert_eq!(
+            uri,
+            &MentionUri::File {
+                abs_path: path!("/project/a\r\nb.txt").into(),
             }
         );
     }

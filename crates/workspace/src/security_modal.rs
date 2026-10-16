@@ -166,13 +166,11 @@ impl Render for SecurityModal {
                                         self.restricted_paths.values().filter_map(
                                             |restricted_path| {
                                                 let abs_path = if restricted_path.is_file {
-                                                    restricted_path
-                                                        .trusted_path
-                                                        .display_path()
-                                                        .parent()
+                                                    restricted_path.trusted_path.parent()
                                                 } else {
-                                                    Some(restricted_path.trusted_path.display_path())
+                                                    Some(restricted_path.trusted_path.clone())
                                                 }?;
+                                                let abs_path = abs_path.display_path();
                                                 let label = match &restricted_path.host {
                                                     Some(remote_host) => {
                                                         match &remote_host.user_name {
@@ -437,7 +435,7 @@ impl SecurityModal {
                 has_restricted_files |= restricted_path.is_file;
                 !restricted_path.is_file
             })
-            .filter_map(|restricted_path| restricted_path.trusted_path.display_path().parent())
+            .filter_map(|restricted_path| restricted_path.trusted_path.parent())
             .collect::<SmallVec<[_; 2]>>();
         match available_parents.len() {
             0 => {
@@ -460,7 +458,7 @@ impl SecurityModal {
                 .replacen(
                     "{}",
                     &self
-                        .shorten_path(available_parents[0])
+                        .shorten_path(available_parents[0].display_path())
                         .display()
                         .to_string(),
                     1,
