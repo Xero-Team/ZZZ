@@ -4174,6 +4174,7 @@ impl Sidebar {
             let remove_task = multi_workspace.update(cx, |mw, cx| {
                 mw.remove(
                     workspaces_to_remove,
+                    false,
                     move |this, window, cx| {
                         let active_workspace = this.workspace().clone();
                         this.find_or_create_workspace(
