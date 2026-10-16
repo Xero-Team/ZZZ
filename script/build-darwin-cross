@@ -1,0 +1,397 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: script/build-darwin-cross [options] [-- cargo-args...]
+
+Cross-compile ZZZ for macOS from Linux using zig + cargo-zigbuild and a
+downloaded macOS SDK, then assemble a .app bundle and (by default) an
+unsigned .dmg.
+
+The resulting bundle is not code-signed or notarized. Code signing,
+notarization, and the DMG license agreement require Apple tooling that only
+runs on macOS; use script/bundle-mac there instead.
+
+Options:
+  -h, --help          Show this help
+  -a, --arch ARCH     aarch64 (default, arm64) or x86_64
+  --debug             Build the dev profile instead of release
+  --profile NAME      Cargo profile (default: release)
+  --no-embed          Skip building and embedding remote_server archives
+  --no-dmg            Build only the .app bundle, skip the DMG
+  --skip-build        Reuse existing binaries and only assemble the bundle
+  --                  Pass the remaining arguments to cargo
+
+Environment:
+  SDKROOT             macOS SDK path (default: script/ensure-macos-sdk)
+  ZZZ_MACOS_SDK_VERSION  SDK version to download when SDKROOT is unset (default: 14.5)
+  ZZZ_APPLE_TARGET    Override the Rust target triple (default: <arch>-apple-darwin)
+  ZIG_GLOBAL_CACHE_DIR / ZIG_LOCAL_CACHE_DIR   zig cache locations
+EOF
+}
+
+if [[ "$(uname -s)" != Linux ]]; then
+  echo "script/build-darwin-cross is for Linux hosts." >&2
+  echo "On macOS, run: script/bundle-mac" >&2
+  exit 1
+fi
+
+arch=aarch64
+profile=release
+embed_remote_server=1
+build_dmg=1
+skip_build=0
+cargo_args=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -a | --arch)
+      arch="${2:?missing architecture}"
+      shift 2
+      ;;
+    --debug)
+      profile=dev
+      shift
+      ;;
+    --profile)
+      profile="${2:?missing profile}"
+      shift 2
+      ;;
+    --no-embed)
+      embed_remote_server=0
+      shift
+      ;;
+    --no-dmg)
+      build_dmg=0
+      shift
+      ;;
+    --skip-build)
+      skip_build=1
+      shift
+      ;;
+    --)
+      shift
+      cargo_args+=("$@")
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      echo "Unexpected argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+case "$arch" in
+  aarch64 | arm64)
+    rust_arch=aarch64
+    arch_suffix=aarch64
+    ;;
+  x86_64 | x64 | amd64)
+    rust_arch=x86_64
+    arch_suffix=x86_64
+    ;;
+  *)
+    echo "Unsupported architecture: $arch (use aarch64 or x86_64)" >&2
+    exit 1
+    ;;
+esac
+
+triple="${ZZZ_APPLE_TARGET:-${rust_arch}-apple-darwin}"
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+artifact_profile="$profile"
+if [[ "$profile" == dev ]]; then
+  artifact_profile=debug
+fi
+
+cargo_profile_args=()
+bundle_profile_args=()
+if [[ "$profile" == dev ]]; then
+  bundle_profile_args=()
+elif [[ "$profile" == release ]]; then
+  cargo_profile_args=(--release)
+  bundle_profile_args=(--release)
+else
+  cargo_profile_args=(--profile "$profile")
+  bundle_profile_args=(--profile "$profile")
+fi
+
+require_tool() {
+  local tool="$1"
+  local hint="$2"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Error: ${tool} is required but was not found on PATH." >&2
+    echo "${hint}" >&2
+    exit 1
+  fi
+}
+
+require_tool zig "Install zig from https://ziglang.org/learn/getting-started or via zigup."
+require_tool cargo-zigbuild "Install with: cargo install cargo-zigbuild"
+require_tool mkfs.hfsplus "Install hfsprogs/hfsplus-tools (Fedora: sudo dnf install hfsplus-tools)."
+if [[ "$build_dmg" -eq 1 ]]; then
+  require_tool dmg "Build libdmg-hfsplus (https://github.com/planetbeing/libdmg-hfsplus) and put dmg on PATH."
+  require_tool hfsplus "Build libdmg-hfsplus and put hfsplus on PATH."
+fi
+
+cargo_bundle_version=$(cargo -q bundle --help 2>&1 | head -n 1 || echo "")
+if [[ "$cargo_bundle_version" != "cargo-bundle v0.6.1-zed" ]]; then
+  echo "Error: cargo-bundle v0.6.1-zed is required (found: ${cargo_bundle_version:-none})." >&2
+  echo "Install with: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy" >&2
+  exit 1
+fi
+
+# The full GUI app references CoreAudio process-tap APIs that older SDKs do
+# not declare; ensure-macos-sdk defaults to 14.5.
+if [[ -z "${SDKROOT:-}" ]]; then
+  SDKROOT="$(script/ensure-macos-sdk "${ZZZ_MACOS_SDK_VERSION:-14.5}")"
+fi
+export SDKROOT
+
+# The macOS video backend uses AVFoundation, so there is no FFmpeg to bundle.
+# macOS has no libstdc++ headers, so C++ dependencies must use libc++.
+export CXXFLAGS="-stdlib=libc++"
+
+if ! rustup target list --installed | grep -qx "$triple"; then
+  rustup target add "$triple"
+fi
+
+channel="$(<crates/zzz/RELEASE_CHANNEL)"
+export ZZZ_RELEASE_CHANNEL="$channel"
+export ZZZ_BUNDLE=true
+
+if [[ "$skip_build" -eq 0 ]]; then
+  cargo xtask grammars generate
+  script/generate-licenses
+fi
+
+embed_dir="${repo_root}/target"
+if [[ "$embed_remote_server" -eq 1 ]]; then
+  export ZIG_GLOBAL_CACHE_DIR="${ZIG_GLOBAL_CACHE_DIR:-/tmp/zzz-zig-cache}"
+  export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-${ZIG_GLOBAL_CACHE_DIR}/local}"
+  mkdir -p "$ZIG_LOCAL_CACHE_DIR"
+
+  if [[ "$skip_build" -eq 0 ]]; then
+    # remote_server transitively depends on remote_server_embed; without this
+    # the embed build script would recursively build every remote_server target.
+    export ZZZ_BUILDING_REMOTE_SERVER=1
+
+    echo "Compiling remote_server for ${triple}"
+    cargo zigbuild --release --package remote_server --target "$triple"
+    gzip -f --stdout --best "target/${triple}/release/remote_server" \
+      > "target/zzz-remote-server-macos-${arch_suffix}.gz"
+
+    build_linux_remote_server() {
+      local linux_triple="$1"
+      local linux_arch="$2"
+      rustup target add "$linux_triple"
+      rm -rf "target/${linux_triple}/release/build"/aws-lc-sys-*
+      rm -rf "target/${linux_triple}/release/.fingerprint"/aws-lc-sys-*
+      rm -f "target/${linux_triple}/release/deps"/libaws_lc*
+      echo "Compiling remote_server for ${linux_triple}"
+      cargo zigbuild --release --package remote_server --target "$linux_triple"
+      gzip -f --stdout --best "target/${linux_triple}/release/remote_server" \
+        > "target/zzz-remote-server-linux-${linux_arch}.gz"
+    }
+
+    saved_rustflags="${RUSTFLAGS:-}"
+    saved_sdkroot="${SDKROOT:-}"
+    saved_cxxflags="${CXXFLAGS:-}"
+    unset CXXFLAGS
+    unset SDKROOT
+    export RUSTFLAGS="${saved_rustflags} -C target-feature=+crt-static -A linker_messages"
+    build_linux_remote_server x86_64-unknown-linux-musl x86_64
+    build_linux_remote_server aarch64-unknown-linux-musl aarch64
+    if [[ -n "$saved_cxxflags" ]]; then
+      export CXXFLAGS="$saved_cxxflags"
+    else
+      unset CXXFLAGS
+    fi
+    if [[ -n "$saved_sdkroot" ]]; then
+      export SDKROOT="$saved_sdkroot"
+    else
+      unset SDKROOT
+    fi
+    if [[ -n "$saved_rustflags" ]]; then
+      export RUSTFLAGS="$saved_rustflags"
+    else
+      unset RUSTFLAGS
+    fi
+    unset ZZZ_BUILDING_REMOTE_SERVER
+  fi
+
+  export ZZZ_EMBED_REMOTE_SERVER_DIR="$embed_dir"
+  export ZZZ_EMBED_REMOTE_SERVERS=1
+else
+  export ZZZ_SKIP_EMBED_REMOTE_SERVER=1
+fi
+
+if [[ "$skip_build" -eq 0 ]]; then
+  echo "Compiling zzz and cli for ${triple}"
+  cargo zigbuild \
+    "${cargo_profile_args[@]}" \
+    --package zzz \
+    --package cli \
+    --target "$triple" \
+    "${cargo_args[@]}"
+fi
+
+echo "Creating application bundle"
+pushd crates/zzz
+manifest_path="Cargo.toml"
+manifest_backup_path="$(mktemp)"
+cp "$manifest_path" "$manifest_backup_path"
+sed -i.bundle-backup \
+  "s/package.metadata.bundle-${channel}/package.metadata.bundle/" \
+  "$manifest_path"
+
+# cargo-bundle must not invoke the host cargo (which cannot link Mach-O); the
+# cross-compiled binaries are copied into the bundle below.
+export CARGO_BUNDLE_SKIP_BUILD=true
+if ! app_path=$(cargo bundle "${bundle_profile_args[@]}" --target "$triple" --select-workspace-root --bin zzz | xargs); then
+  mv "$manifest_backup_path" "$manifest_path"
+  rm -f "${manifest_path}.bundle-backup"
+  popd
+  exit 1
+fi
+
+mv "$manifest_backup_path" "$manifest_path"
+rm -f "${manifest_path}.bundle-backup"
+popd
+echo "Bundled ${app_path}"
+
+info_plist="${app_path}/Contents/Info.plist"
+if [[ ! -f "$info_plist" ]]; then
+  echo "error: cargo-bundle did not produce Info.plist at ${info_plist}" >&2
+  exit 1
+fi
+if ! grep -q "CFBundleIdentifier" "$info_plist"; then
+  echo "error: bundled Info.plist is missing CFBundleIdentifier" >&2
+  exit 1
+fi
+if grep -q "<string>zzz.zzz</string>" "$info_plist"; then
+  echo "error: cargo-bundle produced a stub Info.plist." >&2
+  echo "Ensure [package.metadata.bundle.bin.zzz] exists for release channel '${channel}'." >&2
+  exit 1
+fi
+if ! grep -q "CFBundleIconFile" "$info_plist"; then
+  echo "error: bundled Info.plist is missing CFBundleIconFile" >&2
+  exit 1
+fi
+
+# DocumentTypes.plist references CFBundleTypeIconFile "Document".
+document_icon_source="crates/zzz/resources/Document.icns"
+document_icon_target="${app_path}/Contents/Resources/Document.icns"
+if [[ -f "$document_icon_source" ]]; then
+  mkdir -p "$(dirname "$document_icon_target")"
+  cp "$document_icon_source" "$document_icon_target"
+else
+  echo "Warning: missing ${document_icon_source}; macOS document icons may not appear." >&2
+fi
+
+cp -f "target/${triple}/${artifact_profile}/zzz" "${app_path}/Contents/MacOS/zzz"
+cp -f "target/${triple}/${artifact_profile}/cli" "${app_path}/Contents/MacOS/cli"
+
+GIT_VERSION="v2.43.3"
+GIT_VERSION_SHA="fa29823"
+GIT_ARM64_SHA256="f014b290f36d121bbc47b29b556044c4f6a2f6494cf78ed2eacfa501b77363b6"
+GIT_X64_SHA256="02fb29a47a07e9a7f841888661f32ebc80a56930864dd19b674d80ffc429c96d"
+
+download_git() {
+  local git_arch="$1"
+  local target_binary="$2"
+  local url sha256
+  case "$git_arch" in
+    aarch64-apple-darwin)
+      url="https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-arm64.tar.gz"
+      sha256="$GIT_ARM64_SHA256"
+      ;;
+    x86_64-apple-darwin)
+      url="https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-x64.tar.gz"
+      sha256="$GIT_X64_SHA256"
+      ;;
+    *)
+      echo "Unsupported git architecture: ${git_arch}" >&2
+      exit 1
+      ;;
+  esac
+
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  local archive_path="${temp_dir}/git.tar.gz"
+  curl --silent --fail --location --retry 3 --retry-all-errors -o "$archive_path" "$url"
+  local actual_sha256
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_sha256="$(sha256sum "$archive_path" | cut -d ' ' -f 1)"
+  else
+    actual_sha256="$(shasum -a 256 "$archive_path" | cut -d ' ' -f 1)"
+  fi
+  if [[ "$actual_sha256" != "$sha256" ]]; then
+    echo "Downloaded git archive checksum mismatch: expected ${sha256}, got ${actual_sha256}" >&2
+    rm -rf "$temp_dir"
+    exit 1
+  fi
+  tar -xzf "$archive_path" -C "$temp_dir"
+  mv "${temp_dir}/bin/git" "$target_binary"
+  rm -rf "$temp_dir"
+}
+
+echo "Downloading git binary"
+download_git "$triple" "${app_path}/Contents/MacOS/git"
+
+if [[ -n "$(find "$app_path" -type l -print -quit)" ]]; then
+  echo "Warning: the app bundle contains symlinks; the HFS+ builder copies their targets instead." >&2
+fi
+
+if [[ "$build_dmg" -eq 1 && "$profile" != dev ]]; then
+  dmg_target_directory="target/${triple}/${artifact_profile}"
+  dmg_source_directory="${dmg_target_directory}/dmg"
+  dmg_file_path="${dmg_target_directory}/ZZZ-${arch_suffix}.dmg"
+
+  rm -rf "$dmg_source_directory"
+  mkdir -p "$dmg_source_directory"
+  cp -R "$app_path" "$dmg_source_directory/"
+
+  size_mb="$(du -sm "$dmg_source_directory" | cut -f 1)"
+  size_mb=$((size_mb + size_mb / 5 + 16))
+  hfs_image="$(mktemp --suffix=.hfs)"
+  trap 'rm -f "$hfs_image"' EXIT
+
+  dd if=/dev/zero of="$hfs_image" bs=1M count="$size_mb" status=none
+  mkfs.hfsplus "$hfs_image" >/dev/null
+  hfsplus "$hfs_image" addall "$dmg_source_directory" / >/dev/null
+
+  # libdmg-hfsplus stores every file as 0644; restore the executable bit that
+  # macOS needs for the app binary, the CLI, and the bundled git.
+  while IFS= read -r -d '' executable; do
+    relative="${executable#"$dmg_source_directory"/}"
+    hfsplus "$hfs_image" chmod 755 "/${relative}" >/dev/null
+  done < <(find "$dmg_source_directory" -type f -perm -u+x -print0)
+
+  rm -f "$dmg_file_path"
+  echo "Creating DMG at ${dmg_file_path}"
+  dmg build "$hfs_image" "$dmg_file_path"
+
+  rm -f "$hfs_image"
+  trap - EXIT
+
+  echo "Built ${dmg_file_path} (unsigned)"
+fi
+
+echo "Built ${app_path}"
+echo "Built target/${triple}/${artifact_profile}/zzz"
+echo "Built target/${triple}/${artifact_profile}/cli"
