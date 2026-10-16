@@ -14,7 +14,7 @@ ZZZ has built-in support for CSS.
 
 ## Tailwind CSS
 
-ZZZ also supports [Tailwind CSS](./tailwindcss.md) out-of-the-box. To use Tailwind CSS IntelliSense in CSS files, configure the Tailwind CSS language server for the `CSS` language and disable the default CSS language server. See the [Tailwind CSS documentation](./tailwindcss.md) for more detail.
+ZZZ also supports [Tailwind CSS](./tailwindcss.md) out-of-the-box. To use Tailwind CSS IntelliSense in CSS files, configure the Tailwind CSS language server for the `CSS` language and disable the default CSS language server. See the [Tailwind CSS documentation](./tailwindcss.md#using-tailwind-css-mode-in-css-files) for more detail.
 
 This enables autocomplete, diagnostics, and hover previews for Tailwind-specific CSS such as `@apply`, `@layer`, and `@theme`. The `tailwindcss-intellisense-css` language server is an alternative to the default CSS language server; do not enable both at the same time.
 

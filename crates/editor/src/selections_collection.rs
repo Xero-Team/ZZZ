@@ -91,6 +91,15 @@ impl SelectionsCollection {
         (0..disjoint.len()).map(move |ix| disjoint[ix].range())
     }
 
+    /// Disjoint selection ranges plus the pending selection's range, if any.
+    ///
+    /// Jumps that unfold folded destinations include the pending anchor so the
+    /// deferred selection is revealed before it is resolved.
+    pub fn anchor_ranges_with_pending(&self) -> impl Iterator<Item = Range<Anchor>> + '_ {
+        self.disjoint_anchor_ranges()
+            .chain(self.pending_anchor().map(|selection| selection.range()))
+    }
+
     /// Non-overlapping selections using anchors, including the pending selection.
     pub fn all_anchors(&self, snapshot: &DisplaySnapshot) -> Arc<[Selection<Anchor>]> {
         if self.pending.is_none() {
@@ -577,6 +586,7 @@ impl SelectionsCollection {
             snapshot,
             collection: self,
             selections_changed: false,
+            preserve_buffer_positions: false,
         };
 
         let result = change(&mut mutable_collection);
@@ -660,6 +670,7 @@ pub struct MutableSelectionsCollection<'snap, 'a> {
     collection: &'a mut SelectionsCollection,
     snapshot: &'snap DisplaySnapshot,
     selections_changed: bool,
+    preserve_buffer_positions: bool,
 }
 
 impl fmt::Debug for MutableSelectionsCollection<'_, '_> {
@@ -667,11 +678,16 @@ impl fmt::Debug for MutableSelectionsCollection<'_, '_> {
         f.debug_struct("MutableSelectionsCollection")
             .field("collection", &self.collection)
             .field("selections_changed", &self.selections_changed)
+            .field("preserve_buffer_positions", &self.preserve_buffer_positions)
             .finish()
     }
 }
 
 impl MutableSelectionsCollection<'_, '_> {
+    pub(crate) fn preserve_buffer_positions(&mut self) {
+        self.preserve_buffer_positions = true;
+    }
+
     pub fn display_snapshot(&self) -> DisplaySnapshot {
         self.snapshot.clone()
     }
@@ -873,9 +889,13 @@ impl MutableSelectionsCollection<'_, '_> {
 
     pub fn select_anchors(&mut self, selections: Vec<Selection<Anchor>>) {
         let map = self.display_snapshot();
-        let resolved_selections =
+        let resolved_selections = if self.preserve_buffer_positions {
+            resolve_selections_without_display_round_trip::<MultiBufferOffset, _>(&selections, &map)
+                .collect::<Vec<_>>()
+        } else {
             resolve_selections_wrapping_blocks::<MultiBufferOffset, _>(&selections, &map)
-                .collect::<Vec<_>>();
+                .collect::<Vec<_>>()
+        };
         self.select(resolved_selections);
     }
 
