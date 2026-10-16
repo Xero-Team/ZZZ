@@ -347,3 +347,130 @@ fails on a pre-existing non-exhaustive match over
 `RemoteConnectionOptions::Mock`; the same failure reproduces on the batch base
 `818f06038a`, so it is a baseline defect rather than a regression from this
 batch.
+
+## Continued Batch 3
+
+### Scope
+
+- Target branch: `sync/upstream-2026-10-16`, continuing the same local base
+  `9269d59448`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `32b16ce2ada96ba86c9052e456a2642102b39b7a`
+- Reviewed head: `9f63850f7affbd57772a4f99554d4fd333b50a6f`
+- Live upstream head queried: `9f63850f7affbd57772a4f99554d4fd333b50a6f`
+- Query time: `2026-10-16T19:10:53+02:00`
+- Reviewed range: the ten commits after `32b16ce2ad`, oldest first
+- Remaining after this batch: 0 commits through the queried live head
+
+The previous baseline is an ancestor of `FETCH_HEAD`. Upstream advanced by
+one commit (`9f63850f7a`) since the last batch, so this run drains the queue.
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                        |
+| ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| 5504e87bfd | B     | 19db6a0d9e   | Derives restricted-path parents through `TrustedPath::parent`; upstream's `PathStyle` additions omitted.           |
+| df51ce9d4c | C     | --           | Adds ACP v2 session cancellation; `acp/v2.rs` and `acp_thread/src/submission.rs` are absent.                       |
+| 9b421ed7fe | C     | --           | Adds v2 `session/list`; absent ACP v2 transport.                                                                   |
+| 4f70271800 | C     | --           | Adds v2 session resume and replay (901 lines in `acp/v2.rs`); absent ACP v2.                                       |
+| df1ce4fee3 | C     | --           | Preserves organization UI permissions for a GitHub App install surface ZZZ does not have.                          |
+| 8c8ada0fbf | C     | --           | Separates explicit session close from view release for the absent v2 backend; new trait API would be dead.         |
+| 14119f8d87 | A     | 7b219037cb   | Narrows Rust `sql!` injection to literal string content; direct cherry-pick.                                       |
+| 6b218b8412 | C     | --           | Bumps the ACP SDK to 3.4.0 for the v2 migration; dependency and lockfile churn with no independent local behavior. |
+| d678e7de4d | C     | --           | Documents Gemini 4 Argon hosted pricing; ZZZ has no `docs/src/account` hosted-model page.                          |
+| 9f63850f7a | C     | --           | Effort-specific thinking controls touch the absent `language_models`, `copilot_chat`, and `cloud_llm_client`.      |
+
+Totals: one `A`, one `B`, eight `C` across ten commits.
+
+### Applied Work
+
+- `7b219037cb` is a direct `git cherry-pick -x -s` of `14119f8d87`, with one
+  local adaptation: ZZZ's `LanguageConfig::matcher` is a `LanguageMatcher`, not
+  an `Arc<LanguageMatcher>`, so the added `sql_lang` test helper drops the
+  `Arc::new` wrapper.
+- `19db6a0d9e` is a `B` port of `5504e87bfd`.
+
+### Per-Commit Narrative
+
+#### 5504e87bfd — trust scope parents (B)
+
+Upstream switched the security modal from `Path::parent` to
+`PathStyle::parent` so a remote Windows worktree opened from Unix shows its
+containing folder. ZZZ already routes trust paths through
+`TrustedPath`/`NativePath` and its `trusted_worktrees` auto-trust logic already
+uses `TrustedPath::starts_with`, so upstream's `PathStyle::parent`,
+`starts_with`, and `join_path_preserving_components` additions have no local
+caller and were omitted, along with the async home-directory task. Two
+remaining raw-`Path` sites were ported: the project-list label in `Render` and
+`build_trust_label` now call `TrustedPath::parent`, which resolves Windows
+display paths correctly on Unix. The existing
+`validate_trust_scope_accepts_remote_windows_paths_cross_platform` test already
+asserts `TrustedPath::parent` for a Windows path, so the ported behavior is
+covered.
+
+#### 14119f8d87 — Rust `sql!` injection (A)
+
+`injections.scm` now captures `string_content` for `string_literal` and
+`raw_string_literal` inside `sql!`, and keeps the historical unquoted
+token-tree form via a `#not-match?` guard. The commit's `syntax_map_tests.rs`
+additions auto-merged onto ZZZ's existing `sql_lang` helper; the only
+adaptation is the non-`Arc` matcher field noted above.
+
+#### df51ce9d4c, 9b421ed7fe, 4f70271800 — ACP v2 session lifecycle (C)
+
+These three add cancellation, `session/list`, and resume/replay to the inactive
+v2 adapter. ZZZ has no `crates/agent_servers/src/acp/v2.rs` (its ACP server is
+a flat `acp.rs`), imports only `schema::v1 as acp`, and has no
+`crates/acp_thread/src/submission.rs`; the receipt lifecycle they extend does
+not exist locally.
+
+#### df1ce4fee3 — organization UI permissions (C)
+
+Adds `ui_permissions.can_install_github_app` to the `Organization` record. The
+field only feeds the organization GitHub App install surface, an account and
+commercial path that ZZZ omits.
+
+#### 8c8ada0fbf — session close vs view release (C)
+
+Adds `AgentConnection::should_close_sessions_on_release` so the v2 backend can
+opt out of automatic teardown, and rewrites `close_all_sessions` to aggregate
+failures around v2 close-lifecycle tests. Without a v2 backend there is no
+non-default implementor, so the new trait API would be dead scaffolding and its
+error-aggregation rework is coupled to the absent v2 session model.
+
+#### 6b218b8412 — ACP SDK 3.4.0 (C)
+
+A `Cargo.toml`/`Cargo.lock` bump that moves `agent-client-protocol` and its
+schema to the versions carrying the v2 protocol. ZZZ pins `=3.3.0` with the
+`unstable` feature only, so this is dependency churn with no independent local
+behavior.
+
+#### d678e7de4d — Gemini 4 Argon pricing (C)
+
+Edits `docs/src/account/zed-hosted-models.md`, a hosted-model pricing page that
+ZZZ does not ship.
+
+#### 9f63850f7a — effort-specific thinking controls (C)
+
+Threads a thinking-disable capability through `language_models` providers,
+`copilot_chat`, `cloud_llm_client`, and `language_models_cloud`. ZZZ has none
+of those crates; its AI surface is ACP-only.
+
+### Verification
+
+| Check                                                       | Result  | Notes                                                   |
+| ----------------------------------------------------------- | ------- | ------------------------------------------------------- |
+| Live `git ls-remote` and `git fetch --no-tags`              | PASS    | `FETCH_HEAD=9f63850f7affbd57772a4f99554d4fd333b50a6f`   |
+| Previous baseline ancestry                                  | PASS    | `32b16ce2ad` is an ancestor of `FETCH_HEAD`             |
+| `cargo check --locked --tests -p language -p grammars`      | PASS    | `sql!` injection cherry-pick                            |
+| `cargo test --locked -p language --lib test_rust_sql_macro` | PASS    | 2 tests pass                                            |
+| `cargo check --locked -p workspace`                         | PASS    | trust-parent port                                       |
+| `cargo test --locked -p workspace --lib security_modal`     | PASS    | 6 tests pass, including the cross-platform Windows case |
+| `./script/check-philosophy`                                 | PASS    | philosophy gate                                         |
+| `git diff --check`                                          | PASS    | clean                                                   |
+| `./script/clippy`                                           | PASS    | after the batch-2 `recent_projects` baseline fix        |
+| Windows and macOS runtime checks                            | NOT RUN | host is Linux                                           |
+| `cargo test --workspace`                                    | NOT RUN | not requested                                           |
+
+The general reviewed baseline advances to
+`9f63850f7affbd57772a4f99554d4fd333b50a6f`.
