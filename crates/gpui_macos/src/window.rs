@@ -886,6 +886,7 @@ impl MacWindow {
             display_id,
             window_min_size,
             tabbing_identifier,
+            use_display_p3,
             ..
         }: WindowParams,
         cursor_visible: Arc<AtomicBool>,
@@ -1016,6 +1017,7 @@ impl MacWindow {
                     native_view.cast(),
                     bounds.size.map(|pixels| pixels.as_f32()),
                     false,
+                    use_display_p3,
                 ),
                 request_frame_callback: None,
                 event_callback: None,
