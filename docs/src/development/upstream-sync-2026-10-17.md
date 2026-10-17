@@ -87,6 +87,7 @@ required protocol and type architecture is absent.
 | Previous baseline ancestry                                                                 | PASS    | `9f63850f7a` is an ancestor of `FETCH_HEAD`           |
 | `cargo check --locked -p gpui -p settings_content -p settings -p settings_ui -p workspace` | PASS    | settings and window-option wiring                     |
 | `cargo check --locked -p zzz`                                                              | PASS    | application crate                                     |
+| `./script/clippy -p gpui -p settings_content -p settings -p settings_ui -p workspace`      | PASS    | targeted lint                                         |
 | `cargo fmt --check`                                                                        | PASS    | clean                                                 |
 | `git diff --check`                                                                         | PASS    | clean                                                 |
 | `./script/check-philosophy`                                                                | PASS    | philosophy gate                                       |
