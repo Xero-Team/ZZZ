@@ -221,6 +221,7 @@ sha	class	reason_code	note	source
 56303a3372	C	philosophy	Audio recovery requires broad CPAL lockfile churn and LiveKit collaboration compatibility changes.	upstream-sync-2026-10-09.md
 5631830c	C	untriaged	Depends on the unabsorbed Bedrock Mantle model surface.	upstream-sync-2026-08-27.md
 5638be1f	C	philosophy	ChatGPT subscription authentication.	upstream-sync-2026-08-07.md
+56934ec056	C	upstream-infra	Patches ACP v2 metadata by key; ZZZ imports only `schema::v1` and has no `acp/v2.rs` or `MetadataUpdate::V2`.	upstream-sync-2026-10-17.md
 5786fee5	C	untriaged	Community automation.	upstream-sync-2026-08-07.md
 582e6a57	C	unisolatable	Broad async language-loader and query API rewrite.	upstream-sync-2026-08-27.md
 5989a369d3	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
@@ -254,6 +255,7 @@ sha	class	reason_code	note	source
 65f3428f	C	philosophy	Collaboration panel.	upstream-sync-2026-08-07.md
 66432e4ca9	C	absent-api	Requires the absent `LocalSnapshot.external_canonical_to_relative` index; ZZZ only has scanner-internal multi-target symlink mappings that cannot safely serve synchronous LSP lookup.	upstream-sync-2026-10-04.md
 66ed3027	C	philosophy	Native agent panel UI; no ACP-only surface.	upstream-sync-2026-08-07.md
+670a779a5e	C	upstream-infra	Adds opt-in Subsecond hot reloading, five new dependencies, and lockfile churn with no current ZZZ caller.	upstream-sync-2026-10-17.md
 6721ea2e	C	diverged	Reset dock panels; workspace conflict.	upstream-sync-2026-08-18.md
 674dd790	C	unisolatable	Pure ACP stdio/debug-log refactor into new `acp/` submodules; local `acp.rs` is consolidated, so the extraction is an unisolatable rewrite.	upstream-sync-2026-09-24.md
 67b41bf976	C	upstream-infra	Dependency and lockfile bump of the ACP SDK with no independent ZZZ behavior.	upstream-sync-2026-10-10.md
