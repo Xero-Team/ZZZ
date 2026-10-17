@@ -19,9 +19,7 @@ test-support = []
 anyhow.workspace = true
 base64.workspace = true
 chacha20poly1305.workspace = true
-# Pinned: glass_pumpkin 2.0.0-rc1 moved to num-bigint 0.5, which is
-# semver-incompatible with grammers-crypto 0.10's num-bigint 0.4 usage.
-glass_pumpkin = "=2.0.0-rc0"
+glass_pumpkin = "=2.0.0"
 grammers-client.workspace = true
 grammers-session.workspace = true
 grammers-tl-types.workspace = true

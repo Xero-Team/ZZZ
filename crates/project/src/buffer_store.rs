@@ -1522,8 +1522,10 @@ impl BufferStore {
             })
             .await?;
         } else {
-            this.update(&mut cx, |this, cx| this.save_buffer(buffer.clone(), false, cx))
-                .await?;
+            this.update(&mut cx, |this, cx| {
+                this.save_buffer(buffer.clone(), false, cx)
+            })
+            .await?;
         }
 
         Ok(buffer.read_with(&cx, |buffer, _| proto::BufferSaved {

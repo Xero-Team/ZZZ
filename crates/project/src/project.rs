@@ -2819,8 +2819,10 @@ impl Project {
     ) -> Task<Result<()>> {
         cx.spawn(async move |this, cx| {
             let save_tasks = buffers.into_iter().filter_map(|buffer| {
-                this.update(cx, |this, cx| this.save_buffer_with_force(buffer, force, cx))
-                    .ok()
+                this.update(cx, |this, cx| {
+                    this.save_buffer_with_force(buffer, force, cx)
+                })
+                .ok()
             });
             try_join_all(save_tasks).await?;
             Ok(())

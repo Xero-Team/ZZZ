@@ -3912,8 +3912,9 @@ impl LocalLspStore {
                     });
                     if let Some(buffer) = dirty_buffer {
                         this.update(cx, |this, cx| {
-                            this.buffer_store()
-                                .update(cx, |buffer_store, cx| buffer_store.save_buffer(buffer, false, cx))
+                            this.buffer_store().update(cx, |buffer_store, cx| {
+                                buffer_store.save_buffer(buffer, false, cx)
+                            })
                         })
                         .await
                         .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;

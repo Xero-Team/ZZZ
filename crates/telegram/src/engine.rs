@@ -11,13 +11,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use base64::Engine as _;
-use grammers_client::client::{
-    GlobalSearchIter, LoginToken, PasswordToken, SearchIter, UpdatesConfiguration,
-};
+use grammers_client::client::{GlobalSearchIter, LoginToken, PasswordToken, SearchIter};
 use grammers_client::media::{InputMedia, Media, PhotoSize};
 use grammers_client::message::{InputMessage, Message};
 use grammers_client::peer::{Dialog, Peer};
-use grammers_client::sender::{ConnectionParams, SenderPool};
+use grammers_client::sender::{ConnectionParams, SenderPool, UpdatesConfiguration};
 use grammers_client::session::SessionData;
 use grammers_client::session::types::{PeerId, PeerKind, PeerRef};
 use grammers_client::tl;
@@ -1787,7 +1785,7 @@ impl EngineState {
         if let Some(chat) = self.view.chats.iter_mut().find(|chat| chat.id == chat_id) {
             chat.preview = preview;
             chat.preview_media = preview_media;
-            chat.timestamp_unix = message.date().timestamp();
+            chat.timestamp_unix = message.date().as_second();
         }
     }
 
@@ -2494,7 +2492,7 @@ fn dialog_to_snapshot(dialog: &Dialog) -> Option<ChatSnapshot> {
     let last_message = dialog.last_message.as_ref();
     let (preview, preview_media) = last_message.map_or_else(|| (String::new(), None), chat_preview);
     let timestamp_unix = last_message
-        .map(|message| message.date().timestamp())
+        .map(|message| message.date().as_second())
         .unwrap_or_default();
 
     let (unread_count, pinned, muted) = match &dialog.raw {
@@ -2504,8 +2502,9 @@ fn dialog_to_snapshot(dialog: &Dialog) -> Option<ChatSnapshot> {
             };
             (raw.unread_count, raw.pinned, muted)
         }
-        // Dialog folders are not conversations, so they are not listed.
-        tl::enums::Dialog::Folder(_) => return None,
+        // Dialog folders and community entries are not conversations, so they
+        // are not listed.
+        tl::enums::Dialog::Folder(_) | tl::enums::Dialog::Community(_) => return None,
     };
 
     Some(ChatSnapshot {
@@ -2575,7 +2574,7 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
         chat_id,
         outgoing: message.outgoing(),
         sender_name,
-        timestamp_unix: message.date().timestamp(),
+        timestamp_unix: message.date().as_second(),
         text,
         markdown,
         media: message.media().as_ref().map(media_to_snapshot),
@@ -2826,7 +2825,7 @@ async fn fetch_search(
         collect_search_messages(SearchSource::Global(iterator)).await?
     };
 
-    found.sort_by_key(|message| std::cmp::Reverse(message.date().timestamp()));
+    found.sort_by_key(|message| std::cmp::Reverse(message.date().as_second()));
     found.truncate(SEARCH_LIMIT);
 
     Ok(found

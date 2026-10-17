@@ -289,8 +289,7 @@ impl Session for TelegramSession {
         Box::pin(async move { Ok(self.data()?.peer_infos.get(&peer).cloned()) })
     }
 
-    fn cache_peer(&self, peer: &PeerInfo) -> BoxFuture<'_, Result<(), Self::Error>> {
-        let peer = peer.clone();
+    fn cache_peer(&self, peer: PeerInfo) -> BoxFuture<'_, Result<(), Self::Error>> {
         Box::pin(async move {
             let mut data = self.data()?;
             data.peer_infos
@@ -394,7 +393,7 @@ mod tests {
         let peer_id = PeerId::user(7).expect("valid user");
         assert!(session.peer(peer_id).await.expect("peer").is_none());
         session
-            .cache_peer(&grammers_session::types::PeerInfo::User {
+            .cache_peer(grammers_session::types::PeerInfo::User {
                 id: 7,
                 auth: None,
                 bot: None,
