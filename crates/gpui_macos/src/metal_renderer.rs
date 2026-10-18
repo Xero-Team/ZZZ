@@ -15,6 +15,7 @@ use gpui::{
 use image::RgbaImage;
 
 use core_foundation::base::TCFType;
+use core_graphics::color_space::{CGColorSpace, kCGColorSpaceDisplayP3};
 use core_video::{
     image_buffer::TCVImageBuffer, metal_texture::CVMetalTextureGetTexture,
     metal_texture_cache::CVMetalTextureCache,
@@ -52,8 +53,9 @@ pub(crate) unsafe fn new_renderer(
     _native_view: *mut c_void,
     _bounds: gpui::Size<f32>,
     transparent: bool,
+    use_display_p3: bool,
 ) -> Renderer {
-    MetalRenderer::new(context, transparent)
+    MetalRenderer::new(context, transparent, use_display_p3)
 }
 
 pub(crate) struct InstanceBufferPool {
@@ -148,12 +150,31 @@ pub struct PathRasterizationVertex {
 
 impl MetalRenderer {
     /// Creates a new MetalRenderer with a CAMetalLayer for window-based rendering.
-    pub fn new(instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>, transparent: bool) -> Self {
+    pub fn new(
+        instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>,
+        transparent: bool,
+        use_display_p3: bool,
+    ) -> Self {
         let device = Self::create_device();
 
         let layer = metal::MetalLayer::new();
         layer.set_device(&device);
         layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+        if use_display_p3 {
+            // SAFETY: The constant is extern, from Core Graphics.
+            let display_p3_name = unsafe { kCGColorSpaceDisplayP3 };
+            if let Some(display_p3_color_space) = CGColorSpace::create_with_name(display_p3_name) {
+                // SAFETY: `layer` is a CAMetalLayer and the color space remains valid for the call.
+                unsafe {
+                    let _: () = msg_send![
+                        &*layer,
+                        setColorspace: display_p3_color_space.as_ptr().cast::<c_void>()
+                    ];
+                }
+            } else {
+                log::error!("unable to create the Display P3 color space");
+            }
+        }
         // Support direct-to-display rendering if the window is not transparent
         // https://developer.apple.com/documentation/metal/managing-your-game-window-for-metal-in-macos
         layer.set_opaque(!transparent);

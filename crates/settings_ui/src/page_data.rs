@@ -1270,7 +1270,7 @@ fn appearance_page() -> SettingsPage {
         ]
     }
 
-    fn text_rendering_section() -> [SettingsPageItem; 2] {
+    fn text_rendering_section() -> [SettingsPageItem; 3] {
         [
             SettingsPageItem::SectionHeader(lt(
                 "settings_ui.page_data.section.text.rendering",
@@ -1292,6 +1292,22 @@ fn appearance_page() -> SettingsPage {
                     },
                     write: |settings_content, value, _| {
                         settings_content.workspace.text_rendering_mode = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: lt("settings_ui.page_data.title.display.p3", "Display P3"),
+                description: lt(
+                    "settings_ui.page_data.description.display.p3",
+                    "(macOS only) render windows using the Display P3 color space.",
+                ),
+                field: Box::new(SettingField {
+                    json_path: Some("use_display_p3"),
+                    pick: |settings_content| settings_content.workspace.use_display_p3.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.workspace.use_display_p3 = value;
                     },
                 }),
                 metadata: None,
