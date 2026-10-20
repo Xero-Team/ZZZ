@@ -1547,6 +1547,10 @@ impl DisplaySnapshot {
         self.companion_display_snapshot.as_deref()
     }
 
+    pub(crate) fn diagnostics_visible(&self) -> bool {
+        self.diagnostics_max_severity.into_lsp().is_some()
+    }
+
     pub fn wrap_snapshot(&self) -> &WrapSnapshot {
         &self.block_snapshot.wrap_snapshot
     }

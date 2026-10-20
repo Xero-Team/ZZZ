@@ -17692,7 +17692,7 @@ impl Editor {
             .then(|| self.initialize_new_minimap(minimap_settings, window, cx))
     }
 
-    fn initialize_new_minimap(
+    pub(crate) fn initialize_new_minimap(
         &self,
         minimap_settings: MinimapSettings,
         window: &mut Window,
@@ -21928,7 +21928,7 @@ impl Editor {
         }
     }
 
-    fn create_style(&self, cx: &App) -> EditorStyle {
+    pub(crate) fn create_style(&self, cx: &App) -> EditorStyle {
         let settings = ThemeSettings::get_global(cx);
 
         let mut text_style = match self.mode {
@@ -21974,7 +21974,7 @@ impl Editor {
             status: cx.theme().status().clone(),
             inlay_hints_style: make_inlay_hints_style(cx),
             unnecessary_code_fade: settings.unnecessary_code_fade,
-            show_underlines: self.diagnostics_enabled(),
+            show_underlines: !self.mode.is_minimap(),
         }
     }
 

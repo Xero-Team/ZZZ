@@ -1502,10 +1502,13 @@ impl ConversationView {
         cx: &mut Context<Self>,
     ) {
         let session_id = thread.read(cx).session_id().clone();
-        let has_thread = self
-            .as_connected()
-            .is_some_and(|connected| connected.threads.contains_key(&session_id));
-        if !has_thread {
+        let is_current_owner = self.as_connected().is_some_and(|connected| {
+            connected
+                .threads
+                .get(&session_id)
+                .is_some_and(|view| view.read(cx).thread == *thread)
+        });
+        if !is_current_owner {
             return;
         };
         let is_subagent = thread.read(cx).parent_session_id().is_some();
