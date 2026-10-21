@@ -867,7 +867,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
             .filter_map(move |axis| {
                 let max_offset = max_offset.along(axis);
                 let viewport_size = viewport_size.along(axis);
-                if max_offset.is_zero() || viewport_size.is_zero() {
+                if !is_positive_finite(max_offset) || !is_positive_finite(viewport_size) {
                     return None;
                 }
                 let content_size = viewport_size + max_offset;
@@ -906,7 +906,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
             .filter(|&axis| self.visibility.along(axis).is_visible())
             .filter_map(|axis| {
                 let max_offset = max_offset.along(axis);
-                if max_offset <= Pixels::ZERO {
+                if !is_positive_finite(max_offset) {
                     return None;
                 }
 
@@ -933,7 +933,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
         }
 
         let max_offset = self.scroll_handle().max_offset().along(axis);
-        if max_offset <= Pixels::ZERO {
+        if !is_positive_finite(max_offset) {
             return;
         }
 
@@ -951,7 +951,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
         cx: &mut Context<Self>,
     ) {
         let max_offset = self.scroll_handle().max_offset().along(axis);
-        if max_offset <= Pixels::ZERO {
+        if !is_positive_finite(max_offset) {
             return;
         }
 
@@ -1822,6 +1822,10 @@ impl<T: ScrollableHandle> IntoElement for ScrollbarElement<T> {
     }
 }
 
+fn is_positive_finite(pixels: Pixels) -> bool {
+    pixels.as_f32().is_finite() && pixels > Pixels::ZERO
+}
+
 #[cfg(feature = "accessibility")]
 fn accessibility_step(desired: Pixels, max_offset: Pixels) -> Pixels {
     desired.max(px(1.)).min(max_offset)
@@ -1836,5 +1840,14 @@ mod tests {
         assert_eq!(accessibility_step(px(10.), px(0.5)), px(0.5));
         assert_eq!(accessibility_step(px(10.), px(100.)), px(10.));
         assert_eq!(accessibility_step(px(0.1), px(100.)), px(1.));
+    }
+
+    #[test]
+    fn scroll_offsets_must_be_positive_and_finite() {
+        assert!(is_positive_finite(px(0.5)));
+        assert!(!is_positive_finite(px(0.)));
+        assert!(!is_positive_finite(px(-1.)));
+        assert!(!is_positive_finite(px(f32::NAN)));
+        assert!(!is_positive_finite(px(f32::INFINITY)));
     }
 }
