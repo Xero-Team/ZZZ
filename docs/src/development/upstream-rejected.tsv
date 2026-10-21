@@ -569,6 +569,7 @@ d6b7f24b7	C	upstream-infra	Linux release and Sentry-symbol workflow change has n
 d70c45e5	C	absent-api	Needs absent web clipboard and external-drag GPUI APIs.	upstream-sync-2026-08-27.md
 d71f1461	C	upstream-infra	`stacksafe` lockfile-only bump.	upstream-sync-2026-08-18.md
 d7f28899	C	untriaged	Buffer highlight cache depends on rejected `318c664e` `ResolvedHighlights`.	upstream-sync-2026-09-18.md
+d814ad6efd	C	release-metadata	Bumps the upstream app crate to v1.27.0; release metadata for the Zed package that ZZZ does not carry.	upstream-sync-2026-10-21-b.md
 d84e5d49	C	untriaged	Depends on the rejected Web IME implementation from `8fc1a8a0`.	upstream-sync-2026-08-27.md
 d85eade7	C	unisolatable	Pending-keystrokes indicator needs a GPUI timeout rewrite, unused hover API, and localized settings_ui.	upstream-sync-2026-09-04.md
 d8664715	C	diverged	csv_preview copy; renderer conflict.	upstream-sync-2026-08-18.md
