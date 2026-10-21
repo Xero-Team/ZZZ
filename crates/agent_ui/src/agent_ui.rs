@@ -14,6 +14,7 @@ mod external_source_prompt;
 mod mention_set;
 mod message_editor;
 mod mode_selector;
+mod model_search;
 mod model_selector;
 mod model_selector_popover;
 mod profile_selector;
