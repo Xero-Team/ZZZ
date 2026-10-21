@@ -145,7 +145,7 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     let mut elapsed = Duration::ZERO;
     let retry_frequency = Duration::from_millis(100);
     let mut maybe_client = None;
-    while maybe_client.is_none() {
+    while elapsed <= CRASH_HANDLER_CONNECT_TIMEOUT {
         if let Ok(client) = Client::with_name(SocketName::Path(&socket_name)) {
             maybe_client = Some(client);
             info!("connected to crash handler process after {elapsed:?}");
