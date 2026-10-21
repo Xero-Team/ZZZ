@@ -914,7 +914,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
                     .along(axis)
                     .clamp(-max_offset, Pixels::ZERO)
                     .abs();
-                let step = (viewport.along(axis) / 10.).clamp(px(1.), max_offset);
+                let step = accessibility_step(viewport.along(axis) / 10., max_offset);
 
                 Some(ScrollbarAccessibilityAxis {
                     axis,
@@ -961,7 +961,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
             .along(axis)
             .clamp(-max_offset, Pixels::ZERO)
             .abs();
-        let step = Pixels::from(step).clamp(px(1.), max_offset);
+        let step = accessibility_step(Pixels::from(step), max_offset);
         let value = if increment {
             current_value + step
         } else {
@@ -1262,9 +1262,10 @@ impl ScrollbarLayout {
             ScrollbarMouseEvent::ThumbDrag(thumb_offset) => thumb_offset,
         };
 
+        let max_thumb_start = (viewport_size - thumb_size).max(px(0.));
         let thumb_start =
             (event_position.along(axis) - track_bounds.origin.along(axis) - thumb_offset)
-                .clamp(px(0.), viewport_size - thumb_size);
+                .clamp(px(0.), max_thumb_start);
 
         let max_offset = max_offset.along(axis);
         let percentage = if viewport_size > thumb_size {
@@ -1818,5 +1819,22 @@ impl<T: ScrollableHandle> IntoElement for ScrollbarElement<T> {
 
     fn into_element(self) -> Self::Element {
         self
+    }
+}
+
+#[cfg(feature = "accessibility")]
+fn accessibility_step(desired: Pixels, max_offset: Pixels) -> Pixels {
+    desired.max(px(1.)).min(max_offset)
+}
+
+#[cfg(all(test, feature = "accessibility"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accessibility_step_stays_within_max_offset() {
+        assert_eq!(accessibility_step(px(10.), px(0.5)), px(0.5));
+        assert_eq!(accessibility_step(px(10.), px(100.)), px(10.));
+        assert_eq!(accessibility_step(px(0.1), px(100.)), px(1.));
     }
 }
