@@ -1715,6 +1715,13 @@ impl ProjectSearchView {
         if let Some(index) = self.active_match_index {
             let match_ranges = self.entity.read(cx).match_ranges.clone();
 
+            // A new search clears the ranges before the view observes the change,
+            // so the active index can briefly outlive them.
+            if match_ranges.is_empty() {
+                self.active_match_index = None;
+                return;
+            }
+
             if !EditorSettings::get_global(cx).search_wrap
                 && ((direction == Direction::Next && index + 1 >= match_ranges.len())
                     || (direction == Direction::Prev && index == 0))
@@ -6010,6 +6017,45 @@ pub mod tests {
             let query_text = search_view.query_editor.read(cx).text(cx);
             assert_eq!(query_text, "Uppercase_Query");
         });
+    }
+
+    #[gpui::test]
+    async fn test_select_match_with_stale_empty_ranges(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.background_executor.clone());
+        fs.insert_tree(
+            path!("/dir"),
+            json!({
+                "one.rs": "const ONE: usize = 1;",
+            }),
+        )
+        .await;
+        let project = Project::test(fs, [path!("/dir").as_ref()], cx).await;
+        let window =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = window
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .unwrap();
+        let search = cx.new(|cx| ProjectSearch::new(project, cx));
+        let search_view = cx.add_window(|window, cx| {
+            ProjectSearchView::new(workspace.downgrade(), search, window, cx, None)
+        });
+
+        perform_search(search_view, "ONE", cx);
+        cx.run_until_parked();
+
+        search_view
+            .update(cx, |search_view, window, cx| {
+                assert!(search_view.active_match_index.is_some());
+                search_view
+                    .entity
+                    .update(cx, |search, _| search.match_ranges.clear());
+
+                search_view.select_match(Direction::Next, window, cx);
+
+                assert_eq!(search_view.active_match_index, None);
+            })
+            .unwrap();
     }
 
     fn init_test(cx: &mut TestAppContext) {
