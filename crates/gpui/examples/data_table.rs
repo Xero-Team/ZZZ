@@ -361,9 +361,10 @@ impl DataTable {
                                 / (table_bounds.size.height))
                                 .clamp(0., 1.);
 
+                            let max_offset_y = (scroll_height - SCROLLBAR_THUMB_HEIGHT).max(px(0.));
                             let offset_y = ((scroll_height - table_bounds.size.height)
                                 * percentage)
-                                .clamp(px(0.), scroll_height - SCROLLBAR_THUMB_HEIGHT);
+                                .clamp(px(0.), max_offset_y);
                             scroll_handle.set_offset(point(px(0.), -offset_y));
                             cx.notify(entity.entity_id());
                         })

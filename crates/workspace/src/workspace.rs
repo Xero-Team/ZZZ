@@ -2467,7 +2467,7 @@ impl Workspace {
         let center_column_count = self.center_full_height_column_count();
         let opposite = self.opposite_dock_panel_and_size_state(position, window, cx);
         if let Some(opposite_flex) = opposite.as_ref().and_then(|(_, s)| s.flex) {
-            let size = size.clamp(px(0.), workspace_width - px(1.));
+            let size = size.clamp(px(0.), (workspace_width - px(1.)).max(px(0.)));
             Some((size * (center_column_count + opposite_flex) / (workspace_width - size)).max(0.0))
         } else {
             let opposite_width = opposite
