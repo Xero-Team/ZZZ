@@ -34,6 +34,7 @@ sha	class	reason_code	note	source
 09745431b5	C	philosophy	Hosted-model pricing documents a commercial hosted offering that ZZZ does not promote.	upstream-sync-2026-10-09.md
 098e4407	C	untriaged	OpenAI subscribed ungated catalog.	upstream-sync-2026-08-18.md
 0a7c84bc37	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+0a9eb81e6c	C	untriaged	Migrates macOS keyboard and event bindings to objc2. ZZZ's `gpui_macos` has a different renderer/window architecture, and the host cannot build it.	upstream-sync-2026-10-21-c.md
 0ad5441b	C	diverged	Display-position selections; editor conflict.	upstream-sync-2026-08-18.md
 0b61ce2039	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 0d08af1e	C	diverged	Share GPUI/scheduler impls; conflicts in app.rs, view.rs, div.rs, executor.rs.	upstream-sync-2026-09-18.md
@@ -54,6 +55,7 @@ sha	class	reason_code	note	source
 1416404b88	C	untriaged	Seven-hundred-line rework of discard selection, trash-untracked filtering, git transport, and the git panel; not isolatable onto ZZZ's flow.	upstream-sync-2026-10-21.md
 1475887f	C	unisolatable	Broad project-search-on-type rewrite is not isolatable locally.	upstream-sync-2026-08-27.md
 153f709a18	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+1563b405f9	C	untriaged	Requires the per-registration dynamic-selector model from #59243, which ZZZ does not carry; its `DynamicRegistrations` only holds watched files and diagnostics.	upstream-sync-2026-10-21-c.md
 158c16f5	C	unisolatable	Broad sidebar/MultiWorkspace replacement and persistence rewrite.	upstream-sync-2026-08-07.md
 15d2fd55	C	absent-api	Disable share-generics; `.cargo/bundle-config.toml` is absent.	upstream-sync-2026-09-18.md
 15dc0e9fa0	C	absent-api	The upstream `open_ai` and `language_models` provider crates are absent; ZZZ does not restore this commercial provider route.	upstream-sync-2026-10-04.md
@@ -530,6 +532,7 @@ c9d1d0dd	C	untriaged	Dependency-only helper relocation has no independent behavi
 ca2b5741	C	upstream-infra	New upstream lint/test infrastructure only; no independent product behavior.	upstream-sync-2026-09-02.md
 ca49b5da	C	absent-api	Requires absent display-terminal APIs from the rejected lifecycle work.	upstream-sync-2026-09-24.md
 cac9d17a6c	C	absent-api	The upstream commit-context-menu component has no local caller; importing it would add an unused public menu path.	upstream-sync-2026-10-09.md
+cb1937a8e7	C	diverged	Migrates macOS display bindings to objc2 on the same diverged `gpui_macos` base and cannot be verified on this host.	upstream-sync-2026-10-21-c.md
 cbffa0f5	C	absent-api	`snapshot_with_edits` / `EditedBufferSnapshot` are absent.	upstream-sync-2026-09-18.md
 cc053a4a	C	absent-api	AccessKit accessibility chain is absent from current ZZZ GPUI.	upstream-sync-2026-08-07.md
 ccadf399	C	untriaged	GitHub Actions / xtask Miri and migration-check runner sizes.	upstream-sync-2026-09-18.md
@@ -612,6 +615,7 @@ e717010c	C	untriaged	WSL streaming fallback is coupled to upstream remote transp
 e773a56d6c	C	upstream-infra	gpui_web iOS keyboard/browser-activity fix uses absent `touch_input`/`ime_mirror` infrastructure.	upstream-sync-2026-09-30.md
 e778eec483	C	absent-api	Introduces a Zed-owned `ToolCallLocation` over `acp_v2` location types absent from ZZZ.	upstream-sync-2026-10-10.md
 e8041cce	C	untriaged	GLSL extension version-only bump; local is still 0.2.3.	upstream-sync-2026-09-18.md
+e83f1c9495	C	diverged	Migrates macOS clipboard bindings to objc2 on the same diverged `gpui_macos` base and cannot be verified on this host.	upstream-sync-2026-10-21-c.md
 e8c6c67fad	C	untriaged	ACP v2 terminal ingress depends on rejected `39b5329322` and `f2cdf3d5bd`; the new v2 builder is deliberately not selected by an application connection.	upstream-sync-2026-10-04.md
 e8fbacb6	C	diverged	Large outline-panel rewrite is not isolatable from ZZZ's divergent panel implementation.	upstream-sync-2026-09-02.md
 e91b82c106	C	diverged	Linux headless renderer depends on the upstream renderer/bind-group refactor; 11 conflict regions on a diverged backend.	upstream-sync-2026-09-26.md

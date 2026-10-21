@@ -83,3 +83,7 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
   the worktree changes (zed#65660).
 - Keep language server notifications and requests in order, so formatting
   requests see pending document changes (zed#65856).
+- Explain when a move fails because a file or folder with that name
+  already exists, including over remote connections (zed#64344).
+- Fix npm-backed language server setup failing in pnpm and Yarn
+  projects (zed#65280).
