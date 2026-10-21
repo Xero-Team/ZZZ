@@ -46,6 +46,8 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 - Add local crash reporting. Set `ZZZ_GENERATE_MINIDUMPS=1` to have ZZZ write
   a minidump and metadata to its logs directory after a panic. Nothing is
   uploaded; see [Debugging Crashes](./docs/src/development/debugging-crashes.md).
+- Add an `extension` project-panel sort order that groups files by their
+  last suffix (zed#65776).
 
 ### Changed
 
@@ -57,6 +59,9 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 - Require an extension to honor the user's language server and debug
   adapter binary permissions before it can look up or download a binary
   (gram#507).
+- Improve fuzzy search in the agent model and configuration-option
+  pickers. Punctuation, provider, group, description, and value-id
+  queries match, and results are no longer capped at 100 (zed#64147).
 
 ### Removed
 
@@ -66,3 +71,11 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 
 - Fix a crash while laying out a grid (for example a Markdown or HTML table)
   whose track template or placement described no tracks at all.
+- Highlight fenced and inline languages in notebook cells immediately and
+  after language grammars load (zed#65893).
+- Save agent configuration defaults only after the agent accepts them,
+  using the value the agent returns (zed#65849).
+- Name both the attempted and existing borrow sites when a GPUI app
+  double-borrow panics (zed#65863).
+- Rank fuzzy file-search hits closer to the end of the path above earlier
+  duplicate matches (zed#59224).
