@@ -4428,6 +4428,7 @@ impl RenderedLine {
             .binary_search_by_key(&source_index, |probe| probe.source_index)
         {
             Ok(ix) => &self.source_mappings[ix],
+            Err(0) => return 0,
             Err(ix) => &self.source_mappings[ix - 1],
         };
         (mapping.rendered_index + (source_index - mapping.source_index)).min(self.layout.len())
@@ -4443,6 +4444,7 @@ impl RenderedLine {
             .binary_search_by_key(&rendered_index, |probe| probe.rendered_index)
         {
             Ok(ix) => &self.source_mappings[ix],
+            Err(0) => return 0,
             Err(ix) => &self.source_mappings[ix - 1],
         };
         mapping.source_index + (rendered_index - mapping.rendered_index)
@@ -4462,6 +4464,7 @@ impl RenderedLine {
             .binary_search_by_key(&rendered_index, |probe| probe.rendered_index)
         {
             Ok(ix) => ix,
+            Err(0) => return 0,
             Err(ix) => {
                 return self.source_mappings[ix - 1].source_index
                     + (rendered_index - self.source_mappings[ix - 1].rendered_index);

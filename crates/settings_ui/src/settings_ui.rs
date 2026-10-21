@@ -1117,9 +1117,7 @@ impl SettingsPageItem {
                                         });
 
                                     let Some(header) = header_text else {
-                                        unreachable!(
-                                            "All items always have a section header above them"
-                                        )
+                                        return;
                                     };
 
                                     this.push_sub_page(sub_page_link.clone(), header, window, cx)

@@ -210,7 +210,7 @@ impl ConfigOptionsView {
                     .map_or(0, |current_index| (current_index + 1) % options.len());
 
                 Some(acp::SessionConfigOptionValue::value_id(
-                    options[next_index].value.clone(),
+                    options.get(next_index)?.value.clone(),
                 ))
             }
             acp::SessionConfigKind::Boolean(boolean) => {

@@ -367,7 +367,12 @@ fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_render::MermaidTheme {
     let is_dark = !cx.theme().appearance.is_light();
 
     let players = cx.theme().players();
-    let git_branch_colors = std::array::from_fn(|i| players.0[i % players.0.len()].cursor);
+    let git_branch_colors = std::array::from_fn(|i| {
+        players
+            .0
+            .get(i % players.0.len().max(1))
+            .map_or(colors.text, |player| player.cursor)
+    });
     let git_branch_label_colors = git_branch_colors.map(mermaid_render::text_color_for_background);
 
     mermaid_render::MermaidTheme {

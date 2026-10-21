@@ -207,7 +207,9 @@ fn collect_buffer_diagnostics(
 ) -> bool {
     let mut found_any = false;
     for (_, group) in snapshot.diagnostic_groups(None) {
-        let entry = &group.entries[group.primary_ix];
+        let Some(entry) = group.entries.get(group.primary_ix) else {
+            continue;
+        };
         if collect_diagnostic(
             text,
             entry,

@@ -75,6 +75,9 @@ impl ZZZPromptRenderer {
     }
 
     fn select_next(&mut self, _: &menu::SelectNext, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.actions.is_empty() {
+            return;
+        }
         self.active_action_id = (self.active_action_id + 1) % self.actions.len();
         cx.notify();
     }

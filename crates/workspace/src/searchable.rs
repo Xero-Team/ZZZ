@@ -174,6 +174,10 @@ pub trait SearchableItem: Item + EventEmitter<SearchEvent> {
         _window: &mut Window,
         _: &mut Context<Self>,
     ) -> usize {
+        if matches.is_empty() {
+            return current_index;
+        }
+
         match direction {
             Direction::Prev => {
                 let count = count % matches.len();

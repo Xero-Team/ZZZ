@@ -124,15 +124,23 @@ impl PlayerColors {
 
 impl PlayerColors {
     pub fn local(&self) -> PlayerColor {
-        *self.0.first().expect("collection should not be empty")
+        self.0.first().copied().unwrap_or_default()
     }
 
     pub fn agent(&self) -> PlayerColor {
-        *self.0.last().expect("collection should not be empty")
+        self.0
+            .last()
+            .or_else(|| self.0.first())
+            .copied()
+            .unwrap_or_default()
     }
 
     pub fn absent(&self) -> PlayerColor {
-        *self.0.last().expect("collection should not be empty")
+        self.0
+            .last()
+            .or_else(|| self.0.first())
+            .copied()
+            .unwrap_or_default()
     }
 
     pub fn read_only(&self) -> PlayerColor {
@@ -145,7 +153,31 @@ impl PlayerColors {
     }
 
     pub fn color_for_participant(&self, participant_index: u32) -> PlayerColor {
-        let len = self.0.len() - 1;
-        self.0[(participant_index as usize % len) + 1]
+        match self.0.len() {
+            0 => PlayerColor::default(),
+            1 => self.0[0],
+            len => self.0[(participant_index as usize % (len - 1)) + 1],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_player_colors_fall_back_to_default() {
+        let colors = PlayerColors(Vec::new());
+        assert_eq!(colors.local(), PlayerColor::default());
+        assert_eq!(colors.agent(), PlayerColor::default());
+        assert_eq!(colors.absent(), PlayerColor::default());
+        assert_eq!(colors.color_for_participant(3), PlayerColor::default());
+    }
+
+    #[test]
+    fn single_player_color_is_used_for_participants() {
+        let player = PlayerColors::dark().0[0];
+        let colors = PlayerColors(vec![player]);
+        assert_eq!(colors.color_for_participant(7), player);
     }
 }

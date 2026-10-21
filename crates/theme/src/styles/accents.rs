@@ -63,6 +63,20 @@ impl AccentColors {
 impl AccentColors {
     /// Returns the color for the given index.
     pub fn color_for_index(&self, index: u32) -> Hsla {
-        self.0[index as usize % self.0.len()]
+        self.0
+            .get(index as usize % self.0.len().max(1))
+            .copied()
+            .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_accent_colors_fall_back_to_default() {
+        let colors = AccentColors(Arc::from(Vec::<Hsla>::new()));
+        assert_eq!(colors.color_for_index(3), Hsla::default());
     }
 }

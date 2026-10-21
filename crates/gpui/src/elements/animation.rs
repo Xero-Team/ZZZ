@@ -164,7 +164,15 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                     start: Instant::now(),
                     animation_ix: 0,
                 });
-                let animation_ix = state.animation_ix;
+                if self.animations.is_empty() {
+                    let element = self.element.take().expect("should only be called once");
+                    let mut element = element.into_any_element();
+                    return ((element.request_layout(window, cx), element), state);
+                }
+                let animation_ix = state
+                    .animation_ix
+                    .min(self.animations.len().saturating_sub(1));
+                state.animation_ix = animation_ix;
                 let duration = self.animations[animation_ix].duration;
 
                 let elapsed = if self.animations[animation_ix].synced && !duration.is_zero() {
@@ -173,7 +181,11 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                 } else {
                     state.start.elapsed()
                 };
-                let mut delta = elapsed.as_secs_f32() / duration.as_secs_f32();
+                let mut delta = if duration.is_zero() {
+                    2.0
+                } else {
+                    elapsed.as_secs_f32() / duration.as_secs_f32()
+                };
 
                 let mut done = false;
                 if delta > 1.0 {
@@ -187,9 +199,15 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                         delta = 1.0;
                     } else {
                         delta %= 1.0;
+                        done = duration.is_zero();
                     }
                 }
-                let delta = (self.animations[animation_ix].easing)(delta);
+                let eased = (self.animations[animation_ix].easing)(delta);
+                let delta = if eased.is_finite() {
+                    eased.clamp(0., 1.)
+                } else {
+                    1.
+                };
 
                 debug_assert!(
                     (0.0..=1.0).contains(&delta),

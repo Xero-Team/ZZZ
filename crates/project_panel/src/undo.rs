@@ -138,6 +138,7 @@ use gpui::{AppContext, AsyncApp, IntoElement, SharedString, Styled, Task, WeakEn
 use i18n::tr;
 use markdown::{Markdown, MarkdownElement};
 use project::{Project, ProjectPath, WorktreeId};
+use proto::{ErrorCode, ErrorExt as _, RpcError};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::VecDeque, sync::Arc};
 use ui::{App, TextSize};

@@ -652,7 +652,7 @@ fn format_timestamp(timestamp: i64) -> String {
 }
 
 fn accent_colors_count(accents: &AccentColors) -> usize {
-    accents.0.len()
+    accents.0.len().max(1)
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -961,10 +961,11 @@ impl GraphData {
     }
 
     fn get_lane_color(&mut self, lane_idx: ActiveLaneIdx) -> BranchColor {
-        let accent_colors_count = self.accent_colors_count;
+        let accent_colors_count = self.accent_colors_count.clamp(1, usize::from(u8::MAX) + 1);
         *self.lane_colors.entry(lane_idx).or_insert_with(|| {
             let color_idx = self.next_color;
-            self.next_color = BranchColor((self.next_color.0 + 1) % accent_colors_count as u8);
+            let next = (usize::from(self.next_color.0) + 1) % accent_colors_count;
+            self.next_color = BranchColor(next as u8);
             color_idx
         })
     }
@@ -2029,13 +2030,16 @@ impl GitGraph {
         if let Some(repository) = repository.as_ref() {
             const FETCH_RANGE: usize = 100;
             repository.update(cx, |repository, cx| {
-                self.graph_data.commits[range.start.saturating_sub(FETCH_RANGE)
-                    ..(range.end + FETCH_RANGE)
-                        .min(self.graph_data.commits.len().saturating_sub(1))]
-                    .iter()
-                    .for_each(|commit| {
-                        repository.fetch_commit_data(commit.data.sha, false, cx);
-                    });
+                let commit_count = self.graph_data.commits.len();
+                let fetch_start = range.start.saturating_sub(FETCH_RANGE).min(commit_count);
+                let fetch_end = range.end.saturating_add(FETCH_RANGE).min(commit_count);
+                if fetch_start < fetch_end {
+                    self.graph_data.commits[fetch_start..fetch_end]
+                        .iter()
+                        .for_each(|commit| {
+                            repository.fetch_commit_data(commit.data.sha, false, cx);
+                        });
+                }
             });
         }
 

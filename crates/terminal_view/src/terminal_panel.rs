@@ -1169,7 +1169,8 @@ impl TerminalPanel {
         if self
             .center
             .move_to_border(&self.active_pane, direction, cx)
-            .expect("move_to_border should be present")
+            .log_err()
+            .unwrap_or(false)
         {
             cx.notify();
         }

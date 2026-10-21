@@ -2017,11 +2017,15 @@ impl ProjectPanel {
                 .unwrap_or_default();
             if entry_ix > 0 {
                 entry_ix -= 1;
-            } else if worktree_ix > 0 {
-                worktree_ix -= 1;
-                entry_ix = self.state.visible_entries[worktree_ix].entries.len() - 1;
             } else {
-                return;
+                let Some(previous_worktree_ix) = (0..worktree_ix)
+                    .rev()
+                    .find(|&ix| !self.state.visible_entries[ix].entries.is_empty())
+                else {
+                    return;
+                };
+                worktree_ix = previous_worktree_ix;
+                entry_ix = self.state.visible_entries[worktree_ix].entries.len() - 1;
             }
 
             let VisibleEntriesForWorktree {

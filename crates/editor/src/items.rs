@@ -2011,6 +2011,12 @@ impl SearchableItem for Editor {
             return current_index;
         }
 
+        if matches.is_empty() {
+            return 0;
+        }
+
+        let current_index = current_index.min(matches.len() - 1);
+
         let cursor = if self.selections.disjoint_anchors_arc().len() == 1 {
             self.selections.newest_anchor().head()
         } else {

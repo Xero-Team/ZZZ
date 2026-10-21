@@ -24877,7 +24877,7 @@ impl RowExt for DisplayRow {
     }
 
     fn minus(&self, other: Self) -> u32 {
-        self.0 - other.0
+        self.0.saturating_sub(other.0)
     }
 }
 
@@ -24895,7 +24895,7 @@ impl RowExt for MultiBufferRow {
     }
 
     fn minus(&self, other: Self) -> u32 {
-        self.0 - other.0
+        self.0.saturating_sub(other.0)
     }
 }
 
@@ -24911,7 +24911,7 @@ impl RowRangeExt for Range<MultiBufferRow> {
     type Row = MultiBufferRow;
 
     fn len(&self) -> usize {
-        (self.end.0 - self.start.0) as usize
+        self.end.0.saturating_sub(self.start.0) as usize
     }
 
     fn iter_rows(&self) -> impl DoubleEndedIterator<Item = MultiBufferRow> {
@@ -24923,7 +24923,7 @@ impl RowRangeExt for Range<DisplayRow> {
     type Row = DisplayRow;
 
     fn len(&self) -> usize {
-        (self.end.0 - self.start.0) as usize
+        self.end.0.saturating_sub(self.start.0) as usize
     }
 
     fn iter_rows(&self) -> impl DoubleEndedIterator<Item = DisplayRow> {

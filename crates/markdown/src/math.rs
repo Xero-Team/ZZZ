@@ -658,7 +658,8 @@ fn parse_macro_name(source: &str, start: usize) -> Option<(String, usize)> {
         }
     } else {
         // A single non-letter control sequence, e.g. `\,`.
-        index += 1;
+        let character = source[index..].chars().next()?;
+        index += character.len_utf8();
     }
     Some((source[name_start..index].to_owned(), index))
 }
@@ -711,7 +712,12 @@ fn replace_braced_command(
             if bytes.get(open) == Some(&b'{')
                 && let Some(end) = find_matching(source, open, b'{', b'}')
             {
-                result.push_str(&replacement(&source[open + 1..end - 1]));
+                let argument = if end > open + 1 {
+                    &source[open + 1..end - 1]
+                } else {
+                    ""
+                };
+                result.push_str(&replacement(argument));
                 index = end;
                 continue;
             }
@@ -1534,6 +1540,19 @@ mod tests {
             formulas("$$\\eqref{eq:test}$$"),
             vec![("\\text{(eq:test)}".to_string(), true)]
         );
+    }
+
+    #[test]
+    fn empty_equation_references_do_not_panic() {
+        assert_eq!(sanitize_equation_references("\\ref{}"), "\\text{}");
+        assert_eq!(sanitize_equation_references("\\label{}"), "");
+    }
+
+    #[test]
+    fn non_ascii_macro_control_sequences_do_not_panic() {
+        let (name, _, end) = parse_macro_definition("\\newcommand\\é{x}", 0).expect("valid macro");
+        assert_eq!(name, "é");
+        assert_eq!(end, "\\newcommand\\é{x}".len());
     }
 
     const VIEWPORT: f32 = 800.0;

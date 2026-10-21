@@ -22,7 +22,7 @@ impl Editor {
             self.bracket_fetched_tree_sitter_chunks.clear();
         }
 
-        let accents_count = cx.theme().accents().0.len();
+        let accents_count = cx.theme().accents().0.len().max(1);
         let multi_buffer_snapshot = self.buffer().read(cx).snapshot(cx);
 
         let visible_excerpts = self.visible_buffer_ranges(cx);

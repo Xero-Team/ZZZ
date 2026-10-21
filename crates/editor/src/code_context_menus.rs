@@ -1061,9 +1061,15 @@ impl CompletionsMenu {
             return None;
         }
 
-        let mat = &self.entries.borrow()[self.selected_item];
+        let entries = self.entries.borrow();
+        let Some(mat) = entries.get(self.selected_item) else {
+            return None;
+        };
         let completions = self.completions.borrow();
-        let multiline_docs = match completions[mat.candidate_id].documentation.as_ref() {
+        let Some(completion) = completions.get(mat.candidate_id) else {
+            return None;
+        };
+        let multiline_docs = match completion.documentation.as_ref() {
             Some(CompletionDocumentation::MultiLinePlainText(text)) => div().child(text.clone()),
             Some(CompletionDocumentation::SingleLineAndMultiLinePlainText {
                 plain_text: Some(text),
