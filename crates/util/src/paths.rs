@@ -1330,6 +1330,11 @@ pub enum SortOrder {
     /// Pure Unicode codepoint comparison. No case folding, no natural number sorting.
     /// Uppercase ASCII sorts before lowercase. Accented characters sort after ASCII.
     Unicode,
+    /// Files are grouped by their last extension (case-insensitive) in ascending order,
+    /// with extensionless files, including dotfiles such as `.gitignore`, first.
+    /// Dotfiles with a further suffix, such as `.config.json`, keep that extension.
+    /// Within a group, names use the same natural sort as `Default`.
+    Extension,
 }
 
 /// Controls how files and directories are ordered relative to each other.
@@ -1433,6 +1438,17 @@ pub fn compare_rel_paths_by(
                 } else {
                     Default::default()
                 };
+                if order == SortOrder::Extension {
+                    // Directories have no extension and must take part in this comparison too,
+                    // otherwise mixed mode would produce an inconsistent (non-transitive) ordering.
+                    let extension_ordering = a_ext
+                        .unwrap_or_default()
+                        .to_lowercase()
+                        .cmp(&b_ext.unwrap_or_default().to_lowercase());
+                    if !extension_ordering.is_eq() {
+                        return extension_ordering;
+                    }
+                }
                 let a_key = if a_leaf_file {
                     a_stem
                 } else {
@@ -2347,6 +2363,86 @@ mod tests {
                 (RelPath::unix("README.md").unwrap(), true),
                 (RelPath::unix(".github").unwrap(), false),
                 (RelPath::unix("src").unwrap(), false),
+            ]
+        );
+    }
+
+    #[perf]
+    fn compare_rel_paths_extension_groups_files() {
+        let mut paths = vec![
+            (RelPath::unix("b.rs").unwrap(), true),
+            (RelPath::unix("a.py").unwrap(), true),
+            (RelPath::unix("a.RS").unwrap(), true),
+            (RelPath::unix("file10.rs").unwrap(), true),
+            (RelPath::unix("file2.rs").unwrap(), true),
+            (RelPath::unix("Makefile").unwrap(), true),
+            (RelPath::unix(".gitignore").unwrap(), true),
+            (RelPath::unix(".config.json").unwrap(), true),
+            (RelPath::unix(".env.local").unwrap(), true),
+            (RelPath::unix("a.css").unwrap(), true),
+            (RelPath::unix("archive.tar.gz").unwrap(), true),
+            (RelPath::unix("src").unwrap(), false),
+        ];
+        paths.sort_by(|&a, &b| {
+            compare_rel_paths_by(a, b, SortMode::DirectoriesFirst, SortOrder::Extension)
+        });
+        assert_eq!(
+            paths,
+            vec![
+                (RelPath::unix("src").unwrap(), false),
+                (RelPath::unix(".gitignore").unwrap(), true),
+                (RelPath::unix("Makefile").unwrap(), true),
+                (RelPath::unix("a.css").unwrap(), true),
+                (RelPath::unix("archive.tar.gz").unwrap(), true),
+                (RelPath::unix(".config.json").unwrap(), true),
+                (RelPath::unix(".env.local").unwrap(), true),
+                (RelPath::unix("a.py").unwrap(), true),
+                (RelPath::unix("a.RS").unwrap(), true),
+                (RelPath::unix("b.rs").unwrap(), true),
+                (RelPath::unix("file2.rs").unwrap(), true),
+                (RelPath::unix("file10.rs").unwrap(), true),
+            ]
+        );
+    }
+
+    #[perf]
+    fn compare_rel_paths_extension_with_files_first() {
+        let mut paths = vec![
+            (RelPath::unix("z.rs").unwrap(), true),
+            (RelPath::unix("a.txt").unwrap(), true),
+            (RelPath::unix("m").unwrap(), false),
+            (RelPath::unix("b.py").unwrap(), true),
+        ];
+        paths.sort_by(|&a, &b| {
+            compare_rel_paths_by(a, b, SortMode::FilesFirst, SortOrder::Extension)
+        });
+        assert_eq!(
+            paths,
+            vec![
+                (RelPath::unix("b.py").unwrap(), true),
+                (RelPath::unix("z.rs").unwrap(), true),
+                (RelPath::unix("a.txt").unwrap(), true),
+                (RelPath::unix("m").unwrap(), false),
+            ]
+        );
+    }
+
+    #[perf]
+    fn compare_rel_paths_extension_mixed_is_consistent() {
+        let mut paths = vec![
+            (RelPath::unix("z.rs").unwrap(), true),
+            (RelPath::unix("a.txt").unwrap(), true),
+            (RelPath::unix("m").unwrap(), false),
+            (RelPath::unix("b").unwrap(), true),
+        ];
+        paths.sort_by(|&a, &b| compare_rel_paths_by(a, b, SortMode::Mixed, SortOrder::Extension));
+        assert_eq!(
+            paths,
+            vec![
+                (RelPath::unix("b").unwrap(), true),
+                (RelPath::unix("m").unwrap(), false),
+                (RelPath::unix("z.rs").unwrap(), true),
+                (RelPath::unix("a.txt").unwrap(), true),
             ]
         );
     }
