@@ -1667,6 +1667,22 @@ pub fn rust_lang() -> Arc<Language> {
 
 #[doc(hidden)]
 #[cfg(any(test, feature = "test-support"))]
+pub fn json_lang() -> Arc<Language> {
+    Arc::new(Language::new(
+        LanguageConfig {
+            name: "JSON".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["json".into()],
+                ..Default::default()
+            },
+            ..LanguageConfig::default()
+        },
+        Some(tree_sitter_json::LANGUAGE.into()),
+    ))
+}
+
+#[doc(hidden)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn markdown_lang() -> Arc<Language> {
     use std::borrow::Cow;
 
