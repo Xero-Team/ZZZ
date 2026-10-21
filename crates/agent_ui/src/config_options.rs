@@ -126,25 +126,15 @@ impl ConfigOptionsView {
             return false;
         };
 
-        let default_value = setting_value_for_config_option_value(&next_value);
-
-        self.agent_server.set_default_config_option(
-            config_id.0.as_ref(),
-            default_value,
+        set_config_option_and_default(
+            self.config_options.clone(),
+            self.agent_server.clone(),
+            config_id,
+            next_value,
             self.fs.clone(),
             cx,
-        );
-
-        let task = self
-            .config_options
-            .set_config_option(config_id, next_value, cx);
-
-        cx.spawn(async move |_, _| {
-            if let Err(err) = task.await {
-                log::error!("Failed to set config option: {:?}", err);
-            }
-        })
-        .detach();
+        )
+        .detach_and_log_err(cx);
 
         true
     }
@@ -655,25 +645,15 @@ impl Render for ConfigOptionSelector {
                             }
 
                             let next_value = matches!(state, ToggleState::Selected);
-                            agent_server.set_default_config_option(
-                                config_id.0.as_ref(),
-                                Some(AgentConfigOptionValue::Boolean(next_value)),
-                                fs.clone(),
-                                cx,
-                            );
-
-                            let task = config_options.set_config_option(
+                            set_config_option_and_default(
+                                config_options.clone(),
+                                agent_server.clone(),
                                 config_id.clone(),
                                 acp::SessionConfigOptionValue::boolean(next_value),
+                                fs.clone(),
                                 cx,
-                            );
-
-                            cx.spawn(async move |_| {
-                                if let Err(err) = task.await {
-                                    log::error!("Failed to set config option: {:?}", err);
-                                }
-                            })
-                            .detach();
+                            )
+                            .detach_and_log_err(cx);
                         }),
                     )
                     .into_any_element()
@@ -864,18 +844,30 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                 );
             }
 
-            let task = self.config_options.set_config_option(
-                self.config_id.clone(),
-                acp::SessionConfigOptionValue::value_id(option.value.clone()),
-                cx,
-            );
+            if window.modifiers().secondary() {
+                let task = self.config_options.set_config_option(
+                    self.config_id.clone(),
+                    acp::SessionConfigOptionValue::value_id(option.value.clone()),
+                    cx,
+                );
 
-            cx.spawn(async move |_, _| {
-                if let Err(err) = task.await {
-                    log::error!("Failed to set config option: {:?}", err);
-                }
-            })
-            .detach();
+                cx.spawn(async move |_, _| {
+                    if let Err(err) = task.await {
+                        log::error!("Failed to set config option: {:?}", err);
+                    }
+                })
+                .detach();
+            } else {
+                set_config_option_and_default(
+                    self.config_options.clone(),
+                    self.agent_server.clone(),
+                    self.config_id.clone(),
+                    acp::SessionConfigOptionValue::value_id(option.value.clone()),
+                    self.fs.clone(),
+                    cx,
+                )
+                .detach_and_log_err(cx);
+            }
 
             cx.emit(DismissEvent);
         }
@@ -1122,15 +1114,44 @@ fn get_current_select_value(
         })
 }
 
-fn setting_value_for_config_option_value(
-    value: &acp::SessionConfigOptionValue,
-) -> Option<AgentConfigOptionValue> {
-    match value {
-        acp::SessionConfigOptionValue::ValueId { value } => {
-            Some(AgentConfigOptionValue::ValueId(value.0.to_string()))
+fn set_config_option_and_default(
+    config_options: Rc<dyn AgentSessionConfigOptions>,
+    agent_server: Rc<dyn AgentServer>,
+    config_id: acp::SessionConfigId,
+    value: acp::SessionConfigOptionValue,
+    fs: Arc<dyn Fs>,
+    cx: &mut App,
+) -> Task<anyhow::Result<()>> {
+    let response = config_options.set_config_option(config_id.clone(), value, cx);
+    cx.spawn(async move |cx| {
+        let options = response.await?;
+        // Saving the request would make rejected or normalized choices future defaults.
+        if let Some(value) = options
+            .iter()
+            .find(|option| option.id == config_id)
+            .and_then(setting_value_for_config_option)
+        {
+            cx.update(|cx| {
+                agent_server.set_default_config_option(config_id.0.as_ref(), Some(value), fs, cx);
+            });
         }
-        acp::SessionConfigOptionValue::Boolean { value } => {
-            Some(AgentConfigOptionValue::Boolean(*value))
+        Ok(())
+    })
+}
+
+fn setting_value_for_config_option(
+    option: &acp::SessionConfigOption,
+) -> Option<AgentConfigOptionValue> {
+    match &option.kind {
+        acp::SessionConfigKind::Select(select)
+            if find_option_name(&select.options, &select.current_value).is_some() =>
+        {
+            Some(AgentConfigOptionValue::ValueId(
+                select.current_value.0.to_string(),
+            ))
+        }
+        acp::SessionConfigKind::Boolean(boolean) => {
+            Some(AgentConfigOptionValue::Boolean(boolean.current_value))
         }
         _ => None,
     }
@@ -1288,6 +1309,37 @@ mod tests {
         ) -> Task<anyhow::Result<Vec<acp::SessionConfigOption>>> {
             Task::ready(Ok(self.config_options()))
         }
+    }
+
+    #[test]
+    fn setting_value_comes_from_authoritative_option() {
+        let select = acp::SessionConfigOption::select(
+            "model",
+            "Model",
+            "auto",
+            vec![
+                acp::SessionConfigSelectOption::new("auto", "Auto"),
+                acp::SessionConfigSelectOption::new("manual", "Manual"),
+            ],
+        );
+        assert_eq!(
+            setting_value_for_config_option(&select),
+            Some(AgentConfigOptionValue::ValueId("auto".into()))
+        );
+
+        let boolean = acp::SessionConfigOption::boolean("enabled", "Enabled", false);
+        assert_eq!(
+            setting_value_for_config_option(&boolean),
+            Some(AgentConfigOptionValue::Boolean(false))
+        );
+
+        let stale = acp::SessionConfigOption::select(
+            "model",
+            "Model",
+            "gone",
+            vec![acp::SessionConfigSelectOption::new("auto", "Auto")],
+        );
+        assert_eq!(setting_value_for_config_option(&stale), None);
     }
 
     #[test]
