@@ -79,3 +79,7 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
   double-borrow panics (zed#65863).
 - Rank fuzzy file-search hits closer to the end of the path above earlier
   duplicate matches (zed#59224).
+- Remove deleted files from the file finder's history and selection when
+  the worktree changes (zed#65660).
+- Keep language server notifications and requests in order, so formatting
+  requests see pending document changes (zed#65856).
