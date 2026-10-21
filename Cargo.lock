@@ -13071,6 +13071,7 @@ dependencies = [
  "notifications",
  "pretty_assertions",
  "project",
+ "proto",
  "rayon",
  "remote_connection",
  "schemars 1.2.3",

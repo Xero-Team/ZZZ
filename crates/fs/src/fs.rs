@@ -839,8 +839,13 @@ impl Fs for RealFs {
         if use_metadata_fallback && smol::fs::metadata(target).await.is_ok() {
             if options.ignore_if_exists {
                 return Ok(());
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    format!("{target:?} already exists"),
+                )
+                .into());
             }
-            anyhow::bail!("{target:?} already exists");
         }
 
         smol::fs::rename(source, target).await?;
@@ -3110,7 +3115,11 @@ impl Fs for FakeFs {
                         // destroy a file the caller still expects to find.
                         moved = false;
                     } else {
-                        anyhow::bail!("path already exists: {new_path:?}");
+                        return Err(io::Error::new(
+                            io::ErrorKind::AlreadyExists,
+                            format!("path already exists: {new_path:?}"),
+                        )
+                        .into());
                     }
                 }
                 btree_map::Entry::Vacant(e) => {

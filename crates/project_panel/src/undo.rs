@@ -354,7 +354,7 @@ impl UndoMessage {
     }
 }
 
-fn project_path_display(
+pub(crate) fn project_path_display(
     project: &Project,
     project_path: &ProjectPath,
     path_style: PathStyle,
@@ -363,6 +363,18 @@ fn project_path_display(
     project
         .short_full_path_for_project_path(project_path, cx)
         .unwrap_or_else(|| project_path.path.display(path_style).to_string())
+}
+
+pub(crate) fn already_exists_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            io_err.kind() == std::io::ErrorKind::AlreadyExists
+        } else if let Some(rpc_error) = cause.downcast_ref::<RpcError>() {
+            rpc_error.error_code() == ErrorCode::AlreadyExists
+        } else {
+            false
+        }
+    })
 }
 
 impl Inner {
@@ -578,13 +590,7 @@ impl Inner {
             });
 
         rename_task?.await.map_err(|error| {
-            let already_exists = error.chain().any(|cause| {
-                cause
-                    .downcast_ref::<std::io::Error>()
-                    .is_some_and(|io_error| io_error.kind() == std::io::ErrorKind::AlreadyExists)
-            }) || format!("{error:#}").contains("already exists");
-
-            if already_exists {
+            if already_exists_error(&error) {
                 anyhow!(
                     "Failed to {operation} `{from_name}` to `{to_name}`. A file or folder already exists there."
                 )

@@ -28,7 +28,7 @@ use project::{
     agent_server_store::AgentServerCommand,
     search::{SearchQuery, SearchResult},
 };
-use proto;
+use proto::{self, ErrorCode, ErrorExt as _};
 use remote::RemoteClient;
 use serde_json::json;
 use settings::{Settings, SettingsLocation, SettingsStore, initial_server_settings_content};
@@ -1875,6 +1875,60 @@ async fn test_remote_rename_entry(cx: &mut TestAppContext, server_cx: &mut TestA
             entry.id
         )
     });
+}
+
+#[gpui::test]
+async fn test_remote_rename_entry_onto_existing_path(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(
+        "/code",
+        json!({
+            "project1": {
+                ".git": {},
+                "README.md": "# project 1",
+                "README.rst": "existing",
+            },
+        }),
+    )
+    .await;
+
+    let (project, _) = init_test(&fs, cx, server_cx).await;
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree("/code/project1", true, cx)
+        })
+        .await
+        .unwrap();
+
+    cx.run_until_parked();
+
+    let err = project
+        .update(cx, |project, cx| {
+            let worktree = worktree.read(cx);
+            let entry = worktree.entry_for_path(rel_path("README.md")).unwrap();
+            project.rename_entry(entry.id, (worktree.id(), rel_path("README.rst")).into(), cx)
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        err.error_code(),
+        ErrorCode::AlreadyExists,
+        "the collision should survive the trip from the server: {err:#}"
+    );
+
+    // Nothing was overwritten on the server.
+    assert_eq!(
+        fs.load("/code/project1/README.md".as_ref()).await.unwrap(),
+        "# project 1"
+    );
+    assert_eq!(
+        fs.load("/code/project1/README.rst".as_ref()).await.unwrap(),
+        "existing"
+    );
 }
 
 #[gpui::test]
