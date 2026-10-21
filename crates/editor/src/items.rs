@@ -1906,8 +1906,11 @@ impl SearchableItem for Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.unfold_ranges(&[matches[index].clone()], false, true, cx);
-        let range = self.range_for_match(&matches[index]);
+        let Some(target_match) = matches.get(index).cloned() else {
+            return;
+        };
+        self.unfold_ranges(std::slice::from_ref(&target_match), false, true, cx);
+        let range = self.range_for_match(&target_match);
         let autoscroll = if EditorSettings::get_global(cx).search.center_on_match {
             Autoscroll::center()
         } else {

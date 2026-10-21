@@ -48,6 +48,32 @@ impl Direction {
     }
 }
 
+/// Wraps `current_index` into `0..matches_len` before stepping by `count`.
+///
+/// The active index can outlive the match list it was computed from while a new
+/// search is replacing the results. Clamping first keeps a stale index from
+/// escaping the slice that the caller then indexes.
+fn wrapped_match_index(
+    matches_len: usize,
+    current_index: usize,
+    direction: Direction,
+    count: usize,
+) -> usize {
+    debug_assert!(
+        matches_len > 0,
+        "match index math requires at least one match"
+    );
+
+    let current_index = current_index.min(matches_len - 1);
+    let count = count % matches_len;
+    match direction {
+        Direction::Prev => current_index
+            .checked_sub(count)
+            .unwrap_or_else(|| matches_len - (count - current_index)),
+        Direction::Next => (current_index + count) % matches_len,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SearchOptions {
     pub case: bool,
@@ -178,17 +204,7 @@ pub trait SearchableItem: Item + EventEmitter<SearchEvent> {
             return current_index;
         }
 
-        match direction {
-            Direction::Prev => {
-                let count = count % matches.len();
-                if current_index >= count {
-                    current_index - count
-                } else {
-                    matches.len() - (count - current_index)
-                }
-            }
-            Direction::Next => (current_index + count) % matches.len(),
-        }
+        wrapped_match_index(matches.len(), current_index, direction, count)
     }
     fn find_matches(
         &mut self,
@@ -576,5 +592,24 @@ impl Eq for Box<dyn WeakSearchableItemHandle> {}
 impl std::hash::Hash for Box<dyn WeakSearchableItemHandle> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id().hash(state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Direction, wrapped_match_index};
+
+    #[test]
+    fn wrapped_match_index_handles_stale_and_large_counts() {
+        assert_eq!(wrapped_match_index(3, 0, Direction::Prev, 1), 2);
+        assert_eq!(wrapped_match_index(3, 2, Direction::Next, 1), 0);
+
+        // A stale active index from a longer match list must stay in bounds.
+        assert_eq!(wrapped_match_index(3, 9, Direction::Prev, 1), 1);
+        assert_eq!(wrapped_match_index(3, 9, Direction::Next, 1), 0);
+
+        // Large counts must not overflow the addition.
+        assert_eq!(wrapped_match_index(4, 1, Direction::Next, usize::MAX), 0);
+        assert_eq!(wrapped_match_index(4, 1, Direction::Prev, usize::MAX), 2);
     }
 }
