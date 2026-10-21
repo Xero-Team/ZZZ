@@ -2049,10 +2049,7 @@ impl SearchableItem for Editor {
 
         let new_idx = (new_idx + count) % matches.len() as isize;
         let new_idx = if new_idx.is_negative() {
-            // We need a `matches.len() - 1` here in case `next_idx` has now been
-            // set to `0`, otherwise we'd end up returning `matches.len()`, which
-            // would be out of bounds.
-            new_idx + (matches.len() - 1) as isize
+            new_idx + matches.len() as isize
         } else {
             new_idx
         };

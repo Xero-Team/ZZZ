@@ -1912,8 +1912,15 @@ impl BufferSearchBar {
                     .as_ref()
                     .clone()
                     .with_replacement(self.replacement(cx));
-                searchable_item.replace(matches.at(active_index), &query, *token, window, cx);
-                self.select_next_match(&SelectNextMatch, window, cx);
+                let replaced = if let Some(match_to_replace) = matches.get(active_index) {
+                    searchable_item.replace(match_to_replace, &query, *token, window, cx);
+                    true
+                } else {
+                    false
+                };
+                if replaced {
+                    self.select_next_match(&SelectNextMatch, window, cx);
+                }
             }
             should_propagate = false;
         }
@@ -2451,6 +2458,45 @@ mod tests {
         });
         search_bar.read_with(cx, |search_bar, _| {
             assert_eq!(search_bar.active_match_index, Some(2));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_replace_next_with_stale_match_index(cx: &mut TestAppContext) {
+        let (editor, search_bar, cx) = init_test(cx);
+        search_bar
+            .update_in(cx, |search_bar, window, cx| {
+                search_bar.search("us", None, true, window, cx)
+            })
+            .await
+            .unwrap();
+
+        let original_text = editor.update(cx, |editor, cx| {
+            editor
+                .buffer()
+                .read(cx)
+                .as_singleton()
+                .expect("editor should have a singleton buffer")
+                .read(cx)
+                .text()
+        });
+
+        search_bar.update_in(cx, |search_bar, window, cx| {
+            search_bar.active_match_index = Some(usize::MAX);
+            search_bar.replace_next(&ReplaceNext, window, cx);
+        });
+
+        editor.update(cx, |editor, cx| {
+            assert_eq!(
+                editor
+                    .buffer()
+                    .read(cx)
+                    .as_singleton()
+                    .expect("editor should have a singleton buffer")
+                    .read(cx)
+                    .text(),
+                original_text
+            );
         });
     }
 
