@@ -3480,7 +3480,13 @@ impl ProjectPanel {
                 if entry_ix + 1 < worktree_entries.len() {
                     entry_ix += 1;
                 } else {
-                    worktree_ix += 1;
+                    let Some(next_worktree_ix) = (worktree_ix.saturating_add(1)
+                        ..self.state.visible_entries.len())
+                        .find(|&ix| !self.state.visible_entries[ix].entries.is_empty())
+                    else {
+                        return;
+                    };
+                    worktree_ix = next_worktree_ix;
                     entry_ix = 0;
                 }
             }
@@ -3738,7 +3744,11 @@ impl ProjectPanel {
             worktree_id,
             entries,
             ..
-        }) = self.state.visible_entries.first()
+        }) = self
+            .state
+            .visible_entries
+            .iter()
+            .find(|visible| !visible.entries.is_empty())
             && let Some(entry) = entries.first()
         {
             let selection = SelectedEntry {
@@ -3759,7 +3769,12 @@ impl ProjectPanel {
             worktree_id,
             entries,
             ..
-        }) = self.state.visible_entries.last()
+        }) = self
+            .state
+            .visible_entries
+            .iter()
+            .rev()
+            .find(|visible| !visible.entries.is_empty())
         {
             let worktree = self.project.read(cx).worktree_for_id(*worktree_id, cx);
             if let (Some(worktree), Some(entry)) = (worktree, entries.last()) {
