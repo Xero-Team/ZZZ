@@ -839,13 +839,12 @@ impl Fs for RealFs {
         if use_metadata_fallback && smol::fs::metadata(target).await.is_ok() {
             if options.ignore_if_exists {
                 return Ok(());
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::AlreadyExists,
-                    format!("{target:?} already exists"),
-                )
-                .into());
             }
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("{target:?} already exists"),
+            )
+            .into());
         }
 
         smol::fs::rename(source, target).await?;

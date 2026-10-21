@@ -106,9 +106,8 @@ impl AppCell {
         // Keep the first origin across overlapping shared borrows. The old
         // origin may remain after release; the next group replaces it.
         let starts_borrow_group = self.app.try_borrow_mut().is_ok();
-        let borrow = match self.app.try_borrow() {
-            Ok(borrow) => borrow,
-            Err(_) => self.borrow_failed("shared"),
+        let Ok(borrow) = self.app.try_borrow() else {
+            self.borrow_failed("shared")
         };
         if starts_borrow_group {
             self.borrow_origin

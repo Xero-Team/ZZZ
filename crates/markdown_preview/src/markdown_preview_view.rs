@@ -1468,7 +1468,7 @@ impl Item for MarkdownPreviewView {
                 &util::truncate_and_trailoff(&editor.title(cx), max_title_len),
                 1,
             ),
-            None => tr(cx, "markdown_preview.tab_title", "Markdown Preview").to_string(),
+            None => tr(cx, "markdown_preview.tab_title", "Markdown Preview"),
         };
         let description = editor
             .zip(params.detail)
@@ -1525,10 +1525,10 @@ impl Item for MarkdownPreviewView {
     // Save As writes the source file, so suggest its name rather than the tab text, which can be a
     // full path for files outside the project.
     fn suggested_filename(&self, cx: &App) -> SharedString {
-        self.active_editor
-            .as_ref()
-            .map(|editor_state| editor_state.editor.read(cx).suggested_filename(cx))
-            .unwrap_or_else(|| SharedString::from("Markdown Preview"))
+        self.active_editor.as_ref().map_or_else(
+            || SharedString::from("Markdown Preview"),
+            |editor_state| editor_state.editor.read(cx).suggested_filename(cx),
+        )
     }
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {

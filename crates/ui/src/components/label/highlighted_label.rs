@@ -39,20 +39,27 @@ impl HighlightedLabel {
     }
 
     /// Constructs a label with the given byte ranges highlighted.
-    /// Assumes that the highlight ranges are valid UTF-8 byte positions.
+    ///
+    /// Ranges are clamped to valid UTF-8 boundaries, so out-of-bounds or
+    /// mid-character ranges cannot panic or loop forever while rendering.
     pub fn from_ranges(
         label: impl Into<SharedString>,
         highlight_ranges: Vec<Range<usize>>,
     ) -> Self {
         let label = label.into();
+        let label_len = label.len();
         let highlight_indices = highlight_ranges
             .iter()
             .flat_map(|range| {
                 let mut indices = Vec::new();
-                let mut index = range.start;
-                while index < range.end {
+                let mut index = label.floor_char_boundary(range.start.min(label_len));
+                let end = label.floor_char_boundary(range.end.min(label_len));
+                while index < end {
                     indices.push(index);
-                    index += label[index..].chars().next().map_or(0, |c| c.len_utf8());
+                    let Some(character) = label[index..].chars().next() else {
+                        break;
+                    };
+                    index += character.len_utf8();
                 }
                 indices
             })
@@ -201,10 +208,13 @@ pub fn highlight_ranges(
     let mut highlights: Vec<(Range<usize>, HighlightStyle)> = Vec::new();
 
     while let Some(start_ix) = highlight_indices.next() {
+        if start_ix > text.len() || !text.is_char_boundary(start_ix) {
+            continue;
+        }
         let mut end_ix = start_ix;
 
-        loop {
-            end_ix += text[end_ix..].chars().next().map_or(0, |c| c.len_utf8());
+        while let Some(character) = text[end_ix..].chars().next() {
+            end_ix += character.len_utf8();
             if highlight_indices.next_if(|&ix| ix == end_ix).is_none() {
                 break;
             }
@@ -382,5 +392,30 @@ mod tests {
         // unless the caller asked for a single line.
         let label = HighlightedLabel::new("a\nb", vec![0]);
         assert_eq!(label.text(), "a\nb");
+    }
+
+    #[test]
+    fn test_from_ranges_clamps_out_of_bounds_ranges() {
+        let label = HighlightedLabel::from_ranges("abc", vec![1..100]);
+        assert_eq!(label.highlight_indices(), &[1, 2]);
+
+        let label = HighlightedLabel::from_ranges("abc", vec![100..200]);
+        assert!(label.highlight_indices().is_empty());
+    }
+
+    #[test]
+    fn test_from_ranges_handles_mid_character_boundaries() {
+        let label = HighlightedLabel::from_ranges("aé", vec![2..3]);
+        assert_eq!(label.highlight_indices(), &[1]);
+    }
+
+    #[test]
+    fn test_highlight_ranges_ignores_invalid_indices() {
+        let style = HighlightStyle::default();
+        assert_eq!(
+            highlight_ranges("abc", &[1, 2, 99], style),
+            vec![(1..3, style)]
+        );
+        assert!(highlight_ranges("abc", &[99], style).is_empty());
     }
 }
