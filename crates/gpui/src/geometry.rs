@@ -3811,7 +3811,10 @@ impl From<GridPlacement> for taffy::GridPlacement {
     fn from(placement: GridPlacement) -> Self {
         match placement {
             GridPlacement::Line(index) => taffy::GridPlacement::from_line_index(index),
-            GridPlacement::Span(span) => taffy::GridPlacement::from_span(span),
+            // `span(0)` is not a valid grid area: it describes an item that occupies no tracks,
+            // which the placement algorithm is not required to handle. Treat it as `span(1)`, the
+            // same way browsers treat zero-sized spans.
+            GridPlacement::Span(span) => taffy::GridPlacement::from_span(span.max(1)),
             GridPlacement::Auto => taffy::GridPlacement::Auto,
         }
     }

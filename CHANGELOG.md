@@ -61,3 +61,8 @@ ZZZ has not cut a versioned release yet, so the changes below are unreleased.
 ### Removed
 
 - N/A
+
+### Fixed
+
+- Fix a crash while laying out a grid (for example a Markdown or HTML table)
+  whose track template or placement described no tracks at all.

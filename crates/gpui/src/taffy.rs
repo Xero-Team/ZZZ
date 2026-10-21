@@ -419,25 +419,31 @@ impl ToTaffy<taffy::style::Style> for Style {
             unit: &Option<GridTemplate>,
         ) -> Vec<taffy::GridTemplateComponent<T>> {
             unit.map(|template| {
+                // A template that repeats zero times describes an explicit grid with no tracks at
+                // all, which the grid placement algorithm is not required to handle. The grid style
+                // helpers clamp this at the authoring site, but styles can also be built by hand or
+                // refined from a theme, so clamp here as the last line of defense before the value
+                // reaches taffy.
+                let repeat_count = template.repeat.max(1);
                 match template.min_size {
                     // grid-template-*: repeat(<number>, minmax(0, 1fr));
                     crate::TemplateColumnMinSize::Zero => {
                         vec![repeat(
-                            template.repeat,
+                            repeat_count,
                             vec![minmax(length(0.0_f32), fr(1.0_f32))],
                         )]
                     }
                     // grid-template-*: repeat(<number>, minmax(min-content, 1fr));
                     crate::TemplateColumnMinSize::MinContent => {
                         vec![repeat(
-                            template.repeat,
+                            repeat_count,
                             vec![minmax(min_content(), fr(1.0_f32))],
                         )]
                     }
                     // grid-template-*: repeat(<number>, minmax(0, max-content))
                     crate::TemplateColumnMinSize::MaxContent => {
                         vec![repeat(
-                            template.repeat,
+                            repeat_count,
                             vec![minmax(length(0.0_f32), max_content())],
                         )]
                     }
@@ -744,5 +750,157 @@ mod tests {
             taffy_border.left,
             taffy::style::LengthPercentage::length(2.0)
         );
+    }
+
+    #[test]
+    fn grid_templates_repeat_at_least_one_track() {
+        let templates = [
+            GridTemplate {
+                repeat: 0,
+                min_size: crate::TemplateColumnMinSize::Zero,
+            },
+            GridTemplate {
+                repeat: 0,
+                min_size: crate::TemplateColumnMinSize::MinContent,
+            },
+            GridTemplate {
+                repeat: 0,
+                min_size: crate::TemplateColumnMinSize::MaxContent,
+            },
+        ];
+
+        for template in templates {
+            let style = Style {
+                display: crate::Display::Grid,
+                grid_cols: Some(template),
+                grid_rows: Some(template),
+                ..Default::default()
+            };
+            let taffy_style = style.to_taffy(Pixels(16.0), 2.0);
+
+            for tracks in [
+                taffy_style.grid_template_columns.as_slice(),
+                taffy_style.grid_template_rows.as_slice(),
+            ] {
+                match tracks {
+                    [taffy::style::GridTemplateComponent::Repeat(repetition)] => assert_eq!(
+                        repetition.count,
+                        taffy::style::RepetitionCount::Count(1),
+                        "a grid template must always describe at least one track"
+                    ),
+                    other => panic!("expected a single repeat track definition, got {other:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn grid_placements_span_at_least_one_track() {
+        assert_eq!(
+            taffy::GridPlacement::from(crate::GridPlacement::Span(0)),
+            taffy::GridPlacement::Span(1),
+        );
+
+        let style = Style {
+            display: crate::Display::Grid,
+            grid_location: Some(crate::GridLocation {
+                row: crate::GridPlacement::Span(0)..crate::GridPlacement::Span(0),
+                column: crate::GridPlacement::Span(0)..crate::GridPlacement::Span(0),
+            }),
+            ..Default::default()
+        };
+        let taffy_style = style.to_taffy(Pixels(16.0), 2.0);
+
+        assert_eq!(taffy_style.grid_row.start, taffy::GridPlacement::Span(1));
+        assert_eq!(taffy_style.grid_row.end, taffy::GridPlacement::Span(1));
+        assert_eq!(taffy_style.grid_column.start, taffy::GridPlacement::Span(1));
+        assert_eq!(taffy_style.grid_column.end, taffy::GridPlacement::Span(1));
+    }
+
+    /// Degenerate grid definitions (zero repeats, zero-sized spans, placement lines that fall
+    /// outside of the explicit grid, and oversized spans) used to abort the process inside of
+    /// taffy's grid placement algorithm. Styles are clamped on the way into taffy, and what makes
+    /// it through must lay out without panicking.
+    #[test]
+    fn degenerate_grid_styles_lay_out_without_panicking() {
+        let placements = [
+            crate::GridPlacement::Auto,
+            crate::GridPlacement::Line(0),
+            crate::GridPlacement::Line(-1000),
+            crate::GridPlacement::Line(1000),
+            crate::GridPlacement::Span(0),
+            crate::GridPlacement::Span(1),
+            crate::GridPlacement::Span(u16::MAX),
+        ];
+        let templates = [
+            None,
+            Some(GridTemplate {
+                repeat: 0,
+                min_size: crate::TemplateColumnMinSize::Zero,
+            }),
+            Some(GridTemplate {
+                repeat: 2,
+                min_size: crate::TemplateColumnMinSize::MinContent,
+            }),
+        ];
+
+        for columns in templates {
+            for rows in templates {
+                for column_start in placements {
+                    for column_end in placements {
+                        let child_style = Style {
+                            display: crate::Display::Grid,
+                            grid_location: Some(crate::GridLocation {
+                                row: crate::GridPlacement::Span(3)..crate::GridPlacement::Auto,
+                                column: column_start..column_end,
+                            }),
+                            ..Default::default()
+                        };
+                        let container_style = Style {
+                            display: crate::Display::Grid,
+                            grid_cols: columns,
+                            grid_rows: rows,
+                            size: Size {
+                                width: Pixels(400.0).into(),
+                                height: Pixels(400.0).into(),
+                            },
+                            ..Default::default()
+                        };
+
+                        for child_count in [0, 1, 3] {
+                            let mut tree: TaffyTree<()> = TaffyTree::new();
+                            let children = (0..child_count)
+                                .map(|_| {
+                                    tree.new_leaf(child_style.to_taffy(Pixels(16.0), 2.0))
+                                        .expect(EXPECT_MESSAGE)
+                                })
+                                .collect::<Vec<_>>();
+                            let root = if children.is_empty() {
+                                tree.new_leaf(container_style.to_taffy(Pixels(16.0), 2.0))
+                                    .expect(EXPECT_MESSAGE)
+                            } else {
+                                tree.new_with_children(
+                                    container_style.to_taffy(Pixels(16.0), 2.0),
+                                    &children,
+                                )
+                                .expect(EXPECT_MESSAGE)
+                            };
+                            tree.compute_layout(
+                                root,
+                                TaffySize {
+                                    width: min_content(),
+                                    height: max_content(),
+                                },
+                            )
+                            .expect(EXPECT_MESSAGE);
+
+                            let layout = tree.layout(root).expect(EXPECT_MESSAGE);
+                            assert!(layout.size.width.is_finite());
+                            assert!(layout.size.height.is_finite());
+                        }
+                    }
+                }
+            }
+        }
     }
 }
