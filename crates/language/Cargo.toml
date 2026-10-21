@@ -21,6 +21,7 @@ test-support = [
     "tree-sitter-rust",
     "tree-sitter-python",
     "tree-sitter-typescript",
+    "tree-sitter-json",
     "tree-sitter-md",
     "settings/test-support",
     "util/test-support",
@@ -63,6 +64,7 @@ text.workspace = true
 theme.workspace = true
 toml.workspace = true
 tracing.workspace = true
+tree-sitter-json = { workspace = true, optional = true }
 tree-sitter-md = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
