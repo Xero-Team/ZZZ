@@ -197,9 +197,11 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                             state.animation_ix += 1;
                         }
                         delta = 1.0;
+                    } else if duration.is_zero() {
+                        delta = 1.0;
+                        done = true;
                     } else {
                         delta %= 1.0;
-                        done = duration.is_zero();
                     }
                 }
                 let eased = (self.animations[animation_ix].easing)(delta);
