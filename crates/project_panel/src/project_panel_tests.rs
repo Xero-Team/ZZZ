@@ -11,6 +11,7 @@ use pretty_assertions::assert_eq;
 use project::{FakeFs, ProjectPath};
 use serde_json::json;
 use settings::{ProjectPanelAutoOpenSettings, SettingsStore, SplicingVec};
+use smallvec::smallvec;
 use std::path::{Path, PathBuf};
 use util::{markdown::MarkdownInlineCode, path, paths::PathStyle, rel_path::rel_path};
 use workspace::{
@@ -2351,7 +2352,11 @@ async fn test_duplicate_preserves_clipboards(cx: &mut gpui::TestAppContext) {
         .read_with(cx, |mw, _| mw.workspace().clone())
         .unwrap();
     let cx = &mut VisualTestContext::from_window(window.into(), cx);
-    let panel = workspace.update_in(cx, ProjectPanel::new);
+    let panel = workspace.update_in(cx, |workspace, window, cx| {
+        let panel = ProjectPanel::new(workspace.project().clone(), workspace, window, cx);
+        workspace.add_panel(panel.clone(), window, cx);
+        panel
+    });
     cx.run_until_parked();
 
     select_path(&panel, "root/cut.txt", cx);
@@ -2440,7 +2445,11 @@ async fn test_duplicate_with_only_root_selected_does_nothing(cx: &mut gpui::Test
         .read_with(cx, |mw, _| mw.workspace().clone())
         .unwrap();
     let cx = &mut VisualTestContext::from_window(window.into(), cx);
-    let panel = workspace.update_in(cx, ProjectPanel::new);
+    let panel = workspace.update_in(cx, |workspace, window, cx| {
+        let panel = ProjectPanel::new(workspace.project().clone(), workspace, window, cx);
+        workspace.add_panel(panel.clone(), window, cx);
+        panel
+    });
     cx.run_until_parked();
 
     select_path(&panel, "root/folder/cut.txt", cx);
