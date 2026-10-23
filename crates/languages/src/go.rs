@@ -484,7 +484,6 @@ fn json_string_array(value: &serde_json::Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-
 fn parent_for_path_style(path: &Path, path_style: PathStyle) -> Option<PathBuf> {
     let path = path.to_str()?;
     match path_style {
@@ -492,9 +491,7 @@ fn parent_for_path_style(path: &Path, path_style: PathStyle) -> Option<PathBuf> 
         PathStyle::Windows => {
             let normalized = path_style.normalize(path);
             let normalized = normalized.trim_end_matches(['\\', '/']);
-            let (prefix, remainder) = if normalized.len() >= 2
-                && normalized.as_bytes()[1] == b':'
-            {
+            let (prefix, remainder) = if normalized.len() >= 2 && normalized.as_bytes()[1] == b':' {
                 (&normalized[..2], &normalized[2..])
             } else if let Some(rest) = normalized.strip_prefix("\\\\") {
                 let mut parts = rest.splitn(3, ['\\', '/']);

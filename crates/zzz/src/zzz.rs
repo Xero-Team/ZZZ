@@ -7530,5 +7530,4 @@ mod tests {
             assert_eq!(active_path.as_ref(), expected_paths.last());
         });
     }
-
 }

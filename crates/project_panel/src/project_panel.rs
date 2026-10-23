@@ -3846,9 +3846,8 @@ impl ProjectPanel {
         let source_entry = source_worktree.read(cx).entry_for_id(source.entry_id)?;
 
         let source_file_name = source_entry.path.file_name()?.to_owned();
-        new_path.push(
-            RelPath::unix(&source_file_name).expect("path should be a valid relative path"),
-        );
+        new_path
+            .push(RelPath::unix(&source_file_name).expect("path should be a valid relative path"));
 
         let (extension, file_name_without_extension) = if source_entry.is_file() {
             (
