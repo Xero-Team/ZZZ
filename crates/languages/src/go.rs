@@ -484,6 +484,46 @@ fn json_string_array(value: &serde_json::Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+
+fn parent_for_path_style(path: &Path, path_style: PathStyle) -> Option<PathBuf> {
+    let path = path.to_str()?;
+    match path_style {
+        PathStyle::Posix => Path::new(path).parent().map(Path::to_path_buf),
+        PathStyle::Windows => {
+            let normalized = path_style.normalize(path);
+            let normalized = normalized.trim_end_matches(['\\', '/']);
+            let (prefix, remainder) = if normalized.len() >= 2
+                && normalized.as_bytes()[1] == b':'
+            {
+                (&normalized[..2], &normalized[2..])
+            } else if let Some(rest) = normalized.strip_prefix("\\\\") {
+                let mut parts = rest.splitn(3, ['\\', '/']);
+                let server = parts.next()?;
+                let share = parts.next()?;
+                let prefix_len = 2 + server.len() + 1 + share.len();
+                (&normalized[..prefix_len], &normalized[prefix_len..])
+            } else {
+                ("", normalized)
+            };
+            let remainder = remainder.trim_start_matches(['\\', '/']);
+            match remainder.rsplit_once(['\\', '/']) {
+                Some((parent, _)) => {
+                    let parent = parent.trim_end_matches(['\\', '/']);
+                    if prefix.is_empty() {
+                        Some(PathBuf::from(parent))
+                    } else if parent.is_empty() {
+                        Some(PathBuf::from(format!("{prefix}\\")))
+                    } else {
+                        Some(PathBuf::from(format!("{prefix}\\{parent}")))
+                    }
+                }
+                None if prefix.is_empty() => None,
+                None => Some(PathBuf::from(format!("{prefix}\\"))),
+            }
+        }
+    }
+}
+
 fn go_test_task_template(
     arg: &serde_json::Value,
     path_style: PathStyle,
@@ -532,7 +572,7 @@ fn go_test_task_template(
         .and_then(|v| v.as_str())
         .and_then(|uri| uri.parse::<lsp::Uri>().ok())
         .and_then(|uri| uri.to_file_path_ext(path_style).ok())
-        .and_then(|path| path_style.parent(&path).map(|parent| parent.to_owned()))
+        .and_then(|path| parent_for_path_style(&path, path_style))
         .map(|path| path.to_string_lossy().into_owned());
 
     Some(task::TaskTemplate {
@@ -989,9 +1029,9 @@ mod tests {
                 r"\\server\share\pkg",
             ),
             (PathStyle::Windows, "file:///C:/main_test.go", r"C:\"),
-            (PathStyle::Unix, "file:///C:/repo/main_test.go", "/C:/repo"),
+            (PathStyle::Posix, "file:///C:/repo/main_test.go", "/C:/repo"),
             (
-                PathStyle::Unix,
+                PathStyle::Posix,
                 "file:///my%20repo/main_test.go",
                 "/my repo",
             ),
