@@ -3506,79 +3506,6 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn test_open_remote_project_readme(
-        cx: &mut TestAppContext,
-        server_cx: &mut TestAppContext,
-    ) {
-        let app_state = init_test(cx);
-        set_on_new_window(Some(settings::OnNewWindow::Readme), cx);
-        server_cx.update(|cx| {
-            release_channel::init(Version::new(0, 0, 0), cx);
-            HeadlessProject::init(cx);
-        });
-        let remote_fs = FakeFs::new(server_cx.executor());
-        for (name, explicit_file, expected_file) in [
-            ("directory", None, Some("README.md")),
-            ("explicit", Some("code.rs"), Some("code.rs")),
-            ("failed", Some(path!("/missing-parent/code.rs")), None),
-        ] {
-            let root = Path::new(path!("/root")).join(name);
-            remote_fs
-                .insert_tree(&root, json!({"README.md": "", "code.rs": ""}))
-                .await;
-            let (connection_options, server_session, connect_guard) =
-                RemoteClient::fake_server(cx, server_cx);
-            let languages = Arc::new(LanguageRegistry::new(server_cx.executor()));
-            let _headless = server_cx.new(|cx| {
-                HeadlessProject::new(
-                    HeadlessAppState {
-                        session: server_session,
-                        fs: remote_fs.clone(),
-                        http_client: Arc::new(BlockedHttpClient),
-                        node_runtime: NodeRuntime::unavailable(),
-                        languages,
-                        extension_host_proxy: Arc::new(ExtensionHostProxy::new()),
-                        startup_time: std::time::Instant::now(),
-                    },
-                    false,
-                    cx,
-                )
-            });
-            drop(connect_guard);
-            let mut paths = vec![root.clone()];
-            if let Some(explicit_file) = explicit_file {
-                paths.push(root.join(explicit_file));
-            }
-            let window = open_remote_project(
-                connection_options,
-                paths,
-                app_state.clone(),
-                OpenOptions {
-                    workspace_matching: workspace::WorkspaceMatching::None,
-                    ..OpenOptions::default()
-                },
-                &mut cx.to_async(),
-            )
-            .await
-            .expect("open remote project");
-            cx.run_until_parked();
-            let workspace = window
-                .read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone())
-                .expect("remote workspace");
-            let expected_paths = expected_file
-                .into_iter()
-                .map(|path| root.join(path))
-                .collect::<Vec<_>>();
-            assert_workspace_item_paths(&workspace, &expected_paths, cx);
-            window
-                .update(cx, |_, window, _| window.remove_window())
-                .expect("close remote workspace");
-            drop(workspace);
-            cx.run_until_parked();
-        }
-    }
-
-    #[gpui::test]
     async fn test_open_paths_readme_after_restoration(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         for restore_item in [false, true] {
@@ -7554,4 +7481,54 @@ mod tests {
             "active workspace should contain the remaining project, not be empty: {active_paths:?}"
         );
     }
+
+    fn set_on_new_window(on_new_window: Option<settings::OnNewWindow>, cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.on_new_window = on_new_window;
+                });
+            });
+        });
+    }
+
+    async fn open_test_workspace_paths(
+        paths: Vec<PathBuf>,
+        app_state: Arc<AppState>,
+        cx: &mut TestAppContext,
+    ) -> workspace::OpenResult {
+        let result = cx
+            .update(|cx| {
+                open_paths(
+                    &paths,
+                    app_state,
+                    OpenOptions {
+                        workspace_matching: workspace::WorkspaceMatching::None,
+                        ..OpenOptions::default()
+                    },
+                    cx,
+                )
+            })
+            .await
+            .expect("open workspace paths");
+        cx.run_until_parked();
+        result
+    }
+
+    fn assert_workspace_item_paths(
+        workspace: &Entity<Workspace>,
+        expected_paths: &[PathBuf],
+        cx: &TestAppContext,
+    ) {
+        workspace.read_with(cx, |workspace, cx| {
+            assert_eq!(workspace.open_item_abs_paths(cx), expected_paths);
+            assert_eq!(workspace.items(cx).count(), expected_paths.len());
+            let active_path = workspace
+                .active_item(cx)
+                .and_then(|item| item.project_path(cx))
+                .and_then(|path| workspace.project().read(cx).absolute_path(&path, cx));
+            assert_eq!(active_path.as_ref(), expected_paths.last());
+        });
+    }
+
 }

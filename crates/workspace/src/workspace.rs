@@ -3837,12 +3837,13 @@ impl Workspace {
                         break 'emit_winner;
                     };
 
-                    this.update(cx, |workspace, cx| {
-                        workspace.project.update(cx, |_, cx| {
-                            cx.emit(project::Event::ActiveEntryChanged(Some(entry_id)));
-                        });
-                    })
-                    .log_err();
+                    workspace
+                        .update(cx, |workspace, cx| {
+                            workspace.project.update(cx, |_, cx| {
+                                cx.emit(project::Event::ActiveEntryChanged(Some(entry_id)));
+                            });
+                        })
+                        .log_err();
                 }
             }
 
@@ -4927,15 +4928,18 @@ impl Workspace {
                 "readme.txt",
                 "Readme.txt",
             ] {
-                let Some(path) = RelPath::from_unix_str(file_name).ok() else {
+                let Some(path) = RelPath::new(Path::new(file_name), PathStyle::Posix)
+                    .ok()
+                    .map(|path| Arc::<RelPath>::from(path.as_ref()))
+                else {
                     continue;
                 };
                 let metadata = project
                     .read(cx)
-                    .resolve_abs_path(&worktree.absolutize(path).to_string_lossy(), cx);
+                    .resolve_abs_path(&worktree.absolutize(&path).to_string_lossy(), cx);
                 let path = ProjectPath {
                     worktree_id: worktree.id(),
-                    path: Arc::from(path),
+                    path,
                 };
                 candidates.push((path, metadata));
             }
