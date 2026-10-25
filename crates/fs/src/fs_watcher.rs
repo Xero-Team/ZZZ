@@ -396,6 +396,19 @@ fn path_is_under(path: &SanitizedPath, root: &SanitizedPath, case_insensitive: b
     }
 }
 
+/// Lookup key for a watch path, shared by add, remove, and dispatch so they all
+/// agree on whether two spellings denote the same directory.
+///
+/// On case-sensitive volumes the exact (sanitized) path is the key, so genuinely
+/// distinct directories stay distinct. On case-insensitive volumes the folded
+/// (lowercased) spelling is the key, so any casing of a directory collides.
+///
+/// The two variants are distinct map keys, so a case-sensitive registration can
+/// never be hit by a folded lookup (or vice versa); dispatch can therefore probe
+/// both forms of an event path without risking a cross-rule false match.
+///
+/// Folded keys use path-component spelling so separators and `.` components
+/// agree with exact path equality. macOS also normalizes Unicode before folding.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum WatchKey {
     Exact(Arc<Path>),
@@ -408,7 +421,13 @@ impl WatchKey {
     }
 
     fn folded(path: &SanitizedPath) -> Self {
-        let lossy = path.as_path().to_string_lossy();
+        // Event ancestors omit trailing separators, even when registration paths include them.
+        let normalized_path = path.as_path().components().collect::<std::path::PathBuf>();
+        let lossy = normalized_path.to_string_lossy();
+        // macOS (APFS/HFS+) compares names normalization-insensitively (NFC vs
+        // NFD), and FSEvents can report NFD while a config/LSP supplies NFC, so
+        // normalize before folding case. Windows (NTFS) and Linux are
+        // normalization-sensitive, so there we only fold case.
         #[cfg(target_os = "macos")]
         let folded = {
             use unicode_normalization::UnicodeNormalization as _;
