@@ -1799,11 +1799,41 @@ mod resolve_worktree_tests {
         ];
         for (common_dir, expected) in examples {
             assert_eq!(
-                repo_identity_path(Path::new(common_dir)),
+                repo_identity_path(Path::new(common_dir), PathStyle::local()),
                 Path::new(expected),
                 "identity path for common_dir {common_dir:?} should be {expected:?}"
             );
         }
+    }
+
+    #[test]
+    fn test_windows_remote_repo_identity_path() {
+        let examples = [
+            (r"C:\Users\bob\zzz\.git", r"C:\Users\bob\zzz"),
+            (r"C:\repos\project\.bare", r"C:\repos\project"),
+            (r"C:\repos\zzz.git", r"C:\repos\zzz.git"),
+            (r"C:\repos\project", r"C:\repos\project"),
+        ];
+        for (common_dir, expected) in examples {
+            assert_eq!(
+                repo_identity_path(Path::new(common_dir), PathStyle::Windows),
+                Path::new(expected),
+                "identity path for Windows common_dir {common_dir:?} should be {expected:?}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_repo_identity_path_preserves_non_utf8_local_paths() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let common_dir = Path::new(OsStr::from_bytes(b"/home/bob/\xff/.git"));
+        assert_eq!(
+            repo_identity_path(common_dir, PathStyle::local()),
+            Path::new(OsStr::from_bytes(b"/home/bob/\xff"))
+        );
     }
 
     #[test]
