@@ -116,6 +116,7 @@ sha	class	reason_code	note	source
 23aca989	C	diverged	Dynamic LSP document-selector support is a broad capability/protocol rewrite across divergent ZZZ APIs.	upstream-sync-2026-09-02.md
 23d10a4754	C	untriaged	Adds a typed ACP v2 streamed tool-content append API but explicitly adds no wire handler; production has no caller, so this is future scaffolding.	upstream-sync-2026-10-05.md
 2440236055	C	upstream-infra	GPUI seeded benchmarks and heap-allocation metrics; benchmark plumbing.	upstream-sync-2026-09-30.md
+24a2823456	C	upstream-infra	Only advances the wgpu git revision in the manifest and lockfile. ZZZ vendors wgpu v29, so the revision does not apply.	upstream-sync-2026-10-27.md
 24aabd3fa6	C	upstream-infra	Community-board label automation is upstream maintenance infrastructure.	upstream-sync-2026-10-09.md
 25185402	C	philosophy	Native Agent Panel terminal-thread renaming.	upstream-sync-2026-09-18.md
 2551721a	C	absent-api	Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.	upstream-sync-2026-09-02.md
@@ -633,6 +634,7 @@ dc339e4f	C	absent-api	LLVM IR adapter sharing; conflicts plus deleted picker win
 dd04a229	C	untriaged	Unused `Animation` max-FPS API.	upstream-sync-2026-08-18.md
 dd510f99e0	C	philosophy	`language_models_cloud` provider crate is absent locally.	upstream-sync-2026-09-30.md
 dd85cf3677	C	upstream-infra	Renames shared APIs to ACP v2 metadata spelling; absent protocol variant.	upstream-sync-2026-10-13.md
+dde76a1dca	C	unisolatable	A wide internal gpui refactor (`SingleSubscriberSet`, subscriber state machine, lint fixes) with no observable behavior change.	upstream-sync-2026-10-27.md
 ded896cc	C	diverged	Depends on an unabsorbed incremental-search architecture and divergent editor APIs; not isolatable onto the current search implementation.	upstream-sync-2026-09-02.md
 df1ce4fee3	C	untriaged	Preserves organization UI permissions for a GitHub App install surface ZZZ does not have.	upstream-sync-2026-10-16.md
 df48a139ce	C	absent-api	Adds Claude Opus 5.5 BYOK support for the absent `bedrock` crate.	upstream-sync-2026-10-10.md

@@ -421,3 +421,178 @@ keeps this in `git_ui`; the port lands in ZZZ's `git_graph`.
 
 The reviewed baseline advances to
 `57c7b10ece671185a8863515667ee5248c6f0d53` for this batch.
+
+## Batch 3
+
+### Scope
+
+- Reviewed baseline: `57c7b10ece671185a8863515667ee5248c6f0d53`
+- Reviewed head: `24a2823456f16e36bf32df510fb5c43fee7a2565`
+- Live upstream head queried: `24a2823456f16e36bf32df510fb5c43fee7a2565`
+- Query time: `2026-10-27T16:16:03+01:00`
+- Reviewed range: the 10 commits after `57c7b10ece`, oldest first
+- Remaining after this batch: none through the queried live head
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                   |
+| ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6b985a8b26 | B     | 2c3021cad3   | Resolves each `ms` edge from both sides of its pre-edit offset, and sorts surround edits ascending so touching selections stop overlapping. Five regression tests are included.               |
+| e30095febc | B     | addbece988   | Adds `-Wl,--max-memory=4294967296` to grammar compilation. The Tree-sitter revision bump and the `captures()` migration have no local target because ZZZ uses crates.io `tree-sitter 0.27.1`. |
+| ec86047d67 | B     | 9b5362fab4   | Reads stash subjects from `%gs` so an external rename shows up, and fixes the failure message. Local helper is named `git_binary`.                                                            |
+| 370591f3d1 | B     | e36451ae2c   | Defers native window close cleanup to a foreground task, so destruction cannot re-enter a borrowed app. The test platform stores the callback.                                                |
+| dde76a1dca | C     | --           | A wide internal gpui refactor (`SingleSubscriberSet`, subscriber state machine, lint fixes) with no observable behavior change.                                                               |
+| 3c2f782514 | B     | 469aa18b3b   | Gives a rejected push a specific toast title. The operation is kept unlocalized for the predicate; the fetch/pull/push button in the PR text is not part of the patch.                        |
+| f2a60bb8b6 | B     | 5eccbc95c5   | Adds path-style-aware `file_name`, `file_stem` and `extension` so `repo.git` bare clones show `repo` on Windows remotes.                                                                      |
+| fdcb198110 | B     | db34c508be   | Caps active windows to 30 fps in low power mode and tolerates 1 ms of display-link jitter. Profiler and notification plumbing were omitted.                                                   |
+| e4a3732b94 | B     | 75b9a36a93   | Pools `CharWidthCache` instead of whole `LineWrapper`s, breaking the `Arc<TextSystem>` cycle. A regression test asserts the text system is freed.                                             |
+| 24a2823456 | C     | --           | Only advances the wgpu git revision in the manifest and lockfile. ZZZ vendors wgpu v29, so the revision does not apply.                                                                       |
+
+Totals: zero `A`, eight `B`, two `C` across ten commits.
+
+### Applied Work
+
+- `2c3021cad3` is a `B` port of `6b985a8b26`.
+- `addbece988` is a `B` port of `e30095febc`.
+- `9b5362fab4` is a `B` port of `ec86047d67`.
+- `e36451ae2c` is a `B` port of `370591f3d1`.
+- `469aa18b3b` is a `B` port of `3c2f782514`.
+- `5eccbc95c5` is a `B` port of `f2a60bb8b6`.
+- `db34c508be` is a `B` port of `fdcb198110`.
+- `75b9a36a93` is a `B` port of `e4a3732b94`.
+
+### Per-Commit Narrative
+
+#### 6b985a8b26 — Helix surround on adjacent selections (B)
+
+`ms` now records anchors on both sides of each pre-edit edge plus the
+length of the text requested at that offset, and resolves an edge forward
+by that length without passing the inserted text. Two touching selections
+therefore no longer produce overlapping ranges when the closing delimiter
+of one and the opening delimiter of the next land on the same offset. The
+edit list is applied in ascending stable order, which keeps same-offset
+insertions in push order and is the reverse of the local
+`Reverse(edit.0.start)` sort. All fifteen `helix::surround` tests pass.
+
+#### e30095febc — Tree-sitter memory imports (B)
+
+Only the extension-builder hunk applies: the clang invocation that builds
+a grammar's WebAssembly now passes
+`-Wl,--max-memory=4294967296`, so the resulting module declares an
+explicit maximum on its memory import and a browser loader can make it
+shared without moving bytes. The rest of the patch moves
+`tree-sitter`/`tree-sitter-language` to a git revision whose
+`QueryMatch::captures` is a method instead of a field; ZZZ depends on
+crates.io `tree-sitter 0.27.1`, so both the call-site migration and the
+lockfile churn have no local target.
+
+#### ec86047d67 — external stash renames (B)
+
+`stash_entries` asks git for `%gs` (reflog subject) instead of `%s`
+(commit subject), which is what `git stash list` shows and what
+`git stash store -m` updates, and the adjacent bail message now names
+`git stash list`. ZZZ binds the helper as `git_binary`, so the port keeps
+that binding; five stash parsing tests pass.
+
+#### 370591f3d1 — native window close cleanup (B)
+
+The shared `on_close` callback no longer touches the app directly. It
+detaches a foreground task that removes the window only if the
+app-driven closure has not already done so, then removes its system tab,
+so a Windows destruction message arriving while GPUI is borrowed cannot
+panic or skip cleanup. The test platform stores the callback and exposes
+`simulate_close`, and a regression test delivers a close while the app is
+borrowed and drains tasks.
+
+#### dde76a1dca — gpui cleanups (C)
+
+Extracts `SingleSubscriberSet`, folds the activation and cancellation
+flags into one `Pending | Active | Dropped` state, changes `insert` to be
+immediately active with a new `insert_pending`, and rewrites the callers
+across `app`, `context`, `window` and the element tree, alongside import
+reordering and lint removals. Nothing about it is observable to a user,
+and the subscription machinery has already diverged locally, so the
+rewrite is not isolatable.
+
+#### 3c2f782514 — rejected push explanation (B)
+
+`is_non_fast_forward_error` matches `[rejected]` output with
+`(non-fast-forward)` or `(fetch first)`, and the `Updates were rejected`
+message with `behind` or `remote`. When the failed operation is `push` and
+the message matches, the toast title becomes
+`Push rejected: fetch and integrate remote changes before pushing again`
+instead of `git push failed`. ZZZ localizes operations, so
+`show_error_toast` keeps the raw operation for the predicate and uses the
+localized name in the fallback title; the new string is in both catalogs.
+Seven predicate tests are ported. The fetch/pull/push action button that
+the PR description mentions is not in the patch, so no button was added.
+
+#### f2a60bb8b6 — bare clone names on Windows remotes (B)
+
+`PathStyle` gains `file_name`, `file_stem` and `extension`, which honor
+the style's separators on any host and skip `.` components like std does,
+and the title bar uses them to detect and strip a `.git` suffix. A bare
+clone whose common directory is `C:\User\test\test_repo.git` opened from a
+Unix client now shows `test_repo` rather than the whole path. The
+stem/extension table covers seventeen Posix and eleven Windows cases and
+passes.
+
+#### fdcb198110 — low power mode frame pacing (B)
+
+`Platform` reports a `PowerMode` (default `Unknown`; macOS reads
+`NSProcessInfo.isLowPowerModeEnabled`, which cannot distinguish Automatic
+from High Power Mode), `App::power_mode` exposes it, and
+`minimum_frame_interval` keeps the previous inactive-window and thermal
+behavior while capping an active window to 30 fps in low power mode and
+raising an inactive window's interval to at least 30 fps. Frame requests
+are accepted within 1 ms of the target interval, so a 16.666 ms callback no
+longer waits for the next refresh. ZZZ has no profiler journal, and the
+throttle reads the platform mode per frame like `thermal_state`, so the
+skip-reason variant and the cached notification observer were omitted.
+Three frame-throttle tests pass.
+
+#### e4a3732b94 — text system reference cycle (B)
+
+The wrapper pool stores `CharWidthCache` instead of `LineWrapper`. A
+wrapper owns an `Arc<TextSystem>`, so pooling it kept the text system and
+its font caches alive forever once any text had been wrapped. The cache
+still carries the ASCII and other-character width tables, so reuse is
+preserved, and `LineWrapperHandle::drop` returns only the widths. A
+regression test wraps a line, drops every handle and asserts the text
+system is freed; all 34 `text_system` tests pass.
+
+#### 24a2823456 — WebGL surface reconfiguration (C)
+
+Only moves the wgpu-family git revision and its `naga` validation
+dependency from `3b3506e` to `cddb2f5` in the manifest and lockfile. ZZZ
+vendors wgpu v29 rather than tracking the upstream git revision, so there
+is no local dependency to advance and no code change to port.
+
+### Verification
+
+| Check                                                                                     | Result  | Notes                                            |
+| ----------------------------------------------------------------------------------------- | ------- | ------------------------------------------------ |
+| Reviewed baseline ancestry                                                                | PASS    | `57c7b10ece` is an ancestor of `FETCH_HEAD`      |
+| `cargo test --locked -p vim --lib helix::surround`                                        | PASS    | 15 tests                                         |
+| `cargo check --locked -p extension`                                                       | PASS    | grammar flag                                     |
+| `cargo test --locked -p git --lib stash`                                                  | PASS    | 5 tests                                          |
+| `cargo test --locked -p gpui --lib test_native_close_defers_app_access`                   | PASS    | defers app access                                |
+| `cargo test --locked -p git_ui --lib is_non_fast_forward`                                 | PASS    | 7 predicate tests                                |
+| `cargo check --locked -p git_ui --all-targets`                                            | PASS    | toast title                                      |
+| `cargo test --locked -p util --lib paths::tests::test_path_style_file_stem_and_extension` | PASS    | 28 cases                                         |
+| `cargo check --locked -p title_bar`                                                       | PASS    | display name                                     |
+| `cargo test --locked -p gpui --lib window::tests::frame_throttle`                         | PASS    | 2 tests                                          |
+| `cargo test --locked -p gpui --lib window::tests::power_modes`                            | PASS    | 1 test                                           |
+| `cargo test --locked -p gpui --lib text_system`                                           | PASS    | 34 tests                                         |
+| `cargo check --locked --workspace --all-targets`                                          | PASS    | after all eight ports                            |
+| `cargo fmt --check`                                                                       | PASS    | clean                                            |
+| `git diff --check`                                                                        | PASS    | clean                                            |
+| `./script/check-philosophy`                                                               | PASS    | philosophy gate                                  |
+| Locale key parity (`en.json` vs `zh-CN.json`)                                             | PASS    | 3662 keys each                                   |
+| macOS Low Power Mode runtime                                                              | NOT RUN | host is Linux; `gpui_macos` cannot be built here |
+| `cargo test --workspace`                                                                  | NOT RUN | not requested                                    |
+| Remaining commits through live head                                                       | NONE    | reviewed head equals the queried live head       |
+
+The reviewed baseline advances to
+`24a2823456f16e36bf32df510fb5c43fee7a2565`, the live upstream head at
+query time.
