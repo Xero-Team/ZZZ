@@ -553,6 +553,65 @@ impl PathStyle {
         )
     }
 
+    /// Returns the final component of `path`, ignoring trailing separators.
+    ///
+    /// Separators for `path`'s style are honored regardless of the host
+    /// platform, so a Windows remote path splits correctly on a Unix client.
+    pub fn file_name<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
+        let bytes = path.as_os_str().as_encoded_bytes();
+        let is_separator = |byte: u8| match self {
+            PathStyle::Posix => byte == b'/',
+            PathStyle::Windows => byte == b'/' || byte == b'\\',
+        };
+
+        let mut end = bytes.len();
+        loop {
+            while end > 0 && is_separator(bytes[end - 1]) {
+                end -= 1;
+            }
+            if end == 0 {
+                return None;
+            }
+            let start = bytes[..end]
+                .iter()
+                .rposition(|byte| is_separator(*byte))
+                .map_or(0, |index| index + 1);
+            let mut component = &bytes[start..end];
+            if self.is_windows()
+                && start == 0
+                && component.len() >= 2
+                && component[0].is_ascii_alphabetic()
+                && component[1] == b':'
+            {
+                component = &component[2..];
+                if component.is_empty() {
+                    return None;
+                }
+            }
+            match component {
+                b"." => end = start,
+                b".." => return None,
+                // SAFETY: the range is a subslice of a valid `OsStr` and the
+                // checks above only trim ASCII separators and prefixes.
+                _ => return Some(unsafe { OsStr::from_encoded_bytes_unchecked(component) }),
+            }
+        }
+    }
+
+    /// Returns the final component of `path` without its extension.
+    pub fn file_stem<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
+        self.file_name(path)
+            .map(rsplit_file_at_dot)
+            .and_then(|(before, after)| before.or(after))
+    }
+
+    /// Returns the extension of the final component of `path`.
+    pub fn extension<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
+        self.file_name(path)
+            .map(rsplit_file_at_dot)
+            .and_then(|(before, after)| before.and(after))
+    }
+
     pub fn strip_prefix<'a>(
         &self,
         child: &'a Path,
@@ -589,6 +648,29 @@ impl PathStyle {
             Some(Cow::Borrowed(RelPath::empty()))
         } else {
             None
+        }
+    }
+}
+
+/// Splits `file` at its final dot, mirroring `std::path::Path`'s private helper.
+fn rsplit_file_at_dot(file: &OsStr) -> (Option<&OsStr>, Option<&OsStr>) {
+    if file.as_encoded_bytes() == b".." {
+        return (Some(file), None);
+    }
+
+    // SAFETY: the encoding is only split at ASCII dots, so every produced
+    // `OsStr` is a boundary-aligned subslice of `file`.
+    let mut parts = file.as_encoded_bytes().rsplitn(2, |byte| *byte == b'.');
+    let after = parts.next();
+    let before = parts.next();
+    if before == Some(b"") {
+        (Some(file), None)
+    } else {
+        unsafe {
+            (
+                before.map(|part| OsStr::from_encoded_bytes_unchecked(part)),
+                after.map(|part| OsStr::from_encoded_bytes_unchecked(part)),
+            )
         }
     }
 }
@@ -1889,6 +1971,83 @@ mod tests {
             windows_path.to_string_lossy(),
             "C:\\Users\\user\\dev\\worktrees"
         );
+    }
+
+    #[test]
+    fn test_path_style_file_stem_and_extension() {
+        let posix_paths = [
+            ("foo", Some("foo"), None),
+            ("foo.", Some("foo"), Some("")),
+            (".foo", Some(".foo"), None),
+            ("foo.txt", Some("foo"), Some("txt")),
+            ("/tmp/archive.tar.gz", Some("archive.tar"), Some("gz")),
+            ("foo.bar.", Some("foo.bar"), Some("")),
+            (".x.y.z", Some(".x.y"), Some("z")),
+            ("a/.rustfmt.toml", Some(".rustfmt"), Some("toml")),
+            ("a.b/c.md", Some("c"), Some("md")),
+            ("", None, None),
+            ("/", None, None),
+            (".", None, None),
+            ("..", None, None),
+            ("foo/.", Some("foo"), None),
+            ("foo/..", None, None),
+            ("/foo/bar/", Some("bar"), None),
+            ("/etc/passwd", Some("passwd"), None),
+        ];
+
+        for (path, expected_stem, expected_extension) in posix_paths {
+            let path = Path::new(path);
+            assert_eq!(
+                PathStyle::Posix.file_stem(path),
+                expected_stem.map(OsStr::new),
+                "file_stem({path:?})"
+            );
+            assert_eq!(
+                PathStyle::Posix.extension(path),
+                expected_extension.map(OsStr::new),
+                "extension({path:?})"
+            );
+        }
+
+        let windows_paths = [
+            (
+                r"C:\Users\user\Documents\report.docx",
+                Some("report"),
+                Some("docx"),
+            ),
+            (
+                r"C:\Users\user\Downloads\archive.tar.gz",
+                Some("archive.tar"),
+                Some("gz"),
+            ),
+            (r"C:\Users\user\.gitignore", Some(".gitignore"), None),
+            (r"C:\Users\user\config.", Some("config"), Some("")),
+            (r"C:\Users\user\README", Some("README"), None),
+            (r"D:\projects\my.app\src\main.rs", Some("main"), Some("rs")),
+            ("C:/Users/user/report.txt", Some("report"), Some("txt")),
+            (
+                r"\\server\share\reports\2024.summary.xlsx",
+                Some("2024.summary"),
+                Some("xlsx"),
+            ),
+            (r"\\?\C:\Users\user\report.txt", Some("report"), Some("txt")),
+            (r"C:\Users\user\.", Some("user"), None),
+            (r"C:\Users\user\..", None, None),
+        ];
+
+        for (path, expected_stem, expected_extension) in windows_paths {
+            let path = Path::new(path);
+            assert_eq!(
+                PathStyle::Windows.file_stem(path),
+                expected_stem.map(OsStr::new),
+                "file_stem({path:?})"
+            );
+            assert_eq!(
+                PathStyle::Windows.extension(path),
+                expected_extension.map(OsStr::new),
+                "extension({path:?})"
+            );
+        }
     }
 
     #[test]
