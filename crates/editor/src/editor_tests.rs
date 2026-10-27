@@ -25807,6 +25807,39 @@ async fn test_completions_with_additional_edits_and_multiple_cursors(cx: &mut Te
     );
 }
 
+#[test]
+fn test_label_match_ranges_follow_current_filter_text() {
+    use crate::code_context_menus::label_match_ranges;
+
+    let mat = StringMatch {
+        candidate_id: 0,
+        score: 1.0,
+        positions: vec![0, 4],
+        string: "old_name".to_string(),
+    };
+
+    let unchanged_label =
+        language::CodeLabel::plain("old_name => Symbol".to_string(), Some("old_name"));
+    assert_eq!(
+        label_match_ranges(&mat, &unchanged_label).collect::<Vec<_>>(),
+        vec![0..1, 4..5]
+    );
+
+    let shifted_label = language::CodeLabel::plain("x old_name".to_string(), Some("old_name"));
+    assert_eq!(
+        label_match_ranges(&mat, &shifted_label).collect::<Vec<_>>(),
+        vec![2..3, 6..7]
+    );
+
+    // A server resolved the label into something else: the recorded offsets describe text that is
+    // no longer displayed, so they must be dropped instead of indexed into the new label.
+    let resolved_label = language::CodeLabel::plain(" => Class<>".to_string(), Some(""));
+    assert_eq!(
+        label_match_ranges(&mat, &resolved_label).collect::<Vec<_>>(),
+        Vec::<Range<usize>>::new()
+    );
+}
+
 #[gpui::test]
 async fn test_completions_resolve_updates_labels_if_filter_text_matches(cx: &mut TestAppContext) {
     init_test(cx, |_| {});

@@ -838,15 +838,9 @@ impl CompletionsMenu {
                             &None
                         };
 
-                        let filter_start = completion.label.filter_range.start;
-
                         let highlights = gpui::combine_highlights(
-                            mat.ranges().map(|range| {
-                                (
-                                    filter_start + range.start..filter_start + range.end,
-                                    FontWeight::BOLD.into(),
-                                )
-                            }),
+                            label_match_ranges(mat, &completion.label)
+                                .map(|range| (range, FontWeight::BOLD.into())),
                             styled_runs_for_code_label(
                                 &completion.label,
                                 &style.syntax,
@@ -1519,6 +1513,22 @@ fn completion_kind_highlight_name(kind: CompletionItemKind) -> Option<&'static s
         CompletionItemKind::SNIPPET => "string",
         _ => return None,
     })
+}
+
+/// Match offsets index `mat.string` — the text that was filtered — which is not necessarily the
+/// label currently displayed: some servers change labels during resolve despite our advertised
+/// capabilities. Reuse the offsets only while they still describe the label's filter text,
+/// shifted into the label's own byte range.
+pub(crate) fn label_match_ranges<'a>(
+    mat: &'a StringMatch,
+    label: &CodeLabel,
+) -> impl Iterator<Item = Range<usize>> + 'a {
+    let filter_start = label.filter_range.start;
+    (mat.string == label.filter_text())
+        .then(|| mat.ranges())
+        .into_iter()
+        .flatten()
+        .map(move |range| filter_start + range.start..filter_start + range.end)
 }
 
 fn split_completion_label<'a>(
