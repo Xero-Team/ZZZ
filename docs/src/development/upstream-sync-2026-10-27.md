@@ -28,8 +28,15 @@ found two defects in the `fdcb198110` port (`db34c508be`). Both are fixed
 in `6159bc81e0`, which adds a macOS 12 guard for
 `isLowPowerModeEnabled` and defers a forced render across throttling.
 `fdcb198110` stays `B` with the corrected local commit; `f14592c4a5`
-stays `C`, so the deployment floor remains 10.15.7. The totals in each
-batch are unchanged because no class moved.
+stays `C`, so the deployment floor remains 10.15.7.
+
+A third correction covers the `bd9aa0ac` port: `53158b01b7` split
+displayed paths by the remote style but still resolved the repository
+identity with the host `std::path` methods, so a Windows remote `.git`
+directory was not recognized as a dot entry. `226e2a45d8` resolves it
+with the remote style while keeping local paths on `std::path`. The row
+stays `B`, so the totals in each batch are unchanged because no class
+moved.
 
 ## Decisions
 
@@ -182,28 +189,28 @@ The reviewed baseline advances to
 
 ### Decisions
 
-| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                                  |
-| ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 772a8a9100 | B     | 99f7b8d817   | Holds `WindowTextSystem` in an `Rc` and keeps per-window layout caches in a `RefCell`. The font-generation invalidation this patch interleaves with does not exist locally.                                  |
-| 2a74c8dff6 | B     | e17c46238f   | Deletes the unused hash-keyed layout cache and its key types. Replayed by hand, and no caller outside `text_system` existed.                                                                                 |
-| 1808df02c0 | C     | --           | Removes `block` by bumping vendored `scap` and rewriting the upstream `gpui_apple` Metal renderer. The upstream `gpui_apple` renderer is absent locally and ZZZ vendors an older `scap`, so nothing applies. |
-| f14592c4a5 | C     | --           | Raises the macOS floor to 12 and replaces a deprecated icon API. The local window has no `iconForFileType` path, and the floor bump is release metadata.                                                     |
-| 96b617fa37 | B     | d0217b7d0d   | Drops navigation history and persisted recent paths for deleted entries. The `zed` test hunk was omitted; one test drives the path change directly.                                                          |
-| 087340e2d7 | C     | --           | Only moves the `crash-context` pin to a minidump-writer git SHA in the manifest and lockfile. Dependency churn with no local code path.                                                                      |
-| 5e548b8ad9 | B     | 254659a2c9   | Focuses the zoomed panel from its status bar button. The click-through test needs a panel type ZZZ does not carry; a focused test asserts the handle instead.                                                |
-| e0f4f28001 | B     | 1f8cbc13e5   | Anchors submenus to their trigger row and stacks nested menus by depth. The accessibility refactor and its focus tests were omitted because ZZZ's context menu keeps cfg-gated roles.                        |
-| 3318784374 | B     | 51ccaab565   | Reads `focus_follows_mouse` per dock render instead of caching it at construction. The struct hunk conflicted only over a renamed field.                                                                     |
-| 23973bd49f | B     | 33f0f923e4   | Treats ACP tool call location lines as 1-based. The native tool hunks were omitted because ZZZ does not ship the Edit, Grep and Read tools.                                                                  |
-| 979cd3fdf0 | B     | 5559e965ef   | Shapes Windows text in segments so U+2028 and U+2029 stay on one line. `FontRun` also carries style and weight locally, so segment runs copy them.                                                           |
-| 4d7b2d05ea | A     | aabce0cc14   | Clean cherry-pick: refreshes diagnostic endpoints on every seek.                                                                                                                                             |
-| 60919b0248 | B     | 58a2286021   | Leaves focus alone while a single-line editor is focused. Superseded later in the batch by the retained-focus registry.                                                                                      |
-| 182d15a629 | C     | --           | Adds a `SquareR` icon with no local caller. ZZZ has no such usage, so the asset would be dead code.                                                                                                          |
-| bd9aa0ac05 | B     | 53158b01b7   | Compares git worktree paths with the remote path style. Local `PathStyle` has no `starts_with`, so containment uses `strip_prefix`.                                                                          |
-| bed9563afc | B     | 97190b2bf2   | Stages Metal shaders in `OUT_DIR` and runs the tools there. ZZZ's macOS-only script keeps its older deployment target.                                                                                       |
-| 484bcbfea6 | C     | --           | Gates the Linux backend on `not(target_env = "ohos")`. ZZZ has no local ohos target or backend, so the change would only add dead configuration.                                                             |
-| a72cb6a214 | B     | 977cee96c2   | Keeps focus on menus and pickers through a retained-focus registry; supersedes the key-context check. The project-panel test covers both cases.                                                              |
-| 2c335b81dc | B     | 7881a03564   | Pins the zed-industries tree-sitter-go fork and highlights method type parameters. The local highlights query is shorter, so the rule was added beside `type_spec`.                                          |
-| 57c7b10ece | B     | 222c88091c   | Reads the git graph repository state through `Deref` instead of cloning a snapshot per ref label. Ported into `git_graph`.                                                                                   |
+| Upstream   | Class | Local commit           | Disposition                                                                                                                                                                                                  |
+| ---------- | ----- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 772a8a9100 | B     | 99f7b8d817             | Holds `WindowTextSystem` in an `Rc` and keeps per-window layout caches in a `RefCell`. The font-generation invalidation this patch interleaves with does not exist locally.                                  |
+| 2a74c8dff6 | B     | e17c46238f             | Deletes the unused hash-keyed layout cache and its key types. Replayed by hand, and no caller outside `text_system` existed.                                                                                 |
+| 1808df02c0 | C     | --                     | Removes `block` by bumping vendored `scap` and rewriting the upstream `gpui_apple` Metal renderer. The upstream `gpui_apple` renderer is absent locally and ZZZ vendors an older `scap`, so nothing applies. |
+| f14592c4a5 | C     | --                     | Raises the macOS floor to 12 and replaces a deprecated icon API. The local window has no `iconForFileType` path, and the floor bump is release metadata.                                                     |
+| 96b617fa37 | B     | d0217b7d0d             | Drops navigation history and persisted recent paths for deleted entries. The `zed` test hunk was omitted; one test drives the path change directly.                                                          |
+| 087340e2d7 | C     | --                     | Only moves the `crash-context` pin to a minidump-writer git SHA in the manifest and lockfile. Dependency churn with no local code path.                                                                      |
+| 5e548b8ad9 | B     | 254659a2c9             | Focuses the zoomed panel from its status bar button. The click-through test needs a panel type ZZZ does not carry; a focused test asserts the handle instead.                                                |
+| e0f4f28001 | B     | 1f8cbc13e5             | Anchors submenus to their trigger row and stacks nested menus by depth. The accessibility refactor and its focus tests were omitted because ZZZ's context menu keeps cfg-gated roles.                        |
+| 3318784374 | B     | 51ccaab565             | Reads `focus_follows_mouse` per dock render instead of caching it at construction. The struct hunk conflicted only over a renamed field.                                                                     |
+| 23973bd49f | B     | 33f0f923e4             | Treats ACP tool call location lines as 1-based. The native tool hunks were omitted because ZZZ does not ship the Edit, Grep and Read tools.                                                                  |
+| 979cd3fdf0 | B     | 5559e965ef             | Shapes Windows text in segments so U+2028 and U+2029 stay on one line. `FontRun` also carries style and weight locally, so segment runs copy them.                                                           |
+| 4d7b2d05ea | A     | aabce0cc14             | Clean cherry-pick: refreshes diagnostic endpoints on every seek.                                                                                                                                             |
+| 60919b0248 | B     | 58a2286021             | Leaves focus alone while a single-line editor is focused. Superseded later in the batch by the retained-focus registry.                                                                                      |
+| 182d15a629 | C     | --                     | Adds a `SquareR` icon with no local caller. ZZZ has no such usage, so the asset would be dead code.                                                                                                          |
+| bd9aa0ac05 | B     | 53158b01b7, 226e2a45d8 | Compares git worktree paths with the remote path style. Local `PathStyle` has no `starts_with`, so containment uses `strip_prefix`; `226e2a45d8` also resolves the repository identity by that style.        |
+| bed9563afc | B     | 97190b2bf2             | Stages Metal shaders in `OUT_DIR` and runs the tools there. ZZZ's macOS-only script keeps its older deployment target.                                                                                       |
+| 484bcbfea6 | C     | --                     | Gates the Linux backend on `not(target_env = "ohos")`. ZZZ has no local ohos target or backend, so the change would only add dead configuration.                                                             |
+| a72cb6a214 | B     | 977cee96c2             | Keeps focus on menus and pickers through a retained-focus registry; supersedes the key-context check. The project-panel test covers both cases.                                                              |
+| 2c335b81dc | B     | 7881a03564             | Pins the zed-industries tree-sitter-go fork and highlights method type parameters. The local highlights query is shorter, so the rule was added beside `type_spec`.                                          |
+| 57c7b10ece | B     | 222c88091c             | Reads the git graph repository state through `Deref` instead of cloning a snapshot per ref label. Ported into `git_graph`.                                                                                   |
 
 Totals: one `A`, fourteen `B`, five `C` across twenty commits.
 
@@ -220,7 +227,8 @@ Totals: one `A`, fourteen `B`, five `C` across twenty commits.
 - `33f0f923e4` is a `B` port of `23973bd49f`.
 - `5559e965ef` is a `B` port of `979cd3fdf0`.
 - `58a2286021` is a `B` port of `60919b0248`.
-- `53158b01b7` is a `B` port of `bd9aa0ac05`.
+- `53158b01b7` is a `B` port of `bd9aa0ac05`; `226e2a45d8` corrects it
+  after the audit.
 - `97190b2bf2` is a `B` port of `bed9563afc`.
 - `977cee96c2` is a `B` port of `a72cb6a214`.
 - `7881a03564` is a `B` port of `2c335b81dc`.
@@ -362,6 +370,12 @@ keeps showing the repository, worktree and branch. ZZZ's
 `util::paths::PathStyle` has no `starts_with`, so the containment checks
 use `strip_prefix` and the display path uses
 `RelPath::display(path_style)`.
+
+Superseded: the audit in `upstream-sync-audit-2026-10-27.md` found that
+`repo_identity_path` still used host `std::path` methods, so a Windows
+remote `.git` directory was not treated as a dot entry. `226e2a45d8`
+resolves the identity with the remote style and keeps local non-UTF-8
+paths on `std::path`. The class stays `B`.
 
 #### bed9563afc — Metal shaders without the checkout path (B)
 

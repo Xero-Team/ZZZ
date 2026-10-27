@@ -22,6 +22,11 @@ This audit covers the whole recorded absorption history, not just the
 2026-10-27 batch. The reviewed upstream baseline does not advance: it
 already sits at the live upstream head `37faef81f7`.
 
+Correction (2026-10-27, second pass): F3 records that the `bd9aa0ac` port
+did not resolve the repository identity with the remote path style.
+`226e2a45d8` fixes it; the decision row remains `B`, so the totals and
+ledger are unchanged.
+
 ## Method
 
 Every decision table in every sync report was parsed, as were the handful
@@ -77,6 +82,27 @@ request inside the default 33.333 ms inactive interval, waits past it, and
 then sends an ordinary request; it asserts the forced render is served by
 that later frame, and it fails with the deferred flag removed.
 
+### F3: `bd9aa0ac` still resolved repository identity with the host path style
+
+The `B` port `53158b01b7` made the title bar's containment checks and
+display path use the active worktree's `PathStyle`, but the identity call
+at `crates/title_bar/src/title_bar.rs` still went through
+`repo_identity_path`, which used `std::path::file_name` and `parent`.
+On a Unix client connected to a Windows remote, `C:\User\test\test_repo\.git`
+is one host component, so the `.git` directory was never recognized as a
+dot entry and the title bar derived `.git` (or the whole path) instead of
+the repository name. The same helper also feeds worktree project grouping.
+
+`repo_identity_path` now takes a `PathStyle` and uses the path-style
+helpers for foreign styles, while local paths keep `std::path` so non-UTF-8
+components still resolve. `WorktreeStore::paths` passes the snapshot's
+style, and restored local project groups pass `PathStyle::local()`.
+Regression tests cover Windows bare and non-bare common directories and a
+non-UTF-8 local path. `bd9aa0ac` remains `B` with `226e2a45d8` added to
+its local-commit list. The title-bar entry point itself is not exercised
+in a window test; the covered behavior is the identity and style helpers
+it calls.
+
 ### Non-findings re-checked
 
 The following `C` decisions were re-checked against the current tree and
@@ -96,11 +122,16 @@ stay `C`:
   icon API. ZZZ has no `iconForFileType` call site, and the floor is
   release metadata that `.cargo/config.toml` deliberately keeps at
   10.15.7.
+- `e4945b5d09` and `1dd9bbfd71` have local ports `d8124889a4` and
+  `48978a9ba7`, but those commits exist only on the unmerged
+  `sync/upstream-2026-10-07` branch. Neither is reachable from `main` or
+  this branch, and the current tree still lacks the SSH
+  `known_is_windows` reuse and `GlobalElementId` hash caching. Both stay
+  `C`; reclassify them if that branch is merged.
 
 No other definite defect was confirmed in path-position parsing,
-navigation history, context menus, retained focus, Metal staging, title
-bar path styles, ACP line handling, the DirectWrite changes, or the
-completion-label guard.
+navigation history, context menus, retained focus, Metal staging, ACP
+line handling, the DirectWrite changes, or the completion-label guard.
 
 ## Superseded decisions
 
@@ -131,14 +162,20 @@ included so the deduplication is auditable.
 
 ## Corrections applied
 
-| Report                              | Correction                                                                                                        | Local commit |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------ |
-| `upstream-sync-2026-10-27.md`       | Recorded the audit correction for `fdcb198110`; the row stays `B` with a superseded note and the new local commit | `6159bc81e0` |
-| `crates/gpui_macos/src/platform.rs` | Added the macOS 12 guard in `MacPlatform::power_mode`                                                             | `6159bc81e0` |
-| `crates/gpui/src/window.rs`         | Deferred the forced render across throttling and added its regression test                                        | `6159bc81e0` |
-| `crates/util/src/paths.rs`          | Split the `unsafe` operations in `rsplit_file_at_dot` so `multiple_unsafe_ops_per_block` passes                   | `6159bc81e0` |
-| `crates/workspace/src/dock.rs`      | Replaced `map(...).unwrap_or_else(...)` with `map_or_else` so `map_unwrap_or` passes                              | `6159bc81e0` |
-| `Cargo.lock`                        | Restored the `tempfile` edge to `getrandom 0.4.3`; the tree-sitter-go pin did not require the resolver churn      | `6159bc81e0` |
+| Report                                          | Correction                                                                                                        | Local commit |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------ |
+| `upstream-sync-2026-10-27.md`                   | Recorded the audit correction for `fdcb198110`; the row stays `B` with a superseded note and the new local commit | `6159bc81e0` |
+| `crates/gpui_macos/src/platform.rs`             | Added the macOS 12 guard in `MacPlatform::power_mode`                                                             | `6159bc81e0` |
+| `crates/gpui/src/window.rs`                     | Deferred the forced render across throttling and added its regression test                                        | `6159bc81e0` |
+| `crates/util/src/paths.rs`                      | Split the `unsafe` operations in `rsplit_file_at_dot` so `multiple_unsafe_ops_per_block` passes                   | `6159bc81e0` |
+| `crates/workspace/src/dock.rs`                  | Replaced `map(...).unwrap_or_else(...)` with `map_or_else` so `map_unwrap_or` passes                              | `6159bc81e0` |
+| `Cargo.lock`                                    | Restored the `tempfile` edge to `getrandom 0.4.3`; the tree-sitter-go pin did not require the resolver churn      | `6159bc81e0` |
+| `upstream-sync-2026-10-27.md`                   | Recorded the `bd9aa0ac` correction; the row stays `B` and names the new local commit                              | `226e2a45d8` |
+| `crates/project/src/git_store.rs`               | Resolved the identity by `PathStyle`, keeping local non-UTF-8 paths on `std::path`                                | `226e2a45d8` |
+| `crates/project/src/worktree_store.rs`          | Passed the worktree snapshot's path style to identity resolution                                                  | `226e2a45d8` |
+| `crates/title_bar/src/title_bar.rs`             | Passed the active worktree's path style to identity resolution                                                    | `226e2a45d8` |
+| `crates/workspace/src/workspace.rs`             | Kept restored local project groups on the local path style                                                        | `226e2a45d8` |
+| `crates/project/tests/integration/git_store.rs` | Added Windows remote and non-UTF-8 local identity regressions                                                     | `226e2a45d8` |
 
 The two lint fixes repair regressions introduced by this branch's own
 ports (`5eccbc95c5` and `254659a2c9`); `./script/clippy` failed on both
@@ -155,28 +192,32 @@ edited by hand. No class changed, so the rejection set is unchanged.
 
 ## Verification
 
-| Check                                                              | Result           | Notes                                       |
-| ------------------------------------------------------------------ | ---------------- | ------------------------------------------- |
-| `./script/check-upstream-ledger` before the audit                  | PASS             | 727 rejection rows                          |
-| `cargo check --locked -p gpui --lib`                               | PASS             | after the frame-throttle change             |
-| `cargo test --locked -p gpui --lib`                                | PASS             | 273 tests                                   |
-| `cargo test --locked -p gpui --lib window::tests::`                | PASS             | 19 tests                                    |
-| Deferred-force regression with the fix reverted                    | FAIL as expected | second render never happened                |
-| `cargo test --locked -p util --lib path`                           | PASS             | 77 tests                                    |
-| `cargo test --locked -p workspace --lib dock`                      | PASS             | 7 tests                                     |
-| `cargo check --locked -p gpui_macos --target aarch64-apple-darwin` | PASS             | cross-compiles; macOS runtime not exercised |
-| `cargo metadata --locked --no-deps`                                | PASS             | lockfile unchanged by resolution            |
-| `./script/clippy` (full workspace)                                 | PASS             | after the two lint fixes                    |
-| `cargo fmt --check`                                                | PASS             | clean                                       |
-| `git diff --check`                                                 | PASS             | clean                                       |
-| `./script/check-philosophy`                                        | PASS             | philosophy gate                             |
-| `./script/backfill-upstream-ledger`                                | PASS             | regenerated 727 rejection rows              |
-| `./script/check-upstream-ledger` after the audit                   | PASS             | no absorbed SHA remains in the ledger       |
-| macOS / Windows runtime checks                                     | NOT RUN          | host is Linux                               |
-| `cargo test --workspace`                                           | NOT RUN          | not requested                               |
+| Check                                                                                          | Result           | Notes                                       |
+| ---------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------- |
+| `./script/check-upstream-ledger` before the audit                                              | PASS             | 727 rejection rows                          |
+| `cargo check --locked -p gpui --lib`                                                           | PASS             | after the frame-throttle change             |
+| `cargo test --locked -p gpui --lib`                                                            | PASS             | 273 tests                                   |
+| `cargo test --locked -p gpui --lib window::tests::`                                            | PASS             | 19 tests                                    |
+| Deferred-force regression with the fix reverted                                                | FAIL as expected | second render never happened                |
+| `cargo test --locked -p util --lib path`                                                       | PASS             | 77 tests                                    |
+| `cargo test --locked -p workspace --lib dock`                                                  | PASS             | 7 tests                                     |
+| `cargo check --locked -p gpui_macos --target aarch64-apple-darwin`                             | PASS             | cross-compiles; macOS runtime not exercised |
+| `cargo test --locked -p project --test integration --features test-support repo_identity_path` | PASS             | 4 tests                                     |
+| `cargo check --locked -p title_bar -p project -p workspace`                                    | PASS             | call sites updated                          |
+| `cargo check --locked --workspace --all-targets`                                               | PASS             | after the identity change                   |
+| `cargo metadata --locked --no-deps`                                                            | PASS             | lockfile unchanged by resolution            |
+| `./script/clippy` (full workspace)                                                             | PASS             | after both corrections                      |
+| `cargo fmt --check`                                                                            | PASS             | clean                                       |
+| `git diff --check`                                                                             | PASS             | clean                                       |
+| `./script/check-philosophy`                                                                    | PASS             | philosophy gate                             |
+| `./script/backfill-upstream-ledger`                                                            | PASS             | regenerated 727 rejection rows              |
+| `./script/check-upstream-ledger` after the audit                                               | PASS             | no absorbed SHA remains in the ledger       |
+| macOS / Windows runtime checks                                                                 | NOT RUN          | host is Linux                               |
+| `cargo test --workspace`                                                                       | NOT RUN          | not requested                               |
 
 The macOS guard is covered by cross-compilation only; there is no unit
 test for `MacPlatform::power_mode`, and `power_mode` reads the OS version
 at runtime, so an actual 10.15 or 11 host remains unverified here. The
 frame-throttle tests exercise the platform-agnostic closure through the
-test window.
+test window. The Windows remote identity is covered by path-level tests;
+no actual Unix-to-Windows remote session was available.
