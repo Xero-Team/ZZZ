@@ -31,7 +31,8 @@ use gpui::{
     Action, AnyWindowHandle, BackgroundExecutor, ClipboardItem, CursorStyle, ForegroundExecutor,
     KeyContext, Keymap, Menu, MenuItem, OsMenu, OwnedMenu, PathPromptOptions, Platform,
     PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
-    PlatformWindow, Result, SystemMenuType, Task, ThermalState, WindowAppearance, WindowParams,
+    PlatformWindow, PowerMode, Result, SystemMenuType, Task, ThermalState, WindowAppearance,
+    WindowParams,
 };
 use itertools::Itertools;
 use objc::{
@@ -989,6 +990,20 @@ impl Platform for MacPlatform {
                 3 => ThermalState::Critical,
                 _ => ThermalState::Nominal,
             }
+        }
+    }
+
+    fn power_mode(&self) -> PowerMode {
+        // `isLowPowerModeEnabled` does not distinguish Automatic from High Power
+        // Mode, so a disabled low power mode reports `Unknown`.
+        let enabled: BOOL = unsafe {
+            let process_info: id = msg_send![class!(NSProcessInfo), processInfo];
+            msg_send![process_info, isLowPowerModeEnabled]
+        };
+        if enabled == YES {
+            PowerMode::LowPower
+        } else {
+            PowerMode::Unknown
         }
     }
 

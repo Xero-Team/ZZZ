@@ -267,6 +267,11 @@ pub trait Platform: AppLifecycle + 'static {
 
     fn thermal_state(&self) -> ThermalState;
     fn on_thermal_state_change(&self, callback: Box<dyn FnMut()>);
+    /// Returns the operating system's power mode, or [`PowerMode::Unknown`]
+    /// when the platform cannot determine it.
+    fn power_mode(&self) -> PowerMode {
+        PowerMode::Unknown
+    }
     fn on_system_wake(&self, _callback: Box<dyn FnMut()>) {}
 
     fn compositor_name(&self) -> &'static str {
@@ -353,6 +358,20 @@ pub enum ThermalState {
     Serious,
     /// System is critically constrained, minimize all resource usage
     Critical,
+}
+
+/// The operating system's preference for energy use versus performance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerMode {
+    /// The platform cannot determine the mode, or cannot distinguish the
+    /// active mode from other non-low-power modes.
+    Unknown,
+    /// The system prioritizes reducing energy use.
+    LowPower,
+    /// The system balances energy use and performance.
+    Balanced,
+    /// The system prioritizes performance over energy use.
+    HighPower,
 }
 
 /// Metadata for a given [ScreenCaptureSource]
