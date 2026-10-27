@@ -963,7 +963,9 @@ impl ToolCall {
         let buffer = buffer.await.log_err()?;
         let position = buffer.update(cx, |buffer, _| {
             let snapshot = buffer.snapshot();
-            if let Some(row) = location.line {
+            if let Some(line) = location.line {
+                // ACP numbers lines from 1; buffer rows start at 0.
+                let row = line.saturating_sub(1);
                 let column = snapshot.indent_size_for_line(row).len;
                 let point = snapshot.clip_point(Point::new(row, column), Bias::Left);
                 snapshot.anchor_before(point)
@@ -5840,7 +5842,7 @@ mod tests {
         let fs = FakeFs::new(cx.executor());
         fs.insert_tree(
             path!("/tmp/skills/test-skill"),
-            json!({ "SKILL.md": "skill body" }),
+            json!({ "SKILL.md": "skill body\nsecond line" }),
         )
         .await;
         let project = Project::test(fs, [], cx).await;
@@ -5860,7 +5862,9 @@ mod tests {
                         acp::ToolCall::new("write_file", "Write SKILL.md")
                             .kind(acp::ToolKind::Edit)
                             .status(acp::ToolCallStatus::Completed)
-                            .locations(vec![acp::ToolCallLocation::new(skill_path.clone())]),
+                            .locations(vec![
+                                acp::ToolCallLocation::new(skill_path.clone()).line(2),
+                            ]),
                     ),
                     cx,
                 )
@@ -5879,7 +5883,15 @@ mod tests {
                 .buffer
                 .upgrade()
                 .expect("resolved location should keep an open buffer");
-            assert_eq!(buffer.read(cx).text(), "skill body");
+            assert_eq!(buffer.read(cx).text(), "skill body\nsecond line");
+            // ACP numbers lines from 1, so line 2 is the buffer's second row.
+            assert_eq!(
+                agent_location
+                    .position
+                    .to_point(&buffer.read(cx).snapshot())
+                    .row,
+                1
+            );
         });
     }
 
