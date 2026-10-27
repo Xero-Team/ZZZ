@@ -12480,6 +12480,46 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_panel_button_focus_follows_zoomed_panel(cx: &mut gpui::TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+
+        let project = Project::test(fs, [], cx).await;
+        let (workspace, cx) =
+            cx.add_window_view(|window, cx| Workspace::test_new(project, window, cx));
+
+        let panel = workspace.update_in(cx, |workspace, window, cx| {
+            let panel = cx.new(|cx| TestPanel::new(DockPosition::Bottom, 100, cx));
+            workspace.add_panel(panel.clone(), window, cx);
+            workspace.toggle_panel_focus::<TestPanel>(window, cx);
+            panel
+        });
+        cx.run_until_parked();
+
+        let panel_focus_handle = cx.update(|_, cx| panel.read(cx).focus_handle(cx));
+        workspace.update_in(cx, |workspace, window, cx| {
+            let dock = workspace.bottom_dock().read(cx);
+            assert_ne!(
+                dock.panel_button_focus_handle(window, cx),
+                panel_focus_handle,
+                "an unzoomed dock keeps its own focus handle"
+            );
+        });
+
+        panel.update(cx, |panel, _| panel.zoomed = true);
+        cx.run_until_parked();
+
+        workspace.update_in(cx, |workspace, window, cx| {
+            let dock = workspace.bottom_dock().read(cx);
+            assert_eq!(
+                dock.panel_button_focus_handle(window, cx),
+                panel_focus_handle,
+                "a zoomed panel button must focus the panel rendered in the zoom layer"
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn test_close_panel_on_toggle(cx: &mut gpui::TestAppContext) {
         init_test(cx);
         let fs = FakeFs::new(cx.executor());
