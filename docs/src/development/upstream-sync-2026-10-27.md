@@ -596,3 +596,75 @@ is no local dependency to advance and no code change to port.
 The reviewed baseline advances to
 `24a2823456f16e36bf32df510fb5c43fee7a2565`, the live upstream head at
 query time.
+
+## Batch 4
+
+### Scope
+
+- Reviewed baseline: `24a2823456f16e36bf32df510fb5c43fee7a2565`
+- Reviewed head: `37faef81f74fc1bb08be9939c4cffc8ede6ced2f`
+- Live upstream head queried: `37faef81f74fc1bb08be9939c4cffc8ede6ced2f`
+- Query time: `2026-10-27T17:38:29+01:00`
+- Reviewed range: the 1 commit after `24a2823456`
+- Remaining after this batch: none through the queried live head
+
+### Decisions
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                         |
+| ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 37faef81f7 | B     | d10420510d   | Drops completion match offsets when the label's current filter text no longer equals the filtered text. Only the render hunk applies; the second hunk targets a label cache that ZZZ does not have. |
+
+Totals: zero `A`, one `B`, zero `C` across one commit.
+
+### Applied Work
+
+- `d10420510d` is a `B` port of `37faef81f7`.
+
+### Per-Commit Narrative
+
+#### 37faef81f7 — solargraph label changes during resolve (B)
+
+Fuzzy match offsets are byte offsets into the candidate string captured
+when the menu opened, which is the label's filter slice. Solargraph
+returns a different label from `completionItem/resolve` even though the
+client does not advertise a changeable label, so applying the recorded
+offsets to the new label indexed past its end. The render path now keeps
+the offsets only while the candidate string still equals the label's
+filter text, and shifts them by the label's current `filter_range.start`;
+otherwise the item renders without fuzzy-match emphasis. Three cases are
+covered by `test_label_match_ranges_follow_current_filter_text`:
+unchanged filter text, filter text at a non-zero offset, and a resolved
+label whose filter text changed. The test fails when the guard is
+removed.
+
+Upstream's second hunk rewrote the fallback in `sort_string_matches` that
+reuses a previously computed match. ZZZ's `sort_string_matches` has
+diverged (tiered sorting, no `label_match_state` cache), so there is no
+equivalent fallback to guard.
+
+ZZZ also still rejects resolved labels whose filter text changed, in
+`regenerate_completion_labels` (the guard came from #22061; upstream
+relaxed it in #62433, which predates this sync's baseline). That closes
+the panic at its source here, so the upstream LSP-driven regression test
+cannot reach the render guard and was replaced by the unit test above.
+
+### Verification
+
+| Check                                                                                    | Result           | Notes                                         |
+| ---------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------- |
+| Reviewed baseline ancestry                                                               | PASS             | `24a2823456` is an ancestor of `FETCH_HEAD`   |
+| `cargo test --locked -p editor --lib test_label_match_ranges_follow_current_filter_text` | PASS             | 1 test, three assertions                      |
+| Guard removed (negative control)                                                         | FAIL as expected | stale offsets were reused and the test failed |
+| `cargo test --locked -p editor --lib completions_resolve`                                | PASS             | 2 tests                                       |
+| `cargo check --locked --workspace --all-targets`                                         | PASS             | after the port                                |
+| `cargo fmt --check`                                                                      | PASS             | clean                                         |
+| `git diff --check`                                                                       | PASS             | clean                                         |
+| `./script/check-philosophy`                                                              | PASS             | philosophy gate                               |
+| Locale key parity (`en.json` vs `zh-CN.json`)                                            | PASS             | 3662 keys each                                |
+| Upstream LSP-driven regression test                                                      | NOT PORTED       | local resolve rejects filter-text changes     |
+| `cargo test --workspace`                                                                 | NOT RUN          | not requested                                 |
+| Remaining commits through live head                                                      | NONE             | reviewed head equals the queried live head    |
+
+The reviewed baseline advances to
+`37faef81f74fc1bb08be9939c4cffc8ede6ced2f` (2026-10-27 14:32:31 UTC), the
+live upstream head at query time.
