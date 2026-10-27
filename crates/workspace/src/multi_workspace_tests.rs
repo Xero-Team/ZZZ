@@ -719,6 +719,43 @@ async fn test_close_workspace_prefers_already_loaded_neighboring_workspace(
 }
 
 #[gpui::test]
+async fn test_remove_unloaded_project_group_removes_its_row(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree("/project-a", json!({})).await;
+
+    let project_a = Project::test(fs, ["/project-a".as_ref()], cx).await;
+    let key_a = project_a.read_with(cx, |project, cx| project.project_group_key(cx));
+    let key_b = ProjectGroupKey::new(None, PathList::new(&[PathBuf::from("/project-b")]));
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project_a, window, cx));
+
+    multi_workspace.update(cx, |multi_workspace, cx| {
+        multi_workspace.open_sidebar(cx);
+    });
+
+    multi_workspace.update(cx, |multi_workspace, _cx| {
+        multi_workspace.test_add_project_group(ProjectGroup {
+            key: key_b.clone(),
+            workspaces: Vec::new(),
+            expanded: true,
+        });
+    });
+
+    let removed = multi_workspace
+        .update_in(cx, |multi_workspace, window, cx| {
+            multi_workspace.remove_project_group(&key_b, window, cx)
+        })
+        .await
+        .expect("removing an unloaded project group should succeed");
+
+    assert!(removed, "the unloaded project group row should be removed");
+    multi_workspace.read_with(cx, |multi_workspace, _cx| {
+        assert_eq!(multi_workspace.project_group_keys(), vec![key_a]);
+    });
+}
+
+#[gpui::test]
 async fn test_switching_projects_with_sidebar_closed_retains_old_active_workspace(
     cx: &mut TestAppContext,
 ) {
