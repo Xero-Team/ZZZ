@@ -41,7 +41,7 @@ use ui::{
     ButtonLike, ContextMenu, ContextMenuEntry, IconWithIndicator, Indicator, PopoverMenu,
     TintColor, Tooltip, prelude::*, utils::platform_title_bar_height,
 };
-use util::ResultExt;
+use util::{ResultExt, paths::PathStyle};
 use workspace::{MultiWorkspace, ToggleWorktreeSecurity, Workspace};
 
 use zzz_actions::OpenRemote;
@@ -200,7 +200,8 @@ impl Render for TitleBar {
         let mut repository = None;
         let mut linked_worktree_name = None;
         if let Some(worktree) = self.effective_active_worktree(cx) {
-            repository = self.get_repository_for_worktree(&worktree, cx);
+            let path_style = worktree.read(cx).path_style();
+            repository = self.get_repository_for_worktree(&worktree, path_style, cx);
             let worktree_abs_path = worktree.read(cx).abs_path();
             project_name = worktree
                 .read(cx)
@@ -233,15 +234,22 @@ impl Render for TitleBar {
                 };
 
                 if let Some(repo_name) = display_name.and_then(|n| n.to_str()) {
-                    let visible_worktrees_in_repo = self.visible_worktrees_in_repository(repo, cx);
+                    let visible_worktrees_in_repo =
+                        self.visible_worktrees_in_repository(repo, path_style, cx);
                     let name = if visible_worktrees_in_repo == 1 {
-                        if let Ok(relative) =
-                            worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
-                        {
-                            if relative.as_os_str().is_empty() {
+                        if let Some(relative) = path_style.strip_prefix(
+                            worktree_abs_path.as_ref(),
+                            repo.work_directory_abs_path.as_ref(),
+                        ) {
+                            if relative.is_empty() {
                                 repo_name.to_owned()
                             } else {
-                                format!("{}/{}", repo_name, relative.display())
+                                format!(
+                                    "{}{}{}",
+                                    repo_name,
+                                    path_style.primary_separator(),
+                                    relative.display(path_style)
+                                )
                             }
                         } else {
                             repo_name.to_owned()
@@ -468,6 +476,7 @@ impl TitleBar {
     fn get_repository_for_worktree(
         &self,
         worktree: &Entity<project::Worktree>,
+        path_style: PathStyle,
         cx: &App,
     ) -> Option<Entity<project::git_store::Repository>> {
         let project = self.project.read(cx);
@@ -479,7 +488,9 @@ impl TitleBar {
             .values()
             .filter(|repo| {
                 let repo_path = &repo.read(cx).work_directory_abs_path;
-                worktree_path == *repo_path || worktree_path.starts_with(repo_path.as_ref())
+                path_style
+                    .strip_prefix(worktree_path.as_ref(), repo_path.as_ref())
+                    .is_some()
             })
             .max_by_key(|repo| repo.read(cx).work_directory_abs_path.as_os_str().len())
             .cloned()
@@ -488,6 +499,7 @@ impl TitleBar {
     fn visible_worktrees_in_repository(
         &self,
         repository: &project::git_store::Repository,
+        path_style: PathStyle,
         cx: &App,
     ) -> usize {
         let repo_path = &repository.work_directory_abs_path;
@@ -496,7 +508,9 @@ impl TitleBar {
             .visible_worktrees(cx)
             .filter(|worktree| {
                 let worktree_path = worktree.read(cx).abs_path();
-                worktree_path == *repo_path || worktree_path.starts_with(repo_path.as_ref())
+                path_style
+                    .strip_prefix(worktree_path.as_ref(), repo_path.as_ref())
+                    .is_some()
             })
             .count()
     }
