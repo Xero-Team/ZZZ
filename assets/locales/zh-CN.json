@@ -2744,6 +2744,8 @@
     "git_graph.column.description": "描述",
     "git_graph.column.graph": "图谱",
     "git_graph.commit_sha_copied": "已复制提交 SHA！",
+    "git_graph.close_details_panel": "关闭详情面板",
+    "git_graph.open_in_browser": "在浏览器中打开",
     "git_graph.copy_tag": "复制标签",
     "git_graph.copy_ref_name": "复制引用名称",
     "git_graph.refs": "引用",

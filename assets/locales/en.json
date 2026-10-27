@@ -2744,6 +2744,8 @@
     "git_graph.column.description": "Description",
     "git_graph.column.graph": "Graph",
     "git_graph.commit_sha_copied": "Commit SHA Copied!",
+    "git_graph.close_details_panel": "Close Details Panel",
+    "git_graph.open_in_browser": "Open In Browser",
     "git_graph.copy_tag": "Copy Tag",
     "git_graph.copy_ref_name": "Copy Ref Name",
     "git_graph.refs": "Refs",

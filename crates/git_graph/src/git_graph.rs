@@ -3220,6 +3220,21 @@ impl GitGraph {
                     .child(
                         div().absolute().top_2().right_2().child(
                             IconButton::new("close-detail", IconName::Close)
+                                .tooltip({
+                                    let focus_handle = self.focus_handle.clone();
+                                    move |_window, cx: &mut App| {
+                                        Tooltip::for_action_in(
+                                            tr(
+                                                cx,
+                                                "git_graph.close_details_panel",
+                                                "Close Details Panel",
+                                            ),
+                                            &Cancel,
+                                            &focus_handle,
+                                            cx,
+                                        )
+                                    }
+                                })
                                 .icon_size(IconSize::Small)
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.selected_entry_idx = None;
@@ -3415,6 +3430,18 @@ impl GitGraph {
                                     )
                                     .label_size(LabelSize::Small)
                                     .truncate(true)
+                                    .tooltip({
+                                        move |_window, cx: &mut App| {
+                                            Tooltip::simple(
+                                                tr(
+                                                    cx,
+                                                    "git_graph.open_in_browser",
+                                                    "Open In Browser",
+                                                ),
+                                                cx,
+                                            )
+                                        }
+                                    })
                                     .color(Color::Muted)
                                     .on_click(
                                         move |_, _, cx| {
