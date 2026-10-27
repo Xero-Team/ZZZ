@@ -32,6 +32,7 @@ sha	class	reason_code	note	source
 0812d210	C	untriaged	GPT-5.6 Sol default mixed with subscribed provider.	upstream-sync-2026-08-18.md
 0849124bc2	C	philosophy	Cross-crate snapshot rewrite includes native-agent and Copilot paths; no coherent, independently testable slice.	upstream-sync-2026-10-09.md
 0855410c	C	untriaged	Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.	upstream-sync-2026-09-02.md
+087340e2d7	C	upstream-infra	Only moves the `crash-context` pin to a minidump-writer git SHA in the manifest and lockfile. Dependency churn with no local code path.	upstream-sync-2026-10-27.md
 089abd6917	C	absent-api	Adds Bedrock models and provider wiring for the absent `bedrock` crate.	upstream-sync-2026-10-10.md
 0943bcb76c	C	untriaged	Shares ACP connection lifecycle across v1 and v2.	upstream-sync-2026-10-16.md
 09745431b5	C	philosophy	Hosted-model pricing documents a commercial hosted offering that ZZZ does not promote.	upstream-sync-2026-10-09.md
@@ -69,6 +70,8 @@ sha	class	reason_code	note	source
 17c0ebb0f7	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 17d3378bb9	C	philosophy	Adds account-settings notifications to the cloud WebSocket protocol and account-bound consumers, which are outside ZZZ's no-account product.	upstream-sync-2026-10-05.md
 17d71d2b	C	absent-api	csv_preview filter files deleted locally.	upstream-sync-2026-08-18.md
+1808df02c0	C	absent-api	Removes `block` by bumping vendored `scap` and rewriting the upstream `gpui_apple` Metal renderer. The upstream `gpui_apple` renderer is absent locally and ZZZ vendors an older `scap`, so nothing applies.	upstream-sync-2026-10-27.md
+182d15a629	C	absent-api	Adds a `SquareR` icon with no local caller. ZZZ has no such usage, so the asset would be dead code.	upstream-sync-2026-10-27.md
 184e124b	C	diverged	Per-line terminal CWD resolver requires a divergent terminal path model.	upstream-sync-2026-08-07.md
 18512de483	C	diverged	Depends on `reveal_policy` and `should_show_scrollbars` from an unabsorbed scrollbar refactor; the local element has diverged.	upstream-sync-2026-10-24-b.md
 1861e58f	C	philosophy	Telemetry/hang journaling violates the no-telemetry boundary.	upstream-sync-2026-08-27.md
@@ -199,6 +202,7 @@ sha	class	reason_code	note	source
 479bce0995	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 47b8ea58	C	absent-api	Reveal-in-panel needs `Item::active_project_path` and missing DiffMultibuffer.	upstream-sync-2026-09-18.md
 480d81bf	C	philosophy	ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.	upstream-sync-2026-09-02.md
+484bcbfea6	C	absent-api	Gates the Linux backend on `not(target_env = "ohos")`. ZZZ has no local ohos target or backend, so the change would only add dead configuration.	upstream-sync-2026-10-27.md
 4882254fae	C	absent-api	Batched SSH environment probe depends on the absent local `RemoteEnvironment`, `os_version`, and `home_dir` machinery.	upstream-sync-2026-10-10.md
 4905e67333	C	upstream-infra	Fixes a permission in a first-contribution GitHub workflow; community automation ZZZ does not ship.	upstream-sync-2026-10-13.md
 49276a3d	C	untriaged	GitHub Actions / xtask gate tests on check_style.	upstream-sync-2026-09-18.md
@@ -690,6 +694,7 @@ f092e5e9	C	untriaged	Rescan diagnostics need upstream `OsWatcher`; ZZZ still use
 f0b38ac75e	C	upstream-infra	Lockfile-only dependency bump with no independent ZZZ behavior.	upstream-sync-2026-10-10.md
 f0d8b0b0	C	untriaged	New `HoverListenerMode` API with no current ZZZ caller once the which-key indicator is rejected.	upstream-sync-2026-09-04.md
 f0fb48c7	C	philosophy	ForegroundJournal sleep/visibility needs unabsorbed Window APIs and hang telemetry.	upstream-sync-2026-09-18.md
+f14592c4a5	C	release-metadata	Raises the macOS floor to 12 and replaces a deprecated icon API. The local window has no `iconForFileType` path, and the floor bump is release metadata.	upstream-sync-2026-10-27.md
 f16f9652ec	C	philosophy	Uses ACP v2 content for native prompts; native agent plus the absent v2 transport.	upstream-sync-2026-10-10.md
 f1a10a5227	C	philosophy	Adds checkpoint-action telemetry to the agent panel.	upstream-sync-2026-10-10.md
 f1ccf949d5	C	absent-api	Reuses the iOS cached main-thread marker; `gpui_ios` and `gpui_apple` are absent and the host is Linux.	upstream-sync-2026-10-24-b.md
