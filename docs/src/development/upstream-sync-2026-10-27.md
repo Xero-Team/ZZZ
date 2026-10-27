@@ -22,6 +22,15 @@ through the live head contains 50 commits; this batch covers the first 20
 as the configured batch size. The second batch then covers the next 20
 commits; see [Batch 2](#batch-2) below.
 
+Audit correction (2026-10-27): the full re-audit in
+[`upstream-sync-audit-2026-10-27.md`](./upstream-sync-audit-2026-10-27.md)
+found two defects in the `fdcb198110` port (`db34c508be`). Both are fixed
+in `6159bc81e0`, which adds a macOS 12 guard for
+`isLowPowerModeEnabled` and defers a forced render across throttling.
+`fdcb198110` stays `B` with the corrected local commit; `f14592c4a5`
+stays `C`, so the deployment floor remains 10.15.7. The totals in each
+batch are unchanged because no class moved.
+
 ## Decisions
 
 | Upstream   | Class | Local commit | Disposition                                                                                                                                                                                         |
@@ -435,18 +444,18 @@ The reviewed baseline advances to
 
 ### Decisions
 
-| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                   |
-| ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 6b985a8b26 | B     | 2c3021cad3   | Resolves each `ms` edge from both sides of its pre-edit offset, and sorts surround edits ascending so touching selections stop overlapping. Five regression tests are included.               |
-| e30095febc | B     | addbece988   | Adds `-Wl,--max-memory=4294967296` to grammar compilation. The Tree-sitter revision bump and the `captures()` migration have no local target because ZZZ uses crates.io `tree-sitter 0.27.1`. |
-| ec86047d67 | B     | 9b5362fab4   | Reads stash subjects from `%gs` so an external rename shows up, and fixes the failure message. Local helper is named `git_binary`.                                                            |
-| 370591f3d1 | B     | e36451ae2c   | Defers native window close cleanup to a foreground task, so destruction cannot re-enter a borrowed app. The test platform stores the callback.                                                |
-| dde76a1dca | C     | --           | A wide internal gpui refactor (`SingleSubscriberSet`, subscriber state machine, lint fixes) with no observable behavior change.                                                               |
-| 3c2f782514 | B     | 469aa18b3b   | Gives a rejected push a specific toast title. The operation is kept unlocalized for the predicate; the fetch/pull/push button in the PR text is not part of the patch.                        |
-| f2a60bb8b6 | B     | 5eccbc95c5   | Adds path-style-aware `file_name`, `file_stem` and `extension` so `repo.git` bare clones show `repo` on Windows remotes.                                                                      |
-| fdcb198110 | B     | db34c508be   | Caps active windows to 30 fps in low power mode and tolerates 1 ms of display-link jitter. Profiler and notification plumbing were omitted.                                                   |
-| e4a3732b94 | B     | 75b9a36a93   | Pools `CharWidthCache` instead of whole `LineWrapper`s, breaking the `Arc<TextSystem>` cycle. A regression test asserts the text system is freed.                                             |
-| 24a2823456 | C     | --           | Only advances the wgpu git revision in the manifest and lockfile. ZZZ vendors wgpu v29, so the revision does not apply.                                                                       |
+| Upstream   | Class | Local commit           | Disposition                                                                                                                                                                                                      |
+| ---------- | ----- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6b985a8b26 | B     | 2c3021cad3             | Resolves each `ms` edge from both sides of its pre-edit offset, and sorts surround edits ascending so touching selections stop overlapping. Five regression tests are included.                                  |
+| e30095febc | B     | addbece988             | Adds `-Wl,--max-memory=4294967296` to grammar compilation. The Tree-sitter revision bump and the `captures()` migration have no local target because ZZZ uses crates.io `tree-sitter 0.27.1`.                    |
+| ec86047d67 | B     | 9b5362fab4             | Reads stash subjects from `%gs` so an external rename shows up, and fixes the failure message. Local helper is named `git_binary`.                                                                               |
+| 370591f3d1 | B     | e36451ae2c             | Defers native window close cleanup to a foreground task, so destruction cannot re-enter a borrowed app. The test platform stores the callback.                                                                   |
+| dde76a1dca | C     | --                     | A wide internal gpui refactor (`SingleSubscriberSet`, subscriber state machine, lint fixes) with no observable behavior change.                                                                                  |
+| 3c2f782514 | B     | 469aa18b3b             | Gives a rejected push a specific toast title. The operation is kept unlocalized for the predicate; the fetch/pull/push button in the PR text is not part of the patch.                                           |
+| f2a60bb8b6 | B     | 5eccbc95c5             | Adds path-style-aware `file_name`, `file_stem` and `extension` so `repo.git` bare clones show `repo` on Windows remotes.                                                                                         |
+| fdcb198110 | B     | db34c508be, 6159bc81e0 | Caps active windows to 30 fps in low power mode and tolerates 1 ms of display-link jitter. Profiler and notification plumbing were omitted; `6159bc81e0` adds the macOS 12 guard and the deferred forced render. |
+| e4a3732b94 | B     | 75b9a36a93             | Pools `CharWidthCache` instead of whole `LineWrapper`s, breaking the `Arc<TextSystem>` cycle. A regression test asserts the text system is freed.                                                                |
+| 24a2823456 | C     | --                     | Only advances the wgpu git revision in the manifest and lockfile. ZZZ vendors wgpu v29, so the revision does not apply.                                                                                          |
 
 Totals: zero `A`, eight `B`, two `C` across ten commits.
 
@@ -458,7 +467,7 @@ Totals: zero `A`, eight `B`, two `C` across ten commits.
 - `e36451ae2c` is a `B` port of `370591f3d1`.
 - `469aa18b3b` is a `B` port of `3c2f782514`.
 - `5eccbc95c5` is a `B` port of `f2a60bb8b6`.
-- `db34c508be` is a `B` port of `fdcb198110`.
+- `db34c508be` is a `B` port of `fdcb198110`; `6159bc81e0` corrects it after the audit.
 - `75b9a36a93` is a `B` port of `e4a3732b94`.
 
 ### Per-Commit Narrative
@@ -550,6 +559,12 @@ longer waits for the next refresh. ZZZ has no profiler journal, and the
 throttle reads the platform mode per frame like `thermal_state`, so the
 skip-reason variant and the cached notification observer were omitted.
 Three frame-throttle tests pass.
+
+Superseded: the audit in `upstream-sync-audit-2026-10-27.md` found two
+defects in the original port and fixed both in `6159bc81e0`. `power_mode`
+now returns `Unknown` below macOS 12 instead of messaging a selector that
+only exists from Monterey on, and a forced render deferred by the throttle
+is remembered and served by the next frame. The class stays `B`.
 
 #### e4a3732b94 — text system reference cycle (B)
 
