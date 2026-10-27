@@ -1,6 +1,6 @@
 use gpui::{
     AnyWindowHandle, AppContext as _, Context, FocusHandle, Focusable, Global,
-    StatefulInteractiveElement, Task,
+    StatefulInteractiveElement, Task, Window,
 };
 use util::ResultExt as _;
 
@@ -51,6 +51,9 @@ pub trait FocusFollowsMouse<E: Focusable>: StatefulInteractiveElement {
                             };
 
                             cx.update_window(window, move |_view, window, cx| {
+                                if is_single_line_editor_focused(window) {
+                                    return;
+                                }
                                 window.focus(&focus, cx);
                             })
                             .log_err();
@@ -70,3 +73,12 @@ pub trait FocusFollowsMouse<E: Focusable>: StatefulInteractiveElement {
 }
 
 impl<E: Focusable, T: StatefulInteractiveElement> FocusFollowsMouse<E> for T {}
+
+fn is_single_line_editor_focused(window: &Window) -> bool {
+    window.context_stack().last().is_some_and(|context| {
+        context.contains("Editor")
+            && context
+                .get("mode")
+                .is_some_and(|mode| mode.as_ref() == "single_line")
+    })
+}
