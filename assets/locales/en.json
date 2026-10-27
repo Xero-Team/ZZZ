@@ -2896,6 +2896,7 @@
     "git_ui.git_panel.view_file_history": "View File History",
     "git_ui.git_panel.view_log": "View Log",
     "git_ui.git_panel.git_action_failed": "git {} failed",
+    "git_ui.git_panel.push_rejected_fetch_and_integrate": "Push rejected: fetch and integrate remote changes before pushing again",
     "git_ui.git_panel.where_initialize_git_repository": "Where would you like to initialize this git repository?",
     "git_ui.project_diff.base": "Base: {}",
     "git_ui.project_diff.branch_diff": "Branch Diff",

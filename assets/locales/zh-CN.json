@@ -2896,6 +2896,7 @@
     "git_ui.git_panel.view_file_history": "查看文件历史",
     "git_ui.git_panel.view_log": "查看日志",
     "git_ui.git_panel.git_action_failed": "git {} 失败",
+    "git_ui.git_panel.push_rejected_fetch_and_integrate": "推送被拒绝：请先获取并整合远程更改后再推送",
     "git_ui.git_panel.where_initialize_git_repository": "要在哪里初始化这个 Git 仓库？",
     "git_ui.project_diff.base": "基准：{}",
     "git_ui.project_diff.branch_diff": "分支差异",
