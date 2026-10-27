@@ -457,7 +457,7 @@ impl LspAdapter for GoLspAdapter {
         arguments: &[serde_json::Value],
         path_style: PathStyle,
     ) -> Option<ClientCommand> {
-        if let "gopls.run_tests" = command_name {
+        if command_name == "gopls.run_tests" {
             let template = go_test_task_template(arguments.first()?, path_style)?;
             Some(ClientCommand::ScheduleTask(template))
         } else {

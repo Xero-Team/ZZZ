@@ -172,8 +172,8 @@ impl std::fmt::Display for PromptId {
 pub struct PromptStore {
     env: heed::Env,
     metadata_cache: RwLock<MetadataCache>,
-    metadata: Database<SerdeJson<PromptId>, SerdeJson<PromptMetadata>>,
-    bodies: Database<SerdeJson<PromptId>, Str>,
+    metadata: Database<'static, SerdeJson<PromptId>, SerdeJson<PromptMetadata>>,
+    bodies: Database<'static, SerdeJson<PromptId>, Str>,
 }
 
 pub struct PromptsUpdatedEvent;
@@ -188,8 +188,8 @@ struct MetadataCache {
 
 impl MetadataCache {
     fn from_db(
-        db: Database<SerdeJson<PromptId>, SerdeJson<PromptMetadata>>,
-        txn: &RoTxn,
+        db: Database<'static, SerdeJson<PromptId>, SerdeJson<PromptMetadata>>,
+        txn: &RoTxn<'_>,
     ) -> Result<Self> {
         let mut cache = MetadataCache::default();
         for result in db.iter(txn)? {
@@ -260,16 +260,25 @@ impl PromptStore {
                     .open(db_path)?
             };
 
-            let mut txn = db_env.write_txn()?;
-            let metadata = db_env.create_database(&mut txn, Some("metadata.v2"))?;
-            let bodies = db_env.create_database(&mut txn, Some("bodies.v2"))?;
-            txn.commit()?;
+            let (metadata, bodies) = db_env
+                .create_databases_and_commit(db_env.write_txn()?, |opener, txn| {
+                    let metadata = opener
+                        .create_database::<SerdeJson<PromptId>, SerdeJson<PromptMetadata>>(
+                            txn,
+                            Some("metadata.v2"),
+                        )?;
+                    let bodies = opener
+                        .create_database::<SerdeJson<PromptId>, Str>(txn, Some("bodies.v2"))?;
+                    Ok::<_, heed::Error>(heed::CommitOrAbort::<_, ()>::Commit((metadata, bodies)))
+                })?
+                .unwrap_commit();
 
             Self::upgrade_dbs(&db_env, metadata, bodies).log_err();
 
-            let txn = db_env.read_txn()?;
-            let metadata_cache = MetadataCache::from_db(metadata, &txn)?;
-            txn.commit()?;
+            let metadata_cache = {
+                let txn = db_env.read_txn()?;
+                MetadataCache::from_db(metadata, &txn)?
+            };
 
             Ok(PromptStore {
                 env: db_env,
@@ -282,30 +291,33 @@ impl PromptStore {
 
     fn upgrade_dbs(
         env: &heed::Env,
-        metadata_db: heed::Database<SerdeJson<PromptId>, SerdeJson<PromptMetadata>>,
-        bodies_db: heed::Database<SerdeJson<PromptId>, Str>,
+        metadata_db: heed::Database<'static, SerdeJson<PromptId>, SerdeJson<PromptMetadata>>,
+        bodies_db: heed::Database<'static, SerdeJson<PromptId>, Str>,
     ) -> Result<()> {
-        let mut txn = env.write_txn()?;
-        let Some(bodies_v1_db) = env
-            .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<String>>(
-                &txn,
-                Some("bodies"),
-            )?
-        else {
+        let (bodies_v1_db, metadata_v1_db) = env
+            .open_databases_and_commit(env.read_txn()?, |opener, txn| {
+                let bodies = opener
+                    .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<String>>(
+                        txn,
+                        Some("bodies"),
+                    )?;
+                let metadata = opener
+                    .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<PromptMetadataV1>>(
+                        txn,
+                        Some("metadata"),
+                    )?;
+                Ok::<_, heed::Error>(heed::CommitOrAbort::<_, ()>::Commit((bodies, metadata)))
+            })?
+            .unwrap_commit();
+
+        let (Some(bodies_v1_db), Some(metadata_v1_db)) = (bodies_v1_db, metadata_v1_db) else {
             return Ok(());
         };
+
+        let mut txn = env.write_txn()?;
         let mut bodies_v1 = bodies_v1_db
             .iter(&txn)?
             .collect::<heed::Result<HashMap<_, _>>>()?;
-
-        let Some(metadata_v1_db) = env
-            .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<PromptMetadataV1>>(
-                &txn,
-                Some("metadata"),
-            )?
-        else {
-            return Ok(());
-        };
         let metadata_v1 = metadata_v1_db
             .iter(&txn)?
             .collect::<heed::Result<HashMap<_, _>>>()?;
@@ -382,6 +394,22 @@ impl PromptStore {
         let metadata = self.metadata;
 
         let task = cx.background_spawn(async move {
+            let (metadata_v1_db, bodies_v1_db) = db_connection
+                .open_databases_and_commit(db_connection.read_txn()?, |opener, txn| {
+                    let metadata = opener
+                        .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<()>>(
+                            txn,
+                            Some("metadata"),
+                        )?;
+                    let bodies = opener
+                        .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<()>>(
+                            txn,
+                            Some("bodies"),
+                        )?;
+                    Ok::<_, heed::Error>(heed::CommitOrAbort::<_, ()>::Commit((metadata, bodies)))
+                })?
+                .unwrap_commit();
+
             let mut txn = db_connection.write_txn()?;
 
             metadata.delete(&mut txn, &id)?;
@@ -390,21 +418,11 @@ impl PromptStore {
             if let PromptId::User { uuid } = id {
                 let prompt_id_v1 = PromptIdV1::from(uuid);
 
-                if let Some(metadata_v1_db) = db_connection
-                    .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<()>>(
-                        &txn,
-                        Some("metadata"),
-                    )?
-                {
+                if let Some(metadata_v1_db) = metadata_v1_db {
                     metadata_v1_db.delete(&mut txn, &prompt_id_v1)?;
                 }
 
-                if let Some(bodies_v1_db) = db_connection
-                    .open_database::<SerdeBincode<PromptIdV1>, SerdeBincode<()>>(
-                        &txn,
-                        Some("bodies"),
-                    )?
-                {
+                if let Some(bodies_v1_db) = bodies_v1_db {
                     bodies_v1_db.delete(&mut txn, &prompt_id_v1)?;
                 }
             }
@@ -816,12 +834,18 @@ mod tests {
                     .unwrap()
             };
 
-            let mut txn = db_env.write_txn().unwrap();
             // Create the metadata.v2 database with raw bytes so we can write
             // an incompatible key format.
-            let metadata_db: Database<heed::types::Bytes, heed::types::Bytes> = db_env
-                .create_database(&mut txn, Some("metadata.v2"))
-                .unwrap();
+            let metadata_db: Database<'static, heed::types::Bytes, heed::types::Bytes> = db_env
+                .create_databases_and_commit(db_env.write_txn().unwrap(), |opener, txn| {
+                    opener
+                        .create_database(txn, Some("metadata.v2"))
+                        .map(heed::CommitOrAbort::<_, ()>::Commit)
+                })
+                .unwrap()
+                .unwrap_commit();
+
+            let mut txn = db_env.write_txn().unwrap();
 
             // Write an incompatible PromptId key: `{"kind":"CommitMessage"}`
             // This is the old/branch format that current code can't decode.
@@ -893,13 +917,23 @@ mod tests {
                     .unwrap()
             };
 
+            let (metadata_v1_db, bodies_v1_db) = db_env
+                .create_databases_and_commit(db_env.write_txn().unwrap(), |opener, txn| {
+                    let metadata_v1_db: Database<
+                        SerdeBincode<PromptIdV1>,
+                        SerdeBincode<PromptMetadataV1>,
+                    > = opener.create_database(txn, Some("metadata"))?;
+                    let bodies_v1_db: Database<SerdeBincode<PromptIdV1>, SerdeBincode<String>> =
+                        opener.create_database(txn, Some("bodies"))?;
+                    Ok::<_, heed::Error>(heed::CommitOrAbort::<_, ()>::Commit((
+                        metadata_v1_db,
+                        bodies_v1_db,
+                    )))
+                })
+                .unwrap()
+                .unwrap_commit();
+
             let mut txn = db_env.write_txn().unwrap();
-
-            let metadata_v1_db: Database<SerdeBincode<PromptIdV1>, SerdeBincode<PromptMetadataV1>> =
-                db_env.create_database(&mut txn, Some("metadata")).unwrap();
-
-            let bodies_v1_db: Database<SerdeBincode<PromptIdV1>, SerdeBincode<String>> =
-                db_env.create_database(&mut txn, Some("bodies")).unwrap();
 
             let metadata_v1 = PromptMetadataV1 {
                 id: prompt_id_v1.clone(),

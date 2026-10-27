@@ -42,9 +42,9 @@ font-kit = { path = "../../vendor/font-kit", optional = true }
 pollster.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-resvg = { version = "0.48.1", default-features = false }
+resvg = { version = "0.49.0", default-features = false }
 skrifa.workspace = true
-usvg = { version = "0.48.1", default-features = false, features = ["svgz"] }
+usvg = { version = "0.49.0", default-features = false, features = ["svgz"] }
 vello_cpu = { version = "0.3.0", default-features = false, features = [
     "std",
     "text",

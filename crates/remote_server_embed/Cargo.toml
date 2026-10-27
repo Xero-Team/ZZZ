@@ -15,4 +15,4 @@ workspace = true
 
 [build-dependencies]
 flate2 = "1.1.10"
-zip = { version = "9.0.4", default-features = false, features = ["deflate"] }
+zip = { version = "9.1.0", default-features = false, features = ["deflate"] }

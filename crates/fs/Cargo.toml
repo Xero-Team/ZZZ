@@ -44,7 +44,7 @@ time.workspace = true
 util.workspace = true
 vfs.workspace = true
 is_executable = "1.0.6"
-notify = "8.2.0"
+notify = "8.2.1"
 # Vendored from https://github.com/ArturKovacs/trash @ 54e0a2d69fdc058cc2efa19a497ec8f44631d61f
 trash = { path = "../../vendor/trash" }
 

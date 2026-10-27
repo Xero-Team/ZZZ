@@ -48,7 +48,7 @@ text.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
 menu.workspace = true
-tokio = { version = "1.53", features = ["full"], optional = true }
+tokio = { version = "1.54", features = ["full"], optional = true }
 ui.workspace = true
 util.workspace = true
 util_macros.workspace = true
