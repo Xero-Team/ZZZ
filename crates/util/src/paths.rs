@@ -666,12 +666,10 @@ fn rsplit_file_at_dot(file: &OsStr) -> (Option<&OsStr>, Option<&OsStr>) {
     if before == Some(b"") {
         (Some(file), None)
     } else {
-        unsafe {
-            (
-                before.map(|part| OsStr::from_encoded_bytes_unchecked(part)),
-                after.map(|part| OsStr::from_encoded_bytes_unchecked(part)),
-            )
-        }
+        (
+            before.map(|part| unsafe { OsStr::from_encoded_bytes_unchecked(part) }),
+            after.map(|part| unsafe { OsStr::from_encoded_bytes_unchecked(part) }),
+        )
     }
 }
 

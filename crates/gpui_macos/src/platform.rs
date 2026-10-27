@@ -994,6 +994,10 @@ impl Platform for MacPlatform {
     }
 
     fn power_mode(&self) -> PowerMode {
+        // `isLowPowerModeEnabled` is only available on macOS 12 and later.
+        if Self::os_version() < Version::new(12, 0, 0) {
+            return PowerMode::Unknown;
+        }
         // `isLowPowerModeEnabled` does not distinguish Automatic from High Power
         // Mode, so a disabled low power mode reports `Unknown`.
         let enabled: BOOL = unsafe {

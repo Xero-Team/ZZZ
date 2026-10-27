@@ -1196,7 +1196,10 @@ impl Window {
             let invalidator = invalidator.clone();
             let active = active.clone();
             let input_rate_tracker = input_rate_tracker.clone();
+            let mut deferred_force_render = false;
             move |request_frame_options| {
+                let force_render =
+                    mem::take(&mut deferred_force_render) || request_frame_options.force_render;
                 let power_state = handle
                     .update(&mut cx, |_, _, cx| (cx.thermal_state(), cx.power_mode()))
                     .log_err();
@@ -1207,8 +1210,7 @@ impl Window {
                 // - Inactive window (not focused): use its configured frame interval,
                 //   unless high-rate input is arriving (such as scrolling an unfocused window).
                 let should_throttle = !request_frame_options.require_presentation
-                    && (request_frame_options.force_render
-                        || !next_frame_callbacks.borrow().is_empty());
+                    && (force_render || !next_frame_callbacks.borrow().is_empty());
                 let inactive_without_high_rate_input = should_throttle
                     && !active.get()
                     && !input_rate_tracker.borrow_mut().is_high_rate();
@@ -1230,6 +1232,8 @@ impl Window {
                             min_interval,
                         )
                     {
+                        // Don't lose a pending forced render to throttling.
+                        deferred_force_render |= force_render;
                         // Must still complete the frame on platforms that require it.
                         // On Wayland, `surface.frame()` was already called to request the
                         // next frame callback, so we must call `surface.commit()` (via
@@ -1261,11 +1265,11 @@ impl Window {
                     || needs_present.get()
                     || input_rate_tracker.borrow_mut().is_high_rate();
 
-                if invalidator.is_dirty() || request_frame_options.force_render {
+                if invalidator.is_dirty() || force_render {
                     measure("frame duration", || {
                         handle
                             .update(&mut cx, |_, window, cx| {
-                                if request_frame_options.force_render {
+                                if force_render {
                                     // Bypass cached view reuse so we don't replay stale
                                     // atlas tile references after a GPU device recovery.
                                     window.refresh();
@@ -6175,6 +6179,17 @@ mod tests {
 
     struct EmptyView;
 
+    struct CountingView {
+        render_count: Rc<Cell<usize>>,
+    }
+
+    impl Render for CountingView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            div()
+        }
+    }
+
     #[gpui::test]
     async fn test_focus_handle_release(cx: &mut TestAppContext) {
         let (handle, survivor) = cx.update(|cx| (cx.focus_handle(), cx.focus_handle()));
@@ -6853,6 +6868,42 @@ mod tests {
                 );
             })
             .expect("test window should remain open");
+    }
+
+    #[gpui::test]
+    fn test_throttled_forced_render_is_not_lost(cx: &mut TestAppContext) {
+        let render_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let render_count = render_count.clone();
+            move |_, _| CountingView { render_count }
+        });
+        let test_window = cx.test_window(window.into());
+
+        // Serve a frame so the inactive-window throttle has a reference time.
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(render_count.get(), 1);
+
+        // Test windows report themselves inactive, so a forced render arriving
+        // inside the configured inactive interval is deferred instead of drawn.
+        test_window.simulate_frame_request(RequestFrameOptions {
+            require_presentation: false,
+            force_render: true,
+        });
+        assert_eq!(
+            render_count.get(),
+            1,
+            "a throttled forced render must not draw before the interval elapses"
+        );
+
+        // Wait out the interval, then send an ordinary request. It carries no
+        // force flag of its own, so only the deferred forced render can make it draw.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(
+            render_count.get(),
+            2,
+            "the deferred forced render must be served on the next frame"
+        );
     }
 
     #[gpui::test]
