@@ -89,3 +89,12 @@ added to both `assets/locales/en.json` and `assets/locales/zh-CN.json`.
   by synchronous helpers that have no `cx`, so they were not localized.
 - `unicode_confusables` is ported without the sandbox-prompt display helpers
   that upstream uses outside elicitation.
+
+## Follow-up
+
+The port inlined `fa66442a01`/`fbceb2823b` without their `entry_view_state.rs`
+hunks, so an elicitation took an index in the thread but not in
+`EntryViewState::entries` and the next entry panicked in `set_entry`.
+[Upstream Sync 2026-10-28](./upstream-sync-2026-10-28-elicitation-entries.md)
+re-absorbs those hunks, the dropped regression test, and the live
+`sync_elicitation_state_for_entry` wiring in `conversation_view.rs`.
