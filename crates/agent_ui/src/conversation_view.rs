@@ -1532,6 +1532,7 @@ impl ConversationView {
                         );
                     });
                     active.update(cx, |active, cx| {
+                        active.sync_elicitation_state_for_entry(index, window, cx);
                         active.sync_editor_mode_for_empty_state(cx);
                     });
                 }
@@ -1545,6 +1546,7 @@ impl ConversationView {
                     });
                     list_state.remeasure_items(*index..*index + 1);
                     active.update(cx, |active, cx| {
+                        active.sync_elicitation_state_for_entry(*index, window, cx);
                         active.auto_expand_streaming_thought(cx);
                     });
                 }
@@ -1577,7 +1579,19 @@ impl ConversationView {
                 );
             }
             AcpThreadEvent::ToolAuthorizationReceived(_) => {}
-            AcpThreadEvent::ElicitationRequested(_) => {}
+            AcpThreadEvent::ElicitationRequested(_) => {
+                self.notify_with_sound(
+                    tr(
+                        cx,
+                        "agent_ui.conversation.waiting_for_input",
+                        "Waiting for input",
+                    )
+                    .as_ref(),
+                    IconName::Info,
+                    window,
+                    cx,
+                );
+            }
             AcpThreadEvent::ElicitationResponded(_) => {}
             AcpThreadEvent::Retry(retry) => {
                 if let Some(active) = self.thread_view(&session_id) {

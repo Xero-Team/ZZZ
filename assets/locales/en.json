@@ -2015,6 +2015,7 @@
     "agent_ui.conversation.server_exited_with_status": "Server exited with status {}",
     "agent_ui.conversation.upgrade_agent": "Configure {}",
     "agent_ui.conversation.upgrade_to_work_with_zzz": "Configure {} to work with ZZZ",
+    "agent_ui.conversation.waiting_for_input": "Waiting for input",
     "agent_ui.conversation.waiting_for_tool_confirmation": "Waiting for tool confirmation",
     "agent_ui.notification.dismiss": "Dismiss",
     "agent_ui.notification.view": "View",

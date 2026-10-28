@@ -2015,6 +2015,7 @@
     "agent_ui.conversation.server_exited_with_status": "服务器已退出，状态码为 {}",
     "agent_ui.conversation.upgrade_agent": "配置 {}",
     "agent_ui.conversation.upgrade_to_work_with_zzz": "配置 {} 以适配 ZZZ",
+    "agent_ui.conversation.waiting_for_input": "等待输入",
     "agent_ui.conversation.waiting_for_tool_confirmation": "等待工具确认",
     "agent_ui.notification.dismiss": "关闭",
     "agent_ui.notification.view": "查看",
