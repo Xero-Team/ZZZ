@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=b961b4950febbc050081554bafe976b5d1b93f39
+LAST_REVIEWED_UPSTREAM=37faef81f74fc1bb08be9939c4cffc8ede6ced2f
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=50d748832b8e0a7cd290b11957de82584bb4b2d8
+LOCAL_BASE_COMMIT=4d3b091b22be4a46f9fbb40df60c7473c1caf7e3
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,10 +20,11 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-09-22, local `main` is `50d748832b`. The last completed
-audit is `docs/src/development/upstream-sync-2026-09-18.md` through
-`b961b495` on `sync/upstream-2026-09-18`. Query again at run start.
-The next range starts after `LAST_REVIEWED_UPSTREAM`.
+As of 2026-10-27, local `main` is `4d3b091b22`. The last completed
+sync is `docs/src/development/upstream-sync-2026-10-27.md` through
+`37faef81` on `sync/upstream-2026-10-27`, and its full re-audit is
+`docs/src/development/upstream-sync-audit-2026-10-27.md`. Query again at
+run start. The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy
 

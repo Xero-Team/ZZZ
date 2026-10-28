@@ -25,9 +25,11 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use smallvec::{SmallVec, smallvec};
 use std::{
     borrow::Cow,
+    cell::RefCell,
     cmp,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
+    mem,
     ops::{Deref, DerefMut, Range},
     sync::{
         Arc,
@@ -405,8 +407,7 @@ pub struct TextSystem {
     font_ids_by_font: RwLock<FxHashMap<Font, CachedFont>>,
     font_metrics: RwLock<FxHashMap<FontId, FontMetrics>>,
     raster_info: RwLock<GlyphRasterInfoCache>,
-    wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<LineWrapper>>>,
-    font_runs_pool: Mutex<Vec<Vec<FontRun>>>,
+    wrapper_pool: Mutex<FxHashMap<FontIdWithSize, Vec<CharWidthCache>>>,
     fallback_font_stack: SmallVec<[Font; 2]>,
 }
 
@@ -426,7 +427,6 @@ impl TextSystem {
             raster_info: RwLock::default(),
             font_ids_by_font: RwLock::default(),
             wrapper_pool: Mutex::default(),
-            font_runs_pool: Mutex::default(),
             fallback_font_stack: smallvec![
                 // TODO: Remove this when Linux have implemented setting fallbacks.
                 font(".ZZZMono"),
@@ -678,12 +678,12 @@ impl TextSystem {
     pub fn line_wrapper(self: &Arc<Self>, font: Font, font_size: Pixels) -> LineWrapperHandle {
         let lock = &mut self.wrapper_pool.lock();
         let font_id = self.resolve_font(&font);
-        let wrappers = lock
+        let char_widths = lock
             .entry(FontIdWithSize { font_id, font_size })
-            .or_default();
-        let wrapper = wrappers
+            .or_default()
             .pop()
-            .unwrap_or_else(|| LineWrapper::new(font_id, font_size, self.clone()));
+            .unwrap_or_default();
+        let wrapper = LineWrapper::new(font_id, font_size, self.clone(), char_widths);
 
         LineWrapperHandle {
             wrapper: Some(wrapper),
@@ -808,6 +808,7 @@ impl TextSystem {
 #[derive(Deref)]
 pub struct WindowTextSystem {
     line_layout_cache: LineLayoutCache,
+    font_runs_buffer: RefCell<Vec<FontRun>>,
     #[deref]
     text_system: Arc<TextSystem>,
 }
@@ -817,6 +818,7 @@ impl WindowTextSystem {
     pub fn new(text_system: Arc<TextSystem>) -> Self {
         Self {
             line_layout_cache: LineLayoutCache::new(text_system.platform_text_system.clone()),
+            font_runs_buffer: RefCell::default(),
             text_system,
         }
     }
@@ -880,74 +882,6 @@ impl WindowTextSystem {
         }
     }
 
-    /// Shape the given line using a caller-provided content hash as the cache key.
-    ///
-    /// This enables cache hits without materializing a contiguous `SharedString` for the text.
-    /// If the cache misses, `materialize_text` is invoked to produce the `SharedString` for shaping.
-    ///
-    /// Contract (caller enforced):
-    /// - Same `text_hash` implies identical text content (collision risk accepted by caller).
-    /// - `text_len` should be the UTF-8 byte length of the text (helps reduce accidental collisions).
-    ///
-    /// Like [`Self::shape_line`], this must be used only for single-line text (no `\n`).
-    pub fn shape_line_by_hash(
-        &self,
-        text_hash: u64,
-        text_len: usize,
-        font_size: Pixels,
-        runs: &[TextRun],
-        force_width: Option<Pixels>,
-        materialize_text: impl FnOnce() -> SharedString,
-    ) -> ShapedLine {
-        let mut decoration_runs = SmallVec::<[DecorationRun; 32]>::new();
-        for run in runs {
-            if let Some(last_run) = decoration_runs.last_mut()
-                && last_run.color == run.color
-                && last_run.underline == run.underline
-                && last_run.strikethrough == run.strikethrough
-                && last_run.background_color == run.background_color
-            {
-                last_run.len += run.len as u32;
-                continue;
-            }
-            decoration_runs.push(DecorationRun {
-                len: run.len as u32,
-                color: run.color,
-                background_color: run.background_color,
-                underline: run.underline,
-                strikethrough: run.strikethrough,
-            });
-        }
-
-        let mut used_force_width = force_width;
-        let layout = self.layout_line_by_hash(
-            text_hash,
-            text_len,
-            font_size,
-            runs,
-            used_force_width,
-            || {
-                let text = materialize_text();
-                debug_assert!(
-                    text.find('\n').is_none(),
-                    "text argument should not contain newlines"
-                );
-                text
-            },
-        );
-
-        // We only materialize actual text on cache miss; on hit we avoid allocations.
-        // Since `ShapedLine` carries a `SharedString`, use an empty placeholder for hits.
-        // NOTE: Callers must not rely on `ShapedLine.text` for content when using this API.
-        let text: SharedString = SharedString::new_static("");
-
-        ShapedLine {
-            layout,
-            text,
-            decoration_runs,
-        }
-    }
-
     /// Shape a multi line string of text, at the given font_size, for painting to the screen.
     /// Subsets of the text can be styled independently with the `runs` parameter.
     /// If `wrap_width` is provided, the line breaks will be adjusted to fit within the given width.
@@ -960,7 +894,7 @@ impl WindowTextSystem {
         line_clamp: Option<usize>,
     ) -> Result<SmallVec<[WrappedLine; 1]>> {
         let mut runs = runs.iter().filter(|run| run.len > 0).cloned().peekable();
-        let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
+        let mut font_runs = mem::take(&mut *self.font_runs_buffer.borrow_mut());
 
         let mut lines = SmallVec::new();
         let mut max_wrap_lines = line_clamp;
@@ -1078,7 +1012,7 @@ impl WindowTextSystem {
             process_line(text, 0, end);
         }
 
-        self.font_runs_pool.lock().push(font_runs);
+        *self.font_runs_buffer.borrow_mut() = font_runs;
 
         Ok(lines)
     }
@@ -1099,7 +1033,7 @@ impl WindowTextSystem {
         force_width: Option<Pixels>,
     ) -> Arc<LineLayout> {
         let mut last_run = None::<&TextRun>;
-        let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
+        let mut font_runs = mem::take(&mut *self.font_runs_buffer.borrow_mut());
         font_runs.clear();
 
         for run in runs {
@@ -1141,139 +1075,7 @@ impl WindowTextSystem {
             force_width,
         );
 
-        self.font_runs_pool.lock().push(font_runs);
-
-        layout
-    }
-
-    /// Probe the line layout cache using a caller-provided content hash, without allocating.
-    ///
-    /// Returns `Some(layout)` if the layout is already cached in either the current frame
-    /// or the previous frame. Returns `None` if it is not cached.
-    ///
-    /// Contract (caller enforced):
-    /// - Same `text_hash` implies identical text content (collision risk accepted by caller).
-    /// - `text_len` should be the UTF-8 byte length of the text (helps reduce accidental collisions).
-    pub fn try_layout_line_by_hash(
-        &self,
-        text_hash: u64,
-        text_len: usize,
-        font_size: Pixels,
-        runs: &[TextRun],
-        force_width: Option<Pixels>,
-    ) -> Option<Arc<LineLayout>> {
-        let mut last_run = None::<&TextRun>;
-        let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
-        font_runs.clear();
-
-        for run in runs {
-            let decoration_changed = if let Some(last_run) = last_run
-                && last_run.color == run.color
-                && last_run.underline == run.underline
-                && last_run.strikethrough == run.strikethrough
-            // we do not consider differing background color relevant, as it does not affect glyphs
-            // && last_run.background_color == run.background_color
-            {
-                false
-            } else {
-                last_run = Some(run);
-                true
-            };
-
-            let font_id = self.resolve_font(&run.font);
-            if let Some(font_run) = font_runs.last_mut()
-                && font_id == font_run.font_id
-                && run.font.style == font_run.font_style
-                && run.font.weight == font_run.font_weight
-                && !decoration_changed
-            {
-                font_run.len += run.len;
-            } else {
-                font_runs.push(FontRun {
-                    len: run.len,
-                    font_id,
-                    font_style: run.font.style,
-                    font_weight: run.font.weight,
-                });
-            }
-        }
-
-        let layout = self.line_layout_cache.try_layout_line_by_hash(
-            text_hash,
-            text_len,
-            font_size,
-            &font_runs,
-            force_width,
-        );
-
-        self.font_runs_pool.lock().push(font_runs);
-
-        layout
-    }
-
-    /// Layout the given line of text using a caller-provided content hash as the cache key.
-    ///
-    /// This enables cache hits without materializing a contiguous `SharedString` for the text.
-    /// If the cache misses, `materialize_text` is invoked to produce the `SharedString` for shaping.
-    ///
-    /// Contract (caller enforced):
-    /// - Same `text_hash` implies identical text content (collision risk accepted by caller).
-    /// - `text_len` should be the UTF-8 byte length of the text (helps reduce accidental collisions).
-    pub fn layout_line_by_hash(
-        &self,
-        text_hash: u64,
-        text_len: usize,
-        font_size: Pixels,
-        runs: &[TextRun],
-        force_width: Option<Pixels>,
-        materialize_text: impl FnOnce() -> SharedString,
-    ) -> Arc<LineLayout> {
-        let mut last_run = None::<&TextRun>;
-        let mut font_runs = self.font_runs_pool.lock().pop().unwrap_or_default();
-        font_runs.clear();
-
-        for run in runs {
-            let decoration_changed = if let Some(last_run) = last_run
-                && last_run.color == run.color
-                && last_run.underline == run.underline
-                && last_run.strikethrough == run.strikethrough
-            // we do not consider differing background color relevant, as it does not affect glyphs
-            // && last_run.background_color == run.background_color
-            {
-                false
-            } else {
-                last_run = Some(run);
-                true
-            };
-
-            let font_id = self.resolve_font(&run.font);
-            if let Some(font_run) = font_runs.last_mut()
-                && font_id == font_run.font_id
-                && run.font.style == font_run.font_style
-                && run.font.weight == font_run.font_weight
-                && !decoration_changed
-            {
-                font_run.len += run.len;
-            } else {
-                font_runs.push(FontRun {
-                    len: run.len,
-                    font_id,
-                    font_style: run.font.style,
-                    font_weight: run.font.weight,
-                });
-            }
-        }
-
-        let layout = self.line_layout_cache.layout_line_by_hash(
-            text_hash,
-            text_len,
-            font_size,
-            &font_runs,
-            force_width,
-            materialize_text,
-        );
-
-        self.font_runs_pool.lock().push(font_runs);
+        *self.font_runs_buffer.borrow_mut() = font_runs;
 
         layout
     }
@@ -1301,7 +1103,7 @@ impl Drop for LineWrapperHandle {
                 font_size: wrapper.font_size,
             })
             .expect("entry should be present")
-            .push(wrapper);
+            .push(wrapper.into_char_widths());
     }
 }
 
@@ -2027,5 +1829,27 @@ mod font_resolution_tests {
 
         text_system.fallback_font_stack.clear();
         assert_eq!(text_system.resolve_font(&requested), FontId(42));
+    }
+}
+
+#[cfg(test)]
+mod line_wrapper_pool_tests {
+    use super::*;
+    use crate::NoopTextSystem;
+
+    #[test]
+    fn pooled_line_wrappers_do_not_retain_text_system() {
+        let text_system = Arc::new(TextSystem::new(Arc::new(NoopTextSystem::new())));
+        let weak_text_system = Arc::downgrade(&text_system);
+
+        let mut wrapper = text_system.line_wrapper(font(".ZedMono"), px(16.));
+        let fragments = [LineFragment::text("hello world")];
+        wrapper
+            .wrap_line(&fragments, px(40.), IndentAdjustment::default())
+            .for_each(drop);
+        drop(wrapper);
+        drop(text_system);
+
+        assert!(weak_text_system.upgrade().is_none());
     }
 }

@@ -125,12 +125,22 @@ mod macos_build {
 
     fn compile_metal_shaders(header_path: &Path) {
         let shader_path = "./src/shaders.metal";
-        let air_output_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.air");
-        let metallib_output_path =
-            PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.metallib");
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let air_output_path = out_dir.join("shaders.air");
+        let metallib_output_path = out_dir.join("shaders.metallib");
         println!("cargo:rerun-if-changed={}", shader_path);
 
+        // The metal compiler records the resolved absolute path of its input
+        // unconditionally. Compile a copy staged in OUT_DIR so the recorded
+        // location is the build's canonical output directory, never the checkout.
+        let staged_shader_path = out_dir.join("shaders.metal");
+        std::fs::copy(shader_path, &staged_shader_path).unwrap();
+
+        // When targeting macOS 12+, both `metal` and `metallib` also record their
+        // working directory in the metallib. Run them from OUT_DIR so that path
+        // isn't the checkout either.
         let output = Command::new("xcrun")
+            .current_dir(&out_dir)
             .args([
                 "-sdk",
                 "macosx",
@@ -139,11 +149,9 @@ mod macos_build {
                 "-mmacosx-version-min=10.15.7",
                 "-MO",
                 "-c",
-                shader_path,
-                "-include",
-                (header_path.to_str().unwrap()),
-                "-o",
             ])
+            .arg(&staged_shader_path)
+            .args(["-include", header_path.to_str().unwrap(), "-o"])
             .arg(&air_output_path)
             .output()
             .unwrap();
@@ -157,8 +165,9 @@ mod macos_build {
         }
 
         let output = Command::new("xcrun")
+            .current_dir(&out_dir)
             .args(["-sdk", "macosx", "metallib"])
-            .arg(air_output_path)
+            .arg(&air_output_path)
             .arg("-o")
             .arg(metallib_output_path)
             .output()

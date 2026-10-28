@@ -553,6 +553,65 @@ impl PathStyle {
         )
     }
 
+    /// Returns the final component of `path`, ignoring trailing separators.
+    ///
+    /// Separators for `path`'s style are honored regardless of the host
+    /// platform, so a Windows remote path splits correctly on a Unix client.
+    pub fn file_name<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
+        let bytes = path.as_os_str().as_encoded_bytes();
+        let is_separator = |byte: u8| match self {
+            PathStyle::Posix => byte == b'/',
+            PathStyle::Windows => byte == b'/' || byte == b'\\',
+        };
+
+        let mut end = bytes.len();
+        loop {
+            while end > 0 && is_separator(bytes[end - 1]) {
+                end -= 1;
+            }
+            if end == 0 {
+                return None;
+            }
+            let start = bytes[..end]
+                .iter()
+                .rposition(|byte| is_separator(*byte))
+                .map_or(0, |index| index + 1);
+            let mut component = &bytes[start..end];
+            if self.is_windows()
+                && start == 0
+                && component.len() >= 2
+                && component[0].is_ascii_alphabetic()
+                && component[1] == b':'
+            {
+                component = &component[2..];
+                if component.is_empty() {
+                    return None;
+                }
+            }
+            match component {
+                b"." => end = start,
+                b".." => return None,
+                // SAFETY: the range is a subslice of a valid `OsStr` and the
+                // checks above only trim ASCII separators and prefixes.
+                _ => return Some(unsafe { OsStr::from_encoded_bytes_unchecked(component) }),
+            }
+        }
+    }
+
+    /// Returns the final component of `path` without its extension.
+    pub fn file_stem<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
+        self.file_name(path)
+            .map(rsplit_file_at_dot)
+            .and_then(|(before, after)| before.or(after))
+    }
+
+    /// Returns the extension of the final component of `path`.
+    pub fn extension<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
+        self.file_name(path)
+            .map(rsplit_file_at_dot)
+            .and_then(|(before, after)| before.and(after))
+    }
+
     pub fn strip_prefix<'a>(
         &self,
         child: &'a Path,
@@ -590,6 +649,27 @@ impl PathStyle {
         } else {
             None
         }
+    }
+}
+
+/// Splits `file` at its final dot, mirroring `std::path::Path`'s private helper.
+fn rsplit_file_at_dot(file: &OsStr) -> (Option<&OsStr>, Option<&OsStr>) {
+    if file.as_encoded_bytes() == b".." {
+        return (Some(file), None);
+    }
+
+    // SAFETY: the encoding is only split at ASCII dots, so every produced
+    // `OsStr` is a boundary-aligned subslice of `file`.
+    let mut parts = file.as_encoded_bytes().rsplitn(2, |byte| *byte == b'.');
+    let after = parts.next();
+    let before = parts.next();
+    if before == Some(b"") {
+        (Some(file), None)
+    } else {
+        (
+            before.map(|part| unsafe { OsStr::from_encoded_bytes_unchecked(part) }),
+            after.map(|part| unsafe { OsStr::from_encoded_bytes_unchecked(part) }),
+        )
     }
 }
 
@@ -901,6 +981,14 @@ impl PathWithPosition {
         // in the future seems unlikely.
         static SUFFIX_RE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).expect("valid regex literal"));
+        // `Path::with_file_name` inserts the host's separator, which can
+        // corrupt Unix paths when the editor runs on Windows.
+        let replace_file_name = |input: &str, file_name: &str, replacement: &str| {
+            input.rsplit_once(file_name).map_or_else(
+                || PathBuf::from(input),
+                |(prefix, _)| PathBuf::from(format!("{prefix}{replacement}")),
+            )
+        };
         if let Some((file_name_end, maybe_row, maybe_column)) = SUFFIX_RE
             .captures(maybe_file_name_with_row_col)
             .and_then(|captures| {
@@ -913,7 +1001,11 @@ impl PathWithPosition {
             let column = maybe_column.parse::<u32>().ok();
 
             Self {
-                path: path.with_file_name(&maybe_file_name_with_row_col[..file_name_end]),
+                path: replace_file_name(
+                    trimmed,
+                    maybe_file_name_with_row_col,
+                    &maybe_file_name_with_row_col[..file_name_end],
+                ),
                 row,
                 column,
             }
@@ -956,7 +1048,7 @@ impl PathWithPosition {
 
             Self {
                 path: if row.is_some() {
-                    path.with_file_name(path_string)
+                    replace_file_name(s, file_name, &path_string)
                 } else {
                     path.to_path_buf()
                 },
@@ -1877,6 +1969,83 @@ mod tests {
             windows_path.to_string_lossy(),
             "C:\\Users\\user\\dev\\worktrees"
         );
+    }
+
+    #[test]
+    fn test_path_style_file_stem_and_extension() {
+        let posix_paths = [
+            ("foo", Some("foo"), None),
+            ("foo.", Some("foo"), Some("")),
+            (".foo", Some(".foo"), None),
+            ("foo.txt", Some("foo"), Some("txt")),
+            ("/tmp/archive.tar.gz", Some("archive.tar"), Some("gz")),
+            ("foo.bar.", Some("foo.bar"), Some("")),
+            (".x.y.z", Some(".x.y"), Some("z")),
+            ("a/.rustfmt.toml", Some(".rustfmt"), Some("toml")),
+            ("a.b/c.md", Some("c"), Some("md")),
+            ("", None, None),
+            ("/", None, None),
+            (".", None, None),
+            ("..", None, None),
+            ("foo/.", Some("foo"), None),
+            ("foo/..", None, None),
+            ("/foo/bar/", Some("bar"), None),
+            ("/etc/passwd", Some("passwd"), None),
+        ];
+
+        for (path, expected_stem, expected_extension) in posix_paths {
+            let path = Path::new(path);
+            assert_eq!(
+                PathStyle::Posix.file_stem(path),
+                expected_stem.map(OsStr::new),
+                "file_stem({path:?})"
+            );
+            assert_eq!(
+                PathStyle::Posix.extension(path),
+                expected_extension.map(OsStr::new),
+                "extension({path:?})"
+            );
+        }
+
+        let windows_paths = [
+            (
+                r"C:\Users\user\Documents\report.docx",
+                Some("report"),
+                Some("docx"),
+            ),
+            (
+                r"C:\Users\user\Downloads\archive.tar.gz",
+                Some("archive.tar"),
+                Some("gz"),
+            ),
+            (r"C:\Users\user\.gitignore", Some(".gitignore"), None),
+            (r"C:\Users\user\config.", Some("config"), Some("")),
+            (r"C:\Users\user\README", Some("README"), None),
+            (r"D:\projects\my.app\src\main.rs", Some("main"), Some("rs")),
+            ("C:/Users/user/report.txt", Some("report"), Some("txt")),
+            (
+                r"\\server\share\reports\2024.summary.xlsx",
+                Some("2024.summary"),
+                Some("xlsx"),
+            ),
+            (r"\\?\C:\Users\user\report.txt", Some("report"), Some("txt")),
+            (r"C:\Users\user\.", Some("user"), None),
+            (r"C:\Users\user\..", None, None),
+        ];
+
+        for (path, expected_stem, expected_extension) in windows_paths {
+            let path = Path::new(path);
+            assert_eq!(
+                PathStyle::Windows.file_stem(path),
+                expected_stem.map(OsStr::new),
+                "file_stem({path:?})"
+            );
+            assert_eq!(
+                PathStyle::Windows.extension(path),
+                expected_extension.map(OsStr::new),
+                "extension({path:?})"
+            );
+        }
     }
 
     #[test]
@@ -2856,6 +3025,54 @@ mod tests {
             assert_eq!(parsed.path.as_os_str(), Path::new(input).as_os_str());
             assert_eq!(parsed.row, None, "{input}");
             assert_eq!(parsed.column, None, "{input}");
+        }
+    }
+
+    #[test]
+    fn path_with_position_preserves_path_separators() {
+        for (input, expected_path, expected_column) in [
+            (
+                "/home/user/project/src/main.rs:49",
+                "/home/user/project/src/main.rs",
+                None,
+            ),
+            (
+                "/home/user/project/src/main.rs:49:7",
+                "/home/user/project/src/main.rs",
+                Some(7),
+            ),
+            (
+                "/home/user/project/src/main.rs:49:in",
+                "/home/user/project/src/main.rs",
+                None,
+            ),
+            ("src/main.rs(49,7)", "src/main.rs", Some(7)),
+            ("src/main.rs:49/", "src/main.rs", None),
+            ("src/main.rs:49/.", "src/main.rs", None),
+            ("parent//file.rs:49", "parent//file.rs", None),
+            ("parent/./file.rs:49", "parent/./file.rs", None),
+            ("parent/😀.rs:49", "parent/😀.rs", None),
+            ("C:/project/src/main.rs:49", "C:/project/src/main.rs", None),
+            (
+                r"C:\project\src\main.rs:49",
+                r"C:\project\src\main.rs",
+                None,
+            ),
+            (r"src\mixed/main.rs:49", r"src\mixed/main.rs", None),
+            (
+                r"\\server\share/main.rs:49",
+                r"\\server\share/main.rs",
+                None,
+            ),
+        ] {
+            let parsed = PathWithPosition::parse_str(input);
+            assert_eq!(
+                parsed.path.as_os_str(),
+                OsStr::new(expected_path),
+                "{input}"
+            );
+            assert_eq!(parsed.row, Some(49), "{input}");
+            assert_eq!(parsed.column, expected_column, "{input}");
         }
     }
 

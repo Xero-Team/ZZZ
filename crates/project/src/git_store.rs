@@ -8753,7 +8753,7 @@ pub async fn resolve_git_worktree_to_main_repo(fs: &dyn Fs, path: &Path) -> Opti
         .canonicalize(&gitdir_abs.join(commondir_content.trim()))
         .await
         .ok()?;
-    Some(repo_identity_path(&common_dir).to_path_buf())
+    Some(repo_identity_path(&common_dir, PathStyle::local()).to_path_buf())
 }
 
 /// Validates that the resolved worktree directory is acceptable:
@@ -8917,14 +8917,24 @@ async fn remove_empty_managed_worktree_ancestors(fs: &dyn Fs, child_path: &Path,
 ///   meaningful project root.
 /// - Otherwise (e.g. `zzz.git` for a bare clone), `common_dir` itself is
 ///   returned — it is already a meaningful on-disk path.
-pub fn repo_identity_path(common_dir: &Path) -> &Path {
-    let is_dot_entry = common_dir
-        .file_name()
-        .is_some_and(|n| n.to_string_lossy().starts_with('.'));
-    if is_dot_entry {
+pub fn repo_identity_path(common_dir: &Path, path_style: PathStyle) -> &Path {
+    let is_dot_entry = if path_style == PathStyle::local() {
+        common_dir
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+    } else {
+        path_style
+            .file_name(common_dir)
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+    };
+    if !is_dot_entry {
+        return common_dir;
+    }
+
+    if path_style == PathStyle::local() {
         common_dir.parent().unwrap_or(common_dir)
     } else {
-        common_dir
+        path_style_parent(common_dir, path_style).unwrap_or(common_dir)
     }
 }
 
@@ -8932,7 +8942,7 @@ pub fn repo_identity_path(common_dir: &Path) -> &Path {
 ///
 /// Callers that rely on `std::path` use this to keep foreign path styles unchanged.
 pub fn repo_identity_path_if_local(common_dir: &Path, path_style: PathStyle) -> Option<&Path> {
-    (path_style == PathStyle::local()).then(|| repo_identity_path(common_dir))
+    (path_style == PathStyle::local()).then(|| repo_identity_path(common_dir, path_style))
 }
 
 /// Returns whether `git_dir` is a Git submodule's git directory.

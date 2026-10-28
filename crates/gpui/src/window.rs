@@ -726,7 +726,7 @@ pub struct Window {
     is_resizable: bool,
     is_minimizable: bool,
     sprite_atlas: Arc<dyn PlatformAtlas>,
-    text_system: Arc<WindowTextSystem>,
+    text_system: Rc<WindowTextSystem>,
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
     rem_size: Pixels,
     /// The stack of override values for the window's rem size.
@@ -768,6 +768,47 @@ pub(crate) struct InputRateTracker {
     inputs_per_second: u32,
     sustain_until: Instant,
     sustain_duration: Duration,
+}
+
+const THIRTY_FPS_INTERVAL: Duration = Duration::from_micros(33333);
+const SIXTY_FPS_INTERVAL: Duration = Duration::from_micros(16667);
+const FRAME_INTERVAL_TOLERANCE: Duration = Duration::from_millis(1);
+
+/// Display-link timestamps can straddle a target interval by fractions of a
+/// millisecond. Accepting that callback preserves an even display-frame divisor
+/// instead of occasionally waiting for an additional refresh.
+fn frame_request_arrived_too_early(elapsed: Duration, minimum_interval: Duration) -> bool {
+    elapsed < minimum_interval.saturating_sub(FRAME_INTERVAL_TOLERANCE)
+}
+
+fn minimum_frame_interval(
+    should_throttle: bool,
+    inactive_without_high_rate_input: bool,
+    inactive_frame_interval: Option<Duration>,
+    thermal_state: ThermalState,
+    power_mode: crate::PowerMode,
+) -> Option<Duration> {
+    let low_power_mode_enabled = power_mode == crate::PowerMode::LowPower;
+    if !should_throttle {
+        None
+    } else if inactive_without_high_rate_input {
+        match (inactive_frame_interval, low_power_mode_enabled) {
+            (Some(inactive_frame_interval), true) => {
+                Some(inactive_frame_interval.max(THIRTY_FPS_INTERVAL))
+            }
+            (inactive_frame_interval, false) => inactive_frame_interval,
+            (None, true) => Some(THIRTY_FPS_INTERVAL),
+        }
+    } else if low_power_mode_enabled {
+        Some(THIRTY_FPS_INTERVAL)
+    } else if matches!(
+        thermal_state,
+        ThermalState::Critical | ThermalState::Serious
+    ) {
+        Some(SIXTY_FPS_INTERVAL)
+    } else {
+        None
+    }
 }
 
 impl Default for InputRateTracker {
@@ -1040,7 +1081,7 @@ impl Window {
         let content_size = platform_window.content_size();
         let scale_factor = platform_window.scale_factor();
         let appearance = platform_window.appearance();
-        let text_system = Arc::new(WindowTextSystem::new(cx.text_system().clone()));
+        let text_system = Rc::new(WindowTextSystem::new(cx.text_system().clone()));
         #[cfg(not(feature = "frame-diagnostics"))]
         let invalidator = WindowInvalidator::new();
         #[cfg(feature = "frame-diagnostics")]
@@ -1132,14 +1173,22 @@ impl Window {
 
         platform_window.on_close(Box::new({
             let window_id = handle.window_id();
-            let mut cx = cx.to_async();
+            let cx = cx.to_async();
             move || {
-                handle
-                    .update(&mut cx, |_, window, _| window.remove_window())
-                    .log_err();
-                cx.update(|cx| {
-                    SystemWindowTabController::remove_tab(cx, window_id);
-                });
+                // Native window destruction can re-enter while the app is borrowed.
+                // Schedule the layout changes instead of borrowing the app here.
+                cx.spawn(async move |cx| {
+                    cx.update(|cx| {
+                        // App-driven closure may already have removed the window.
+                        if cx.windows.contains_key(window_id) {
+                            handle
+                                .update(cx, |_, window, _| window.remove_window())
+                                .log_err();
+                        }
+                        SystemWindowTabController::remove_tab(cx, window_id);
+                    });
+                })
+                .detach();
             }
         }));
         platform_window.on_request_frame(Box::new({
@@ -1147,33 +1196,44 @@ impl Window {
             let invalidator = invalidator.clone();
             let active = active.clone();
             let input_rate_tracker = input_rate_tracker.clone();
+            let mut deferred_force_render = false;
             move |request_frame_options| {
-                let thermal_state = handle
-                    .update(&mut cx, |_, _, cx| cx.thermal_state())
+                let force_render =
+                    mem::take(&mut deferred_force_render) || request_frame_options.force_render;
+                let power_state = handle
+                    .update(&mut cx, |_, _, cx| (cx.thermal_state(), cx.power_mode()))
                     .log_err();
 
                 // Throttle frame rate based on conditions:
+                // - Low power mode: cap to ~30fps
                 // - Thermal pressure (Serious/Critical): cap to ~60fps
-                // - Inactive window (not focused): cap to ~30fps to save energy,
+                // - Inactive window (not focused): use its configured frame interval,
                 //   unless high-rate input is arriving (such as scrolling an unfocused window).
-                let min_frame_interval = if !request_frame_options.force_render
-                    && !request_frame_options.require_presentation
-                    && next_frame_callbacks.borrow().is_empty()
-                {
-                    None
-                } else if !active.get() && !input_rate_tracker.borrow_mut().is_high_rate() {
-                    inactive_frame_interval
-                } else if let Some(ThermalState::Critical | ThermalState::Serious) = thermal_state {
-                    Some(Duration::from_micros(16667))
-                } else {
-                    None
-                };
+                let should_throttle = !request_frame_options.require_presentation
+                    && (force_render || !next_frame_callbacks.borrow().is_empty());
+                let inactive_without_high_rate_input = should_throttle
+                    && !active.get()
+                    && !input_rate_tracker.borrow_mut().is_high_rate();
+                let (thermal_state, power_mode) =
+                    power_state.unwrap_or((ThermalState::Nominal, crate::PowerMode::Unknown));
+                let min_frame_interval = minimum_frame_interval(
+                    should_throttle,
+                    inactive_without_high_rate_input,
+                    inactive_frame_interval,
+                    thermal_state,
+                    power_mode,
+                );
 
                 let now = Instant::now();
                 if let Some(min_interval) = min_frame_interval {
                     if let Some(last_frame) = last_frame_time.get()
-                        && now.duration_since(last_frame) < min_interval
+                        && frame_request_arrived_too_early(
+                            now.duration_since(last_frame),
+                            min_interval,
+                        )
                     {
+                        // Don't lose a pending forced render to throttling.
+                        deferred_force_render |= force_render;
                         // Must still complete the frame on platforms that require it.
                         // On Wayland, `surface.frame()` was already called to request the
                         // next frame callback, so we must call `surface.commit()` (via
@@ -1205,11 +1265,11 @@ impl Window {
                     || needs_present.get()
                     || input_rate_tracker.borrow_mut().is_high_rate();
 
-                if invalidator.is_dirty() || request_frame_options.force_render {
+                if invalidator.is_dirty() || force_render {
                     measure("frame duration", || {
                         handle
                             .update(&mut cx, |_, window, cx| {
-                                if request_frame_options.force_render {
+                                if force_render {
                                     // Bypass cached view reuse so we don't replay stale
                                     // atlas tile references after a GPU device recovery.
                                     window.refresh();
@@ -1622,7 +1682,7 @@ impl Window {
     }
 
     /// Accessor for the text system.
-    pub fn text_system(&self) -> &Arc<WindowTextSystem> {
+    pub fn text_system(&self) -> &Rc<WindowTextSystem> {
         &self.text_system
     }
 
@@ -6119,6 +6179,17 @@ mod tests {
 
     struct EmptyView;
 
+    struct CountingView {
+        render_count: Rc<Cell<usize>>,
+    }
+
+    impl Render for CountingView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.render_count.set(self.render_count.get() + 1);
+            div()
+        }
+    }
+
     #[gpui::test]
     async fn test_focus_handle_release(cx: &mut TestAppContext) {
         let (handle, survivor) = cx.update(|cx| (cx.focus_handle(), cx.focus_handle()));
@@ -6602,6 +6673,76 @@ mod tests {
     }
 
     #[test]
+    fn frame_throttle_accepts_display_link_rounding() {
+        assert!(!super::frame_request_arrived_too_early(
+            std::time::Duration::from_micros(16_666),
+            super::SIXTY_FPS_INTERVAL,
+        ));
+        assert!(!super::frame_request_arrived_too_early(
+            std::time::Duration::from_micros(33_332),
+            super::THIRTY_FPS_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn frame_throttle_rejects_an_extra_display_refresh() {
+        assert!(super::frame_request_arrived_too_early(
+            std::time::Duration::from_micros(8_333),
+            super::SIXTY_FPS_INTERVAL,
+        ));
+        assert!(super::frame_request_arrived_too_early(
+            std::time::Duration::from_micros(16_666),
+            super::THIRTY_FPS_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn power_modes_preserve_frame_limits() {
+        for (power_mode, active_interval, thermal_interval) in [
+            (
+                crate::PowerMode::LowPower,
+                Some(super::THIRTY_FPS_INTERVAL),
+                super::THIRTY_FPS_INTERVAL,
+            ),
+            (crate::PowerMode::Unknown, None, super::SIXTY_FPS_INTERVAL),
+            (crate::PowerMode::Balanced, None, super::SIXTY_FPS_INTERVAL),
+            (crate::PowerMode::HighPower, None, super::SIXTY_FPS_INTERVAL),
+        ] {
+            assert_eq!(
+                super::minimum_frame_interval(
+                    true,
+                    false,
+                    None,
+                    crate::ThermalState::Nominal,
+                    power_mode
+                ),
+                active_interval,
+            );
+            assert_eq!(
+                super::minimum_frame_interval(
+                    true,
+                    false,
+                    None,
+                    crate::ThermalState::Serious,
+                    power_mode
+                ),
+                Some(thermal_interval),
+            );
+            let inactive_interval = std::time::Duration::from_millis(100);
+            assert_eq!(
+                super::minimum_frame_interval(
+                    true,
+                    true,
+                    Some(inactive_interval),
+                    crate::ThermalState::Nominal,
+                    power_mode,
+                ),
+                Some(inactive_interval),
+            );
+        }
+    }
+
+    #[test]
     fn test_scale_factor_change_preserves_bounds_and_survives_resize() {
         let mut cx = TestAppContext::single();
         let window = cx.add_window(|_, _| EmptyView);
@@ -6638,6 +6779,18 @@ mod tests {
                 (scale_factor, expected_bounds, resized_size)
             );
         }
+    }
+
+    #[gpui::test]
+    fn test_native_close_defers_app_access(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        let platform_window = cx.test_window(window.into());
+        let app = cx.app.borrow_mut();
+        platform_window.simulate_close();
+        assert!(app.windows.contains_key(window.window_id()));
+        drop(app);
+        cx.run_until_parked();
+        assert!(!cx.app.borrow().windows.contains_key(window.window_id()));
     }
 
     #[gpui::test]
@@ -6715,6 +6868,42 @@ mod tests {
                 );
             })
             .expect("test window should remain open");
+    }
+
+    #[gpui::test]
+    fn test_throttled_forced_render_is_not_lost(cx: &mut TestAppContext) {
+        let render_count = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let render_count = render_count.clone();
+            move |_, _| CountingView { render_count }
+        });
+        let test_window = cx.test_window(window.into());
+
+        // Serve a frame so the inactive-window throttle has a reference time.
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(render_count.get(), 1);
+
+        // Test windows report themselves inactive, so a forced render arriving
+        // inside the configured inactive interval is deferred instead of drawn.
+        test_window.simulate_frame_request(RequestFrameOptions {
+            require_presentation: false,
+            force_render: true,
+        });
+        assert_eq!(
+            render_count.get(),
+            1,
+            "a throttled forced render must not draw before the interval elapses"
+        );
+
+        // Wait out the interval, then send an ordinary request. It carries no
+        // force flag of its own, so only the deferred forced render can make it draw.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        test_window.simulate_frame_request(RequestFrameOptions::default());
+        assert_eq!(
+            render_count.get(),
+            2,
+            "the deferred forced render must be served on the next frame"
+        );
     }
 
     #[gpui::test]

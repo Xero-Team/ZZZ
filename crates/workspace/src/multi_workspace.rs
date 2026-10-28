@@ -1029,6 +1029,20 @@ impl MultiWorkspace {
             .workspaces_for_project_group(group_key, cx)
             .unwrap_or_default();
 
+        // A project group can outlive its workspaces: opening a saved group in
+        // another window leaves a row with no retained workspace behind.
+        if workspaces.is_empty() {
+            let previous_group_count = self.project_groups.len();
+            self.project_groups.retain(|group| group.key != *group_key);
+            if self.project_groups.len() != previous_group_count {
+                cx.emit(MultiWorkspaceEvent::ProjectGroupsChanged);
+                self.serialize(cx);
+                cx.notify();
+                return Task::ready(Ok(true));
+            }
+            return Task::ready(Ok(false));
+        }
+
         // Compute the neighbor while the group is still in the list.
         let neighbor_key = pos.and_then(|pos| {
             self.project_groups

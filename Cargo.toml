@@ -806,7 +806,7 @@ tree-sitter-gitcommit = { path = "crates/grammars/vendor/tree-sitter-gitcommit" 
 tree-sitter-git-rebase = { path = "crates/grammars/vendor/tree-sitter-git-rebase" }
 # Vendored from https://github.com/shunsambongi/tree-sitter-gitignore @ b8928bd61e396bca1dde7666ed306702b0244ea4
 tree-sitter-gitignore = { path = "crates/grammars/vendor/tree-sitter-gitignore", package = "tree-sitter-ignore" }
-tree-sitter-go = "0.25"
+tree-sitter-go = { git = "https://github.com/zed-industries/tree-sitter-go", rev = "6862a49e3c5a7567a6c576420e9a8f944e198a85" }
 # Vendored from https://github.com/camdencheek/tree-sitter-go-mod @ 2e886870578eeba1927a2dc4bd2e2b3f598c5f9a
 tree-sitter-go-mod = { path = "crates/grammars/vendor/tree-sitter-go-mod", package = "tree-sitter-gomod" }
 # Vendored from https://github.com/zed-industries/tree-sitter-go-work @ acb0617bf7f4fda02c6217676cc64acb89536dc7

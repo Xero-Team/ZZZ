@@ -5,6 +5,9 @@
 (type_spec
   name: (type_identifier) @type.definition)
 
+(type_parameter_declaration
+  name: (identifier) @type)
+
 (field_identifier) @property
 
 (package_identifier) @namespace
