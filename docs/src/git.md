@@ -284,18 +284,7 @@ ZZZ does not generate commit messages itself. If you want an external agent to
 draft a message, open the [Agent Panel](./ai/agent-panel.md) and ask it to write
 one from your staged diff, then paste it into the commit editor.
 
-```json [settings]
-{
-  "agent": {
-    "commit_message_model": {
-      "provider": "anthropic",
-      "model": "claude-3-5-haiku"
-    }
-  }
-}
-```
-
-To customize the format of generated commit messages, run {#action agent::OpenRulesLibrary} and select the "Commit message" rule on the left side.
+To customize the format of drafted commit messages, run {#action agent::OpenRulesLibrary} and select the "Commit message" rule on the left side.
 From there, you can modify the prompt to match your desired format.
 
 <!-- Add media -->

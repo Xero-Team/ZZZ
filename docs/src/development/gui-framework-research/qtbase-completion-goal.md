@@ -1,7 +1,6 @@
 ---
 title: GPUI Qt Base Gap Completion Goal
-description: Copyable persistent Goal mode instruction for implementing the GPUI
-  completion plan.
+description: Copyable persistent Goal mode instruction for implementing the GPUI completion plan.
 ---
 
 # GPUI Qt Base 差距闭环 Goal {#gpui-qtbase-completion-goal}

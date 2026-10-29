@@ -1,8 +1,6 @@
 ---
 title: GPUI Qt Base Gap Completion Plan
-description:
-  Staged implementation contract for closing the high-value gaps found
-  by the GPUI and Qt Base comparison.
+description: Staged implementation contract for closing the high-value gaps found by the GPUI and Qt Base comparison.
 ---
 
 # GPUI Qt Base 差距闭环执行计划 {#gpui-qtbase-completion-plan}

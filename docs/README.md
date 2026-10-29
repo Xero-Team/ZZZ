@@ -17,7 +17,7 @@ The first command dumps an action manifest to `crates/docs_preprocessor/actions.
 Before committing, verify that the docs are formatted in the way Prettier expects with:
 
 ```
-cd docs && pnpm dlx prettier@3.9.9 . --write && cd ..
+cd docs && pnpm dlx prettier@3.9.10 . --write && cd ..
 ```
 
 ## Preprocessor

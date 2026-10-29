@@ -48,7 +48,7 @@ pub(crate) fn install_mdbook() -> Step<Use> {
         "actions-mdbook",
         "ee69d230fe19748b7abf22df32acaa93833fad08", // v2
     )
-    .with(("mdbook-version", "0.4.37"))
+    .with(("mdbook-version", "0.5.4"))
 }
 
 pub(crate) fn build_docs_book(docs_channel: String, site_url: String) -> Step<gh_workflow::Run> {
@@ -57,7 +57,7 @@ pub(crate) fn build_docs_book(docs_channel: String, site_url: String) -> Step<gh
         mdbook build ./docs --dest-dir=../{BUILD_OUTPUT_DIR}/docs/
     "#})
     .add_env(("DOCS_CHANNEL", docs_channel))
-    .add_env(("MDBOOK_BOOK__SITE_URL", site_url))
+    .add_env(("MDBOOK_OUTPUT__ZZZ_HTML__SITE_URL", site_url))
 }
 
 fn docs_build_steps(

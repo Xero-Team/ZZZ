@@ -295,18 +295,18 @@
                     <main>
                       {{{ content }}}
                         <div class="footer-buttons">
-                            {{#previous}}
-                            <a rel="prev" href="{{ path_to_root }}{{link}}" class="footer-button" title="{{title}}">
+                            {{#if previous}}
+                            <a rel="prev" href="{{ path_to_root }}{{previous.link}}" class="footer-button" title="{{previous.title}}">
                                 <i class="fa fa-angle-left"></i>
-                                {{title}}
+                                {{previous.title}}
                             </a>
-                            {{/previous}}
-                            {{#next}}
-                            <a rel="next" href="{{ path_to_root }}{{link}}" class="footer-button" title="{{title}}">
-                                {{title}}
+                            {{/if}}
+                            {{#if next}}
+                            <a rel="next" href="{{ path_to_root }}{{next.link}}" class="footer-button" title="{{next.title}}">
+                                {{next.title}}
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                            {{/next}}
+                            {{/if}}
                         </div>
                         <footer class="footer">
                             <a href="/" class="logo-nav">

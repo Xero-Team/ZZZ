@@ -1,7 +1,6 @@
 ---
 title: GPUI and Qt Base Gap Analysis
-description: Evidence-backed scope comparison and decisions for the next GPUI
-  completion program.
+description: Evidence-backed scope comparison and decisions for the next GPUI completion program.
 ---
 
 # GPUI 与 Qt Base 差距调研 {#gpui-qtbase-gap-analysis}
