@@ -205,7 +205,7 @@ jobs:
         uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2.87.25
         with:
           fallback: none
-          tool: cargo-about@0.9.0,cargo-auditable@0.7.7,cargo-cyclonedx@0.5.9
+          tool: cargo-about@0.9.3,cargo-auditable@0.7.7,cargo-cyclonedx@0.5.9
 
       - name: Prefetch pinned non-Cargo dependencies
         run: script/ffmpeg ensure --target x86_64-unknown-linux-gnu

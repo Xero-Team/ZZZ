@@ -34,10 +34,7 @@ impl SystemSpecs {
         let app_version = AppVersion::global(cx).to_string();
         let release_channel = ReleaseChannel::global(cx);
         let os_name = platform_info::os_name();
-        let system = System::new_with_specifics(
-            RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
-        );
-        let memory = system.total_memory();
+        let memory = total_memory();
         let architecture = env::consts::ARCH;
         let commit_sha = match release_channel {
             ReleaseChannel::Dev => AppCommitSha::try_global(cx).map(|sha| sha.full()),
@@ -68,6 +65,12 @@ impl SystemSpecs {
         })
     }
 
+    /// Collects the machine specifications on the calling thread.
+    ///
+    /// Unlike [`SystemSpecs::new`], this blocks: on Linux it runs `vulkaninfo`
+    /// to describe the available GPUs. Call it from a plain thread (the
+    /// `--system-specs` CLI path) or from a test, never from inside an
+    /// executor.
     pub fn new_stateless(
         app_version: Version,
         app_commit_sha: Option<AppCommitSha>,
@@ -75,10 +78,7 @@ impl SystemSpecs {
     ) -> Self {
         let os_name = platform_info::os_name();
         let os_version = platform_info::os_version();
-        let system = System::new_with_specifics(
-            RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
-        );
-        let memory = system.total_memory();
+        let memory = total_memory();
         let architecture = env::consts::ARCH;
         let commit_sha = match release_channel {
             ReleaseChannel::Dev => app_commit_sha.map(|sha| sha.full()),
@@ -96,6 +96,23 @@ impl SystemSpecs {
             commit_sha,
             bundle_type,
             gpu_specs: try_determine_available_gpus(),
+        }
+    }
+}
+
+/// Reads the total physical memory of the machine.
+///
+/// `System` construction is fallible since `sysinfo` 0.40. Memory is only
+/// reported in the bug-report text, so a missing reading costs one diagnostic
+/// line and is never a reason to fail the caller.
+fn total_memory() -> u64 {
+    match System::new_with_specifics(
+        RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+    ) {
+        Ok(system) => system.total_memory(),
+        Err(error) => {
+            log::error!("failed to read system memory: {error}");
+            0
         }
     }
 }
@@ -147,22 +164,25 @@ fn try_determine_available_gpus() -> Option<String> {
             clippy::disallowed_methods,
             reason = "we are not running in an executor"
         )]
-        std::process::Command::new("vulkaninfo")
-            .args(&["--summary"])
-            .output()
-            .ok()
-            .map(|output| {
-                [
-                    "<details><summary>`vulkaninfo --summary` output</summary>",
-                    "",
-                    "```",
-                    String::from_utf8_lossy(&output.stdout).as_ref(),
-                    "```",
-                    "</details>",
-                ]
-                .join("\n")
-            })
-            .or(Some("Failed to run `vulkaninfo --summary`".to_owned()))
+        Some(
+            std::process::Command::new("vulkaninfo")
+                .args(["--summary"])
+                .output()
+                .map_or_else(
+                    |_| "Failed to run `vulkaninfo --summary`".to_owned(),
+                    |output| {
+                        [
+                            "<details><summary>`vulkaninfo --summary` output</summary>",
+                            "",
+                            "```",
+                            String::from_utf8_lossy(&output.stdout).as_ref(),
+                            "```",
+                            "</details>",
+                        ]
+                        .join("\n")
+                    },
+                ),
+        )
     }
     #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     {
@@ -183,7 +203,6 @@ pub struct GpuInfo {
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub fn read_gpu_info_from_sys_class_drm() -> anyhow::Result<Vec<GpuInfo>> {
     use anyhow::Context as _;
-    use pciid_parser;
     let dir_iter = std::fs::read_dir("/sys/class/drm").context("Failed to read /sys/class/drm")?;
     let mut pci_addresses = vec![];
     let mut gpus = Vec::<GpuInfo>::new();

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "diff",
+      "camelcase": "Diff",
+      "scope": "source.diff",
+      "file-types": ["diff", "patch"],
+      "highlights": ["queries/highlights.scm"],
+      "injection-regex": "^diff$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "diff grammar for the tree-sitter parsing library",
+    "links": {
+      "repository": "https://github.com/tree-sitter/tree-sitter-diff"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

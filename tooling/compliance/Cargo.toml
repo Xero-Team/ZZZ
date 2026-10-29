@@ -19,7 +19,7 @@ futures.workspace = true
 itertools.workspace = true
 # Must match the `jsonwebtoken` version used by `octocrab` (currently 10.x);
 # `OctocrabBuilder::app` takes `jsonwebtoken::EncodingKey` from that version.
-jsonwebtoken = { version = "10.4", features = ["use_pem"], optional = true }
+jsonwebtoken = { workspace = true, features = ["use_pem"], optional = true }
 octocrab = { version = "0.54", default-features = false, features = [
     "default-client",
     "jwt-aws-lc-rs",

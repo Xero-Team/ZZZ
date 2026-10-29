@@ -470,10 +470,10 @@ ztracing_macro = { path = "crates/ztracing_macro" }
 # External crates
 #
 
-accesskit = { version = "0.25.1", features = ["enumn"] }
-accesskit_macos = "0.27.1"
-accesskit_unix = "0.24.0"
-accesskit_windows = "0.35.1"
+accesskit = { version = "0.25.2", features = ["enumn"] }
+accesskit_macos = "0.27.2"
+accesskit_unix = "0.24.1"
+accesskit_windows = "0.35.2"
 agent-client-protocol = { version = "=3.5.0", features = ["unstable"] }
 aho-corasick = "1.1"
 alacritty_terminal = "0.26.0"
@@ -510,7 +510,7 @@ base64 = "0.23"
 betlang = "0.1.1"
 bitflags = "2.13.2"
 block2 = "0.6"
-brotli = "9.0.0"
+brotli = "9.1.1"
 bytes = "1.12"
 cargo_metadata = "0.23"
 cargo_toml = "1.0"
@@ -575,13 +575,13 @@ heapless = "0.9.3"
 handlebars = "6.4"
 heck = "0.5"
 hdrhistogram = "7"
-heed = "0.23.0"
+heed = "0.23.1"
 hex = "0.4.3"
 human_bytes = "0.4.3"
 html5ever = { package = "spider-html5ever", version = "0.40.0" }
 http = "1.5"
 http-body = "1.1"
-ignore = "0.4.33"
+ignore = "0.4.34"
 # image's default features minus "avif", which only adds an encoder (rav1e);
 # decoding AVIF would additionally need the non-default "avif-native" feature.
 image = { version = "0.25.10", default-features = false, features = [
@@ -607,12 +607,12 @@ indoc = "2"
 inventory = "0.3.25"
 itertools = "0.15.0"
 json_dotpath = "1.1"
-jsonschema = "0.60.1"
-jsonwebtoken = "11.1"
-jupyter-protocol = "2.0.2"
-jupyter-websocket-client = "2.0.0"
+jsonschema = "0.60.2"
+jsonwebtoken = "10"
+jupyter-protocol = "2.0.3"
+jupyter-websocket-client = "3.0.0"
 libc = "0.2"
-libsqlite3-sys = { version = "0.39.0", features = ["bundled"] }
+libsqlite3-sys = { version = "0.39.1", features = ["bundled"] }
 linkify = "0.11.0"
 lofty = "0.25"
 log = { version = "0.4.34", features = ["kv_unstable_serde", "serde"] }
@@ -673,7 +673,7 @@ objc2-foundation = { version = "=0.3.2", default-features = false, features = [
     "std",
 ] }
 open = "5.4.5"
-ordered-float = "5.5.0"
+ordered-float = "5.5.1"
 palette = { version = "0.7.7", default-features = false, features = ["std"] }
 parking_lot = "0.13.0"
 partial-json-fixer = "0.5.5"
@@ -721,7 +721,7 @@ reqwest = { path = "vendor/reqwest", default-features = false, features = [
     "stream",
     "system-proxy",
 ] }
-runtimelib = { version = "3.0.0", default-features = false, features = [
+runtimelib = { version = "5.0.0", default-features = false, features = [
     "async-dispatcher-runtime", "aws-lc-rs"
 ] }
 rust-embed = { version = "8.13", features = ["include-exclude"] }
@@ -757,7 +757,7 @@ strsim = "0.11"
 strum = { version = "0.28.0", features = ["derive"] }
 syn = { version = "3.0.9", features = ["full", "extra-traits", "visit-mut"] }
 sys-locale = "0.3.2"
-sysinfo = "0.39.6"
+sysinfo = "0.40.0"
 take-until = "0.3.0"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
@@ -784,18 +784,25 @@ toml_edit = { version = "0.25", default-features = false, features = [
 ] }
 tower-http = "0.7.1"
 tree-sitter = { version = "0.27.1", features = ["wasm"] }
-tree-sitter-bash = "0.25.1"
-tree-sitter-c = "0.24.2"
+# Vendored from https://github.com/tree-sitter/tree-sitter-bash @ v0.25.1
+tree-sitter-bash = { path = "crates/grammars/vendor/tree-sitter-bash" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-c @ v0.24.2
+tree-sitter-c = { path = "crates/grammars/vendor/tree-sitter-c" }
 # Vendored from https://github.com/uyha/tree-sitter-cmake @ c7b2a71e7f8ecb167fad4c97227c838439280175
 tree-sitter-cmake = { path = "crates/grammars/vendor/tree-sitter-cmake" }
 tree-sitter-cmd = { path = "crates/grammars/vendor/tree-sitter-cmd" }
-tree-sitter-cpp = { git = "https://github.com/tree-sitter/tree-sitter-cpp", rev = "5cb9b693cfd7bfacab1d9ff4acac1a4150700609" }
-tree-sitter-css = "0.25"
+# Vendored from https://github.com/tree-sitter/tree-sitter-cpp @ 5cb9b693cfd7bfacab1d9ff4acac1a4150700609
+tree-sitter-cpp = { path = "crates/grammars/vendor/tree-sitter-cpp" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-css @ v0.25.0
+tree-sitter-css = { path = "crates/grammars/vendor/tree-sitter-css" }
 tree-sitter-csv = { path = "crates/grammars/vendor/tree-sitter-csv" }
-tree-sitter-diff = "0.1.0"
+# Vendored from https://github.com/the-mikedavis/tree-sitter-diff @ v0.1.0
+tree-sitter-diff = { path = "crates/grammars/vendor/tree-sitter-diff" }
 tree-sitter-dockerfile = { path = "crates/grammars/vendor/tree-sitter-dockerfile" }
-tree-sitter-elixir = "0.3"
-tree-sitter-embedded-template = "0.25.0"
+# Vendored from https://github.com/elixir-lang/tree-sitter-elixir @ v0.3.5
+tree-sitter-elixir = { path = "crates/grammars/vendor/tree-sitter-elixir" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-embedded-template @ v0.25.0
+tree-sitter-embedded-template = { path = "crates/grammars/vendor/tree-sitter-embedded-template" }
 # Vendored from https://github.com/the-mikedavis/tree-sitter-git-config @ 7ee6dd00d1cc235ecc4426921d15938a0539a596
 tree-sitter-git-config = { path = "crates/grammars/vendor/tree-sitter-git-config" }
 # Vendored from https://github.com/tree-sitter-grammars/tree-sitter-gitattributes @ 1b7af09d45b579f9f288453b95ad555f1f431645
@@ -806,24 +813,33 @@ tree-sitter-gitcommit = { path = "crates/grammars/vendor/tree-sitter-gitcommit" 
 tree-sitter-git-rebase = { path = "crates/grammars/vendor/tree-sitter-git-rebase" }
 # Vendored from https://github.com/shunsambongi/tree-sitter-gitignore @ b8928bd61e396bca1dde7666ed306702b0244ea4
 tree-sitter-gitignore = { path = "crates/grammars/vendor/tree-sitter-gitignore", package = "tree-sitter-ignore" }
-tree-sitter-go = { git = "https://github.com/zed-industries/tree-sitter-go", rev = "6862a49e3c5a7567a6c576420e9a8f944e198a85" }
+# Vendored from https://github.com/zed-industries/tree-sitter-go @ 6862a49e3c5a7567a6c576420e9a8f944e198a85
+tree-sitter-go = { path = "crates/grammars/vendor/tree-sitter-go" }
 # Vendored from https://github.com/camdencheek/tree-sitter-go-mod @ 2e886870578eeba1927a2dc4bd2e2b3f598c5f9a
 tree-sitter-go-mod = { path = "crates/grammars/vendor/tree-sitter-go-mod", package = "tree-sitter-gomod" }
 # Vendored from https://github.com/zed-industries/tree-sitter-go-work @ acb0617bf7f4fda02c6217676cc64acb89536dc7
 tree-sitter-gowork = { path = "crates/grammars/vendor/tree-sitter-gowork" }
-tree-sitter-heex = "0.8"
-tree-sitter-html = "0.23"
-tree-sitter-jsdoc = "0.25"
-tree-sitter-json = "0.24"
+# Vendored from https://github.com/phoenixframework/tree-sitter-heex @ v0.8.1
+tree-sitter-heex = { path = "crates/grammars/vendor/tree-sitter-heex" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-html @ v0.23.2
+tree-sitter-html = { path = "crates/grammars/vendor/tree-sitter-html" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-jsdoc @ v0.25.0
+tree-sitter-jsdoc = { path = "crates/grammars/vendor/tree-sitter-jsdoc" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-json @ v0.24.8
+tree-sitter-json = { path = "crates/grammars/vendor/tree-sitter-json" }
 # Vendored fork of 9a23c1a with serialize() buffer-overflow fix; https://github.com/tree-sitter-grammars/tree-sitter-markdown/issues/243
 tree-sitter-md = { path = "crates/grammars/vendor/tree-sitter-md" }
 # Vendored from https://github.com/monaqa/tree-sitter-mermaid @ 90ae195b31933ceb9d079abfa8a3ad0a36fee4cc
 tree-sitter-mermaid = { path = "crates/grammars/vendor/tree-sitter-mermaid" }
 tree-sitter-powershell = { path = "crates/grammars/vendor/tree-sitter-powershell" }
-tree-sitter-python = "0.25"
-tree-sitter-regex = "0.25"
-tree-sitter-ruby = "0.23"
-tree-sitter-rust = "0.24.2"
+# Vendored from https://github.com/tree-sitter/tree-sitter-python @ v0.25.0
+tree-sitter-python = { path = "crates/grammars/vendor/tree-sitter-python" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-regex @ v0.25.0
+tree-sitter-regex = { path = "crates/grammars/vendor/tree-sitter-regex" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-ruby @ v0.23.1
+tree-sitter-ruby = { path = "crates/grammars/vendor/tree-sitter-ruby" }
+# Vendored from https://github.com/tree-sitter/tree-sitter-rust @ v0.24.2
+tree-sitter-rust = { path = "crates/grammars/vendor/tree-sitter-rust" }
 # Vendored from https://github.com/6cdh/tree-sitter-scheme @ af0fd1fa452cb2562dc7b5c8a8c55551c39273b9
 tree-sitter-scheme = { path = "crates/grammars/vendor/tree-sitter-scheme" }
 tree-sitter-syslog = { path = "crates/grammars/vendor/tree-sitter-syslog" }
@@ -831,8 +847,10 @@ tree-sitter-toml = { package = "tree-sitter-toml-ng", path = "crates/grammars/ve
 tree-sitter-typescript = { path = "crates/grammars/vendor/tree-sitter-typescript" } # vendored; https://github.com/tree-sitter/tree-sitter-typescript/pull/347
 # Vendored from https://github.com/SeniorMars/tree-sitter-typst @ 1acd48c90d260bc9f8a99f903d3e2a8031bc7aae
 tree-sitter-typst = { path = "crates/grammars/vendor/tree-sitter-typst" }
-tree-sitter-xml = "0.7.0"
-tree-sitter-yaml = "0.7"
+# Vendored from https://github.com/tree-sitter-grammars/tree-sitter-xml @ v0.7.0
+tree-sitter-xml = { path = "crates/grammars/vendor/tree-sitter-xml" }
+# Vendored from https://github.com/tree-sitter-grammars/tree-sitter-yaml @ v0.7.2
+tree-sitter-yaml = { path = "crates/grammars/vendor/tree-sitter-yaml" }
 tracing = "0.1.44"
 typst = "=0.15.1"
 typst-kit = { version = "=0.15.1", features = [
@@ -955,7 +973,7 @@ block = { path = "vendor/block" }
 # citationberg API and raises quick-xml to the patched 0.41 series.
 citationberg = { git = "https://github.com/typst/citationberg", rev = "8966cf7c178b38b621d297c9eb6d0bb81e14be5e" }
 reqwest = { path = "vendor/reqwest" }
-# Vendored from https://github.com/notify-rs/notify @ a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf
+# Vendored from https://github.com/notify-rs/notify @ 7f6995de25f07bf28ab513c64375d94b4ccd08a1
 notify = { path = "vendor/notify/notify" }
 notify-types = { path = "vendor/notify/notify-types" }
 # Vendored from https://github.com/NiiightmareXD/windows-capture @ c7d106448eb9d9b251345c39047711e1cd408ae2

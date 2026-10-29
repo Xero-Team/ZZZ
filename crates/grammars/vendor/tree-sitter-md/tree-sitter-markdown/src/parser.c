@@ -6,13 +6,9 @@
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-#ifdef _MSC_VER
-#pragma optimize("", off)
-#elif defined(__clang__)
-#pragma clang optimize off
-#elif defined(__GNUC__)
-#pragma GCC optimize ("O0")
-#endif
+/* Optimization pragmas are stripped by `cargo xtask grammars generate`; the
+   grammar's build script selects the optimization level for this translation
+   unit instead. See `tooling/xtask/src/tasks/grammars.rs`. */
 
 #define LANGUAGE_VERSION 15
 #define STATE_COUNT 925

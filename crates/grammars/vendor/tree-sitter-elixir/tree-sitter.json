@@ -1,0 +1,27 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "elixir",
+      "camelcase": "Elixir",
+      "scope": "source.elixir",
+      "file-types": ["ex", "exs"],
+      "highlights": ["queries/highlights.scm"],
+      "injections": ["queries/injections.scm"],
+      "tags": ["queries/tags.scm"],
+      "injection-regex": "^elixir$"
+    }
+  ],
+  "metadata": {
+    "version": "0.3.5",
+    "license": "Apache-2.0",
+    "description": "Elixir grammar for the tree-sitter parsing library",
+    "links": {
+      "repository": "https://github.com/elixir-lang/tree-sitter-elixir"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}

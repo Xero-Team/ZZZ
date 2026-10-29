@@ -1,5 +1,43 @@
-tree-sitter-cli-version = "0.27.0"
+tree-sitter-cli-version = "0.27.1"
 abi = 15
+
+[[packages]]
+directory = "tree-sitter-bash"
+compile-name = "tree-sitter-bash"
+display-name = "Bash"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_bash"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Bash"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-c"
+compile-name = "tree-sitter-c"
+display-name = "C"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_c"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "C"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
 
 [[packages]]
 directory = "tree-sitter-cmake"
@@ -34,6 +72,48 @@ symbol = "tree_sitter_cmd"
 language-constant = "LANGUAGE"
 node-types-constant = "NODE_TYPES"
 display-name = "CMD"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-cpp"
+compile-name = "tree-sitter-cpp"
+display-name = "C++"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_cpp"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "C++"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/injections.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-css"
+compile-name = "tree-sitter-css"
+display-name = "CSS"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_css"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "CSS"
 
 [[packages.queries]]
 constant = "HIGHLIGHTS_QUERY"
@@ -81,6 +161,23 @@ constant = "HIGHLIGHTS_QUERY"
 path = "queries/highlights.scm"
 
 [[packages]]
+directory = "tree-sitter-diff"
+compile-name = "tree-sitter-diff"
+display-name = "Diff"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_diff"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Diff"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
 directory = "tree-sitter-dockerfile"
 compile-name = "tree-sitter-dockerfile"
 display-name = "Dockerfile"
@@ -96,6 +193,60 @@ display-name = "Dockerfile"
 [[packages.queries]]
 constant = "HIGHLIGHTS_QUERY"
 path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-elixir"
+compile-name = "tree-sitter-elixir"
+display-name = "Elixir"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_elixir"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Elixir"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/injections.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-embedded-template"
+compile-name = "tree-sitter-embedded-template"
+display-name = "Embedded template"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_embedded_template"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Embedded template"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_EJS_QUERY"
+path = "queries/injections-ejs.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_ERB_QUERY"
+path = "queries/injections-erb.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_ETLUA_QUERY"
+path = "queries/injections-etlua.scm"
 
 [[packages]]
 directory = "tree-sitter-git-config"
@@ -175,6 +326,27 @@ node-types-constant = "NODE_TYPES"
 display-name = "Gitignore"
 
 [[packages]]
+directory = "tree-sitter-go"
+compile-name = "tree-sitter-go"
+display-name = "Go"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_go"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Go"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
 directory = "tree-sitter-go-mod"
 compile-name = "tree-sitter-go-mod"
 display-name = "Go module"
@@ -203,6 +375,83 @@ symbol = "tree_sitter_gowork"
 language-constant = "LANGUAGE"
 node-types-constant = "NODE_TYPES"
 display-name = "Go workspace"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-heex"
+compile-name = "tree-sitter-heex"
+display-name = "HEEx"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_heex"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "HEEx"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/injections.scm"
+
+[[packages]]
+directory = "tree-sitter-html"
+compile-name = "tree-sitter-html"
+display-name = "HTML"
+extra-rerun-paths = ["src/tag.h"]
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_html"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "HTML"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/injections.scm"
+
+[[packages]]
+directory = "tree-sitter-jsdoc"
+compile-name = "tree-sitter-jsdoc"
+display-name = "JSDoc"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_jsdoc"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "JSDoc"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-json"
+compile-name = "tree-sitter-json"
+display-name = "JSON"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_json"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "JSON"
 
 [[packages.queries]]
 constant = "HIGHLIGHTS_QUERY"
@@ -278,6 +527,94 @@ path = "queries/highlights.scm"
 [[packages.queries]]
 constant = "LOCALS_QUERY"
 path = "queries/locals.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-python"
+compile-name = "tree-sitter-python"
+display-name = "Python"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_python"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Python"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-regex"
+compile-name = "tree-sitter-regex"
+display-name = "Regex"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_regex"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Regex"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-ruby"
+compile-name = "tree-sitter-ruby"
+display-name = "Ruby"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_ruby"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Ruby"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "LOCALS_QUERY"
+path = "queries/locals.scm"
+
+[[packages.queries]]
+constant = "TAGS_QUERY"
+path = "queries/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-rust"
+compile-name = "tree-sitter-rust"
+display-name = "Rust"
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_rust"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "Rust"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"
+
+[[packages.queries]]
+constant = "INJECTIONS_QUERY"
+path = "queries/injections.scm"
 
 [[packages.queries]]
 constant = "TAGS_QUERY"
@@ -397,3 +734,51 @@ path = "queries/typst/folds.scm"
 [[packages.queries]]
 constant = "TAGS_QUERY"
 path = "queries/typst/tags.scm"
+
+[[packages]]
+directory = "tree-sitter-xml"
+compile-name = "tree-sitter-xml"
+display-name = "XML & DTD"
+extra-rerun-paths = ["common/scanner.h"]
+
+[[packages.grammars]]
+input = "xml/src/grammar.json"
+output = "xml/src"
+symbol = "tree_sitter_xml"
+language-constant = "LANGUAGE_XML"
+node-types-constant = "XML_NODE_TYPES"
+display-name = "XML"
+
+[[packages.grammars]]
+input = "dtd/src/grammar.json"
+output = "dtd/src"
+symbol = "tree_sitter_dtd"
+language-constant = "LANGUAGE_DTD"
+node-types-constant = "DTD_NODE_TYPES"
+display-name = "DTD"
+
+[[packages.queries]]
+constant = "XML_HIGHLIGHT_QUERY"
+path = "queries/xml/highlights.scm"
+
+[[packages.queries]]
+constant = "DTD_HIGHLIGHT_QUERY"
+path = "queries/dtd/highlights.scm"
+
+[[packages]]
+directory = "tree-sitter-yaml"
+compile-name = "tree-sitter-yaml"
+display-name = "YAML"
+extra-rerun-paths = ["src/schema.core.c", "src/schema.json.c", "src/schema.legacy.c"]
+
+[[packages.grammars]]
+input = "src/grammar.json"
+output = "src"
+symbol = "tree_sitter_yaml"
+language-constant = "LANGUAGE"
+node-types-constant = "NODE_TYPES"
+display-name = "YAML"
+
+[[packages.queries]]
+constant = "HIGHLIGHTS_QUERY"
+path = "queries/highlights.scm"

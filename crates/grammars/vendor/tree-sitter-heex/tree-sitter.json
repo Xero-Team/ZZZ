@@ -1,0 +1,26 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "heex",
+      "camelcase": "HEEx",
+      "scope": "source.heex",
+      "file-types": ["heex"],
+      "highlights": ["queries/highlights.scm"],
+      "injections": ["queries/injections.scm"],
+      "injection-regex": "^heex$"
+    }
+  ],
+  "metadata": {
+    "version": "0.8.1",
+    "license": "MIT",
+    "description": "heex grammar for the tree-sitter parsing library",
+    "links": {
+      "repository": "https://github.com/phoenixframework/tree-sitter-heex"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "rust": true
+  }
+}
