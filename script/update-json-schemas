@@ -3,7 +3,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
-cd crates/languages/src/json/schemas
+cd crates/json_schema_store/src/schemas
 files=(
     "tsconfig.json"
     "package.json"
