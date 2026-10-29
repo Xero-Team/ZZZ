@@ -58,10 +58,14 @@ impl MacDisplay {
 
             if result == 0 {
                 displays.set_len(display_count as usize);
-                displays.into_iter().map(MacDisplay)
             } else {
-                panic!("Failed to get active display list. Result: {result}");
+                // Reporting no displays keeps the app running; the caller treats an
+                // empty list the same way it treats a machine with no screens.
+                log::error!(
+                    "failed to enumerate the active displays: CGGetActiveDisplayList returned {result}"
+                );
             }
+            displays.into_iter().map(MacDisplay)
         }
     }
 }

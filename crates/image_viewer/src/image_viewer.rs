@@ -344,13 +344,13 @@ impl Element for ImageContentElement {
 
         let first_layout = image_view.container_bounds.is_none();
 
-        let initial_zoom_level = first_layout
-            .then(|| {
-                image_view
-                    .image_size
-                    .map(|image_size| ImageView::compute_fit_to_view_zoom(bounds, image_size))
-            })
-            .flatten();
+        let initial_zoom_level = if first_layout {
+            image_view
+                .image_size
+                .map(|image_size| ImageView::compute_fit_to_view_zoom(bounds, image_size))
+        } else {
+            None
+        };
 
         let zoom_level = initial_zoom_level.unwrap_or(image_view.zoom_level);
 

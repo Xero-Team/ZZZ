@@ -1,10 +1,37 @@
 use gpui::{App, Context, WeakEntity, Window};
 use i18n::tr;
 use notifications::status_toast::StatusToast;
+use std::path::PathBuf;
 use std::sync::Arc;
 use ui::{Color, Icon, IconName, IconSize, SharedString};
 use util::ResultExt;
 use workspace::{self, Workspace};
+
+/// Creates a worktree at `destination_dir` and runs `on_success` in the same
+/// window once it exists.
+fn create_worktree_and_run_on_success(
+    workspace: &mut Workspace,
+    destination_dir: PathBuf,
+    on_success: Arc<dyn Fn(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + Sync>,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    let create_task = workspace.project().update(cx, |project, cx| {
+        project.create_worktree(destination_dir.as_path(), true, cx)
+    });
+
+    let weak_workspace = cx.weak_entity();
+    cx.spawn_in(window, async move |_window, cx| {
+        if create_task.await.log_err().is_some() {
+            weak_workspace
+                .update_in(cx, |workspace, window, cx| {
+                    (on_success)(workspace, window, cx);
+                })
+                .log_err();
+        }
+    })
+    .detach();
+}
 
 pub fn clone_and_open(
     repo_url: SharedString,
@@ -116,22 +143,13 @@ pub fn clone_and_open(
                 0 => {
                     workspace
                         .update_in(cx, |workspace, window, cx| {
-                            let create_task = workspace.project().update(cx, |project, cx| {
-                                project.create_worktree(destination_dir.as_path(), true, cx)
-                            });
-
-                            let workspace_weak = cx.weak_entity();
-                            let on_success = on_success.clone();
-                            cx.spawn_in(window, async move |_window, cx| {
-                                if create_task.await.log_err().is_some() {
-                                    workspace_weak
-                                        .update_in(cx, |workspace, window, cx| {
-                                            (on_success)(workspace, window, cx);
-                                        })
-                                        .ok();
-                                }
-                            })
-                            .detach();
+                            create_worktree_and_run_on_success(
+                                workspace,
+                                destination_dir.clone(),
+                                on_success.clone(),
+                                window,
+                                cx,
+                            );
                         })
                         .ok()?;
                 }
@@ -148,32 +166,18 @@ pub fn clone_and_open(
                                 cx,
                                 move |workspace, window, cx| {
                                     cx.activate(true);
-
-                                    let create_task =
-                                        workspace.project().update(cx, |project, cx| {
-                                            project.create_worktree(
-                                                destination_path.as_path(),
-                                                true,
-                                                cx,
-                                            )
-                                        });
-
-                                    let workspace_weak = cx.weak_entity();
-                                    cx.spawn_in(window, async move |_window, cx| {
-                                        if create_task.await.log_err().is_some() {
-                                            workspace_weak
-                                                .update_in(cx, |workspace, window, cx| {
-                                                    (on_success)(workspace, window, cx);
-                                                })
-                                                .ok();
-                                        }
-                                    })
-                                    .detach();
+                                    create_worktree_and_run_on_success(
+                                        workspace,
+                                        destination_path,
+                                        on_success,
+                                        window,
+                                        cx,
+                                    );
                                 },
                             )
                             .detach();
                         })
-                        .ok();
+                        .log_err();
                 }
                 _ => {}
             }

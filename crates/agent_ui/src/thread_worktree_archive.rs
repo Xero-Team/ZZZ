@@ -72,7 +72,7 @@ pub struct AffectedProject {
 }
 
 fn archived_worktree_ref_name(id: i64) -> String {
-    format!("refs/archived-worktrees/{}", id)
+    format!("refs/archived-worktrees/{id}")
 }
 
 /// Resolves the ZZZ-managed worktrees base directory for a given repo.
@@ -509,12 +509,7 @@ pub async fn persist_worktree_state(root: &RootPlan, cx: &mut AsyncApp) -> Resul
         })
         .await
         .context("failed to create archived worktree DB record");
-    let archived_worktree_id = match db_result {
-        Ok(id) => id,
-        Err(error) => {
-            return Err(error);
-        }
-    };
+    let archived_worktree_id = db_result?;
 
     // Link all threads on this worktree to the archived record
     let thread_ids: Vec<ThreadId> = store.read_with(cx, |store, _cx| {
@@ -557,7 +552,7 @@ pub async fn persist_worktree_state(root: &RootPlan, cx: &mut AsyncApp) -> Resul
     // This is fatal: without the ref, git gc will eventually collect the
     // WIP commits and a later restore will silently fail.
     let ref_name = archived_worktree_ref_name(archived_worktree_id);
-    let (main_repo, _temp_project) =
+    let (main_repo, temp_project) =
         find_or_create_repository(&root.main_repo_path, root.remote_connection.as_ref(), cx)
             .await
             .context("could not open main repo to create archive ref")?;
@@ -570,7 +565,7 @@ pub async fn persist_worktree_state(root: &RootPlan, cx: &mut AsyncApp) -> Resul
         .with_context(|| format!("failed to create ref {ref_name} on main repo"))?;
     // See note in `remove_root_after_worktree_removal`: this may be a live
     // or temporary project; dropping only matters in the temporary case.
-    drop(_temp_project);
+    drop(temp_project);
 
     Ok(archived_worktree_id)
 }
@@ -583,7 +578,7 @@ pub async fn rollback_persist(archived_worktree_id: i64, root: &RootPlan, cx: &m
     // Delete the git ref on main repo
     match find_or_create_repository(&root.main_repo_path, root.remote_connection.as_ref(), cx).await
     {
-        Ok((main_repo, _temp_project)) => {
+        Ok((main_repo, temp_project)) => {
             let ref_name = archived_worktree_ref_name(archived_worktree_id);
             let rx = main_repo.update(cx, |repo, _cx| repo.delete_ref(ref_name));
             match rx.await {
@@ -596,7 +591,7 @@ pub async fn rollback_persist(archived_worktree_id: i64, root: &RootPlan, cx: &m
             // See note in `remove_root_after_worktree_removal`: this may be a
             // live or temporary project; dropping only matters in the temporary
             // case.
-            drop(_temp_project);
+            drop(temp_project);
         }
         Err(error) => {
             log::error!("Failed to open main repo during archive rollback: {error:#}");
@@ -814,7 +809,7 @@ pub async fn cleanup_archived_worktree_record(
 ) {
     // Delete the git ref from the main repo
     match find_or_create_repository(&row.main_repo_path, remote_connection, cx).await {
-        Ok((main_repo, _temp_project)) => {
+        Ok((main_repo, temp_project)) => {
             let ref_name = archived_worktree_ref_name(row.id);
             let rx = main_repo.update(cx, |repo, _cx| repo.delete_ref(ref_name));
             match rx.await {
@@ -825,7 +820,7 @@ pub async fn cleanup_archived_worktree_record(
             // See note in `remove_root_after_worktree_removal`: this may be a
             // live or temporary project; dropping only matters in the temporary
             // case.
-            drop(_temp_project);
+            drop(temp_project);
         }
         Err(error) => {
             log::warn!("Failed to open main repo while cleaning archive ref: {error:#}");

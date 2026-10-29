@@ -92,7 +92,10 @@ impl<S: Source> RodioExt for S {
 
         let chunk_size =
             (samples_per_second.div_ceil(10)).next_multiple_of(self.channels().get() as usize);
-        let chunks_to_queue = samples_to_queue.div_ceil(chunk_size);
+        // A source with a very low sample rate queues no samples at all for the
+        // shortest allowed duration, but the ring buffer requires a capacity of
+        // at least one chunk.
+        let chunks_to_queue = samples_to_queue.div_ceil(chunk_size).max(1);
 
         let is_active = Arc::new(AtomicBool::new(true));
         let queue = Arc::new(ReplayQueue::new(chunks_to_queue, chunk_size));
@@ -324,14 +327,19 @@ impl ReplayQueue {
             last_chunk: Mutex::new(Vec::new()),
         }
     }
+    /// Locks the trailing chunk.
+    ///
+    /// The guarded value is a plain sample buffer, so a panic elsewhere cannot
+    /// leave it inconsistent and recovering from poisoning is always safe.
+    fn last_chunk(&self) -> std::sync::MutexGuard<'_, Vec<Sample>> {
+        self.last_chunk
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     /// Returns the length in samples
     fn len(&self) -> usize {
-        self.inner.len().saturating_sub(1) * self.normal_chunk_len
-            + self
-                .last_chunk
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .len()
+        self.inner.len().saturating_sub(1) * self.normal_chunk_len + self.last_chunk().len()
     }
 
     fn pop(&self) -> Option<Vec<Sample>> {
@@ -339,11 +347,7 @@ impl ReplayQueue {
     }
 
     fn push_last(&self, mut samples: Vec<Sample>) {
-        let mut last_chunk = self
-            .last_chunk
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        std::mem::swap(&mut *last_chunk, &mut samples);
+        std::mem::swap(&mut *self.last_chunk(), &mut samples);
     }
 
     fn push_normal(&self, samples: Vec<Sample>) {
@@ -710,6 +714,17 @@ mod tests {
 
     mod instant_replay {
         use super::*;
+
+        #[test]
+        fn shortest_allowed_duration_keeps_a_non_empty_queue() {
+            // One sample per second queues no samples for the shortest allowed
+            // duration, yet the replay ring buffer must still be created.
+            let input = StaticSamplesBuffer::new(nz!(1), nz!(1), &SAMPLES);
+
+            input
+                .replayable(Duration::from_millis(100))
+                .expect("100ms is the minimum allowed duration");
+        }
 
         #[test]
         fn source_activity_tracks_replayable_lifetime() {

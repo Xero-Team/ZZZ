@@ -629,12 +629,18 @@ impl MacTextSystemState {
             let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
             let mut ix_converter = StringIndexConverter::new(text);
             for run in glyph_runs.into_iter() {
-                let attributes = run.attributes().expect("attributes should be present");
-                let font = unsafe {
-                    attributes
-                        .get(kCTFontAttributeName)
-                        .downcast::<CTFont>()
-                        .expect("downcast should succeed")
+                let Some(attributes) = run.attributes() else {
+                    log::error!("CoreText returned a glyph run without attributes");
+                    continue;
+                };
+                // SAFETY: `kCTFontAttributeName` is a CoreText constant that is
+                // valid for the lifetime of the process.
+                let Some(font) = attributes
+                    .find(unsafe { kCTFontAttributeName })
+                    .and_then(|font| font.downcast::<CTFont>())
+                else {
+                    log::error!("CoreText returned a glyph run without the font GPUI set on it");
+                    continue;
                 };
                 let font_id = self.id_for_native_font(font.clone());
                 let run_start_utf16 = run
@@ -662,26 +668,23 @@ impl MacTextSystemState {
                     synthetic_bold_for(requested_weight, ct_font_weight(&font))
                 };
 
-                let glyphs = match runs.last_mut() {
-                    Some(run)
-                        if run.font_id == font_id
-                            && run.synthetic_italic == synthetic_italic
-                            && run.synthetic_bold == synthetic_bold =>
-                    {
-                        &mut run.glyphs
-                    }
-                    _ => {
-                        runs.push(ShapedRun {
-                            font_id,
-                            synthetic_italic,
-                            synthetic_bold,
-                            glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
-                        });
-                        &mut runs
-                            .last_mut()
-                            .expect("collection should not be empty")
-                            .glyphs
-                    }
+                let reuses_last_run = runs.last().is_some_and(|run| {
+                    run.font_id == font_id
+                        && run.synthetic_italic == synthetic_italic
+                        && run.synthetic_bold == synthetic_bold
+                });
+                if !reuses_last_run {
+                    runs.push(ShapedRun {
+                        font_id,
+                        synthetic_italic,
+                        synthetic_bold,
+                        glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
+                    });
+                }
+                let run_index = runs.len().saturating_sub(1);
+                let Some(shape_run) = runs.get_mut(run_index) else {
+                    log::error!("shaped run {run_index} disappeared while laying out a line");
+                    continue;
                 };
                 for ((&glyph_id, position), &glyph_utf16_ix) in run
                     .glyphs()
@@ -689,14 +692,16 @@ impl MacTextSystemState {
                     .zip(run.positions().iter())
                     .zip(run.string_indices().iter())
                 {
-                    let glyph_utf16_ix =
-                        usize::try_from(glyph_utf16_ix).expect("conversion should succeed");
+                    let Ok(glyph_utf16_ix) = usize::try_from(glyph_utf16_ix) else {
+                        log::error!("CoreText reported a negative string index for a glyph");
+                        continue;
+                    };
                     if ix_converter.utf16_ix > glyph_utf16_ix {
                         // We cannot reuse current index converter, as it can only seek forward. Restart the search.
                         ix_converter = StringIndexConverter::new(text);
                     }
                     ix_converter.advance_to_utf16_ix(glyph_utf16_ix);
-                    glyphs.push(ShapedGlyph {
+                    shape_run.glyphs.push(ShapedGlyph {
                         id: GlyphId(glyph_id as u32),
                         position: point(position.x as f32, position.y as f32).map(px),
                         index: ix_converter.utf8_ix,
@@ -821,10 +826,10 @@ fn fontkit_style(style: FontStyle) -> FontkitStyle {
 }
 
 // Some fonts may have no attributes despite `core_text` requiring them (and panicking).
-// This is the same version as `core_text` has without `expect` calls.
+// This is a lenient equivalent of `core_text`'s accessors, without the `expect` calls.
 mod lenient_font_attributes {
     use core_foundation::{
-        base::{CFRetain, CFType, TCFType},
+        base::{CFType, TCFType},
         string::{CFString, CFStringRef},
     };
     use core_text::font_descriptor::{
@@ -840,23 +845,21 @@ mod lenient_font_attributes {
         attribute: CFStringRef,
     ) -> Option<String> {
         unsafe {
+            // SAFETY: `descriptor` and `attribute` are valid CoreText objects, and
+            // `CTFontDescriptorCopyAttribute` follows the create rule on success.
             let value = CTFontDescriptorCopyAttribute(descriptor.as_concrete_TypeRef(), attribute);
             if value.is_null() {
                 return None;
             }
 
             let value = CFType::wrap_under_create_rule(value);
-            assert!(value.instance_of::<CFString>());
-            let s = wrap_under_get_rule(value.as_CFTypeRef() as CFStringRef);
-            Some(s.to_string())
-        }
-    }
+            if !value.instance_of::<CFString>() {
+                log::error!("font descriptor attribute was not a string");
+                return None;
+            }
 
-    unsafe fn wrap_under_get_rule(reference: CFStringRef) -> CFString {
-        unsafe {
-            assert!(!reference.is_null(), "Attempted to create a NULL object.");
-            let reference = CFRetain(reference.cast::<::std::os::raw::c_void>()) as CFStringRef;
-            TCFType::wrap_under_create_rule(reference)
+            // SAFETY: The instance check above guarantees this is a `CFString`.
+            Some(CFString::wrap_under_get_rule(value.as_CFTypeRef() as CFStringRef).to_string())
         }
     }
 }

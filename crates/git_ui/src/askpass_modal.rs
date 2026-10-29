@@ -13,6 +13,8 @@ use util::maybe;
 use workspace::ModalView;
 use zeroize::Zeroize;
 
+const GITHUB_GIT_SETUP_URL: &str = "https://docs.github.com/en/get-started/git-basics/set-up-git#authenticating-with-github-from-git";
+
 pub(crate) struct AskPassModal {
     operation: SharedString,
     prompt: SharedString,
@@ -65,9 +67,12 @@ impl AskPassModal {
                 this.clear(window, cx);
                 text
             });
-            let pw = askpass::EncryptedPassword::try_from(text.as_ref()).ok()?;
+            let password = askpass::EncryptedPassword::try_from(text.as_ref()).ok();
+            // Zero the plaintext even when it cannot be encrypted, so it never
+            // outlives this scope in memory.
             text.zeroize();
-            if tx.send(pw).is_err() {
+            let password = password?;
+            if tx.send(password).is_err() {
                 log::debug!("askpass receiver was dropped before password confirmation");
             }
             Some(())
@@ -82,38 +87,35 @@ impl AskPassModal {
             && self.prompt.contains("github.com")
         {
             return Some(
-            div()
-                .p_2()
-                .bg(color)
-                .border_t_1()
-                .border_color(cx.theme().status().info_border)
-                .child(
-                    h_flex().gap_2()
-                        .child(
-                            Icon::new(IconName::Github).size(IconSize::Small)
-                        )
-                        .child(
-                            Label::new(tr(
-                                cx,
-                                "git_ui.askpass.github_setup_hint",
-                                "You may need to configure git for GitHub.",
-                            ))
+                div()
+                    .p_2()
+                    .bg(color)
+                    .border_t_1()
+                    .border_color(cx.theme().status().info_border)
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(Icon::new(IconName::Github).size(IconSize::Small))
+                            .child(
+                                Label::new(tr(
+                                    cx,
+                                    "git_ui.askpass.github_setup_hint",
+                                    "You may need to configure git for GitHub.",
+                                ))
                                 .size(LabelSize::Small),
-                        )
-                        .child(
-                            Button::new(
-                                "learn-more",
-                                tr(cx, "git_ui.askpass.learn_more", "Learn more"),
                             )
-                            .color(Color::Accent)
-                            .label_size(LabelSize::Small)
-                            .on_click(|_, _, cx| {
-                                cx.open_url("https://docs.github.com/en/get-started/git-basics/set-up-git#authenticating-with-github-from-git")
-                            }),
-                        ),
-                )
-                .into_any_element(),
-        );
+                            .child(
+                                Button::new(
+                                    "learn-more",
+                                    tr(cx, "git_ui.askpass.learn_more", "Learn more"),
+                                )
+                                .color(Color::Accent)
+                                .label_size(LabelSize::Small)
+                                .on_click(|_, _, cx| cx.open_url(GITHUB_GIT_SETUP_URL)),
+                            ),
+                    )
+                    .into_any_element(),
+            );
         }
         None
     }

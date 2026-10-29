@@ -99,33 +99,13 @@ impl WhichKeyModal {
         let group_label = tr(cx, "which_key.group_keybinds", "+{} keybinds");
         binding_data = group_bindings(binding_data, &group_label);
 
-        // Sort bindings from shortest to longest, with groups last
-        // Using stable sort to preserve relative order of equal elements
-        binding_data.sort_by(|(keystrokes_a, action_a), (keystrokes_b, action_b)| {
-            // Groups (actions starting with "+") should go last
-            let is_group_a = action_a.starts_with('+');
-            let is_group_b = action_b.starts_with('+');
-
-            // First, separate groups from non-groups
-            let group_cmp = is_group_a.cmp(&is_group_b);
-            if group_cmp != std::cmp::Ordering::Equal {
-                return group_cmp;
-            }
-
-            // Then sort by keystroke count
-            let keystroke_cmp = keystrokes_a.len().cmp(&keystrokes_b.len());
-            if keystroke_cmp != std::cmp::Ordering::Equal {
-                return keystroke_cmp;
-            }
-
-            // Finally sort by text length, then lexicographically for full stability
-            let text_a = text_for_keybinding_keystrokes(keystrokes_a, cx);
-            let text_b = text_for_keybinding_keystrokes(keystrokes_b, cx);
-            let text_len_cmp = text_a.len().cmp(&text_b.len());
-            if text_len_cmp != std::cmp::Ordering::Equal {
-                return text_len_cmp;
-            }
-            text_a.cmp(&text_b)
+        // Sort bindings from shortest to longest, with groups last. Groups are
+        // the actions whose label starts with "+". `sort_by_cached_key` keeps the
+        // sort stable and formats each keystroke label only once.
+        binding_data.sort_by_cached_key(|(keystrokes, action_name)| {
+            let is_group = action_name.starts_with('+');
+            let label = text_for_keybinding_keystrokes(keystrokes, cx);
+            (is_group, keystrokes.len(), label.len(), label)
         });
         binding_data.dedup();
         self.pending_keys = text_for_keystrokes(&pending_keys, cx).into();

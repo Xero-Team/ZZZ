@@ -1,4 +1,5 @@
 use gpui::{App, Context, Entity, IntoElement, ParentElement, Render, Subscription, div};
+use i18n::tr;
 use project::image_store::{ImageFormat, ImageMetadata};
 use settings::Settings;
 use ui::prelude::*;
@@ -9,7 +10,7 @@ use crate::{ImageFileSizeUnit, ImageView, ImageViewerSettings};
 
 pub struct ImageInfo {
     metadata: Option<ImageMetadata>,
-    _observe_active_image: Option<Subscription>,
+    observe_active_image: Option<Subscription>,
     observe_image_item: Option<Subscription>,
 }
 
@@ -17,7 +18,7 @@ impl ImageInfo {
     pub fn new(_workspace: &Workspace) -> Self {
         Self {
             metadata: None,
-            _observe_active_image: None,
+            observe_active_image: None,
             observe_image_item: None,
         }
     }
@@ -51,31 +52,36 @@ impl Render for ImageInfo {
         };
 
         let mut components = Vec::new();
-        components.push(format!("{}x{}", metadata.width, metadata.height));
+        components.push(
+            tr(cx, "image_viewer.image_info.dimensions", "{}x{}")
+                .replacen("{}", &metadata.width.to_string(), 1)
+                .replacen("{}", &metadata.height.to_string(), 1),
+        );
         components.push(format_image_size(metadata.file_size, settings.unit));
 
         if let Some(colors) = metadata.colors {
-            components.push(format!(
-                "{} channels, {} bits per pixel",
-                colors.channels,
-                colors.bits_per_pixel()
-            ));
+            components.push(
+                tr(
+                    cx,
+                    "image_viewer.image_info.channels_bits",
+                    "{} channels, {} bits per pixel",
+                )
+                .replacen("{}", &colors.channels.to_string(), 1)
+                .replacen("{}", &colors.bits_per_pixel().to_string(), 1),
+            );
         }
 
-        components.push(
-            match metadata.format {
-                ImageFormat::Png => "PNG",
-                ImageFormat::Jpeg => "JPEG",
-                ImageFormat::Gif => "GIF",
-                ImageFormat::WebP => "WebP",
-                ImageFormat::Tiff => "TIFF",
-                ImageFormat::Bmp => "BMP",
-                ImageFormat::Ico => "ICO",
-                ImageFormat::Avif => "Avif",
-                _ => "Unknown",
-            }
-            .to_owned(),
-        );
+        components.push(match metadata.format {
+            ImageFormat::Png => "PNG".to_owned(),
+            ImageFormat::Jpeg => "JPEG".to_owned(),
+            ImageFormat::Gif => "GIF".to_owned(),
+            ImageFormat::WebP => "WebP".to_owned(),
+            ImageFormat::Tiff => "TIFF".to_owned(),
+            ImageFormat::Bmp => "BMP".to_owned(),
+            ImageFormat::Ico => "ICO".to_owned(),
+            ImageFormat::Avif => "Avif".to_owned(),
+            _ => tr(cx, "image_viewer.image_info.unknown_format", "Unknown"),
+        });
 
         div().child(Label::new(components.join(" • ")).size(LabelSize::Small))
     }
@@ -88,13 +94,13 @@ impl StatusItemView for ImageInfo {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self._observe_active_image = None;
+        self.observe_active_image = None;
         self.observe_image_item = None;
 
         if let Some(image_view) = active_pane_item.and_then(|item| item.act_as::<ImageView>(cx)) {
             self.update_metadata(&image_view, cx);
 
-            self._observe_active_image = Some(cx.observe(&image_view, |this, view, cx| {
+            self.observe_active_image = Some(cx.observe(&image_view, |this, view, cx| {
                 this.update_metadata(&view, cx);
             }));
         } else {

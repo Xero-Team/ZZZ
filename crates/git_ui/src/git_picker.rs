@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
     KeyContext, ModifiersChangedEvent, MouseButton, ParentElement, Rems, Render, Styled,
@@ -27,13 +25,12 @@ pub enum GitPickerTab {
     Stashes,
 }
 
-impl Display for GitPickerTab {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let label = match self {
-            GitPickerTab::Branches => "Branches",
-            GitPickerTab::Stashes => "Stashes",
-        };
-        write!(f, "{}", label)
+impl GitPickerTab {
+    fn other(self) -> Self {
+        match self {
+            GitPickerTab::Branches => GitPickerTab::Stashes,
+            GitPickerTab::Stashes => GitPickerTab::Branches,
+        }
     }
 }
 
@@ -91,6 +88,13 @@ impl GitPicker {
         this
     }
 
+    fn select_tab(&mut self, tab: GitPickerTab, window: &mut Window, cx: &mut Context<Self>) {
+        self.tab = tab;
+        self.ensure_active_picker(window, cx);
+        self.focus_active_picker(window, cx);
+        cx.notify();
+    }
+
     fn ensure_active_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.tab {
             GitPickerTab::Branches => {
@@ -107,29 +111,31 @@ impl GitPicker {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<BranchList> {
-        if self.branch_list.is_none() {
-            let show_footer = !self.popover_style;
-            let branch_list = cx.new(|cx| {
-                branch_picker::create_embedded(
-                    self.workspace.clone(),
-                    self.repository.clone(),
-                    self.width,
-                    show_footer,
-                    window,
-                    cx,
-                )
-            });
-
-            let subscription = cx.subscribe(&branch_list, |this, _, _: &DismissEvent, cx| {
-                if this.tab == GitPickerTab::Branches {
-                    cx.emit(DismissEvent);
-                }
-            });
-
-            self._subscriptions.push(subscription);
-            self.branch_list = Some(branch_list);
+        if let Some(branch_list) = &self.branch_list {
+            return branch_list.clone();
         }
-        self.branch_list.clone().expect("value should be present")
+
+        let show_footer = !self.popover_style;
+        let branch_list = cx.new(|cx| {
+            branch_picker::create_embedded(
+                self.workspace.clone(),
+                self.repository.clone(),
+                self.width,
+                show_footer,
+                window,
+                cx,
+            )
+        });
+
+        let subscription = cx.subscribe(&branch_list, |this, _, _: &DismissEvent, cx| {
+            if this.tab == GitPickerTab::Branches {
+                cx.emit(DismissEvent);
+            }
+        });
+
+        self._subscriptions.push(subscription);
+        self.branch_list = Some(branch_list.clone());
+        branch_list
     }
 
     fn ensure_stash_list(
@@ -137,49 +143,37 @@ impl GitPicker {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<StashList> {
-        if self.stash_list.is_none() {
-            let show_footer = !self.popover_style;
-            let stash_list = cx.new(|cx| {
-                stash_picker::create_embedded(
-                    self.repository.clone(),
-                    self.workspace.clone(),
-                    self.width,
-                    show_footer,
-                    window,
-                    cx,
-                )
-            });
-
-            let subscription = cx.subscribe(&stash_list, |this, _, _: &DismissEvent, cx| {
-                if this.tab == GitPickerTab::Stashes {
-                    cx.emit(DismissEvent);
-                }
-            });
-
-            self._subscriptions.push(subscription);
-            self.stash_list = Some(stash_list);
+        if let Some(stash_list) = &self.stash_list {
+            return stash_list.clone();
         }
-        self.stash_list.clone().expect("value should be present")
+
+        let show_footer = !self.popover_style;
+        let stash_list = cx.new(|cx| {
+            stash_picker::create_embedded(
+                self.repository.clone(),
+                self.workspace.clone(),
+                self.width,
+                show_footer,
+                window,
+                cx,
+            )
+        });
+
+        let subscription = cx.subscribe(&stash_list, |this, _, _: &DismissEvent, cx| {
+            if this.tab == GitPickerTab::Stashes {
+                cx.emit(DismissEvent);
+            }
+        });
+
+        self._subscriptions.push(subscription);
+        self.stash_list = Some(stash_list.clone());
+        stash_list
     }
 
-    fn activate_next_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.tab = match self.tab {
-            GitPickerTab::Branches => GitPickerTab::Stashes,
-            GitPickerTab::Stashes => GitPickerTab::Branches,
-        };
-        self.ensure_active_picker(window, cx);
-        self.focus_active_picker(window, cx);
-        cx.notify();
-    }
-
-    fn activate_previous_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.tab = match self.tab {
-            GitPickerTab::Branches => GitPickerTab::Stashes,
-            GitPickerTab::Stashes => GitPickerTab::Branches,
-        };
-        self.ensure_active_picker(window, cx);
-        self.focus_active_picker(window, cx);
-        cx.notify();
+    /// Switches to the other tab. With only two tabs, "next" and "previous"
+    /// are the same operation.
+    fn activate_other_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.select_tab(self.tab.other(), window, cx);
     }
 
     fn focus_active_picker(&self, window: &mut Window, cx: &mut App) {
@@ -209,10 +203,7 @@ impl GitPicker {
                     ToggleButtonSimple::new(
                         Self::tab_label(GitPickerTab::Branches, cx),
                         cx.listener(|this, _, window, cx| {
-                            this.tab = GitPickerTab::Branches;
-                            this.ensure_active_picker(window, cx);
-                            this.focus_active_picker(window, cx);
-                            cx.notify();
+                            this.select_tab(GitPickerTab::Branches, window, cx);
                         }),
                     )
                     .tooltip(move |_, cx| {
@@ -230,10 +221,7 @@ impl GitPicker {
                     ToggleButtonSimple::new(
                         Self::tab_label(GitPickerTab::Stashes, cx),
                         cx.listener(|this, _, window, cx| {
-                            this.tab = GitPickerTab::Stashes;
-                            this.ensure_active_picker(window, cx);
-                            this.focus_active_picker(window, cx);
-                            cx.notify();
+                            this.select_tab(GitPickerTab::Stashes, window, cx);
                         }),
                     )
                     .tooltip(move |_, cx| {
@@ -464,24 +452,18 @@ impl Render for GitPicker {
                 cx.emit(DismissEvent);
             }))
             .on_action(cx.listener(|this, _: &pane::ActivateNextItem, window, cx| {
-                this.activate_next_tab(window, cx);
+                this.activate_other_tab(window, cx);
             }))
             .on_action(
                 cx.listener(|this, _: &pane::ActivatePreviousItem, window, cx| {
-                    this.activate_previous_tab(window, cx);
+                    this.activate_other_tab(window, cx);
                 }),
             )
             .on_action(cx.listener(|this, _: &ActivateBranchesTab, window, cx| {
-                this.tab = GitPickerTab::Branches;
-                this.ensure_active_picker(window, cx);
-                this.focus_active_picker(window, cx);
-                cx.notify();
+                this.select_tab(GitPickerTab::Branches, window, cx);
             }))
             .on_action(cx.listener(|this, _: &ActivateStashTab, window, cx| {
-                this.tab = GitPickerTab::Stashes;
-                this.ensure_active_picker(window, cx);
-                this.focus_active_picker(window, cx);
-                cx.notify();
+                this.select_tab(GitPickerTab::Stashes, window, cx);
             }))
             .on_modifiers_changed(cx.listener(Self::handle_modifiers_changed))
             .when(self.tab == GitPickerTab::Branches, |el| {

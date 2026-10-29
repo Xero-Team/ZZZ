@@ -372,7 +372,13 @@ pub mod feedback {
 pub mod theme {
     use gpui::actions;
 
-    actions!(theme, [ToggleMode]);
+    actions!(
+        theme,
+        [
+            /// Toggles the theme between the light and dark mode.
+            ToggleMode
+        ]
+    );
 }
 
 pub mod theme_selector {
@@ -481,6 +487,7 @@ pub mod settings_profile_selector {
     use schemars::JsonSchema;
     use serde::Deserialize;
 
+    /// Opens the settings profile selector.
     #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
     #[action(namespace = settings_profile_selector)]
     pub struct Toggle;
@@ -593,7 +600,7 @@ pub struct OpenRecent {
     pub create_new_window: Option<bool>,
 }
 
-/// Creates a project from a selected template.
+/// Opens the remote projects interface.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
 #[action(namespace = projects)]
 #[serde(deny_unknown_fields)]
@@ -691,7 +698,8 @@ pub mod outline {
             ToggleOutline
         ]
     );
-    /// A pointer to outline::toggle function, exposed here to sewer the breadcrumbs <-> outline dependency.
+    /// A pointer to the outline toggle function, exposed here to avoid a
+    /// breadcrumbs <-> outline dependency cycle.
     pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
 }
 
@@ -740,6 +748,7 @@ pub mod vim {
     );
 }
 
+/// The WSL distribution and user a window is opened as.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WslConnectionOptions {
     pub distro_name: String,

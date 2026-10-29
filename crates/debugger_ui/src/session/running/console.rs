@@ -209,12 +209,7 @@ impl Console {
                                 ));
                             }
 
-                            for (range, _) in &mut spans {
-                                let start_offset = len + range.start;
-                                *range = start_offset..len + range.end;
-                            }
-
-                            for (range, _) in &mut background_spans {
+                            for (range, _) in spans.iter_mut().chain(background_spans.iter_mut()) {
                                 let start_offset = len + range.start;
                                 *range = start_offset..len + range.end;
                             }
@@ -279,12 +274,9 @@ impl Console {
         })
     }
 
-    pub fn watch_expression(
-        &mut self,
-        _: &WatchExpression,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    /// Reads the expression typed into the query bar, clears the bar and
+    /// records the expression in the navigation history.
+    fn take_query(&mut self, window: &mut Window, cx: &mut Context<Self>) -> String {
         let expression = self.query_bar.update(cx, |editor, cx| {
             let expression = editor.text(cx);
             cx.defer_in(window, |editor, window, cx| {
@@ -295,23 +287,46 @@ impl Console {
         });
         self.history.add(&mut self.cursor, expression.clone());
         self.cursor.reset();
+
+        expression
+    }
+
+    fn evaluate_expression(
+        &mut self,
+        expression: String,
+        stack_frame_id: Option<dap::StackFrameId>,
+        cx: &mut Context<Self>,
+    ) {
         self.session.update(cx, |session, cx| {
             session
                 .evaluate(
-                    expression.clone(),
+                    expression,
                     Some(dap::EvaluateArgumentsContext::Repl),
-                    self.stack_frame_list.read(cx).opened_stack_frame_id(),
+                    stack_frame_id,
                     None,
                     cx,
                 )
                 .detach();
+        });
+    }
 
-            if let Some(stack_frame_id) = self.stack_frame_list.read(cx).opened_stack_frame_id() {
+    pub fn watch_expression(
+        &mut self,
+        _: &WatchExpression,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let expression = self.take_query(window, cx);
+        let stack_frame_id = self.stack_frame_list.read(cx).opened_stack_frame_id();
+        self.evaluate_expression(expression.clone(), stack_frame_id, cx);
+
+        if let Some(stack_frame_id) = stack_frame_id {
+            self.session.update(cx, |session, cx| {
                 session
                     .add_watcher(expression.into(), stack_frame_id, cx)
                     .detach_and_log_err(cx);
-            }
-        });
+            });
+        }
     }
 
     fn previous_query(&mut self, _: &SelectPrevious, window: &mut Window, cx: &mut Context<Self>) {
@@ -337,28 +352,9 @@ impl Console {
     }
 
     fn evaluate(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let expression = self.query_bar.update(cx, |editor, cx| {
-            let expression = editor.text(cx);
-            cx.defer_in(window, |editor, window, cx| {
-                editor.clear(window, cx);
-            });
-
-            expression
-        });
-
-        self.history.add(&mut self.cursor, expression.clone());
-        self.cursor.reset();
-        self.session.update(cx, |session, cx| {
-            session
-                .evaluate(
-                    expression,
-                    Some(dap::EvaluateArgumentsContext::Repl),
-                    self.stack_frame_list.read(cx).opened_stack_frame_id(),
-                    None,
-                    cx,
-                )
-                .detach();
-        });
+        let expression = self.take_query(window, cx);
+        let stack_frame_id = self.stack_frame_list.read(cx).opened_stack_frame_id();
+        self.evaluate_expression(expression, stack_frame_id, cx);
     }
 
     fn render_submit_menu(
@@ -462,18 +458,20 @@ impl Console {
                 .ok()
                 .flatten()
             else {
-                _ = this.update(cx, |this, _| {
+                this.update(cx, |this, _| {
                     this.update_output_task.take();
-                });
+                })
+                .log_err();
                 return;
             };
             let output_was_added = task.await.log_err().is_some();
-            _ = this.update(cx, |this, _| {
+            this.update(cx, |this, _| {
                 if output_was_added {
                     this.last_token = last_processed_token;
                 }
                 this.update_output_task.take();
-            });
+            })
+            .log_err();
         }));
     }
 }
@@ -583,8 +581,7 @@ impl CompletionProvider for ConsoleQueryBarCompletionProvider {
         trigger_in_words: bool,
         cx: &mut Context<Editor>,
     ) -> bool {
-        let mut chars = text.chars();
-        let Some(char) = chars.next() else {
+        let Some(char) = text.chars().next() else {
             return false;
         };
 

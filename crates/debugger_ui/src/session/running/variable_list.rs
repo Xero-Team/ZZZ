@@ -61,16 +61,10 @@ pub(crate) struct EntryPath {
 }
 
 impl EntryPath {
-    fn for_watcher(expression: impl Into<SharedString>) -> Self {
+    /// A root-level entry, either a scope or a watched expression.
+    fn root(name: impl Into<SharedString>) -> Self {
         Self {
-            leaf_name: Some(expression.into()),
-            indices: Arc::new([]),
-        }
-    }
-
-    fn for_scope(scope_name: impl Into<SharedString>) -> Self {
-        Self {
-            leaf_name: Some(scope_name.into()),
+            leaf_name: Some(name.into()),
             indices: Arc::new([]),
         }
     }
@@ -155,19 +149,14 @@ impl ListEntry {
     }
 
     fn item_id(&self) -> ElementId {
-        let mut id = match &self.entry {
-            DapEntry::Watcher(watcher) => format!("watcher-{}", watcher.expression),
-            DapEntry::Variable(dap) => format!("variable-{}", dap.name),
-            DapEntry::Scope(dap) => format!("scope-{}", dap.name),
-        };
-        for name in self.path.indices.iter() {
-            id.push('-');
-            id.push_str(name);
-        }
-        SharedString::from(id).into()
+        SharedString::from(self.id_prefix()).into()
     }
 
     fn item_value_id(&self) -> ElementId {
+        SharedString::from(format!("{}-value", self.id_prefix())).into()
+    }
+
+    fn id_prefix(&self) -> String {
         let mut id = match &self.entry {
             DapEntry::Watcher(watcher) => format!("watcher-{}", watcher.expression),
             DapEntry::Variable(dap) => format!("variable-{}", dap.name),
@@ -177,8 +166,7 @@ impl ListEntry {
             id.push('-');
             id.push_str(name);
         }
-        id.push_str("-value");
-        SharedString::from(id).into()
+        id
     }
 }
 
@@ -311,7 +299,7 @@ impl VariableList {
                 (
                     scope.variables_reference,
                     scope.variables_reference,
-                    EntryPath::for_scope(&scope.name),
+                    EntryPath::root(&scope.name),
                     DapEntry::Scope(scope),
                 )
             })
@@ -326,7 +314,7 @@ impl VariableList {
                     (
                         watcher.variables_reference,
                         watcher.variables_reference,
-                        EntryPath::for_watcher(watcher.expression.clone()),
+                        EntryPath::root(watcher.expression.clone()),
                         DapEntry::Watcher(watcher),
                     )
                 })
@@ -455,20 +443,51 @@ impl VariableList {
     ) -> Vec<AnyElement> {
         ix.into_iter()
             .filter_map(|ix| {
-                let (entry, state) = self
-                    .entries
-                    .get(ix)
-                    .and_then(|entry| Some(entry).zip(self.entry_states.get(&entry.path)))?;
+                let entry = self.entries.get(ix)?;
+                let state = *self.entry_states.get(&entry.path)?;
 
                 match &entry.entry {
-                    DapEntry::Watcher { .. } => {
-                        Some(self.render_watcher(entry, *state, window, cx))
-                    }
-                    DapEntry::Variable(_) => Some(self.render_variable(entry, *state, window, cx)),
-                    DapEntry::Scope(_) => Some(self.render_scope(entry, *state, cx)),
+                    DapEntry::Watcher { .. } => Some(self.render_watcher(entry, state, window, cx)),
+                    DapEntry::Variable(_) => Some(self.render_variable(entry, state, window, cx)),
+                    DapEntry::Scope(_) => Some(self.render_scope(entry, state, cx)),
                 }
             })
             .collect()
+    }
+
+    /// The entry the user last selected, if it is still present in the list.
+    fn selected_entry(&self) -> Option<&ListEntry> {
+        let selection = self.selection.as_ref()?;
+        self.entries.iter().find(|entry| &entry.path == selection)
+    }
+
+    /// Whether the given entry is the current selection.
+    fn is_entry_selected(&self, path: &EntryPath) -> bool {
+        self.selection
+            .as_ref()
+            .is_some_and(|selection| selection == path)
+    }
+
+    /// Background and border colors of a list row; the border highlights the
+    /// selection while the list holds focus.
+    fn entry_row_colors(
+        &self,
+        is_selected: bool,
+        selection_has_focus: bool,
+        cx: &App,
+    ) -> (Hsla, Hsla) {
+        let colors = get_entry_color(cx);
+        let background = if is_selected {
+            colors.default
+        } else {
+            colors.hover
+        };
+        let border = if is_selected && selection_has_focus {
+            colors.marked_active
+        } else {
+            colors.default
+        };
+        (background, border)
     }
 
     pub(crate) fn toggle_entry(&mut self, var_path: &EntryPath, cx: &mut Context<Self>) {
@@ -499,50 +518,36 @@ impl VariableList {
 
     fn select_prev(&mut self, _: &SelectPrevious, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel(&Default::default(), window, cx);
-        if let Some(selection) = &self.selection {
-            let index = self.entries.iter().enumerate().find_map(|(ix, var)| {
-                if &var.path == selection && ix > 0 {
-                    Some(ix.saturating_sub(1))
-                } else {
-                    None
-                }
-            });
-
-            if let Some(new_selection) =
-                index.and_then(|ix| self.entries.get(ix).map(|var| var.path.clone()))
-            {
+        match self.adjacent_selection(|ix| ix.checked_sub(1)) {
+            Some(new_selection) => {
                 self.selection = Some(new_selection);
                 self.build_entries(cx);
-            } else {
-                self.select_last(&SelectLast, window, cx);
             }
-        } else {
-            self.select_last(&SelectLast, window, cx);
+            None => self.select_last(&SelectLast, window, cx),
         }
     }
 
     fn select_next(&mut self, _: &SelectNext, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel(&Default::default(), window, cx);
-        if let Some(selection) = &self.selection {
-            let index = self.entries.iter().enumerate().find_map(|(ix, var)| {
-                if &var.path == selection {
-                    Some(ix.saturating_add(1))
-                } else {
-                    None
-                }
-            });
-
-            if let Some(new_selection) =
-                index.and_then(|ix| self.entries.get(ix).map(|var| var.path.clone()))
-            {
+        match self.adjacent_selection(|ix| ix.checked_add(1)) {
+            Some(new_selection) => {
                 self.selection = Some(new_selection);
                 self.build_entries(cx);
-            } else {
-                self.select_first(&SelectFirst, window, cx);
             }
-        } else {
-            self.select_first(&SelectFirst, window, cx);
+            None => self.select_first(&SelectFirst, window, cx),
         }
+    }
+
+    /// Path of the entry `offset` positions away from the current selection, if
+    /// there is one.
+    fn adjacent_selection(&self, offset: impl FnOnce(usize) -> Option<usize>) -> Option<EntryPath> {
+        let selection = self.selection.as_ref()?;
+        let ix = self
+            .entries
+            .iter()
+            .position(|entry| &entry.path == selection)?;
+        let ix = offset(ix)?;
+        self.entries.get(ix).map(|entry| entry.path.clone())
     }
 
     fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
@@ -628,9 +633,8 @@ impl VariableList {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        _ = maybe!({
-            let selection = self.selection.as_ref()?;
-            let entry = self.entries.iter().find(|entry| &entry.path == selection)?;
+        maybe!({
+            let entry = self.selected_entry()?;
             let var = entry.entry.as_variable()?;
             let memory_reference = var.memory_reference.as_deref()?;
 
@@ -655,13 +659,15 @@ impl VariableList {
             let weak_panel = self.weak_running.clone();
 
             window.defer(cx, move |window, cx| {
-                _ = weak_panel.update(cx, |this, cx| {
-                    this.activate_item(
-                        crate::persistence::DebuggerPaneItem::MemoryView,
-                        window,
-                        cx,
-                    );
-                });
+                weak_panel
+                    .update(cx, |this, cx| {
+                        this.activate_item(
+                            crate::persistence::DebuggerPaneItem::MemoryView,
+                            window,
+                            cx,
+                        );
+                    })
+                    .log_err();
             });
             Some(())
         });
@@ -814,7 +820,7 @@ impl VariableList {
                     .context(focus_handle.clone())
                 });
 
-                _ = this.update(cx, |this, cx| {
+                this.update(cx, |this, cx| {
                     cx.focus_view(&context_menu, window);
                     let subscription = cx.subscribe_in(
                         &context_menu,
@@ -831,7 +837,8 @@ impl VariableList {
                     );
 
                     this.open_context_menu = Some((context_menu, position, subscription));
-                });
+                })
+                .log_err();
             })
         })
         .detach();
@@ -843,11 +850,7 @@ impl VariableList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(entry) = self
-            .selection
-            .as_ref()
-            .and_then(|selection| self.entries.iter().find(|entry| &entry.path == selection))
-        else {
+        let Some(entry) = self.selected_entry() else {
             return;
         };
 
@@ -871,42 +874,40 @@ impl VariableList {
         let session = self.session.downgrade();
         let requested_access_type = data_info.access_type;
         cx.spawn(async move |_, cx| {
-            let Some((data_id, access_types)) = data_breakpoint
-                .await
-                .and_then(|info| Some((info.data_id?, info.access_types)))
-            else {
+            let Some(info) = data_breakpoint.await else {
+                return;
+            };
+            let Some(data_id) = info.data_id else {
                 return;
             };
 
-            // Because user's can manually add this action to the keymap
-            // we check if access type is supported
-            let access_type = match access_types {
-                None => None,
-                Some(access_types) => {
-                    if let Some(requested_access_type) = requested_access_type {
-                        if !access_types.contains(&requested_access_type) {
-                            return;
-                        }
-                        Some(requested_access_type)
-                    } else {
-                        None
+            // Because users can manually add this action to the keymap, we
+            // check that the requested access type is supported.
+            let access_type = match (info.access_types, requested_access_type) {
+                (Some(access_types), Some(requested_access_type)) => {
+                    if !access_types.contains(&requested_access_type) {
+                        return;
                     }
+                    Some(requested_access_type)
                 }
+                _ => None,
             };
-            _ = session.update(cx, |session, cx| {
-                session.create_data_breakpoint(
-                    context,
-                    data_id.clone(),
-                    dap::DataBreakpoint {
-                        data_id,
-                        access_type,
-                        condition: None,
-                        hit_condition: None,
-                    },
-                    cx,
-                );
-                cx.notify();
-            });
+            session
+                .update(cx, |session, cx| {
+                    session.create_data_breakpoint(
+                        context,
+                        data_id.clone(),
+                        dap::DataBreakpoint {
+                            data_id,
+                            access_type,
+                            condition: None,
+                            hit_condition: None,
+                        },
+                        cx,
+                    );
+                    cx.notify();
+                })
+                .log_err();
         })
         .detach();
     }
@@ -917,11 +918,7 @@ impl VariableList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(selection) = self.selection.as_ref() else {
-            return;
-        };
-
-        let Some(entry) = self.entries.iter().find(|entry| &entry.path == selection) else {
+        let Some(entry) = self.selected_entry() else {
             return;
         };
 
@@ -940,11 +937,7 @@ impl VariableList {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(selection) = self.selection.as_ref() else {
-            return;
-        };
-
-        let Some(entry) = self.entries.iter().find(|entry| &entry.path == selection) else {
+        let Some(entry) = self.selected_entry() else {
             return;
         };
 
@@ -975,11 +968,7 @@ impl VariableList {
     }
 
     fn edit_variable(&mut self, _: &EditVariable, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(selection) = self.selection.as_ref() else {
-            return;
-        };
-
-        let Some(entry) = self.entries.iter().find(|entry| &entry.path == selection) else {
+        let Some(entry) = self.selected_entry() else {
             return;
         };
 
@@ -996,11 +985,7 @@ impl VariableList {
     }
 
     fn add_watcher(&mut self, _: &AddWatch, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(selection) = self.selection.as_ref() else {
-            return;
-        };
-
-        let Some(entry) = self.entries.iter().find(|entry| &entry.path == selection) else {
+        let Some(entry) = self.selected_entry() else {
             return;
         };
 
@@ -1032,11 +1017,7 @@ impl VariableList {
     }
 
     fn remove_watcher(&mut self, _: &RemoveWatch, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(selection) = self.selection.as_ref() else {
-            return;
-        };
-
-        let Some(entry) = self.entries.iter().find(|entry| &entry.path == selection) else {
+        let Some(entry) = self.selected_entry() else {
             return;
         };
 
@@ -1169,14 +1150,14 @@ impl VariableList {
             match presentation_hint
                 .as_ref()
                 .and_then(|hint| hint.kind.as_ref())
-                .unwrap_or(&VariablePresentationHintKind::Unknown)
             {
-                VariablePresentationHintKind::Class
-                | VariablePresentationHintKind::BaseClass
-                | VariablePresentationHintKind::InnerClass
-                | VariablePresentationHintKind::MostDerivedClass => syntax_color_for("type"),
-                VariablePresentationHintKind::Data => syntax_color_for("variable"),
-                VariablePresentationHintKind::Unknown | _ => syntax_color_for("variable"),
+                Some(
+                    VariablePresentationHintKind::Class
+                    | VariablePresentationHintKind::BaseClass
+                    | VariablePresentationHintKind::InnerClass
+                    | VariablePresentationHintKind::MostDerivedClass,
+                ) => syntax_color_for("type"),
+                _ => syntax_color_for("variable"),
             }
         };
         let value = self
@@ -1361,23 +1342,10 @@ impl VariableList {
         let variable_color =
             self.variable_color(watcher.presentation_hint.as_ref(), &watcher.value, None, cx);
 
-        let is_selected = self
-            .selection
-            .as_ref()
-            .is_some_and(|selection| selection == &entry.path);
+        let is_selected = self.is_entry_selected(&entry.path);
         let var_ref = watcher.variables_reference;
 
-        let colors = get_entry_color(cx);
-        let bg_hover_color = if is_selected {
-            colors.default
-        } else {
-            colors.hover
-        };
-        let border_color = if is_selected {
-            colors.marked_active
-        } else {
-            colors.default
-        };
+        let (bg_hover_color, border_color) = self.entry_row_colors(is_selected, true, cx);
         let path = entry.path.clone();
 
         let weak = cx.weak_entity();
@@ -1500,22 +1468,9 @@ impl VariableList {
         };
 
         let var_ref = scope.variables_reference;
-        let is_selected = self
-            .selection
-            .as_ref()
-            .is_some_and(|selection| selection == &entry.path);
+        let is_selected = self.is_entry_selected(&entry.path);
 
-        let colors = get_entry_color(cx);
-        let bg_hover_color = if is_selected {
-            colors.default
-        } else {
-            colors.hover
-        };
-        let border_color = if is_selected {
-            colors.marked_active
-        } else {
-            colors.default
-        };
+        let (bg_hover_color, border_color) = self.entry_row_colors(is_selected, true, cx);
         let path = entry.path.clone();
 
         div()
@@ -1581,22 +1536,11 @@ impl VariableList {
         );
 
         let var_ref = dap.variables_reference;
-        let colors = get_entry_color(cx);
-        let is_selected = self
-            .selection
-            .as_ref()
-            .is_some_and(|selected_path| *selected_path == variable.path);
+        let is_selected = self.is_entry_selected(&variable.path);
 
-        let bg_hover_color = if is_selected {
-            colors.default
-        } else {
-            colors.hover
-        };
-        let border_color = if is_selected && self.focus_handle.contains_focused(window, cx) {
-            colors.marked_active
-        } else {
-            colors.default
-        };
+        let selection_has_focus = self.focus_handle.contains_focused(window, cx);
+        let (bg_hover_color, border_color) =
+            self.entry_row_colors(is_selected, selection_has_focus, cx);
         let path = variable.path.clone();
         div()
             .id(variable.item_id())
@@ -1743,7 +1687,7 @@ struct EntryColors {
     marked_active: Hsla,
 }
 
-fn get_entry_color(cx: &Context<VariableList>) -> EntryColors {
+fn get_entry_color(cx: &App) -> EntryColors {
     let colors = cx.theme().colors();
 
     EntryColors {

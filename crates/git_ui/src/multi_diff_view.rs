@@ -89,38 +89,18 @@ fn register_entry(
         .map(|hunk| hunk.buffer_range.to_point(&snapshot))
         .collect();
 
-    let display_rel = common_root
+    let display_rel: Arc<RelPath> = common_root
         .as_ref()
         .and_then(|root| entry.new_path.strip_prefix(root).ok())
-        .map_or_else(
-            || {
-                entry
-                    .new_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .and_then(|s| RelPath::new(Path::new(s), PathStyle::Posix).ok())
-                    .map_or_else(
-                        || {
-                            RelPath::new(Path::new("untitled"), PathStyle::Posix)
-                                .expect("value should be present")
-                                .into_owned()
-                                .into()
-                        },
-                        |r| r.into_owned().into(),
-                    )
-            },
-            |rel| {
-                RelPath::new(rel, PathStyle::local()).map_or_else(
-                    |_| {
-                        RelPath::new(Path::new("untitled"), PathStyle::Posix)
-                            .expect("value should be present")
-                            .into_owned()
-                            .into()
-                    },
-                    |r| r.into_owned().into(),
-                )
-            },
-        );
+        .and_then(|relative| RelPath::new(relative, PathStyle::local()).ok())
+        .or_else(|| {
+            entry
+                .new_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| RelPath::new(Path::new(name), PathStyle::Posix).ok())
+        })
+        .map_or_else(untitled_rel_path, |relative| relative.into_owned().into());
 
     let path_key = PathKey::with_sort_prefix(entry.index as u64, display_rel);
 
@@ -134,6 +114,14 @@ fn register_entry(
         );
         multibuffer.add_diff(entry.diff.clone(), cx);
     });
+}
+
+/// Display path used for files whose path relative to the diff's common root
+/// cannot be determined.
+fn untitled_rel_path() -> Arc<RelPath> {
+    RelPath::unix("untitled")
+        .expect("path should be a valid relative path")
+        .into()
 }
 
 fn common_prefix(paths: &[PathBuf]) -> Option<PathBuf> {
@@ -173,6 +161,8 @@ async fn build_buffer_diff(
         })
         .await;
 
+    // `set_snapshot` also reports the changed range so callers can restore a
+    // selection; a freshly loaded diff view has none.
     diff.update(cx, |diff, cx| {
         diff.set_snapshot(update, &new_buffer_snapshot.text, cx)
     })

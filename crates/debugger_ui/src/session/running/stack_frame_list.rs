@@ -102,7 +102,7 @@ pub struct StackFrameList {
     _refresh_task: Task<()>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StackFrameEntry {
     Normal(dap::StackFrame),
     /// Used to indicate that the frame is artificial and is a visual label or separator
@@ -710,8 +710,10 @@ impl StackFrameList {
             return;
         }
         self.entries.splice(ix..=ix, entries);
-        let (Ok(filtered_indices_start) | Err(filtered_indices_start)) =
-            self.filter_entries_indices.binary_search(&ix);
+        let filtered_indices_start = self
+            .filter_entries_indices
+            .binary_search(&ix)
+            .unwrap_or_else(|insertion_index| insertion_index);
 
         for idx in &mut self.filter_entries_indices[filtered_indices_start..] {
             *idx += entries_len - 1;
@@ -772,16 +774,20 @@ impl StackFrameList {
     }
 
     fn render_entry(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
-        let ix = match self.list_filter {
-            StackFrameFilter::All => ix,
-            StackFrameFilter::OnlyUserFrames => self.filter_entries_indices[ix],
+        let Some(entry_ix) = self.entry_index_for_visible_position(ix) else {
+            return div().into_any();
+        };
+        let Some(entry) = self.entries.get(entry_ix) else {
+            return div().into_any();
         };
 
-        match &self.entries[ix] {
+        match entry {
             StackFrameEntry::Label(stack_frame) => self.render_label_entry(stack_frame, cx),
-            StackFrameEntry::Normal(stack_frame) => self.render_normal_entry(ix, stack_frame, cx),
+            StackFrameEntry::Normal(stack_frame) => {
+                self.render_normal_entry(entry_ix, stack_frame, cx)
+            }
             StackFrameEntry::Collapsed(stack_frames) => {
-                self.render_collapsed_entry(ix, stack_frames, cx)
+                self.render_collapsed_entry(entry_ix, stack_frames, cx)
             }
         }
     }
@@ -892,15 +898,13 @@ impl StackFrameList {
         let Some(ix) = self.selected_ix else {
             return;
         };
-        let Some(entry) = self.entries.get_mut(ix) else {
+        let Some(entry) = self.entries.get(ix).cloned() else {
             return;
         };
         match entry {
-            StackFrameEntry::Normal(stack_frame) => {
-                let stack_frame = stack_frame.clone();
-                self.go_to_stack_frame_inner(stack_frame, window, cx)
-                    .detach_and_log_err(cx)
-            }
+            StackFrameEntry::Normal(stack_frame) => self
+                .go_to_stack_frame_inner(stack_frame, window, cx)
+                .detach_and_log_err(cx),
             StackFrameEntry::Label(_) => {
                 debug_panic!("You should not be able to select a label stack frame")
             }

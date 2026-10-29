@@ -202,19 +202,22 @@ impl LspLogView {
                                 ],
                                 cx,
                             );
-                            if text.len() > 1024 {
-                                let b = editor
-                                    .buffer()
-                                    .read(cx)
-                                    .as_singleton()
-                                    .expect("as_singleton should be present")
-                                    .read(cx);
-                                let fold_offset =
-                                    b.as_rope().ceil_char_boundary(last_offset.0 + 1024);
+                            // Folding the tail of a very long entry keeps the log
+                            // buffer's rope cheap to re-render. Skipping the fold
+                            // is harmless, so a non-singleton buffer just logs
+                            // unfolded instead of panicking.
+                            let log_buffer = editor.buffer().read(cx).as_singleton();
+                            if text.len() > 1024
+                                && let Some(log_buffer) = log_buffer
+                            {
+                                let log_buffer = log_buffer.read(cx);
+                                let fold_offset = log_buffer
+                                    .as_rope()
+                                    .ceil_char_boundary(last_offset.0 + 1024);
                                 editor.fold_ranges(
                                     vec![
                                         MultiBufferOffset(fold_offset)
-                                            ..MultiBufferOffset(b.as_rope().len()),
+                                            ..MultiBufferOffset(log_buffer.as_rope().len()),
                                     ],
                                     false,
                                     window,
@@ -521,13 +524,12 @@ impl LspLogView {
             self.active_entry_kind = LogKind::Rpc;
             let (editor, editor_subscriptions) = Self::editor_for_logs(rpc_log, window, cx);
             let language = self.project.read(cx).languages().language_for_name("JSON");
-            editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("log buffer should be a singleton")
-                .update(cx, |_, cx| {
+            // `editor_for_logs` builds a single-buffer editor, so this is a
+            // singleton in practice; a non-singleton just means the log renders
+            // without JSON syntax highlighting instead of panicking.
+            let log_buffer = editor.read(cx).buffer().read(cx).as_singleton();
+            if let Some(log_buffer) = log_buffer {
+                log_buffer.update(cx, |_, cx| {
                     cx.spawn({
                         let buffer = cx.entity();
                         async move |_, cx| {
@@ -539,6 +541,7 @@ impl LspLogView {
                     })
                     .detach();
                 });
+            }
 
             self.editor = editor;
             self.editor_subscriptions = editor_subscriptions;

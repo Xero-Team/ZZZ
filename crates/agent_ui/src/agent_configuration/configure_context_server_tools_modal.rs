@@ -106,17 +106,14 @@ impl ConfigureContextServerToolsModal {
                                                 .size(IconSize::Small)
                                                 .color(Color::Muted),
                                         )
-                                        .on_click(cx.listener({
-                                            move |this, _event, _window, _cx| {
-                                                let current = this
-                                                    .expanded_tools
-                                                    .get(tool_name.as_ref())
-                                                    .copied()
-                                                    .unwrap_or(false);
-                                                this.expanded_tools
-                                                    .insert(tool_name.clone(), !current);
-                                                _cx.notify();
-                                            }
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            let current = this
+                                                .expanded_tools
+                                                .get(tool_name.as_ref())
+                                                .copied()
+                                                .unwrap_or(false);
+                                            this.expanded_tools.insert(tool_name.clone(), !current);
+                                            cx.notify();
                                         })),
                                 )
                                 .when(is_expanded, |this| {

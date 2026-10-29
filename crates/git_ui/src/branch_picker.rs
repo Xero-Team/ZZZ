@@ -18,8 +18,8 @@ use settings::Settings;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use ui::{
-    Banner, ContextMenu, Divider, HighlightedLabel, Indicator, KeyBinding, ListItem,
-    ListItemSpacing, ListSubHeader, PopoverMenu, PopoverMenuHandle, Severity, Tooltip, prelude::*,
+    Banner, ContextMenu, Divider, HighlightedLabel, Indicator, ListItem, ListItemSpacing,
+    ListSubHeader, PopoverMenu, PopoverMenuHandle, Severity, Tooltip, prelude::*,
 };
 use ui_input::ErasedEditor;
 use util::ResultExt;
@@ -916,6 +916,15 @@ impl Render for DeleteBranchTooltip {
     }
 }
 
+/// The frame shared by every footer variant of the branch picker.
+fn footer_container(cx: &App) -> Div {
+    h_flex()
+        .w_full()
+        .p_1p5()
+        .border_t_1()
+        .border_color(cx.theme().colors().border_variant)
+}
+
 fn branch_matches_ref(branch: &Branch, branch_ref: &SharedString) -> bool {
     branch.ref_name.as_ref() == branch_ref.as_ref() || branch.name() == branch_ref.as_ref()
 }
@@ -1057,6 +1066,43 @@ impl BranchListDelegate {
 
     fn is_force_delete_hovering_index(&self, index: usize) -> bool {
         self.modifiers.alt && self.hovered_delete_index == Some(index)
+    }
+
+    /// The "Create New From: {branch}" footer button, when a default branch is
+    /// known.
+    fn create_from_default_button(&self, cx: &mut Context<Picker<Self>>) -> Option<Button> {
+        let default_branch = self.default_branch.as_ref()?;
+        let button_label = tr(
+            cx,
+            "git_ui.branch_picker.create_new_from",
+            "Create New From: {}",
+        )
+        .replacen("{}", default_branch, 1);
+
+        Some(
+            Button::new("branch-from-default", button_label)
+                .key_binding(crate::picker_footer_key_binding(
+                    &menu::SecondaryConfirm,
+                    &self.focus_handle,
+                    cx,
+                ))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.delegate.confirm(true, window, cx);
+                })),
+        )
+    }
+
+    /// The primary "Create" footer button, which confirms the typed name.
+    fn create_button(&self, id: &'static str, cx: &mut Context<Picker<Self>>) -> Button {
+        Button::new(id, tr(cx, "git_ui.worktree_picker.create", "Create"))
+            .key_binding(crate::picker_footer_key_binding(
+                &menu::Confirm,
+                &self.focus_handle,
+                cx,
+            ))
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.delegate.confirm(false, window, cx);
+            }))
     }
 
     fn create_branch(
@@ -1550,7 +1596,7 @@ impl PickerDelegate for BranchListDelegate {
                             .unwrap_or(0);
                     } else {
                         delegate.selected_index =
-                            core::cmp::min(delegate.selected_index, delegate.matches.len() - 1);
+                            delegate.selected_index.min(delegate.matches.len() - 1);
                     }
                     delegate.last_query = query;
                 })
@@ -1652,7 +1698,7 @@ impl PickerDelegate for BranchListDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let entry = &self.matches.get(ix)?;
+        let entry = self.matches.get(ix)?;
 
         let (commit_time, absolute_time, author_name, subject) = entry
             .as_branch()
@@ -2034,45 +2080,23 @@ impl PickerDelegate for BranchListDelegate {
         {
             return None;
         }
-        let focus_handle = self.focus_handle.clone();
-
-        let footer_container = || {
-            h_flex()
-                .w_full()
-                .p_1p5()
-                .border_t_1()
-                .border_color(cx.theme().colors().border_variant)
-        };
 
         match self.state {
             PickerState::List => {
                 let selected_entry = self.matches.get(self.selected_index);
 
-                let branch_from_default_button = self
-                    .default_branch
-                    .as_ref()
-                    .filter(|_| matches!(selected_entry, Some(Entry::NewBranch { .. })))
-                    .map(|default_branch| {
-                        let button_label = tr(
-                            cx,
-                            "git_ui.branch_picker.create_new_from",
-                            "Create New From: {}",
-                        )
-                        .replacen("{}", default_branch, 1);
-
-                        Button::new("branch-from-default", button_label)
-                            .key_binding(
-                                KeyBinding::for_action_in(
-                                    &menu::SecondaryConfirm,
-                                    &focus_handle,
-                                    cx,
-                                )
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.delegate.confirm(true, window, cx);
-                            }))
-                    });
+                // A branch name that does not exist yet: offer to create it.
+                if matches!(selected_entry, Some(Entry::NewBranch { .. })) {
+                    return Some(
+                        footer_container(cx)
+                            .justify_end()
+                            .when_some(self.create_from_default_button(cx), |this, button| {
+                                this.child(button)
+                            })
+                            .child(self.create_button("create", cx))
+                            .into_any_element(),
+                    );
+                }
 
                 let selected_branch = selected_entry.and_then(|entry| entry.as_branch());
                 let delete_label = if selected_branch.is_some_and(|branch| branch.is_remote()) {
@@ -2092,14 +2116,11 @@ impl PickerDelegate for BranchListDelegate {
                         |this| {
                             this.child(
                                 Button::new("delete-branch", delete_label)
-                                    .key_binding(
-                                        KeyBinding::for_action_in(
-                                            &branch_picker::DeleteBranch,
-                                            &focus_handle,
-                                            cx,
-                                        )
-                                        .map(|kb| kb.size(rems_from_px(12.))),
-                                    )
+                                    .key_binding(crate::picker_footer_key_binding(
+                                        &branch_picker::DeleteBranch,
+                                        &self.focus_handle,
+                                        cx,
+                                    ))
                                     .on_click(|_, window, cx| {
                                         window.dispatch_action(
                                             branch_picker::DeleteBranch.boxed_clone(),
@@ -2114,100 +2135,46 @@ impl PickerDelegate for BranchListDelegate {
                             "switch_branch",
                             tr(cx, "git_ui.branch_picker.switch", "Switch"),
                         )
-                        .key_binding(
-                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
+                        .key_binding(crate::picker_footer_key_binding(
+                            &menu::Confirm,
+                            &self.focus_handle,
+                            cx,
+                        ))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.delegate.confirm(false, window, cx);
                         })),
                     );
 
                 Some(
-                    footer_container()
+                    footer_container(cx)
                         .justify_end()
-                        .map(|this| match branch_from_default_button {
-                            Some(button) => this.child(button).child(
-                                Button::new(
-                                    "create",
-                                    tr(cx, "git_ui.worktree_picker.create", "Create"),
-                                )
-                                .key_binding(
-                                    KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                        .map(|kb| kb.size(rems_from_px(12.))),
-                                )
-                                .on_click(cx.listener(
-                                    |this, _, window, cx| {
-                                        this.delegate.confirm(false, window, cx);
-                                    },
-                                )),
-                            ),
-                            None => this.child(delete_and_select_btns),
-                        })
+                        .child(delete_and_select_btns)
                         .into_any_element(),
                 )
             }
-            PickerState::NewBranch => {
-                let branch_from_default_button =
-                    self.default_branch.as_ref().map(|default_branch| {
-                        let button_label = tr(
-                            cx,
-                            "git_ui.branch_picker.create_new_from",
-                            "Create New From: {}",
-                        )
-                        .replacen("{}", default_branch, 1);
-
-                        Button::new("branch-from-default", button_label)
-                            .key_binding(
-                                KeyBinding::for_action_in(
-                                    &menu::SecondaryConfirm,
-                                    &focus_handle,
-                                    cx,
-                                )
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.delegate.confirm(true, window, cx);
-                            }))
-                    });
-
-                Some(
-                    footer_container()
-                        .gap_1()
-                        .justify_end()
-                        .when_some(branch_from_default_button, |this, button| {
-                            this.child(button)
-                        })
-                        .child(
-                            Button::new(
-                                "create-new-branch",
-                                tr(cx, "git_ui.worktree_picker.create", "Create"),
-                            )
-                            .key_binding(
-                                KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                    .map(|kb| kb.size(rems_from_px(12.))),
-                            )
-                            .on_click(cx.listener(
-                                |this, _, window, cx| {
-                                    this.delegate.confirm(false, window, cx);
-                                },
-                            )),
-                        )
-                        .into_any_element(),
-                )
-            }
+            PickerState::NewBranch => Some(
+                footer_container(cx)
+                    .gap_1()
+                    .justify_end()
+                    .when_some(self.create_from_default_button(cx), |this, button| {
+                        this.child(button)
+                    })
+                    .child(self.create_button("create-new-branch", cx))
+                    .into_any_element(),
+            ),
             PickerState::CreateRemote(_) => Some(
-                footer_container()
+                footer_container(cx)
                     .justify_end()
                     .child(
                         Button::new(
                             "confirm-create-remote",
                             tr(cx, "git_ui.branch_picker.confirm", "Confirm"),
                         )
-                        .key_binding(
-                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
+                        .key_binding(crate::picker_footer_key_binding(
+                            &menu::Confirm,
+                            &self.focus_handle,
+                            cx,
+                        ))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.delegate.confirm(false, window, cx);
                         }))

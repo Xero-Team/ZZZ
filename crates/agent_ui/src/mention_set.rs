@@ -15,7 +15,7 @@ use gpui::{
     WeakEntity,
 };
 use http_client::{AsyncBody, HttpClientWithUrl};
-use i18n as app_i18n;
+use i18n::tr;
 use language::Buffer;
 use language_model::{LanguageModelImage, LanguageModelImageExt};
 use multi_buffer::MultiBufferRow;
@@ -81,7 +81,7 @@ impl MentionSet {
         cx: &mut App,
     ) -> Task<Result<HashMap<CreaseId, (MentionUri, Mention)>>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.project_not_found",
                 "Project not found",
@@ -152,16 +152,14 @@ impl MentionSet {
                 line_range,
                 ..
             } => self.confirm_mention_for_symbol(abs_path, line_range, cx),
-            MentionUri::Selection { abs_path: None, .. } => {
-                Task::ready(Err(anyhow!(app_i18n::tr(
-                    cx,
-                    "agent_ui.mention_set.untitled_buffer_selection_mentions_not_supported_for_paste",
-                    "Untitled buffer selection mentions are not supported for paste",
-                ))))
-            }
+            MentionUri::Selection { abs_path: None, .. } => Task::ready(Err(anyhow!(tr(
+                cx,
+                "agent_ui.mention_set.untitled_buffer_selection_mentions_not_supported_for_paste",
+                "Untitled buffer selection mentions are not supported for paste",
+            )))),
             MentionUri::PastedImage { .. }
             | MentionUri::TerminalSelection { .. }
-            | MentionUri::MergeConflict { .. } => Task::ready(Err(anyhow!(app_i18n::tr(
+            | MentionUri::MergeConflict { .. } => Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.unsupported_mention_uri_type_for_paste",
                 "Unsupported mention URI type for paste",
@@ -300,7 +298,7 @@ impl MentionSet {
             }
             MentionUri::Selection { .. } => {
                 debug_panic!("unexpected selection URI");
-                Task::ready(Err(anyhow!(app_i18n::tr(
+                Task::ready(Err(anyhow!(tr(
                     cx,
                     "agent_ui.mention_set.unexpected_selection_uri",
                     "Unexpected selection URI",
@@ -308,7 +306,7 @@ impl MentionSet {
             }
             MentionUri::TerminalSelection { .. } => {
                 debug_panic!("unexpected terminal URI");
-                Task::ready(Err(anyhow!(app_i18n::tr(
+                Task::ready(Err(anyhow!(tr(
                     cx,
                     "agent_ui.mention_set.unexpected_terminal_uri",
                     "Unexpected terminal URI",
@@ -319,7 +317,7 @@ impl MentionSet {
             }
             MentionUri::MergeConflict { .. } => {
                 debug_panic!("unexpected merge conflict URI");
-                Task::ready(Err(anyhow!(app_i18n::tr(
+                Task::ready(Err(anyhow!(tr(
                     cx,
                     "agent_ui.mention_set.unexpected_merge_conflict_uri",
                     "Unexpected merge conflict URI",
@@ -358,7 +356,7 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.project_not_found",
                 "Project not found",
@@ -371,7 +369,7 @@ impl MentionSet {
         else {
             return Task::ready(Err(anyhow!(format!(
                 "{} for file mention {abs_path:?}",
-                app_i18n::tr(
+                tr(
                     cx,
                     "agent_ui.mention_set.project_path_not_found",
                     "Project path not found",
@@ -380,14 +378,14 @@ impl MentionSet {
         };
         if is_raster_image_path(&abs_path) {
             if !supports_images {
-                return Task::ready(Err(anyhow!(app_i18n::tr(
+                return Task::ready(Err(anyhow!(tr(
                     cx,
                     "agent_ui.mention_set.model_does_not_support_images_yet",
                     "This model does not support images yet",
                 ))));
             }
             let task = project.update(cx, |project, cx| project.open_image(project_path, cx));
-            let failed_to_convert_image = app_i18n::tr(
+            let failed_to_convert_image = tr(
                 cx,
                 "agent_ui.mention_set.failed_to_convert_image",
                 "Failed to convert image",
@@ -411,11 +409,8 @@ impl MentionSet {
 
         let buffer = project.update(cx, |project, cx| project.open_buffer(project_path, cx));
         cx.spawn(async move |_, cx| {
-            let buffer = match buffer.await {
-                Ok(buffer) => buffer,
-                Err(_error) => {
-                    return Ok(Mention::Link);
-                }
+            let Some(buffer) = buffer.await.log_err() else {
+                return Ok(Mention::Link);
             };
             let buffer_content = outline::get_buffer_content_or_outline(
                 buffer.clone(),
@@ -453,7 +448,7 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.project_not_found",
                 "Project not found",
@@ -465,7 +460,7 @@ impl MentionSet {
         else {
             return Task::ready(Err(anyhow!(format!(
                 "{} for symbol mention {abs_path:?}",
-                app_i18n::tr(
+                tr(
                     cx,
                     "agent_ui.mention_set.project_path_not_found",
                     "Project path not found",
@@ -494,7 +489,7 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(prompt_store) = self.prompt_store.as_ref() else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.missing_prompt_store",
                 "Missing prompt store",
@@ -604,7 +599,7 @@ impl MentionSet {
         _id: acp::SessionId,
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
-        Task::ready(Err(anyhow!(app_i18n::tr(
+        Task::ready(Err(anyhow!(tr(
             cx,
             "agent_ui.mention_set.thread_mentions_no_longer_supported",
             "Thread mentions are no longer supported: the built-in ZZZ Agent has been removed.",
@@ -618,7 +613,7 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.project_not_found",
                 "Project not found",
@@ -634,7 +629,7 @@ impl MentionSet {
             },
             cx,
         );
-        let no_diagnostics_found = app_i18n::tr(
+        let no_diagnostics_found = tr(
             cx,
             "agent_ui.mention_set.no_diagnostics_found",
             "No diagnostics found.",
@@ -654,7 +649,7 @@ impl MentionSet {
         cx: &mut Context<Self>,
     ) -> Task<Result<Mention>> {
         let Some(project) = self.project.upgrade() else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.project_not_found",
                 "Project not found",
@@ -662,7 +657,7 @@ impl MentionSet {
         };
 
         let Some(repo) = project.read(cx).active_repository(cx) else {
-            return Task::ready(Err(anyhow!(app_i18n::tr(
+            return Task::ready(Err(anyhow!(tr(
                 cx,
                 "agent_ui.mention_set.no_active_repository",
                 "No active repository",
@@ -672,7 +667,7 @@ impl MentionSet {
         let diff_receiver = repo.update(cx, |repo, cx| {
             repo.diff(git::repository::DiffType::MergeBase { base_ref }, cx)
         });
-        let no_changes_found_in_branch_diff = app_i18n::tr(
+        let no_changes_found_in_branch_diff = tr(
             cx,
             "agent_ui.mention_set.no_changes_found_in_branch_diff",
             "No changes found in branch diff.",
@@ -967,7 +962,7 @@ pub(crate) async fn insert_images_as_context(
         let image = Arc::new(image);
         let failed_to_convert_image = cx
             .update(|_, cx| {
-                app_i18n::tr(
+                tr(
                     cx,
                     "agent_ui.mention_set.failed_to_convert_image",
                     "Failed to convert image",
@@ -1241,7 +1236,7 @@ fn full_mention_for_directory(
     else {
         return Task::ready(Err(anyhow!(format!(
             "{} for directory mention {abs_path:?}",
-            app_i18n::tr(
+            tr(
                 cx,
                 "agent_ui.mention_set.project_path_not_found",
                 "Project path not found",
@@ -1249,7 +1244,7 @@ fn full_mention_for_directory(
         ))));
     };
     let Some(entry) = project.read(cx).entry_for_path(&project_path, cx) else {
-        return Task::ready(Err(anyhow!(app_i18n::tr(
+        return Task::ready(Err(anyhow!(tr(
             cx,
             "agent_ui.mention_set.project_entry_not_found",
             "Project entry not found",
@@ -1258,7 +1253,7 @@ fn full_mention_for_directory(
     let directory_path = entry.path.clone();
     let worktree_id = project_path.worktree_id;
     let Some(worktree) = project.read(cx).worktree_for_id(worktree_id, cx) else {
-        return Task::ready(Err(anyhow!(app_i18n::tr(
+        return Task::ready(Err(anyhow!(tr(
             cx,
             "agent_ui.mention_set.worktree_not_found",
             "Worktree not found",

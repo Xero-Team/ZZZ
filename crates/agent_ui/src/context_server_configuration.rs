@@ -91,7 +91,7 @@ fn show_configure_mcp_modal(
                             cx,
                         )
                     })
-                    .ok()
+                    .log_err()
                 else {
                     continue;
                 };

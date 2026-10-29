@@ -1,13 +1,9 @@
 use gpui::{Action, ClickEvent, FocusHandle, prelude::*};
-use i18n as app_i18n;
 use ui::{Chip, ElevationIndex, KeyBinding, ListItem, ListItemSpacing, Tooltip, prelude::*};
 use zzz_actions::agent::ToggleModelSelector;
 
 use crate::CycleFavoriteModels;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
+use crate::tr;
 
 enum ModelIcon {
     Name(IconName),
@@ -253,10 +249,11 @@ impl RenderOnce for ModelSelectorFooter {
                 )
                 .full_width()
                 .style(ButtonStyle::Outlined)
-                .key_binding(
-                    KeyBinding::for_action_in(action.as_ref(), &focus_handle, cx)
-                        .map(|kb| kb.size(rems_from_px(12.))),
-                )
+                .key_binding(crate::footer_key_binding(
+                    action.as_ref(),
+                    &focus_handle,
+                    cx,
+                ))
                 .on_click(move |_, window, cx| {
                     window.dispatch_action(action.boxed_clone(), cx);
                 }),

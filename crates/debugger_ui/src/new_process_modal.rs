@@ -239,16 +239,19 @@ impl NewProcessModal {
                                 })
                                 .await;
 
-                            if let Ok(task) = debug_picker.update(cx, |picker, cx| {
-                                picker.delegate.tasks_loaded(
-                                    task_contexts.clone(),
-                                    languages,
-                                    lsp_tasks.clone(),
-                                    current_resolved_tasks.clone(),
-                                    add_current_language_tasks,
-                                    cx,
-                                )
-                            }) {
+                            if let Some(task) = debug_picker
+                                .update(cx, |picker, cx| {
+                                    picker.delegate.tasks_loaded(
+                                        task_contexts.clone(),
+                                        languages,
+                                        lsp_tasks.clone(),
+                                        current_resolved_tasks.clone(),
+                                        add_current_language_tasks,
+                                        cx,
+                                    )
+                                })
+                                .log_err()
+                            {
                                 task.await;
                                 debug_picker
                                     .update_in(cx, |picker, window, cx| {
@@ -596,7 +599,7 @@ impl std::fmt::Display for NewProcessMode {
             NewProcessMode::Launch => "Launch",
         };
 
-        write!(f, "{}", mode)
+        write!(f, "{mode}")
     }
 }
 
@@ -1409,10 +1412,10 @@ impl PickerDelegate for DebugDelegate {
                     delegate.prompt = query;
 
                     delegate.divider_index = delegate.last_used_candidate_index.and_then(|index| {
-                        let index = delegate
+                        delegate
                             .matches
-                            .partition_point(|matching_task| matching_task.candidate_id <= index);
-                        Some(index).and_then(|index| (index != 0).then(|| index - 1))
+                            .partition_point(|matching_task| matching_task.candidate_id <= index)
+                            .checked_sub(1)
                     });
 
                     if delegate.matches.is_empty() {
@@ -1440,10 +1443,15 @@ impl PickerDelegate for DebugDelegate {
             .task_contexts
             .as_ref()
             .and_then(|task_contexts| {
-                Some((
-                    SharedTaskContext::from(task_contexts.active_context().cloned()?),
-                    task_contexts.worktree(),
-                ))
+                task_contexts
+                    .active_context()
+                    .cloned()
+                    .map(|active_context| {
+                        (
+                            SharedTaskContext::from(active_context),
+                            task_contexts.worktree(),
+                        )
+                    })
             })
             .unwrap_or_default();
 
@@ -1534,11 +1542,14 @@ impl PickerDelegate for DebugDelegate {
             self.task_contexts
                 .as_ref()
                 .and_then(|task_contexts| {
-                    Some(DebugScenarioContext {
-                        task_context: task_contexts.active_context().cloned()?.into(),
-                        active_buffer: None,
-                        worktree_id: task_contexts.worktree(),
-                    })
+                    task_contexts
+                        .active_context()
+                        .cloned()
+                        .map(|active_context| DebugScenarioContext {
+                            task_context: active_context.into(),
+                            active_buffer: None,
+                            worktree_id: task_contexts.worktree(),
+                        })
                 })
                 .unwrap_or_default()
         });

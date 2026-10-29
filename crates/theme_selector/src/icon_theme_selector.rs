@@ -103,8 +103,9 @@ impl IconThemeSelectorDelegate {
         });
         let matches = themes
             .iter()
-            .map(|meta| StringMatch {
-                candidate_id: 0,
+            .enumerate()
+            .map(|(id, meta)| StringMatch {
+                candidate_id: id,
                 score: 0.0,
                 positions: Default::default(),
                 string: meta.name.to_string(),

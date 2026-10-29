@@ -85,13 +85,13 @@ impl StashList {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let mut _subscriptions = Vec::new();
+        let mut subscriptions = Vec::new();
         let stash_request = repository
             .clone()
             .map(|repository| repository.read_with(cx, |repo, _| repo.cached_stash()));
 
         if let Some(repo) = repository.clone() {
-            _subscriptions.push(
+            subscriptions.push(
                 cx.subscribe_in(&repo, window, |this, _, event, window, cx| {
                     if matches!(event, RepositoryEvent::StashEntriesChanged) {
                         let stash_entries = this.picker.read_with(cx, |picker, cx| {
@@ -142,7 +142,7 @@ impl StashList {
             picker,
             picker_focus_handle,
             width,
-            _subscriptions,
+            _subscriptions: subscriptions,
         }
     }
 
@@ -269,30 +269,46 @@ impl StashListDelegate {
         }
     }
 
-    fn format_message(ix: usize, message: &String) -> String {
+    fn format_message(ix: usize, message: &str) -> String {
         format!("#{}: {}", ix, message)
     }
 
-    fn format_timestamp(timestamp: i64, timezone: UtcOffset) -> String {
+    /// Formats a stash's unix timestamp in the requested format, falling back
+    /// to the current time when the timestamp is out of range.
+    fn format_timestamp(
+        timestamp: i64,
+        timezone: UtcOffset,
+        format: time_format::TimestampFormat,
+    ) -> String {
         let timestamp =
             OffsetDateTime::from_unix_timestamp(timestamp).unwrap_or(OffsetDateTime::now_utc());
         time_format::format_localized_timestamp(
             timestamp,
             OffsetDateTime::now_utc(),
             timezone,
-            time_format::TimestampFormat::Relative,
+            format,
         )
     }
 
-    fn format_absolute_timestamp(timestamp: i64, timezone: UtcOffset) -> String {
-        let timestamp =
-            OffsetDateTime::from_unix_timestamp(timestamp).unwrap_or(OffsetDateTime::now_utc());
-        time_format::format_localized_timestamp(
-            timestamp,
-            OffsetDateTime::now_utc(),
-            timezone,
-            time_format::TimestampFormat::EnhancedAbsolute,
-        )
+    fn stash_entry_match(
+        entry: StashEntry,
+        positions: Vec<usize>,
+        timezone: UtcOffset,
+    ) -> StashEntryMatch {
+        StashEntryMatch {
+            formatted_timestamp: Self::format_timestamp(
+                entry.timestamp,
+                timezone,
+                time_format::TimestampFormat::Relative,
+            ),
+            formatted_absolute_timestamp: Self::format_timestamp(
+                entry.timestamp,
+                timezone,
+                time_format::TimestampFormat::EnhancedAbsolute,
+            ),
+            entry,
+            positions,
+        }
     }
 
     fn drop_stash_at(&self, ix: usize, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -391,8 +407,8 @@ impl StashListDelegate {
 impl PickerDelegate for StashListDelegate {
     type ListItem = ListItem;
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        tr(_cx, "git_ui.stash_picker.placeholder", "Select a stash...").into()
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
+        tr(cx, "git_ui.stash_picker.placeholder", "Select a stash...").into()
     }
 
     fn match_count(&self) -> usize {
@@ -428,18 +444,7 @@ impl PickerDelegate for StashListDelegate {
             let matches: Vec<StashEntryMatch> = if query.is_empty() {
                 all_stash_entries
                     .into_iter()
-                    .map(|entry| {
-                        let formatted_timestamp = Self::format_timestamp(entry.timestamp, timezone);
-                        let formatted_absolute_timestamp =
-                            Self::format_absolute_timestamp(entry.timestamp, timezone);
-
-                        StashEntryMatch {
-                            entry,
-                            positions: Vec::new(),
-                            formatted_timestamp,
-                            formatted_absolute_timestamp,
-                        }
-                    })
+                    .map(|entry| Self::stash_entry_match(entry, Vec::new(), timezone))
                     .collect()
             } else {
                 let candidates = all_stash_entries
@@ -463,18 +468,11 @@ impl PickerDelegate for StashListDelegate {
                 )
                 .await
                 .into_iter()
-                .map(|candidate| {
-                    let entry = all_stash_entries[candidate.candidate_id].clone();
-                    let formatted_timestamp = Self::format_timestamp(entry.timestamp, timezone);
-                    let formatted_absolute_timestamp =
-                        Self::format_absolute_timestamp(entry.timestamp, timezone);
-
-                    StashEntryMatch {
-                        entry,
-                        positions: candidate.positions,
-                        formatted_timestamp,
-                        formatted_absolute_timestamp,
-                    }
+                .filter_map(|candidate| {
+                    all_stash_entries
+                        .get(candidate.candidate_id)
+                        .cloned()
+                        .map(|entry| Self::stash_entry_match(entry, candidate.positions, timezone))
                 })
                 .collect()
             };
@@ -487,7 +485,7 @@ impl PickerDelegate for StashListDelegate {
                         delegate.selected_index = 0;
                     } else {
                         delegate.selected_index =
-                            core::cmp::min(delegate.selected_index, delegate.matches.len() - 1);
+                            delegate.selected_index.min(delegate.matches.len() - 1);
                     }
                     delegate.last_query = query;
                 })
@@ -518,12 +516,12 @@ impl PickerDelegate for StashListDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let entry_match = &self.matches[ix];
+        let entry_match = self.matches.get(ix)?;
 
         let stash_message =
             Self::format_message(entry_match.entry.index, &entry_match.entry.message);
         let positions = entry_match.positions.clone();
-        let stash_label = HighlightedLabel::new(stash_message, positions)
+        let stash_label = HighlightedLabel::new(stash_message.clone(), positions)
             .truncate()
             .into_any_element();
 
@@ -623,10 +621,6 @@ impl PickerDelegate for StashListDelegate {
                                 .child(stash_label)
                                 .child(branch_info)
                                 .tooltip({
-                                    let stash_message = Self::format_message(
-                                        entry_match.entry.index,
-                                        &entry_match.entry.message,
-                                    );
                                     let absolute_timestamp =
                                         entry_match.formatted_absolute_timestamp.clone();
 
@@ -654,10 +648,10 @@ impl PickerDelegate for StashListDelegate {
         )
     }
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
         Some(
             tr(
-                _cx,
+                cx,
                 "git_ui.stash_picker.no_stashes_found",
                 "No stashes found",
             )

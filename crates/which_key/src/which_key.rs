@@ -23,7 +23,7 @@ pub fn init(cx: &mut App) {
             if window.pending_input_keystrokes().is_none() {
                 if let Some(modal) = workspace.active_modal::<WhichKeyModal>(cx) {
                     modal.update(cx, |modal, cx| modal.dismiss(cx));
-                };
+                }
                 timer.take();
                 return;
             }
@@ -43,7 +43,7 @@ pub fn init(cx: &mut App) {
                     .update_in(cx, |workspace, window, cx| {
                         if workspace.active_modal::<WhichKeyModal>(cx).is_some() {
                             return;
-                        };
+                        }
 
                         workspace.toggle_modal(window, cx, |window, cx| {
                             WhichKeyModal::new(workspace_handle.clone(), window, cx)
@@ -83,12 +83,12 @@ pub static FILTERED_KEYSTROKES: LazyLock<Vec<Vec<Keystroke>>> = LazyLock::new(||
         "ctrl-w ctrl-g shift-t",
     ]
     .iter()
-    .filter_map(|s| {
-        let keystrokes: Result<Vec<_>, _> = s
+    .filter_map(|keystroke_sequence| {
+        keystroke_sequence
             .split(' ')
-            .map(|keystroke_str| Keystroke::parse(keystroke_str))
-            .collect();
-        keystrokes.ok()
+            .map(Keystroke::parse)
+            .collect::<Result<Vec<_>, _>>()
+            .log_err()
     })
     .collect()
 });

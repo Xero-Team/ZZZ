@@ -190,6 +190,10 @@ pub fn data_dir() -> &'static PathBuf {
     })
 }
 
+/// Returns the path to the state directory used by ZZZ.
+///
+/// This holds data that should survive cache cleanup but is not user
+/// configuration, such as the last startup marker.
 pub fn state_dir() -> &'static PathBuf {
     static STATE_DIR: OnceLock<PathBuf> = OnceLock::new();
     STATE_DIR.get_or_init(|| {
@@ -213,7 +217,10 @@ pub fn state_dir() -> &'static PathBuf {
     })
 }
 
-/// Returns the path to the temp directory used by ZZZ.
+/// Returns the path to the cache directory used by ZZZ.
+///
+/// Despite the name, this is the platform cache directory: the OS and the user
+/// may delete it at any time, so only regenerable data belongs here.
 pub fn temp_dir() -> &'static PathBuf {
     static TEMP_DIR: OnceLock<PathBuf> = OnceLock::new();
     TEMP_DIR.get_or_init(|| {
@@ -244,8 +251,8 @@ pub fn temp_dir() -> &'static PathBuf {
 
 /// Returns the path to the hang traces directory.
 pub fn hang_traces_dir() -> &'static PathBuf {
-    static LOGS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    LOGS_DIR.get_or_init(|| data_dir().join("hang_traces"))
+    static HANG_TRACES_DIR: OnceLock<PathBuf> = OnceLock::new();
+    HANG_TRACES_DIR.get_or_init(|| data_dir().join("hang_traces"))
 }
 
 /// Returns the path to the logs directory.
@@ -315,8 +322,8 @@ pub fn global_settings_file() -> &'static PathBuf {
 
 /// Returns the path to the `settings_backup.json` file.
 pub fn settings_backup_file() -> &'static PathBuf {
-    static SETTINGS_FILE: OnceLock<PathBuf> = OnceLock::new();
-    SETTINGS_FILE.get_or_init(|| config_dir().join("settings_backup.json"))
+    static SETTINGS_BACKUP_FILE: OnceLock<PathBuf> = OnceLock::new();
+    SETTINGS_BACKUP_FILE.get_or_init(|| config_dir().join("settings_backup.json"))
 }
 
 /// Returns the path to the `keymap.json` file.
@@ -327,8 +334,8 @@ pub fn keymap_file() -> &'static PathBuf {
 
 /// Returns the path to the `keymap_backup.json` file.
 pub fn keymap_backup_file() -> &'static PathBuf {
-    static KEYMAP_FILE: OnceLock<PathBuf> = OnceLock::new();
-    KEYMAP_FILE.get_or_init(|| config_dir().join("keymap_backup.json"))
+    static KEYMAP_BACKUP_FILE: OnceLock<PathBuf> = OnceLock::new();
+    KEYMAP_BACKUP_FILE.get_or_init(|| config_dir().join("keymap_backup.json"))
 }
 
 /// Returns the path to the `tasks.json` file.
@@ -355,8 +362,8 @@ pub fn extensions_dir() -> &'static PathBuf {
 ///
 /// This is where installed extensions are stored on a remote.
 pub fn remote_extensions_dir() -> &'static PathBuf {
-    static EXTENSIONS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EXTENSIONS_DIR.get_or_init(|| data_dir().join("remote_extensions"))
+    static REMOTE_EXTENSIONS_DIR: OnceLock<PathBuf> = OnceLock::new();
+    REMOTE_EXTENSIONS_DIR.get_or_init(|| data_dir().join("remote_extensions"))
 }
 
 /// Returns the path to the extensions directory.
@@ -401,7 +408,8 @@ pub fn prompts_dir() -> &'static PathBuf {
 ///
 /// # Arguments
 ///
-/// * `dev_mode` - If true, assumes the current working directory is the ZZZ repository.
+/// * `repo_path` - The ZZZ repository root, if the caller has one. When it
+///   contains `assets/prompts`, that directory wins over the user directory.
 pub fn prompt_overrides_dir(repo_path: Option<&Path>) -> PathBuf {
     if let Some(path) = repo_path {
         let dev_path = path.join("assets").join("prompts");
@@ -484,12 +492,15 @@ pub fn devcontainer_dir() -> &'static PathBuf {
     DEVCONTAINER_DIR.get_or_init(|| data_dir().join("devcontainer"))
 }
 
-/// Returns the relative path to a `.ZZZ` folder within a project.
+/// Returns the name of the project-local ZZZ settings folder.
+///
+/// The relative paths below embed this name literally because
+/// [`RelPath`] holds `&'static` data; the unit tests guard against drift.
 pub fn local_settings_folder_name() -> &'static str {
     LOCAL_SETTINGS_DIR_NAME
 }
 
-/// Returns the relative path to a `.vscode` folder within a project.
+/// Returns the name of the project-local VS Code settings folder.
 pub fn local_vscode_folder_name() -> &'static str {
     ".vscode"
 }
@@ -518,10 +529,12 @@ pub fn local_vscode_tasks_file_relative_path() -> &'static RelPath {
     *CACHED
 }
 
+/// Returns the file name of the project-local debug tasks file.
 pub fn debug_task_file_name() -> &'static str {
     "debug.json"
 }
 
+/// Returns the file name of the project-local tasks file.
 pub fn task_file_name() -> &'static str {
     "tasks.json"
 }
@@ -543,10 +556,13 @@ pub fn local_vscode_launch_file_relative_path() -> &'static RelPath {
     *CACHED
 }
 
+/// Returns the path to the user's SSH client configuration file.
 pub fn user_ssh_config_file() -> PathBuf {
     home_dir().join(".ssh/config")
 }
 
+/// Returns the path to the system-wide SSH client configuration file, if the
+/// host has one.
 pub fn global_ssh_config_file() -> Option<&'static Path> {
     if cfg!(windows) {
         None
@@ -717,6 +733,27 @@ mod tests {
         assert_eq!(
             local_vscode_launch_file_relative_path().as_unix_str(),
             ".vscode/launch.json"
+        );
+    }
+
+    #[test]
+    fn project_local_paths_are_rooted_in_the_settings_folder_name() {
+        let folder = local_settings_folder_name();
+        for relative_path in [
+            local_settings_file_relative_path(),
+            local_tasks_file_relative_path(),
+            local_debug_file_relative_path(),
+        ] {
+            assert!(
+                relative_path.as_unix_str().starts_with(folder),
+                "{relative_path:?} should live in the {folder:?} folder"
+            );
+        }
+        assert!(
+            local_vscode_tasks_file_relative_path()
+                .as_unix_str()
+                .starts_with(local_vscode_folder_name()),
+            "the VS Code tasks file should live in the VS Code folder"
         );
     }
 

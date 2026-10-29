@@ -1,3 +1,4 @@
+use crate::tr;
 mod profile_modal_header;
 
 use std::sync::Arc;
@@ -7,7 +8,6 @@ use agent_settings::{AgentProfile, AgentProfileId, AgentSettings, builtin_profil
 use editor::Editor;
 use fs::Fs;
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription, prelude::*};
-use i18n as app_i18n;
 use settings::SettingsStore;
 use settings::{Settings as _, update_settings_file};
 use ui::{
@@ -19,8 +19,79 @@ use crate::agent_configuration::manage_profiles_modal::profile_modal_header::Pro
 use crate::agent_configuration::tool_picker::{ToolPicker, ToolPickerDelegate};
 use crate::{AgentPanel, ManageProfiles};
 
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
+/// A plain action row of the profile view. Every variant renders the same shape
+/// of row and differs only in its icon, label and the handler it invokes.
+#[derive(Clone, Copy)]
+enum ProfileAction {
+    ForkProfile,
+    ConfigureBuiltinTools,
+    ConfigureMcpTools,
+    DeleteProfile,
+}
+
+/// The presentation of one [`ProfileAction`].
+struct ProfileActionSpec {
+    /// Element id of the focusable wrapper around the list item.
+    id: &'static str,
+    /// Element id of the list item itself.
+    list_item_id: &'static str,
+    icon: IconName,
+    icon_color: Color,
+    label_key: &'static str,
+    label_fallback: &'static str,
+    /// Colour applied to the label; `None` keeps the default label colour.
+    label_color: Option<Color>,
+}
+
+impl ProfileAction {
+    fn spec(self) -> ProfileActionSpec {
+        match self {
+            Self::ForkProfile => ProfileActionSpec {
+                id: "fork-profile",
+                list_item_id: "fork-profile",
+                icon: IconName::Scissors,
+                icon_color: Color::Muted,
+                label_key: "agent_ui.manage_profiles.fork_profile",
+                label_fallback: "Fork Profile",
+                label_color: None,
+            },
+            Self::ConfigureBuiltinTools => ProfileActionSpec {
+                id: "configure-builtin-tools",
+                list_item_id: "configure-builtin-tools-item",
+                icon: IconName::Settings,
+                icon_color: Color::Muted,
+                label_key: "agent_ui.manage_profiles.configure_built_in_tools",
+                label_fallback: "Configure Built-in Tools",
+                label_color: None,
+            },
+            Self::ConfigureMcpTools => ProfileActionSpec {
+                id: "configure-mcps",
+                list_item_id: "configure-mcp-tools",
+                icon: IconName::ToolHammer,
+                icon_color: Color::Muted,
+                label_key: "agent_ui.manage_profiles.configure_mcp_tools",
+                label_fallback: "Configure MCP Tools",
+                label_color: None,
+            },
+            Self::DeleteProfile => ProfileActionSpec {
+                id: "delete-profile",
+                list_item_id: "delete-profile",
+                icon: IconName::Trash,
+                icon_color: Color::Error,
+                label_key: "agent_ui.manage_profiles.delete_profile",
+                label_fallback: "Delete Profile",
+                label_color: Some(Color::Error),
+            },
+        }
+    }
+
+    /// Built-in profiles cannot be deleted, so their row is shown disabled.
+    fn disabled_for(self, profile_id: &AgentProfileId) -> bool {
+        match self {
+            Self::DeleteProfile => builtin_profiles::is_builtin(profile_id),
+            _ => false,
+        }
+    }
 }
 
 enum Mode {
@@ -173,7 +244,7 @@ impl ManageProfilesModal {
         let name_editor = cx.new(|cx| Editor::single_line(window, cx));
         name_editor.update(cx, |editor, cx| {
             editor.set_placeholder_text(
-                &app_i18n::tr(
+                &tr(
                     cx,
                     "agent_ui.manage_profiles.profile_name_placeholder",
                     "Profile name",
@@ -384,9 +455,10 @@ impl ManageProfilesModal {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let is_focused = profile.navigation.focus_handle.contains_focused(window, cx);
+        let element_id = format!("profile-{}", profile.id);
 
         div()
-            .id(format!("profile-{}", profile.id))
+            .id(element_id.clone())
             .track_focus(&profile.navigation.focus_handle)
             .on_action({
                 let profile_id = profile.id.clone();
@@ -395,7 +467,7 @@ impl ManageProfilesModal {
                 })
             })
             .child(
-                ListItem::new(format!("profile-{}", profile.id))
+                ListItem::new(element_id)
                     .toggle_state(is_focused)
                     .inset(true)
                     .spacing(ListItemSpacing::Sparse)
@@ -555,274 +627,90 @@ impl ManageProfilesModal {
             .child(h_flex().p_2().child(mode.name_editor))
     }
 
-    fn render_view_profile(
+    fn invoke_profile_action(
         &mut self,
-        mode: ViewProfileMode,
+        action: ProfileAction,
+        profile_id: AgentProfileId,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let settings = AgentSettings::get_global(cx);
+    ) {
+        match action {
+            ProfileAction::ForkProfile => self.new_profile(Some(profile_id), window, cx),
+            ProfileAction::ConfigureBuiltinTools => {
+                self.configure_builtin_tools(profile_id, window, cx);
+            }
+            ProfileAction::ConfigureMcpTools => self.configure_mcp_tools(profile_id, window, cx),
+            ProfileAction::DeleteProfile => self.delete_profile(profile_id, window, cx),
+        }
+    }
 
-        let profile_name = settings.profiles.get(&mode.profile_id).map_or_else(
-            || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
-            |profile| profile.name.clone(),
-        );
+    /// Renders one keyboard-navigable row of the profile view. Every row shares
+    /// the same shape — focusable wrapper, list item, icon, label, click and
+    /// confirm handlers — and differs only in its [`ProfileActionSpec`].
+    fn render_profile_action_row(
+        &self,
+        action: ProfileAction,
+        profile_id: AgentProfileId,
+        focus_handle: &FocusHandle,
+        window: &mut Window,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let spec = action.spec();
+        let is_disabled = action.disabled_for(&profile_id);
 
-        let icon = match mode.profile_id.as_str() {
-            "write" => IconName::Pencil,
-            "ask" => IconName::Chat,
-            _ => IconName::UserRoundPen,
+        let label = Label::new(tr(cx, spec.label_key, spec.label_fallback));
+        let label = match spec.label_color {
+            Some(color) => label.color(color),
+            None => label,
         };
 
-        Navigable::new(
-            div()
-                .track_focus(&self.focus_handle(cx))
-                .size_full()
-                .child(ProfileModalHeader::new(profile_name, Some(icon)))
-                .child(
-                    v_flex()
-                        .pb_1()
-                        .child(ListSeparator)
-                        .child(
-                            div()
-                                .id("fork-profile")
-                                .track_focus(&mode.fork_profile.focus_handle)
-                                .on_action({
-                                    let profile_id = mode.profile_id.clone();
-                                    cx.listener(move |this, _: &menu::Confirm, window, cx| {
-                                        this.new_profile(Some(profile_id.clone()), window, cx);
-                                    })
-                                })
-                                .child(
-                                    ListItem::new("fork-profile")
-                                        .toggle_state(
-                                            mode.fork_profile
-                                                .focus_handle
-                                                .contains_focused(window, cx),
-                                        )
-                                        .inset(true)
-                                        .spacing(ListItemSpacing::Sparse)
-                                        .start_slot(
-                                            Icon::new(IconName::Scissors)
-                                                .size(IconSize::Small)
-                                                .color(Color::Muted),
-                                        )
-                                        .child(Label::new(tr(
-                                            cx,
-                                            "agent_ui.manage_profiles.fork_profile",
-                                            "Fork Profile",
-                                        )))
-                                        .on_click({
-                                            let profile_id = mode.profile_id.clone();
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.new_profile(
-                                                    Some(profile_id.clone()),
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                        }),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .id("configure-builtin-tools")
-                                .track_focus(&mode.configure_tools.focus_handle)
-                                .on_action({
-                                    let profile_id = mode.profile_id.clone();
-                                    cx.listener(move |this, _: &menu::Confirm, window, cx| {
-                                        this.configure_builtin_tools(
-                                            profile_id.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    })
-                                })
-                                .child(
-                                    ListItem::new("configure-builtin-tools-item")
-                                        .toggle_state(
-                                            mode.configure_tools
-                                                .focus_handle
-                                                .contains_focused(window, cx),
-                                        )
-                                        .inset(true)
-                                        .spacing(ListItemSpacing::Sparse)
-                                        .start_slot(
-                                            Icon::new(IconName::Settings)
-                                                .size(IconSize::Small)
-                                                .color(Color::Muted),
-                                        )
-                                        .child(Label::new(tr(
-                                            cx,
-                                            "agent_ui.manage_profiles.configure_built_in_tools",
-                                            "Configure Built-in Tools",
-                                        )))
-                                        .on_click({
-                                            let profile_id = mode.profile_id.clone();
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.configure_builtin_tools(
-                                                    profile_id.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                        }),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .id("configure-mcps")
-                                .track_focus(&mode.configure_mcps.focus_handle)
-                                .on_action({
-                                    let profile_id = mode.profile_id.clone();
-                                    cx.listener(move |this, _: &menu::Confirm, window, cx| {
-                                        this.configure_mcp_tools(profile_id.clone(), window, cx);
-                                    })
-                                })
-                                .child(
-                                    ListItem::new("configure-mcp-tools")
-                                        .toggle_state(
-                                            mode.configure_mcps
-                                                .focus_handle
-                                                .contains_focused(window, cx),
-                                        )
-                                        .inset(true)
-                                        .spacing(ListItemSpacing::Sparse)
-                                        .start_slot(
-                                            Icon::new(IconName::ToolHammer)
-                                                .size(IconSize::Small)
-                                                .color(Color::Muted),
-                                        )
-                                        .child(Label::new(tr(
-                                            cx,
-                                            "agent_ui.manage_profiles.configure_mcp_tools",
-                                            "Configure MCP Tools",
-                                        )))
-                                        .on_click({
-                                            let profile_id = mode.profile_id.clone();
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.configure_mcp_tools(
-                                                    profile_id.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                        }),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .id("delete-profile")
-                                .track_focus(&mode.delete_profile.focus_handle)
-                                .on_action({
-                                    let profile_id = mode.profile_id.clone();
-                                    cx.listener(move |this, _: &menu::Confirm, window, cx| {
-                                        this.delete_profile(profile_id.clone(), window, cx);
-                                    })
-                                })
-                                .child(
-                                    ListItem::new("delete-profile")
-                                        .toggle_state(
-                                            mode.delete_profile
-                                                .focus_handle
-                                                .contains_focused(window, cx),
-                                        )
-                                        .inset(true)
-                                        .spacing(ListItemSpacing::Sparse)
-                                        .start_slot(
-                                            Icon::new(IconName::Trash)
-                                                .size(IconSize::Small)
-                                                .color(Color::Error),
-                                        )
-                                        .child(
-                                            Label::new(tr(
-                                                cx,
-                                                "agent_ui.manage_profiles.delete_profile",
-                                                "Delete Profile",
-                                            ))
-                                            .color(Color::Error),
-                                        )
-                                        .disabled(builtin_profiles::is_builtin(&mode.profile_id))
-                                        .on_click({
-                                            let profile_id = mode.profile_id.clone();
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.delete_profile(profile_id.clone(), window, cx);
-                                            })
-                                        }),
-                                ),
-                        )
-                        .child(ListSeparator)
-                        .child(
-                            div()
-                                .id("cancel-item")
-                                .track_focus(&mode.cancel_item.focus_handle)
-                                .on_action({
-                                    cx.listener(move |this, _: &menu::Confirm, window, cx| {
-                                        this.cancel(window, cx);
-                                    })
-                                })
-                                .child(
-                                    ListItem::new("cancel-item")
-                                        .toggle_state(
-                                            mode.cancel_item
-                                                .focus_handle
-                                                .contains_focused(window, cx),
-                                        )
-                                        .inset(true)
-                                        .spacing(ListItemSpacing::Sparse)
-                                        .start_slot(
-                                            Icon::new(IconName::ArrowLeft)
-                                                .size(IconSize::Small)
-                                                .color(Color::Muted),
-                                        )
-                                        .child(Label::new(tr(
-                                            cx,
-                                            "agent_ui.manage_profiles.go_back",
-                                            "Go Back",
-                                        )))
-                                        .end_slot(
-                                            div().child(
-                                                KeyBinding::for_action_in(
-                                                    &menu::Cancel,
-                                                    &self.focus_handle,
-                                                    cx,
-                                                )
-                                                .size(rems_from_px(12.)),
-                                            ),
-                                        )
-                                        .on_click({
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.cancel(window, cx);
-                                            })
-                                        }),
-                                ),
-                        ),
-                )
-                .into_any_element(),
-        )
-        .entry(mode.fork_profile)
-        .entry(mode.configure_tools)
-        .entry(mode.configure_mcps)
-        .entry(mode.delete_profile)
-        .entry(mode.cancel_item)
-    }
-}
-
-impl Render for ManageProfilesModal {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let settings = AgentSettings::get_global(cx);
-
-        let go_back_item = div()
-            .id("cancel-item")
-            .track_focus(&self.focus_handle)
+        div()
+            .id(spec.id)
+            .track_focus(focus_handle)
             .on_action({
+                let profile_id = profile_id.clone();
                 cx.listener(move |this, _: &menu::Confirm, window, cx| {
-                    this.cancel(window, cx);
+                    this.invoke_profile_action(action, profile_id.clone(), window, cx);
                 })
             })
             .child(
+                ListItem::new(spec.list_item_id)
+                    .toggle_state(focus_handle.contains_focused(window, cx))
+                    .inset(true)
+                    .spacing(ListItemSpacing::Sparse)
+                    .start_slot(
+                        Icon::new(spec.icon)
+                            .size(IconSize::Small)
+                            .color(spec.icon_color),
+                    )
+                    .child(label)
+                    .disabled(is_disabled)
+                    .on_click({
+                        cx.listener(move |this, _, window, cx| {
+                            this.invoke_profile_action(action, profile_id.clone(), window, cx);
+                        })
+                    }),
+            )
+            .into_any_element()
+    }
+
+    /// The "Go Back" row. It is shown both at the bottom of the profile view and
+    /// below the tool pickers, so it is built in exactly one place.
+    fn render_go_back_row(
+        &self,
+        focus_handle: &FocusHandle,
+        window: &mut Window,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        div()
+            .id("cancel-item")
+            .track_focus(focus_handle)
+            .on_action(cx.listener(|this, _: &menu::Confirm, window, cx| {
+                this.cancel(window, cx);
+            }))
+            .child(
                 ListItem::new("cancel-item")
-                    .toggle_state(self.focus_handle.contains_focused(window, cx))
+                    .toggle_state(focus_handle.contains_focused(window, cx))
                     .inset(true)
                     .spacing(ListItemSpacing::Sparse)
                     .start_slot(
@@ -841,12 +729,124 @@ impl Render for ManageProfilesModal {
                                 .size(rems_from_px(12.)),
                         ),
                     )
-                    .on_click({
-                        cx.listener(move |this, _, window, cx| {
-                            this.cancel(window, cx);
-                        })
-                    }),
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.cancel(window, cx);
+                    })),
+            )
+            .into_any_element()
+    }
+
+    /// Both tool-picker modes render the same frame: a titled header, the picker
+    /// itself, and the "Go Back" row.
+    fn render_tool_picker_mode(
+        &self,
+        profile_id: &AgentProfileId,
+        tool_picker: &Entity<ToolPicker>,
+        header_key: &'static str,
+        header_fallback: &'static str,
+        icon: IconName,
+        go_back_item: AnyElement,
+        cx: &App,
+    ) -> AnyElement {
+        let profile_name = AgentSettings::get_global(cx)
+            .profiles
+            .get(profile_id)
+            .map_or_else(
+                || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
+                |profile| profile.name.clone(),
             );
+
+        v_flex()
+            .pb_1()
+            .child(ProfileModalHeader::new(
+                tr(cx, header_key, header_fallback).replacen("{}", profile_name.as_ref(), 1),
+                Some(icon),
+            ))
+            .child(ListSeparator)
+            .child(tool_picker.clone())
+            .child(ListSeparator)
+            .child(go_back_item)
+            .into_any_element()
+    }
+
+    fn render_view_profile(
+        &mut self,
+        mode: ViewProfileMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let settings = AgentSettings::get_global(cx);
+
+        let profile_name = settings.profiles.get(&mode.profile_id).map_or_else(
+            || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
+            |profile| profile.name.clone(),
+        );
+
+        let icon = match mode.profile_id.as_str() {
+            builtin_profiles::WRITE => IconName::Pencil,
+            builtin_profiles::ASK => IconName::Chat,
+            _ => IconName::UserRoundPen,
+        };
+
+        let fork_profile = self.render_profile_action_row(
+            ProfileAction::ForkProfile,
+            mode.profile_id.clone(),
+            &mode.fork_profile.focus_handle,
+            window,
+            cx,
+        );
+        let configure_builtin_tools = self.render_profile_action_row(
+            ProfileAction::ConfigureBuiltinTools,
+            mode.profile_id.clone(),
+            &mode.configure_tools.focus_handle,
+            window,
+            cx,
+        );
+        let configure_mcp_tools = self.render_profile_action_row(
+            ProfileAction::ConfigureMcpTools,
+            mode.profile_id.clone(),
+            &mode.configure_mcps.focus_handle,
+            window,
+            cx,
+        );
+        let delete_profile = self.render_profile_action_row(
+            ProfileAction::DeleteProfile,
+            mode.profile_id.clone(),
+            &mode.delete_profile.focus_handle,
+            window,
+            cx,
+        );
+        let go_back = self.render_go_back_row(&mode.cancel_item.focus_handle, window, cx);
+
+        Navigable::new(
+            div()
+                .track_focus(&self.focus_handle(cx))
+                .size_full()
+                .child(ProfileModalHeader::new(profile_name, Some(icon)))
+                .child(
+                    v_flex()
+                        .pb_1()
+                        .child(ListSeparator)
+                        .child(fork_profile)
+                        .child(configure_builtin_tools)
+                        .child(configure_mcp_tools)
+                        .child(delete_profile)
+                        .child(ListSeparator)
+                        .child(go_back),
+                )
+                .into_any_element(),
+        )
+        .entry(mode.fork_profile)
+        .entry(mode.configure_tools)
+        .entry(mode.configure_mcps)
+        .entry(mode.delete_profile)
+        .entry(mode.cancel_item)
+    }
+}
+
+impl Render for ManageProfilesModal {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let go_back_item = self.render_go_back_row(&self.focus_handle, window, cx);
 
         div()
             .elevation_3(cx)
@@ -872,56 +872,28 @@ impl Render for ManageProfilesModal {
                     profile_id,
                     tool_picker,
                     ..
-                } => {
-                    let profile_name = settings.profiles.get(profile_id).map_or_else(
-                        || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
-                        |profile| profile.name.clone(),
-                    );
-
-                    v_flex()
-                        .pb_1()
-                        .child(ProfileModalHeader::new(
-                            tr(
-                                cx,
-                                "agent_ui.manage_profiles.header.configure_built_in_tools",
-                                "{} — Configure Built-in Tools",
-                            )
-                            .replacen("{}", profile_name.as_ref(), 1),
-                            Some(IconName::Settings),
-                        ))
-                        .child(ListSeparator)
-                        .child(tool_picker.clone())
-                        .child(ListSeparator)
-                        .child(go_back_item)
-                        .into_any_element()
-                }
+                } => self.render_tool_picker_mode(
+                    profile_id,
+                    tool_picker,
+                    "agent_ui.manage_profiles.header.configure_built_in_tools",
+                    "{} — Configure Built-in Tools",
+                    IconName::Settings,
+                    go_back_item,
+                    cx,
+                ),
                 Mode::ConfigureMcps {
                     profile_id,
                     tool_picker,
                     ..
-                } => {
-                    let profile_name = settings.profiles.get(profile_id).map_or_else(
-                        || tr(cx, "agent_ui.manage_profiles.unknown", "Unknown"),
-                        |profile| profile.name.clone(),
-                    );
-
-                    v_flex()
-                        .pb_1()
-                        .child(ProfileModalHeader::new(
-                            tr(
-                                cx,
-                                "agent_ui.manage_profiles.header.configure_mcp_tools",
-                                "{} — Configure MCP Tools",
-                            )
-                            .replacen("{}", profile_name.as_ref(), 1),
-                            Some(IconName::ToolHammer),
-                        ))
-                        .child(ListSeparator)
-                        .child(tool_picker.clone())
-                        .child(ListSeparator)
-                        .child(go_back_item)
-                        .into_any_element()
-                }
+                } => self.render_tool_picker_mode(
+                    profile_id,
+                    tool_picker,
+                    "agent_ui.manage_profiles.header.configure_mcp_tools",
+                    "{} — Configure MCP Tools",
+                    IconName::ToolHammer,
+                    go_back_item,
+                    cx,
+                ),
             })
     }
 }

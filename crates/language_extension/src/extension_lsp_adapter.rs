@@ -20,7 +20,7 @@ use serde::Serialize;
 use serde_json::Value;
 use util::{ResultExt, maybe, rel_path::RelPath};
 
-use crate::{LanguageServerRegistryProxy, LspAccess};
+use crate::{LanguageRegistryProxy, LspAccess};
 
 /// An adapter that allows an [`LspAdapterDelegate`] to be used as a [`WorktreeDelegate`].
 struct WorktreeDelegateAdapter(pub Arc<dyn LspAdapterDelegate>);
@@ -51,7 +51,7 @@ impl WorktreeDelegate for WorktreeDelegateAdapter {
     }
 }
 
-impl ExtensionLanguageServerProxy for LanguageServerRegistryProxy {
+impl ExtensionLanguageServerProxy for LanguageRegistryProxy {
     fn register_language_server(
         &self,
         extension: Arc<dyn Extension>,
@@ -178,33 +178,9 @@ impl DynLspInstaller for ExtensionLspAdapter {
                     )
                     .await?;
 
-                // on windows, extensions might produce weird paths
-                // that start with a leading slash due to WASI
-                // requiring that for PWD and friends so account for
-                // that here and try to transform those paths back
-                // to windows paths
-                //
-                // if we don't do this, std will interpret the path as relative,
-                // which changes join behavior
-                let command_path: &Path = if cfg!(windows)
-                    && let Some(command) = command.command.to_str()
-                {
-                    let mut chars = command.chars();
-                    if chars.next().is_some_and(|c| c == '/')
-                        && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
-                        && chars.next().is_some_and(|c| c == ':')
-                        && chars.next().is_some_and(|c| c == '\\' || c == '/')
-                    {
-                        // looks like a windows path with a leading slash, so strip it
-                        command
-                            .strip_prefix('/')
-                            .expect("strip_prefix should be present")
-                            .as_ref()
-                    } else {
-                        command.as_ref()
-                    }
-                } else {
-                    command.command.as_ref()
+                let command_path: &Path = match command.command.to_str() {
+                    Some(command) => strip_wasi_path_leading_slash(command).as_ref(),
+                    None => command.command.as_ref(),
                 };
                 let path = self.extension.path_from_extension(command_path);
 
@@ -213,30 +189,7 @@ impl DynLspInstaller for ExtensionLspAdapter {
                     arguments: command
                         .args
                         .into_iter()
-                        .map(|arg| {
-                            // on windows, extensions might produce weird paths
-                            // that start with a leading slash due to WASI
-                            // requiring that for PWD and friends so account for
-                            // that here and try to transform those paths back
-                            // to windows paths
-                            if cfg!(windows) {
-                                let mut chars = arg.chars();
-                                if chars.next().is_some_and(|c| c == '/')
-                                    && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
-                                    && chars.next().is_some_and(|c| c == ':')
-                                    && chars.next().is_some_and(|c| c == '\\' || c == '/')
-                                {
-                                    // looks like a windows path with a leading slash, so strip it
-                                    arg.strip_prefix('/')
-                                        .expect("strip_prefix should be present")
-                                        .into()
-                                } else {
-                                    arg.into()
-                                }
-                            } else {
-                                arg.into()
-                            }
-                        })
+                        .map(|arg| strip_wasi_path_leading_slash(&arg).into())
                         .collect(),
                     env: Some(command.env.into_iter().collect()),
                 })
@@ -254,7 +207,9 @@ impl DynLspInstaller for ExtensionLspAdapter {
         _: bool,
         _: &mut AsyncApp,
     ) -> Result<LanguageServerBinary> {
-        unreachable!("get_language_server_command is overridden")
+        // Extension adapters always resolve their binary through
+        // `get_language_server_command`, so this path is never taken.
+        anyhow::bail!("extension language servers cannot fetch a binary directly")
     }
 }
 
@@ -272,13 +227,15 @@ impl LspAdapter for ExtensionLspAdapter {
             .get(&self.language_server_id)
             .and_then(|server| server.code_action_kinds.clone());
 
-        code_action_kinds.or(Some(vec![
-            CodeActionKind::EMPTY,
-            CodeActionKind::QUICKFIX,
-            CodeActionKind::REFACTOR,
-            CodeActionKind::REFACTOR_EXTRACT,
-            CodeActionKind::SOURCE,
-        ]))
+        Some(code_action_kinds.unwrap_or_else(|| {
+            vec![
+                CodeActionKind::EMPTY,
+                CodeActionKind::QUICKFIX,
+                CodeActionKind::REFACTOR,
+                CodeActionKind::REFACTOR_EXTRACT,
+                CodeActionKind::SOURCE,
+            ]
+        }))
     }
 
     fn language_ids(&self) -> HashMap<LanguageName, String> {
@@ -312,13 +269,7 @@ impl LspAdapter for ExtensionLspAdapter {
                 delegate,
             )
             .await?;
-        Ok(if let Some(json_options) = json_options {
-            serde_json::from_str(&json_options).with_context(|| {
-                format!("failed to parse initialization_options from extension: {json_options}")
-            })?
-        } else {
-            None
-        })
+        parse_extension_json("initialization_options", json_options)
     }
 
     async fn workspace_configuration(
@@ -333,13 +284,10 @@ impl LspAdapter for ExtensionLspAdapter {
             .extension
             .language_server_workspace_configuration(self.language_server_id.clone(), delegate)
             .await?;
-        Ok(if let Some(json_options) = json_options {
-            serde_json::from_str(&json_options).with_context(|| {
-                format!("failed to parse workspace_configuration from extension: {json_options}")
-            })?
-        } else {
-            serde_json::json!({})
-        })
+        Ok(
+            parse_extension_json("workspace_configuration", json_options)?
+                .unwrap_or_else(|| serde_json::json!({})),
+        )
     }
 
     async fn initialization_options_schema(
@@ -356,9 +304,9 @@ impl LspAdapter for ExtensionLspAdapter {
                 delegate,
             )
             .await
-            .ok()
+            .log_err()
             .flatten();
-        json_schema.and_then(|s| serde_json::from_str(&s).ok())
+        json_schema.and_then(|schema| serde_json::from_str(&schema).log_err())
     }
 
     async fn settings_schema(
@@ -375,9 +323,9 @@ impl LspAdapter for ExtensionLspAdapter {
                 delegate,
             )
             .await
-            .ok()
+            .log_err()
             .flatten();
-        json_schema.and_then(|s| serde_json::from_str(&s).ok())
+        json_schema.and_then(|schema| serde_json::from_str(&schema).log_err())
     }
 
     async fn additional_initialization_options(
@@ -394,23 +342,13 @@ impl LspAdapter for ExtensionLspAdapter {
                 delegate,
             )
             .await?;
-        Ok(if let Some(json_options) = json_options {
-            serde_json::from_str(&json_options).with_context(|| {
-                format!(
-                    "failed to parse additional_initialization_options from extension: {json_options}"
-                )
-            })?
-        } else {
-            None
-        })
+        parse_extension_json("additional_initialization_options", json_options)
     }
 
     async fn additional_workspace_configuration(
         self: Arc<Self>,
         target_language_server_id: LanguageServerName,
-
         delegate: &Arc<dyn LspAdapterDelegate>,
-
         _cx: &mut AsyncApp,
     ) -> Result<Option<serde_json::Value>> {
         let delegate = Arc::new(WorktreeDelegateAdapter(delegate.clone())) as _;
@@ -422,13 +360,7 @@ impl LspAdapter for ExtensionLspAdapter {
                 delegate,
             )
             .await?;
-        Ok(if let Some(json_options) = json_options {
-            serde_json::from_str(&json_options).with_context(|| {
-                format!("failed to parse additional_workspace_configuration from extension: {json_options}")
-            })?
-        } else {
-            None
-        })
+        parse_extension_json("additional_workspace_configuration", json_options)
     }
 
     async fn labels_for_completions(
@@ -481,6 +413,38 @@ impl LspAdapter for ExtensionLspAdapter {
 
     fn is_extension(&self) -> bool {
         true
+    }
+}
+
+/// Returns whether `path` looks like a Windows drive path that gained a leading
+/// slash, such as `/c:/Users/me` or `/c:\Users\me`.
+fn is_leading_slash_windows_drive_path(path: &str) -> bool {
+    let mut chars = path.chars();
+    chars.next().is_some_and(|c| c == '/')
+        && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.next().is_some_and(|c| c == ':')
+        && chars.next().is_some_and(|c| c == '\\' || c == '/')
+}
+
+/// Extensions built against WASI may return absolute paths with a leading `/`
+/// (for example `/c:/Users/me/server.exe`). [`std::path`] treats such a path as
+/// relative on Windows, which changes join behavior, so the leading slash is
+/// dropped from Windows drive paths.
+fn strip_wasi_path_leading_slash(path: &str) -> &str {
+    if !cfg!(windows) || !is_leading_slash_windows_drive_path(path) {
+        return path;
+    }
+
+    &path[1..]
+}
+
+/// Parses the JSON payload an extension returned for `kind`, if any.
+fn parse_extension_json(kind: &str, json: Option<String>) -> Result<Option<serde_json::Value>> {
+    match json {
+        Some(json) => serde_json::from_str(&json)
+            .with_context(|| format!("failed to parse {kind} from extension: {json}"))
+            .map(Some),
+        None => Ok(None),
     }
 }
 
@@ -752,4 +716,31 @@ fn test_build_code_label_with_invalid_ranges() {
         &language::PLAIN_TEXT,
     );
     assert!(label.is_none());
+}
+
+#[test]
+fn test_detects_leading_slash_windows_drive_paths() {
+    assert!(is_leading_slash_windows_drive_path("/c:/Users/me"));
+    assert!(is_leading_slash_windows_drive_path("/c:\\Users\\me"));
+    assert!(is_leading_slash_windows_drive_path("/Z:/"));
+    assert!(!is_leading_slash_windows_drive_path("c:/Users/me"));
+    assert!(!is_leading_slash_windows_drive_path("/usr/bin"));
+    assert!(!is_leading_slash_windows_drive_path("/c:Users/me"));
+    assert!(!is_leading_slash_windows_drive_path("/1:/Users"));
+    assert!(!is_leading_slash_windows_drive_path(""));
+}
+
+#[test]
+fn test_parse_extension_json_reports_invalid_payloads() {
+    assert_eq!(
+        parse_extension_json("options", Some(r#"{"a": 1}"#.to_owned()))
+            .expect("valid JSON should parse"),
+        Some(serde_json::json!({"a": 1}))
+    );
+    assert!(
+        parse_extension_json("options", None)
+            .expect("absent payload is fine")
+            .is_none()
+    );
+    assert!(parse_extension_json("options", Some("{".to_owned())).is_err());
 }

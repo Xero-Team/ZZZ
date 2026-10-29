@@ -3,8 +3,8 @@ use commit_modal::CommitModal;
 use editor::{Editor, actions::DiffClipboardWithSelectionData};
 
 use ui::{
-    Color, Headline, HeadlineSize, Icon, IconName, IconSize, IntoElement, ParentElement, Render,
-    Styled, StyledExt, div, h_flex, rems, v_flex,
+    Color, Headline, HeadlineSize, Icon, IconName, IconSize, IntoElement, KeyBinding,
+    ParentElement, Render, Styled, StyledExt, div, h_flex, rems, v_flex,
 };
 use workspace::{Toast, notifications::NotificationId};
 
@@ -17,8 +17,8 @@ use git::{
     status::{FileStatus, StatusCode, UnmergedStatus, UnmergedStatusCode},
 };
 use gpui::{
-    App, ClipboardItem, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    SharedString, Subscription, Task, Window,
+    App, AsyncWindowContext, ClipboardItem, Context, DismissEvent, Entity, EventEmitter,
+    FocusHandle, Focusable, SharedString, Subscription, Task, Window,
 };
 use i18n::tr;
 use menu::{Cancel, Confirm};
@@ -157,124 +157,68 @@ pub fn init(cx: &mut App) {
         }
         workspace.register_action(
             |workspace, _: &zzz_actions::git::CreatePullRequest, window, cx| {
-                if let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) {
-                    panel.update(cx, |panel, cx| {
-                        panel.create_pull_request(window, cx);
-                    });
-                }
+                with_git_panel(workspace, cx, |panel, cx| {
+                    panel.create_pull_request(window, cx)
+                });
             },
         );
         workspace.register_action(|workspace, _: &git::Fetch, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.fetch(true, window, cx);
-            });
+            with_git_panel(workspace, cx, |panel, cx| panel.fetch(true, window, cx));
         });
         workspace.register_action(|workspace, _: &git::FetchFrom, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.fetch(false, window, cx);
-            });
+            with_git_panel(workspace, cx, |panel, cx| panel.fetch(false, window, cx));
         });
         workspace.register_action(|workspace, _: &git::Push, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.push(false, false, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.push(false, false, window, cx)
             });
         });
         workspace.register_action(|workspace, _: &git::PushTo, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.push(false, true, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.push(false, true, window, cx)
             });
         });
         workspace.register_action(|workspace, _: &git::ForcePush, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.push(true, false, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.push(true, false, window, cx)
             });
         });
         workspace.register_action(|workspace, _: &git::Pull, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.pull(false, window, cx);
-            });
+            with_git_panel(workspace, cx, |panel, cx| panel.pull(false, window, cx));
         });
         workspace.register_action(|workspace, _: &git::PullRebase, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.pull(true, window, cx);
-            });
+            with_git_panel(workspace, cx, |panel, cx| panel.pull(true, window, cx));
         });
         workspace.register_action(|workspace, action: &git::StashAll, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.stash_all(action, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.stash_all(action, window, cx)
             });
         });
         workspace.register_action(|workspace, action: &git::StashPop, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.stash_pop(action, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.stash_pop(action, window, cx)
             });
         });
         workspace.register_action(|workspace, action: &git::StashApply, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.stash_apply(action, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.stash_apply(action, window, cx)
             });
         });
         workspace.register_action(|workspace, action: &git::StageAll, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.stage_all(action, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.stage_all(action, window, cx)
             });
         });
         workspace.register_action(|workspace, action: &git::UnstageAll, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.unstage_all(action, window, cx);
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.unstage_all(action, window, cx)
             });
         });
         workspace.register_action(|workspace, _: &git::Uncommit, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.uncommit(window, cx);
-            })
+            with_git_panel(workspace, cx, |panel, cx| panel.uncommit(window, cx));
         });
         workspace.register_action(|workspace, _action: &git::Init, window, cx| {
-            let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
-                return;
-            };
-            panel.update(cx, |panel, cx| {
-                panel.git_init(window, cx);
-            });
+            with_git_panel(workspace, cx, |panel, cx| panel.git_init(window, cx));
         });
         workspace.register_action(|workspace, _action: &git::Clone, window, cx| {
             let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
@@ -301,12 +245,35 @@ pub fn init(cx: &mut App) {
         workspace.register_action(
             |workspace, action: &DiffClipboardWithSelectionData, window, cx| {
                 if let Some(task) = TextDiffView::open(action, workspace, window, cx) {
-                    task.detach();
-                };
+                    task.detach_and_log_err(cx);
+                }
             },
         );
     })
     .detach();
+}
+
+/// Runs `f` against the workspace's Git panel, doing nothing when the panel is
+/// not present.
+fn with_git_panel(
+    workspace: &mut Workspace,
+    cx: &mut Context<Workspace>,
+    f: impl FnOnce(&mut GitPanel, &mut Context<GitPanel>),
+) {
+    let Some(panel) = workspace.panel::<GitPanel>(cx) else {
+        return;
+    };
+    panel.update(cx, f);
+}
+
+/// Key binding shown on a picker's footer buttons, sized to match the button
+/// labels.
+fn picker_footer_key_binding(
+    action: &dyn gpui::Action,
+    focus_handle: &FocusHandle,
+    cx: &App,
+) -> KeyBinding {
+    KeyBinding::for_action_in(action, focus_handle, cx).map(|kb| kb.size(rems_from_px(12.)))
 }
 
 fn open_modified_files(
@@ -333,7 +300,9 @@ fn open_modified_files(
             .collect()
     });
     for path in modified_paths {
-        workspace.open_path(path, None, true, window, cx).detach();
+        workspace
+            .open_path(path, None, true, window, cx)
+            .detach_and_log_err(cx);
     }
 }
 
@@ -679,22 +648,16 @@ impl RefPickerModal {
                 .update(cx, |repo, _| repo.show(git_ref.clone()))
                 .await
                 .log_err();
+            let Some(show_result) = show_result else {
+                return;
+            };
+            let commit_details = show_result.log_err();
 
-            if let Some(show_future) = show_result {
-                if let Ok(details) = show_future {
-                    this.update(cx, |this, cx| {
-                        this.commit_details = Some(details);
-                        cx.notify();
-                    })
-                    .log_err();
-                } else {
-                    this.update(cx, |this, cx| {
-                        this.commit_details = None;
-                        cx.notify();
-                    })
-                    .log_err();
-                }
-            }
+            this.update(cx, |this, cx| {
+                this.commit_details = commit_details;
+                cx.notify();
+            })
+            .log_err();
         }));
     }
 
@@ -735,11 +698,13 @@ impl RefPickerModal {
                             );
                         })?;
                     }
-                    Ok(Err(_)) | Err(_) => {
-                        workspace.update(cx, |workspace, cx| {
-                            let error = anyhow::anyhow!("View commit failed");
-                            Self::show_git_error_toast(&git_ref_string, error, workspace, cx);
-                        });
+                    Ok(Err(error)) => {
+                        log::error!("failed to view commit {git_ref_string}: {error:#}");
+                        show_view_commit_failed_toast(&workspace, cx);
+                    }
+                    Err(error) => {
+                        log::error!("commit lookup for {git_ref_string} was cancelled: {error}");
+                        show_view_commit_failed_toast(&workspace, cx);
                     }
                 }
 
@@ -747,16 +712,6 @@ impl RefPickerModal {
             })
             .detach();
         cx.emit(DismissEvent);
-    }
-
-    fn show_git_error_toast(
-        _git_ref: &str,
-        error: anyhow::Error,
-        workspace: &mut Workspace,
-        cx: &mut Context<Workspace>,
-    ) {
-        let toast = Toast::new(NotificationId::unique::<()>(), error.to_string());
-        workspace.show_toast(toast, cx);
     }
 }
 
@@ -831,6 +786,18 @@ impl Render for RefPickerModal {
             })
             .when(!has_commit_details, |el| el.child(div().pb_3()))
     }
+}
+
+fn show_view_commit_failed_toast(workspace: &Entity<Workspace>, cx: &mut AsyncWindowContext) {
+    workspace.update(cx, |workspace, cx| {
+        let message = tr(
+            cx,
+            "git_ui.ref_picker.view_commit_failed",
+            "View commit failed",
+        );
+        let toast = Toast::new(NotificationId::unique::<()>(), message);
+        workspace.show_toast(toast, cx);
+    });
 }
 
 fn show_ref_picker(
@@ -1150,14 +1117,14 @@ mod remote_button {
                         .when_some(keybinding_target.clone(), |el, keybinding_target| {
                             el.context(keybinding_target)
                         })
-                        .action(fetch.clone(), git::Fetch.boxed_clone())
-                        .action(fetch_from.clone(), git::FetchFrom.boxed_clone())
-                        .action(pull.clone(), git::Pull.boxed_clone())
-                        .action(pull_rebase.clone(), git::PullRebase.boxed_clone())
+                        .action(fetch, git::Fetch.boxed_clone())
+                        .action(fetch_from, git::FetchFrom.boxed_clone())
+                        .action(pull, git::Pull.boxed_clone())
+                        .action(pull_rebase, git::PullRebase.boxed_clone())
                         .separator()
-                        .action(push.clone(), git::Push.boxed_clone())
-                        .action(push_to.clone(), git::PushTo.boxed_clone())
-                        .action(force_push.clone(), git::ForcePush.boxed_clone())
+                        .action(push, git::Push.boxed_clone())
+                        .action(push_to, git::PushTo.boxed_clone())
+                        .action(force_push, git::ForcePush.boxed_clone())
                 }))
             })
             .anchor(Anchor::TopRight)
@@ -1347,6 +1314,8 @@ impl Component for GitStatusIcon {
     }
 }
 
+const GIT_CLONE_GUIDE_URL: &str = "https://github.com/git-guides/git-clone";
+
 struct GitCloneModal {
     panel: Entity<GitPanel>,
     repo_input: Entity<Editor>,
@@ -1424,9 +1393,7 @@ impl Render for GitCloneModal {
                         )
                         .label_size(LabelSize::Small)
                         .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::XSmall))
-                        .on_click(|_, _, cx| {
-                            cx.open_url("https://github.com/git-guides/git-clone");
-                        }),
+                        .on_click(|_, _, cx| cx.open_url(GIT_CLONE_GUIDE_URL)),
                     ),
             )
             .on_action(cx.listener(|_, _: &menu::Cancel, _, cx| {

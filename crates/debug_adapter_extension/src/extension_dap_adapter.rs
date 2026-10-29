@@ -30,13 +30,14 @@ impl ExtensionDapAdapter {
         debug_adapter_name: Arc<str>,
         schema_path: &Path,
     ) -> Result<Self> {
-        let schema = std::fs::read_to_string(&schema_path).with_context(|| {
+        let schema = std::fs::read_to_string(schema_path).with_context(|| {
             format!(
-                "Failed to read debug adapter schema for {debug_adapter_name} (from path: `{schema_path:?}`)"
+                "failed to read debug adapter schema for {debug_adapter_name} from `{}`",
+                schema_path.display()
             )
         })?;
         let schema = serde_json::Value::from_str(&schema).with_context(|| {
-            format!("Debug adapter schema for {debug_adapter_name} is not a valid JSON")
+            format!("debug adapter schema for {debug_adapter_name} is not valid JSON")
         })?;
         Ok(Self {
             extension,

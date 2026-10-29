@@ -54,10 +54,12 @@ impl EncodingSelector {
             .read(cx)
             .active_buffer(cx)?;
 
-        let buffer_handle = buffer.read(cx);
-        let project = workspace.project().read(cx);
+        let is_dirty = buffer.read(cx).is_dirty();
+        // Read the flag eagerly: holding the project guard across `toggle_modal`
+        // would keep the entity locked while the modal is built.
+        let is_via_remote_server = workspace.project().read(cx).is_via_remote_server();
 
-        if buffer_handle.is_dirty() {
+        if is_dirty {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
@@ -71,7 +73,7 @@ impl EncodingSelector {
             );
             return Some(());
         }
-        if project.is_via_remote_server() {
+        if is_via_remote_server {
             workspace.show_toast(
                 Toast::new(
                     NotificationId::unique::<EncodingSelector>(),
@@ -300,6 +302,8 @@ impl PickerDelegate for EncodingSelectorDelegate {
         if let Some(mat) = self.matches.get(self.selected_index) {
             let selected_encoding = self.encodings[mat.candidate_id];
 
+            // The reload runs as its own task on the buffer; the receiver only
+            // reports the resulting transaction, which this picker does not use.
             self.buffer.update(cx, |buffer, cx| {
                 drop(buffer.reload_with_encoding(selected_encoding, cx));
             });

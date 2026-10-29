@@ -82,16 +82,13 @@ impl KeyContextView {
                     } else {
                         String::new()
                     };
-                    let mut name = binding.action().name();
-                    if name == "zzz::NoAction" {
-                        name = "(null)"
-                    }
+                    let name: SharedString = if binding.action().name() == "zzz::NoAction" {
+                        tr(cx, "language_tools.key_context.null_action", "(null)").into()
+                    } else {
+                        binding.action().name().to_owned().into()
+                    };
 
-                    (
-                        name.to_owned().into(),
-                        json!(predicate).to_string().into(),
-                        match_state,
-                    )
+                    (name, json!(predicate).to_string().into(), match_state)
                 })
                 .collect();
             cx.notify();
@@ -174,8 +171,6 @@ impl Item for KeyContextView {
 
 impl Render for KeyContextView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl ui::IntoElement {
-        use itertools::Itertools;
-
         let key_equivalents = cx.keyboard_mapper().get_key_equivalents();
         v_flex()
             .id("key-context-view")
@@ -327,9 +322,30 @@ impl Render for KeyContextView {
                             .iter()
                             .map(|(name, predicate, state)| {
                                 let (text, color) = match state {
-                                    Some(true) => ("(match)", ui::Color::Success),
-                                    Some(false) => ("(low precedence)", ui::Color::Hint),
-                                    None => ("(no match)", ui::Color::Error),
+                                    Some(true) => (
+                                        tr(
+                                            cx,
+                                            "language_tools.key_context.match_state_match",
+                                            "(match)",
+                                        ),
+                                        ui::Color::Success,
+                                    ),
+                                    Some(false) => (
+                                        tr(
+                                            cx,
+                                            "language_tools.key_context.match_state_low_precedence",
+                                            "(low precedence)",
+                                        ),
+                                        ui::Color::Hint,
+                                    ),
+                                    None => (
+                                        tr(
+                                            cx,
+                                            "language_tools.key_context.match_state_no_match",
+                                            "(no match)",
+                                        ),
+                                        ui::Color::Error,
+                                    ),
                                 };
                                 h_flex()
                                     .gap_2()

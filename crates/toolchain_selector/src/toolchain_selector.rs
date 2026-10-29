@@ -154,7 +154,7 @@ impl AddToolchainState {
                             None
                         }
                     })
-                    .ok()
+                    .log_err()
                     .flatten();
                 let is_loading = weak
                     .read_with(cx, |this, _| {
@@ -229,30 +229,34 @@ impl AddToolchainState {
                     }
                     Err(error) => Err(error),
                 };
-                let Ok(toolchain) = toolchain else {
-                    // Go back to the path input state
-                    _ = this.update_in(cx, |this, window, cx| {
-                        if let AddState::Path {
-                            input_state,
-                            picker,
-                            error,
-                            ..
-                        } = &mut this.state
-                            && matches!(input_state, PathInputState::Resolving(_))
-                        {
-                            let Err(e) = toolchain else { unreachable!() };
-                            *error = Some(Arc::from(e.to_string()));
-                            let (delegate, rx) =
-                                Self::create_path_browser_delegate(this.project.clone(), cx);
-                            picker.update(cx, |picker, cx| {
-                                *picker = Picker::uniform_list(delegate, window, cx);
-                                picker.set_query(path.to_string_lossy().as_ref(), window, cx);
-                            });
-                            *input_state = Self::wait_for_path(rx, window, cx);
-                            this.focus_handle(cx).focus(window, cx);
-                        }
-                    });
-                    return Err(anyhow::anyhow!("Failed to resolve toolchain"));
+                let toolchain = match toolchain {
+                    Ok(toolchain) => toolchain,
+                    Err(error) => {
+                        let message: Arc<str> = Arc::from(error.to_string());
+                        // Go back to the path input state.
+                        this.update_in(cx, move |this, window, cx| {
+                            if let AddState::Path {
+                                input_state,
+                                picker,
+                                error,
+                                ..
+                            } = &mut this.state
+                                && matches!(input_state, PathInputState::Resolving(_))
+                            {
+                                *error = Some(message);
+                                let (delegate, rx) =
+                                    Self::create_path_browser_delegate(this.project.clone(), cx);
+                                picker.update(cx, |picker, cx| {
+                                    *picker = Picker::uniform_list(delegate, window, cx);
+                                    picker.set_query(path.to_string_lossy().as_ref(), window, cx);
+                                });
+                                *input_state = Self::wait_for_path(rx, window, cx);
+                                this.focus_handle(cx).focus(window, cx);
+                            }
+                        })
+                        .log_err();
+                        return Err(anyhow::anyhow!("Failed to resolve toolchain"));
+                    }
                 };
                 let resolved_toolchain_path = project.read_with(cx, |this, cx| {
                     this.find_project_path_for_native_path(&toolchain.native_path, cx)
@@ -276,7 +280,7 @@ impl AddToolchainState {
                     ToolchainScope::Global
                 };
 
-                _ = this.update_in(cx, |this, window, cx| {
+                this.update_in(cx, |this, window, cx| {
                     let scope_picker = ScopePickerState {
                         entries: std::array::from_fn(|_| NavigableEntry::focusable(cx)),
                         selected_scope: scope,
@@ -291,7 +295,8 @@ impl AddToolchainState {
                         scope_picker,
                     };
                     this.focus_handle(cx).focus(window, cx);
-                });
+                })
+                .log_err();
 
                 Result::<_, anyhow::Error>::Ok(())
             })
@@ -329,7 +334,7 @@ impl AddToolchainState {
                         );
                     }
                 })
-                .ok()?;
+                .log_err()?;
                 Some(())
             })
             .await;
@@ -361,11 +366,13 @@ impl AddToolchainState {
         self.project.update(cx, |this, cx| {
             this.add_toolchain(toolchain.clone(), scope_picker.selected_scope.clone(), cx);
         });
-        _ = self.weak.update(cx, |this, cx| {
-            this.state = State::Search((this.create_search_state)(window, cx));
-            this.focus_handle(cx).focus(window, cx);
-            cx.notify();
-        });
+        self.weak
+            .update(cx, |this, cx| {
+                this.state = State::Search((this.create_search_state)(window, cx));
+                this.focus_handle(cx).focus(window, cx);
+                cx.notify();
+            })
+            .log_err();
     }
 }
 impl Focusable for AddToolchainState {
@@ -523,24 +530,6 @@ impl Render for AddToolchainState {
                                                         cx,
                                                     );
                                                 }))
-                                                .map(|this| {
-                                                    if false {
-                                                        this.with_animation(
-                                                            "inspecting-user-toolchain",
-                                                            Animation::new(Duration::from_millis(
-                                                                500,
-                                                            ))
-                                                            .repeat()
-                                                            .with_easing(pulsating_between(
-                                                                0.4, 0.8,
-                                                            )),
-                                                            |label, delta| label.alpha(delta),
-                                                        )
-                                                        .into_any()
-                                                    } else {
-                                                        this.into_any_element()
-                                                    }
-                                                }),
                                         )
                                     })),
                             )
@@ -668,7 +657,7 @@ impl ToolchainSelector {
                 let language = language_registry
                     .language_for_name(&language_name.0)
                     .await
-                    .ok();
+                    .log_err();
                 this.update(cx, |this, cx| {
                     this.language = language;
                     cx.notify();
@@ -793,17 +782,17 @@ impl ToolchainSelectorDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Self {
-        let _project = project.clone();
+        let detection_project = project.clone();
         let path_style = project.read(cx).path_style(cx);
 
         let _fetch_candidates_task = cx.spawn_in(window, {
             async move |this, cx| {
-                let meta = _project
+                let meta = detection_project
                     .read_with(cx, |this, _| {
                         Project::toolchain_metadata(this.languages().clone(), language_name.clone())
                     })
                     .await?;
-                let relative_path = this
+                let requested_path = this
                     .update(cx, |this, cx| {
                         this.delegate.add_toolchain_text = format!(
                             "{} {}",
@@ -814,18 +803,20 @@ impl ToolchainSelectorDelegate {
                         cx.notify();
                         this.delegate.relative_path.clone()
                     })
-                    .ok()?;
+                    .log_err()?;
 
+                // `available_toolchains` reports the path it actually ran the
+                // detection at, which can differ from the requested one.
                 let Toolchains {
                     toolchains: available_toolchains,
-                    root_path: relative_path,
+                    root_path,
                     user_toolchains,
-                } = _project
+                } = detection_project
                     .update(cx, |this, cx| {
                         this.available_toolchains(
                             ProjectPath {
                                 worktree_id,
-                                path: relative_path.clone(),
+                                path: requested_path,
                             },
                             language_name,
                             cx,
@@ -836,11 +827,11 @@ impl ToolchainSelectorDelegate {
                     .update(cx, |_, cx| {
                         tr(cx, "toolchain_selector.worktree_root", "worktree root")
                     })
-                    .ok()?;
-                let pretty_path = if relative_path.is_empty() {
+                    .log_err()?;
+                let pretty_path = if root_path.is_empty() {
                     worktree_root_label
                 } else {
-                    format!("`{}`", relative_path.display(path_style))
+                    format!("`{}`", root_path.display(path_style))
                 };
                 let placeholder_text = this
                     .update(cx, |_, cx| {
@@ -852,9 +843,9 @@ impl ToolchainSelectorDelegate {
                         .replacen("{}", &meta.term.to_lowercase(), 1)
                         .replacen("{}", &pretty_path, 1)
                     })
-                    .ok()?;
+                    .log_err()?;
                 this.update_in(cx, move |this, window, cx| {
-                    this.delegate.relative_path = relative_path;
+                    this.delegate.relative_path = root_path;
                     this.delegate.placeholder_text = placeholder_text.into();
                     this.refresh_placeholder(window, cx);
                 })
@@ -918,6 +909,33 @@ impl ToolchainSelectorDelegate {
             )),
         }
     }
+    /// Removes the candidate at `candidate_id` and every match pointing at it.
+    ///
+    /// The candidate ids stored in the matches are indices into
+    /// `self.candidates`, so every id above the removed one has to be shifted
+    /// down to keep the two collections aligned.
+    fn remove_candidate(&mut self, candidate_id: usize) {
+        if candidate_id >= self.candidates.len() {
+            return;
+        }
+
+        let dropped_before_selection =
+            remove_matches_for_candidate(&mut self.matches, candidate_id, self.selected_index);
+
+        let candidates = self
+            .candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, candidate)| (ix != candidate_id).then(|| candidate.clone()))
+            .collect();
+        self.candidates = candidates;
+
+        self.selected_index = self
+            .selected_index
+            .saturating_sub(dropped_before_selection)
+            .min(self.matches.len().saturating_sub(1));
+    }
+
     fn relativize_path(path: String, worktree_root: &Path, path_style: PathStyle) -> SharedString {
         let relative_path = Path::new(path.as_str())
             .strip_prefix(&worktree_root)
@@ -929,6 +947,32 @@ impl ToolchainSelectorDelegate {
             path.into()
         }
     }
+}
+
+/// Drops every match pointing at `candidate_id` and shifts the ids of the later
+/// candidates down by one so they keep pointing at the right entries.
+///
+/// Returns how many matches were dropped from before `selected_index`, which is
+/// the amount the selection has to move up to stay on the same row.
+fn remove_matches_for_candidate(
+    matches: &mut Vec<StringMatch>,
+    candidate_id: usize,
+    selected_index: usize,
+) -> usize {
+    let mut dropped_before_selection = 0;
+    let mut index = 0;
+    matches.retain_mut(|candidate_match| {
+        let keep = candidate_match.candidate_id != candidate_id;
+        if keep && candidate_match.candidate_id > candidate_id {
+            candidate_match.candidate_id -= 1;
+        }
+        if !keep && index < selected_index {
+            dropped_before_selection += 1;
+        }
+        index += 1;
+        keep
+    });
+    dropped_before_selection
 }
 
 impl PickerDelegate for ToolchainSelectorDelegate {
@@ -943,45 +987,43 @@ impl PickerDelegate for ToolchainSelectorDelegate {
     }
 
     fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        if let Some(string_match) = self.matches.get(self.selected_index) {
-            let (toolchain, _) = self.candidates[string_match.candidate_id].clone();
-            if let Some(workspace_id) = self
+        if let Some(string_match) = self.matches.get(self.selected_index)
+            && let Some((toolchain, _)) = self.candidates.get(string_match.candidate_id).cloned()
+            && let Some(workspace_id) = self
                 .workspace
                 .read_with(cx, |this, _| this.database_id())
-                .ok()
+                .log_err()
                 .flatten()
-            {
-                let workspace = self.workspace.clone();
-                let worktree_id = self.worktree_id;
-                let worktree_abs_path_root = self.worktree_abs_path_root.clone();
-                let path = self.relative_path.clone();
-                let relative_path = self.relative_path.clone();
-                let db = workspace::WorkspaceDb::global(cx);
-                cx.spawn_in(window, async move |_, cx| {
-                    db.set_toolchain(
-                        workspace_id,
-                        worktree_abs_path_root,
-                        relative_path,
-                        toolchain.clone(),
-                    )
-                    .await
-                    .log_err();
-                    workspace
-                        .update(cx, |this, cx| {
-                            this.project().update(cx, |this, cx| {
-                                this.activate_toolchain(
-                                    ProjectPath { worktree_id, path },
-                                    toolchain,
-                                    cx,
-                                )
-                            })
+        {
+            let workspace = self.workspace.clone();
+            let worktree_id = self.worktree_id;
+            let worktree_abs_path_root = self.worktree_abs_path_root.clone();
+            let path = self.relative_path.clone();
+            let db = workspace::WorkspaceDb::global(cx);
+            cx.spawn_in(window, async move |_, cx| {
+                db.set_toolchain(
+                    workspace_id,
+                    worktree_abs_path_root,
+                    path.clone(),
+                    toolchain.clone(),
+                )
+                .await
+                .log_err();
+                workspace
+                    .update(cx, |this, cx| {
+                        this.project().update(cx, |this, cx| {
+                            this.activate_toolchain(
+                                ProjectPath { worktree_id, path },
+                                toolchain,
+                                cx,
+                            )
                         })
-                        .ok()?
-                        .await;
-                    Some(())
-                })
-                .detach();
-            }
+                    })
+                    .log_err()?
+                    .await;
+                Some(())
+            })
+            .detach();
         }
         self.dismissed(window, cx);
     }
@@ -1016,38 +1058,35 @@ impl PickerDelegate for ToolchainSelectorDelegate {
         let worktree_root_path = self.worktree_abs_path_root.clone();
         let path_style = self.project.read(cx).path_style(cx);
         cx.spawn_in(window, async move |this, cx| {
+            // The candidate id of a match indexes `self.candidates`, so the
+            // rendered string is built once per candidate for both branches.
+            let candidate_strings = candidates
+                .iter()
+                .enumerate()
+                .map(|(candidate_id, (toolchain, _))| {
+                    let path = Self::relativize_path(
+                        toolchain.display_path(),
+                        &worktree_root_path,
+                        path_style,
+                    );
+                    (candidate_id, format!("{}{}", toolchain.name, path))
+                })
+                .collect::<Vec<_>>();
+
             let matches = if query.is_empty() {
-                candidates
+                candidate_strings
                     .into_iter()
-                    .enumerate()
-                    .map(|(index, (candidate, _))| {
-                        let path = Self::relativize_path(
-                            candidate.display_path(),
-                            &worktree_root_path,
-                            path_style,
-                        );
-                        let string = format!("{}{}", candidate.name, path);
-                        StringMatch {
-                            candidate_id: index,
-                            string,
-                            positions: Vec::new(),
-                            score: 0.0,
-                        }
+                    .map(|(candidate_id, string)| StringMatch {
+                        candidate_id,
+                        string,
+                        positions: Vec::new(),
+                        score: 0.0,
                     })
                     .collect()
             } else {
-                let candidates = candidates
+                let candidates = candidate_strings
                     .into_iter()
-                    .enumerate()
-                    .map(|(candidate_id, (toolchain, _))| {
-                        let path = Self::relativize_path(
-                            toolchain.display_path(),
-                            &worktree_root_path,
-                            path_style,
-                        );
-                        let string = format!("{}{}", toolchain.name, path);
-                        StringMatchCandidate::new(candidate_id, &string)
-                    })
+                    .map(|(candidate_id, string)| StringMatchCandidate::new(candidate_id, &string))
                     .collect::<Vec<_>>();
                 match_strings(
                     &candidates,
@@ -1098,7 +1137,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
         for index in &mut path_highlights {
             *index -= label.len();
         }
-        let id: SharedString = format!("toolchain-{ix}",).into();
+        let id: SharedString = format!("toolchain-{ix}").into();
         Some(
             ListItem::new(id)
                 .inset(true)
@@ -1117,6 +1156,9 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                         toolchain.display_path()
                     )
                     .into();
+                    // `ix` is the index into the matches, while the candidate
+                    // that has to be deleted is the one this match points at.
+                    let candidate_id = mat.candidate_id;
                     let toolchain = toolchain.clone();
                     let scope = scope.clone();
 
@@ -1126,27 +1168,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                                 this.remove_toolchain(toolchain.clone(), scope.clone(), cx)
                             });
 
-                            this.delegate.matches.retain_mut(|m| {
-                                if m.candidate_id == ix {
-                                    return false;
-                                } else if m.candidate_id > ix {
-                                    m.candidate_id -= 1;
-                                }
-                                true
-                            });
-
-                            this.delegate.candidates = this
-                                .delegate
-                                .candidates
-                                .iter()
-                                .enumerate()
-                                .filter_map(|(i, toolchain)| (ix != i).then_some(toolchain.clone()))
-                                .collect();
-
-                            if this.delegate.selected_index >= ix {
-                                this.delegate.selected_index =
-                                    this.delegate.selected_index.saturating_sub(1);
-                            }
+                            this.delegate.remove_candidate(candidate_id);
                             cx.stop_propagation();
                             cx.notify();
                         },
@@ -1169,7 +1191,7 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                         .gap_0p5()
                         .justify_end()
                         .child(
-                            Button::new("xd", self.add_toolchain_text.clone())
+                            Button::new("add-toolchain", self.add_toolchain_text.clone())
                                 .key_binding(KeyBinding::for_action_in(
                                     &AddToolchain,
                                     &self.focus_handle,
@@ -1193,5 +1215,58 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                 )
                 .into_any_element(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn string_match(candidate_id: usize) -> StringMatch {
+        StringMatch {
+            candidate_id,
+            string: format!("candidate-{candidate_id}"),
+            positions: Vec::new(),
+            score: 0.0,
+        }
+    }
+
+    #[test]
+    fn removing_a_candidate_drops_its_match_and_renumbers_the_rest() {
+        // Under a fuzzy filter the match index differs from the candidate id,
+        // so the removal has to go through the id carried by the match.
+        let mut matches = vec![string_match(3), string_match(0), string_match(5)];
+
+        remove_matches_for_candidate(&mut matches, 3, 0);
+
+        let remaining = matches
+            .iter()
+            .map(|candidate_match| candidate_match.candidate_id)
+            .collect::<Vec<_>>();
+        assert_eq!(remaining, [0, 4]);
+    }
+
+    #[test]
+    fn removing_an_unknown_candidate_keeps_every_match() {
+        let mut matches = vec![string_match(0), string_match(1)];
+
+        remove_matches_for_candidate(&mut matches, 7, 0);
+
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[1].candidate_id, 1);
+    }
+
+    #[test]
+    fn the_selection_only_moves_when_a_row_above_it_disappears() {
+        let mut matches = vec![string_match(0), string_match(1), string_match(2)];
+
+        // The deleted candidate sits above the selected row, so the selection
+        // has to move up to stay on the same toolchain.
+        assert_eq!(remove_matches_for_candidate(&mut matches, 0, 2), 1);
+
+        let mut matches = vec![string_match(0), string_match(1), string_match(2)];
+
+        // The selected row itself is the deleted one: nothing above it moved.
+        assert_eq!(remove_matches_for_candidate(&mut matches, 2, 2), 0);
     }
 }

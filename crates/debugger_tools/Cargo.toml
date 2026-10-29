@@ -22,6 +22,7 @@ editor.workspace = true
 futures.workspace = true
 gpui.workspace = true
 i18n.workspace = true
+language.workspace = true
 project.workspace = true
 serde_json.workspace = true
 settings.workspace = true

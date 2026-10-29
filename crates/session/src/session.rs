@@ -13,7 +13,7 @@ const SESSION_WINDOW_STACK_KEY: &str = "session_window_stack";
 
 impl Session {
     pub async fn new(session_id: String, db: KeyValueStore) -> Self {
-        let old_session_id = db.read_kvp(SESSION_ID_KEY).ok().flatten();
+        let old_session_id = db.read_kvp(SESSION_ID_KEY).log_err().flatten();
 
         db.write_kvp(SESSION_ID_KEY.to_owned(), session_id.clone())
             .await
@@ -21,7 +21,7 @@ impl Session {
 
         let old_window_ids = db
             .read_kvp(SESSION_WINDOW_STACK_KEY)
-            .ok()
+            .log_err()
             .flatten()
             .and_then(|json| serde_json::from_str::<Vec<u64>>(&json).ok())
             .map(|vec: Vec<u64>| {
@@ -72,23 +72,21 @@ impl AppSession {
 
         let _serialization_task = if cfg!(not(any(test, feature = "test-support"))) {
             let db = KeyValueStore::global(cx);
+            // Disabled in tests: the infinite loop bypasses "parking forbidden" checks,
+            // causing tests to hang instead of panicking.
             cx.spawn(async move |_, cx| {
-                // Disabled in tests: the infinite loop bypasses "parking forbidden" checks,
-                // causing tests to hang instead of panicking.
-                {
-                    let mut current_window_stack = Vec::new();
-                    loop {
-                        if let Some(windows) = cx.update(|cx| window_stack(cx))
-                            && windows != current_window_stack
-                        {
-                            store_window_stack(db.clone(), &windows).await;
-                            current_window_stack = windows;
-                        }
-
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(500))
-                            .await;
+                let mut current_window_stack = Vec::new();
+                loop {
+                    if let Some(windows) = cx.update(|cx| window_stack(cx))
+                        && windows != current_window_stack
+                    {
+                        store_window_stack(db.clone(), &windows).await;
+                        current_window_stack = windows;
                     }
+
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(500))
+                        .await;
                 }
             })
         } else {
@@ -139,11 +137,12 @@ fn window_stack(cx: &App) -> Option<Vec<u64>> {
 }
 
 async fn store_window_stack(db: KeyValueStore, windows: &[u64]) {
-    if let Ok(window_ids_json) = serde_json::to_string(windows) {
-        db.write_kvp(SESSION_WINDOW_STACK_KEY.to_owned(), window_ids_json)
-            .await
-            .log_err();
-    }
+    let Some(window_ids_json) = serde_json::to_string(windows).log_err() else {
+        return;
+    };
+    db.write_kvp(SESSION_WINDOW_STACK_KEY.to_owned(), window_ids_json)
+        .await
+        .log_err();
 }
 
 #[cfg(test)]

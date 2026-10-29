@@ -65,6 +65,26 @@ pub fn format_date_medium(
     format_absolute_date_medium(timestamp, reference, enhanced_formatting)
 }
 
+/// The relative-day label for `timestamp`, when it is the same day as
+/// `reference` or the day before.
+///
+/// Every formatter needs this check before falling back to an absolute date, and
+/// each platform formats that absolute date differently.
+fn relative_day_label(
+    timestamp: OffsetDateTime,
+    reference: OffsetDateTime,
+) -> Option<&'static str> {
+    let timestamp_date = timestamp.date();
+    let reference_date = reference.date();
+    if timestamp_date == reference_date {
+        Some("Today")
+    } else if reference_date.previous_day() == Some(timestamp_date) {
+        Some("Yesterday")
+    } else {
+        None
+    }
+}
+
 fn format_absolute_date(
     timestamp: OffsetDateTime,
     reference: OffsetDateTime,
@@ -76,15 +96,8 @@ fn format_absolute_date(
             return macos::format_date(&timestamp);
         }
 
-        let timestamp_date = timestamp.date();
-        let reference_date = reference.date();
-        if timestamp_date == reference_date {
-            "Today".to_owned()
-        } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_owned()
-        } else {
-            macos::format_date(&timestamp)
-        }
+        relative_day_label(timestamp, reference)
+            .map_or_else(|| macos::format_date(&timestamp), str::to_owned)
     }
     #[cfg(target_os = "windows")]
     {
@@ -92,15 +105,8 @@ fn format_absolute_date(
             return windows::format_date(&timestamp);
         }
 
-        let timestamp_date = timestamp.date();
-        let reference_date = reference.date();
-        if timestamp_date == reference_date {
-            "Today".to_owned()
-        } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_owned()
-        } else {
-            windows::format_date(&timestamp)
-        }
+        relative_day_label(timestamp, reference)
+            .map_or_else(|| windows::format_date(&timestamp), str::to_owned)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -151,19 +157,16 @@ fn format_absolute_timestamp(
             );
         }
 
-        let timestamp_date = timestamp.date();
-        let reference_date = reference.date();
-        if timestamp_date == reference_date {
-            format!("Today at {}", format_absolute_time(timestamp))
-        } else if reference_date.previous_day() == Some(timestamp_date) {
-            format!("Yesterday at {}", format_absolute_time(timestamp))
-        } else {
-            format!(
-                "{} {}",
-                format_absolute_date(timestamp, reference, enhanced_date_formatting),
-                format_absolute_time(timestamp)
-            )
-        }
+        relative_day_label(timestamp, reference).map_or_else(
+            || {
+                format!(
+                    "{} {}",
+                    format_absolute_date(timestamp, reference, enhanced_date_formatting),
+                    format_absolute_time(timestamp)
+                )
+            },
+            |day| format!("{day} at {}", format_absolute_time(timestamp)),
+        )
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -183,15 +186,8 @@ fn format_absolute_date_medium(
             return macos::format_date_medium(&timestamp);
         }
 
-        let timestamp_date = timestamp.date();
-        let reference_date = reference.date();
-        if timestamp_date == reference_date {
-            "Today".to_owned()
-        } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_owned()
-        } else {
-            macos::format_date_medium(&timestamp)
-        }
+        relative_day_label(timestamp, reference)
+            .map_or_else(|| macos::format_date_medium(&timestamp), str::to_owned)
     }
     #[cfg(target_os = "windows")]
     {
@@ -199,40 +195,23 @@ fn format_absolute_date_medium(
             return windows::format_date_medium(&timestamp);
         }
 
-        let timestamp_date = timestamp.date();
-        let reference_date = reference.date();
-        if timestamp_date == reference_date {
-            "Today".to_owned()
-        } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_owned()
-        } else {
-            windows::format_date_medium(&timestamp)
-        }
+        relative_day_label(timestamp, reference)
+            .map_or_else(|| windows::format_date_medium(&timestamp), str::to_owned)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         // todo(linux) respect user's date/time preferences
         let current_locale = CURRENT_LOCALE
             .get_or_init(|| sys_locale::get_locale().unwrap_or_else(|| String::from("en-US")));
+        let is_12_hour_time = is_12_hour_time_by_locale(current_locale.as_str());
         if !enhanced_formatting {
-            return format_timestamp_naive_date_medium(
-                timestamp,
-                is_12_hour_time_by_locale(current_locale.as_str()),
-            );
+            return format_timestamp_naive_date_medium(timestamp, is_12_hour_time);
         }
 
-        let timestamp_date = timestamp.date();
-        let reference_date = reference.date();
-        if timestamp_date == reference_date {
-            "Today".to_owned()
-        } else if reference_date.previous_day() == Some(timestamp_date) {
-            "Yesterday".to_owned()
-        } else {
-            format_timestamp_naive_date_medium(
-                timestamp,
-                is_12_hour_time_by_locale(current_locale.as_str()),
-            )
-        }
+        relative_day_label(timestamp, reference).map_or_else(
+            || format_timestamp_naive_date_medium(timestamp, is_12_hour_time),
+            str::to_owned,
+        )
     }
 }
 
@@ -240,18 +219,14 @@ fn format_absolute_timestamp_medium(
     timestamp: OffsetDateTime,
     reference: OffsetDateTime,
 ) -> String {
-    #[cfg(target_os = "macos")]
-    {
-        format_absolute_date_medium(timestamp, reference, false)
-    }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         format_absolute_date_medium(timestamp, reference, false)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         // todo(linux) respect user's date/time preferences
-        // todo(windows) respect user's date/time preferences
+        // The naive fallback has no medium style and renders the short date.
         format_timestamp_fallback(timestamp, reference)
     }
 }
@@ -279,6 +254,13 @@ fn format_relative_date(timestamp: OffsetDateTime, reference: OffsetDateTime) ->
     let reference_date = reference.date();
     let difference = reference_date - timestamp_date;
     let days = difference.whole_days();
+    // Callers can hand over a timestamp that is ahead of the reference (clock
+    // skew, or a file dated in the future). Relative wording only describes the
+    // past, and the month arithmetic below assumes `reference` is the later of
+    // the two, so a future timestamp is reported as today.
+    if days < 0 {
+        return "Today".to_owned();
+    }
     match days {
         0 => "Today".to_owned(),
         1 => "Yesterday".to_owned(),
@@ -320,6 +302,12 @@ fn format_compound_year_month(month_diff: usize) -> String {
 /// Calculates the difference in months between two timestamps.
 /// The reference timestamp should always be greater than the timestamp.
 fn calculate_month_difference(timestamp: OffsetDateTime, reference: OffsetDateTime) -> usize {
+    // The callers are meant to pass `reference >= timestamp`; a timestamp ahead
+    // of the reference has no elapsed months rather than a negative count.
+    if reference < timestamp {
+        return 0;
+    }
+
     let timestamp_year = timestamp.year();
     let reference_year = reference.year();
     let timestamp_month: u8 = timestamp.month().into();
@@ -331,9 +319,9 @@ fn calculate_month_difference(timestamp: OffsetDateTime, reference: OffsetDateTi
         12 - timestamp_month as usize + reference_month as usize
     };
 
-    let year_diff = (reference_year - timestamp_year) as usize;
+    let year_diff = reference_year.saturating_sub(timestamp_year) as usize;
     if year_diff == 0 {
-        reference_month as usize - timestamp_month as usize
+        reference_month.saturating_sub(timestamp_month) as usize
     } else if month_diff == 0 {
         year_diff * 12
     } else if timestamp_month > reference_month {
@@ -375,34 +363,40 @@ fn format_timestamp_naive_time(timestamp_local: OffsetDateTime, is_12_hour_time:
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Renders the date as `MM/DD/YYYY` for 12-hour locales and `DD/MM/YYYY`
+/// otherwise, with no relative-day handling.
+fn format_timestamp_naive_date_only(
+    timestamp_local: OffsetDateTime,
+    is_12_hour_time: bool,
+) -> String {
+    let date = timestamp_local.date();
+    if is_12_hour_time {
+        format!(
+            "{:02}/{:02}/{}",
+            date.month() as u32,
+            date.day(),
+            date.year()
+        )
+    } else {
+        format!(
+            "{:02}/{:02}/{}",
+            date.day(),
+            date.month() as u32,
+            date.year()
+        )
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn format_timestamp_naive_date(
     timestamp_local: OffsetDateTime,
     reference_local: OffsetDateTime,
     is_12_hour_time: bool,
 ) -> String {
-    let reference_local_date = reference_local.date();
-    let timestamp_local_date = timestamp_local.date();
-
-    if timestamp_local_date == reference_local_date {
-        "Today".to_owned()
-    } else if reference_local_date.previous_day() == Some(timestamp_local_date) {
-        "Yesterday".to_owned()
-    } else if is_12_hour_time {
-        format!(
-            "{:02}/{:02}/{}",
-            timestamp_local_date.month() as u32,
-            timestamp_local_date.day(),
-            timestamp_local_date.year()
-        )
-    } else {
-        format!(
-            "{:02}/{:02}/{}",
-            timestamp_local_date.day(),
-            timestamp_local_date.month() as u32,
-            timestamp_local_date.year()
-        )
-    }
+    relative_day_label(timestamp_local, reference_local).map_or_else(
+        || format_timestamp_naive_date_only(timestamp_local, is_12_hour_time),
+        str::to_owned,
+    )
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -410,23 +404,7 @@ fn format_timestamp_naive_date_medium(
     timestamp_local: OffsetDateTime,
     is_12_hour_time: bool,
 ) -> String {
-    let timestamp_local_date = timestamp_local.date();
-
-    if is_12_hour_time {
-        format!(
-            "{:02}/{:02}/{}",
-            timestamp_local_date.month() as u32,
-            timestamp_local_date.day(),
-            timestamp_local_date.year()
-        )
-    } else {
-        format!(
-            "{:02}/{:02}/{}",
-            timestamp_local_date.day(),
-            timestamp_local_date.month() as u32,
-            timestamp_local_date.year()
-        )
-    }
+    format_timestamp_naive_date_only(timestamp_local, is_12_hour_time)
 }
 
 pub fn format_timestamp_naive(
@@ -435,31 +413,17 @@ pub fn format_timestamp_naive(
     is_12_hour_time: bool,
 ) -> String {
     let formatted_time = format_timestamp_naive_time(timestamp_local, is_12_hour_time);
-    let reference_local_date = reference_local.date();
-    let timestamp_local_date = timestamp_local.date();
 
-    if timestamp_local_date == reference_local_date {
-        format!("Today at {}", formatted_time)
-    } else if reference_local_date.previous_day() == Some(timestamp_local_date) {
-        format!("Yesterday at {}", formatted_time)
-    } else {
-        let formatted_date = if is_12_hour_time {
+    relative_day_label(timestamp_local, reference_local).map_or_else(
+        || {
             format!(
-                "{:02}/{:02}/{}",
-                timestamp_local_date.month() as u32,
-                timestamp_local_date.day(),
-                timestamp_local_date.year()
+                "{} {}",
+                format_timestamp_naive_date_only(timestamp_local, is_12_hour_time),
+                formatted_time
             )
-        } else {
-            format!(
-                "{:02}/{:02}/{}",
-                timestamp_local_date.day(),
-                timestamp_local_date.month() as u32,
-                timestamp_local_date.year()
-            )
-        };
-        format!("{} {}", formatted_date, formatted_time)
-    }
+        },
+        |day| format!("{day} at {formatted_time}"),
+    )
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -609,7 +573,7 @@ mod windows {
                 if is_time {
                     super::format_timestamp_naive_time(*timestamp, true)
                 } else {
-                    super::format_timestamp_naive_date(*timestamp, *timestamp, true)
+                    super::format_timestamp_naive_date_only(*timestamp, true)
                 }
             })
     }
@@ -1169,6 +1133,36 @@ mod tests {
         assert_eq!(
             format_local_timestamp(timestamp, reference, TimestampFormat::Relative),
             "2 minutes ago"
+        );
+    }
+
+    #[test]
+    fn relative_formats_tolerate_a_timestamp_ahead_of_the_reference() {
+        let reference = create_offset_datetime(1990, 4, 12, 23, 0, 0);
+        // Same year, later month: the month arithmetic used to subtract the
+        // larger month from the smaller one and underflow.
+        let timestamp = create_offset_datetime(1990, 5, 12, 23, 0, 0);
+
+        assert_eq!(format_relative_date(timestamp, reference), "Today");
+        assert_eq!(
+            format_local_timestamp(timestamp, reference, TimestampFormat::Relative),
+            "Today"
+        );
+
+        // A later year takes the `year_diff` branch instead.
+        let timestamp = create_offset_datetime(1991, 1, 12, 23, 0, 0);
+        assert_eq!(format_relative_date(timestamp, reference), "Today");
+        assert_eq!(calculate_month_difference(timestamp, reference), 0);
+    }
+
+    #[test]
+    fn format_timestamp_naive_renders_a_date_without_a_relative_day_label() {
+        let reference = create_offset_datetime(1990, 4, 20, 10, 0, 0);
+        let timestamp = create_offset_datetime(1990, 4, 10, 20, 20, 0);
+
+        assert_eq!(
+            format_timestamp_naive(timestamp, reference, true),
+            "04/10/1990 8:20 PM"
         );
     }
 

@@ -17,8 +17,8 @@ use gpui::{
     Action, AnyElement, App, AppContext, Empty, Entity, EventEmitter, FocusHandle, Focusable,
     Global, SharedString, Subscription, Task, WeakEntity, Window, prelude::*,
 };
-use i18n as app_i18n;
 
+use crate::tr;
 use language::{Buffer, Capability, OffsetRangeExt, Point};
 use multi_buffer::PathKey;
 use project::{Project, ProjectItem, ProjectPath};
@@ -29,7 +29,7 @@ use std::{
     ops::Range,
     sync::Arc,
 };
-use ui::{CommonAnimationExt, IconButtonShape, KeyBinding, Tooltip, prelude::*, vertical_divider};
+use ui::{CommonAnimationExt, IconButtonShape, Tooltip, prelude::*, vertical_divider};
 use util::{ResultExt, truncate_and_trailoff};
 use workspace::{
     Item, ItemHandle, ItemNavHistory, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
@@ -38,10 +38,6 @@ use workspace::{
     searchable::SearchableItemHandle,
 };
 use zzz_actions::assistant::ToggleFocus;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 pub struct AgentDiffPane {
     multibuffer: Entity<MultiBuffer>,
@@ -727,11 +723,7 @@ impl Render for AgentDiffPane {
                                     .color(Color::Muted),
                             )
                             .full_width()
-                            .key_binding(KeyBinding::for_action_in(
-                                &ToggleFocus,
-                                &focus_handle.clone(),
-                                cx,
-                            ))
+                            .key_binding(crate::footer_key_binding(&ToggleFocus, focus_handle, cx))
                             .on_click(|_event, window, cx| {
                                 window.dispatch_action(ToggleFocus.boxed_clone(), cx)
                             }),
@@ -750,19 +742,17 @@ fn diff_hunk_controls(
 
     Arc::new(
         move |row, status, hunk_range, is_created_file, line_height, editor, _, cx| {
-            {
-                render_diff_hunk_controls(
-                    row,
-                    status,
-                    hunk_range,
-                    is_created_file,
-                    line_height,
-                    &thread,
-                    editor,
-                    workspace.clone(),
-                    cx,
-                )
-            }
+            render_diff_hunk_controls(
+                row,
+                status,
+                hunk_range,
+                is_created_file,
+                line_height,
+                &thread,
+                editor,
+                workspace.clone(),
+                cx,
+            )
         },
     )
 }
@@ -803,10 +793,11 @@ fn render_diff_hunk_controls(
                 tr(cx, "agent_ui.agent_diff.reject", "Reject"),
             )
             .disabled(is_created_file)
-            .key_binding(
-                KeyBinding::for_action_in(&Reject, &editor.read(cx).focus_handle(cx), cx)
-                    .map(|kb| kb.size(rems_from_px(12.))),
-            )
+            .key_binding(crate::footer_key_binding(
+                &Reject,
+                &editor.read(cx).focus_handle(cx),
+                cx,
+            ))
             .on_click({
                 let editor = editor.clone();
                 let thread = thread.clone();
@@ -829,10 +820,11 @@ fn render_diff_hunk_controls(
                 ("keep", row as u64),
                 tr(cx, "agent_ui.agent_diff.keep", "Keep"),
             )
-            .key_binding(
-                KeyBinding::for_action_in(&Keep, &editor.read(cx).focus_handle(cx), cx)
-                    .map(|kb| kb.size(rems_from_px(12.))),
-            )
+            .key_binding(crate::footer_key_binding(
+                &Keep,
+                &editor.read(cx).focus_handle(cx),
+                cx,
+            ))
             .on_click({
                 let editor = editor.clone();
                 let thread = thread.clone();
@@ -858,7 +850,6 @@ fn render_diff_hunk_controls(
                     IconButton::new(("next-hunk", row as u64), IconName::ArrowDown)
                         .shape(IconButtonShape::Square)
                         .icon_size(IconSize::Small)
-                        // .disabled(!has_multiple_hunks)
                         .tooltip({
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
@@ -894,7 +885,6 @@ fn render_diff_hunk_controls(
                     IconButton::new(("prev-hunk", row as u64), IconName::ArrowUp)
                         .shape(IconButtonShape::Square)
                         .icon_size(IconSize::Small)
-                        // .disabled(!has_multiple_hunks)
                         .tooltip({
                             let focus_handle = editor.focus_handle(cx);
                             move |_window, cx| {
@@ -1147,8 +1137,7 @@ impl Render for AgentDiffToolbar {
                                     tr(cx, "agent_ui.agent_diff.reject_all", "Reject All"),
                                 )
                                 .key_binding({
-                                    KeyBinding::for_action_in(&RejectAll, &editor_focus_handle, cx)
-                                        .map(|kb| kb.size(rems_from_px(12.)))
+                                    crate::footer_key_binding(&RejectAll, &editor_focus_handle, cx)
                                 })
                                 .on_click(cx.listener(
                                     |this, _, window, cx| {
@@ -1162,8 +1151,7 @@ impl Render for AgentDiffToolbar {
                                     tr(cx, "agent_ui.agent_diff.keep_all", "Keep All"),
                                 )
                                 .key_binding({
-                                    KeyBinding::for_action_in(&KeepAll, &editor_focus_handle, cx)
-                                        .map(|kb| kb.size(rems_from_px(12.)))
+                                    crate::footer_key_binding(&KeepAll, &editor_focus_handle, cx)
                                 })
                                 .on_click(cx.listener(
                                     |this, _, window, cx| {
@@ -1249,8 +1237,7 @@ impl Render for AgentDiffToolbar {
                                     tr(cx, "agent_ui.agent_diff.reject_all", "Reject All"),
                                 )
                                 .key_binding({
-                                    KeyBinding::for_action_in(&RejectAll, &focus_handle, cx)
-                                        .map(|kb| kb.size(rems_from_px(12.)))
+                                    crate::footer_key_binding(&RejectAll, &focus_handle, cx)
                                 })
                                 .on_click(cx.listener(
                                     |this, _, window, cx| {
@@ -1264,8 +1251,7 @@ impl Render for AgentDiffToolbar {
                                     tr(cx, "agent_ui.agent_diff.keep_all", "Keep All"),
                                 )
                                 .key_binding({
-                                    KeyBinding::for_action_in(&KeepAll, &focus_handle, cx)
-                                        .map(|kb| kb.size(rems_from_px(12.)))
+                                    crate::footer_key_binding(&KeepAll, &focus_handle, cx)
                                 })
                                 .on_click(cx.listener(
                                     |this, _, window, cx| {
@@ -1623,46 +1609,42 @@ impl AgentDiff {
                     multibuffer.add_diff(diff_handle.clone(), cx);
                 });
 
-                let reviewing_state = EditorState::Reviewing;
-
-                let previous_state = self
+                let already_reviewing = self
                     .reviewing_editors
-                    .insert(weak_editor.clone(), reviewing_state.clone());
+                    .insert(weak_editor.clone(), EditorState::Reviewing)
+                    .is_some();
 
-                if previous_state.is_none() {
-                    editor.update(cx, |editor, cx| {
-                        editor.start_temporary_diff_override();
-                        editor.set_render_diff_hunk_controls(
-                            diff_hunk_controls(&thread, workspace.clone()),
-                            cx,
-                        );
-                        editor.set_expand_all_diff_hunks(cx);
-                        editor.register_addon(EditorAgentDiffAddon);
-                    });
-                } else {
+                if already_reviewing {
+                    // Still under review, so keep it out of the cleanup pass below.
                     unaffected.remove(weak_editor);
+                    continue;
                 }
 
-                if reviewing_state == EditorState::Reviewing
-                    && previous_state != Some(reviewing_state)
-                {
-                    // Jump to first hunk when we enter review mode
-                    editor.update(cx, |editor, cx| {
-                        let snapshot = multibuffer.read(cx).snapshot(cx);
-                        if let Some(first_hunk) = snapshot.diff_hunks().next() {
-                            let first_hunk_start = first_hunk.multi_buffer_range.start;
+                // Entering review mode: enable the diff override and put the
+                // cursor on the first hunk so the user lands on something to review.
+                editor.update(cx, |editor, cx| {
+                    editor.start_temporary_diff_override();
+                    editor.set_render_diff_hunk_controls(
+                        diff_hunk_controls(&thread, workspace.clone()),
+                        cx,
+                    );
+                    editor.set_expand_all_diff_hunks(cx);
+                    editor.register_addon(EditorAgentDiffAddon);
 
-                            editor.change_selections(
-                                SelectionEffects::scroll(Autoscroll::center()),
-                                window,
-                                cx,
-                                |selections| {
-                                    selections.select_ranges([first_hunk_start..first_hunk_start])
-                                },
-                            );
-                        }
-                    });
-                }
+                    let snapshot = multibuffer.read(cx).snapshot(cx);
+                    if let Some(first_hunk) = snapshot.diff_hunks().next() {
+                        let first_hunk_start = first_hunk.multi_buffer_range.start;
+
+                        editor.change_selections(
+                            SelectionEffects::scroll(Autoscroll::center()),
+                            window,
+                            cx,
+                            |selections| {
+                                selections.select_ranges([first_hunk_start..first_hunk_start])
+                            },
+                        );
+                    }
+                });
             }
         }
 
@@ -1791,12 +1773,12 @@ impl AgentDiff {
     }
 
     fn post_review_state(snapshot: &MultiBufferSnapshot) -> PostReviewState {
-        for (i, _) in snapshot.diff_hunks().enumerate() {
-            if i > 0 {
-                return PostReviewState::Pending;
-            }
+        // A second hunk means there is still something left to review.
+        if snapshot.diff_hunks().nth(1).is_some() {
+            PostReviewState::Pending
+        } else {
+            PostReviewState::AllReviewed
         }
-        PostReviewState::AllReviewed
     }
 
     fn review_in_active_editor(
@@ -1834,12 +1816,12 @@ impl AgentDiff {
         {
             let changed_buffers = thread.read(cx).action_log().read(cx).changed_buffers(cx);
 
+            // Advance past the current buffer and take whatever changed buffer
+            // comes next in iteration order. If the current buffer is not part
+            // of the map, the iterator is exhausted and nothing is opened.
             let mut keys = changed_buffers.keys();
-            keys.find(|k| *k == &curr_buffer);
-            let next_project_path = keys
-                .next()
-                .filter(|k| *k != &curr_buffer)
-                .and_then(|after| after.read(cx).project_path(cx));
+            keys.find(|key| *key == &curr_buffer);
+            let next_project_path = keys.next().and_then(|next| next.read(cx).project_path(cx));
 
             if let Some(path) = next_project_path {
                 let task = workspace.open_path(path, None, true, window, cx);

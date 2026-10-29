@@ -1,3 +1,4 @@
+use crate::tr;
 use crate::{
     CycleModeSelector, ManageProfiles, ToggleProfileSelector, ui::documentation_aside_side,
 };
@@ -22,10 +23,6 @@ use ui::{
     PopoverMenuHandle, Tooltip, prelude::*,
 };
 use util::ResultExt as _;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 /// Trait for types that can provide and manage agent profiles
 pub trait ProfileProvider {
@@ -319,9 +316,7 @@ impl ProfilePickerDelegate {
             focus_handle,
         };
 
-        this.selected_index = this
-            .index_of_profile(&this.provider.profile_id(cx))
-            .unwrap_or_else(|| this.first_selectable_index().unwrap_or(0));
+        this.select_active_profile(cx);
 
         this
     }
@@ -337,11 +332,7 @@ impl ProfilePickerDelegate {
         self.string_candidates = Arc::new(Self::string_candidates(&self.candidates));
 
         if query.is_empty() {
-            self.query.clear();
-            self.filtered_entries = Self::entries_from_candidates(&self.candidates);
-            self.selected_index = self
-                .index_of_profile(&self.provider.profile_id(cx))
-                .unwrap_or_else(|| self.first_selectable_index().unwrap_or(0));
+            self.reset_filtered_entries(cx);
             cx.notify();
         } else {
             self.filtered_entries.clear();
@@ -425,6 +416,21 @@ impl ProfilePickerDelegate {
         entries
     }
 
+    /// Points the selection at the active profile, falling back to the first
+    /// selectable entry.
+    fn select_active_profile(&mut self, cx: &App) {
+        self.selected_index = self
+            .index_of_profile(&self.provider.profile_id(cx))
+            .unwrap_or_else(|| self.first_selectable_index().unwrap_or(0));
+    }
+
+    /// Restores the unfiltered entry list with the active profile selected.
+    fn reset_filtered_entries(&mut self, cx: &App) {
+        self.query.clear();
+        self.filtered_entries = Self::entries_from_candidates(&self.candidates);
+        self.select_active_profile(cx);
+    }
+
     fn first_selectable_index(&self) -> Option<usize> {
         self.filtered_entries
             .iter()
@@ -497,11 +503,7 @@ impl PickerDelegate for ProfilePickerDelegate {
         self._refresh_search_task = None;
 
         if query.is_empty() {
-            self.query.clear();
-            self.filtered_entries = Self::entries_from_candidates(&self.candidates);
-            self.selected_index = self
-                .index_of_profile(&self.provider.profile_id(cx))
-                .unwrap_or_else(|| self.first_selectable_index().unwrap_or(0));
+            self.reset_filtered_entries(cx);
             cx.notify();
             return Task::ready(());
         }
@@ -548,30 +550,30 @@ impl PickerDelegate for ProfilePickerDelegate {
     }
 
     fn confirm(&mut self, _: bool, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        match self.filtered_entries.get(self.selected_index) {
-            Some(ProfilePickerEntry::Profile(entry)) => {
-                if let Some(candidate) = self.candidates.get(entry.candidate_index) {
-                    let profile_id = candidate.id.clone();
-                    let fs = self.fs.clone();
-                    let provider = self.provider.clone();
+        let Some(ProfilePickerEntry::Profile(entry)) =
+            self.filtered_entries.get(self.selected_index)
+        else {
+            return;
+        };
+        let Some(candidate) = self.candidates.get(entry.candidate_index) else {
+            return;
+        };
 
-                    update_settings_file(fs, cx, {
-                        let profile_id = profile_id.clone();
-                        move |settings, _cx| {
-                            settings
-                                .agent
-                                .get_or_insert_default()
-                                .set_profile(profile_id.0);
-                        }
-                    });
+        let profile_id = candidate.id.clone();
+        let fs = self.fs.clone();
 
-                    provider.set_profile(profile_id, cx);
-                }
-
-                cx.emit(DismissEvent);
+        update_settings_file(fs, cx, {
+            let profile_id = profile_id.clone();
+            move |settings, _cx| {
+                settings
+                    .agent
+                    .get_or_insert_default()
+                    .set_profile(profile_id.0);
             }
-            _ => {}
-        }
+        });
+
+        self.provider.set_profile(profile_id, cx);
+        cx.emit(DismissEvent);
     }
 
     fn dismissed(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -703,10 +705,11 @@ impl PickerDelegate for ProfilePickerDelegate {
                     )
                     .full_width()
                     .style(ButtonStyle::Outlined)
-                    .key_binding(
-                        KeyBinding::for_action_in(&ManageProfiles::default(), &focus_handle, cx)
-                            .map(|kb| kb.size(rems_from_px(12.))),
-                    )
+                    .key_binding(crate::footer_key_binding(
+                        &ManageProfiles::default(),
+                        &focus_handle,
+                        cx,
+                    ))
                     .on_click(|_, window, cx| {
                         window.dispatch_action(ManageProfiles::default().boxed_clone(), cx);
                     }),
@@ -748,8 +751,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn entries_include_custom_profiles(_cx: &mut TestAppContext) {
+    #[test]
+    fn entries_include_custom_profiles() {
         let candidates = vec![
             ProfileCandidate {
                 id: AgentProfileId("write".into()),

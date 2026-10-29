@@ -80,9 +80,6 @@ pub enum Commands {
 }
 
 pub fn run(command: Commands) -> anyhow::Result<()> {
-    use anyhow::Context;
-    use release_channel::{RELEASE_CHANNEL, ReleaseChannel};
-
     match command {
         Commands::Run {
             log_file,
@@ -438,7 +435,7 @@ pub fn execute_run(
         .stack_size(10 * 1024 * 1024)
         .thread_name(|ix| format!("RayonWorker{}", ix))
         .build_global()
-        .expect("entry should be present");
+        .context("failed to build the global Rayon thread pool")?;
 
     #[cfg(unix)]
     let shell_env_loaded_rx = {
@@ -593,7 +590,7 @@ impl ServerPaths {
             }
         })?;
         let log_dir = logs_dir();
-        std::fs::create_dir_all(log_dir).map_err(|source| ServerPathError::CreateLogsDir {
+        std::fs::create_dir_all(&log_dir).map_err(|source| ServerPathError::CreateLogsDir {
             source,
             path: log_dir.clone(),
         })?;
@@ -602,7 +599,7 @@ impl ServerPaths {
         let stdin_socket = server_dir.join("stdin.sock");
         let stdout_socket = server_dir.join("stdout.sock");
         let stderr_socket = server_dir.join("stderr.sock");
-        let log_file = logs_dir().join(format!("server-{}.log", identifier));
+        let log_file = log_dir.join(format!("server-{}.log", identifier));
 
         Ok(Self {
             pid_file,
@@ -705,7 +702,7 @@ pub(crate) fn execute_proxy(
                 );
                 kill_running_server(pid, &server_paths)?;
             }
-            gpui::block_on(spawn_server(&server_paths)).map_err(ExecuteProxyError::SpawnServer)?;
+            spawn_server(&server_paths).map_err(ExecuteProxyError::SpawnServer)?;
             std::fs::read_to_string(&server_paths.pid_file)
                 .and_then(|contents| {
                     contents.parse::<u32>().map_err(|_| {
@@ -766,7 +763,7 @@ pub(crate) fn execute_proxy(
                 0 => {
                     let error =
                         std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "stderr closed");
-                    Err(anyhow!(error))?;
+                    return Err(error.into());
                 }
                 n => {
                     stderr.write_all(&stderr_buffer[..n]).await?;
@@ -796,13 +793,31 @@ pub(crate) fn execute_proxy(
     Ok(())
 }
 
+/// Reads the full process table.
+///
+/// `System` construction is fallible since `sysinfo` 0.40; process inspection is
+/// best-effort, so callers treat an unavailable process table as "no process
+/// information" instead of failing their own operation.
+fn process_system(refresh_kind: sysinfo::RefreshKind) -> Option<sysinfo::System> {
+    match sysinfo::System::new_with_specifics(refresh_kind) {
+        Ok(system) => Some(system),
+        Err(error) => {
+            log::error!("failed to read process information: {error}");
+            None
+        }
+    }
+}
+
 fn kill_running_server(pid: u32, paths: &ServerPaths) -> Result<(), ExecuteProxyError> {
     log::info!("killing existing server with PID {}", pid);
-    let system = sysinfo::System::new_with_specifics(
+    let system = process_system(
         sysinfo::RefreshKind::nothing().with_processes(sysinfo::ProcessRefreshKind::nothing()),
     );
 
-    if let Some(process) = system.process(sysinfo::Pid::from_u32(pid)) {
+    if let Some(process) = system
+        .as_ref()
+        .and_then(|system| system.process(sysinfo::Pid::from_u32(pid)))
+    {
         let killed = process.kill();
         if !killed {
             return Err(ExecuteProxyError::KillRunningServer { pid });
@@ -843,8 +858,13 @@ pub enum SpawnServerError {
     Timeout,
 }
 
-async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
-    log::info!("spawning server process",);
+/// Spawns the server process and waits for its sockets to appear.
+///
+/// Plain (non-async) on purpose: it only does filesystem work and a bounded
+/// blocking wait, so it has nothing to await. The proxy process runs outside
+/// gpui and is free to block while the server boots.
+fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
+    log::info!("spawning server process");
     if paths.stdin_socket.exists() {
         std::fs::remove_file(&paths.stdin_socket).map_err(SpawnServerError::RemoveStdinSocket)?;
     }
@@ -874,6 +894,9 @@ async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
         || !paths.stderr_socket.exists()
     {
         log::debug!("waiting for server to be ready to accept connections...");
+        // Deliberately blocks: the proxy runs outside gpui, so there is no
+        // executor timer to await (and `smol::Timer` is disallowed repo-wide).
+        // The wait is bounded at 20ms slices up to the 10s timeout below.
         std::thread::sleep(wait_duration);
         total_time_waited += wait_duration;
         if total_time_waited > std::time::Duration::from_secs(10) {
@@ -968,11 +991,15 @@ fn check_pid_file(path: &Path) -> Result<Option<u32>, CheckPidError> {
 
     log::debug!("Checking if process with PID {} exists...", pid);
 
-    let system = sysinfo::System::new_with_specifics(
+    let system = process_system(
         sysinfo::RefreshKind::nothing().with_processes(sysinfo::ProcessRefreshKind::nothing()),
     );
 
-    if system.process(sysinfo::Pid::from_u32(pid)).is_some() {
+    if system
+        .as_ref()
+        .and_then(|system| system.process(sysinfo::Pid::from_u32(pid)))
+        .is_some()
+    {
         log::debug!(
             "Process with PID {} exists. NOT spawning new server, but attaching to existing one.",
             pid
@@ -1167,9 +1194,11 @@ fn is_new_version(version: &str) -> bool {
 }
 
 fn is_file_in_use(file_name: &OsStr) -> bool {
-    let info = sysinfo::System::new_with_specifics(sysinfo::RefreshKind::nothing().with_processes(
+    let Some(info) = process_system(sysinfo::RefreshKind::nothing().with_processes(
         sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::Always),
-    ));
+    )) else {
+        return false;
+    };
 
     for process in info.processes().values() {
         if process

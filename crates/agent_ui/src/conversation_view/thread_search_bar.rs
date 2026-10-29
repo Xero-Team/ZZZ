@@ -15,7 +15,6 @@ use gpui::{
     Action, App, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, KeyContext,
     SharedString, Subscription, Task, TextStyle, WeakEntity, Window, actions, prelude::*,
 };
-use i18n as app_i18n;
 use markdown::Markdown;
 use multi_buffer::{Anchor, MultiBufferOffset, MultiBufferSnapshot};
 use project::search::SearchQuery;
@@ -27,10 +26,7 @@ use util::ResultExt as _;
 use util::paths::PathMatcher;
 
 use super::thread_view::ThreadView;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
+use crate::tr;
 
 actions!(
     agent,

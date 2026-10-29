@@ -389,7 +389,14 @@ fn get_processes_for_project(project: &Entity<Project>, cx: &mut App) -> Task<Ar
                 .without_tasks()
                 .with_cmd(UpdateKind::Always),
         );
-        let mut processes: Box<[_]> = System::new_with_specifics(refresh_kind)
+        let system = match System::new_with_specifics(refresh_kind) {
+            Ok(system) => system,
+            Err(error) => {
+                log::error!("failed to initialize sysinfo: {error}");
+                return Task::ready(Arc::from([]));
+            }
+        };
+        let mut processes: Box<[_]> = system
             .processes()
             .values()
             .map(|process| {
@@ -406,8 +413,7 @@ fn get_processes_for_project(project: &Entity<Project>, cx: &mut App) -> Task<Ar
             })
             .collect();
         processes.sort_by(|left, right| left.name.cmp(&right.name));
-        let processes = processes.into_iter().collect();
-        Task::ready(processes)
+        Task::ready(Arc::from(processes))
     }
 }
 

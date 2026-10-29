@@ -47,7 +47,7 @@ pub mod __private {
 pub fn register_component<T: Component>() {
     let id = T::id();
     let metadata = ComponentMetadata {
-        id: id.clone(),
+        id,
         description: T::description().map(Into::into),
         name: SharedString::new_static(T::name()),
         preview: Some(T::preview),
@@ -104,9 +104,13 @@ impl ComponentRegistry {
     pub fn len(&self) -> usize {
         self.components.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.components.is_empty()
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ComponentId(pub &'static str);
 
 #[derive(Clone)]
@@ -122,7 +126,7 @@ pub struct ComponentMetadata {
 
 impl ComponentMetadata {
     pub fn id(&self) -> ComponentId {
-        self.id.clone()
+        self.id
     }
 
     pub fn description(&self) -> Option<SharedString> {
@@ -146,13 +150,10 @@ impl ComponentMetadata {
     }
 
     pub fn scopeless_name(&self) -> SharedString {
-        self.name
-            .clone()
-            .split("::")
-            .last()
-            .unwrap_or(&self.name)
-            .to_owned()
-            .into()
+        match self.name.rsplit_once("::") {
+            Some((_, name)) => SharedString::from(name),
+            None => self.name.clone(),
+        }
     }
 
     pub fn status(&self) -> ComponentStatus {
@@ -215,7 +216,8 @@ pub trait Component {
     /// - IconButton  -> ButtonBIcon
     /// - ToggleButton -> ButtonCToggle
     ///
-    /// This naming scheme keeps these components together and allows them to /// be sorted in a logical order.
+    /// This naming scheme keeps these components together and allows them to
+    /// be sorted in a logical order.
     fn sort_name() -> &'static str {
         Self::name()
     }
@@ -349,6 +351,15 @@ mod tests {
             sort_name: SharedString::new_static(sort_name),
             status: ComponentStatus::Live,
         }
+    }
+
+    #[test]
+    fn scopeless_name_drops_the_module_path() {
+        let with_path = metadata("button", "ui::components::Button", "Button");
+        assert_eq!(with_path.scopeless_name().as_ref(), "Button");
+
+        let without_path = metadata("plain", "Button", "Button");
+        assert_eq!(without_path.scopeless_name().as_ref(), "Button");
     }
 
     #[test]

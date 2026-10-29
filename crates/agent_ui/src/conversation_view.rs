@@ -93,6 +93,7 @@ use crate::entry_view_state::{EntryViewEvent, ViewEvent};
 use crate::message_editor::{InputAttempt, MessageEditor, MessageEditorEvent};
 use crate::profile_selector::ProfileSelector;
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore};
+use crate::tr;
 use crate::ui::{AgentNotification, AgentNotificationEvent};
 use crate::{
     Agent, AgentDiffPane, AgentInitialContent, AgentPanel, AgentPanelEvent, AllowAlways, AllowOnce,
@@ -113,10 +114,6 @@ pub(crate) mod elicitation;
 mod thread_search_bar;
 mod thread_view;
 pub use thread_view::*;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 pub struct QueuedMessage {
     pub content: Vec<acp::ContentBlock>,
@@ -1494,6 +1491,37 @@ impl ConversationView {
         }
     }
 
+    /// Settles the thread's view once the turn has ended: drop the retry
+    /// status, scroll to the end when the list was following it, and re-sync
+    /// the generating indicator. `clear_auto_expand` forgets which thinking
+    /// block was last auto-expanded, so the next turn auto-expands a fresh one;
+    /// it is skipped after an error, where the block stays open.
+    fn settle_finished_turn(
+        &mut self,
+        session_id: &acp::SessionId,
+        thread: &Entity<AcpThread>,
+        clear_auto_expand: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(active) = self.thread_view(session_id) else {
+            return;
+        };
+
+        let is_generating = matches!(thread.read(cx).status(), ThreadStatus::Generating);
+        active.update(cx, |active, cx| {
+            if !is_generating {
+                active.thread_retry_status.take();
+                if clear_auto_expand {
+                    active.clear_auto_expand_tracking();
+                }
+                if active.list_state.is_following_tail() {
+                    active.list_state.scroll_to_end();
+                }
+            }
+            active.sync_generating_indicator(cx);
+        });
+    }
+
     fn handle_thread_event(
         &mut self,
         thread: &Entity<AcpThread>,
@@ -1601,20 +1629,7 @@ impl ConversationView {
                 }
             }
             AcpThreadEvent::Stopped(stop_reason) => {
-                if let Some(active) = self.thread_view(&session_id) {
-                    let is_generating =
-                        matches!(thread.read(cx).status(), ThreadStatus::Generating);
-                    active.update(cx, |active, cx| {
-                        if !is_generating {
-                            active.thread_retry_status.take();
-                            active.clear_auto_expand_tracking();
-                            if active.list_state.is_following_tail() {
-                                active.list_state.scroll_to_end();
-                            }
-                        }
-                        active.sync_generating_indicator(cx);
-                    });
-                }
+                self.settle_finished_turn(&session_id, thread, true, cx);
                 if is_subagent {
                     if *stop_reason == acp::StopReason::EndTurn {
                         thread.update(cx, |thread, cx| {
@@ -1691,19 +1706,7 @@ impl ConversationView {
                 }
             }
             AcpThreadEvent::Error => {
-                if let Some(active) = self.thread_view(&session_id) {
-                    let is_generating =
-                        matches!(thread.read(cx).status(), ThreadStatus::Generating);
-                    active.update(cx, |active, cx| {
-                        if !is_generating {
-                            active.thread_retry_status.take();
-                            if active.list_state.is_following_tail() {
-                                active.list_state.scroll_to_end();
-                            }
-                        }
-                        active.sync_generating_indicator(cx);
-                    });
-                }
+                self.settle_finished_turn(&session_id, thread, false, cx);
                 if !is_subagent {
                     self.notify_with_sound(
                         tr(
@@ -2000,30 +2003,39 @@ impl ConversationView {
             "agent_ui.conversation.login_command_terminated_without_exit_status",
             "Login command terminated without exit status",
         );
+        let login_command_missing = app_i18n::tr(
+            cx,
+            "agent_ui.conversation.login_command_missing",
+            "Login command is missing",
+        );
 
         window.spawn(cx, async move |cx| {
             let mut task = login.clone();
-            if let Some(cmd) = &task.command {
-                // Have "node" command use ZZZ's managed Node runtime by default
-                if cmd == "node" {
-                    let resolved_node_runtime = project.update(cx, |project, cx| {
-                        let agent_server_store = project.agent_server_store().clone();
-                        agent_server_store.update(cx, |store, cx| {
-                            store.node_runtime().map(|node_runtime| {
-                                cx.background_spawn(async move { node_runtime.binary_path().await })
-                            })
+            // Have the "node" command use ZZZ's managed Node runtime by default
+            if let Some(cmd) = &task.command
+                && cmd == "node"
+            {
+                let resolved_node_runtime = project.update(cx, |project, cx| {
+                    let agent_server_store = project.agent_server_store().clone();
+                    agent_server_store.update(cx, |store, cx| {
+                        store.node_runtime().map(|node_runtime| {
+                            cx.background_spawn(async move { node_runtime.binary_path().await })
                         })
-                    });
+                    })
+                });
 
-                    if let Some(resolve_task) = resolved_node_runtime {
-                        if let Ok(node_path) = resolve_task.await {
-                            task.command = Some(node_path.to_string_lossy().to_string());
-                        }
-                    }
+                if let Some(resolve_task) = resolved_node_runtime
+                    && let Some(node_path) = resolve_task.await.log_err()
+                {
+                    task.command = Some(node_path.to_string_lossy().to_string());
                 }
             }
+
+            let Some(program) = task.command.take() else {
+                return Err(anyhow!(login_command_missing));
+            };
             task.shell = task::Shell::WithArguments {
-                program: task.command.take().expect("login command should be set"),
+                program,
                 args: std::mem::take(&mut task.args),
                 title_override: None,
             };
@@ -2633,11 +2645,9 @@ impl ConversationView {
                     })
     }
 
-    fn agent_status_visible(&self, window: &Window, cx: &Context<Self>) -> bool {
-        if !window.is_window_active() {
-            return false;
-        }
-
+    /// Whether this thread is the one on display in `window`, whether that
+    /// window is a multi-workspace shell or a plain workspace.
+    fn is_visible_in_window(&self, window: &Window, cx: &Context<Self>) -> bool {
         if let Some(multi_workspace) = window.root::<MultiWorkspace>().flatten() {
             self.is_visible(&multi_workspace, cx)
         } else {
@@ -2647,16 +2657,13 @@ impl ConversationView {
         }
     }
 
+    fn agent_status_visible(&self, window: &Window, cx: &Context<Self>) -> bool {
+        window.is_window_active() && self.is_visible_in_window(window, cx)
+    }
+
     #[cfg(feature = "audio")]
     fn play_notification_sound(&self, window: &Window, cx: &mut Context<Self>) {
-        let visible = window.is_window_active()
-            && if let Some(mw) = window.root::<MultiWorkspace>().flatten() {
-                self.is_visible(&mw, cx)
-            } else {
-                self.workspace
-                    .upgrade()
-                    .is_some_and(|workspace| AgentPanel::is_visible(&workspace, cx))
-            };
+        let visible = window.is_window_active() && self.is_visible_in_window(window, cx);
         let settings = AgentSettings::get_global(cx);
         if settings.play_sound_when_agent_done.should_play(visible) {
             Audio::play_sound(Sound::AgentDone, cx);
@@ -3115,47 +3122,47 @@ impl ConversationView {
     }
 
     fn request_elicitation_card_handlers(view: WeakEntity<Self>) -> ElicitationCardHandlers {
-        ElicitationCardHandlers::new(
-            {
+        ElicitationCardHandlers {
+            on_submit: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.submit_request_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_decline: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.decline_request_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_cancel: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.cancel_request_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_dismiss_url: {
                 let view = view.clone();
-                move |elicitation_id, _window, cx| {
+                Rc::new(move |elicitation_id, _window, cx| {
                     view.update(cx, |this, cx| {
                         this.dismiss_request_url_elicitation(elicitation_id, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            move |_elicitation_id, url, _window, cx| cx.open_url(&url),
-            {
+            on_open_url: Rc::new(|_elicitation_id, url, _window, cx| cx.open_url(&url)),
+            on_boolean_change: {
                 let view = view.clone();
-                move |elicitation_id, field_name, value, cx| {
+                Rc::new(move |elicitation_id, field_name, value, cx| {
                     view.update(cx, |this, cx| {
                         this.update_request_elicitation_form_state(
                             &elicitation_id,
@@ -3164,11 +3171,11 @@ impl ConversationView {
                         );
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_single_select_change: {
                 let view = view.clone();
-                move |elicitation_id, field_name, value, cx| {
+                Rc::new(move |elicitation_id, field_name, value, cx| {
                     view.update(cx, |this, cx| {
                         this.update_request_elicitation_form_state(
                             &elicitation_id,
@@ -3177,19 +3184,21 @@ impl ConversationView {
                         );
                     })
                     .log_err();
-                }
-            },
-            move |elicitation_id, field_name, value, selected, cx| {
-                view.update(cx, |this, cx| {
-                    this.update_request_elicitation_form_state(
-                        &elicitation_id,
-                        |form| form.set_multi_select(&field_name, value, selected),
-                        cx,
-                    );
                 })
-                .log_err();
             },
-        )
+            on_multi_select_change: Rc::new(
+                move |elicitation_id, field_name, value, selected, cx| {
+                    view.update(cx, |this, cx| {
+                        this.update_request_elicitation_form_state(
+                            &elicitation_id,
+                            |form| form.set_multi_select(&field_name, value, selected),
+                            cx,
+                        );
+                    })
+                    .log_err();
+                },
+            ),
+        }
     }
 
     fn update_request_elicitation_form_state(

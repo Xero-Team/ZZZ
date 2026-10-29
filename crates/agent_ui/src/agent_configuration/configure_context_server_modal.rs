@@ -7,7 +7,6 @@ use gpui::{
     AsyncWindowContext, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle,
     Subscription, Task, TextStyle, TextStyleRefinement, UnderlineStyle, WeakEntity, prelude::*,
 };
-use i18n as app_i18n;
 use language::{Language, LanguageRegistry};
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use notifications::status_toast::StatusToast;
@@ -25,20 +24,20 @@ use settings::{Settings as _, update_settings_file};
 use std::sync::Arc;
 use theme_settings::ThemeSettings;
 use ui::{
-    CommonAnimationExt, KeyBinding, Modal, ModalFooter, ModalHeader, Section, Tooltip,
-    WithScrollbar, prelude::*,
+    CommonAnimationExt, Modal, ModalFooter, ModalHeader, Section, Tooltip, WithScrollbar,
+    prelude::*,
 };
 use util::ResultExt as _;
 use workspace::{ModalView, Workspace};
 
+use crate::tr;
 use crate::{AddContextServer, ContextServerType};
 
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
-
 fn template_text(cx: Option<&App>, key: &'static str, fallback: &'static str) -> String {
-    cx.map_or_else(|| fallback.to_owned(), |cx| app_i18n::tr(cx, key, fallback))
+    cx.map_or_else(
+        || fallback.to_owned(),
+        |cx| tr(cx, key, fallback).to_string(),
+    )
 }
 
 enum ConfigurationTarget {
@@ -232,7 +231,7 @@ impl ConfigurationSource {
             } => {
                 let text = editor
                     .as_ref()
-                    .context(app_i18n::tr(
+                    .context(tr(
                         cx,
                         "agent_ui.context_server.no_output_available",
                         "No output available",
@@ -509,7 +508,7 @@ fn parse_http_input_for_ui(
             .to_string()
             .contains("Expected exactly one context server configuration")
         {
-            anyhow::anyhow!(app_i18n::tr(
+            anyhow::anyhow!(tr(
                 cx,
                 "agent_ui.context_server.expected_exactly_one_context_server_configuration",
                 "Expected exactly one context server configuration",
@@ -532,7 +531,7 @@ fn resolve_context_server_extension(
     };
 
     let extension = crate::agent_configuration::resolve_extension_for_context_server(&id, cx);
-    let failed_to_resolve_configuration = app_i18n::tr(
+    let failed_to_resolve_configuration = tr(
         cx,
         "agent_ui.context_server.failed_to_resolve_configuration",
         "Failed to resolve context server configuration",
@@ -653,12 +652,12 @@ impl ConfigureContextServerModal {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<()>> {
-        let not_found = app_i18n::tr(
+        let not_found = tr(
             cx,
             "agent_ui.context_server.not_found",
             "Context server not found",
         );
-        let failed_to_resolve = app_i18n::tr(
+        let failed_to_resolve = tr(
             cx,
             "agent_ui.context_server.failed_to_resolve",
             "Failed to resolve context server",
@@ -760,7 +759,7 @@ impl ConfigureContextServerModal {
                     secret_editor: cx.new(|cx| {
                         let mut editor = Editor::single_line(window, cx);
                         editor.set_placeholder_text(
-                            &app_i18n::tr(
+                            &tr(
                                 cx,
                                 "agent_ui.context_server.enter_client_secret_public_clients",
                                 "Enter client secret (leave empty for public clients)",
@@ -828,11 +827,12 @@ impl ConfigureContextServerModal {
                 "Context server store was dropped",
             )
             .into(),
-            app_i18n::tr(
+            tr(
                 cx,
                 "agent_ui.context_server.timed_out_waiting_to_start",
                 "Timed out waiting for context server `{}` to start. Check the ZZZ log for details.",
-            ),
+            )
+            .to_string(),
             cx,
         );
         cx.spawn({
@@ -971,7 +971,7 @@ impl ConfigureContextServerModal {
             .update(cx, {
                 |workspace, cx| {
                     let status_toast = StatusToast::new(
-                        app_i18n::tr(
+                        tr(
                             cx,
                             "agent_ui.context_server.configured_successfully",
                             "{} configured successfully.",
@@ -985,7 +985,7 @@ impl ConfigureContextServerModal {
                                     .color(Color::Muted),
                             )
                             .action(
-                                app_i18n::tr(cx, "agent_ui.context_server.dismiss", "Dismiss"),
+                                tr(cx, "agent_ui.context_server.dismiss", "Dismiss"),
                                 |_, _| {},
                             )
                         },
@@ -1013,13 +1013,13 @@ fn parse_input_for_ui(text: &str, cx: &App) -> Result<(ContextServerId, ContextS
     parse_input(text).map_err(|error| {
         let message = error.to_string();
         if message.contains("Expected object") {
-            anyhow::anyhow!(app_i18n::tr(
+            anyhow::anyhow!(tr(
                 cx,
                 "agent_ui.context_server.expected_object",
                 "Expected object",
             ))
         } else if message.contains("Expected exactly one key-value pair") {
-            anyhow::anyhow!(app_i18n::tr(
+            anyhow::anyhow!(tr(
                 cx,
                 "agent_ui.context_server.expected_exactly_one_key_value_pair",
                 "Expected exactly one key-value pair",
@@ -1059,7 +1059,7 @@ impl ConfigureContextServerModal {
                 "agent_ui.context_server.configure_mcp_server",
                 "Configure MCP Server",
             ),
-            ConfigurationSource::Extension { id, .. } => app_i18n::tr(
+            ConfigurationSource::Extension { id, .. } => tr(
                 cx,
                 "agent_ui.context_server.configure_server",
                 "Configure {}",
@@ -1282,10 +1282,7 @@ impl ConfigureContextServerModal {
                                 tr(cx, "agent_ui.context_server.dismiss", "Dismiss")
                             },
                         )
-                        .key_binding(
-                            KeyBinding::for_action_in(&menu::Cancel, &focus_handle, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
+                        .key_binding(crate::footer_key_binding(&menu::Cancel, &focus_handle, cx))
                         .on_click(
                             cx.listener(|this, _event, _window, cx| this.cancel(&menu::Cancel, cx)),
                         ),
@@ -1304,10 +1301,7 @@ impl ConfigureContextServerModal {
                             },
                         )
                         .disabled(is_busy)
-                        .key_binding(
-                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
+                        .key_binding(crate::footer_key_binding(&menu::Confirm, &focus_handle, cx))
                         .on_click(
                             cx.listener(|this, _event, _window, cx| {
                                 this.confirm(&menu::Confirm, cx)

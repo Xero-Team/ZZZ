@@ -3,9 +3,9 @@ use collections::{HashMap, HashSet};
 use editor::SelectionEffects;
 use editor::{CurrentLineHighlight, Editor, EditorElement, EditorEvent, EditorStyle, actions::Tab};
 use gpui::{
-    App, Bounds, DEFAULT_ADDITIONAL_WINDOW_SIZE, Entity, EventEmitter, Focusable, PromptLevel,
-    Subscription, Task, TextStyle, Tiling, TitlebarOptions, WindowBounds, WindowHandle,
-    WindowOptions, actions, point, size, transparent_black,
+    AnyView, App, Bounds, DEFAULT_ADDITIONAL_WINDOW_SIZE, Entity, EventEmitter, Focusable,
+    PromptLevel, Subscription, Task, TextStyle, Tiling, TitlebarOptions, WindowBounds,
+    WindowHandle, WindowOptions, actions, point, size, transparent_black,
 };
 use i18n::tr;
 use language::{Buffer, LanguageRegistry, language_settings::SoftWrap};
@@ -72,7 +72,7 @@ pub fn open_rules_library(
                         }
                         window.activate_window()
                     })
-                    .ok();
+                    .log_err();
 
                 Some(existing_window)
             } else {
@@ -140,16 +140,40 @@ struct RuleEditor {
     _subscriptions: Vec<Subscription>,
 }
 
+/// Section headers of the rule picker.
+///
+/// The entries are built on the background executor, where `cx` is not
+/// available, so sections are recorded as variants and localized in
+/// `render_match` instead of storing a pre-rendered label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RulePickerHeader {
+    BuiltIn,
+    Default,
+}
+
 enum RulePickerEntry {
-    Header(SharedString),
+    Header(RulePickerHeader),
     Rule(PromptMetadata),
     Separator,
+}
+
+impl RulePickerEntry {
+    /// Returns the rule carried by this entry, if any.
+    fn prompt_id(&self) -> Option<PromptId> {
+        match self {
+            Self::Rule(rule) => Some(rule.id),
+            Self::Header(_) | Self::Separator => None,
+        }
+    }
 }
 
 struct RulePickerDelegate {
     store: Entity<PromptStore>,
     selected_index: usize,
     filtered_entries: Vec<RulePickerEntry>,
+    /// Rule requested by the `OpenRulesLibrary` action, consumed by the first
+    /// `update_matches` so a freshly opened window starts on that rule.
+    pending_prompt_id: Option<PromptId>,
 }
 
 enum RulePickerEvent {
@@ -157,6 +181,81 @@ enum RulePickerEvent {
     Confirmed { prompt_id: PromptId },
     Deleted { prompt_id: PromptId },
     ToggledDefault { prompt_id: PromptId },
+}
+
+/// Builds the tooltip shared by every "toggle default rule" control.
+fn default_rule_toggle_tooltip(
+    default: bool,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    move |window, cx| {
+        if default {
+            Tooltip::text(tr(
+                cx,
+                "rules_library.remove_from_default_rules",
+                "Remove from Default Rules",
+            ))(window, cx)
+        } else {
+            Tooltip::with_meta(
+                tr(
+                    cx,
+                    "rules_library.add_to_default_rules",
+                    "Add to Default Rules",
+                ),
+                None,
+                tr(
+                    cx,
+                    "rules_library.always_included",
+                    "Always included in every thread.",
+                ),
+                cx,
+            )
+        }
+    }
+}
+
+/// Groups the matched rules for display — built-in rules first, then the rules
+/// attached to every thread by default, then the rest — and picks the index to
+/// select: the `preferred` rule when it is still part of the matches, the first
+/// rule otherwise.
+fn build_picker_entries(
+    matches: Vec<PromptMetadata>,
+    preferred: Option<PromptId>,
+) -> (Vec<RulePickerEntry>, usize) {
+    let (built_in_rules, user_rules): (Vec<_>, Vec<_>) =
+        matches.into_iter().partition(|rule| rule.id.is_built_in());
+    let (default_rules, other_rules): (Vec<_>, Vec<_>) =
+        user_rules.into_iter().partition(|rule| rule.default);
+
+    let mut entries = Vec::new();
+
+    if !built_in_rules.is_empty() {
+        entries.push(RulePickerEntry::Header(RulePickerHeader::BuiltIn));
+        entries.extend(built_in_rules.into_iter().map(RulePickerEntry::Rule));
+        entries.push(RulePickerEntry::Separator);
+    }
+
+    if !default_rules.is_empty() {
+        entries.push(RulePickerEntry::Header(RulePickerHeader::Default));
+        entries.extend(default_rules.into_iter().map(RulePickerEntry::Rule));
+        entries.push(RulePickerEntry::Separator);
+    }
+
+    entries.extend(other_rules.into_iter().map(RulePickerEntry::Rule));
+
+    let selected_index = preferred
+        .and_then(|preferred| {
+            entries
+                .iter()
+                .position(|entry| entry.prompt_id() == Some(preferred))
+        })
+        .or_else(|| {
+            entries
+                .iter()
+                .position(|entry| matches!(entry, RulePickerEntry::Rule(_)))
+        })
+        .unwrap_or(0);
+
+    (entries, selected_index)
 }
 
 impl EventEmitter<RulePickerEvent> for Picker<RulePickerDelegate> {}
@@ -217,71 +316,19 @@ impl PickerDelegate for RulePickerDelegate {
         let cancellation_flag = Arc::new(AtomicBool::default());
         let search = self.store.read(cx).search(query, cancellation_flag, cx);
 
-        let prev_prompt_id = self
-            .filtered_entries
-            .get(self.selected_index)
-            .and_then(|entry| {
-                if let RulePickerEntry::Rule(rule) = entry {
-                    Some(rule.id)
-                } else {
-                    None
-                }
-            });
+        // A rule requested through `OpenRulesLibrary` wins over the current
+        // selection the first time matches are produced.
+        let preferred_prompt_id = self.pending_prompt_id.take().or_else(|| {
+            self.filtered_entries
+                .get(self.selected_index)
+                .and_then(RulePickerEntry::prompt_id)
+        });
 
         cx.spawn_in(window, async move |this, cx| {
             let (filtered_entries, selected_index) = cx
                 .background_spawn(async move {
                     let matches = search.await;
-
-                    let (built_in_rules, user_rules): (Vec<_>, Vec<_>) =
-                        matches.into_iter().partition(|rule| rule.id.is_built_in());
-                    let (default_rules, other_rules): (Vec<_>, Vec<_>) =
-                        user_rules.into_iter().partition(|rule| rule.default);
-
-                    let mut filtered_entries = Vec::new();
-
-                    if !built_in_rules.is_empty() {
-                        filtered_entries.push(RulePickerEntry::Header("Built-in Rules".into()));
-
-                        for rule in built_in_rules {
-                            filtered_entries.push(RulePickerEntry::Rule(rule));
-                        }
-
-                        filtered_entries.push(RulePickerEntry::Separator);
-                    }
-
-                    if !default_rules.is_empty() {
-                        filtered_entries.push(RulePickerEntry::Header("Default Rules".into()));
-
-                        for rule in default_rules {
-                            filtered_entries.push(RulePickerEntry::Rule(rule));
-                        }
-
-                        filtered_entries.push(RulePickerEntry::Separator);
-                    }
-
-                    for rule in other_rules {
-                        filtered_entries.push(RulePickerEntry::Rule(rule));
-                    }
-
-                    let selected_index = prev_prompt_id
-                        .and_then(|prev_prompt_id| {
-                            filtered_entries.iter().position(|entry| {
-                                if let RulePickerEntry::Rule(rule) = entry {
-                                    rule.id == prev_prompt_id
-                                } else {
-                                    false
-                                }
-                            })
-                        })
-                        .unwrap_or_else(|| {
-                            filtered_entries
-                                .iter()
-                                .position(|entry| matches!(entry, RulePickerEntry::Rule(_)))
-                                .unwrap_or(0)
-                        });
-
-                    (filtered_entries, selected_index)
+                    build_picker_entries(matches, preferred_prompt_id)
                 })
                 .await;
 
@@ -296,7 +343,7 @@ impl PickerDelegate for RulePickerDelegate {
                 );
                 cx.notify();
             })
-            .ok();
+            .log_err();
         })
     }
 
@@ -316,15 +363,28 @@ impl PickerDelegate for RulePickerDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         match self.filtered_entries.get(ix)? {
-            RulePickerEntry::Header(title) => {
-                let tooltip_text = if title.as_ref() == "Built-in Rules" {
-                    "Built-in rules are those included out of the box with ZZZ."
-                } else {
-                    "Default Rules are attached by default with every new thread."
+            RulePickerEntry::Header(header) => {
+                let (title, tooltip_text) = match header {
+                    RulePickerHeader::BuiltIn => (
+                        tr(cx, "rules_library.built_in_rules", "Built-in Rules"),
+                        tr(
+                            cx,
+                            "rules_library.built_in_rules_description",
+                            "Built-in rules are those included out of the box with ZZZ.",
+                        ),
+                    ),
+                    RulePickerHeader::Default => (
+                        tr(cx, "rules_library.default_rules", "Default Rules"),
+                        tr(
+                            cx,
+                            "rules_library.default_rules_description",
+                            "Default Rules are attached by default with every new thread.",
+                        ),
+                    ),
                 };
 
                 Some(
-                    ListSubHeader::new(title.clone())
+                    ListSubHeader::new(title)
                         .end_slot(
                             IconButton::new("info", IconName::Info)
                                 .style(ButtonStyle::Transparent)
@@ -356,8 +416,8 @@ impl PickerDelegate for RulePickerDelegate {
                             Label::new(rule.title.clone().unwrap_or_else(|| {
                                 tr(cx, "rules_library.untitled", "Untitled").into()
                             }))
-                                .truncate()
-                                .mr_10(),
+                            .truncate()
+                            .mr_10(),
                         )
                         .end_slot::<IconButton>((default && !prompt_id.is_built_in()).then(|| {
                             IconButton::new("toggle-default-rule", IconName::Paperclip)
@@ -399,32 +459,7 @@ impl PickerDelegate for RulePickerDelegate {
                                             } else {
                                                 Color::Muted
                                             })
-                                            .map(|this| {
-                                                if default {
-                                                    this.tooltip(Tooltip::text(tr(
-                                                        cx,
-                                                        "rules_library.remove_from_default_rules",
-                                                        "Remove from Default Rules",
-                                                    )))
-                                                } else {
-                                                    this.tooltip(move |_window, cx| {
-                                                        Tooltip::with_meta(
-                                                            tr(
-                                                                cx,
-                                                                "rules_library.add_to_default_rules",
-                                                                "Add to Default Rules",
-                                                            ),
-                                                            None,
-                                                            tr(
-                                                                cx,
-                                                                "rules_library.always_included",
-                                                                "Always included in every thread.",
-                                                            ),
-                                                            cx,
-                                                        )
-                                                    })
-                                                }
-                                            })
+                                            .tooltip(default_rule_toggle_tooltip(default))
                                             .on_click(cx.listener(move |_, _, _, cx| {
                                                 cx.emit(RulePickerEvent::ToggledDefault {
                                                     prompt_id,
@@ -446,10 +481,9 @@ impl PickerDelegate for RulePickerDelegate {
         _: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Div> {
-        let editor = editor
-            .as_any()
-            .downcast_ref::<Entity<Editor>>()
-            .expect("downcast should succeed");
+        // Falling back to the picker's default search bar is preferable to
+        // panicking if the erased editor is ever not an `Entity<Editor>`.
+        let editor = editor.as_any().downcast_ref::<Entity<Editor>>()?;
 
         Some(
             h_flex()
@@ -475,22 +509,11 @@ impl RulesLibrary {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let (_selected_index, _matches) = if let Some(rule_to_select) = rule_to_select {
-            let matches = store.read(cx).all_prompt_metadata();
-            let selected_index = matches
-                .iter()
-                .enumerate()
-                .find(|(_, metadata)| metadata.id == rule_to_select)
-                .map_or(0, |(ix, _)| ix);
-            (selected_index, matches)
-        } else {
-            (0, vec![])
-        };
-
         let picker_delegate = RulePickerDelegate {
             store: store.clone(),
             selected_index: 0,
             filtered_entries: Vec::new(),
+            pending_prompt_id: rule_to_select,
         };
 
         let picker = cx.new(|cx| {
@@ -572,15 +595,9 @@ impl RulesLibrary {
             return;
         }
 
-        let rule_metadata = self
-            .store
-            .read(cx)
-            .metadata(prompt_id)
-            .expect("metadata should be present");
-        let rule_editor = self
-            .rule_editors
-            .get_mut(&prompt_id)
-            .expect("entry should be present");
+        let Some(rule_editor) = self.rule_editors.get_mut(&prompt_id) else {
+            return;
+        };
         let title = rule_editor.title_editor.read(cx).text(cx);
         let body = rule_editor.body_editor.update(cx, |editor, cx| {
             editor
@@ -616,7 +633,13 @@ impl RulesLibrary {
                             };
                             cx.update(|_window, cx| {
                                 store.update(cx, |store, cx| {
-                                    store.save(prompt_id, title, rule_metadata.default, body, cx)
+                                    // The default flag can change while this throttle
+                                    // loop sleeps, so read it on every write instead of
+                                    // capturing it once.
+                                    let default = store
+                                        .metadata(prompt_id)
+                                        .is_some_and(|metadata| metadata.default);
+                                    store.save(prompt_id, title, default, body, cx)
                                 })
                             })?
                             .await
@@ -771,7 +794,7 @@ impl RulesLibrary {
                                 &title_editor,
                                 window,
                                 move |this, editor, event, window, cx| {
-                                    this.handle_rule_title_editor_event(
+                                    this.handle_rule_editor_event(
                                         prompt_id, editor, event, window, cx,
                                     )
                                 },
@@ -780,7 +803,7 @@ impl RulesLibrary {
                                 &body_editor,
                                 window,
                                 move |this, editor, event, window, cx| {
-                                    this.handle_rule_body_editor_event(
+                                    this.handle_rule_editor_event(
                                         prompt_id, editor, event, window, cx,
                                     )
                                 },
@@ -803,7 +826,7 @@ impl RulesLibrary {
                         log::error!("error while loading rule: {:?}", error);
                     }
                 })
-                .ok();
+                .log_err();
             });
         }
     }
@@ -817,24 +840,18 @@ impl RulesLibrary {
         self.active_rule_id = prompt_id;
         self.picker.update(cx, |picker, cx| {
             if let Some(prompt_id) = prompt_id {
-                if picker
+                let already_selected = picker
                     .delegate
                     .filtered_entries
                     .get(picker.delegate.selected_index())
-                    .is_none_or(|old_selected_prompt| {
-                        if let RulePickerEntry::Rule(rule) = old_selected_prompt {
-                            rule.id != prompt_id
-                        } else {
-                            true
-                        }
-                    })
-                    && let Some(ix) = picker.delegate.filtered_entries.iter().position(|mat| {
-                        if let RulePickerEntry::Rule(rule) = mat {
-                            rule.id == prompt_id
-                        } else {
-                            false
-                        }
-                    })
+                    .and_then(RulePickerEntry::prompt_id)
+                    == Some(prompt_id);
+                if !already_selected
+                    && let Some(ix) = picker
+                        .delegate
+                        .filtered_entries
+                        .iter()
+                        .position(|entry| entry.prompt_id() == Some(prompt_id))
                 {
                     picker.set_selected_index(ix, None, true, window, cx);
                 }
@@ -941,8 +958,10 @@ impl RulesLibrary {
     }
 
     fn focus_active_rule(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(active_rule) = self.active_rule_id {
-            self.rule_editors[&active_rule]
+        if let Some(active_rule) = self.active_rule_id
+            && let Some(rule_editor) = self.rule_editors.get(&active_rule)
+        {
+            rule_editor
                 .body_editor
                 .update(cx, |editor, cx| window.focus(&editor.focus_handle(cx), cx));
             cx.stop_propagation();
@@ -980,10 +999,12 @@ impl RulesLibrary {
         }
     }
 
-    fn handle_rule_title_editor_event(
+    /// Handles the events of the title and the body editor, which only differ
+    /// in which editor they were emitted for.
+    fn handle_rule_editor_event(
         &mut self,
         prompt_id: PromptId,
-        title_editor: &Entity<Editor>,
+        editor: &Entity<Editor>,
         event: &EditorEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -993,37 +1014,10 @@ impl RulesLibrary {
                 self.save_rule(prompt_id, window, cx);
             }
             EditorEvent::Blurred => {
-                title_editor.update(cx, |title_editor, cx| {
-                    title_editor.change_selections(
-                        SelectionEffects::no_scroll(),
-                        window,
-                        cx,
-                        |selections| {
-                            let cursor = selections.oldest_anchor().head();
-                            selections.select_anchor_ranges([cursor..cursor]);
-                        },
-                    );
-                });
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_rule_body_editor_event(
-        &mut self,
-        prompt_id: PromptId,
-        body_editor: &Entity<Editor>,
-        event: &EditorEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            EditorEvent::BufferEdited => {
-                self.save_rule(prompt_id, window, cx);
-            }
-            EditorEvent::Blurred => {
-                body_editor.update(cx, |body_editor, cx| {
-                    body_editor.change_selections(
+                // Collapse the selection on blur so a refocused editor starts
+                // from a plain cursor.
+                editor.update(cx, |editor, cx| {
+                    editor.change_selections(
                         SelectionEffects::no_scroll(),
                         window,
                         cx,
@@ -1176,39 +1170,14 @@ impl RulesLibrary {
             )
     }
 
-    fn render_regular_rule_controls(&self, default: bool, cx: &App) -> impl IntoElement {
+    fn render_regular_rule_controls(&self, default: bool) -> impl IntoElement {
         h_flex()
             .gap_1()
             .child(
                 IconButton::new("toggle-default-rule", IconName::Paperclip)
                     .toggle_state(default)
                     .when(default, |this| this.icon_color(Color::Accent))
-                    .map(|this| {
-                        if default {
-                            this.tooltip(Tooltip::text(tr(
-                                cx,
-                                "rules_library.remove_from_default_rules",
-                                "Remove from Default Rules",
-                            )))
-                        } else {
-                            this.tooltip(move |_window, cx| {
-                                Tooltip::with_meta(
-                                    tr(
-                                        cx,
-                                        "rules_library.add_to_default_rules",
-                                        "Add to Default Rules",
-                                    ),
-                                    None,
-                                    tr(
-                                        cx,
-                                        "rules_library.always_included",
-                                        "Always included in every thread.",
-                                    ),
-                                    cx,
-                                )
-                            })
-                        }
-                    })
+                    .tooltip(default_rule_toggle_tooltip(default))
                     .on_click(|_, window, cx| {
                         window.dispatch_action(Box::new(ToggleDefaultRule), cx);
                     }),
@@ -1239,7 +1208,7 @@ impl RulesLibrary {
             .bg(cx.theme().colors().editor_background)
             .children(self.active_rule_id.and_then(|prompt_id| {
                 let rule_metadata = self.store.read(cx).metadata(prompt_id)?;
-                let rule_editor = &self.rule_editors[&prompt_id];
+                let rule_editor = self.rule_editors.get(&prompt_id)?;
                 let focus_handle = rule_editor.body_editor.focus_handle(cx);
                 let built_in = prompt_id.is_built_in();
 
@@ -1268,10 +1237,11 @@ impl RulesLibrary {
                                     if built_in {
                                         this.child(self.render_built_in_rule_controls())
                                     } else {
-                                        this.child(self.render_regular_rule_controls(
-                                            rule_metadata.default,
-                                            cx,
-                                        ))
+                                        this.child(
+                                            self.render_regular_rule_controls(
+                                                rule_metadata.default,
+                                            ),
+                                        )
                                     }
                                 })),
                         )
@@ -1345,5 +1315,82 @@ impl Render for RulesLibrary {
             cx,
             Tiling::default(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prompt_store::{BuiltInPrompt, UserPromptId};
+
+    fn user_rule(title: &str, default: bool) -> PromptMetadata {
+        PromptMetadata {
+            id: PromptId::new(),
+            title: Some(title.into()),
+            default,
+            saved_at: Default::default(),
+        }
+    }
+
+    fn built_in_rule() -> PromptMetadata {
+        PromptMetadata {
+            id: BuiltInPrompt::CommitMessage.into(),
+            title: Some(BuiltInPrompt::CommitMessage.title().into()),
+            default: false,
+            saved_at: Default::default(),
+        }
+    }
+
+    fn rule_titles(entries: &[RulePickerEntry]) -> Vec<&str> {
+        entries
+            .iter()
+            .filter_map(|entry| match entry {
+                RulePickerEntry::Rule(metadata) => metadata.title.as_deref(),
+                RulePickerEntry::Header(_) | RulePickerEntry::Separator => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn entries_group_built_in_then_default_then_other_rules() {
+        let matches = vec![
+            user_rule("Other", false),
+            built_in_rule(),
+            user_rule("Pinned", true),
+        ];
+
+        let (entries, selected_index) = build_picker_entries(matches, None);
+
+        assert_eq!(rule_titles(&entries), ["Commit message", "Pinned", "Other"]);
+        assert!(matches!(
+            entries[0],
+            RulePickerEntry::Header(RulePickerHeader::BuiltIn)
+        ));
+        assert!(matches!(
+            entries[3],
+            RulePickerEntry::Header(RulePickerHeader::Default)
+        ));
+        assert_eq!(entries[selected_index].prompt_id(), entries[1].prompt_id());
+    }
+
+    #[test]
+    fn requested_rule_drives_the_initial_selection() {
+        let requested = user_rule("Requested", false);
+        let requested_id = requested.id;
+        let matches = vec![built_in_rule(), requested];
+
+        let (entries, selected_index) = build_picker_entries(matches, Some(requested_id));
+
+        assert_eq!(entries[selected_index].prompt_id(), Some(requested_id));
+    }
+
+    #[test]
+    fn unknown_requested_rule_falls_back_to_the_first_rule() {
+        let matches = vec![built_in_rule(), user_rule("Other", false)];
+
+        let (_entries, selected_index) =
+            build_picker_entries(matches, Some(PromptId::from(UserPromptId::new())));
+
+        assert_eq!(selected_index, 1);
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use gpui::{App, Global, PromptButton};
+use gpui::{App, Global};
 use indexmap::IndexMap;
 use parking_lot::RwLock;
 use rust_embed::RustEmbed;
@@ -7,7 +7,7 @@ use serde::Deserialize;
 use settings::Settings;
 use std::sync::Arc;
 use sys_locale::get_locale;
-use util::asset_str;
+use util::{ResultExt as _, asset_str};
 
 const DEFAULT_LOCALE: &str = "en";
 const CHINESE_SIMPLIFIED_LOCALE: &str = "zh-CN";
@@ -107,7 +107,9 @@ fn catalog_for(locale: ActiveLocale, fallback: &LocaleCatalog) -> LocaleCatalog 
     if locale == ActiveLocale::English {
         fallback.clone()
     } else {
-        load_catalog(locale.code()).unwrap_or_else(|_| fallback.clone())
+        load_catalog(locale.code())
+            .log_err()
+            .unwrap_or_else(|| fallback.clone())
     }
 }
 
@@ -120,22 +122,11 @@ pub fn is_initialized(cx: &App) -> bool {
     cx.try_global::<GlobalI18nService>().is_some()
 }
 
-pub fn t(cx: &App, key: &str) -> String {
-    let service = cx.global::<GlobalI18nService>().0.read();
-    service
-        .lookup(key)
-        .map_or_else(|| key.to_owned(), ToOwned::to_owned)
-}
-
 pub fn tr(cx: &App, key: &str, fallback: &str) -> String {
     let service = cx.global::<GlobalI18nService>().0.read();
     service
         .lookup(key)
         .map_or_else(|| fallback.to_owned(), ToOwned::to_owned)
-}
-
-pub fn prompt_button(cx: &App, key: &str, fallback: &str) -> PromptButton {
-    PromptButton::new(tr(cx, key, fallback))
 }
 
 fn resolve_locale(setting: DisplayLanguageSetting) -> ActiveLocale {

@@ -27,8 +27,9 @@ mod tests {
     const CLIENT_MESSAGE: &str = "Hello, server!";
     const BUFFER_SIZE: usize = 32;
 
+    // Exercises the synchronous `UnixListener`/`UnixStream` API.
     #[test]
-    fn test_windows_listener() -> std::io::Result<()> {
+    fn test_sync_listener() -> std::io::Result<()> {
         use crate::{UnixListener, UnixStream};
 
         let temp = tempfile::tempdir()?;
@@ -66,8 +67,9 @@ mod tests {
         Ok(())
     }
 
+    // Exercises the `async_net` listener and stream.
     #[test]
-    fn test_unix_listener() -> std::io::Result<()> {
+    fn test_async_listener() -> std::io::Result<()> {
         use crate::async_net::{UnixListener, UnixStream};
 
         smol::block_on(async {

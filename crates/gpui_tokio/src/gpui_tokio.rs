@@ -15,7 +15,7 @@ pub fn init(cx: &mut App) {
         .worker_threads(2)
         .enable_all()
         .build()
-        .expect("Failed to initialize Tokio");
+        .expect("failed to initialize the Tokio runtime");
 
     let handle = runtime.handle().clone();
     cx.set_global(GlobalTokio {
@@ -80,18 +80,10 @@ impl Tokio {
         Fut: Future<Output = anyhow::Result<R>> + Send + 'static,
         R: Send + 'static,
     {
-        cx.read_global(|tokio: &GlobalTokio, cx| {
-            let join_handle = tokio.handle.spawn(f);
-            let abort_handle = join_handle.abort_handle();
-            let cancel = defer(move || {
-                abort_handle.abort();
-            });
-            cx.background_spawn(async move {
-                let result = join_handle.await?;
-                drop(cancel);
-                result
-            })
-        })
+        let task = Self::spawn(cx, f);
+        // `spawn` reports a cancelled Tokio task as `JoinError`; surface it as
+        // an `anyhow::Error` together with the inner result.
+        cx.background_spawn(async move { task.await? })
     }
 
     pub fn handle(cx: &App) -> tokio::runtime::Handle {

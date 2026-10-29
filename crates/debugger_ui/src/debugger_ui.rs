@@ -3,12 +3,12 @@ use std::any::TypeId;
 use dap::{DapRegistry, adapters::DebugAdapterName};
 use debugger_panel::DebugPanel;
 use editor::{Editor, MultiBufferOffsetUtf16};
-use gpui::{Action, App, DispatchPhase, EntityInputHandler, actions};
+use gpui::{Action, App, Context, DispatchPhase, EntityInputHandler, WeakEntity, actions};
 use new_process_modal::{NewProcessModal, NewProcessMode};
 use project::debugger::{self, breakpoint_store::SourceBreakpoint, session::ThreadStatus};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use session::DebugSession;
+use session::{DebugSession, running::RunningState};
 
 use tasks_ui::{Spawn, TaskOverrides};
 use ui::{FluentBuilder, InteractiveElement};
@@ -206,101 +206,91 @@ pub fn init(cx: &mut App) {
 
                 let active_item = active_item.downgrade();
                 div.when(status == Some(ThreadStatus::Running), |div| {
-                    let active_item = active_item.clone();
-                    div.on_action(move |_: &Pause, _, cx| {
-                        active_item
-                            .update(cx, |item, cx| item.pause_thread(cx))
-                            .log_err();
+                    div.on_action({
+                        let active_item = active_item.clone();
+                        move |_: &Pause, _, cx| {
+                            handle_session_action(&active_item, cx, |state, cx| {
+                                state.pause_thread(cx)
+                            })
+                        }
                     })
                 })
                 .when(status == Some(ThreadStatus::Stopped), |div| {
                     div.on_action({
                         let active_item = active_item.clone();
                         move |_: &StepInto, _, cx| {
-                            active_item
-                                .update(cx, |item, cx| item.step_in(cx))
-                                .log_err();
+                            handle_session_action(&active_item, cx, |state, cx| state.step_in(cx))
                         }
                     })
                     .on_action({
                         let active_item = active_item.clone();
                         move |_: &StepOver, _, cx| {
-                            active_item
-                                .update(cx, |item, cx| item.step_over(cx))
-                                .log_err();
+                            handle_session_action(&active_item, cx, |state, cx| state.step_over(cx))
                         }
                     })
                     .on_action({
                         let active_item = active_item.clone();
                         move |_: &StepOut, _, cx| {
-                            active_item
-                                .update(cx, |item, cx| item.step_out(cx))
-                                .log_err();
+                            handle_session_action(&active_item, cx, |state, cx| state.step_out(cx))
                         }
                     })
                     .when(supports_step_back, |div| {
                         let active_item = active_item.clone();
                         div.on_action(move |_: &StepBack, _, cx| {
-                            active_item
-                                .update(cx, |item, cx| item.step_back(cx))
-                                .log_err();
+                            handle_session_action(&active_item, cx, |state, cx| state.step_back(cx))
                         })
                     })
                     .on_action({
                         let active_item = active_item.clone();
                         move |_: &Continue, _, cx| {
-                            active_item
-                                .update(cx, |item, cx| item.continue_program(cx))
-                                .log_err();
+                            handle_session_action(&active_item, cx, |state, cx| {
+                                state.continue_program(cx)
+                            })
                         }
                     })
                     .when(supports_single_thread_execution_requests, |div| {
                         let active_item = active_item.clone();
                         div.on_action(move |_: &ContinueThread, _, cx| {
-                            active_item
-                                .update(cx, |item, cx| item.continue_thread(cx))
-                                .log_err();
+                            handle_session_action(&active_item, cx, |state, cx| {
+                                state.continue_thread(cx)
+                            })
                         })
                     })
                 })
                 .when(supports_detach, |div| {
                     let active_item = active_item.clone();
                     div.on_action(move |_: &Detach, _, cx| {
-                        active_item
-                            .update(cx, |item, cx| item.detach_client(cx))
-                            .log_err();
+                        handle_session_action(&active_item, cx, |state, cx| state.detach_client(cx))
                     })
                 })
                 .on_action({
                     let active_item = active_item.clone();
                     move |_: &Restart, _, cx| {
-                        active_item
-                            .update(cx, |item, cx| item.restart_session(cx))
-                            .log_err();
+                        handle_session_action(&active_item, cx, |state, cx| {
+                            state.restart_session(cx)
+                        })
                     }
                 })
                 .on_action({
                     let active_item = active_item.clone();
                     move |_: &RerunSession, window, cx| {
-                        active_item
-                            .update(cx, |item, cx| item.rerun_session(window, cx))
-                            .log_err();
+                        handle_session_action(&active_item, cx, |state, cx| {
+                            state.rerun_session(window, cx)
+                        })
                     }
                 })
                 .on_action({
                     let active_item = active_item.clone();
                     move |_: &Stop, _, cx| {
-                        active_item
-                            .update(cx, |item, cx| item.stop_thread(cx))
-                            .log_err();
+                        handle_session_action(&active_item, cx, |state, cx| state.stop_thread(cx))
                     }
                 })
                 .on_action({
                     let active_item = active_item.clone();
                     move |_: &ToggleIgnoreBreakpoints, _, cx| {
-                        active_item
-                            .update(cx, |item, cx| item.toggle_ignore_breakpoints(cx))
-                            .log_err();
+                        handle_session_action(&active_item, cx, |state, cx| {
+                            state.toggle_ignore_breakpoints(cx)
+                        })
                     }
                 })
                 .on_action(move |_: &ToggleUserFrames, _, cx| {
@@ -457,6 +447,18 @@ pub fn init(cx: &mut App) {
         }
     })
     .detach();
+}
+
+/// Applies `action` to the running state of the active debug session, logging
+/// instead of dropping the action when that session has already been closed.
+fn handle_session_action(
+    running_state: &WeakEntity<RunningState>,
+    cx: &mut App,
+    action: impl FnOnce(&mut RunningState, &mut Context<RunningState>),
+) {
+    running_state
+        .update(cx, |running_state, cx| action(running_state, cx))
+        .log_err();
 }
 
 fn spawn_task_or_modal(

@@ -210,9 +210,11 @@ async fn test_select_stack_frame(executor: BackgroundExecutor, cx: &mut TestAppC
 
     let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
     let workspace = init_test_workspace(&project, cx).await;
-    let _ = workspace.update(cx, |workspace, window, cx| {
-        workspace.toggle_dock(workspace::dock::DockPosition::Bottom, window, cx);
-    });
+    workspace
+        .update(cx, |workspace, window, cx| {
+            workspace.toggle_dock(workspace::dock::DockPosition::Bottom, window, cx);
+        })
+        .unwrap();
 
     let cx = &mut VisualTestContext::from_window(*workspace, cx);
     let session = start_debug_session(&workspace, cx, |_| {}).unwrap();
@@ -392,31 +394,33 @@ async fn test_select_stack_frame(executor: BackgroundExecutor, cx: &mut TestAppC
         assert_eq!(stack_frames, stack_frame_list.dap_stack_frames(cx));
     });
 
-    let _ = workspace.update(cx, |workspace, window, cx| {
-        let editors = workspace.items_of_type::<Editor>(cx).collect::<Vec<_>>();
-        assert_eq!(1, editors.len());
+    workspace
+        .update(cx, |workspace, window, cx| {
+            let editors = workspace.items_of_type::<Editor>(cx).collect::<Vec<_>>();
+            assert_eq!(1, editors.len());
 
-        let project_path = editors[0]
-            .update(cx, |editor, cx| editor.project_path(cx))
-            .unwrap();
-        assert_eq!(rel_path("src/module.js"), project_path.path.as_ref());
-        assert_eq!(module_file_content, editors[0].read(cx).text(cx));
-        assert_eq!(
-            vec![0..1],
-            editors[0].update(cx, |editor, cx| {
-                let snapshot = editor.snapshot(window, cx);
+            let project_path = editors[0]
+                .update(cx, |editor, cx| editor.project_path(cx))
+                .unwrap();
+            assert_eq!(rel_path("src/module.js"), project_path.path.as_ref());
+            assert_eq!(module_file_content, editors[0].read(cx).text(cx));
+            assert_eq!(
+                vec![0..1],
+                editors[0].update(cx, |editor, cx| {
+                    let snapshot = editor.snapshot(window, cx);
 
-                editor
-                    .highlighted_rows::<editor::ActiveDebugLine>()
-                    .map(|(range, _)| {
-                        let start = range.start.to_point(&snapshot.buffer_snapshot());
-                        let end = range.end.to_point(&snapshot.buffer_snapshot());
-                        start.row..end.row
-                    })
-                    .collect::<Vec<_>>()
-            })
-        );
-    });
+                    editor
+                        .highlighted_rows::<editor::ActiveDebugLine>()
+                        .map(|(range, _)| {
+                            let start = range.start.to_point(&snapshot.buffer_snapshot());
+                            let end = range.end.to_point(&snapshot.buffer_snapshot());
+                            start.row..end.row
+                        })
+                        .collect::<Vec<_>>()
+                })
+            );
+        })
+        .unwrap();
 }
 
 #[gpui::test]

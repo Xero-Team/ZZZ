@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod color;
 mod vscode;
 
@@ -90,26 +91,22 @@ fn main() -> Result<()> {
     let theme_file_path = args.theme_path;
 
     let mut buffer = Vec::new();
-    match File::open(&theme_file_path).and_then(|mut file| file.read_to_end(&mut buffer)) {
-        Ok(_) => {}
-        Err(err) => {
-            log::info!("Failed to open file at path: {:?}", theme_file_path);
-            return Err(err)?;
-        }
-    };
+    File::open(&theme_file_path)
+        .and_then(|mut file| file.read_to_end(&mut buffer))
+        .with_context(|| format!("failed to read theme file {theme_file_path:?}"))?;
 
     let vscode_theme: VsCodeTheme = serde_json_lenient::from_slice(&buffer)
         .context(format!("failed to parse theme {theme_file_path:?}"))?;
 
     let theme_metadata = ThemeMetadata {
-        name: vscode_theme.name.clone().unwrap_or(String::new()),
+        name: vscode_theme.name.clone().unwrap_or_default(),
         appearance: ThemeAppearanceJson::Dark,
         file_name: String::new(),
     };
 
     let converter = VsCodeThemeConverter::new(vscode_theme, theme_metadata, IndexMap::default());
 
-    let theme = converter.convert()?;
+    let theme = converter.convert();
     let mut theme = serde_json::to_value(theme).expect("converting to a JSON value cannot fail");
     theme
         .as_object_mut()
@@ -121,8 +118,10 @@ fn main() -> Result<()> {
     let theme_json = serde_json::to_string_pretty(&theme).expect("serializing to JSON cannot fail");
 
     if let Some(output) = args.output {
-        let mut file = File::create(output)?;
-        file.write_all(theme_json.as_bytes())?;
+        let mut file = File::create(&output)
+            .with_context(|| format!("failed to create output file {output:?}"))?;
+        file.write_all(theme_json.as_bytes())
+            .with_context(|| format!("failed to write output file {output:?}"))?;
     } else {
         println!("{}", theme_json);
     }

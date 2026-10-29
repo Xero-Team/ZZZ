@@ -170,10 +170,10 @@ impl CommitView {
     ) {
         let commit_diff = repo
             .update(cx, |repo, _| repo.load_commit_diff(commit_sha.clone()))
-            .ok();
+            .log_err();
         let commit_details = repo
             .update(cx, |repo, _| repo.show(commit_sha.clone()))
-            .ok();
+            .log_err();
 
         window
             .spawn(cx, async move |cx| {
@@ -209,19 +209,15 @@ impl CommitView {
 
                         let pane = workspace.active_pane();
                         pane.update(cx, |pane, cx| {
-                            let ix = pane.items().position(|item| {
-                                let commit_view = item.downcast::<CommitView>();
-                                commit_view
-                                    .is_some_and(|view| view.read(cx).commit.sha == commit_sha)
+                            // Reuse the slot of an already open view of the same
+                            // commit, if there is one.
+                            let existing = pane.items().enumerate().find_map(|(ix, item)| {
+                                item.downcast::<CommitView>()
+                                    .filter(|view| view.read(cx).commit.sha == commit_sha)
+                                    .map(|_| (ix, item.item_id()))
                             });
-                            if let Some(ix) = ix {
-                                let existing = pane
-                                    .items()
-                                    .filter_map(|item| item.downcast::<CommitView>())
-                                    .find(|view| view.read(cx).commit.sha == commit_sha)
-                                    .expect("downcast should succeed");
-
-                                pane.remove_item(existing.item_id(), false, false, window, cx);
+                            if let Some((ix, existing_item_id)) = existing {
+                                pane.remove_item(existing_item_id, false, false, window, cx);
                                 pane.add_item(
                                     Box::new(commit_view),
                                     true,
@@ -307,7 +303,13 @@ impl CommitView {
                         .is_some_and(|text| is_binary_content(text.as_bytes()));
 
                 let new_text = if is_binary {
-                    "(binary file not shown)".to_owned()
+                    cx.update(|cx| {
+                        tr(
+                            cx,
+                            "git_ui.commit_view.binary_file_not_shown",
+                            "(binary file not shown)",
+                        )
+                    })
                 } else {
                     raw_new_text
                 };
@@ -962,8 +964,8 @@ async fn build_buffer(
         language_registry
             .load_language(&language)
             .await
-            .ok()
-            .and_then(|e| e.log_err())
+            .log_err()
+            .and_then(|language| language.log_err())
     } else {
         None
     };
@@ -1009,6 +1011,8 @@ async fn build_buffer_diff(
         })
         .await;
 
+    // `set_snapshot` also reports the changed range so callers can restore a
+    // selection; a freshly built diff has none.
     diff.update(cx, |diff, cx| {
         diff.language_changed(language, Some(language_registry.clone()), cx);
         diff.set_snapshot(update, &buffer.text, cx)
@@ -1045,25 +1049,14 @@ impl Item for CommitView {
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
         let short_sha = self.commit.sha.get(0..7).unwrap_or(&*self.commit.sha);
-        let subject = truncate_and_trailoff(
-            self.commit
-                .message
-                .split('\n')
-                .next()
-                .expect("iterator should yield an item"),
-            20,
-        );
+        let subject =
+            truncate_and_trailoff(self.commit.message.lines().next().unwrap_or_default(), 20);
         format!("{short_sha} — {subject}").into()
     }
 
     fn tab_tooltip_content(&self, _: &App) -> Option<TabTooltipContent> {
         let short_sha = self.commit.sha.get(0..16).unwrap_or(&*self.commit.sha);
-        let subject = self
-            .commit
-            .message
-            .split('\n')
-            .next()
-            .expect("iterator should yield an item");
+        let subject = self.commit.message.lines().next().unwrap_or_default();
 
         Some(TabTooltipContent::Custom(Box::new(Tooltip::element({
             let subject = subject.to_owned();

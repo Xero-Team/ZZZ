@@ -1,6 +1,5 @@
 use std::{
     cell::{RefCell, RefMut},
-    fmt::Write,
     ops::RangeInclusive,
     rc::Rc,
     sync::{Arc, LazyLock},
@@ -350,13 +349,13 @@ impl MemoryView {
         let selected_width = self.view_state().line_width.clone();
         DropdownMenu::new(
             "memory-view-width-picker",
-            selected_width.label.clone(),
+            selected_width.label(cx),
             ContextMenu::build(window, cx, |mut this, window, cx| {
                 for width in &WIDTHS {
                     let weak = weak.clone();
                     let width = width.clone();
-                    this = this.entry(width.label.clone(), None, move |_, cx| {
-                        _ = weak.update(cx, |this, _| {
+                    this = this.entry(width.label(cx), None, move |_, cx| {
+                        weak.update(cx, |this, _| {
                             let mut view_state = this.view_state();
                             // Convert base ix between 2 line widths to keep the shown memory address roughly the same.
                             // All widths are powers of 2, so the conversion should be lossless.
@@ -377,7 +376,8 @@ impl MemoryView {
                                 _ => {}
                             }
                             view_state.line_width = width.clone();
-                        });
+                        })
+                        .log_err();
                     });
                 }
                 if let Some(ix) = WIDTHS
@@ -415,35 +415,36 @@ impl MemoryView {
             return;
         }
         if self.is_writing_memory {
-            self.query_editor.update(cx, |this, cx| {
-                this.clear(window, cx);
-                this.set_placeholder_text(
-                    &tr(
-                        cx,
-                        "debugger_ui.memory_view.goto_memory_address_or_expression",
-                        "Go to Memory Address / Expression",
-                    ),
-                    window,
-                    cx,
-                );
-            });
+            self.set_query_placeholder(
+                "debugger_ui.memory_view.goto_memory_address_or_expression",
+                "Go to Memory Address / Expression",
+                window,
+                cx,
+            );
             self.is_writing_memory = false;
         } else {
-            self.query_editor.update(cx, |this, cx| {
-                this.clear(window, cx);
-                this.set_placeholder_text(
-                    &tr(
-                        cx,
-                        "debugger_ui.memory_view.write_selected_memory_range",
-                        "Write to Selected Memory Range",
-                    ),
-                    window,
-                    cx,
-                );
-            });
+            self.set_query_placeholder(
+                "debugger_ui.memory_view.write_selected_memory_range",
+                "Write to Selected Memory Range",
+                window,
+                cx,
+            );
             self.is_writing_memory = true;
             self.query_editor.focus_handle(cx).focus(window, cx);
         }
+    }
+
+    fn set_query_placeholder(
+        &mut self,
+        key: &str,
+        fallback: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.query_editor.update(cx, |this, cx| {
+            this.clear(window, cx);
+            this.set_placeholder_text(&tr(cx, key, fallback), window, cx);
+        });
     }
 
     fn toggle_data_breakpoint(
@@ -470,7 +471,7 @@ impl MemoryView {
                     let Some(data_id) = info.data_id else {
                         return;
                     };
-                    _ = this.update(cx, |this, cx| {
+                    this.update(cx, |this, cx| {
                         this.create_data_breakpoint(
                             context,
                             data_id.clone(),
@@ -482,7 +483,8 @@ impl MemoryView {
                             },
                             cx,
                         );
-                    });
+                    })
+                    .log_err();
                 }
             })
             .detach();
@@ -504,31 +506,34 @@ impl MemoryView {
                     } else {
                         let adapter_name = session.adapter();
                         // We cannot write memory with this adapter.
-                        _ = self.workspace.update(cx, |this, cx| {
-                            let message = tr(
-                                cx,
-                                "debugger_ui.memory_view.write_memory_not_supported",
-                                "Debug Adapter `{}` does not support writing to memory",
-                            )
-                            .replacen("{}", &adapter_name, 1);
-                            this.toggle_status_toast(
-                                StatusToast::new(message, cx, |this, cx| {
-                                    cx.spawn(async move |this, cx| {
-                                        cx.background_executor()
-                                            .timer(Duration::from_secs(2))
-                                            .await;
-                                        _ = this.update(cx, |_, cx| cx.emit(DismissEvent));
-                                    })
-                                    .detach();
-                                    this.icon(
-                                        Icon::new(IconName::XCircle)
-                                            .size(IconSize::Small)
-                                            .color(Color::Error),
-                                    )
-                                }),
-                                cx,
-                            );
-                        });
+                        self.workspace
+                            .update(cx, |this, cx| {
+                                let message = tr(
+                                    cx,
+                                    "debugger_ui.memory_view.write_memory_not_supported",
+                                    "Debug Adapter `{}` does not support writing to memory",
+                                )
+                                .replacen("{}", &adapter_name, 1);
+                                this.toggle_status_toast(
+                                    StatusToast::new(message, cx, |this, cx| {
+                                        cx.spawn(async move |this, cx| {
+                                            cx.background_executor()
+                                                .timer(Duration::from_secs(2))
+                                                .await;
+                                            this.update(cx, |_, cx| cx.emit(DismissEvent))
+                                                .log_err();
+                                        })
+                                        .detach();
+                                        this.icon(
+                                            Icon::new(IconName::XCircle)
+                                                .size(IconSize::Small)
+                                                .color(Color::Error),
+                                        )
+                                    }),
+                                    cx,
+                                );
+                            })
+                            .log_err();
                         true
                     }
                 });
@@ -596,7 +601,7 @@ impl MemoryView {
         });
         cx.spawn(async move |this, cx| {
             if let Some((reference, typ)) = reference.await {
-                _ = this.update(cx, |this, cx| {
+                this.update(cx, |this, cx| {
                     let sizeof_expr = if typ.as_ref().is_some_and(|t| {
                         t.chars()
                             .all(|c| c.is_whitespace() || c.is_alphabetic() || c == '*')
@@ -606,7 +611,8 @@ impl MemoryView {
                         None
                     };
                     this.go_to_memory_reference(&reference, sizeof_expr, selected_frame, cx);
-                });
+                })
+                .log_err();
             }
         })
         .detach();
@@ -638,12 +644,11 @@ impl MemoryView {
             return;
         }
         let zeros_to_write = 8 - memory.len();
-        let mut acc = String::from("0x");
-        acc.extend(std::iter::repeat("00").take(zeros_to_write));
-        let as_query = memory.into_iter().rev().fold(acc, |mut acc, byte| {
-            _ = write!(&mut acc, "{:02x}", byte);
-            acc
-        });
+        let mut as_query = String::from("0x");
+        as_query.push_str(&"00".repeat(zeros_to_write));
+        for byte in memory.into_iter().rev() {
+            as_query.push_str(&format!("{byte:02x}"));
+        }
         self.query_editor.update(cx, |this, cx| {
             this.set_text(as_query, window, cx);
         });
@@ -715,26 +720,32 @@ impl MemoryView {
 #[derive(Clone)]
 struct ViewWidth {
     width: u8,
-    label: SharedString,
+    label_key: &'static str,
+    label_fallback: &'static str,
 }
 
 impl ViewWidth {
-    const fn new(width: u8, label: &'static str) -> Self {
+    const fn new(width: u8, label_key: &'static str, label_fallback: &'static str) -> Self {
         Self {
             width,
-            label: SharedString::new_static(label),
+            label_key,
+            label_fallback,
         }
+    }
+
+    fn label(&self, cx: &App) -> SharedString {
+        tr(cx, self.label_key, self.label_fallback).into()
     }
 }
 
 static WIDTHS: [ViewWidth; 7] = [
-    ViewWidth::new(1, "1 byte"),
-    ViewWidth::new(2, "2 bytes"),
-    ViewWidth::new(4, "4 bytes"),
-    ViewWidth::new(8, "8 bytes"),
-    ViewWidth::new(16, "16 bytes"),
-    ViewWidth::new(32, "32 bytes"),
-    ViewWidth::new(64, "64 bytes"),
+    ViewWidth::new(1, "debugger_ui.memory_view.width_1_byte", "1 byte"),
+    ViewWidth::new(2, "debugger_ui.memory_view.width_2_bytes", "2 bytes"),
+    ViewWidth::new(4, "debugger_ui.memory_view.width_4_bytes", "4 bytes"),
+    ViewWidth::new(8, "debugger_ui.memory_view.width_8_bytes", "8 bytes"),
+    ViewWidth::new(16, "debugger_ui.memory_view.width_16_bytes", "16 bytes"),
+    ViewWidth::new(32, "debugger_ui.memory_view.width_32_bytes", "32 bytes"),
+    ViewWidth::new(64, "debugger_ui.memory_view.width_64_bytes", "64 bytes"),
 ];
 
 fn render_single_memory_view_line(
@@ -794,14 +805,15 @@ fn render_single_memory_view_line(
                                         this.on_mouse_down(
                                             MouseButton::Right,
                                             move |click, window, cx| {
-                                                _ = weak.update(cx, |this, cx| {
+                                                weak.update(cx, |this, cx| {
                                                     this.deploy_memory_context_menu(
                                                         selection.clone(),
                                                         click.position,
                                                         window,
                                                         cx,
                                                     )
-                                                });
+                                                })
+                                                .log_err();
                                                 cx.stop_propagation();
                                             },
                                         )
@@ -826,10 +838,11 @@ fn render_single_memory_view_line(
                             {
                                 let weak = weak.clone();
                                 move |drag, _, _, cx| {
-                                    _ = weak.update(cx, |this, _| {
+                                    weak.update(cx, |this, _| {
                                         this.view_state().selection =
                                             Some(SelectedMemoryRange::DragUnderway(drag.clone()));
-                                    });
+                                    })
+                                    .log_err();
 
                                     cx.new(|_| Empty)
                                 }
@@ -838,23 +851,25 @@ fn render_single_memory_view_line(
                         .on_drop({
                             let weak = weak.clone();
                             move |drag: &Drag, _, cx| {
-                                _ = weak.update(cx, |this, _| {
+                                weak.update(cx, |this, _| {
                                     this.view_state().selection =
                                         Some(SelectedMemoryRange::DragComplete(Drag {
                                             start_address: drag.start_address,
                                             end_address: address,
                                         }));
-                                });
+                                })
+                                .log_err();
                             }
                         })
                         .drag_over(move |style, drag: &Drag, _, cx| {
-                            _ = weak.update(cx, |this, _| {
+                            weak.update(cx, |this, _| {
                                 this.view_state().selection =
                                     Some(SelectedMemoryRange::DragUnderway(Drag {
                                         start_address: drag.start_address,
                                         end_address: address,
                                     }));
-                            });
+                            })
+                            .log_err();
 
                             style
                         })
@@ -869,7 +884,6 @@ fn render_single_memory_view_line(
                 .h_full()
                 .px_1()
                 .mr_4()
-                // .gap_x_1p5()
                 .border_x_1()
                 .border_color(Color::Muted.color(cx))
                 .children(memory.iter().enumerate().map(|(ix, cell)| {

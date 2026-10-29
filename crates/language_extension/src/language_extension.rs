@@ -21,29 +21,31 @@ pub fn init(
     extension_host_proxy: Arc<ExtensionHostProxy>,
     language_registry: Arc<LanguageRegistry>,
 ) {
-    let language_server_registry_proxy = LanguageServerRegistryProxy {
+    let proxy = LanguageRegistryProxy {
         language_registry,
         lsp_access,
     };
-    extension_host_proxy.register_grammar_proxy(language_server_registry_proxy.clone());
-    extension_host_proxy.register_language_proxy(language_server_registry_proxy.clone());
-    extension_host_proxy.register_language_server_proxy(language_server_registry_proxy);
+    extension_host_proxy.register_grammar_proxy(proxy.clone());
+    extension_host_proxy.register_language_proxy(proxy.clone());
+    extension_host_proxy.register_language_server_proxy(proxy);
 }
 
+/// Bridges the extension host proxies (grammars, languages, language servers)
+/// onto the shared [`LanguageRegistry`].
 #[derive(Clone)]
-struct LanguageServerRegistryProxy {
+struct LanguageRegistryProxy {
     language_registry: Arc<LanguageRegistry>,
     lsp_access: LspAccess,
 }
 
-impl ExtensionGrammarProxy for LanguageServerRegistryProxy {
+impl ExtensionGrammarProxy for LanguageRegistryProxy {
     #[ztracing::instrument(skip_all)]
     fn register_grammars(&self, grammars: Vec<(Arc<str>, PathBuf)>) {
         self.language_registry.register_wasm_grammars(grammars)
     }
 }
 
-impl ExtensionLanguageProxy for LanguageServerRegistryProxy {
+impl ExtensionLanguageProxy for LanguageRegistryProxy {
     fn register_language(
         &self,
         language: LanguageName,

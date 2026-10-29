@@ -46,23 +46,24 @@ impl LanguageSelector {
         });
     }
 
-    fn toggle(
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Option<()> {
+    /// Opens the language picker for the active editor's buffer. Does nothing
+    /// when the active item is not an editor or has no active buffer.
+    fn toggle(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
         let registry = workspace.app_state().languages.clone();
-        let buffer = workspace
-            .active_item(cx)?
-            .act_as::<Editor>(cx)?
-            .read(cx)
-            .active_buffer(cx)?;
+        let Some(item) = workspace.active_item(cx) else {
+            return;
+        };
+        let Some(editor) = item.act_as::<Editor>(cx) else {
+            return;
+        };
+        let Some(buffer) = editor.read(cx).active_buffer(cx) else {
+            return;
+        };
         let project = workspace.project().clone();
 
         workspace.toggle_modal(window, cx, move |window, cx| {
             LanguageSelector::new(buffer, project, registry, window, cx)
         });
-        Some(())
     }
 
     fn new(

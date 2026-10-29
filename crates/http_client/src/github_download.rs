@@ -42,7 +42,7 @@ pub async fn download_server_binary(
     digest: Option<&str>,
     destination_path: &Path,
     asset_kind: AssetKind,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     log::info!("downloading github artifact from {url}");
     let Some(destination_parent) = destination_path.parent() else {
         anyhow::bail!("destination path has no parent: {destination_path:?}");
@@ -53,6 +53,10 @@ pub async fn download_server_binary(
         .get(url, Default::default(), true)
         .await
         .with_context(|| format!("downloading release from {url}"))?;
+    if let Err(err) = ensure_download_success(response.status(), url) {
+        cleanup_staging_path(&staging_path, asset_kind).await;
+        return Err(err);
+    }
     let body = response.body_mut();
 
     if let Err(err) = extract_to_staging(body, digest, url, &staging_path, asset_kind).await {
@@ -74,7 +78,7 @@ pub async fn download_server_raw_binary(
     digest: Option<&str>,
     destination_path: &Path,
     binary_file_name: &str,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     log::info!("downloading raw binary from {url}");
     let Some(destination_parent) = destination_path.parent() else {
         anyhow::bail!("destination path has no parent: {destination_path:?}");
@@ -86,6 +90,7 @@ pub async fn download_server_raw_binary(
             .get(url, Default::default(), true)
             .await
             .with_context(|| format!("downloading release from {url}"))?;
+        ensure_download_success(response.status(), url)?;
 
         let binary_path = staging_path.join(binary_file_name);
         let mut writer = HashingWriter {
@@ -103,10 +108,7 @@ pub async fn download_server_raw_binary(
             .with_context(|| format!("flushing binary contents for {url}"))?;
 
         if let Some(expected_sha_256) = digest {
-            anyhow::ensure!(
-                asset_sha_256 == expected_sha_256,
-                "{url} asset got SHA-256 mismatch. Expected: {expected_sha_256}, Got: {asset_sha_256}",
-            );
+            verify_sha256(url, expected_sha_256, &asset_sha_256)?;
         }
 
         util::fs::make_file_executable(&binary_path)
@@ -117,12 +119,39 @@ pub async fn download_server_raw_binary(
     .await;
 
     if let Err(err) = result {
-        if let Err(err) = async_fs::remove_dir_all(&staging_path).await {
-            log::warn!("failed to remove staging directory {staging_path:?}: {err:?}");
+        if let Err(cleanup_error) = async_fs::remove_dir_all(&staging_path).await {
+            log::warn!("failed to remove staging directory {staging_path:?}: {cleanup_error:?}");
         }
         return Err(err);
     }
 
+    Ok(())
+}
+
+/// Fails unless the download response is a success.
+///
+/// Error responses carry an HTML or JSON error page rather than the requested
+/// asset, so they must never be extracted or installed as the binary.
+fn ensure_download_success(status: http::StatusCode, url: &str) -> Result<()> {
+    if status.is_success() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "downloading {url} failed with status {}{}",
+        status.as_u16(),
+        status
+            .canonical_reason()
+            .map(|reason| format!(" ({reason})"))
+            .unwrap_or_default()
+    )
+}
+
+/// Checks the SHA-256 digest of a downloaded asset against the expected one.
+fn verify_sha256(url: &str, expected: &str, actual: &str) -> Result<()> {
+    anyhow::ensure!(
+        actual == expected,
+        "{url} asset got SHA-256 mismatch. Expected: {expected}, Got: {actual}",
+    );
     Ok(())
 }
 
@@ -149,10 +178,7 @@ async fn extract_to_staging(
                 })?;
             let asset_sha_256 = hex::encode(writer.hasher.finalize());
 
-            anyhow::ensure!(
-                asset_sha_256 == expected_sha_256,
-                "{url} asset got SHA-256 mismatch. Expected: {expected_sha_256}, Got: {asset_sha_256}",
-            );
+            verify_sha256(url, expected_sha_256, &asset_sha_256)?;
             writer
                 .writer
                 .seek(std::io::SeekFrom::Start(0))
@@ -288,7 +314,7 @@ async fn extract_tar_gz(
     destination_path: &Path,
     url: &str,
     from: impl AsyncRead + Unpin,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     let decompressed_bytes = GzipDecoder::new(BufReader::new(from));
     unpack_tar_archive(destination_path, url, decompressed_bytes).await?;
     Ok(())
@@ -298,7 +324,7 @@ async fn extract_tar_bz2(
     destination_path: &Path,
     url: &str,
     from: impl AsyncRead + Unpin,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     let decompressed_bytes = BzDecoder::new(BufReader::new(from));
     unpack_tar_archive(destination_path, url, decompressed_bytes).await?;
     Ok(())
@@ -308,7 +334,7 @@ async fn unpack_tar_archive(
     destination_path: &Path,
     url: &str,
     archive_bytes: impl AsyncRead + Unpin,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     // We don't need to set the modified time. It's irrelevant to downloaded
     // archive verification, and some filesystems return errors when asked to
     // apply it after extraction.
@@ -326,7 +352,7 @@ async fn extract_gz(
     destination_path: &Path,
     url: &str,
     from: impl AsyncRead + Unpin,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     let mut decompressed_bytes = GzipDecoder::new(BufReader::new(from));
     let mut file = async_fs::File::create(&destination_path)
         .await
@@ -399,7 +425,17 @@ mod tests {
     use url::Url;
 
     struct StaticResponseClient {
+        status: http::StatusCode,
         body: Vec<u8>,
+    }
+
+    impl StaticResponseClient {
+        fn ok(body: impl Into<Vec<u8>>) -> Self {
+            Self {
+                status: http::StatusCode::OK,
+                body: body.into(),
+            }
+        }
     }
 
     impl HttpClient for StaticResponseClient {
@@ -407,10 +443,11 @@ mod tests {
             &self,
             _req: http::Request<AsyncBody>,
         ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+            let status = self.status;
             let body = self.body.clone();
             Box::pin(async move {
                 Ok(Response::builder()
-                    .status(200)
+                    .status(status)
                     .body(AsyncBody::from(body))
                     .unwrap())
             })
@@ -432,7 +469,7 @@ mod tests {
             let destination_path = temp_dir.path().join("v_1");
             let contents = b"#!/bin/sh\necho hello\n".to_vec();
             let expected_sha_256 = hex::encode(Sha256::digest(&contents));
-            let client = StaticResponseClient { body: contents };
+            let client = StaticResponseClient::ok(contents);
 
             download_server_raw_binary(
                 &client,
@@ -462,13 +499,41 @@ mod tests {
     }
 
     #[test]
+    fn error_responses_are_never_installed_as_the_binary() {
+        // A 404 body is an error page, not the requested asset; installing it
+        // would leave an unexecutable file behind that looks like a download.
+        let client = StaticResponseClient {
+            status: http::StatusCode::NOT_FOUND,
+            body: b"<html>not found</html>".to_vec(),
+        };
+
+        futures::executor::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let destination_path = temp_dir.path().join("v_1");
+
+            let error = download_server_raw_binary(
+                &client,
+                "https://example.com/agent-binary",
+                None,
+                &destination_path,
+                "agent-binary",
+            )
+            .await
+            .unwrap_err();
+
+            assert!(error.to_string().contains("status 404"), "{error}");
+            assert!(!destination_path.exists());
+            let leftover_entries = std::fs::read_dir(temp_dir.path()).unwrap().count();
+            assert_eq!(leftover_entries, 0, "staging directory should be removed");
+        });
+    }
+
+    #[test]
     fn raw_binary_digest_mismatch_cleans_up_staging() {
         futures::executor::block_on(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let destination_path = temp_dir.path().join("v_1");
-            let client = StaticResponseClient {
-                body: b"some binary".to_vec(),
-            };
+            let client = StaticResponseClient::ok(b"some binary".to_vec());
 
             let error = download_server_raw_binary(
                 &client,

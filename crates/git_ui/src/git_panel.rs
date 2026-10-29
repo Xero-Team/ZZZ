@@ -190,7 +190,7 @@ impl StashMessageModal {
         let message = (!message.is_empty()).then_some(message);
         self.panel
             .update(cx, |panel, cx| panel.perform_stash(message, cx))
-            .ok();
+            .log_err();
         cx.emit(DismissEvent);
     }
 }
@@ -969,12 +969,15 @@ pub(crate) fn commit_message_editor(
     commit_editor.set_custom_context_menu(|editor, _point, window, cx| {
         let has_selection = editor.has_non_empty_selection(&editor.display_snapshot(cx));
         let focus_handle = editor.focus_handle(cx);
+        let cut = tr(cx, "menu.edit.cut", "Cut");
+        let copy = tr(cx, "menu.edit.copy", "Copy");
+        let paste = tr(cx, "menu.edit.paste", "Paste");
 
-        Some(ContextMenu::build(window, cx, |menu, _, _| {
+        Some(ContextMenu::build(window, cx, move |menu, _, _| {
             menu.context(focus_handle)
-                .action_disabled_when(!has_selection, "Cut", Box::new(editor::actions::Cut))
-                .action_disabled_when(!has_selection, "Copy", Box::new(editor::actions::Copy))
-                .action("Paste", Box::new(editor::actions::Paste))
+                .action_disabled_when(!has_selection, cut, Box::new(editor::actions::Cut))
+                .action_disabled_when(!has_selection, copy, Box::new(editor::actions::Copy))
+                .action(paste, Box::new(editor::actions::Paste))
         }))
     });
     commit_editor
@@ -1123,7 +1126,7 @@ impl GitPanel {
                             .update(cx, |workspace, cx| {
                                 workspace.show_error(error, cx);
                             })
-                            .ok();
+                            .log_err();
                     }
                     GitStoreEvent::RepositoryUpdated(_, _, _) => {}
                     GitStoreEvent::JobsUpdated | GitStoreEvent::ConflictsUpdated => {}
@@ -2193,15 +2196,14 @@ impl GitPanel {
             1 => return self.revert_entry(&entries[0], window, cx),
             _ => {}
         }
-        let mut details = entries
-            .iter()
-            .filter_map(|entry| entry.repo_path.as_ref().file_name())
-            .map(|filename| filename.to_owned())
-            .take(5)
-            .join("\n");
-        if entries.len() > 5 {
-            details.push_str(&format!("\nand {} more...", entries.len() - 5))
-        }
+        let details = truncated_file_list(
+            entries
+                .iter()
+                .filter_map(|entry| entry.repo_path.as_ref().file_name())
+                .map(|filename| filename.to_owned()),
+            entries.len(),
+            cx,
+        );
 
         let restore = tr(
             cx,
@@ -2250,22 +2252,18 @@ impl GitPanel {
             _ => {}
         };
 
-        let mut details = to_delete
-            .iter()
-            .map(|entry| {
+        let details = truncated_file_list(
+            to_delete.iter().map(|entry| {
                 entry
                     .repo_path
                     .as_ref()
                     .file_name()
-                    .map(|f| f.to_owned())
+                    .map(|filename| filename.to_owned())
                     .unwrap_or_default()
-            })
-            .take(5)
-            .join("\n");
-
-        if to_delete.len() > 5 {
-            details.push_str(&format!("\nand {} more...", to_delete.len() - 5))
-        }
+            }),
+            to_delete.len(),
+            cx,
+        );
 
         let trash = tr(cx, "git_ui.git_panel.trash", "Trash");
         let cancel = tr(cx, "prompt.common.cancel", "Cancel");
@@ -2737,10 +2735,7 @@ impl GitPanel {
     }
 
     fn on_commit(&mut self, _: &Commit, window: &mut Window, cx: &mut Context<Self>) {
-        let is_amend = self.amend_pending;
-        if self.commit(&self.commit_editor.focus_handle(cx), window, cx) {
-            let _ = is_amend;
-        }
+        self.commit(&self.commit_editor.focus_handle(cx), window, cx);
     }
 
     /// Commits staged changes with the current commit message.
@@ -2771,9 +2766,7 @@ impl GitPanel {
     }
 
     fn on_amend(&mut self, _: &Amend, window: &mut Window, cx: &mut Context<Self>) {
-        if self.amend(&self.commit_editor.focus_handle(cx), window, cx) {
-            let _ = ();
-        }
+        self.amend(&self.commit_editor.focus_handle(cx), window, cx);
     }
 
     /// Enters the amend state on first invocation, loading the last commit
@@ -3350,18 +3343,12 @@ impl GitPanel {
                 Ok(Some(remote)) => remote,
                 Ok(None) => {
                     this.update(cx, |this, cx| {
-                        this.show_error_toast(
-                            "push",
-                            anyhow::anyhow!(
-                                "{}",
-                                tr(
-                                    cx,
-                                    "git_ui.git_panel.no_remote_available_to_push_to",
-                                    "No remote available to push to. Add a remote to be able to publish changes.",
-                                ),
-                            ),
+                        let message = tr(
                             cx,
-                        )
+                            "git_ui.git_panel.no_remote_available_to_pull_from",
+                            "No remote available to pull from. Add a remote to be able to pull changes.",
+                        );
+                        this.show_error_toast("pull", anyhow::anyhow!("{message}"), cx)
                     })
                     .ok();
                     return Ok(());
@@ -3447,18 +3434,12 @@ impl GitPanel {
                 Ok(Some(remote)) => remote,
                 Ok(None) => {
                     this.update(cx, |this, cx| {
-                        this.show_error_toast(
-                            "push",
-                            anyhow::anyhow!(
-                                "{}",
-                                tr(
-                                    cx,
-                                    "git_ui.git_panel.no_remote_available_to_push_to",
-                                    "No remote available to push to. Add a remote to be able to publish changes.",
-                                ),
-                            ),
+                        let message = tr(
                             cx,
-                        )
+                            "git_ui.git_panel.no_remote_available_to_push_to",
+                            "No remote available to push to. Add a remote to be able to publish changes.",
+                        );
+                        this.show_error_toast("push", anyhow::anyhow!("{message}"), cx)
                     })
                     .ok();
                     return Ok(());
@@ -3677,17 +3658,20 @@ impl GitPanel {
                 .collect();
             let selection = cx
                 .update(|window, cx| {
-                    picker_prompt::prompt(
-                        &tr(
+                    let prompt = if is_push {
+                        tr(
                             cx,
                             "git_ui.git_panel.pick_which_remote_to_push_to",
                             "Pick which remote to push to",
-                        ),
-                        current_remotes.clone(),
-                        workspace,
-                        window,
-                        cx,
-                    )
+                        )
+                    } else {
+                        tr(
+                            cx,
+                            "git_ui.git_panel.pick_which_remote_to_pull_from",
+                            "Pick which remote to pull from",
+                        )
+                    };
+                    picker_prompt::prompt(&prompt, current_remotes.clone(), workspace, window, cx)
                 })?
                 .await;
 
@@ -4870,7 +4854,7 @@ impl GitPanel {
         let has_staged_changes = self.has_staged_changes();
         let has_unstaged_changes = self.has_unstaged_changes();
         let has_new_changes = self.new_count > 0;
-        let has_stash_items = self.stash_entries.entries.len() > 0;
+        let has_stash_items = !self.stash_entries.entries.is_empty();
         let focus_handle = self.focus_handle.clone();
 
         PopoverMenu::new(id.into())
@@ -5978,74 +5962,15 @@ impl GitPanel {
                                                 .w_full()
                                                 .min_w_0()
                                                 .child(Label::new(subject).truncate())
-                                                .children((!branch_names.is_empty()).then(|| {
-                                                    let hidden_branch_count = branch_names
-                                                        .len()
-                                                        .saturating_sub(MAX_HISTORY_TAG_CHIPS);
-                                                    h_flex()
-                                                        .gap_1()
-                                                        .min_w_0()
-                                                        .children(
-                                                            branch_names
-                                                                .iter()
-                                                                .take(MAX_HISTORY_TAG_CHIPS)
-                                                                .cloned()
-                                                                .map(|branch_name| {
-                                                                    Chip::new(branch_name.clone())
-                                                                        .truncate()
-                                                                        .tooltip(Tooltip::text(
-                                                                            branch_name,
-                                                                        ))
-                                                                }),
-                                                        )
-                                                        .when(hidden_branch_count > 0, |this| {
-                                                            let hidden_branch_names = branch_names
-                                                                [MAX_HISTORY_TAG_CHIPS..]
-                                                                .join(", ");
-                                                            this.child(
-                                                                Chip::new(format!(
-                                                                    "+{hidden_branch_count}"
-                                                                ))
-                                                                .tooltip(Tooltip::text(
-                                                                    hidden_branch_names,
-                                                                )),
-                                                            )
-                                                        })
-                                                }))
-                                                .children((!tag_names.is_empty()).then(|| {
-                                                    let hidden_tag_count = tag_names
-                                                        .len()
-                                                        .saturating_sub(MAX_HISTORY_TAG_CHIPS);
-                                                    h_flex()
-                                                        .gap_1()
-                                                        .min_w_0()
-                                                        .children(
-                                                            tag_names
-                                                                .iter()
-                                                                .take(MAX_HISTORY_TAG_CHIPS)
-                                                                .cloned()
-                                                                .map(|tag_name| {
-                                                                    Chip::new(tag_name.clone())
-                                                                        .truncate()
-                                                                        .tooltip(Tooltip::text(
-                                                                            tag_name,
-                                                                        ))
-                                                                }),
-                                                        )
-                                                        .when(hidden_tag_count > 0, |this| {
-                                                            let hidden_tag_names = tag_names
-                                                                [MAX_HISTORY_TAG_CHIPS..]
-                                                                .join(", ");
-                                                            this.child(
-                                                                Chip::new(format!(
-                                                                    "+{hidden_tag_count}"
-                                                                ))
-                                                                .tooltip(Tooltip::text(
-                                                                    hidden_tag_names,
-                                                                )),
-                                                            )
-                                                        })
-                                                }))
+                                                .children(
+                                                    (!branch_names.is_empty()).then(|| {
+                                                        history_label_chips(&branch_names)
+                                                    }),
+                                                )
+                                                .children(
+                                                    (!tag_names.is_empty())
+                                                        .then(|| history_label_chips(&tag_names)),
+                                                )
                                                 .when(is_unpushed, |this| {
                                                     this.child(
                                                         Icon::new(IconName::ArrowUp)
@@ -6636,6 +6561,11 @@ impl GitPanel {
             tr(cx, "git_ui.git_panel.discard_changes", "Discard Changes")
         };
         let add_to_gitignore = tr(cx, "git_ui.git_panel.add_to_gitignore", "Add to .gitignore");
+        let add_to_git_info_exclude = tr(
+            cx,
+            "git_ui.git_panel.add_to_git_info_exclude",
+            "Add to .git/info/exclude",
+        );
         let open_diff = tr(cx, "git_ui.git_panel.open_diff", "Open Diff");
         let open_diff_file = tr(cx, "git_ui.git_panel.open_diff_file", "Open Diff (File)");
         let view_file = tr(cx, "git_ui.git_panel.view_file", "View File");
@@ -6670,7 +6600,7 @@ impl GitPanel {
                 )
                 .action_disabled_when(
                     !is_created,
-                    "Add to .git/info/exclude",
+                    add_to_git_info_exclude.clone(),
                     git::AddToGitInfoExclude.boxed_clone(),
                 )
                 .separator()
@@ -6725,7 +6655,7 @@ impl GitPanel {
         let has_staged_changes = self.has_staged_changes();
         let has_unstaged_changes = self.has_unstaged_changes();
         let has_new_changes = self.new_count > 0;
-        let has_stash_items = self.stash_entries.entries.len() > 0;
+        let has_stash_items = !self.stash_entries.entries.is_empty();
 
         let context_menu = git_panel_context_menu(
             has_tracked_changes,
@@ -7774,7 +7704,7 @@ impl RenderOnce for PanelRepoFooter {
                         .collect::<String>()
                 })
             })
-            .unwrap_or_else(|| " (no branch)".to_owned());
+            .unwrap_or_else(|| format!(" {}", tr(cx, "git_ui.git_panel.no_branch", "(no branch)")));
         let show_separator = self.branch.is_some() || self.head_commit.is_some();
 
         let active_repo_name = self.active_repository.clone();
@@ -8257,39 +8187,38 @@ pub(crate) fn show_error_toast(
     cx: &mut App,
 ) {
     let operation = action.into();
-    let action = localize_git_operation(cx, operation.as_ref());
     let message = format_git_error_toast_message(&e);
-    let title = git_error_toast_title(cx, operation.as_ref(), &message, &action);
-    if message
-        .matches(git::repository::REMOTE_CANCELLED_BY_USER)
-        .next()
-        .is_some()
-    { // Hide the cancelled by user message
-    } else {
-        cx.defer(move |cx| {
-            workspace.update(cx, |workspace, cx| {
-                let workspace_weak = cx.weak_entity();
-                let view_log = tr(cx, "git_ui.git_panel.view_log", "View Log");
-                let toast = StatusToast::new(title.clone(), cx, |this, _cx| {
-                    this.icon(
-                        Icon::new(IconName::XCircle)
-                            .size(IconSize::Small)
-                            .color(Color::Error),
-                    )
-                    .action(view_log.clone(), move |window, cx| {
-                        let message = message.clone();
-                        let action = action.clone();
-                        workspace_weak
-                            .update(cx, move |workspace, cx| {
-                                open_output(action, workspace, &message, window, cx)
-                            })
-                            .ok();
-                    })
-                });
-                workspace.toggle_status_toast(toast, cx)
-            });
-        });
+
+    // A cancelled credentials prompt is an expected outcome, not an error.
+    if message.contains(git::repository::REMOTE_CANCELLED_BY_USER) {
+        return;
     }
+
+    let action = localize_git_operation(cx, operation.as_ref());
+    let title = git_error_toast_title(cx, operation.as_ref(), &message, &action);
+    cx.defer(move |cx| {
+        workspace.update(cx, |workspace, cx| {
+            let workspace_weak = cx.weak_entity();
+            let view_log = tr(cx, "git_ui.git_panel.view_log", "View Log");
+            let toast = StatusToast::new(title.clone(), cx, |this, _cx| {
+                this.icon(
+                    Icon::new(IconName::XCircle)
+                        .size(IconSize::Small)
+                        .color(Color::Error),
+                )
+                .action(view_log.clone(), move |window, cx| {
+                    let message = message.clone();
+                    let action = action.clone();
+                    workspace_weak
+                        .update(cx, move |workspace, cx| {
+                            open_output(action, workspace, &message, window, cx)
+                        })
+                        .log_err();
+                })
+            });
+            workspace.toggle_status_toast(toast, cx)
+        });
+    });
 }
 
 fn rpc_error_raw_message_from_chain(error: &anyhow::Error) -> Option<&str> {
@@ -8304,6 +8233,51 @@ fn format_git_error_toast_message(error: &anyhow::Error) -> String {
     } else {
         error.to_string().trim().to_owned()
     }
+}
+
+/// How many file names a bulk confirmation prompt lists before summarizing the
+/// rest as "and N more".
+const MAX_PROMPT_FILE_NAMES: usize = 5;
+
+/// The detail text of a bulk confirmation prompt: up to
+/// [`MAX_PROMPT_FILE_NAMES`] names, then a count of the remaining ones.
+fn truncated_file_list(file_names: impl Iterator<Item = String>, total: usize, cx: &App) -> String {
+    let mut details = file_names.take(MAX_PROMPT_FILE_NAMES).join("\n");
+    if total > MAX_PROMPT_FILE_NAMES {
+        let remaining = total - MAX_PROMPT_FILE_NAMES;
+        let more = tr(cx, "git_ui.git_panel.and_n_more_files", "and {} more...").replacen(
+            "{}",
+            &remaining.to_string(),
+            1,
+        );
+        details.push('\n');
+        details.push_str(&more);
+    }
+    details
+}
+
+/// Renders up to [`MAX_HISTORY_TAG_CHIPS`] chips for `names`, plus a `+N` chip
+/// summarizing the rest.
+fn history_label_chips(names: &[SharedString]) -> impl IntoElement {
+    let hidden_count = names.len().saturating_sub(MAX_HISTORY_TAG_CHIPS);
+    h_flex()
+        .gap_1()
+        .min_w_0()
+        .children(
+            names
+                .iter()
+                .take(MAX_HISTORY_TAG_CHIPS)
+                .cloned()
+                .map(|name| {
+                    Chip::new(name.clone())
+                        .truncate()
+                        .tooltip(Tooltip::text(name))
+                }),
+        )
+        .when(hidden_count > 0, |this| {
+            let hidden_names = names[MAX_HISTORY_TAG_CHIPS..].join(", ");
+            this.child(Chip::new(format!("+{hidden_count}")).tooltip(Tooltip::text(hidden_names)))
+        })
 }
 
 pub(crate) fn commit_title_exceeds_limit(title: &str, max_length: usize) -> bool {

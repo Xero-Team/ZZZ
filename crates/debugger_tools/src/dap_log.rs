@@ -14,6 +14,7 @@ use gpui::{
     ParentElement, Render, SharedString, Styled, Subscription, WeakEntity, Window, actions, div,
 };
 use i18n::tr;
+use language::LanguageRegistry;
 use project::{
     Project,
     debugger::{dap_store, session::Session},
@@ -25,7 +26,7 @@ use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     sync::Arc,
 };
-use util::maybe;
+use util::{ResultExt as _, maybe};
 use workspace::{
     ToolbarItemEvent, ToolbarItemView, Workspace,
     item::Item,
@@ -421,8 +422,15 @@ impl LogStore {
             state.insert(DebugAdapterState::new(
                 id.session_id,
                 adapter_name,
-                session_label
-                    .unwrap_or_else(|| format!("Session {} (child)", id.session_id.0).into()),
+                session_label.unwrap_or_else(|| {
+                    tr(
+                        cx,
+                        "debugger_tools.dap_log.session_child",
+                        "Session {} (child)",
+                    )
+                    .replacen("{}", &id.session_id.0.to_string(), 1)
+                    .into()
+                }),
                 has_adapter_logs,
             ));
 
@@ -445,7 +453,7 @@ impl LogStore {
                             command: command.map(|command| command.to_owned().into()),
                             message: message.to_owned().into(),
                         })
-                        .ok();
+                        .log_err();
                 },
                 LogKind::Rpc,
             );
@@ -464,7 +472,7 @@ impl LogStore {
                             command: command.map(|command| command.to_owned().into()),
                             message: message.to_owned().into(),
                         })
-                        .ok();
+                        .log_err();
                 },
                 LogKind::Adapter,
             );
@@ -532,21 +540,36 @@ impl Render for DapLogToolbarItemView {
         let current_client = current_session_id
             .and_then(|session_id| menu_rows.iter().find(|row| row.session_id == session_id));
 
+        let adapter_logs_label = tr(cx, "debugger_tools.dap_log.adapter_logs", "Adapter Logs");
+        let rpc_messages_label = tr(cx, "debugger_tools.dap_log.rpc_messages", "RPC Messages");
+        let initialization_sequence_label = tr(
+            cx,
+            "debugger_tools.dap_log.initialization_sequence",
+            "Initialization Sequence",
+        );
+
         let dap_menu: PopoverMenu<_> = PopoverMenu::new("DapLogView")
             .anchor(gpui::Anchor::TopLeft)
             .trigger(Button::new(
                 "debug_client_menu_header",
                 current_client.map_or_else(
-                    || "No adapter selected".into(),
+                    || {
+                        Cow::Owned(tr(
+                            cx,
+                            "debugger_tools.dap_log.no_adapter_selected",
+                            "No adapter selected",
+                        ))
+                    },
                     |sub_item| {
                         Cow::Owned(format!(
                             "{} - {} - {}",
                             sub_item.adapter_name,
                             sub_item.session_label,
                             match sub_item.selected_entry {
-                                View::AdapterLogs => ADAPTER_LOGS,
-                                View::RpcMessages => RPC_MESSAGES,
-                                View::InitializationSequence => INITIALIZATION_SEQUENCE,
+                                View::AdapterLogs => adapter_logs_label.as_str(),
+                                View::RpcMessages => rpc_messages_label.as_str(),
+                                View::InitializationSequence =>
+                                    initialization_sequence_label.as_str(),
                             }
                         ))
                     },
@@ -556,8 +579,15 @@ impl Render for DapLogToolbarItemView {
                 let log_view = log_view.clone();
                 let menu_rows = menu_rows.clone();
                 let project = project.clone();
+                let adapter_logs_label = adapter_logs_label.clone();
+                let rpc_messages_label = rpc_messages_label.clone();
+                let initialization_sequence_label = initialization_sequence_label.clone();
                 ContextMenu::build(window, cx, move |mut menu, window, _cx| {
                     for row in menu_rows.into_iter() {
+                        let adapter_logs_label = adapter_logs_label.clone();
+                        let rpc_messages_label = rpc_messages_label.clone();
+                        let initialization_sequence_label = initialization_sequence_label.clone();
+
                         menu = menu.custom_row(move |_window, _cx| {
                             div()
                                 .w_full()
@@ -578,7 +608,7 @@ impl Render for DapLogToolbarItemView {
                                     div()
                                         .w_full()
                                         .pl_4()
-                                        .child(Label::new(ADAPTER_LOGS))
+                                        .child(Label::new(adapter_logs_label.clone()))
                                         .into_any_element()
                                 },
                                 window.handler_for(&log_view, {
@@ -600,7 +630,7 @@ impl Render for DapLogToolbarItemView {
                                     div()
                                         .w_full()
                                         .pl_4()
-                                        .child(Label::new(RPC_MESSAGES))
+                                        .child(Label::new(rpc_messages_label.clone()))
                                         .into_any_element()
                                 },
                                 window.handler_for(&log_view, {
@@ -619,7 +649,7 @@ impl Render for DapLogToolbarItemView {
                                     div()
                                         .w_full()
                                         .pl_4()
-                                        .child(Label::new(INITIALIZATION_SEQUENCE))
+                                        .child(Label::new(initialization_sequence_label.clone()))
                                         .into_any_element()
                                 },
                                 window.handler_for(&log_view, {
@@ -799,6 +829,32 @@ impl DapLogView {
         (editor, vec![editor_subscription, search_subscription])
     }
 
+    /// Renders `editor`'s contents as JSON once the JSON language has loaded.
+    fn highlight_logs_as_json(
+        editor: &Entity<Editor>,
+        language_registry: Arc<LanguageRegistry>,
+        cx: &mut Context<Self>,
+    ) {
+        let language = language_registry.language_for_name("JSON");
+        editor
+            .read(cx)
+            .buffer()
+            .read(cx)
+            .as_singleton()
+            .expect("invariant: the log editor is created with `Editor::multi_line`")
+            .update(cx, |_, cx| {
+                cx.spawn(async move |buffer, cx| {
+                    let Some(language) = language.await.log_err() else {
+                        return;
+                    };
+                    buffer
+                        .update(cx, |buffer, cx| buffer.set_language(Some(language), cx))
+                        .log_err();
+                })
+                .detach();
+            });
+    }
+
     fn menu_items(&self, cx: &App) -> Vec<DapMenuItem> {
         self.log_store
             .read(cx)
@@ -836,24 +892,7 @@ impl DapLogView {
         if let Some(rpc_log) = rpc_log {
             self.current_view = Some((id.session_id, View::RpcMessages));
             let (editor, editor_subscriptions) = Self::editor_for_logs(rpc_log, window, cx);
-            let language = self.project.read(cx).languages().language_for_name("JSON");
-            editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("log buffer should be a singleton")
-                .update(cx, |_, cx| {
-                    cx.spawn({
-                        async move |buffer, cx| {
-                            let language = language.await.ok();
-                            buffer.update(cx, |buffer, cx| {
-                                buffer.set_language(language, cx);
-                            })
-                        }
-                    })
-                    .detach_and_log_err(cx);
-                });
+            Self::highlight_logs_as_json(&editor, self.project.read(cx).languages().clone(), cx);
 
             self.editor = editor;
             self.editor_subscriptions = editor_subscriptions;
@@ -877,12 +916,6 @@ impl DapLogView {
         if let Some(message_log) = message_log {
             self.current_view = Some((id.session_id, View::AdapterLogs));
             let (editor, editor_subscriptions) = Self::editor_for_logs(message_log, window, cx);
-            editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("log buffer should be a singleton");
 
             self.editor = editor;
             self.editor_subscriptions = editor_subscriptions;
@@ -906,25 +939,7 @@ impl DapLogView {
         if let Some(rpc_log) = rpc_log {
             self.current_view = Some((id.session_id, View::InitializationSequence));
             let (editor, editor_subscriptions) = Self::editor_for_logs(rpc_log, window, cx);
-            let language = self.project.read(cx).languages().language_for_name("JSON");
-            editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("log buffer should be a singleton")
-                .update(cx, |_, cx| {
-                    cx.spawn({
-                        let buffer = cx.entity();
-                        async move |_, cx| {
-                            let language = language.await.ok();
-                            buffer.update(cx, |buffer, cx| {
-                                buffer.set_language(language, cx);
-                            });
-                        }
-                    })
-                    .detach();
-                });
+            Self::highlight_logs_as_json(&editor, self.project.read(cx).languages().clone(), cx);
 
             self.editor = editor;
             self.editor_subscriptions = editor_subscriptions;
@@ -951,10 +966,6 @@ struct DapMenuItem {
     has_adapter_logs: bool,
     selected_entry: View,
 }
-
-const ADAPTER_LOGS: &str = "Adapter Logs";
-const RPC_MESSAGES: &str = "RPC Messages";
-const INITIALIZATION_SEQUENCE: &str = "Initialization Sequence";
 
 impl Render for DapLogView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1008,8 +1019,8 @@ impl Item for DapLogView {
         Editor::to_item_events(event, f)
     }
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "DAP Logs".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(cx, "debugger_tools.dap_log.tab_title", "DAP Logs").into()
     }
 
     fn as_searchable(

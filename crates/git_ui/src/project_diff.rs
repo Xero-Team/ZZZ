@@ -137,6 +137,69 @@ struct BufferSubscriptions {
     _conflict_set_subscription: Subscription,
 }
 
+/// Points `project_diff`'s branch diff at `repo`, if it is not already there.
+fn set_branch_diff_repo(
+    project_diff: &Entity<ProjectDiff>,
+    repo: Entity<Repository>,
+    cx: &mut App,
+) {
+    let needs_switch = project_diff
+        .read(cx)
+        .branch_diff
+        .read(cx)
+        .repo()
+        .is_none_or(|current| current.read(cx).id != repo.read(cx).id);
+    if !needs_switch {
+        return;
+    }
+
+    project_diff.update(cx, |project_diff, cx| {
+        project_diff
+            .branch_diff
+            .update(cx, |branch_diff, cx| branch_diff.set_repo(Some(repo), cx));
+    });
+}
+
+/// Focuses the existing uncommitted-changes diff, or opens a new one.
+///
+/// `move_to_beginning` scrolls a pre-existing diff back to its first hunk; a
+/// freshly created one already starts there.
+fn open_head_diff(
+    workspace: &mut Workspace,
+    move_to_beginning: bool,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) -> Entity<ProjectDiff> {
+    let existing = workspace
+        .items_of_type::<ProjectDiff>(cx)
+        .find(|item| matches!(item.read(cx).diff_base(cx), DiffBase::Head));
+
+    if let Some(existing) = existing {
+        if move_to_beginning {
+            existing.update(cx, |project_diff, cx| {
+                project_diff.move_to_beginning(window, cx);
+            });
+        }
+        workspace.activate_item(&existing, true, true, window, cx);
+        return existing;
+    }
+
+    let workspace_handle = cx.entity();
+    let project_diff =
+        cx.new(|cx| ProjectDiff::new(workspace.project().clone(), workspace_handle, window, cx));
+    workspace.add_item_to_active_pane(Box::new(project_diff.clone()), None, true, window, cx);
+    project_diff
+}
+
+fn notify_no_active_repository(
+    workspace: WeakEntity<Workspace>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    Task::ready(Err::<(), _>(anyhow!("No active repository")))
+        .detach_and_notify_err(workspace, window, cx);
+}
+
 pub struct ProjectDiff {
     project: Entity<Project>,
     multibuffer: Entity<MultiBuffer>,
@@ -179,13 +242,7 @@ impl ProjectDiff {
     ) {
         let project = workspace.project().clone();
         let Some(intended_repo) = project.read(cx).active_repository(cx) else {
-            let workspace = cx.entity().downgrade();
-            window
-                .spawn(cx, async |_cx| {
-                    let result: Result<()> = Err(anyhow!("No active repository"));
-                    result
-                })
-                .detach_and_notify_err(workspace, window, cx);
+            notify_no_active_repository(cx.entity().downgrade(), window, cx);
             return;
         };
 
@@ -222,13 +279,7 @@ impl ProjectDiff {
     ) {
         let project = workspace.project().clone();
         let Some(repository) = project.read(cx).active_repository(cx) else {
-            let workspace = cx.entity().downgrade();
-            window
-                .spawn(cx, async |_cx| {
-                    let result: Result<()> = Err(anyhow!("No active repository"));
-                    result
-                })
-                .detach_and_notify_err(workspace, window, cx);
+            notify_no_active_repository(cx.entity().downgrade(), window, cx);
             return;
         };
         let selected_branch = workspace.active_item_as::<Self>(cx).and_then(|item| {
@@ -288,20 +339,7 @@ impl ProjectDiff {
         if let Some(existing) = existing {
             workspace.activate_item(&existing, true, true, window, cx);
 
-            let needs_switch = existing
-                .read(cx)
-                .branch_diff
-                .read(cx)
-                .repo()
-                .is_none_or(|current| current.read(cx).id != intended_repo.read(cx).id);
-
-            if needs_switch {
-                existing.update(cx, |project_diff, cx| {
-                    project_diff.branch_diff.update(cx, |branch_diff, cx| {
-                        branch_diff.set_repo(Some(intended_repo), cx);
-                    });
-                });
-            }
+            set_branch_diff_repo(&existing, intended_repo, cx);
 
             return;
         }
@@ -411,44 +449,10 @@ impl ProjectDiff {
             return;
         }
 
-        let existing = workspace
-            .items_of_type::<Self>(cx)
-            .find(|item| matches!(item.read(cx).diff_base(cx), DiffBase::Head));
-        let project_diff = if let Some(existing) = existing {
-            existing.update(cx, |project_diff, cx| {
-                project_diff.move_to_beginning(window, cx);
-            });
-
-            workspace.activate_item(&existing, true, true, window, cx);
-            existing
-        } else {
-            let workspace_handle = cx.entity();
-            let project_diff =
-                cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
-            workspace.add_item_to_active_pane(
-                Box::new(project_diff.clone()),
-                None,
-                true,
-                window,
-                cx,
-            );
-            project_diff
-        };
+        let project_diff = open_head_diff(workspace, true, window, cx);
 
         if let Some(intended) = &intended_repo {
-            let needs_switch = project_diff
-                .read(cx)
-                .branch_diff
-                .read(cx)
-                .repo()
-                .is_none_or(|current| current.read(cx).id != intended.read(cx).id);
-            if needs_switch {
-                project_diff.update(cx, |project_diff, cx| {
-                    project_diff.branch_diff.update(cx, |branch_diff, cx| {
-                        branch_diff.set_repo(Some(intended.clone()), cx);
-                    });
-                });
-            }
+            set_branch_diff_repo(&project_diff, intended.clone(), cx);
         }
 
         if let Some(entry) = entry {
@@ -464,25 +468,7 @@ impl ProjectDiff {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let existing = workspace
-            .items_of_type::<Self>(cx)
-            .find(|item| matches!(item.read(cx).diff_base(cx), DiffBase::Head));
-        let project_diff = if let Some(existing) = existing {
-            workspace.activate_item(&existing, true, true, window, cx);
-            existing
-        } else {
-            let workspace_handle = cx.entity();
-            let project_diff =
-                cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
-            workspace.add_item_to_active_pane(
-                Box::new(project_diff.clone()),
-                None,
-                true,
-                window,
-                cx,
-            );
-            project_diff
-        };
+        let project_diff = open_head_diff(workspace, false, window, cx);
         project_diff.update(cx, |project_diff, cx| {
             project_diff.move_to_project_path(&project_path, window, cx);
         });
@@ -799,26 +785,31 @@ impl ProjectDiff {
         let editor = self.editor.read(cx).rhs_editor().read(cx);
         let snapshot = self.multibuffer.read(cx).snapshot(cx);
         let prev_next = snapshot.diff_hunks().nth(1).is_some();
-        let mut selection = true;
 
-        let mut ranges = editor
+        let selection_ranges = editor
             .selections
             .disjoint_anchor_ranges()
             .collect::<Vec<_>>();
-        if !ranges.iter().any(|range| range.start != range.end) {
-            selection = false;
+        let selection = selection_ranges
+            .iter()
+            .any(|range| range.start != range.end);
+        // Without a selection, the buttons act on the whole excerpt under the
+        // cursor instead of a single hunk.
+        let ranges = if selection {
+            selection_ranges
+        } else {
             let anchor = editor.selections.newest_anchor().head();
-            if let Some((_, excerpt_range)) = snapshot.excerpt_containing(anchor..anchor)
-                && let Some(range) = snapshot
-                    .anchor_in_buffer(excerpt_range.context.start)
-                    .zip(snapshot.anchor_in_buffer(excerpt_range.context.end))
-                    .map(|(start, end)| start..end)
-            {
-                ranges = vec![range];
-            } else {
-                ranges = Vec::default();
-            };
-        }
+            snapshot
+                .excerpt_containing(anchor..anchor)
+                .and_then(|(_, excerpt_range)| {
+                    snapshot
+                        .anchor_in_buffer(excerpt_range.context.start)
+                        .zip(snapshot.anchor_in_buffer(excerpt_range.context.end))
+                        .map(|(start, end)| start..end)
+                })
+                .into_iter()
+                .collect::<Vec<_>>()
+        };
         let mut has_staged_hunks = false;
         let mut has_unstaged_hunks = false;
         for hunk in editor.diff_hunks_in_ranges(&ranges, &snapshot) {
@@ -1174,12 +1165,10 @@ impl ProjectDiff {
             .snapshot(cx);
         snapshot
             .excerpts()
-            .map(|excerpt| {
+            .filter_map(|excerpt| {
                 snapshot
                     .path_for_buffer(excerpt.context.start.buffer_id)
-                    .unwrap()
-                    .path
-                    .clone()
+                    .map(|path_key| path_key.path.clone())
             })
             .collect()
     }
@@ -1728,6 +1717,32 @@ mod persistence {
     }
 }
 
+/// Focuses `project_diff` (when there is one) and dispatches `action` to it.
+fn dispatch_action_to_diff(
+    project_diff: Option<Entity<ProjectDiff>>,
+    action: &dyn Action,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if let Some(project_diff) = project_diff {
+        project_diff.focus_handle(cx).focus(window, cx);
+    }
+    let action = action.boxed_clone();
+    cx.defer(move |cx| {
+        cx.dispatch_action(action.as_ref());
+    })
+}
+
+/// Resolves the toolbar's diff item, keeping it only when its diff base matches.
+fn project_diff_from_item(
+    active_pane_item: Option<&dyn ItemHandle>,
+    keep: impl Fn(&DiffBase) -> bool,
+    cx: &App,
+) -> Option<WeakEntity<ProjectDiff>> {
+    let item = active_pane_item.and_then(|item| item.act_as::<ProjectDiff>(cx))?;
+    keep(item.read(cx).diff_base(cx)).then(|| item.downgrade())
+}
+
 pub struct ProjectDiffToolbar {
     project_diff: Option<WeakEntity<ProjectDiff>>,
     workspace: WeakEntity<Workspace>,
@@ -1746,23 +1761,18 @@ impl ProjectDiffToolbar {
     }
 
     fn dispatch_action(&self, action: &dyn Action, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(project_diff) = self.project_diff(cx) {
-            project_diff.focus_handle(cx).focus(window, cx);
-        }
-        let action = action.boxed_clone();
-        cx.defer(move |cx| {
-            cx.dispatch_action(action.as_ref());
-        })
+        dispatch_action_to_diff(self.project_diff(cx), action, window, cx);
     }
 
     fn stage_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace
             .update(cx, |workspace, cx| {
-                if let Some(panel) = workspace.panel::<GitPanel>(cx) {
-                    panel.update(cx, |panel, cx| {
-                        panel.stage_all(&Default::default(), window, cx);
-                    });
-                }
+                let Some(panel) = workspace.panel::<GitPanel>(cx) else {
+                    return;
+                };
+                panel.update(cx, |panel, cx| {
+                    panel.stage_all(&Default::default(), window, cx);
+                });
             })
             .log_err();
     }
@@ -1790,10 +1800,8 @@ impl ToolbarItemView for ProjectDiffToolbar {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.project_diff = active_pane_item
-            .and_then(|item| item.act_as::<ProjectDiff>(cx))
-            .filter(|item| item.read(cx).diff_base(cx) == &DiffBase::Head)
-            .map(|entity| entity.downgrade());
+        self.project_diff =
+            project_diff_from_item(active_pane_item, |base| base == &DiffBase::Head, cx);
         if self.project_diff.is_some() {
             ToolbarItemLocation::PrimaryRight
         } else {
@@ -2063,13 +2071,7 @@ impl BranchDiffToolbar {
     }
 
     fn dispatch_action(&self, action: &dyn Action, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(project_diff) = self.project_diff(cx) {
-            project_diff.focus_handle(cx).focus(window, cx);
-        }
-        let action = action.boxed_clone();
-        cx.defer(move |cx| {
-            cx.dispatch_action(action.as_ref());
-        })
+        dispatch_action_to_diff(self.project_diff(cx), action, window, cx);
     }
 }
 
@@ -2082,10 +2084,11 @@ impl ToolbarItemView for BranchDiffToolbar {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.project_diff = active_pane_item
-            .and_then(|item| item.act_as::<ProjectDiff>(cx))
-            .filter(|item| matches!(item.read(cx).diff_base(cx), DiffBase::Merge { .. }))
-            .map(|entity| entity.downgrade());
+        self.project_diff = project_diff_from_item(
+            active_pane_item,
+            |base| matches!(base, DiffBase::Merge { .. }),
+            cx,
+        );
         if self.project_diff.is_some() {
             ToolbarItemLocation::PrimaryRight
         } else {

@@ -22,6 +22,7 @@
 //! is acceptable for the macOS path to spend a few seconds sampling.
 
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 
 pub async fn gather() -> Value {
     let mut diag = Map::new();
@@ -66,21 +67,33 @@ pub async fn gather() -> Value {
     Value::Object(diag)
 }
 
+fn current_process_id() -> anyhow::Result<sysinfo::Pid> {
+    sysinfo::get_current_pid()
+        .map_err(|error| anyhow::anyhow!("sysinfo::get_current_pid failed: {error}"))
+}
+
+/// Reads the process table with `refresh` applied, then returns it alongside
+/// the pids of every descendant of the current process.
+fn descendants_of_current_process(
+    refresh: sysinfo::ProcessRefreshKind,
+) -> anyhow::Result<(sysinfo::System, Vec<sysinfo::Pid>)> {
+    let current_pid = current_process_id()?;
+    let system = refreshed_process_system(refresh)?;
+    let descendants = descendants_of(&system, current_pid);
+    Ok((system, descendants))
+}
+
 /// Walk the descendant tree of the current process and return a JSON array
 /// describing each descendant. Cross-platform; uses `sysinfo`.
 fn collect_process_tree() -> anyhow::Result<Value> {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, UpdateKind};
+    use sysinfo::{ProcessRefreshKind, UpdateKind};
 
-    let current_pid = sysinfo::get_current_pid()
-        .map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
+    let current_pid = current_process_id()?;
 
     let refresh = ProcessRefreshKind::nothing()
         .with_cmd(UpdateKind::Always)
         .with_exe(UpdateKind::Always);
-    let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh));
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
-
-    let descendants = descendants_of(&system, current_pid);
+    let (system, descendants) = descendants_of_current_process(refresh)?;
 
     let entries: Vec<Value> = descendants
         .iter()
@@ -234,9 +247,25 @@ mod tests {
     }
 }
 
+/// A `System` that has read every process, filling the per-process fields named
+/// by `refresh`.
+///
+/// `System` construction is fallible since `sysinfo` 0.40. The diagnostics here
+/// have nothing to report without a process table, so the error is propagated to
+/// `gather`, which logs it and omits this section.
+fn refreshed_process_system(
+    refresh: sysinfo::ProcessRefreshKind,
+) -> anyhow::Result<sysinfo::System> {
+    use sysinfo::{ProcessesToUpdate, RefreshKind, System};
+
+    let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh))
+        .map_err(|error| anyhow::anyhow!("failed to initialize sysinfo: {error}"))?;
+    system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
+    Ok(system)
+}
+
 fn descendants_of(system: &sysinfo::System, root: sysinfo::Pid) -> Vec<sysinfo::Pid> {
-    let mut parent_map: std::collections::HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> =
-        std::collections::HashMap::new();
+    let mut parent_map: HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> = HashMap::new();
     for (pid, process) in system.processes() {
         if let Some(parent) = process.parent() {
             parent_map.entry(parent).or_default().push(*pid);
@@ -257,15 +286,10 @@ fn descendants_of(system: &sysinfo::System, root: sysinfo::Pid) -> Vec<sysinfo::
 
 #[cfg(target_os = "linux")]
 fn collect_linux_proc_info() -> anyhow::Result<Value> {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
+    use sysinfo::ProcessRefreshKind;
 
-    let current_pid = sysinfo::get_current_pid()
-        .map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
     let refresh = ProcessRefreshKind::nothing();
-    let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh));
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
-
-    let descendants = descendants_of(&system, current_pid);
+    let (_, descendants) = descendants_of_current_process(refresh)?;
 
     let mut entries = Vec::new();
     for pid in descendants {
@@ -305,29 +329,19 @@ fn collect_linux_proc_info() -> anyhow::Result<Value> {
 #[cfg(target_os = "macos")]
 async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
     use std::path::Path;
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, UpdateKind};
+    use sysinfo::{ProcessRefreshKind, UpdateKind};
 
     let sample_available = Path::new("/usr/bin/sample").exists();
-    let lsof_available =
-        Path::new("/usr/sbin/lsof").exists() || Path::new("/usr/bin/lsof").exists();
-    let lsof_path = if Path::new("/usr/sbin/lsof").exists() {
-        "/usr/sbin/lsof"
-    } else {
-        "/usr/bin/lsof"
-    };
+    let lsof_path = ["/usr/sbin/lsof", "/usr/bin/lsof"]
+        .into_iter()
+        .find(|path| Path::new(*path).exists());
 
-    if !sample_available && !lsof_available {
+    if !sample_available && lsof_path.is_none() {
         return Ok(Value::Null);
     }
 
-    let current_pid = sysinfo::get_current_pid()
-        .map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
-
     let refresh = ProcessRefreshKind::nothing().with_exe(UpdateKind::Always);
-    let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh));
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
-
-    let descendants = descendants_of(&system, current_pid);
+    let (system, descendants) = descendants_of_current_process(refresh)?;
 
     // Limit ourselves to git-flavored descendants. We don't want to spend
     // several seconds sampling unrelated children (terminals, language
@@ -359,7 +373,10 @@ async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
         if sample_available {
             match run_capturing("/usr/bin/sample", &[&pid.to_string(), "2", "-mayDie"]).await {
                 Ok(output) => {
-                    entry.insert("sample".into(), Value::String(truncate(output, 64 * 1024)));
+                    entry.insert(
+                        "sample".into(),
+                        Value::String(truncate(output, MAX_TOOL_OUTPUT_BYTES)),
+                    );
                 }
                 Err(err) => {
                     log::warn!("git runtime diagnostics: `sample {pid}` failed: {err}");
@@ -367,10 +384,13 @@ async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
             }
         }
 
-        if lsof_available {
+        if let Some(lsof_path) = lsof_path {
             match run_capturing(lsof_path, &["-p", &pid.to_string()]).await {
                 Ok(output) => {
-                    entry.insert("lsof".into(), Value::String(truncate(output, 64 * 1024)));
+                    entry.insert(
+                        "lsof".into(),
+                        Value::String(truncate(output, MAX_TOOL_OUTPUT_BYTES)),
+                    );
                 }
                 Err(err) => {
                     log::warn!("git runtime diagnostics: `lsof -p {pid}` failed: {err}");
@@ -383,6 +403,9 @@ async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
 
     Ok(Value::Array(entries))
 }
+
+#[cfg(target_os = "macos")]
+const MAX_TOOL_OUTPUT_BYTES: usize = 64 * 1024;
 
 #[cfg(target_os = "macos")]
 async fn run_capturing(program: &str, args: &[&str]) -> anyhow::Result<String> {

@@ -1,10 +1,6 @@
+use crate::tr;
 use gpui::{App, IntoElement, Modifiers, RenderOnce, Window};
-use i18n as app_i18n;
 use ui::{prelude::*, render_modifiers};
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 #[derive(IntoElement)]
 pub struct HoldForDefault {

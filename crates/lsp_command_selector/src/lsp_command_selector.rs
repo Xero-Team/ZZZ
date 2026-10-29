@@ -15,6 +15,7 @@ use lsp::{LanguageServerId, LanguageServerName};
 use picker::{Picker, PickerDelegate};
 use project::{File, LspStore, Project};
 use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
+use util::ResultExt as _;
 use workspace::{ModalView, Workspace};
 
 actions!(lsp_command_selector, [Toggle, ToggleArgumentsFocus]);
@@ -180,6 +181,9 @@ impl LspCommandSelectorDelegate {
         if trimmed_arguments.is_empty() {
             return Vec::new();
         }
+        // The editor is free-form, so a parse failure is a supported input and
+        // not an error to report: anything that is not JSON is passed through as
+        // a single string argument.
         serde_json::Deserializer::from_str(trimmed_arguments)
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -268,14 +272,16 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                         picker.delegate.dismissed(window, cx);
                     }
                 })
-                .ok();
+                .log_err();
         });
         self.execution = Execution::Running { _task: task };
         cx.notify();
     }
 
     fn dismissed(&mut self, _: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.selector.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
+        self.selector
+            .update(cx, |_, cx| cx.emit(DismissEvent))
+            .log_err();
     }
 
     fn selected_index(&self) -> usize {
@@ -330,7 +336,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                     picker.set_selected_index(0, None, false, window, cx);
                     cx.notify();
                 })
-                .ok();
+                .log_err();
         })
     }
 

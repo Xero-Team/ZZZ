@@ -105,7 +105,19 @@ impl ScreenCaptureSource for MacScreenCaptureSource {
                     Box::into_raw(Box::new(frame_callback)).cast::<c_void>(),
                 );
 
-            let meta = self.metadata().expect("metadata should be present");
+            let meta = match self.metadata() {
+                Ok(meta) => meta,
+                Err(error) => {
+                    log::error!(
+                        "unable to read the display metadata for a capture stream: {error:#}"
+                    );
+                    let (done_tx, done_rx) = oneshot::channel();
+                    if done_tx.send(Err(error)).is_err() {
+                        log::error!("screen capture stream error had no receiver");
+                    }
+                    return done_rx;
+                }
+            };
             let _: id = msg_send![configuration, setWidth: meta.resolution.width.0 as i64];
             let _: id = msg_send![configuration, setHeight: meta.resolution.height.0 as i64];
             let stream: id = msg_send![stream, initWithFilter:filter configuration:configuration delegate:delegate];

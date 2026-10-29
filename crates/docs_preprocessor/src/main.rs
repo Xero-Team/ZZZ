@@ -659,6 +659,9 @@ struct ActionDef {
 
 #[derive(Debug, serde::Deserialize)]
 struct ActionManifest {
+    /// Sorted by [`ActionDef::name`]. [`find_action_by_name`] binary-searches
+    /// this vector, so any other construction path must sort it too;
+    /// [`load_all_actions`] is the only producer in this binary.
     actions: Vec<ActionDef>,
     #[serde(default)]
     schema_definitions: serde_json::Map<String, serde_json::Value>,
@@ -743,7 +746,8 @@ fn handle_postprocessing() -> Result<()> {
                     Some("html")
                 )
             {
-                if ignore_list.contains(&&*entry.file_name().to_string_lossy()) {
+                let file_name = entry.file_name();
+                if ignore_list.contains(&file_name.to_string_lossy().as_ref()) {
                     zlog::info!(logger => "Ignoring {}", entry.path().to_string_lossy());
                 } else {
                     files.push(entry.path());
@@ -870,12 +874,7 @@ fn generate_big_table_of_actions(actions: &ActionManifest) -> String {
 
         // Add the description, escaping HTML if needed
         if let Some(description) = action.docs.as_ref() {
-            output.push_str(
-                &description
-                    .replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;"),
-            );
+            output.push_str(&escape_html_text(description));
             output.push_str("<br>\n");
         }
         output.push_str("Keymap Name: <code>");

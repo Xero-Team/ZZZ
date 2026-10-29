@@ -74,6 +74,7 @@ impl StatusItemView for LineEndingIndicator {
             self.update(editor, window, cx);
         } else {
             self.line_ending = None;
+            self.active_editor = None;
             self._observe_active_editor = None;
         }
         cx.notify();

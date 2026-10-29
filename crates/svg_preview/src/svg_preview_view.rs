@@ -12,6 +12,7 @@ use language::{Buffer, BufferEvent};
 use multi_buffer::MultiBuffer;
 use project::ProjectPath;
 use ui::prelude::*;
+use util::ResultExt as _;
 use workspace::item::Item;
 use workspace::notifications::NotifyResultExt;
 use workspace::{Pane, Workspace};
@@ -129,7 +130,7 @@ impl SvgPreviewView {
                     let pane = workspace.active_pane().clone();
                     Self::open_preview_in_pane(workspace, buffer, pane, window, cx);
                 })
-                .ok();
+                .log_err();
         })
         .detach();
     }
@@ -152,12 +153,11 @@ impl SvgPreviewView {
             let Some(this) = this.upgrade() else {
                 return;
             };
-            let Ok(()) = this.update_in(cx, |view, window, cx| {
+            this.update_in(cx, |view, window, cx| {
                 let current = result.map_err(|e| e.to_string().into());
                 view.set_current(Some(current), window, cx);
-            }) else {
-                return;
-            };
+            })
+            .log_err();
         });
     }
 
@@ -189,6 +189,24 @@ impl SvgPreviewView {
             .and_then(|view| pane.index_for_item(&view))
     }
 
+    /// Activates the preview that already shows `buffer` in `pane`, or adds
+    /// `view` as a new item.
+    fn activate_or_add_preview(
+        pane: &mut Pane,
+        view: Entity<Self>,
+        buffer: &Entity<MultiBuffer>,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Pane>,
+    ) {
+        match Self::find_existing_preview_item_idx(pane, buffer, cx) {
+            Some(existing_view_idx) => {
+                pane.activate_item(existing_view_idx, true, true, window, cx)
+            }
+            None => pane.add_item(Box::new(view), activate, activate, None, window, cx),
+        };
+    }
+
     pub fn open_preview_in_pane(
         workspace: &mut Workspace,
         buffer: Entity<MultiBuffer>,
@@ -196,14 +214,15 @@ impl SvgPreviewView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let existing_view_idx = Self::find_existing_preview_item_idx(pane.read(cx), &buffer, cx);
-        let view = Self::create_svg_view(SvgPreviewMode::Default, workspace, buffer, window, cx);
+        let view = Self::create_svg_view(
+            SvgPreviewMode::Default,
+            workspace,
+            buffer.clone(),
+            window,
+            cx,
+        );
         pane.update(cx, |pane, cx| {
-            if let Some(existing_view_idx) = existing_view_idx {
-                pane.activate_item(existing_view_idx, true, true, window, cx);
-            } else {
-                pane.add_item(Box::new(view), true, true, None, window, cx);
-            }
+            Self::activate_or_add_preview(pane, view, &buffer, true, window, cx)
         });
     }
 
@@ -273,13 +292,7 @@ impl SvgPreviewView {
                     cx,
                 );
                 pane.update(cx, |pane, cx| {
-                    if let Some(existing_view_idx) =
-                        Self::find_existing_preview_item_idx(pane, &buffer, cx)
-                    {
-                        pane.activate_item(existing_view_idx, true, true, window, cx);
-                    } else {
-                        pane.add_item(Box::new(view), true, true, None, window, cx)
-                    }
+                    Self::activate_or_add_preview(pane, view, &buffer, true, window, cx)
                 });
                 cx.notify();
             }
@@ -289,11 +302,10 @@ impl SvgPreviewView {
             if let Some(editor) = Self::resolve_active_item_as_svg_buffer(workspace, cx)
                 && Self::is_svg_file(&editor, cx)
             {
-                let editor_clone = editor.clone();
                 let view = Self::create_svg_view(
                     SvgPreviewMode::Default,
                     workspace,
-                    editor_clone,
+                    editor.clone(),
                     window,
                     cx,
                 );
@@ -308,13 +320,7 @@ impl SvgPreviewView {
                         )
                     });
                 pane.update(cx, |pane, cx| {
-                    if let Some(existing_view_idx) =
-                        Self::find_existing_preview_item_idx(pane, &editor, cx)
-                    {
-                        pane.activate_item(existing_view_idx, true, true, window, cx);
-                    } else {
-                        pane.add_item(Box::new(view), false, false, None, window, cx)
-                    }
+                    Self::activate_or_add_preview(pane, view, &editor, false, window, cx)
                 });
                 cx.notify();
             }

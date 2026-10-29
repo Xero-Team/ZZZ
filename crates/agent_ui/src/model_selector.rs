@@ -21,13 +21,10 @@ use util::ResultExt;
 use zzz_actions::agent::OpenSettings;
 
 use crate::model_search;
+use crate::tr;
 use crate::ui::{
     ModelSelectorFooter, ModelSelectorHeader, ModelSelectorListItem, documentation_aside_side,
 };
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 fn model_group_label(title: &SharedString, cx: &App) -> SharedString {
     match title.as_ref() {
@@ -541,7 +538,7 @@ mod tests {
 
     fn assert_models_eq(result: AgentModelList, expected: Vec<(&str, Vec<&str>)>) {
         let AgentModelList::Grouped(groups) = result else {
-            panic!("Expected LanguageModelInfoList::Grouped, got {:?}", result);
+            panic!("expected AgentModelList::Grouped, got {result:?}");
         };
 
         assert_eq!(
@@ -817,8 +814,8 @@ mod tests {
         assert_eq!(results, ["High"]);
     }
 
-    #[gpui::test]
-    fn test_favorites_section_appears_when_favorites_exist(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_favorites_section_appears_when_favorites_exist() {
         let models = create_model_list(vec![
             ("zed", vec!["zed/claude", "zed/gemini"]),
             ("openai", vec!["openai/gpt-5"]),
@@ -836,8 +833,8 @@ mod tests {
         assert_eq!(model_ids[0], "zed/gemini");
     }
 
-    #[gpui::test]
-    fn test_no_favorites_section_when_no_favorites(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_no_favorites_section_when_no_favorites() {
         let models = create_model_list(vec![("zed", vec!["zed/claude", "zed/gemini"])]);
         let favorites = create_favorites(vec![]);
 
@@ -849,8 +846,8 @@ mod tests {
         ));
     }
 
-    #[gpui::test]
-    fn test_models_have_correct_actions(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_models_have_correct_actions() {
         let models = create_model_list(vec![
             ("zed", vec!["zed/claude", "zed/gemini"]),
             ("openai", vec!["openai/gpt-5"]),
@@ -870,8 +867,8 @@ mod tests {
         }
     }
 
-    #[gpui::test]
-    fn test_favorites_appear_in_both_sections(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_favorites_appear_in_both_sections() {
         let models = create_model_list(vec![
             ("zed", vec!["zed/claude", "zed/gemini"]),
             ("openai", vec!["openai/gpt-5", "openai/gpt-4"]),
@@ -888,8 +885,8 @@ mod tests {
         assert!(model_ids[2..].contains(&"openai/gpt-5"));
     }
 
-    #[gpui::test]
-    fn test_favorites_are_not_duplicated_when_repeated_in_other_sections(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_favorites_are_not_duplicated_when_repeated_in_other_sections() {
         let models = create_model_list(vec![
             ("Recommended", vec!["zed/claude", "anthropic/claude"]),
             ("Zed", vec!["zed/claude", "zed/gpt-5"]),
@@ -921,8 +918,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn test_flat_model_list_with_favorites(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_flat_model_list_with_favorites() {
         let models = AgentModelList::Flat(vec![
             acp_thread::AgentModelInfo {
                 id: AgentModelId::new("zed/claude"),
@@ -956,8 +953,8 @@ mod tests {
         )));
     }
 
-    #[gpui::test]
-    fn test_favorites_count_returns_correct_count(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_favorites_count_returns_correct_count() {
         let empty_favorites: HashSet<AgentModelId> = HashSet::default();
         assert_eq!(empty_favorites.len(), 0);
 
@@ -971,8 +968,8 @@ mod tests {
         assert_eq!(with_duplicates.len(), 2);
     }
 
-    #[gpui::test]
-    fn test_is_favorite_flag_set_correctly_in_entries(_cx: &mut TestAppContext) {
+    #[test]
+    fn test_is_favorite_flag_set_correctly_in_entries() {
         let models = AgentModelList::Flat(vec![
             acp_thread::AgentModelInfo {
                 id: AgentModelId::new("favorite-model"),

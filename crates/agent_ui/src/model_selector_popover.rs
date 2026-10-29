@@ -2,16 +2,12 @@ use std::rc::Rc;
 
 use acp_thread::{AgentModelIcon, AgentModelInfo, AgentModelSelector};
 use gpui::{Entity, FocusHandle};
-use i18n as app_i18n;
 use picker::popover_menu::PickerPopoverMenu;
 use ui::{PopoverMenuHandle, Tooltip, prelude::*};
 
+use crate::tr;
 use crate::ui::ModelSelectorTooltip;
 use crate::{ModelSelector, model_selector::acp_model_selector};
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 pub struct ModelSelectorPopover {
     selector: Entity<ModelSelector>,

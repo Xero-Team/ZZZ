@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use crate::tr;
 use client::zzz_urls;
 use collections::HashMap;
 use editor::{Editor, EditorElement, EditorStyle};
@@ -9,7 +10,6 @@ use gpui::{
     RenderOnce, SharedString, Styled, TextStyle, UniformListScrollHandle, Window, point,
     uniform_list,
 };
-use i18n as app_i18n;
 use project::agent_server_store::{AllAgentServersSettings, CustomAgentServerSettings};
 use project::{AgentRegistryStore, RegistryAgent};
 use settings::{Settings, SettingsStore, update_settings_file};
@@ -22,10 +22,6 @@ use workspace::{
     Workspace,
     item::{Item, ItemEvent},
 };
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RegistryFilter {
@@ -90,17 +86,13 @@ pub struct AgentRegistryPage {
 }
 
 impl AgentRegistryPage {
-    pub fn new(
-        _workspace: &Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Entity<Self> {
+    pub fn new(window: &mut Window, cx: &mut Context<Workspace>) -> Entity<Self> {
         cx.new(|cx| {
             let registry_store = AgentRegistryStore::global(cx);
             let query_editor = cx.new(|cx| {
                 let mut input = Editor::single_line(window, cx);
                 input.set_placeholder_text(
-                    &app_i18n::tr(
+                    &tr(
                         cx,
                         "agent_ui.registry.search_agents_placeholder",
                         "Search agents...",
@@ -161,8 +153,8 @@ impl AgentRegistryPage {
             .global::<SettingsStore>()
             .get::<AllAgentServersSettings>(None);
         self.installed_statuses.clear();
-        for (id, settings) in settings.iter() {
-            let status = match settings {
+        for (id, agent_settings) in settings.iter() {
+            let status = match agent_settings {
                 CustomAgentServerSettings::Registry { .. } => {
                     RegistryInstallStatus::InstalledRegistry
                 }
@@ -181,10 +173,11 @@ impl AgentRegistryPage {
 
     fn search_query(&self, cx: &mut App) -> Option<String> {
         let search = self.query_editor.read(cx).text(cx);
-        if search.trim().is_empty() {
+        let search = search.trim();
+        if search.is_empty() {
             None
         } else {
-            Some(search)
+            Some(search.to_owned())
         }
     }
 
@@ -192,7 +185,6 @@ impl AgentRegistryPage {
         self.refresh_installed_statuses(cx);
         let search = self.search_query(cx).map(|search| search.to_lowercase());
         let filter = self.filter;
-        let installed_statuses = self.installed_statuses.clone();
 
         let filtered_indices = self
             .registry_agents
@@ -206,18 +198,12 @@ impl AgentRegistryPage {
                         || agent.description().as_ref().to_lowercase().contains(query)
                 });
 
-                let install_status = installed_statuses
-                    .get(agent.id().as_ref())
-                    .copied()
-                    .unwrap_or(RegistryInstallStatus::NotInstalled);
+                let is_installed =
+                    self.install_status(agent.id().as_ref()) != RegistryInstallStatus::NotInstalled;
                 let matches_filter = match filter {
                     RegistryFilter::All => true,
-                    RegistryFilter::Installed => {
-                        install_status != RegistryInstallStatus::NotInstalled
-                    }
-                    RegistryFilter::NotInstalled => {
-                        install_status == RegistryInstallStatus::NotInstalled
-                    }
+                    RegistryFilter::Installed => is_installed,
+                    RegistryFilter::NotInstalled => !is_installed,
                 };
 
                 matches_search && matches_filter

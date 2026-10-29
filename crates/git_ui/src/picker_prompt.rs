@@ -1,7 +1,6 @@
 use futures::channel::oneshot;
 use fuzzy::{StringMatch, StringMatchCandidate};
 
-use core::cmp;
 use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
     IntoElement, ParentElement, Render, SharedString, Styled, Subscription, Task, WeakEntity,
@@ -81,9 +80,9 @@ impl Render for PickerPrompt {
             .w(rems(self.rem_width))
             .child(self.picker.clone())
             .on_mouse_down_out(cx.listener(|this, _, window, cx| {
-                this.picker.update(cx, |this, cx| {
-                    this.cancel(&Default::default(), window, cx);
-                })
+                this.picker.update(cx, |picker, cx| {
+                    picker.cancel(&Default::default(), window, cx);
+                });
             }))
     }
 }
@@ -189,7 +188,7 @@ impl PickerDelegate for PickerPromptDelegate {
                         delegate.selected_index = 0;
                     } else {
                         delegate.selected_index =
-                            cmp::min(delegate.selected_index, delegate.matches.len() - 1);
+                            delegate.selected_index.min(delegate.matches.len() - 1);
                     }
                 })
                 .log_err();
@@ -201,7 +200,11 @@ impl PickerDelegate for PickerPromptDelegate {
             return;
         };
 
-        self.tx.take().map(|tx| tx.send(option.candidate_id));
+        if let Some(tx) = self.tx.take()
+            && tx.send(option.candidate_id).is_err()
+        {
+            log::debug!("picker prompt receiver was dropped before confirmation");
+        }
         cx.emit(DismissEvent);
     }
 

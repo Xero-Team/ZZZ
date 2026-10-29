@@ -83,6 +83,17 @@ impl RecentFiles {
                 .update(|cx| WorkspaceDb::global(cx).recent_files(100))
                 .log_err();
             if let Some(paths) = paths {
+                // Stat up to 100 paths. Doing it here keeps the file system off
+                // the UI thread that opens the picker.
+                let paths = cx
+                    .background_spawn(async move {
+                        paths
+                            .into_iter()
+                            .map(PathBuf::from)
+                            .filter(|path| path.exists())
+                            .collect::<Vec<_>>()
+                    })
+                    .await;
                 this.update(cx, |this, cx| {
                     this.picker.update(cx, |picker, cx| {
                         picker.delegate.set_paths(paths, cx);
@@ -106,9 +117,31 @@ impl Render for RecentFiles {
     }
 }
 
+/// A recently opened file, with the rendered and searchable forms of its path
+/// precomputed: both are rebuilt on every keystroke otherwise.
+struct RecentFile {
+    path: PathBuf,
+    /// `homify(path)`, used as the muted second line of the list item.
+    display_path: String,
+    /// Lowercase `display_path`, used to match the query.
+    search_path: String,
+}
+
+impl RecentFile {
+    fn new(path: PathBuf) -> Self {
+        let display_path = homify(&path);
+        let search_path = display_path.to_lowercase();
+        Self {
+            path,
+            display_path,
+            search_path,
+        }
+    }
+}
+
 struct RecentFilesDelegate {
     workspace: WeakEntity<Workspace>,
-    paths: Vec<PathBuf>,
+    files: Vec<RecentFile>,
     matches: Vec<usize>,
     selected_index: usize,
 }
@@ -117,19 +150,15 @@ impl RecentFilesDelegate {
     fn new(workspace: WeakEntity<Workspace>) -> Self {
         Self {
             workspace,
-            paths: Vec::new(),
+            files: Vec::new(),
             matches: Vec::new(),
             selected_index: 0,
         }
     }
 
-    fn set_paths(&mut self, paths: Vec<String>, cx: &mut Context<Picker<Self>>) {
-        self.paths = paths
-            .into_iter()
-            .map(PathBuf::from)
-            .filter(|path| path.exists())
-            .collect();
-        self.matches = (0..self.paths.len()).collect();
+    fn set_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Picker<Self>>) {
+        self.files = paths.into_iter().map(RecentFile::new).collect();
+        self.matches = (0..self.files.len()).collect();
         self.selected_index = 0;
         cx.notify();
     }
@@ -181,13 +210,13 @@ impl PickerDelegate for RecentFilesDelegate {
     ) -> Task<()> {
         let query = query.trim().to_lowercase();
         if query.is_empty() {
-            self.matches = (0..self.paths.len()).collect();
+            self.matches = (0..self.files.len()).collect();
         } else {
             self.matches = self
-                .paths
+                .files
                 .iter()
                 .enumerate()
-                .filter(|(_, path)| homify(path).to_lowercase().contains(&query))
+                .filter(|(_, file)| file.search_path.contains(&query))
                 .map(|(ix, _)| ix)
                 .collect();
         }
@@ -199,8 +228,8 @@ impl PickerDelegate for RecentFilesDelegate {
         let Some(path) = self
             .matches
             .get(self.selected_index)
-            .and_then(|ix| self.paths.get(*ix))
-            .cloned()
+            .and_then(|ix| self.files.get(*ix))
+            .map(|file| file.path.clone())
         else {
             return;
         };
@@ -226,11 +255,12 @@ impl PickerDelegate for RecentFilesDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let path = self.paths.get(*self.matches.get(ix)?)?;
-        let file_icon = self.icon_for_file(path.as_path(), cx);
-        let file_name = path
-            .file_name()
-            .map_or_else(|| homify(path), |name| name.to_string_lossy().into_owned());
+        let file = self.files.get(*self.matches.get(ix)?)?;
+        let file_icon = self.icon_for_file(&file.path, cx);
+        let file_name = file.path.file_name().map_or_else(
+            || file.display_path.clone(),
+            |name| name.to_string_lossy().into_owned(),
+        );
 
         Some(
             ListItem::new(ix)
@@ -240,7 +270,7 @@ impl PickerDelegate for RecentFilesDelegate {
                 .toggle_state(selected)
                 .child(
                     h_flex().gap_2().child(Label::new(file_name)).child(
-                        Label::new(homify(path))
+                        Label::new(file.display_path.clone())
                             .size(LabelSize::Small)
                             .color(Color::Muted),
                     ),

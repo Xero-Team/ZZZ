@@ -1,13 +1,9 @@
+use crate::tr;
 use action_log::ActionLog;
 use gpui::{App, Entity};
-use i18n as app_i18n;
 use notifications::status_toast::StatusToast;
 use ui::prelude::*;
 use workspace::Workspace;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 pub fn show_undo_reject_toast(
     workspace: &mut Workspace,

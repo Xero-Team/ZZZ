@@ -52,10 +52,12 @@ pub(crate) fn sockaddr_un<P: AsRef<Path>>(path: P) -> Result<(SOCKADDR_UN, usize
         );
     }
 
+    // Abstract socket names (a leading NUL byte) are rejected above, so every
+    // accepted path is a pathname socket whose address includes the trailing
+    // NUL terminator. An empty path has no bytes to terminate.
     let mut len = sun_path_offset(&addr) + bytes.len();
-    match bytes.first() {
-        Some(&0) | None => {}
-        Some(_) => len += 1,
+    if !bytes.is_empty() {
+        len += 1;
     }
     Ok((addr, len))
 }

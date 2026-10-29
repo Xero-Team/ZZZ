@@ -41,6 +41,7 @@ pub fn generate_feature_flags_schema() -> Schema {
             .iter()
             .map(|v| Value::String(v.label.to_owned()))
             .collect();
+        let default_variant_key = (descriptor.default_variant_key)();
 
         let mut property = Map::new();
         property.insert("type".to_owned(), Value::String("string".to_owned()));
@@ -55,9 +56,7 @@ pub fn generate_feature_flags_schema() -> Schema {
             "description".to_owned(),
             Value::String(format!(
                 "Override for the `{}` feature flag. Default: `{}` (the {} variant).",
-                descriptor.name,
-                (descriptor.default_variant_key)(),
-                (descriptor.default_variant_key)(),
+                descriptor.name, default_variant_key, default_variant_key,
             )),
         );
 

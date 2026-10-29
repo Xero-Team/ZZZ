@@ -145,20 +145,25 @@ impl SyntaxTreeView {
 
         this.handle_item_updated(active_item, window, cx);
 
-        cx.subscribe_in(
-            &workspace_handle.upgrade().expect("entity should be alive"),
-            window,
-            move |this, workspace, event, window, cx| match event {
-                WorkspaceEvent::ItemAdded { .. } | WorkspaceEvent::ActiveItemChanged => {
-                    this.handle_item_updated(workspace.read(cx).active_item(cx), window, cx)
-                }
-                WorkspaceEvent::ItemRemoved { item_id } => {
-                    this.handle_item_removed(item_id, window, cx);
-                }
-                _ => {}
-            },
-        )
-        .detach();
+        // The view is only ever created from a handler on a live workspace, so
+        // the upgrade succeeds in practice; skipping the subscription instead of
+        // panicking keeps a stale handle from taking the app down.
+        if let Some(workspace) = workspace_handle.upgrade() {
+            cx.subscribe_in(
+                &workspace,
+                window,
+                move |this, workspace, event, window, cx| match event {
+                    WorkspaceEvent::ItemAdded { .. } | WorkspaceEvent::ActiveItemChanged => {
+                        this.handle_item_updated(workspace.read(cx).active_item(cx), window, cx)
+                    }
+                    WorkspaceEvent::ItemRemoved { item_id } => {
+                        this.handle_item_removed(item_id, window, cx);
+                    }
+                    _ => {}
+                },
+            )
+            .detach();
+        }
 
         this
     }

@@ -20,6 +20,10 @@ use workspace::{DismissDecision, ModalView};
 
 pub fn init(cx: &mut App) {
     cx.observe_new(OutlineView::register).detach();
+    // The handler lives in a process-wide `OnceLock`, while `init` runs once per
+    // app (and once per test app), so every call after the first fails to set it.
+    // That is the expected outcome here, and the error value is the handler
+    // itself, which has no `Display` for `log_err`.
     zzz_actions::outline::TOGGLE_OUTLINE
         .set(|view, window, cx| {
             let Ok(editor) = view.downcast::<Editor>() else {
@@ -67,7 +71,7 @@ pub fn toggle(
                     });
                 });
             })
-            .ok();
+            .log_err();
         })
         .detach();
 }
@@ -200,7 +204,6 @@ impl OutlineViewDelegate {
         outline_view: WeakEntity<OutlineView>,
         outline: Outline<Anchor>,
         editor: Entity<Editor>,
-
         cx: &mut Context<OutlineView>,
     ) -> Self {
         Self {
@@ -226,7 +229,6 @@ impl OutlineViewDelegate {
         &mut self,
         ix: usize,
         navigate: bool,
-
         cx: &mut Context<Picker<OutlineViewDelegate>>,
     ) {
         let Some(selected_match) = self.matches.get(ix) else {

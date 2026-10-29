@@ -19,7 +19,7 @@ pub struct ModuleList {
     workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     entries: Vec<Module>,
-    _rebuild_task: Option<Task<()>>,
+    rebuild_task: Option<Task<()>>,
     _subscription: Subscription,
 }
 
@@ -35,7 +35,7 @@ impl ModuleList {
             SessionEvent::Stopped(_)
             | SessionEvent::HistoricSnapshotSelected
             | SessionEvent::Modules => {
-                if this._rebuild_task.is_some() {
+                if this.rebuild_task.is_some() {
                     this.schedule_rebuild(cx);
                 }
             }
@@ -52,12 +52,12 @@ impl ModuleList {
             entries: Vec::new(),
             selected_ix: None,
             _subscription,
-            _rebuild_task: None,
+            rebuild_task: None,
         }
     }
 
     fn schedule_rebuild(&mut self, cx: &mut Context<Self>) {
-        self._rebuild_task = Some(cx.spawn(async move |this, cx| {
+        self.rebuild_task = Some(cx.spawn(async move |this, cx| {
             let Some(this) = this.upgrade() else {
                 return;
             };
@@ -134,7 +134,9 @@ impl ModuleList {
     }
 
     fn render_entry(&mut self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
-        let module = self.entries[ix].clone();
+        let Some(module) = self.entries.get(ix).cloned() else {
+            return div().into_any();
+        };
 
         v_flex()
             .rounded_md()
@@ -296,7 +298,7 @@ impl Focusable for ModuleList {
 
 impl Render for ModuleList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self._rebuild_task.is_none() {
+        if self.rebuild_task.is_none() {
             self.schedule_rebuild(cx);
         }
         div()

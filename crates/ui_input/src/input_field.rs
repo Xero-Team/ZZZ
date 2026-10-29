@@ -26,7 +26,9 @@ pub struct InputField {
     label: Option<SharedString>,
     /// The size of the label text.
     label_size: LabelSize,
-    /// The placeholder text for the text field.
+    /// The placeholder text for the text field. Only kept for the accessibility
+    /// label fallback, because the editor renders the placeholder itself.
+    #[cfg(feature = "accessibility")]
     placeholder: SharedString,
 
     editor: Arc<dyn ErasedEditor>,
@@ -34,7 +36,7 @@ pub struct InputField {
     ///
     /// For example, a magnifying glass icon in a search field.
     start_icon: Option<IconName>,
-    /// The minimum width of for the input
+    /// The minimum width of the input control.
     min_width: Length,
     /// The tab index for keyboard navigation order.
     tab_index: Option<isize>,
@@ -76,6 +78,7 @@ impl InputField {
         InputField {
             label: None,
             label_size: LabelSize::Small,
+            #[cfg(feature = "accessibility")]
             placeholder: SharedString::new(placeholder_text),
             editor,
             start_icon: None,
@@ -101,7 +104,8 @@ impl InputField {
         self
     }
 
-    pub fn label_min_width(mut self, width: impl Into<Length>) -> Self {
+    /// Sets the minimum width of the input control (not of the label).
+    pub fn min_width(mut self, width: impl Into<Length>) -> Self {
         self.min_width = width.into();
         self
     }
@@ -251,7 +255,7 @@ impl Render for InputField {
             });
 
         v_flex()
-            .id(self.placeholder.clone())
+            .id(("input-field", cx.entity_id()))
             .w_full()
             .gap_1()
             .when_some(self.label.clone(), |this, label| {

@@ -12,6 +12,8 @@ use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, it
 use crate::{LanguageSelector, Toggle};
 
 pub struct ActiveBufferLanguage {
+    /// `None` until a pane item is observed; `Some(None)` when the active editor
+    /// has no language, and `Some(Some(name))` when it does.
     active_language: Option<Option<LanguageName>>,
     workspace: WeakEntity<Workspace>,
     _observe_active_editor: Option<Subscription>,

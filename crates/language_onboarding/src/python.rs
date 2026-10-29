@@ -17,11 +17,14 @@ impl Dismissable for BasedPyrightBanner {
 
 impl BasedPyrightBanner {
     pub fn new(workspace: &Workspace, cx: &mut Context<Self>) -> Self {
-        let subscription = cx.subscribe(workspace.project(), |this, _, event, _| {
+        let subscription = cx.subscribe(workspace.project(), |this, _, event, cx| {
             if let project::Event::LanguageServerAdded(_, name, _) = event
                 && name == "basedpyright"
             {
                 this.have_basedpyright = true;
+                // The banner is hidden until the server shows up, so the toolbar
+                // has to be re-rendered when that happens.
+                cx.notify();
             }
         });
         let dismissed = Self::dismissed(cx);
@@ -112,8 +115,9 @@ impl ToolbarItemView for BasedPyrightBanner {
         if let Some(item) = active_pane_item
             && let Some(editor) = item.act_as::<Editor>(cx)
             && let Some(path) = editor.update(cx, |editor, cx| editor.target_file_abs_path(cx))
-            && let Some(file_name) = path.file_name()
-            && file_name.as_encoded_bytes().ends_with(b".py")
+            && path
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("py"))
         {
             return ToolbarItemLocation::Secondary;
         }

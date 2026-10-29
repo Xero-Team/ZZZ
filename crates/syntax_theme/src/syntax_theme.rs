@@ -86,12 +86,14 @@ impl SyntaxTheme {
     }
 
     pub fn highlight_id(&self, capture_name: &str) -> Option<u32> {
+        // Capture names are dot-separated (`function.method.async`), and the
+        // longest registered prefix wins.
+        let prefix = capture_name
+            .split_once('.')
+            .map_or(capture_name, |(prefix, _)| prefix);
         self.capture_name_map
             .range::<str, _>((
-                capture_name.split(".").next().map_or(
-                    std::ops::Bound::Included(capture_name),
-                    std::ops::Bound::Included,
-                ),
+                std::ops::Bound::Included(prefix),
                 std::ops::Bound::Included(capture_name),
             ))
             .rfind(|(prefix, _)| {

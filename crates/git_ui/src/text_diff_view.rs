@@ -17,13 +17,13 @@ use project::Project;
 use settings::Settings;
 use std::{
     any::{Any, TypeId},
-    cmp,
     ops::Range,
     pin::pin,
     sync::Arc,
     time::Duration,
 };
 use ui::{Color, Icon, IconName, Label, LabelCommon as _, SharedString};
+use util::ResultExt as _;
 use util::paths::PathExt;
 
 use workspace::{
@@ -70,7 +70,7 @@ impl TextDiffView {
             let expanded_start = Point::new(buffer_range.start.row, 0);
             let expanded_end = if buffer_range.end.column > 0 {
                 let next_row = buffer_range.end.row + 1;
-                cmp::min(max_point, Point::new(next_row, 0))
+                max_point.min(Point::new(next_row, 0))
             } else {
                 buffer_range.end
             };
@@ -192,11 +192,13 @@ impl TextDiffView {
             language::BufferEvent::Edited { .. }
             | language::BufferEvent::LanguageChanged(_)
             | language::BufferEvent::Reparsed => {
-                this.buffer_changes_tx.send(()).ok();
+                this.buffer_changes_tx.send(()).log_err();
             }
             _ => {}
         })
         .detach();
+
+        let untitled_path = tr(cx, "workspace.pane.untitled", "untitled");
 
         let editor = source_editor.read(cx);
         let title = editor.buffer().read(cx).title(cx).to_string();
@@ -215,30 +217,25 @@ impl TextDiffView {
                     .file()
                     .map(|f| f.full_path(cx).compact().to_string_lossy().into_owned())
             })
-            .unwrap_or("untitled".into());
+            .unwrap_or(untitled_path);
 
         let selection_location_path = selection_location_text
             .map(|text| format!("{} @ {}", path, text))
             .unwrap_or(path);
 
-        Self {
-            diff_editor,
-            title: tr(
+        let clipboard_diff_title = |location: &str| {
+            tr(
                 cx,
                 "git_ui.text_diff_view.clipboard_diff_title",
                 "Clipboard ↔ {}",
             )
-            .replacen("{}", &selection_location_title, 1)
-            .into(),
-            path: Some(
-                tr(
-                    cx,
-                    "git_ui.text_diff_view.clipboard_diff_title",
-                    "Clipboard ↔ {}",
-                )
-                .replacen("{}", &selection_location_path, 1)
-                .into(),
-            ),
+            .replacen("{}", location, 1)
+        };
+
+        Self {
+            diff_editor,
+            title: clipboard_diff_title(&selection_location_title).into(),
+            path: Some(clipboard_diff_title(&selection_location_path).into()),
             buffer_changes_tx,
             _recalculate_diff_task: cx.spawn(async move |_, cx| {
                 while buffer_changes_rx.recv().await.is_ok() {
@@ -309,6 +306,8 @@ async fn update_diff_buffer(
         })
         .await;
 
+    // `set_snapshot` also reports the changed range so callers can restore a
+    // selection; a freshly built diff view has none.
     diff.update(cx, |diff, cx| {
         diff.language_changed(language, language_registry, cx);
         diff.set_snapshot(update, &source_buffer_snapshot.text, cx)

@@ -10,6 +10,26 @@ use ui::{ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
 use workspace::{ModalView, Workspace};
 
+/// Sorts repositories by display name, case-insensitively.
+fn sort_by_display_name(repositories: &mut [Entity<Repository>], cx: &App) {
+    repositories.sort_by_key(|repository| repository.read(cx).display_name().to_lowercase());
+}
+
+/// Index of the active repository within `repositories`, falling back to the
+/// first entry when no repository is active.
+fn index_of_active_repository(
+    repositories: &[Entity<Repository>],
+    active_repository: Option<&Entity<Repository>>,
+) -> usize {
+    active_repository
+        .and_then(|active| {
+            repositories
+                .iter()
+                .position(|repository| repository == active)
+        })
+        .unwrap_or(0)
+}
+
 pub fn register(workspace: &mut Workspace) {
     workspace.register_action(open);
 }
@@ -39,19 +59,11 @@ impl RepositorySelector {
         cx: &mut Context<Self>,
     ) -> Self {
         let git_store = project_handle.read(cx).git_store().clone();
-        let repository_entries = git_store.update(cx, |git_store, _cx| {
-            let mut repos: Vec<_> = git_store.repositories().values().cloned().collect();
-
-            repos.sort_by(|a, b| {
-                a.read(_cx)
-                    .display_name()
-                    .to_lowercase()
-                    .cmp(&b.read(_cx).display_name().to_lowercase())
-            });
-
-            repos
+        let repository_entries = git_store.update(cx, |git_store, cx| {
+            let mut repositories: Vec<_> = git_store.repositories().values().cloned().collect();
+            sort_by_display_name(&mut repositories, cx);
+            repositories
         });
-        let filtered_repositories = repository_entries.clone();
 
         let widest_item_ix = repository_entries.iter().position_max_by(|a, b| {
             a.read(cx)
@@ -61,14 +73,12 @@ impl RepositorySelector {
         });
 
         let active_repository = git_store.read(cx).active_repository();
-        let selected_index = active_repository
-            .as_ref()
-            .and_then(|active| filtered_repositories.iter().position(|repo| repo == active))
-            .unwrap_or(0);
+        let selected_index =
+            index_of_active_repository(&repository_entries, active_repository.as_ref());
         let delegate = RepositorySelectorDelegate {
             repository_selector: cx.entity().downgrade(),
-            repository_entries,
-            filtered_repositories,
+            repository_entries: repository_entries.clone(),
+            filtered_repositories: repository_entries,
             active_repository,
             selected_index,
         };
@@ -113,17 +123,10 @@ pub struct RepositorySelectorDelegate {
 
 impl RepositorySelectorDelegate {
     pub fn update_repository_entries(&mut self, all_repositories: Vec<Entity<Repository>>) {
+        self.selected_index =
+            index_of_active_repository(&all_repositories, self.active_repository.as_ref());
         self.repository_entries = all_repositories.clone();
         self.filtered_repositories = all_repositories;
-        self.selected_index = self
-            .active_repository
-            .as_ref()
-            .and_then(|active| {
-                self.filtered_repositories
-                    .iter()
-                    .position(|repo| repo == active)
-            })
-            .unwrap_or(0);
     }
 }
 
@@ -192,21 +195,13 @@ impl PickerDelegate for RepositorySelectorDelegate {
 
             this.update_in(cx, |this, window, cx| {
                 let mut sorted_repositories = filtered_repositories;
-                sorted_repositories.sort_by(|a, b| {
-                    a.read(cx)
-                        .display_name()
-                        .to_lowercase()
-                        .cmp(&b.read(cx).display_name().to_lowercase())
-                });
-                let selected_index = this
-                    .delegate
-                    .active_repository
-                    .as_ref()
-                    .and_then(|active| sorted_repositories.iter().position(|repo| repo == active))
-                    .unwrap_or(0);
+                sort_by_display_name(&mut sorted_repositories, cx);
+                let selected_index = index_of_active_repository(
+                    &sorted_repositories,
+                    this.delegate.active_repository.as_ref(),
+                );
                 this.delegate.filtered_repositories = sorted_repositories;
                 this.delegate.set_selected_index(selected_index, window, cx);
-                cx.notify();
             })
             .log_err();
         })

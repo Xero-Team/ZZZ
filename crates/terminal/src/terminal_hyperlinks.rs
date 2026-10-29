@@ -29,13 +29,12 @@ pub(super) struct RegexSearches {
     path_hyperlink_timeout: Duration,
 }
 
+// No path hyperlink regexes and a zero timeout, so only URLs are detected.
+// Used by `TerminalBuilder::new_display_only`: those terminals render captured
+// output and never take pointer input of their own.
 impl Default for RegexSearches {
     fn default() -> Self {
-        Self {
-            url_regex: RegexSearch::new(URL_REGEX).expect("value should be present"),
-            path_hyperlink_regexes: Vec::default(),
-            path_hyperlink_timeout: Duration::ZERO,
-        }
+        Self::new(std::iter::empty::<&str>(), Duration::ZERO)
     }
 }
 impl RegexSearches {
@@ -356,12 +355,13 @@ fn path_match<T>(
     for regex in path_hyperlink_regexes {
         let mut path_found = false;
 
-        for (line_start_offset, captures) in regex
-            .captures_iter(&line)
-            .map(|captures| (0usize, captures))
-        {
+        for captures in regex.captures_iter(&line) {
             path_found = true;
-            let match_range = captures.get(0).expect("entry should be present").range();
+            // Group 0 always participates in a successful match; skip rather than
+            // panic if a future rewrite ever makes that untrue.
+            let Some(match_range) = captures.get(0).map(|capture| capture.range()) else {
+                continue;
+            };
             let (mut path_range, line_column) = if let Some(path) = captures.name("path") {
                 let parse = |name: &str| {
                     captures
@@ -379,11 +379,6 @@ fn path_match<T>(
             let mut link_range = captures
                 .name("link")
                 .map_or_else(|| match_range.clone(), |link| link.range());
-
-            path_range.start += line_start_offset;
-            path_range.end += line_start_offset;
-            link_range.start += line_start_offset;
-            link_range.end += line_start_offset;
 
             // Strip prefix up to the first unbalanced `(` in the matched path.
             // This handles delimiter parens like `Update(.claude/SKILL.md)` while

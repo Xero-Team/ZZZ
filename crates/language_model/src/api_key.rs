@@ -55,13 +55,13 @@ impl ApiKeyState {
     }
 
     pub fn is_from_env_var(&self) -> bool {
-        match &self.load_status {
+        matches!(
+            &self.load_status,
             LoadStatus::Loaded(ApiKey {
-                source: ApiKeySource::EnvVar { .. },
+                source: ApiKeySource::EnvVar(_),
                 ..
-            }) => true,
-            _ => false,
-        }
+            })
+        )
     }
 
     /// Get the stored API key, verifying that it is associated with the URL. Returns `None` if
@@ -109,13 +109,14 @@ impl ApiKeyState {
             )));
         }
         cx.spawn(async move |ent, cx| {
+            // Propagate failures: reporting the key as stored when the keychain
+            // write failed would hide the problem from the caller.
             if let Some(key) = &key {
                 provider
                     .write_credentials(&url, "Bearer", key.as_bytes(), cx)
-                    .await
-                    .log_err();
+                    .await?;
             } else {
-                provider.delete_credentials(&url, cx).await.log_err();
+                provider.delete_credentials(&url, cx).await?;
             }
             ent.update(cx, |ent, cx| {
                 let this = get_this(ent);
@@ -145,8 +146,10 @@ impl ApiKeyState {
     ) {
         if url != self.url {
             if !self.is_from_env_var() {
-                // loading will continue even though this result task is dropped
-                let _task = self.load_if_needed(url, get_this, provider, cx);
+                // The load itself is shared through `load_task`, so it keeps running
+                // even though nothing awaits the task returned here.
+                self.load_if_needed(url, get_this, provider, cx)
+                    .detach_and_log_err(cx);
             }
         }
     }

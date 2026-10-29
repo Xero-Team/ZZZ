@@ -175,14 +175,10 @@ fn parse_choices<'a>(
                 return Ok((source, Some(choices)));
             }
             Some(_) => {
-                let chunk_end = source.find([',', '|', '\\']);
-
-                anyhow::ensure!(
-                    chunk_end.is_some(),
-                    "Placeholder choice doesn't contain closing pipe-character '|'"
-                );
-
-                let (chunk, rest) = source.split_at(chunk_end.expect("value should be present"));
+                let Some(chunk_end) = source.find([',', '|', '\\']) else {
+                    anyhow::bail!("placeholder choice is missing its closing pipe character '|'");
+                };
+                let (chunk, rest) = source.split_at(chunk_end);
 
                 if !found_default_choice {
                     text.push_str(chunk);

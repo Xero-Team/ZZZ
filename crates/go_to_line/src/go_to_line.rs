@@ -217,12 +217,7 @@ impl GoToLine {
 
     fn anchor_from_query(&self, editor: &Editor, cx: &Context<Editor>) -> Option<Anchor> {
         let (query_row, query_char) = if let Some(offset) = self.relative_line_from_query(cx) {
-            let target = if offset >= 0 {
-                self.current_line.saturating_add(offset as u32)
-            } else {
-                self.current_line.saturating_sub(offset.unsigned_abs())
-            };
-            (target, None)
+            (self.relative_target_line(offset), None)
         } else {
             self.line_and_char_from_query(cx)?
         };
@@ -242,46 +237,21 @@ impl GoToLine {
     }
 
     fn relative_line_from_query(&self, cx: &App) -> Option<i32> {
-        let input = self.line_editor.read(cx).text(cx);
-        let trimmed = input.trim();
+        parse_relative_offset(&self.line_editor.read(cx).text(cx))
+    }
 
-        let mut last_direction_char: Option<char> = None;
-        let mut number_start_index = 0;
-
-        for (i, c) in trimmed.char_indices() {
-            match c {
-                '+' | 'f' | 'F' | '-' | 'b' | 'B' => {
-                    last_direction_char = Some(c);
-                    number_start_index = i + c.len_utf8();
-                }
-                _ => break,
-            }
-        }
-
-        let direction = last_direction_char?;
-
-        let number_part = &trimmed[number_start_index..];
-        let line_part = number_part
-            .split(FILE_ROW_COLUMN_DELIMITER)
-            .next()
-            .unwrap_or(number_part)
-            .trim();
-
-        let value = line_part.parse::<u32>().ok()?;
-
-        match direction {
-            '+' | 'f' | 'F' => Some(value as i32),
-            '-' | 'b' | 'B' => Some(-(value as i32)),
-            _ => None,
+    /// Line the given relative offset points at, clamped to the first line.
+    fn relative_target_line(&self, offset: i32) -> u32 {
+        if offset >= 0 {
+            self.current_line.saturating_add(offset as u32)
+        } else {
+            self.current_line.saturating_sub(offset.unsigned_abs())
         }
     }
 
     fn line_and_char_from_query(&self, cx: &App) -> Option<(u32, Option<u32>)> {
         let input = self.line_editor.read(cx).text(cx);
-        let mut components = input
-            .splitn(2, FILE_ROW_COLUMN_DELIMITER)
-            .map(str::trim)
-            .fuse();
+        let mut components = input.splitn(2, FILE_ROW_COLUMN_DELIMITER).map(str::trim);
         let row = components.next().and_then(|row| row.parse::<u32>().ok())?;
         let column = components.next().and_then(|col| col.parse::<u32>().ok());
         Some((row, column))
@@ -314,11 +284,7 @@ impl GoToLine {
 impl Render for GoToLine {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let help_text = if let Some(offset) = self.relative_line_from_query(cx) {
-            let target_line = if offset >= 0 {
-                self.current_line.saturating_add(offset as u32)
-            } else {
-                self.current_line.saturating_sub(offset.unsigned_abs())
-            };
+            let target_line = self.relative_target_line(offset);
             app_i18n::tr(
                 cx,
                 "go_to_line.go_to_line_relative",
@@ -368,6 +334,45 @@ impl Render for GoToLine {
     }
 }
 
+/// Parses a relative line offset as typed into the go to line editor: `+10` or
+/// `f10` jump forward, `-3` or `b3` jump backward. A column may follow after the
+/// row/column delimiter and is ignored here.
+fn parse_relative_offset(input: &str) -> Option<i32> {
+    let trimmed = input.trim();
+
+    let mut last_direction_char: Option<char> = None;
+    let mut number_start_index = 0;
+
+    for (i, c) in trimmed.char_indices() {
+        match c {
+            '+' | 'f' | 'F' | '-' | 'b' | 'B' => {
+                last_direction_char = Some(c);
+                number_start_index = i + c.len_utf8();
+            }
+            _ => break,
+        }
+    }
+
+    let direction = last_direction_char?;
+
+    let number_part = &trimmed[number_start_index..];
+    let line_part = number_part
+        .split(FILE_ROW_COLUMN_DELIMITER)
+        .next()
+        .unwrap_or(number_part)
+        .trim();
+
+    // Parse as `i32` rather than `u32`: an offset beyond `i32::MAX` used to wrap
+    // around and jump in the opposite direction.
+    let value = line_part.parse::<i32>().ok()?;
+
+    match direction {
+        '+' | 'f' | 'F' => Some(value),
+        '-' | 'b' | 'B' => Some(value.saturating_neg()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +387,28 @@ mod tests {
     use std::{num::NonZeroU32, sync::Arc, time::Duration};
     use util::{path, rel_path::rel_path};
     use workspace::{AppState, MultiWorkspace, Workspace};
+
+    #[test]
+    fn relative_offsets_jump_in_the_requested_direction() {
+        assert_eq!(parse_relative_offset("+5"), Some(5));
+        assert_eq!(parse_relative_offset("f5"), Some(5));
+        assert_eq!(parse_relative_offset("F5"), Some(5));
+        assert_eq!(parse_relative_offset("-5"), Some(-5));
+        assert_eq!(parse_relative_offset("b5"), Some(-5));
+        assert_eq!(parse_relative_offset("B5"), Some(-5));
+        assert_eq!(parse_relative_offset("b5:3"), Some(-5));
+        assert_eq!(parse_relative_offset("   +7  "), Some(7));
+        assert_eq!(parse_relative_offset("5"), None);
+        assert_eq!(parse_relative_offset("+"), None);
+    }
+
+    #[test]
+    fn oversized_relative_offsets_are_rejected_instead_of_reversing_direction() {
+        // Parsing the offset as `u32` used to accept these and wrap them into an
+        // offset of the opposite sign.
+        assert_eq!(parse_relative_offset("+3000000000"), None);
+        assert_eq!(parse_relative_offset("-3000000000"), None);
+    }
 
     #[gpui::test]
     async fn test_go_to_line_view_row_highlights(cx: &mut TestAppContext) {

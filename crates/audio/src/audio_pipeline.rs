@@ -269,12 +269,10 @@ impl PlaybackHandle {
 
     pub fn position(&self) -> Duration {
         let samples = self.control.sample_position.load(Ordering::Relaxed);
-        let denominator = SAMPLE_RATE.get() as f64 * CHANNEL_COUNT.get() as f64;
-        if denominator <= 0.0 {
-            Duration::ZERO
-        } else {
-            Duration::from_secs_f64(samples as f64 / denominator)
-        }
+        // `SAMPLE_RATE` and `CHANNEL_COUNT` are non-zero by construction, so
+        // this divisor can never be zero or negative.
+        let samples_per_second = SAMPLE_RATE.get() as f64 * CHANNEL_COUNT.get() as f64;
+        Duration::from_secs_f64(samples as f64 / samples_per_second)
     }
 
     pub fn is_paused(&self) -> bool {
@@ -524,20 +522,11 @@ fn get_available_audio_devices() -> Vec<AudioDeviceInfo> {
     };
     devices
         .filter_map(|device| {
-            let id = match device.id() {
-                Ok(id) => id,
-                Err(error) => {
-                    log::warn!("Failed to read audio device ID: {error}");
-                    return None;
-                }
-            };
-            let desc = match device.description() {
-                Ok(description) => description,
-                Err(error) => {
-                    log::warn!("Failed to read audio device description: {error}");
-                    return None;
-                }
-            };
+            // A device that cannot report its id or description cannot be
+            // selected from the settings, so skip it rather than listing an
+            // entry that would never round-trip through the settings file.
+            let id = device.id().warn_on_err()?;
+            let desc = device.description().warn_on_err()?;
             Some(AudioDeviceInfo { id, desc })
         })
         .collect()

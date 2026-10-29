@@ -117,6 +117,61 @@ fn tr_args_with(
         .replacen("{}", second, 1)
 }
 
+/// Number of files git reported changing, parsed from the summary line at the
+/// end of a `pull`'s stdout (for example `"3 files changed, 10 insertions(+)"`).
+fn changed_file_count(output: &RemoteCommandOutput) -> anyhow::Result<u32> {
+    let last_line = output
+        .stdout
+        .lines()
+        .last()
+        .context("Failed to get last line of output")?
+        .trim();
+
+    last_line
+        .split_whitespace()
+        .next()
+        .context("Failed to get first word of last line")?
+        .parse()
+        .context("Failed to parse the number of changed files")
+}
+
+/// Wording used to report how many files a pull changed. `no_count` is used
+/// when git's output carries no summary line.
+#[derive(Clone, Copy)]
+struct ChangeSummaryKeys {
+    one_file: (&'static str, &'static str),
+    many_files: (&'static str, &'static str),
+    no_count: (&'static str, &'static str),
+}
+
+fn summarize_changes(
+    output: &RemoteCommandOutput,
+    remote_name: &str,
+    keys: ChangeSummaryKeys,
+    translate: impl Fn(&'static str, &'static str) -> String + Copy,
+) -> String {
+    match changed_file_count(output).log_err() {
+        Some(1) => tr_args_with(
+            translate,
+            keys.one_file.0,
+            keys.one_file.1,
+            "1",
+            remote_name,
+        ),
+        Some(files_changed) => {
+            let files_changed = files_changed.to_string();
+            tr_args_with(
+                translate,
+                keys.many_files.0,
+                keys.many_files.1,
+                &files_changed,
+                remote_name,
+            )
+        }
+        None => tr_arg_with(translate, keys.no_count.0, keys.no_count.1, remote_name),
+    }
+}
+
 fn format_output_impl(
     action: &RemoteAction,
     output: RemoteCommandOutput,
@@ -152,22 +207,6 @@ fn format_output_impl(
             }
         }
         RemoteAction::Pull(remote_ref) => {
-            let get_changes = |output: &RemoteCommandOutput| -> anyhow::Result<u32> {
-                let last_line = output
-                    .stdout
-                    .lines()
-                    .last()
-                    .context("Failed to get last line of output")?
-                    .trim();
-
-                let files_changed = last_line
-                    .split_whitespace()
-                    .next()
-                    .context("Failed to get first word of last line")?
-                    .parse()?;
-
-                Ok(files_changed)
-            };
             if output.stdout.ends_with("Already up to date.\n") {
                 SuccessMessage {
                     message: translate(
@@ -177,67 +216,46 @@ fn format_output_impl(
                     style: SuccessStyle::Toast,
                 }
             } else if output.stdout.starts_with("Updating") {
-                let files_changed = get_changes(&output).log_err();
-                let message = if let Some(files_changed) = files_changed {
-                    let files_changed = files_changed.to_string();
-                    if files_changed == "1" {
-                        tr_args_with(
-                            translate,
+                let message = summarize_changes(
+                    &output,
+                    &remote_ref.name,
+                    ChangeSummaryKeys {
+                        one_file: (
                             "git_ui.remote_output.received_one_file_change_from",
                             "Received {} file change from {}",
-                            &files_changed,
-                            &remote_ref.name,
-                        )
-                    } else {
-                        tr_args_with(
-                            translate,
+                        ),
+                        many_files: (
                             "git_ui.remote_output.received_many_file_changes_from",
                             "Received {} file changes from {}",
-                            &files_changed,
-                            &remote_ref.name,
-                        )
-                    }
-                } else {
-                    tr_arg_with(
-                        translate,
-                        "git_ui.remote_output.fast_forwarded_from",
-                        "Fast forwarded from {}",
-                        &remote_ref.name,
-                    )
-                };
+                        ),
+                        no_count: (
+                            "git_ui.remote_output.fast_forwarded_from",
+                            "Fast forwarded from {}",
+                        ),
+                    },
+                    translate,
+                );
                 SuccessMessage {
                     message,
                     style: SuccessStyle::ToastWithLog { output },
                 }
             } else if output.stdout.starts_with("Merge") {
-                let files_changed = get_changes(&output).log_err();
-                let message = if let Some(files_changed) = files_changed {
-                    let files_changed = files_changed.to_string();
-                    if files_changed == "1" {
-                        tr_args_with(
-                            translate,
+                let message = summarize_changes(
+                    &output,
+                    &remote_ref.name,
+                    ChangeSummaryKeys {
+                        one_file: (
                             "git_ui.remote_output.merged_one_file_change_from",
                             "Merged {} file change from {}",
-                            &files_changed,
-                            &remote_ref.name,
-                        )
-                    } else {
-                        tr_args_with(
-                            translate,
+                        ),
+                        many_files: (
                             "git_ui.remote_output.merged_many_file_changes_from",
                             "Merged {} file changes from {}",
-                            &files_changed,
-                            &remote_ref.name,
-                        )
-                    }
-                } else {
-                    tr_arg_with(
-                        translate,
-                        "git_ui.remote_output.merged_from",
-                        "Merged from {}",
-                        &remote_ref.name,
-                    )
-                };
+                        ),
+                        no_count: ("git_ui.remote_output.merged_from", "Merged from {}"),
+                    },
+                    translate,
+                );
                 SuccessMessage {
                     message,
                     style: SuccessStyle::ToastWithLog { output },

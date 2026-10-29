@@ -40,9 +40,10 @@ impl BlameRenderer for GitBlameRenderer {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<AnyElement> {
-        let relative_timestamp = blame_entry_relative_timestamp(&blame_entry);
+        let relative_timestamp = blame_entry_relative_timestamp(&blame_entry, cx);
         let short_commit_id = blame_entry.sha.display_short();
-        let author_name = blame_entry.author.as_deref().unwrap_or("<no name>");
+        let no_author_name = tr(cx, "git_ui.blame_ui.no_author_name", "<no name>");
+        let author_name = blame_entry.author.as_deref().unwrap_or(&no_author_name);
         let name = util::truncate_and_trailoff(author_name, GIT_BLAME_MAX_AUTHOR_CHARS_DISPLAYED);
 
         let show_avatar = {
@@ -50,14 +51,7 @@ impl BlameRenderer for GitBlameRenderer {
             git.show_avatar && git.blame.show_avatar
         };
         let avatar = if show_avatar {
-            let author_email = blame_entry.author_mail.as_ref().map(|email| {
-                SharedString::from(
-                    email
-                        .trim_start_matches('<')
-                        .trim_end_matches('>')
-                        .to_owned(),
-                )
-            });
+            let author_email = avatar_author_email(&blame_entry);
             Some(
                 CommitAvatar::new(
                     &blame_entry.sha.to_string().into(),
@@ -114,12 +108,10 @@ impl BlameRenderer for GitBlameRenderer {
                             let repository = repository.clone();
                             let workspace = workspace.clone();
                             move |_, window, cx| {
-                                CommitView::open(
+                                open_commit_view(
                                     blame_entry.sha.to_string(),
-                                    repository.downgrade(),
-                                    workspace.clone(),
-                                    None,
-                                    None,
+                                    &repository,
+                                    &workspace,
                                     window,
                                     cx,
                                 )
@@ -151,7 +143,7 @@ impl BlameRenderer for GitBlameRenderer {
         blame_entry: BlameEntry,
         cx: &mut App,
     ) -> Option<AnyElement> {
-        let relative_timestamp = blame_entry_relative_timestamp(&blame_entry);
+        let relative_timestamp = blame_entry_relative_timestamp(&blame_entry, cx);
         let author = blame_entry.author.as_deref().unwrap_or_default();
         let summary_enabled = ProjectSettings::get_global(cx)
             .git
@@ -197,20 +189,12 @@ impl BlameRenderer for GitBlameRenderer {
             .unwrap_or(OffsetDateTime::now_utc());
 
         let sha = blame.sha.to_string().into();
-        let author: SharedString = blame
-            .author
-            .clone()
-            .unwrap_or("<no name>".to_owned())
-            .into();
+        let author: SharedString = blame.author.clone().map_or_else(
+            || tr(cx, "git_ui.blame_ui.no_author_name", "<no name>").into(),
+            SharedString::from,
+        );
         let author_email = blame.author_mail.as_deref().unwrap_or_default();
-        let author_email_for_avatar = blame.author_mail.as_ref().map(|email| {
-            SharedString::from(
-                email
-                    .trim_start_matches('<')
-                    .trim_end_matches('>')
-                    .to_owned(),
-            )
-        });
+        let author_email_for_avatar = avatar_author_email(&blame);
         let avatar = CommitAvatar::new(
             &sha,
             author_email_for_avatar,
@@ -218,14 +202,11 @@ impl BlameRenderer for GitBlameRenderer {
         )
         .render(window, cx);
 
-        let short_commit_id = sha
-            .get(..8)
-            .map_or_else(|| sha.clone(), |sha| sha.to_owned().into());
-        let local_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+        let short_commit_id = sha.get(..8).map_or_else(|| sha.clone(), SharedString::from);
         let absolute_timestamp = time_format::format_localized_timestamp(
             commit_time,
             OffsetDateTime::now_utc(),
-            local_offset,
+            local_offset(),
             time_format::TimestampFormat::MediumAbsolute,
         );
         let link_color = cx.theme().colors().text_accent;
@@ -243,13 +224,21 @@ impl BlameRenderer for GitBlameRenderer {
             style
         };
 
-        let message = details
-            .as_ref()
-            .map_or("<no commit message>".into_any(), |_| {
+        let message = details.as_ref().map_or_else(
+            || {
+                SharedString::from(tr(
+                    cx,
+                    "git_ui.blame_ui.no_commit_message",
+                    "<no commit message>",
+                ))
+                .into_any_element()
+            },
+            |_| {
                 MarkdownElement::new(markdown.clone(), markdown_style)
                     .scroll_handle(scroll_handle.clone())
                     .into_any()
-            });
+            },
+        );
 
         let pull_request = details
             .as_ref()
@@ -261,18 +250,10 @@ impl BlameRenderer for GitBlameRenderer {
             sha: sha.clone(),
             subject: details
                 .as_ref()
-                .and_then(|details| {
-                    Some(
-                        details
-                            .message
-                            .split('\n')
-                            .next()?
-                            .trim_end()
-                            .to_owned()
-                            .into(),
-                    )
-                })
-                .unwrap_or_default(),
+                .and_then(|details| details.message.lines().next())
+                .map(str::trim_end)
+                .unwrap_or_default()
+                .into(),
             commit_timestamp: commit_time.unix_timestamp(),
             author_name: author.clone(),
             has_parent: false,
@@ -360,12 +341,10 @@ impl BlameRenderer for GitBlameRenderer {
                                                         .color(Color::Muted),
                                                 )
                                                 .on_click(move |_, window, cx| {
-                                                    CommitView::open(
-                                                        commit_summary.sha.clone().into(),
-                                                        repository.downgrade(),
-                                                        workspace.clone(),
-                                                        None,
-                                                        None,
+                                                    open_commit_view(
+                                                        commit_summary.sha.to_string(),
+                                                        &repository,
+                                                        &workspace,
                                                         window,
                                                         cx,
                                                     );
@@ -397,16 +376,50 @@ impl BlameRenderer for GitBlameRenderer {
         window: &mut Window,
         cx: &mut App,
     ) {
-        CommitView::open(
+        open_commit_view(
             blame_entry.sha.to_string(),
-            repository.downgrade(),
-            workspace,
-            None,
-            None,
+            &repository,
+            &workspace,
             window,
             cx,
-        )
+        );
     }
+}
+
+/// Opens the commit view for `sha` in the given repository, with no stash or
+/// file filter applied.
+fn open_commit_view(
+    sha: String,
+    repository: &Entity<Repository>,
+    workspace: &WeakEntity<Workspace>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    CommitView::open(
+        sha,
+        repository.downgrade(),
+        workspace.clone(),
+        None,
+        None,
+        window,
+        cx,
+    );
+}
+
+/// Author email with the angle brackets git reports it in removed.
+fn avatar_author_email(blame_entry: &BlameEntry) -> Option<SharedString> {
+    blame_entry.author_mail.as_ref().map(|email| {
+        SharedString::from(
+            email
+                .trim_start_matches('<')
+                .trim_end_matches('>')
+                .to_owned(),
+        )
+    })
+}
+
+fn local_offset() -> time::UtcOffset {
+    time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC)
 }
 
 fn deploy_blame_entry_context_menu(
@@ -442,18 +455,18 @@ fn deploy_blame_entry_context_menu(
     });
 }
 
-fn blame_entry_relative_timestamp(blame_entry: &BlameEntry) -> String {
+fn blame_entry_relative_timestamp(blame_entry: &BlameEntry, cx: &App) -> String {
     match blame_entry.author_offset_date_time() {
-        Ok(timestamp) => {
-            let local_offset =
-                time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-            time_format::format_localized_timestamp(
-                timestamp,
-                time::OffsetDateTime::now_utc(),
-                local_offset,
-                time_format::TimestampFormat::Relative,
-            )
-        }
-        Err(_) => "Error parsing date".to_owned(),
+        Ok(timestamp) => time_format::format_localized_timestamp(
+            timestamp,
+            time::OffsetDateTime::now_utc(),
+            local_offset(),
+            time_format::TimestampFormat::Relative,
+        ),
+        Err(_) => tr(
+            cx,
+            "git_ui.blame_ui.invalid_commit_date",
+            "Invalid commit date",
+        ),
     }
 }

@@ -10,15 +10,10 @@ impl HandleTag for WebpageChromeRemover {
 
     fn handle_tag_start(
         &mut self,
-        tag: &HtmlElement,
+        _tag: &HtmlElement,
         _writer: &mut MarkdownWriter,
     ) -> StartTagOutcome {
-        match tag.tag() {
-            "head" | "script" | "style" | "nav" => return StartTagOutcome::Skip,
-            _ => {}
-        }
-
-        StartTagOutcome::Continue
+        StartTagOutcome::Skip
     }
 }
 
@@ -36,7 +31,7 @@ impl HandleTag for ParagraphHandler {
     ) -> StartTagOutcome {
         if tag.is_inline()
             && writer.is_inside("p")
-            && let Some(parent) = writer.current_element_stack().iter().last()
+            && let Some(parent) = writer.current_parent()
             && !(parent.is_inline()
                 || writer.markdown.ends_with(' ')
                 || writer.markdown.ends_with('\n'))
@@ -76,11 +71,8 @@ impl HandleTag for HeadingHandler {
         StartTagOutcome::Continue
     }
 
-    fn handle_tag_end(&mut self, tag: &HtmlElement, writer: &mut MarkdownWriter) {
-        match tag.tag() {
-            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => writer.push_blank_line(),
-            _ => {}
-        }
+    fn handle_tag_end(&mut self, _tag: &HtmlElement, writer: &mut MarkdownWriter) {
+        writer.push_blank_line();
     }
 }
 
@@ -105,12 +97,8 @@ impl HandleTag for ListHandler {
         StartTagOutcome::Continue
     }
 
-    fn handle_tag_end(&mut self, tag: &HtmlElement, writer: &mut MarkdownWriter) {
-        match tag.tag() {
-            "ul" | "ol" => writer.push_newline(),
-            "li" => writer.push_newline(),
-            _ => {}
-        }
+    fn handle_tag_end(&mut self, _tag: &HtmlElement, writer: &mut MarkdownWriter) {
+        writer.push_newline();
     }
 }
 

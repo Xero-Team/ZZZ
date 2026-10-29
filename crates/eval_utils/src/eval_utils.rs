@@ -75,9 +75,12 @@ pub fn eval<P>(
 ) where
     P: EvalOutputProcessor,
 {
+    // The pass ratio is computed from `iterations`, so running the benchmark
+    // zero times would divide by zero and silently report `NaN`.
+    assert!(iterations > 0, "eval requires at least one iteration");
+
     let mut evaluated_count = 0;
     let mut failed_count = 0;
-    let evalf = Arc::new(evalf);
     report_progress(evaluated_count, failed_count, iterations);
 
     let (tx, rx) = mpsc::channel();

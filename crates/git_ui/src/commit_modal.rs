@@ -287,14 +287,14 @@ impl CommitModal {
                     let signoff_enabled = git_panel.signoff_enabled();
                     let has_previous_commit = git_panel.head_commit(cx).is_some();
 
-                    Some(ContextMenu::build(window, cx, |context_menu, _, _| {
+                    Some(ContextMenu::build(window, cx, |context_menu, _, cx| {
                         context_menu
                             .when_some(keybinding_target.clone(), |el, keybinding_target| {
                                 el.context(keybinding_target)
                             })
                             .when(has_previous_commit, |this| {
                                 this.toggleable_entry(
-                                    "Amend",
+                                    tr(cx, "git_ui.git_panel.amend", "Amend"),
                                     amend_enabled,
                                     IconPosition::Start,
                                     Some(Box::new(Amend)),
@@ -311,7 +311,7 @@ impl CommitModal {
                                 )
                             })
                             .toggleable_entry(
-                                "Signoff",
+                                tr(cx, "git_ui.git_panel.signoff", "Signoff"),
                                 signoff_enabled,
                                 IconPosition::Start,
                                 Some(Box::new(Signoff)),
@@ -363,7 +363,10 @@ impl CommitModal {
         let branch = active_repo
             .as_ref()
             .and_then(|repo| repo.read(cx).branch.as_ref())
-            .map_or_else(|| "<no branch>".to_owned(), |b| b.name().to_owned());
+            .map_or_else(
+                || tr(cx, "git_ui.commit_modal.no_branch", "<no branch>"),
+                |branch| branch.name().to_owned(),
+            );
 
         let branch_picker_button = Button::new("branch_picker_button", branch)
             .start_icon(
@@ -403,7 +406,11 @@ impl CommitModal {
         let focus_handle = self.focus_handle(cx);
 
         let close_kb_hint = ui::KeyBinding::for_action(&menu::Cancel, cx).map(|close_kb| {
-            KeybindingHint::new(close_kb, cx.theme().colors().editor_background).suffix("Cancel")
+            KeybindingHint::new(close_kb, cx.theme().colors().editor_background).suffix(tr(
+                cx,
+                "git_ui.commit_modal.cancel",
+                "Cancel",
+            ))
         });
 
         h_flex()
@@ -412,7 +419,6 @@ impl CommitModal {
             .w_full()
             .items_center()
             .justify_between()
-            .w_full()
             .h(px(self.properties.footer_height))
             .gap_1()
             .child(
@@ -475,7 +481,7 @@ impl CommitModal {
                                             if is_amend_pending { " --amend" } else { "" },
                                             if is_signoff_enabled { " --signoff" } else { "" }
                                         ),
-                                        &focus_handle.clone(),
+                                        &focus_handle,
                                         cx,
                                     )
                                 } else {
@@ -569,16 +575,13 @@ impl Render for CommitModal {
         let editor_focus_handle = self.commit_editor.focus_handle(cx);
 
         let max_title_length = GitPanelSettings::get_global(cx).commit_title_max_length;
-        let title_exceeds_limit = if max_title_length > 0 {
-            self.commit_editor
-                .read(cx)
-                .text(cx)
-                .lines()
-                .next()
-                .is_some_and(|title| commit_title_exceeds_limit(title, max_title_length))
-        } else {
-            false
-        };
+        let title_exceeds_limit = self
+            .commit_editor
+            .read(cx)
+            .text(cx)
+            .lines()
+            .next()
+            .is_some_and(|title| commit_title_exceeds_limit(title, max_title_length));
 
         v_flex()
             .id("commit-modal")
@@ -652,9 +655,18 @@ impl Render for CommitModal {
                                         .color(Color::Warning),
                                 )
                                 .child(
-                                    Label::new(format!(
-                                        "Commit message title exceeds {max_title_length}-character limit."
-                                    ))
+                                    Label::new(
+                                        tr(
+                                            cx,
+                                            "git_ui.commit_modal.title_exceeds_limit",
+                                            "Commit message title exceeds {}-character limit.",
+                                        )
+                                        .replacen(
+                                            "{}",
+                                            &max_title_length.to_string(),
+                                            1,
+                                        ),
+                                    )
                                     .size(LabelSize::Small),
                                 ),
                         )

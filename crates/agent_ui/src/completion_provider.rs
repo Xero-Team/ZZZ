@@ -13,7 +13,7 @@ use editor::{CompletionProvider, Editor, code_context_menus::COMPLETION_MENU_MAX
 use futures::FutureExt as _;
 use fuzzy::{PathMatch, StringMatch, StringMatchCandidate};
 use gpui::{App, BackgroundExecutor, Entity, Focusable, SharedString, Task, WeakEntity, Window};
-use i18n as app_i18n;
+use i18n::tr;
 use language::{Buffer, CodeLabel, CodeLabelBuilder, HighlightId};
 use lsp::CompletionContext;
 use multi_buffer::ToOffset as _;
@@ -39,10 +39,6 @@ use workspace::Workspace;
 
 use crate::AgentPanel;
 use crate::mention_set::MentionSet;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
-    app_i18n::tr(cx, key, fallback)
-}
 
 #[derive(Clone)]
 pub(crate) enum AgentContextSelection {
@@ -310,6 +306,29 @@ fn session_title(title: Option<SharedString>, cx: &App) -> SharedString {
         .unwrap_or_else(|| default_thread_title(cx))
 }
 
+/// Characters a mention label can occupy in the completion menu once padding,
+/// spacing and the icon are subtracted from the menu's maximum width.
+fn mention_label_max_chars(window: &Window, cx: &App) -> usize {
+    // Base06 left padding + Base06 gap + Base06 right padding + icon width
+    let used_pixels =
+        DynamicSpacing::Base06.px(cx) * 3.0 + IconSize::XSmall.rems() * window.rem_size();
+
+    let style = window.text_style();
+    let font_id = window.text_system().resolve_font(&style.font());
+    let font_size = TextSize::Small.rems(cx).to_pixels(window.rem_size());
+
+    // Fallback em_width of 10px matches file_finder.rs fallback for TextSize::Small
+    let em_width = cx
+        .text_system()
+        .em_width(font_id, font_size)
+        .unwrap_or(px(10.0));
+
+    // The menu uses `dynamic_width`, so it can grow up to the maximum width.
+    let available_pixels = COMPLETION_MENU_MAX_WIDTH - used_pixels;
+
+    (f32::from(available_pixels) / f32::from(em_width)) as usize
+}
+
 #[derive(Debug, Clone)]
 pub struct RulesContextEntry {
     pub prompt_id: UserPromptId,
@@ -342,6 +361,44 @@ pub struct PromptCompletionProvider<T: PromptCompletionProviderDelegate> {
     workspace: WeakEntity<Workspace>,
 }
 
+/// The state shared by every `Match`-driven completion builder. Gathering it
+/// once per request keeps the builders from repeating seven identical
+/// arguments, and it is what they read instead of re-deriving the project or
+/// the label width from scratch.
+struct MentionCompletionContext<T: PromptCompletionProviderDelegate> {
+    source_range: Range<Anchor>,
+    source: Arc<T>,
+    editor: WeakEntity<Editor>,
+    mention_set: WeakEntity<MentionSet>,
+    workspace: Entity<Workspace>,
+    project: Entity<Project>,
+    label_max_chars: usize,
+}
+
+impl<T: PromptCompletionProviderDelegate> MentionCompletionContext<T> {
+    /// The confirm callback every builder installs: it stores the mention once
+    /// the completion is accepted. Taking it from the context keeps the five
+    /// builders from repeating the same eight arguments.
+    fn confirm_callback(
+        &self,
+        crease_text: impl Into<SharedString>,
+        inserted_len: usize,
+        mention_uri: MentionUri,
+    ) -> ConfirmCallback {
+        confirm_completion_callback(
+            crease_text.into(),
+            self.source_range.start,
+            // The trailing space is not part of the crease.
+            inserted_len - 1,
+            mention_uri,
+            self.source.clone(),
+            self.editor.clone(),
+            self.mention_set.clone(),
+            self.workspace.clone(),
+        )
+    }
+}
+
 impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
     pub fn new(
         source: T,
@@ -360,16 +417,13 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
     }
 
     fn completion_for_entry(
+        context: &MentionCompletionContext<T>,
         entry: PromptContextEntry,
-        source_range: Range<Anchor>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: &Entity<Workspace>,
         cx: &mut App,
     ) -> Option<Completion> {
         match entry {
             PromptContextEntry::Mode(mode) => Some(Completion {
-                replace_range: source_range,
+                replace_range: context.source_range.clone(),
                 new_text: format!("@{} ", mode.keyword()),
                 label: CodeLabel::plain(localized_prompt_context_type_label(mode, cx), None),
                 icon_path: Some(mode.icon().path().into()),
@@ -384,16 +438,16 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                 confirm: Some(Arc::new(|_, _, _| true)),
             }),
             PromptContextEntry::Action(action) => {
-                let selection = workspace.update(cx, |workspace, cx| {
+                let selection = context.workspace.update(cx, |workspace, cx| {
                     AgentContextSource::from_active(workspace, cx)?
                         .read_selection(workspace, false, cx)
                 });
                 Self::completion_for_action(
                     action,
-                    source_range,
-                    editor,
-                    mention_set,
-                    workspace.downgrade(),
+                    context.source_range.clone(),
+                    context.editor.clone(),
+                    context.mention_set.clone(),
+                    context.workspace.downgrade(),
                     selection,
                     cx,
                 )
@@ -402,14 +456,10 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
     }
 
     fn completion_for_thread(
+        context: &MentionCompletionContext<T>,
         session_id: acp::SessionId,
         title: Option<SharedString>,
-        source_range: Range<Anchor>,
         recent: bool,
-        source: Arc<T>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: Entity<Workspace>,
         cx: &mut App,
     ) -> Completion {
         let title = session_title(title, cx);
@@ -428,7 +478,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
 
         let new_text_len = new_text.len();
         Completion {
-            replace_range: source_range.clone(),
+            replace_range: context.source_range.clone(),
             new_text,
             label: CodeLabel::plain(title.to_string(), None),
             documentation: None,
@@ -437,26 +487,13 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             match_start: None,
             snippet_deduplication_key: None,
             icon_path: Some(icon_for_completion),
-            confirm: Some(confirm_completion_callback(
-                title,
-                source_range.start,
-                new_text_len - 1,
-                uri,
-                source,
-                editor,
-                mention_set,
-                workspace,
-            )),
+            confirm: Some(context.confirm_callback(title, new_text_len, uri)),
         }
     }
 
     fn completion_for_rules(
+        context: &MentionCompletionContext<T>,
         rule: RulesContextEntry,
-        source_range: Range<Anchor>,
-        source: Arc<T>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: Entity<Workspace>,
         cx: &mut App,
     ) -> Completion {
         let uri = MentionUri::Rule {
@@ -467,7 +504,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let new_text_len = new_text.len();
         let icon_path = uri.icon_path(cx);
         Completion {
-            replace_range: source_range.clone(),
+            replace_range: context.source_range.clone(),
             new_text,
             label: CodeLabel::plain(rule.title.to_string(), None),
             documentation: None,
@@ -476,34 +513,19 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             match_start: None,
             snippet_deduplication_key: None,
             icon_path: Some(icon_path),
-            confirm: Some(confirm_completion_callback(
-                rule.title,
-                source_range.start,
-                new_text_len - 1,
-                uri,
-                source,
-                editor,
-                mention_set,
-                workspace,
-            )),
+            confirm: Some(context.confirm_callback(rule.title, new_text_len, uri)),
         }
     }
 
-    pub(crate) fn completion_for_path(
+    fn completion_for_path(
+        context: &MentionCompletionContext<T>,
         project_path: ProjectPath,
         path_prefix: &RelPath,
         is_recent: bool,
         is_directory: bool,
-        source_range: Range<Anchor>,
-        source: Arc<T>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: Entity<Workspace>,
-        project: Entity<Project>,
-        label_max_chars: usize,
         cx: &mut App,
     ) -> Option<Completion> {
-        let path_style = project.read(cx).path_style(cx);
+        let path_style = context.project.read(cx).path_style(cx);
         let (file_name, directory) =
             extract_file_name_and_directory(&project_path.path, path_prefix, path_style);
 
@@ -511,11 +533,11 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             &file_name,
             directory.as_ref().map(|s| s.as_ref()),
             None,
-            label_max_chars,
+            context.label_max_chars,
             cx,
         );
 
-        let abs_path = project.read(cx).absolute_path(&project_path, cx)?;
+        let abs_path = context.project.read(cx).absolute_path(&project_path, cx)?;
 
         let uri = if is_directory {
             MentionUri::Directory { abs_path }
@@ -533,7 +555,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let new_text = format!("{} ", uri.as_link());
         let new_text_len = new_text.len();
         Some(Completion {
-            replace_range: source_range.clone(),
+            replace_range: context.source_range.clone(),
             new_text,
             label,
             documentation: None,
@@ -542,34 +564,18 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             match_start: None,
             snippet_deduplication_key: None,
             insert_text_mode: None,
-            confirm: Some(confirm_completion_callback(
-                file_name,
-                source_range.start,
-                new_text_len - 1,
-                uri,
-                source,
-                editor,
-                mention_set,
-                workspace,
-            )),
+            confirm: Some(context.confirm_callback(file_name, new_text_len, uri)),
         })
     }
 
     fn completion_for_symbol(
+        context: &MentionCompletionContext<T>,
         symbol: Symbol,
-        source_range: Range<Anchor>,
-        source: Arc<T>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: Entity<Workspace>,
-        label_max_chars: usize,
         cx: &mut App,
     ) -> Option<Completion> {
-        let project = workspace.read(cx).project().clone();
-
         let (abs_path, file_name) = match &symbol.path {
             SymbolLocation::InProject { project_path, .. } => (
-                project.read(cx).absolute_path(&project_path, cx)?,
+                context.project.read(cx).absolute_path(&project_path, cx)?,
                 project_path.path.file_name()?.to_owned().into(),
             ),
             SymbolLocation::OutsideProject { abs_path, .. } => (
@@ -582,7 +588,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             &symbol.name,
             Some(&file_name),
             Some(symbol.range.start.0.row + 1),
-            label_max_chars,
+            context.label_max_chars,
             cx,
         );
 
@@ -595,7 +601,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let new_text_len = new_text.len();
         let icon_path = uri.icon_path(cx);
         Some(Completion {
-            replace_range: source_range.clone(),
+            replace_range: context.source_range.clone(),
             new_text,
             label,
             documentation: None,
@@ -604,26 +610,13 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             match_start: None,
             snippet_deduplication_key: None,
             insert_text_mode: None,
-            confirm: Some(confirm_completion_callback(
-                symbol.name.into(),
-                source_range.start,
-                new_text_len - 1,
-                uri,
-                source,
-                editor,
-                mention_set,
-                workspace,
-            )),
+            confirm: Some(context.confirm_callback(symbol.name, new_text_len, uri)),
         })
     }
 
     fn completion_for_fetch(
-        source_range: Range<Anchor>,
+        context: &MentionCompletionContext<T>,
         url_to_fetch: SharedString,
-        source: Arc<T>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: Entity<Workspace>,
         cx: &mut App,
     ) -> Option<Completion> {
         let new_text = format!("@fetch {} ", url_to_fetch);
@@ -634,26 +627,19 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             url: url_to_fetch.clone(),
         };
         let icon_path = mention_uri.icon_path(cx);
+        let inserted_len = new_text.len();
+        let url_text = url_to_fetch.to_string();
         Some(Completion {
-            replace_range: source_range.clone(),
-            new_text: new_text.clone(),
-            label: CodeLabel::plain(url_to_fetch.to_string(), None),
+            replace_range: context.source_range.clone(),
+            new_text,
+            label: CodeLabel::plain(url_text.clone(), None),
             documentation: None,
             source: project::CompletionSource::Custom,
             icon_path: Some(icon_path),
             match_start: None,
             snippet_deduplication_key: None,
             insert_text_mode: None,
-            confirm: Some(confirm_completion_callback(
-                url_to_fetch.to_string().into(),
-                source_range.start,
-                new_text.len() - 1,
-                mention_uri,
-                source,
-                editor,
-                mention_set,
-                workspace,
-            )),
+            confirm: Some(context.confirm_callback(url_text, inserted_len, mention_uri)),
         })
     }
 
@@ -705,6 +691,9 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         })
     }
 
+    /// The one builder that runs before the shared context exists: it can
+    /// answer a bare `@diagnostics` request without starting a search, and it
+    /// returns several completions instead of one.
     fn completion_for_diagnostics(
         source_range: Range<Anchor>,
         source: Arc<T>,
@@ -805,12 +794,8 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
     }
 
     fn build_branch_diff_completion(
+        context: &MentionCompletionContext<T>,
         base_ref: SharedString,
-        source_range: Range<Anchor>,
-        source: Arc<T>,
-        editor: WeakEntity<Editor>,
-        mention_set: WeakEntity<MentionSet>,
-        workspace: Entity<Workspace>,
         cx: &mut App,
     ) -> Completion {
         let uri = MentionUri::GitDiff {
@@ -829,7 +814,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
         let icon_path = uri.icon_path(cx);
 
         Completion {
-            replace_range: source_range.clone(),
+            replace_range: context.source_range.clone(),
             new_text,
             label: CodeLabel::plain(crease_text.to_string(), None),
             documentation: None,
@@ -838,15 +823,246 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             match_start: None,
             snippet_deduplication_key: None,
             insert_text_mode: None,
-            confirm: Some(confirm_completion_callback(
-                crease_text,
-                source_range.start,
-                new_text_len - 1,
-                uri,
-                source,
-                editor,
-                mention_set,
-                workspace,
+            confirm: Some(context.confirm_callback(crease_text, new_text_len, uri)),
+        }
+    }
+
+    /// Parses the text between the start of the line and the cursor into the
+    /// state that decides which kind of completion this request produces.
+    fn parse_prompt_completion(
+        &self,
+        buffer: &Entity<Buffer>,
+        buffer_position: Anchor,
+        cx: &mut App,
+    ) -> Option<PromptCompletion> {
+        buffer.update(cx, |buffer, cx| {
+            let position = buffer_position.to_point(buffer);
+            let line_start = Point::new(position.row, 0);
+            let offset_to_line = buffer.point_to_offset(line_start);
+            let mut lines = buffer.text_for_range(line_start..position).lines();
+            let line = lines.next()?;
+            PromptCompletion::try_parse(line, offset_to_line, &self.source.supported_modes(cx))
+        })
+    }
+
+    fn slash_command_completion_response(
+        &self,
+        command: Option<String>,
+        argument: Option<String>,
+        source_range: Range<Anchor>,
+        cx: &mut App,
+    ) -> Task<Result<Vec<CompletionResponse>>> {
+        let search_task = self.search_slash_commands(command.unwrap_or_default(), cx);
+        let source = self.source.clone();
+
+        cx.background_spawn(async move {
+            let completions = search_task
+                .await
+                .into_iter()
+                .map(|command| {
+                    Self::completion_for_slash_command(
+                        command,
+                        argument.as_deref(),
+                        &source_range,
+                        &source,
+                    )
+                })
+                .collect();
+
+            Ok(vec![CompletionResponse {
+                completions,
+                display_options: CompletionDisplayOptions {
+                    dynamic_width: true,
+                },
+                // Since this does its own filtering (see `filter_completions()` returns false),
+                // there is no benefit to computing whether this set of completions is incomplete.
+                is_incomplete: true,
+            }])
+        })
+    }
+
+    /// Builds the completion for a single slash command. Split out of the
+    /// background task above because most of that closure is the confirm
+    /// callback, not the request plumbing.
+    fn completion_for_slash_command(
+        command: AvailableCommand,
+        argument: Option<&str>,
+        source_range: &Range<Anchor>,
+        source: &Arc<T>,
+    ) -> Completion {
+        let new_text = if let Some(argument) = argument {
+            format!("/{} {}", command.name, argument)
+        } else {
+            format!("/{} ", command.name)
+        };
+
+        let is_missing_argument = command.requires_argument && argument.is_none();
+
+        Completion {
+            replace_range: source_range.clone(),
+            new_text,
+            label: CodeLabel::plain(command.name.to_string(), None),
+            documentation: Some(CompletionDocumentation::MultiLinePlainText(
+                command.description.into(),
+            )),
+            source: project::CompletionSource::Custom,
+            icon_path: None,
+            match_start: None,
+            snippet_deduplication_key: None,
+            insert_text_mode: None,
+            confirm: Some(Arc::new({
+                let source = source.clone();
+                move |intent, _window, cx| {
+                    if !is_missing_argument {
+                        cx.defer({
+                            let source = source.clone();
+                            move |cx| match intent {
+                                CompletionIntent::Complete
+                                | CompletionIntent::CompleteWithInsert
+                                | CompletionIntent::CompleteWithReplace => {
+                                    source.confirm_command(cx);
+                                }
+                                CompletionIntent::Compose => {}
+                            }
+                        });
+                    }
+                    false
+                }
+            })),
+        }
+    }
+
+    fn mention_completion_response(
+        &self,
+        mode: Option<PromptContextType>,
+        argument: Option<String>,
+        source_range: Range<Anchor>,
+        workspace: Entity<Workspace>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Task<Result<Vec<CompletionResponse>>> {
+        if mode == Some(PromptContextType::Diagnostics) {
+            if argument.is_some() {
+                return Task::ready(Ok(Vec::new()));
+            }
+
+            let completions = Self::completion_for_diagnostics(
+                source_range.clone(),
+                self.source.clone(),
+                self.editor.clone(),
+                self.mention_set.downgrade(),
+                workspace.clone(),
+                cx,
+            );
+            if !completions.is_empty() {
+                return Task::ready(Ok(vec![CompletionResponse {
+                    completions,
+                    display_options: CompletionDisplayOptions::default(),
+                    is_incomplete: false,
+                }]));
+            }
+        }
+
+        let context = MentionCompletionContext {
+            source_range,
+            source: self.source.clone(),
+            editor: self.editor.clone(),
+            mention_set: self.mention_set.downgrade(),
+            project: workspace.read(cx).project().clone(),
+            label_max_chars: mention_label_max_chars(window, cx),
+            workspace,
+        };
+        let search_task = self.search_mentions(
+            mode,
+            argument.unwrap_or_default(),
+            Arc::<AtomicBool>::default(),
+            cx,
+        );
+
+        cx.spawn(async move |cx| {
+            let matches = search_task.await;
+
+            let completions = cx.update(|cx| {
+                matches
+                    .into_iter()
+                    .filter_map(|mat| Self::completion_for_match(&context, mat, cx))
+                    .collect::<Vec<_>>()
+            });
+
+            Ok(vec![CompletionResponse {
+                completions,
+                display_options: CompletionDisplayOptions {
+                    dynamic_width: true,
+                },
+                // Since this does its own filtering (see `filter_completions()` returns false),
+                // there is no benefit to computing whether this set of completions is incomplete.
+                is_incomplete: true,
+            }])
+        })
+    }
+
+    fn completion_for_match(
+        context: &MentionCompletionContext<T>,
+        matched: Match,
+        cx: &mut App,
+    ) -> Option<Completion> {
+        match matched {
+            Match::File(FileMatch { mat, is_recent }) => {
+                let project_path = ProjectPath {
+                    worktree_id: WorktreeId::from_usize(mat.worktree_id),
+                    path: mat.path.clone(),
+                };
+
+                // If path is empty, this means we're matching with the root directory itself
+                // so we use the path_prefix as the name
+                let path_prefix = if mat.path.is_empty() {
+                    context
+                        .project
+                        .read(cx)
+                        .worktree_for_id(project_path.worktree_id, cx)
+                        .map_or_else(
+                            || mat.path_prefix.clone(),
+                            |worktree| worktree.read(cx).root_name().into(),
+                        )
+                } else {
+                    mat.path_prefix.clone()
+                };
+
+                Self::completion_for_path(
+                    context,
+                    project_path,
+                    &path_prefix,
+                    is_recent,
+                    mat.is_dir,
+                    cx,
+                )
+            }
+            Match::Symbol(SymbolMatch { symbol, .. }) => {
+                Self::completion_for_symbol(context, symbol, cx)
+            }
+            Match::Thread(thread) => Some(Self::completion_for_thread(
+                context,
+                thread.session_id,
+                Some(thread.title),
+                false,
+                cx,
+            )),
+            Match::RecentThread(thread) => Some(Self::completion_for_thread(
+                context,
+                thread.session_id,
+                Some(thread.title),
+                true,
+                cx,
+            )),
+            Match::Rules(user_rules) => Some(Self::completion_for_rules(context, user_rules, cx)),
+            Match::Fetch(url) => Self::completion_for_fetch(context, url, cx),
+            Match::Entry(EntryMatch { entry, .. }) => {
+                Self::completion_for_entry(context, entry, cx)
+            }
+            Match::BranchDiff(branch_diff) => Some(Self::build_branch_diff_completion(
+                context,
+                branch_diff.base_ref,
+                cx,
             )),
         }
     }
@@ -880,6 +1096,22 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                 .map(|mat| commands[mat.candidate_id].clone())
                 .collect()
         })
+    }
+
+    /// The branch-diff candidate for the "no mode" lists, when the agent can
+    /// actually take a diff as context.
+    fn branch_diff_task_if_supported(
+        &self,
+        workspace: &Entity<Workspace>,
+        cx: &mut App,
+    ) -> Option<Task<Option<BranchDiffMatch>>> {
+        if !self
+            .source
+            .supports_context(PromptContextType::BranchDiff, cx)
+        {
+            return None;
+        }
+        self.fetch_branch_diff_match(workspace, cx)
     }
 
     fn fetch_branch_diff_match(
@@ -987,14 +1219,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                     })
                     .collect::<Vec<_>>();
 
-                let branch_diff_task = if self
-                    .source
-                    .supports_context(PromptContextType::BranchDiff, cx)
-                {
-                    self.fetch_branch_diff_match(&workspace, cx)
-                } else {
-                    None
-                };
+                let branch_diff_task = self.branch_diff_task_if_supported(&workspace, cx);
 
                 cx.spawn(async move |_cx| {
                     let mut matches = recent_task.await;
@@ -1022,14 +1247,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                     .map(|(ix, entry)| StringMatchCandidate::new(ix, entry.keyword()))
                     .collect::<Vec<_>>();
 
-                let branch_diff_task = if self
-                    .source
-                    .supports_context(PromptContextType::BranchDiff, cx)
-                {
-                    self.fetch_branch_diff_match(&workspace, cx)
-                } else {
-                    None
-                };
+                let branch_diff_task = self.branch_diff_task_if_supported(&workspace, cx);
 
                 cx.spawn(async move |cx| {
                     let mut matches = search_files_task
@@ -1069,10 +1287,10 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                         )
                         .await;
 
-                        if !branch_diff_matches.is_empty() {
-                            if let Some(branch_diff_match) = branch_diff_task.await {
-                                matches.push(Match::BranchDiff(branch_diff_match));
-                            }
+                        if !branch_diff_matches.is_empty()
+                            && let Some(branch_diff_match) = branch_diff_task.await
+                        {
+                            matches.push(Match::BranchDiff(branch_diff_match));
                         }
                     }
 
@@ -1232,15 +1450,7 @@ impl<T: PromptCompletionProviderDelegate> CompletionProvider for PromptCompletio
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) -> Task<Result<Vec<CompletionResponse>>> {
-        let state = buffer.update(cx, |buffer, cx| {
-            let position = buffer_position.to_point(buffer);
-            let line_start = Point::new(position.row, 0);
-            let offset_to_line = buffer.point_to_offset(line_start);
-            let mut lines = buffer.text_for_range(line_start..position).lines();
-            let line = lines.next()?;
-            PromptCompletion::try_parse(line, offset_to_line, &self.source.supported_modes(cx))
-        });
-        let Some(state) = state else {
+        let Some(state) = self.parse_prompt_completion(buffer, buffer_position, cx) else {
             return Task::ready(Ok(Vec::new()));
         };
 
@@ -1248,261 +1458,16 @@ impl<T: PromptCompletionProviderDelegate> CompletionProvider for PromptCompletio
             return Task::ready(Ok(Vec::new()));
         };
 
-        let project = workspace.read(cx).project().clone();
         let snapshot = buffer.read(cx).snapshot();
         let source_range = snapshot.anchor_before(state.source_range().start)
             ..snapshot.anchor_after(state.source_range().end);
 
-        let source = self.source.clone();
-        let editor = self.editor.clone();
-        let mention_set = self.mention_set.downgrade();
         match state {
             PromptCompletion::SlashCommand(SlashCommandCompletion {
                 command, argument, ..
-            }) => {
-                let search_task = self.search_slash_commands(command.unwrap_or_default(), cx);
-                cx.background_spawn(async move {
-                    let completions = search_task
-                        .await
-                        .into_iter()
-                        .map(|command| {
-                            let new_text = if let Some(argument) = argument.as_ref() {
-                                format!("/{} {}", command.name, argument)
-                            } else {
-                                format!("/{} ", command.name)
-                            };
-
-                            let is_missing_argument =
-                                command.requires_argument && argument.is_none();
-
-                            Completion {
-                                replace_range: source_range.clone(),
-                                new_text,
-                                label: CodeLabel::plain(command.name.to_string(), None),
-                                documentation: Some(CompletionDocumentation::MultiLinePlainText(
-                                    command.description.into(),
-                                )),
-                                source: project::CompletionSource::Custom,
-                                icon_path: None,
-                                match_start: None,
-                                snippet_deduplication_key: None,
-                                insert_text_mode: None,
-                                confirm: Some(Arc::new({
-                                    let source = source.clone();
-                                    move |intent, _window, cx| {
-                                        if !is_missing_argument {
-                                            cx.defer({
-                                                let source = source.clone();
-                                                move |cx| match intent {
-                                                    CompletionIntent::Complete
-                                                    | CompletionIntent::CompleteWithInsert
-                                                    | CompletionIntent::CompleteWithReplace => {
-                                                        source.confirm_command(cx);
-                                                    }
-                                                    CompletionIntent::Compose => {}
-                                                }
-                                            });
-                                        }
-                                        false
-                                    }
-                                })),
-                            }
-                        })
-                        .collect();
-
-                    Ok(vec![CompletionResponse {
-                        completions,
-                        display_options: CompletionDisplayOptions {
-                            dynamic_width: true,
-                        },
-                        // Since this does its own filtering (see `filter_completions()` returns false),
-                        // there is no benefit to computing whether this set of completions is incomplete.
-                        is_incomplete: true,
-                    }])
-                })
-            }
-            PromptCompletion::Mention(MentionCompletion { mode, argument, .. }) => {
-                if mode == Some(PromptContextType::Diagnostics) {
-                    if argument.is_some() {
-                        return Task::ready(Ok(Vec::new()));
-                    }
-
-                    let completions = Self::completion_for_diagnostics(
-                        source_range.clone(),
-                        source.clone(),
-                        editor.clone(),
-                        mention_set.clone(),
-                        workspace.clone(),
-                        cx,
-                    );
-                    if !completions.is_empty() {
-                        return Task::ready(Ok(vec![CompletionResponse {
-                            completions,
-                            display_options: CompletionDisplayOptions::default(),
-                            is_incomplete: false,
-                        }]));
-                    }
-                }
-
-                let query = argument.unwrap_or_default();
-                let search_task =
-                    self.search_mentions(mode, query, Arc::<AtomicBool>::default(), cx);
-
-                // Calculate maximum characters available for the full label (file_name + space + directory)
-                // based on maximum menu width after accounting for padding, spacing, and icon width
-                let label_max_chars = {
-                    // Base06 left padding + Base06 gap + Base06 right padding + icon width
-                    let used_pixels = DynamicSpacing::Base06.px(cx) * 3.0
-                        + IconSize::XSmall.rems() * window.rem_size();
-
-                    let style = window.text_style();
-                    let font_id = window.text_system().resolve_font(&style.font());
-                    let font_size = TextSize::Small.rems(cx).to_pixels(window.rem_size());
-
-                    // Fallback em_width of 10px matches file_finder.rs fallback for TextSize::Small
-                    let em_width = cx
-                        .text_system()
-                        .em_width(font_id, font_size)
-                        .unwrap_or(px(10.0));
-
-                    // Calculate available pixels for text (file_name + directory)
-                    // Using max width since dynamic_width allows the menu to expand up to this
-                    let available_pixels = COMPLETION_MENU_MAX_WIDTH - used_pixels;
-
-                    // Convert to character count (total available for file_name + directory)
-                    (f32::from(available_pixels) / f32::from(em_width)) as usize
-                };
-
-                cx.spawn(async move |_, cx| {
-                    let matches = search_task.await;
-
-                    let completions = cx.update(|cx| {
-                        matches
-                            .into_iter()
-                            .filter_map(|mat| match mat {
-                                Match::File(FileMatch { mat, is_recent }) => {
-                                    let project_path = ProjectPath {
-                                        worktree_id: WorktreeId::from_usize(mat.worktree_id),
-                                        path: mat.path.clone(),
-                                    };
-
-                                    // If path is empty, this means we're matching with the root directory itself
-                                    // so we use the path_prefix as the name
-                                    let path_prefix = if mat.path.is_empty() {
-                                        project
-                                            .read(cx)
-                                            .worktree_for_id(project_path.worktree_id, cx)
-                                            .map_or_else(
-                                                || mat.path_prefix.clone(),
-                                                |wt| wt.read(cx).root_name().into(),
-                                            )
-                                    } else {
-                                        mat.path_prefix.clone()
-                                    };
-
-                                    Self::completion_for_path(
-                                        project_path,
-                                        &path_prefix,
-                                        is_recent,
-                                        mat.is_dir,
-                                        source_range.clone(),
-                                        source.clone(),
-                                        editor.clone(),
-                                        mention_set.clone(),
-                                        workspace.clone(),
-                                        project.clone(),
-                                        label_max_chars,
-                                        cx,
-                                    )
-                                }
-                                Match::Symbol(SymbolMatch { symbol, .. }) => {
-                                    Self::completion_for_symbol(
-                                        symbol,
-                                        source_range.clone(),
-                                        source.clone(),
-                                        editor.clone(),
-                                        mention_set.clone(),
-                                        workspace.clone(),
-                                        label_max_chars,
-                                        cx,
-                                    )
-                                }
-                                Match::Thread(thread) => Some(Self::completion_for_thread(
-                                    thread.session_id,
-                                    Some(thread.title),
-                                    source_range.clone(),
-                                    false,
-                                    source.clone(),
-                                    editor.clone(),
-                                    mention_set.clone(),
-                                    workspace.clone(),
-                                    cx,
-                                )),
-                                Match::RecentThread(thread) => Some(Self::completion_for_thread(
-                                    thread.session_id,
-                                    Some(thread.title),
-                                    source_range.clone(),
-                                    true,
-                                    source.clone(),
-                                    editor.clone(),
-                                    mention_set.clone(),
-                                    workspace.clone(),
-                                    cx,
-                                )),
-                                Match::Rules(user_rules) => Some(Self::completion_for_rules(
-                                    user_rules,
-                                    source_range.clone(),
-                                    source.clone(),
-                                    editor.clone(),
-                                    mention_set.clone(),
-                                    workspace.clone(),
-                                    cx,
-                                )),
-                                Match::Fetch(url) => Self::completion_for_fetch(
-                                    source_range.clone(),
-                                    url,
-                                    source.clone(),
-                                    editor.clone(),
-                                    mention_set.clone(),
-                                    workspace.clone(),
-                                    cx,
-                                ),
-                                Match::Entry(EntryMatch { entry, .. }) => {
-                                    Self::completion_for_entry(
-                                        entry,
-                                        source_range.clone(),
-                                        editor.clone(),
-                                        mention_set.clone(),
-                                        &workspace,
-                                        cx,
-                                    )
-                                }
-                                Match::BranchDiff(branch_diff) => {
-                                    Some(Self::build_branch_diff_completion(
-                                        branch_diff.base_ref,
-                                        source_range.clone(),
-                                        source.clone(),
-                                        editor.clone(),
-                                        mention_set.clone(),
-                                        workspace.clone(),
-                                        cx,
-                                    ))
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                    });
-
-                    Ok(vec![CompletionResponse {
-                        completions,
-                        display_options: CompletionDisplayOptions {
-                            dynamic_width: true,
-                        },
-                        // Since this does its own filtering (see `filter_completions()` returns false),
-                        // there is no benefit to computing whether this set of completions is incomplete.
-                        is_incomplete: true,
-                    }])
-                })
-            }
+            }) => self.slash_command_completion_response(command, argument, source_range, cx),
+            PromptCompletion::Mention(MentionCompletion { mode, argument, .. }) => self
+                .mention_completion_response(mode, argument, source_range, workspace, window, cx),
         }
     }
 
@@ -1758,20 +1723,46 @@ impl MentionCompletion {
     }
 }
 
-fn diagnostics_count_label(
-    count: usize,
-    singular_key: &'static str,
-    singular_fallback: &'static str,
-    plural_key: &'static str,
-    plural_fallback: &'static str,
-    cx: &App,
-) -> String {
-    let noun = if count == 1 {
-        tr(cx, singular_key, singular_fallback)
-    } else {
-        tr(cx, plural_key, plural_fallback)
-    };
-    format!("{count} {noun}")
+/// Which diagnostics count a label is talking about. Carrying the noun and the
+/// locale keys together keeps callers from pairing an error count with the
+/// warning wording.
+#[derive(Clone, Copy)]
+enum DiagnosticCount {
+    Errors,
+    Warnings,
+}
+
+impl DiagnosticCount {
+    fn count(self, summary: DiagnosticSummary) -> usize {
+        match self {
+            Self::Errors => summary.error_count,
+            Self::Warnings => summary.warning_count,
+        }
+    }
+
+    fn label(self, summary: DiagnosticSummary, cx: &App) -> String {
+        let (singular_key, singular, plural_key, plural) = match self {
+            Self::Errors => (
+                "agent_ui.completion_provider.error_singular",
+                "error",
+                "agent_ui.completion_provider.error_plural",
+                "errors",
+            ),
+            Self::Warnings => (
+                "agent_ui.completion_provider.warning_singular",
+                "warning",
+                "agent_ui.completion_provider.warning_plural",
+                "warnings",
+            ),
+        };
+        let count = self.count(summary);
+        let noun = if count == 1 {
+            tr(cx, singular_key, singular)
+        } else {
+            tr(cx, plural_key, plural)
+        };
+        format!("{count} {noun}")
+    }
 }
 
 fn diagnostics_label(
@@ -1783,25 +1774,11 @@ fn diagnostics_label(
     let mut parts = Vec::new();
 
     if include_errors && summary.error_count > 0 {
-        parts.push(diagnostics_count_label(
-            summary.error_count,
-            "agent_ui.completion_provider.error_singular",
-            "error",
-            "agent_ui.completion_provider.error_plural",
-            "errors",
-            cx,
-        ));
+        parts.push(DiagnosticCount::Errors.label(summary, cx));
     }
 
     if include_warnings && summary.warning_count > 0 {
-        parts.push(diagnostics_count_label(
-            summary.warning_count,
-            "agent_ui.completion_provider.warning_singular",
-            "warning",
-            "agent_ui.completion_provider.warning_plural",
-            "warnings",
-            cx,
-        ));
+        parts.push(DiagnosticCount::Warnings.label(summary, cx));
     }
 
     if parts.is_empty() {
@@ -1812,22 +1789,22 @@ fn diagnostics_label(
         );
     }
 
-    let body = if parts.len() == 2 {
-        tr(
+    let body = match parts.as_slice() {
+        [errors, warnings] => tr(
             cx,
             "agent_ui.completion_provider.diagnostics_join_and",
             "{} and {}",
         )
-        .replacen("{}", &parts[0], 1)
-        .replacen("{}", &parts[1], 1)
-    } else if let Some(body) = parts.pop() {
-        body
-    } else {
-        return tr(
-            cx,
-            "agent_ui.completion_provider.diagnostics",
-            "Diagnostics",
-        );
+        .replacen("{}", errors, 1)
+        .replacen("{}", warnings, 1),
+        [only] => only.clone(),
+        _ => {
+            return tr(
+                cx,
+                "agent_ui.completion_provider.diagnostics",
+                "Diagnostics",
+            );
+        }
     };
 
     tr(
@@ -1850,46 +1827,10 @@ fn diagnostics_submenu_label(
             "agent_ui.completion_provider.diagnostics_submenu_both",
             "{} & {}",
         )
-        .replacen(
-            "{}",
-            &diagnostics_count_label(
-                summary.error_count,
-                "agent_ui.completion_provider.error_singular",
-                "error",
-                "agent_ui.completion_provider.error_plural",
-                "errors",
-                cx,
-            ),
-            1,
-        )
-        .replacen(
-            "{}",
-            &diagnostics_count_label(
-                summary.warning_count,
-                "agent_ui.completion_provider.warning_singular",
-                "warning",
-                "agent_ui.completion_provider.warning_plural",
-                "warnings",
-                cx,
-            ),
-            1,
-        ),
-        (true, _) => diagnostics_count_label(
-            summary.error_count,
-            "agent_ui.completion_provider.error_singular",
-            "error",
-            "agent_ui.completion_provider.error_plural",
-            "errors",
-            cx,
-        ),
-        (_, true) => diagnostics_count_label(
-            summary.warning_count,
-            "agent_ui.completion_provider.warning_singular",
-            "warning",
-            "agent_ui.completion_provider.warning_plural",
-            "warnings",
-            cx,
-        ),
+        .replacen("{}", &DiagnosticCount::Errors.label(summary, cx), 1)
+        .replacen("{}", &DiagnosticCount::Warnings.label(summary, cx), 1),
+        (true, _) => DiagnosticCount::Errors.label(summary, cx),
+        (_, true) => DiagnosticCount::Warnings.label(summary, cx),
         _ => tr(
             cx,
             "agent_ui.completion_provider.diagnostics",

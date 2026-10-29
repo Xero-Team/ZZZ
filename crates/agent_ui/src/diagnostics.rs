@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gpui::{App, AppContext as _, Entity, Task};
-use i18n as app_i18n;
+use i18n::tr;
 use language::{Anchor, BufferSnapshot, DiagnosticEntryRef, DiagnosticSeverity, ToOffset};
 use project::{DiagnosticSummary, Project};
 use rope::Point;
@@ -8,10 +8,6 @@ use std::{ops::RangeInclusive, path::Path};
 use text::OffsetRangeExt;
 use util::ResultExt;
 use util::paths::PathMatcher;
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
-    app_i18n::tr(cx, key, fallback)
-}
 
 pub fn codeblock_fence_for_path(
     path: Option<&str>,

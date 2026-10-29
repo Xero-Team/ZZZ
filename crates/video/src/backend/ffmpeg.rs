@@ -291,6 +291,11 @@ fn video_stream_rotation(stream: &ffmpeg::format::stream::Stream<'_>) -> Rotatio
             if side_data.type_ != ffmpeg::ffi::AVPacketSideDataType::DISPLAYMATRIX {
                 continue;
             }
+            // `from_raw_parts` requires a non-null pointer even for a zero
+            // length, and FFmpeg does not promise one for empty side data.
+            if side_data.data.is_null() {
+                continue;
+            }
             let data = std::slice::from_raw_parts(side_data.data, side_data.size);
             if let Some(rotation) = rotation_from_display_matrix(data) {
                 return rotation;

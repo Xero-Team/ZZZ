@@ -6,6 +6,7 @@ use crate::{
 };
 use agent_client_protocol::schema::v1 as acp;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::message_editor::SharedSessionCapabilities;
 use acp_thread::{
@@ -15,7 +16,6 @@ use acp_thread::{
 use editor::actions::OpenExcerpts;
 
 use gpui::List;
-use heapless::Vec as ArrayVec;
 use i18n as app_i18n;
 use ui::{SpinnerLabel, SpinnerVariant, Tab};
 use workspace::{OpenOptions, SERIALIZATION_THROTTLE_TIME};
@@ -25,9 +25,85 @@ use super::elicitation::{
 };
 use super::thread_search_bar::{ThreadSearchBar, ThreadSearchBarEvent};
 use super::*;
+use crate::tr;
 
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
+/// The localized granularity choices, paired with their index in `choices`.
+fn permission_menu_options(
+    choices: &[PermissionOptionChoice],
+    cx: &App,
+) -> Vec<(usize, SharedString)> {
+    choices
+        .iter()
+        .enumerate()
+        .map(|(i, choice)| (i, localize_permission_label(cx, choice.label().as_ref())))
+        .collect()
+}
+
+/// The button that opens a granularity dropdown. Both dropdowns show the same
+/// trigger, including the key binding hint on the first permission entry.
+fn granularity_trigger(
+    current_label: SharedString,
+    entry_ix: usize,
+    is_first: bool,
+    focus_handle: &FocusHandle,
+    cx: &App,
+) -> Button {
+    Button::new(("granularity-trigger", entry_ix), current_label)
+        .truncate(true)
+        .end_icon(
+            Icon::new(IconName::ChevronDown)
+                .size(IconSize::XSmall)
+                .color(Color::Muted),
+        )
+        .label_size(LabelSize::Small)
+        .when(is_first, |this| {
+            this.key_binding(crate::footer_key_binding(
+                &crate::OpenPermissionDropdown as &dyn Action,
+                focus_handle,
+                cx,
+            ))
+        })
+}
+
+/// Applies `select` to the markdown block of the first chunk that has one.
+/// Assistant message and thought chunks are looked at identically, which is
+/// what every caller of this wants.
+fn first_chunk_markdown<T>(
+    chunks: &[AssistantMessageChunk],
+    cx: &App,
+    select: impl Fn(&Markdown) -> Option<T>,
+) -> Option<T> {
+    chunks.iter().find_map(|chunk| {
+        let markdown = match chunk {
+            AssistantMessageChunk::Message { block, .. } => block.markdown(),
+            AssistantMessageChunk::Thought { block, .. } => block.markdown(),
+        }?;
+        select(markdown.read(cx))
+    })
+}
+
+/// A "Context" menu entry that inserts a `#file`-style crease into the message
+/// editor. The four crease entries only differ in their keyword, so they share
+/// this instead of repeating the focus-and-update dance.
+fn context_crease_menu_entry(
+    cx: &App,
+    message_editor: &Entity<MessageEditor>,
+    key: &'static str,
+    label: &'static str,
+    icon: IconName,
+    context_type: &'static str,
+) -> ContextMenuEntry {
+    let message_editor = message_editor.clone();
+    ContextMenuEntry::new(tr(cx, key, label))
+        .icon(icon)
+        .icon_color(Color::Muted)
+        .icon_size(IconSize::XSmall)
+        .handler(move |window, cx| {
+            message_editor.focus_handle(cx).focus(window, cx);
+            message_editor.update(cx, |editor, cx| {
+                editor.insert_context_type(context_type, window, cx);
+            });
+        })
 }
 
 fn localize_permission_label(cx: &App, label: &str) -> SharedString {
@@ -770,18 +846,15 @@ impl ThreadView {
         ));
 
         subscriptions.push(cx.observe(&message_editor, |this, editor, cx| {
-            let is_empty = editor.read(cx).text(cx).is_empty();
-            let draft_contents_task = if is_empty {
+            let draft_contents_task = if editor.read(cx).text(cx).is_empty() {
                 None
             } else {
                 Some(editor.update(cx, |editor, cx| editor.draft_contents(cx)))
             };
             this._draft_resolve_task = Some(cx.spawn(async move |this, cx| {
-                let draft = if let Some(task) = draft_contents_task {
-                    let blocks = task.await.ok().filter(|b| !b.is_empty());
-                    blocks
-                } else {
-                    None
+                let draft = match draft_contents_task {
+                    Some(task) => task.await.log_err().filter(|blocks| !blocks.is_empty()),
+                    None => None,
                 };
                 this.update(cx, |this, cx| {
                     this.thread.update(cx, |thread, cx| {
@@ -922,16 +995,15 @@ impl ThreadView {
         }
     }
 
-    /// Resolves the message editor's contents into content blocks. For profiles
-    /// that do not enable any tools, directory mentions are expanded to inline
-    /// file contents since the agent can't read files on its own.
+    /// Resolves the message editor's contents into content blocks. Directory
+    /// mentions are kept as references rather than expanded to the full
+    /// contents of every file they contain.
     fn resolve_message_contents(
         &self,
         message_editor: &Entity<MessageEditor>,
         cx: &mut App,
     ) -> Task<Result<(Vec<acp::ContentBlock>, Vec<Entity<Buffer>>)>> {
-        let expand = false;
-        message_editor.update(cx, |message_editor, cx| message_editor.contents(expand, cx))
+        message_editor.update(cx, |message_editor, cx| message_editor.contents(false, cx))
     }
 
     pub fn current_model_id(&self, cx: &App) -> Option<String> {
@@ -2075,47 +2147,47 @@ impl ThreadView {
     fn elicitation_card_handlers(&self, cx: &Context<Self>) -> ElicitationCardHandlers {
         let view = cx.entity().downgrade();
 
-        ElicitationCardHandlers::new(
-            {
+        ElicitationCardHandlers {
+            on_submit: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.submit_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_decline: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.decline_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_cancel: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.cancel_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_dismiss_url: {
                 let view = view.clone();
-                move |elicitation_id, window, cx| {
+                Rc::new(move |elicitation_id, window, cx| {
                     view.update(cx, |this, cx| {
                         this.dismiss_url_elicitation(elicitation_id, window, cx);
                     })
                     .log_err();
-                }
+                })
             },
-            move |_elicitation_id, url, _window, cx| cx.open_url(&url),
-            {
+            on_open_url: Rc::new(|_elicitation_id, url, _window, cx| cx.open_url(&url)),
+            on_boolean_change: {
                 let view = view.clone();
-                move |elicitation_id, field_name, value, cx| {
+                Rc::new(move |elicitation_id, field_name, value, cx| {
                     view.update(cx, |this, cx| {
                         if let Some(form) = this.elicitation_form_states.get_mut(&elicitation_id) {
                             form.set_boolean(&field_name, value);
@@ -2123,11 +2195,11 @@ impl ThreadView {
                         }
                     })
                     .log_err();
-                }
+                })
             },
-            {
+            on_single_select_change: {
                 let view = view.clone();
-                move |elicitation_id, field_name, value, cx| {
+                Rc::new(move |elicitation_id, field_name, value, cx| {
                     view.update(cx, |this, cx| {
                         if let Some(form) = this.elicitation_form_states.get_mut(&elicitation_id) {
                             form.set_single_select(&field_name, value);
@@ -2135,18 +2207,20 @@ impl ThreadView {
                         }
                     })
                     .log_err();
-                }
-            },
-            move |elicitation_id, field_name, value, selected, cx| {
-                view.update(cx, |this, cx| {
-                    if let Some(form) = this.elicitation_form_states.get_mut(&elicitation_id) {
-                        form.set_multi_select(&field_name, value, selected);
-                        cx.notify();
-                    }
                 })
-                .log_err();
             },
-        )
+            on_multi_select_change: Rc::new(
+                move |elicitation_id, field_name, value, selected, cx| {
+                    view.update(cx, |this, cx| {
+                        if let Some(form) = this.elicitation_form_states.get_mut(&elicitation_id) {
+                            form.set_multi_select(&field_name, value, selected);
+                            cx.notify();
+                        }
+                    })
+                    .log_err();
+                },
+            ),
+        }
     }
 
     pub(crate) fn handle_authorize_tool_call(
@@ -3445,10 +3519,11 @@ impl ThreadView {
                         .when(pending_edits, |this| {
                             this.tooltip(Tooltip::text(edit_not_ready_tooltip_label.clone()))
                         })
-                        .key_binding(
-                            KeyBinding::for_action_in(&RejectAll, &focus_handle.clone(), cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
+                        .key_binding(crate::footer_key_binding(
+                            &RejectAll,
+                            &focus_handle.clone(),
+                            cx,
+                        ))
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
                                 this.reject_all(&RejectAll, window, cx);
@@ -3465,10 +3540,7 @@ impl ThreadView {
                         .when(pending_edits, |this| {
                             this.tooltip(Tooltip::text(edit_not_ready_tooltip_label.clone()))
                         })
-                        .key_binding(
-                            KeyBinding::for_action_in(&KeepAll, &focus_handle, cx)
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                        )
+                        .key_binding(crate::footer_key_binding(&KeepAll, &focus_handle, cx))
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
                                 this.keep_all(&KeepAll, window, cx);
@@ -3780,8 +3852,6 @@ impl ThreadView {
                         };
 
                         let editor_focused = editor.focus_handle(cx).is_focused(_window);
-                        let keybinding_size = rems_from_px(12.);
-
                         h_flex()
                             .group("queue_entry")
                             .w_full()
@@ -3852,12 +3922,11 @@ impl ThreadView {
                                             .label_size(LabelSize::Small)
                                             .style(ButtonStyle::Outlined)
                                             .key_binding(
-                                                KeyBinding::for_action_in(
+                                                crate::footer_key_binding(
                                                     &SendImmediately,
                                                     &editor.focus_handle(cx),
                                                     cx,
-                                                )
-                                                .map(|kb| kb.size(keybinding_size)),
+                                                ),
                                             )
                                             .on_click(cx.listener(move |this, _, window, cx| {
                                                 this.send_queued_message_at_index(
@@ -3960,12 +4029,11 @@ impl ThreadView {
                                                     };
 
                                                 this.key_binding(
-                                                    KeyBinding::for_action_in(
+                                                    crate::footer_key_binding(
                                                         action.as_ref(),
-                                                        &focus_handle.clone(),
+                                                        &focus_handle,
                                                         cx,
-                                                    )
-                                                    .map(|kb| kb.size(keybinding_size)),
+                                                    ),
                                                 )
                                             })
                                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -4349,78 +4417,38 @@ impl ThreadView {
         ContextMenu::build(window, cx, move |menu, _window, cx| {
             menu.key_context("AddContextMenu")
                 .header(tr(cx, "agent_ui.thread_view.context", "Context"))
-                .item(
-                    ContextMenuEntry::new(tr(
-                        cx,
-                        "agent_ui.thread_view.context.files_and_directories",
-                        "Files & Directories",
-                    ))
-                    .icon(IconName::File)
-                    .icon_color(Color::Muted)
-                    .icon_size(IconSize::XSmall)
-                    .handler({
-                        let message_editor = message_editor.clone();
-                        move |window, cx| {
-                            message_editor.focus_handle(cx).focus(window, cx);
-                            message_editor.update(cx, |editor, cx| {
-                                editor.insert_context_type("file", window, cx);
-                            });
-                        }
-                    }),
-                )
-                .item(
-                    ContextMenuEntry::new(tr(
-                        cx,
-                        "agent_ui.thread_view.context.symbols",
-                        "Symbols",
-                    ))
-                    .icon(IconName::Code)
-                    .icon_color(Color::Muted)
-                    .icon_size(IconSize::XSmall)
-                    .handler({
-                        let message_editor = message_editor.clone();
-                        move |window, cx| {
-                            message_editor.focus_handle(cx).focus(window, cx);
-                            message_editor.update(cx, |editor, cx| {
-                                editor.insert_context_type("symbol", window, cx);
-                            });
-                        }
-                    }),
-                )
-                .item(
-                    ContextMenuEntry::new(tr(
-                        cx,
-                        "agent_ui.thread_view.context.threads",
-                        "Threads",
-                    ))
-                    .icon(IconName::Thread)
-                    .icon_color(Color::Muted)
-                    .icon_size(IconSize::XSmall)
-                    .handler({
-                        let message_editor = message_editor.clone();
-                        move |window, cx| {
-                            message_editor.focus_handle(cx).focus(window, cx);
-                            message_editor.update(cx, |editor, cx| {
-                                editor.insert_context_type("thread", window, cx);
-                            });
-                        }
-                    }),
-                )
-                .item(
-                    ContextMenuEntry::new(tr(cx, "agent_ui.thread_view.context.rules", "Rules"))
-                        .icon(IconName::Reader)
-                        .icon_color(Color::Muted)
-                        .icon_size(IconSize::XSmall)
-                        .handler({
-                            let message_editor = message_editor.clone();
-                            move |window, cx| {
-                                message_editor.focus_handle(cx).focus(window, cx);
-                                message_editor.update(cx, |editor, cx| {
-                                    editor.insert_context_type("rule", window, cx);
-                                });
-                            }
-                        }),
-                )
+                .item(context_crease_menu_entry(
+                    cx,
+                    &message_editor,
+                    "agent_ui.thread_view.context.files_and_directories",
+                    "Files & Directories",
+                    IconName::File,
+                    "file",
+                ))
+                .item(context_crease_menu_entry(
+                    cx,
+                    &message_editor,
+                    "agent_ui.thread_view.context.symbols",
+                    "Symbols",
+                    IconName::Code,
+                    "symbol",
+                ))
+                .item(context_crease_menu_entry(
+                    cx,
+                    &message_editor,
+                    "agent_ui.thread_view.context.threads",
+                    "Threads",
+                    IconName::Thread,
+                    "thread",
+                ))
+                .item(context_crease_menu_entry(
+                    cx,
+                    &message_editor,
+                    "agent_ui.thread_view.context.rules",
+                    "Rules",
+                    IconName::Reader,
+                    "rule",
+                ))
                 .item(
                     ContextMenuEntry::new(tr(cx, "agent_ui.thread_view.context.image", "Image"))
                         .icon(IconName::Image)
@@ -6050,35 +6078,18 @@ impl ThreadView {
                         );
 
                     let context_menu_link = chunks.and_then(|chunks| {
-                        chunks.iter().find_map(|chunk| {
-                            let markdown = match chunk {
-                                AssistantMessageChunk::Message { block, .. } => block.markdown(),
-                                AssistantMessageChunk::Thought { block, .. } => block.markdown(),
-                            };
-                            markdown
-                                .and_then(|markdown| markdown.read(cx).context_menu_link().cloned())
+                        first_chunk_markdown(chunks, cx, |markdown| {
+                            markdown.context_menu_link().cloned()
                         })
                     });
                     let selected_text = chunks.and_then(|chunks| {
-                        chunks.iter().find_map(|chunk| {
-                            let markdown = match chunk {
-                                AssistantMessageChunk::Message { block, .. } => block.markdown(),
-                                AssistantMessageChunk::Thought { block, .. } => block.markdown(),
-                            };
-                            markdown.and_then(|markdown| {
-                                markdown.read(cx).context_menu_selected_text().cloned()
-                            })
+                        first_chunk_markdown(chunks, cx, |markdown| {
+                            markdown.context_menu_selected_text().cloned()
                         })
                     });
                     let selected_markdown = chunks.and_then(|chunks| {
-                        chunks.iter().find_map(|chunk| {
-                            let markdown = match chunk {
-                                AssistantMessageChunk::Message { block, .. } => block.markdown(),
-                                AssistantMessageChunk::Thought { block, .. } => block.markdown(),
-                            };
-                            markdown.and_then(|markdown| {
-                                markdown.read(cx).context_menu_selected_markdown().cloned()
-                            })
+                        first_chunk_markdown(chunks, cx, |markdown| {
+                            markdown.context_menu_selected_markdown().cloned()
                         })
                     });
 
@@ -7184,8 +7195,11 @@ impl ThreadView {
                                                 .style(ButtonStyle::Outlined)
                                                 .label_size(LabelSize::Small)
                                                 .key_binding(
-                                                    KeyBinding::for_action_in(&OpenExcerpts, &tool_call_output_focus_handle, cx)
-                                                        .map(|s| s.size(rems_from_px(12.))),
+                                                    crate::footer_key_binding(
+                                                        &OpenExcerpts,
+                                                        &tool_call_output_focus_handle,
+                                                        cx,
+                                                    ),
                                                 )
                                                 .on_click(|_, window, cx| {
                                                     window.dispatch_action(
@@ -7424,14 +7438,11 @@ impl ThreadView {
                         )
                         .label_size(LabelSize::Small)
                         .when(is_first, |this| {
-                            this.key_binding(
-                                KeyBinding::for_action_in(
-                                    &AllowOnce as &dyn Action,
-                                    focus_handle,
-                                    cx,
-                                )
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                            )
+                            this.key_binding(crate::footer_key_binding(
+                                &AllowOnce as &dyn Action,
+                                focus_handle,
+                                cx,
+                            ))
                         })
                         .on_click(cx.listener({
                             let session_id = session_id.clone();
@@ -7458,14 +7469,11 @@ impl ThreadView {
                         )
                         .label_size(LabelSize::Small)
                         .when(is_first, |this| {
-                            this.key_binding(
-                                KeyBinding::for_action_in(
-                                    &RejectOnce as &dyn Action,
-                                    focus_handle,
-                                    cx,
-                                )
-                                .map(|kb| kb.size(rems_from_px(12.))),
-                            )
+                            this.key_binding(crate::footer_key_binding(
+                                &RejectOnce as &dyn Action,
+                                focus_handle,
+                                cx,
+                            ))
                         })
                         .on_click(cx.listener({
                             move |this, _, window, cx| {
@@ -7494,37 +7502,20 @@ impl ThreadView {
         is_first: bool,
         cx: &Context<Self>,
     ) -> AnyElement {
-        let menu_options: Vec<(usize, SharedString)> = choices
-            .iter()
-            .enumerate()
-            .map(|(i, choice)| (i, localize_permission_label(cx, choice.label().as_ref())))
-            .collect();
+        let menu_options = permission_menu_options(choices, cx);
 
         let permission_dropdown_handle = self.permission_dropdown_handle.clone();
         let conversation = self.conversation.downgrade();
 
         PopoverMenu::new(("permission-granularity", entry_ix))
             .with_handle(permission_dropdown_handle)
-            .trigger(
-                Button::new(("granularity-trigger", entry_ix), current_label)
-                    .truncate(true)
-                    .end_icon(
-                        Icon::new(IconName::ChevronDown)
-                            .size(IconSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .label_size(LabelSize::Small)
-                    .when(is_first, |this| {
-                        this.key_binding(
-                            KeyBinding::for_action_in(
-                                &crate::OpenPermissionDropdown as &dyn Action,
-                                &self.focus_handle(cx),
-                                cx,
-                            )
-                            .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                    }),
-            )
+            .trigger(granularity_trigger(
+                current_label,
+                entry_ix,
+                is_first,
+                &self.focus_handle(cx),
+                cx,
+            ))
             .menu(move |window, cx| {
                 let session_id = session_id.clone();
                 let options = menu_options.clone();
@@ -7576,11 +7567,7 @@ impl ThreadView {
         cx: &Context<Self>,
     ) -> AnyElement {
         let default_choice_index = choices.len().saturating_sub(1);
-        let menu_options: Vec<(usize, SharedString)> = choices
-            .iter()
-            .enumerate()
-            .map(|(i, choice)| (i, localize_permission_label(cx, choice.label().as_ref())))
-            .collect();
+        let menu_options = permission_menu_options(choices, cx);
 
         let pattern_options: Vec<(usize, SharedString)> = patterns
             .iter()
@@ -7606,26 +7593,13 @@ impl ThreadView {
             .with_handle(permission_dropdown_handle.clone())
             .anchor(gpui::Anchor::TopRight)
             .attach(gpui::Anchor::BottomRight)
-            .trigger(
-                Button::new(("granularity-trigger", entry_ix), current_label)
-                    .truncate(true)
-                    .end_icon(
-                        Icon::new(IconName::ChevronDown)
-                            .size(IconSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .label_size(LabelSize::Small)
-                    .when(is_first, |this| {
-                        this.key_binding(
-                            KeyBinding::for_action_in(
-                                &crate::OpenPermissionDropdown as &dyn Action,
-                                &self.focus_handle(cx),
-                                cx,
-                            )
-                            .map(|kb| kb.size(rems_from_px(12.))),
-                        )
-                    }),
-            )
+            .trigger(granularity_trigger(
+                current_label,
+                entry_ix,
+                is_first,
+                &self.focus_handle(cx),
+                cx,
+            ))
             .menu(move |window, cx| {
                 let session_id = session_id.clone();
                 let options = menu_options.clone();
@@ -7760,7 +7734,7 @@ impl ThreadView {
         focus_handle: &FocusHandle,
         cx: &Context<Self>,
     ) -> Div {
-        let mut seen_kinds: ArrayVec<acp::PermissionOptionKind, 3, u8> = ArrayVec::new();
+        let mut seen_kinds = Vec::new();
 
         div()
             .p_1()
@@ -7819,14 +7793,9 @@ impl ThreadView {
                         return this;
                     }
 
-                    seen_kinds
-                        .push(option.kind)
-                        .expect("push should be present");
+                    seen_kinds.push(option.kind);
 
-                    this.key_binding(
-                        KeyBinding::for_action_in(action, focus_handle, cx)
-                            .map(|kb| kb.size(rems_from_px(12.))),
-                    )
+                    this.key_binding(crate::footer_key_binding(action, focus_handle, cx))
                 })
                 .label_size(LabelSize::Small)
                 .on_click(cx.listener({

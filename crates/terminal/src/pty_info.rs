@@ -92,12 +92,28 @@ pub struct ProcessInfo {
 
 /// Fetches ZZZ-relevant Pseudo-Terminal (PTY) process information
 pub struct PtyProcessInfo {
-    system: RwLock<System>,
+    /// `None` when the platform cannot provide process information.
+    system: RwLock<Option<System>>,
     refresh_kind: ProcessRefreshKind,
     pid_getter: ProcessIdGetter,
     pub(crate) current: RwLock<Option<ProcessInfo>>,
     last_foreground_pid: Mutex<Option<Pid>>,
     task: Mutex<Option<Task<()>>>,
+}
+
+/// Creates the `System` used to look up PTY processes.
+///
+/// `System` construction became fallible in `sysinfo` 0.40 and only fails when
+/// the platform cannot provide process information, in which case terminals
+/// simply report no process information.
+fn new_system() -> Option<System> {
+    match System::new() {
+        Ok(system) => Some(system),
+        Err(error) => {
+            log::error!("failed to initialize system information: {error}");
+            None
+        }
+    }
 }
 
 impl PtyProcessInfo {
@@ -115,12 +131,14 @@ impl PtyProcessInfo {
         // retaining one open procfs handle per process for the lifetime of the
         // terminal (#58651). Refresh only the spawned child so that
         // `kill_child_process` works before the first foreground refresh.
-        let mut system = System::new();
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&[pid_getter.fallback_pid()]),
-            true,
-            process_refresh_kind,
-        );
+        let mut system = new_system();
+        if let Some(system) = system.as_mut() {
+            system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&[pid_getter.fallback_pid()]),
+                true,
+                process_refresh_kind,
+            );
+        }
 
         PtyProcessInfo {
             system: RwLock::new(system),
@@ -139,29 +157,36 @@ impl PtyProcessInfo {
     fn refresh(&self) -> Option<MappedRwLockReadGuard<'_, Process>> {
         let pid = self.pid_getter.pid()?;
         let fallback_pid = self.pid_getter.fallback_pid();
-        let mut system = self.system.write();
-        // sysinfo never evicts processes that are absent from the refreshed pid
-        // set, so entries for former foreground processes (each pinning an open
-        // `/proc/<pid>/stat` handle on Linux) would otherwise accumulate for as
-        // long as this terminal lives (#58651). Rebuild the `System` whenever
-        // the foreground process changes to keep the map bounded.
-        if self.last_foreground_pid.lock().replace(pid) != Some(pid) {
-            *system = System::new();
-        }
         let pids = [pid, fallback_pid];
         let pids = if pid == fallback_pid {
             &pids[..1]
         } else {
             &pids[..]
         };
-        system.refresh_processes_specifics(ProcessesToUpdate::Some(pids), true, self.refresh_kind);
-        drop(system);
-        RwLockReadGuard::try_map(self.system.read(), |system| system.process(pid)).ok()
+        {
+            let mut system = self.system.write();
+            // sysinfo never evicts processes that are absent from the refreshed
+            // pid set, so entries for former foreground processes (each pinning
+            // an open `/proc/<pid>/stat` handle on Linux) would otherwise
+            // accumulate for as long as this terminal lives (#58651). Rebuild
+            // the `System` whenever the foreground process changes to keep the
+            // map bounded.
+            if self.last_foreground_pid.lock().replace(pid) != Some(pid) {
+                *system = new_system();
+            }
+            let system = system.as_mut()?;
+            system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(pids),
+                true,
+                self.refresh_kind,
+            );
+        }
+        RwLockReadGuard::try_map(self.system.read(), |system| system.as_ref()?.process(pid)).ok()
     }
 
     fn get_child(&self) -> Option<MappedRwLockReadGuard<'_, Process>> {
         let pid = self.pid_getter.fallback_pid();
-        RwLockReadGuard::try_map(self.system.read(), |system| system.process(pid)).ok()
+        RwLockReadGuard::try_map(self.system.read(), |system| system.as_ref()?.process(pid)).ok()
     }
 
     #[cfg(unix)]
@@ -272,7 +297,11 @@ mod tests {
              before the first foreground refresh"
         );
         assert!(info.load().is_some());
-        let initial_len = info.system.read().processes().len();
+        let initial_len = info
+            .system
+            .read()
+            .as_ref()
+            .map_or(0, |system| system.processes().len());
         assert!(
             initial_len <= 2,
             "creating a terminal retained {initial_len} process entries"
@@ -292,7 +321,11 @@ mod tests {
             child.wait().expect("failed to wait for child process");
         }
 
-        let churned_len = info.system.read().processes().len();
+        let churned_len = info
+            .system
+            .read()
+            .as_ref()
+            .map_or(0, |system| system.processes().len());
         assert!(
             churned_len <= 2,
             "foreground process churn retained {churned_len} process entries"

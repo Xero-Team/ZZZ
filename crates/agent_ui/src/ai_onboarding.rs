@@ -1,3 +1,4 @@
+use crate::tr;
 mod agent_panel_onboarding_card;
 
 pub use agent_panel_onboarding_card::AgentPanelOnboardingCard;
@@ -5,12 +6,7 @@ pub use agent_panel_onboarding_card::AgentPanelOnboardingCard;
 use std::sync::Arc;
 
 use gpui::{AnyElement, IntoElement, ParentElement};
-use i18n as app_i18n;
 use ui::{List, ListBulletItem, RegisterComponent, Tooltip, prelude::*};
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 #[derive(RegisterComponent, IntoElement)]
 pub struct ZZZAiOnboarding {
@@ -227,23 +223,7 @@ impl Render for AgentLayoutOnboarding {
                         "You can always customize your workspace layout in your Settings",
                     ))),
             )
-            .child(
-                h_flex()
-                    .w_full()
-                    .gap_1()
-                    .flex_wrap()
-                    .justify_end()
-                    .child(
-                        Button::new(
-                            "learn",
-                            tr(cx, "ai_onboarding.agent_layout.learn_more", "Learn More"),
-                        )
-                        .label_size(LabelSize::Small)
-                        .style(ButtonStyle::OutlinedGhost)
-                        .on_click(|_, _, _| {}),
-                    )
-                    .child(primary_button),
-            )
+            .child(primary_button)
             .child(dismiss_button);
 
         AgentPanelOnboardingCard::new().child(content)

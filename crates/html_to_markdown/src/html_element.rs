@@ -46,21 +46,18 @@ impl HtmlElement {
         self.attrs
             .borrow()
             .iter()
-            .find(|attr| attr.name.local.to_string() == name)
+            .find(|attr| &*attr.name.local == name)
             .map(|attr| attr.value.to_string())
     }
 
     /// Returns the list of classes on this [`HtmlElement`].
     pub fn classes(&self) -> Vec<String> {
-        self.attrs
-            .borrow()
-            .iter()
-            .find(|attr| attr.name.local.to_string() == "class")
-            .map(|attr| {
-                attr.value
-                    .split(' ')
-                    .map(|class| class.trim().to_owned())
-                    .collect::<Vec<_>>()
+        self.attr("class")
+            .map(|classes| {
+                classes
+                    .split_whitespace()
+                    .map(|class| class.to_owned())
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -72,12 +69,10 @@ impl HtmlElement {
 
     /// Returns whether this [`HtmlElement`] has any of the specified classes.
     pub fn has_any_classes(&self, classes: &[&str]) -> bool {
-        self.attrs.borrow().iter().any(|attr| {
-            attr.name.local.to_string() == "class"
-                && attr
-                    .value
-                    .split(' ')
-                    .any(|class| classes.contains(&class.trim()))
+        self.attr("class").is_some_and(|class_attribute| {
+            class_attribute
+                .split_whitespace()
+                .any(|class| classes.contains(&class))
         })
     }
 }

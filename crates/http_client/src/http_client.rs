@@ -5,7 +5,7 @@ pub mod github;
 pub mod github_download;
 
 pub use anyhow::{Result, anyhow};
-pub use async_body::{AsyncBody, Inner, Json};
+pub use async_body::{AsyncBody, Inner};
 use derive_more::Deref;
 pub use http::{self, Method, Request, Response, StatusCode, Uri, request::Builder};
 use http::{HeaderName, HeaderValue};
@@ -24,7 +24,6 @@ pub enum RedirectPolicy {
     FollowLimit(u32),
     FollowAll,
 }
-pub struct FollowRedirects(pub bool);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RequestTimeout(pub Duration);
@@ -185,7 +184,13 @@ impl HttpClientWithProxy {
     /// Returns a new [`HttpClientWithProxy`] with the given proxy URL.
     pub fn new(client: Arc<dyn HttpClient>, proxy_url: Option<String>) -> Self {
         let proxy_url = proxy_url
-            .and_then(|proxy| proxy.parse().ok())
+            .and_then(|proxy| match proxy.parse::<Url>() {
+                Ok(url) => Some(url),
+                Err(error) => {
+                    log::warn!("ignoring unparsable proxy URL {proxy:?}: {error}");
+                    None
+                }
+            })
             .or_else(read_proxy_from_env);
 
         Self::new_url(client, proxy_url)
@@ -328,7 +333,13 @@ pub fn read_proxy_from_env() -> Option<Url> {
     ENV_VARS
         .iter()
         .find_map(|var| std::env::var(var).ok())
-        .and_then(|env| env.parse().ok())
+        .and_then(|env| match env.parse::<Url>() {
+            Ok(url) => Some(url),
+            Err(error) => {
+                log::warn!("ignoring unparsable proxy from the environment {env:?}: {error}");
+                None
+            }
+        })
 }
 
 pub fn read_no_proxy_from_env() -> Option<String> {

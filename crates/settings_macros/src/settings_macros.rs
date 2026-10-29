@@ -1,9 +1,7 @@
 use proc_macro::TokenStream;
 
 use quote::quote;
-use syn::{
-    Data, DeriveInput, Field, Fields, ItemEnum, ItemStruct, Type, parse_macro_input, parse_quote,
-};
+use syn::{Data, DeriveInput, Field, Fields, Type, parse_macro_input, parse_quote};
 
 /// Derives the `MergeFrom` trait for a struct.
 ///
@@ -64,7 +62,11 @@ pub fn derive_merge_from(input: TokenStream) -> TokenStream {
             }
         }
         Data::Union(_) => {
-            panic!("MergeFrom cannot be derived for unions");
+            // A panic here would surface as "proc macro panicked" without a
+            // span, so report it as a regular compile error instead.
+            return syn::Error::new_spanned(&input, "MergeFrom cannot be derived for unions")
+                .to_compile_error()
+                .into();
         }
     };
 
@@ -139,16 +141,24 @@ fn add_if_option(field: &mut Field) {
 // #serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "settings::deserialize_fallible")
 #[proc_macro_attribute]
 pub fn with_fallible_options(_args: TokenStream, input: TokenStream) -> TokenStream {
-    if let Ok(mut input) = syn::parse::<ItemStruct>(input.clone()) {
-        apply_on_fields(&mut input.fields);
-        quote!(#input).into()
-    } else if let Ok(mut input) = syn::parse::<ItemEnum>(input) {
-        for variant in &mut input.variants {
-            apply_on_fields(&mut variant.fields);
+    const SUPPORTED: &str =
+        "with_fallible_options can only be applied to struct or enum definitions";
+
+    match syn::parse::<syn::Item>(input) {
+        Ok(syn::Item::Struct(mut item)) => {
+            apply_on_fields(&mut item.fields);
+            quote!(#item).into()
         }
-        quote!(#input).into()
-    } else {
-        panic!("with_fallible_options can only be applied to struct or enum definitions.");
+        Ok(syn::Item::Enum(mut item)) => {
+            for variant in &mut item.variants {
+                apply_on_fields(&mut variant.fields);
+            }
+            quote!(#item).into()
+        }
+        Ok(other) => syn::Error::new_spanned(other, SUPPORTED)
+            .to_compile_error()
+            .into(),
+        Err(error) => error.to_compile_error().into(),
     }
 }
 
@@ -156,7 +166,7 @@ pub fn with_fallible_options(_args: TokenStream, input: TokenStream) -> TokenStr
 mod tests {
     use super::*;
     use quote::ToTokens;
-    use syn::parse_quote;
+    use syn::{ItemStruct, parse_quote};
 
     #[test]
     fn add_if_option_marks_plain_option_fields() {

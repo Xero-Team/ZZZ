@@ -9,7 +9,7 @@ use gpui::{
     AnyEntity, App, AppContext as _, Corners, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, ScrollHandle, TextStyleRefinement, WeakEntity, Window,
 };
-use i18n as app_i18n;
+use i18n::tr;
 use language::language_settings::SoftWrap;
 use project::{AgentId, Project};
 use prompt_store::PromptStore;
@@ -21,10 +21,6 @@ use ui::{Context, TextSize};
 use workspace::Workspace;
 
 use crate::message_editor::{MessageEditor, MessageEditorEvent, SharedSessionCapabilities};
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> String {
-    app_i18n::tr(cx, key, fallback)
-}
 
 /// Top padding, in rems, inside agent terminals. The tool card adds it to the
 /// scrollable terminal's height so the number of visible rows doesn't change.
@@ -439,13 +435,7 @@ impl Focusable for ToolCallEntry {
 
 impl Focusable for Entry {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        match self {
-            Self::UserMessage(editor) => editor.read(cx).focus_handle(cx),
-            Self::AssistantMessage(message) => message.focus_handle.clone(),
-            Self::ToolCall(tool_call) => tool_call.focus_handle.clone(),
-            Self::Elicitation { focus_handle } => focus_handle.clone(),
-            Self::CompletedPlan => cx.focus_handle(),
-        }
+        Entry::focus_handle(self, cx).unwrap_or_else(|| cx.focus_handle())
     }
 }
 

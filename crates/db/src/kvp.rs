@@ -9,7 +9,7 @@ use crate::{
     write_and_log,
 };
 
-pub struct KeyValueStore(crate::sqlez::thread_safe_connection::ThreadSafeConnection);
+pub struct KeyValueStore(ThreadSafeConnection);
 
 impl KeyValueStore {
     pub fn from_app_db(db: &crate::AppDatabase) -> Self {

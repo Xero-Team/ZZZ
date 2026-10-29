@@ -1,6 +1,7 @@
 use gpui::{App, AppContext, Task};
 use language::{BufferSnapshot, Language, LanguageRegistry};
 use std::sync::Arc;
+use util::ResultExt as _;
 
 const SAMPLE_BLOCK_SIZE: usize = 4096;
 const MIN_LANGUAGE_DETECTION_CONFIDENCE: f32 = 0.2;
@@ -113,8 +114,8 @@ pub fn detect_language(
         language_registry
             .load_language(&language)
             .await
-            .ok()
-            .and_then(|language| language.ok())
+            .log_err()
+            .and_then(|language| language.log_err())
     })
 }
 

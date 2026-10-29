@@ -564,7 +564,12 @@ fn push_stream_message_for_connection(
             } else {
                 (
                     Some(id),
-                    "[unrecognized response]".into(),
+                    app_i18n::tr(
+                        cx,
+                        "acp_tools.unrecognized_response",
+                        "[unrecognized response]",
+                    )
+                    .into(),
                     MessageType::Response,
                     result,
                 )
@@ -630,9 +635,7 @@ fn collapsed_params_md(
     language_registry: &Arc<LanguageRegistry>,
     cx: &mut App,
 ) -> Option<Entity<Markdown>> {
-    let params_json = serde_json::to_string(params).log_err()?;
-    let params_md = format!("```json\n{params_json}\n```");
-    Some(cx.new(|cx| Markdown::new(params_md.into(), Some(language_registry.clone()), None, cx)))
+    params_markdown(params, false, language_registry, cx)
 }
 
 fn expanded_params_md(
@@ -640,8 +643,24 @@ fn expanded_params_md(
     language_registry: &Arc<LanguageRegistry>,
     cx: &mut App,
 ) -> Option<Entity<Markdown>> {
-    let params_json = serde_json::to_string_pretty(params).log_err()?;
-    let params_md = format!("```json\n{}\n```", params_json);
+    params_markdown(params, true, language_registry, cx)
+}
+
+/// Renders ACP message parameters as a JSON code block. Collapsed rows use the
+/// compact form, expanded rows the pretty-printed one.
+fn params_markdown(
+    params: &serde_json::Value,
+    pretty: bool,
+    language_registry: &Arc<LanguageRegistry>,
+    cx: &mut App,
+) -> Option<Entity<Markdown>> {
+    let params_json = if pretty {
+        serde_json::to_string_pretty(params)
+    } else {
+        serde_json::to_string(params)
+    }
+    .log_err()?;
+    let params_md = format!("```json\n{params_json}\n```");
     Some(cx.new(|cx| Markdown::new(params_md.into(), Some(language_registry.clone()), None, cx)))
 }
 
@@ -738,7 +757,7 @@ impl Render for AcpTools {
                     .border_color(cx.theme().colors().border)
                     .child(
                         DropdownMenu::new(
-                            "acp-connection-selector",
+                            ("acp-connection-selector", cx.entity_id()),
                             self.selected_connection_label(cx),
                             self.connection_menu(window, cx),
                         )
@@ -749,20 +768,25 @@ impl Render for AcpTools {
                         h_flex()
                             .gap_2()
                             .child(
-                                IconButton::new("restart_connection", IconName::RotateCw)
-                                    .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text(app_i18n::tr(
-                                        cx,
-                                        "acp_tools.restart_connection",
-                                        "Restart Connection",
-                                    )))
-                                    .disabled(!can_restart)
-                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                IconButton::new(
+                                    ("restart-connection", cx.entity_id()),
+                                    IconName::RotateCw,
+                                )
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text(app_i18n::tr(
+                                    cx,
+                                    "acp_tools.restart_connection",
+                                    "Restart Connection",
+                                )))
+                                .disabled(!can_restart)
+                                .on_click(cx.listener(
+                                    |this, _, _window, cx| {
                                         this.restart_selected_connection(cx);
-                                    })),
+                                    },
+                                )),
                             )
                             .child(
-                                CopyButton::new("copy-all-messages", "")
+                                CopyButton::new(("copy-all-messages", cx.entity_id()), "")
                                     .tooltip_label(app_i18n::tr(
                                         cx,
                                         "acp_tools.copy_all_messages",
@@ -785,17 +809,22 @@ impl Render for AcpTools {
                                     }),
                             )
                             .child(
-                                IconButton::new("clear_messages", IconName::Trash)
-                                    .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text(app_i18n::tr(
-                                        cx,
-                                        "acp_tools.clear_messages",
-                                        "Clear Messages",
-                                    )))
-                                    .disabled(!has_messages)
-                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                IconButton::new(
+                                    ("clear-messages", cx.entity_id()),
+                                    IconName::Trash,
+                                )
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text(app_i18n::tr(
+                                    cx,
+                                    "acp_tools.clear_messages",
+                                    "Clear Messages",
+                                )))
+                                .disabled(!has_messages)
+                                .on_click(cx.listener(
+                                    |this, _, _window, cx| {
                                         this.clear_messages(cx);
-                                    })),
+                                    },
+                                )),
                             ),
                     ),
             )

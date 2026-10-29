@@ -35,6 +35,7 @@ use gpui::{
     Action as _, AnyView, App, AppContext, Axis, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, NoAction, Pixels, Point, Subscription, Task, WeakEntity,
 };
+use i18n::tr;
 use language::Buffer;
 use loaded_source_list::LoadedSourceList;
 use module_list::ModuleList;
@@ -86,6 +87,14 @@ fn apply_run_in_terminal_environment(
     }
 }
 
+// Some built-in zzz tasks wrap their arguments in quotes as they might contain
+// spaces, but the debug adapter must receive the bare value.
+fn strip_wrapping_quotes(value: &mut String) {
+    if value.starts_with("\"$ZZZ_") && value.ends_with('"') {
+        *value = value[1..value.len() - 1].to_string();
+    }
+}
+
 pub struct RunningState {
     session: Entity<Session>,
     thread_id: Option<ThreadId>,
@@ -106,7 +115,7 @@ pub struct RunningState {
     active_pane: Entity<Pane>,
     pane_close_subscriptions: HashMap<EntityId, Subscription>,
     dock_axis: Axis,
-    _schedule_serialize: Option<Task<()>>,
+    scheduled_serialize: Option<Task<()>>,
     pub(crate) scenario: Option<DebugScenario>,
     pub(crate) scenario_context: Option<DebugScenarioContext>,
     memory_view: Entity<MemoryView>,
@@ -369,11 +378,11 @@ impl Item for SubView {
                 };
 
                 let new_pane = new_debugger_pane(running.workspace.clone(), project, window, cx);
-                let _previous_subscription = running.pane_close_subscriptions.insert(
+                let previous_subscription = running.pane_close_subscriptions.insert(
                     new_pane.entity_id(),
                     cx.subscribe_in(&new_pane, window, RunningState::handle_pane_event),
                 );
-                debug_assert!(_previous_subscription.is_none());
+                debug_assert!(previous_subscription.is_none());
                 running
                     .panes
                     .split(&this_pane, &new_pane, split_direction, cx);
@@ -517,8 +526,7 @@ pub(crate) fn new_debugger_pane(
                     .border_color(cx.theme().colors().border)
                     .bg(cx.theme().colors().tab_bar_background)
                     .on_action(|_: &menu::Cancel, window, cx| {
-                        if cx.stop_active_drag(window) {
-                        } else {
+                        if !cx.stop_active_drag(window) {
                             cx.propagate();
                         }
                     })
@@ -645,8 +653,11 @@ pub(crate) fn new_debugger_pane(
                                 .tooltip({
                                     let focus_handle = focus_handle.clone();
                                     move |_window, cx| {
-                                        let zoomed_text =
-                                            if zoomed { "Minimize" } else { "Expand" };
+                                        let zoomed_text = if zoomed {
+                                            tr(cx, "debugger_ui.running.minimize_pane", "Minimize")
+                                        } else {
+                                            tr(cx, "debugger_ui.running.expand_pane", "Expand")
+                                        };
                                         Tooltip::for_action_in(
                                             zoomed_text,
                                             &ToggleExpandItem,
@@ -724,10 +735,7 @@ impl RunningState {
                 }
             }
             serde_json::Value::String(s) => {
-                // Some built-in zzz tasks wrap their arguments in quotes as they might contain spaces.
-                if s.starts_with("\"$ZZZ_") && s.ends_with('"') {
-                    *s = s[1..s.len() - 1].to_string();
-                }
+                strip_wrapping_quotes(s);
                 if let Some(substituted) = substitute_variables_in_str(s, context) {
                     *s = substituted;
                 }
@@ -786,10 +794,7 @@ impl RunningState {
                 }
             }
             serde_json::Value::String(s) if key == Some("program") || key == Some("cwd") => {
-                // Some built-in zzz tasks wrap their arguments in quotes as they might contain spaces.
-                if s.starts_with("\"$ZZZ_") && s.ends_with('"') {
-                    *s = s[1..s.len() - 1].to_string();
-                }
+                strip_wrapping_quotes(s);
                 resolve_path(s);
 
                 if let Some(substituted) = substitute_variables_in_str(s, context) {
@@ -1005,7 +1010,7 @@ impl RunningState {
             pane_close_subscriptions,
             debug_terminal,
             dock_axis,
-            _schedule_serialize: None,
+            scheduled_serialize: None,
             scenario: None,
             scenario_context: None,
         }
@@ -1074,7 +1079,10 @@ impl RunningState {
             Self::relativize_paths(None, &mut config, &task_context);
             Self::substitute_variables_in_config(&mut config, &task_context);
 
-            if Self::contains_substring(&config, PROCESS_ID_PLACEHOLDER.as_str()) || label.as_ref().contains(PROCESS_ID_PLACEHOLDER.as_str()) {
+            let needs_process_id =
+                Self::contains_substring(&config, PROCESS_ID_PLACEHOLDER.as_str())
+                    || label.as_ref().contains(PROCESS_ID_PLACEHOLDER.as_str());
+            if needs_process_id {
                 let (tx, rx) = futures::channel::oneshot::channel::<Option<u32>>();
 
                 let weak_workspace_clone = weak_workspace.clone();
@@ -1108,15 +1116,15 @@ impl RunningState {
                     .into();
             }
 
-            let request_type = match dap_registry
-                .adapter(&adapter)
-                .with_context(|| format!("{}: is not a valid adapter name", adapter)) {
-                    Ok(adapter) => adapter.request_kind(&config).await,
-                    Err(e) => Err(e)
-                };
+            let config_error = match dap_registry.adapter(&adapter) {
+                Some(adapter) => adapter
+                    .request_kind(&config)
+                    .await
+                    .err()
+                    .map(|error| error.to_string()),
+                None => Some(format!("{}: is not a valid adapter name", adapter)),
+            };
 
-
-            let config_is_valid = request_type.is_ok();
             let mut extra_config = Value::Null;
             let build_output = if let Some(build) = build {
                 let (task_template, locator_name) = match build {
@@ -1148,9 +1156,9 @@ impl RunningState {
 
                 let locator_name = if let Some(locator_name) = locator_name {
                     extra_config = config.clone();
-                    debug_assert!(!config_is_valid);
+                    debug_assert!(config_error.is_some());
                     Some(locator_name)
-                } else if !config_is_valid {
+                } else if config_error.is_some() {
                     let task = dap_store
                         .update(cx, |this, cx| {
                             this.debug_scenario_for_build_task(
@@ -1232,14 +1240,15 @@ impl RunningState {
                 None
             };
 
-            if config_is_valid {
-            } else if let Some((task, locator_name, extra_config)) = build_output {
-                let locator_name =
-                    locator_name.with_context(|| {
-                        format!("Could not find a valid locator for a build task and configure is invalid with error: {}", request_type.err()
-                            .map(|err| err.to_string())
-                            .unwrap_or_default())
-                    })?;
+            if let Some(config_error) = config_error {
+                let Some((task, locator_name, extra_config)) = build_output else {
+                    anyhow::bail!("ZZZ cannot determine how to run this debug scenario. `build` field was not provided and Debug Adapter won't accept provided configuration because: {config_error}");
+                };
+                let locator_name = locator_name.with_context(|| {
+                    format!(
+                        "Could not find a valid locator for a build task and configure is invalid with error: {config_error}"
+                    )
+                })?;
                 let request = dap_store
                     .update(cx, |this, cx| {
                         this.run_debug_locator(&locator_name, task, cx)
@@ -1261,11 +1270,6 @@ impl RunningState {
                 util::merge_non_null_json_value_into(extra_config, &mut config);
 
                 Self::substitute_variables_in_config(&mut config, &task_context);
-            } else {
-                let Err(e) = request_type else {
-                    unreachable!();
-                };
-                anyhow::bail!("ZZZ cannot determine how to run this debug scenario. `build` field was not provided and Debug Adapter won't accept provided configuration because: {e}");
             };
 
             Ok(DebugTaskDefinition {
@@ -1532,8 +1536,8 @@ impl RunningState {
     }
 
     pub(crate) fn serialize_layout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self._schedule_serialize.is_none() {
-            self._schedule_serialize = Some(cx.spawn_in(window, async move |this, cx| {
+        if self.scheduled_serialize.is_none() {
+            self.scheduled_serialize = Some(cx.spawn_in(window, async move |this, cx| {
                 cx.background_executor()
                     .timer(Duration::from_millis(100))
                     .await;
@@ -1565,7 +1569,7 @@ impl RunningState {
                 }
 
                 this.update(cx, |this, _| {
-                    this._schedule_serialize.take();
+                    this.scheduled_serialize.take();
                 })
                 .log_err();
             }));
@@ -1589,8 +1593,8 @@ impl RunningState {
                 }
             }
             Event::Remove { .. } => {
-                let _did_find_pane = this.panes.remove(source_pane, cx).is_ok();
-                debug_assert!(_did_find_pane);
+                let did_find_pane = this.panes.remove(source_pane, cx).is_ok();
+                debug_assert!(did_find_pane);
                 cx.notify();
             }
             Event::Focus => {
@@ -1679,20 +1683,18 @@ impl RunningState {
     ) {
         self.ensure_pane_item(item, window, cx);
 
-        let Some((variable_list_position, pane)) =
-            self.panes.panes().into_iter().find_map(|pane| {
-                pane.read(cx)
-                    .items_of_type::<SubView>()
-                    .position(|view| view.read(cx).view_kind() == item)
-                    .map(|view| (view, pane))
-            })
-        else {
+        let Some((item_index, pane)) = self.panes.panes().into_iter().find_map(|pane| {
+            pane.read(cx)
+                .items_of_type::<SubView>()
+                .position(|view| view.read(cx).view_kind() == item)
+                .map(|view| (view, pane))
+        }) else {
             log::error!("failed to locate debugger pane item {item:?}");
             return;
         };
 
         pane.update(cx, |this, cx| {
-            this.activate_item(variable_list_position, true, true, window, cx);
+            this.activate_item(item_index, true, true, window, cx);
         });
     }
 
@@ -1712,7 +1714,7 @@ impl RunningState {
 
     pub fn select_current_thread(
         &mut self,
-        threads: &Vec<(Thread, ThreadStatus)>,
+        threads: &[(Thread, ThreadStatus)],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1755,71 +1757,62 @@ impl RunningState {
             .update(cx, |list, cx| list.schedule_refresh(true, window, cx));
     }
 
-    pub fn continue_program(&mut self, cx: &mut Context<Self>) {
+    /// Applies `operation` to the DAP session of the currently selected
+    /// thread, doing nothing when no thread is selected yet.
+    fn with_thread(
+        &self,
+        cx: &mut Context<Self>,
+        operation: impl FnOnce(&mut Session, ThreadId, &mut Context<Session>),
+    ) {
         let Some(thread_id) = self.thread_id else {
             return;
         };
 
-        self.session().update(cx, |state, cx| {
-            state.continue_program(thread_id, cx);
+        self.session()
+            .update(cx, |session, cx| operation(session, thread_id, cx));
+    }
+
+    pub fn continue_program(&mut self, cx: &mut Context<Self>) {
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.continue_program(thread_id, cx)
         });
     }
 
     pub fn continue_thread(&mut self, cx: &mut Context<Self>) {
-        let Some(thread_id) = self.thread_id else {
-            return;
-        };
-
-        self.session().update(cx, |state, cx| {
-            state.continue_thread(thread_id, cx);
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.continue_thread(thread_id, cx)
         });
     }
 
     pub fn step_over(&mut self, cx: &mut Context<Self>) {
-        let Some(thread_id) = self.thread_id else {
-            return;
-        };
-
         let granularity = DebuggerSettings::get_global(cx).stepping_granularity;
 
-        self.session().update(cx, |state, cx| {
-            state.step_over(thread_id, granularity, cx);
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.step_over(thread_id, granularity, cx)
         });
     }
 
     pub(crate) fn step_in(&mut self, cx: &mut Context<Self>) {
-        let Some(thread_id) = self.thread_id else {
-            return;
-        };
-
         let granularity = DebuggerSettings::get_global(cx).stepping_granularity;
 
-        self.session().update(cx, |state, cx| {
-            state.step_in(thread_id, granularity, cx);
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.step_in(thread_id, granularity, cx)
         });
     }
 
     pub(crate) fn step_out(&mut self, cx: &mut Context<Self>) {
-        let Some(thread_id) = self.thread_id else {
-            return;
-        };
-
         let granularity = DebuggerSettings::get_global(cx).stepping_granularity;
 
-        self.session().update(cx, |state, cx| {
-            state.step_out(thread_id, granularity, cx);
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.step_out(thread_id, granularity, cx)
         });
     }
 
     pub(crate) fn step_back(&mut self, cx: &mut Context<Self>) {
-        let Some(thread_id) = self.thread_id else {
-            return;
-        };
-
         let granularity = DebuggerSettings::get_global(cx).stepping_granularity;
 
-        self.session().update(cx, |state, cx| {
-            state.step_back(thread_id, granularity, cx);
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.step_back(thread_id, granularity, cx)
         });
     }
 
@@ -1858,27 +1851,13 @@ impl RunningState {
     }
 
     pub fn pause_thread(&self, cx: &mut Context<Self>) {
-        let Some(thread_id) = self.thread_id else {
-            return;
-        };
-
-        self.session().update(cx, |state, cx| {
-            state.pause_thread(thread_id, cx);
+        self.with_thread(cx, |session, thread_id, cx| {
+            session.pause_thread(thread_id, cx)
         });
     }
 
     pub(crate) fn shutdown(&mut self, cx: &mut Context<Self>) {
-        self.workspace
-            .update(cx, |workspace, cx| {
-                workspace
-                    .project()
-                    .read(cx)
-                    .breakpoint_store()
-                    .update(cx, |store, cx| {
-                        store.remove_active_position(Some(self.session_id), cx)
-                    })
-            })
-            .log_err();
+        self.clear_active_position(cx);
 
         let is_building = self.session.update(cx, |session, cx| {
             session.shutdown(cx).detach();
@@ -1902,6 +1881,14 @@ impl RunningState {
             return;
         };
 
+        self.clear_active_position(cx);
+
+        self.session().update(cx, |state, cx| {
+            state.terminate_threads(Some(vec![thread_id; 1]), cx);
+        });
+    }
+
+    fn clear_active_position(&self, cx: &mut Context<Self>) {
         self.workspace
             .update(cx, |workspace, cx| {
                 workspace
@@ -1913,10 +1900,6 @@ impl RunningState {
                     })
             })
             .log_err();
-
-        self.session().update(cx, |state, cx| {
-            state.terminate_threads(Some(vec![thread_id; 1]), cx);
-        });
     }
 
     pub fn detach_client(&self, cx: &mut Context<Self>) {
@@ -2034,7 +2017,7 @@ impl RunningState {
         Member::Axis(group_root)
     }
 
-    pub(crate) fn invert_axies(&mut self, cx: &mut App) {
+    pub(crate) fn invert_axes(&mut self, cx: &mut App) {
         self.dock_axis = self.dock_axis.invert();
         self.panes.invert_axies(cx);
     }

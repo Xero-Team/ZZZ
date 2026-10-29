@@ -8,6 +8,7 @@ use gpui::{
     AnyElement, App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle,
     Focusable, Font, IntoElement, Render, Task, WeakEntity, Window,
 };
+use i18n::tr;
 use language::{Buffer, HighlightedText, LanguageRegistry, Point};
 use project::Project;
 use settings::Settings;
@@ -19,6 +20,7 @@ use std::{
     time::Duration,
 };
 use ui::{Color, Icon, IconName, Label, LabelCommon as _, SharedString};
+use util::ResultExt as _;
 use util::paths::PathExt as _;
 use workspace::{
     Item, ItemHandle as _, ItemNavHistory, ToolbarItemLocation, Workspace,
@@ -143,7 +145,7 @@ impl FileDiffView {
                         .update(cx, |base_text_buffer, cx| {
                             base_text_buffer.set_language_async(language, cx);
                         })
-                        .ok();
+                        .log_err();
                 }
             }
         })
@@ -154,7 +156,7 @@ impl FileDiffView {
                 language::BufferEvent::Edited { .. }
                 | language::BufferEvent::LanguageChanged(_)
                 | language::BufferEvent::Reparsed => {
-                    this.buffer_changes_tx.send(()).ok();
+                    this.buffer_changes_tx.send(()).log_err();
                 }
                 _ => {}
             })
@@ -196,7 +198,7 @@ impl FileDiffView {
                         )
                     })
                     .await
-                    .ok();
+                    .log_err();
                     log::trace!("finish recalculating");
                 }
                 Ok(())
@@ -229,6 +231,8 @@ async fn build_buffer_diff(
         })
         .await;
 
+    // `set_snapshot` also reports the changed range so callers can restore a
+    // selection; a freshly built diff view has none.
     diff.update(cx, |diff, cx| {
         diff.language_changed(
             new_buffer_snapshot.language().cloned(),
@@ -280,7 +284,7 @@ impl Item for FileDiffView {
                             .to_string(),
                     )
                 })
-                .unwrap_or_else(|| "untitled".into())
+                .unwrap_or_else(|| tr(cx, "workspace.pane.untitled", "untitled"))
         };
         let old_filename = title_text(&self.old_buffer);
         let new_filename = title_text(&self.new_buffer);
@@ -291,7 +295,7 @@ impl Item for FileDiffView {
     fn tab_tooltip_text(&self, cx: &App) -> Option<ui::SharedString> {
         let path = |buffer: &Entity<Buffer>| {
             buffer.read(cx).file().map_or_else(
-                || "untitled".into(),
+                || tr(cx, "workspace.pane.untitled", "untitled"),
                 |file| file.full_path(cx).compact().to_string_lossy().into_owned(),
             )
         };

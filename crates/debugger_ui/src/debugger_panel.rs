@@ -85,6 +85,32 @@ fn previous_historic_snapshot_index(
     )
 }
 
+/// Builds an action listener that runs `action` on the panel, logging instead of
+/// silently dropping it when the panel has already been closed.
+fn panel_action<A: Action>(
+    panel: &WeakEntity<DebugPanel>,
+    action: impl Fn(&mut DebugPanel, &mut Window, &mut Context<DebugPanel>) + 'static,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let panel = panel.clone();
+    move |_: &A, window, cx| {
+        panel
+            .update(cx, |panel, cx| action(panel, window, cx))
+            .log_err();
+    }
+}
+
+/// Tooltip showing `action`'s key binding, resolved against the panel's focus
+/// handle.
+fn action_tooltip(
+    focus_handle: &FocusHandle,
+    key: &'static str,
+    fallback: &'static str,
+    action: Box<dyn Action>,
+) -> impl Fn(&mut Window, &mut App) -> gpui::AnyView + 'static {
+    let focus_handle = focus_handle.clone();
+    move |_window, cx| Tooltip::for_action_in(&tr(cx, key, fallback), &*action, &focus_handle, cx)
+}
+
 pub struct DebugPanel {
     active_session: Option<Entity<DebugSession>>,
     project: Entity<Project>,
@@ -685,21 +711,12 @@ impl DebugPanel {
                 .on_click({
                     move |_, window, cx| window.dispatch_action(crate::Start.boxed_clone(), cx)
                 })
-                .tooltip({
-                    let focus_handle = focus_handle.clone();
-                    move |_window, cx| {
-                        Tooltip::for_action_in(
-                            &tr(
-                                cx,
-                                "debugger_ui.debug_panel.start_debug_session",
-                                "Start Debug Session",
-                            ),
-                            &crate::Start,
-                            &focus_handle,
-                            cx,
-                        )
-                    }
-                })
+                .tooltip(action_tooltip(
+                    &focus_handle,
+                    "debugger_ui.debug_panel.start_debug_session",
+                    "Start Debug Session",
+                    crate::Start.boxed_clone(),
+                ))
         };
 
         let edit_debug_json_button = || {
@@ -780,21 +797,12 @@ impl DebugPanel {
                                                         this.pause_thread(cx);
                                                     },
                                                 ))
-                                                .tooltip({
-                                                    let focus_handle = focus_handle.clone();
-                                                    move |_window, cx| {
-                                                        Tooltip::for_action_in(
-                                                            &tr(
-                                                                cx,
-                                                                "debugger_ui.debug_panel.pause_program",
-                                                                "Pause Program",
-                                                            ),
-                                                            &Pause,
-                                                            &focus_handle,
-                                                            cx,
-                                                        )
-                                                    }
-                                                }),
+                                                .tooltip(action_tooltip(
+                                                    &focus_handle,
+                                                    "debugger_ui.debug_panel.pause_program",
+                                                    "Pause Program",
+                                                    Pause.boxed_clone(),
+                                                )),
                                             )
                                         } else {
                                             this.child(
@@ -808,21 +816,12 @@ impl DebugPanel {
                                                     |this, _, _window, cx| this.continue_thread(cx),
                                                 ))
                                                 .disabled(thread_status != ThreadStatus::Stopped)
-                                                .tooltip({
-                                                    let focus_handle = focus_handle.clone();
-                                                    move |_window, cx| {
-                                                        Tooltip::for_action_in(
-                                                            &tr(
-                                                                cx,
-                                                                "debugger_ui.debug_panel.continue_program",
-                                                                "Continue Program",
-                                                            ),
-                                                            &Continue,
-                                                            &focus_handle,
-                                                            cx,
-                                                        )
-                                                    }
-                                                }),
+                                                .tooltip(action_tooltip(
+                                                    &focus_handle,
+                                                    "debugger_ui.debug_panel.continue_program",
+                                                    "Continue Program",
+                                                    Continue.boxed_clone(),
+                                                )),
                                             )
                                         }
                                     })
@@ -836,17 +835,12 @@ impl DebugPanel {
                                                 },
                                             ))
                                             .disabled(thread_status != ThreadStatus::Stopped)
-                                            .tooltip({
-                                                let focus_handle = focus_handle.clone();
-                                                move |_window, cx| {
-                                                    Tooltip::for_action_in(
-                                                        &tr(cx, "menu.run.step_over", "Step Over"),
-                                                        &StepOver,
-                                                        &focus_handle,
-                                                        cx,
-                                                    )
-                                                }
-                                            }),
+                                            .tooltip(action_tooltip(
+                                                &focus_handle,
+                                                "menu.run.step_over",
+                                                "Step Over",
+                                                StepOver.boxed_clone(),
+                                            )),
                                     )
                                     .child(
                                         IconButton::new("step-into", IconName::DebugStepInto)
@@ -858,17 +852,12 @@ impl DebugPanel {
                                                 },
                                             ))
                                             .disabled(thread_status != ThreadStatus::Stopped)
-                                            .tooltip({
-                                                let focus_handle = focus_handle.clone();
-                                                move |_window, cx| {
-                                                    Tooltip::for_action_in(
-                                                        &tr(cx, "menu.run.step_into", "Step Into"),
-                                                        &StepInto,
-                                                        &focus_handle,
-                                                        cx,
-                                                    )
-                                                }
-                                            }),
+                                            .tooltip(action_tooltip(
+                                                &focus_handle,
+                                                "menu.run.step_into",
+                                                "Step Into",
+                                                StepInto.boxed_clone(),
+                                            )),
                                     )
                                     .child(
                                         IconButton::new("step-out", IconName::DebugStepOut)
@@ -880,17 +869,12 @@ impl DebugPanel {
                                                 },
                                             ))
                                             .disabled(thread_status != ThreadStatus::Stopped)
-                                            .tooltip({
-                                                let focus_handle = focus_handle.clone();
-                                                move |_window, cx| {
-                                                    Tooltip::for_action_in(
-                                                        &tr(cx, "menu.run.step_out", "Step Out"),
-                                                        &StepOut,
-                                                        &focus_handle,
-                                                        cx,
-                                                    )
-                                                }
-                                            }),
+                                            .tooltip(action_tooltip(
+                                                &focus_handle,
+                                                "menu.run.step_out",
+                                                "Step Out",
+                                                StepOut.boxed_clone(),
+                                            )),
                                     )
                                     .child(Divider::vertical())
                                     .child(
@@ -902,21 +886,12 @@ impl DebugPanel {
                                                     this.rerun_session(window, cx);
                                                 },
                                             ))
-                                            .tooltip({
-                                                let focus_handle = focus_handle.clone();
-                                                move |_window, cx| {
-                                                    Tooltip::for_action_in(
-                                                        &tr(
-                                                            cx,
-                                                            "debugger_ui.debug_panel.rerun_session",
-                                                            "Rerun Session",
-                                                        ),
-                                                        &RerunSession,
-                                                        &focus_handle,
-                                                        cx,
-                                                    )
-                                                }
-                                            }),
+                                            .tooltip(action_tooltip(
+                                                &focus_handle,
+                                                "debugger_ui.debug_panel.rerun_session",
+                                                "Rerun Session",
+                                                RerunSession.boxed_clone(),
+                                            )),
                                     )
                                     .child(
                                         IconButton::new("debug-stop", IconName::Power)
@@ -987,21 +962,12 @@ impl DebugPanel {
                                                     this.detach_client(cx);
                                                 },
                                             ))
-                                            .tooltip({
-                                                let focus_handle = focus_handle.clone();
-                                                move |_window, cx| {
-                                                    Tooltip::for_action_in(
-                                                        &tr(
-                                                            cx,
-                                                            "debugger_ui.debug_panel.detach",
-                                                            "Detach",
-                                                        ),
-                                                        &Detach,
-                                                        &focus_handle,
-                                                        cx,
-                                                    )
-                                                }
-                                            }),
+                                            .tooltip(action_tooltip(
+                                                &focus_handle,
+                                                "debugger_ui.debug_panel.detach",
+                                                "Detach",
+                                                Detach.boxed_clone(),
+                                            )),
                                         )
                                     })
                                     .when(
@@ -1672,7 +1638,7 @@ impl Panel for DebugPanel {
             self.sessions_with_children.keys().for_each(|session_item| {
                 session_item.update(cx, |item, cx| {
                     item.running_state()
-                        .update(cx, |state, cx| state.invert_axies(cx))
+                        .update(cx, |state, cx| state.invert_axes(cx))
                 })
             });
         }
@@ -1752,122 +1718,66 @@ impl Render for DebugPanel {
             .key_context("DebugPanel")
             .child(h_flex().children(self.top_controls_strip(window, cx)))
             .track_focus(&self.focus_handle(cx))
-            .on_action({
-                let this = this.clone();
-                move |_: &workspace::ActivatePaneLeft, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_pane_in_direction(SplitDirection::Left, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &workspace::ActivatePaneRight, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_pane_in_direction(SplitDirection::Right, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &workspace::ActivatePaneUp, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_pane_in_direction(SplitDirection::Up, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &workspace::ActivatePaneDown, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_pane_in_direction(SplitDirection::Down, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusConsole, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::Console, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusVariables, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::Variables, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusBreakpointList, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::BreakpointList, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusFrames, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::Frames, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusModules, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::Modules, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusLoadedSources, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::LoadedSources, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &FocusTerminal, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.activate_item(DebuggerPaneItem::Terminal, window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                let this = this.clone();
-                move |_: &ToggleThreadPicker, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.toggle_thread_picker(window, cx);
-                    })
-                    .log_err();
-                }
-            })
-            .on_action({
-                move |_: &ToggleSessionPicker, window, cx| {
-                    this.update(cx, |this, cx| {
-                        this.toggle_session_picker(window, cx);
-                    })
-                    .log_err();
-                }
-            })
+            .on_action(panel_action::<workspace::ActivatePaneLeft>(
+                &this,
+                |panel, window, cx| {
+                    panel.activate_pane_in_direction(SplitDirection::Left, window, cx)
+                },
+            ))
+            .on_action(panel_action::<workspace::ActivatePaneRight>(
+                &this,
+                |panel, window, cx| {
+                    panel.activate_pane_in_direction(SplitDirection::Right, window, cx)
+                },
+            ))
+            .on_action(panel_action::<workspace::ActivatePaneUp>(
+                &this,
+                |panel, window, cx| {
+                    panel.activate_pane_in_direction(SplitDirection::Up, window, cx)
+                },
+            ))
+            .on_action(panel_action::<workspace::ActivatePaneDown>(
+                &this,
+                |panel, window, cx| {
+                    panel.activate_pane_in_direction(SplitDirection::Down, window, cx)
+                },
+            ))
+            .on_action(panel_action::<FocusConsole>(&this, |panel, window, cx| {
+                panel.activate_item(DebuggerPaneItem::Console, window, cx)
+            }))
+            .on_action(panel_action::<FocusVariables>(
+                &this,
+                |panel, window, cx| panel.activate_item(DebuggerPaneItem::Variables, window, cx),
+            ))
+            .on_action(panel_action::<FocusBreakpointList>(
+                &this,
+                |panel, window, cx| {
+                    panel.activate_item(DebuggerPaneItem::BreakpointList, window, cx)
+                },
+            ))
+            .on_action(panel_action::<FocusFrames>(&this, |panel, window, cx| {
+                panel.activate_item(DebuggerPaneItem::Frames, window, cx)
+            }))
+            .on_action(panel_action::<FocusModules>(&this, |panel, window, cx| {
+                panel.activate_item(DebuggerPaneItem::Modules, window, cx)
+            }))
+            .on_action(panel_action::<FocusLoadedSources>(
+                &this,
+                |panel, window, cx| {
+                    panel.activate_item(DebuggerPaneItem::LoadedSources, window, cx)
+                },
+            ))
+            .on_action(panel_action::<FocusTerminal>(&this, |panel, window, cx| {
+                panel.activate_item(DebuggerPaneItem::Terminal, window, cx)
+            }))
+            .on_action(panel_action::<ToggleThreadPicker>(
+                &this,
+                |panel, window, cx| panel.toggle_thread_picker(window, cx),
+            ))
+            .on_action(panel_action::<ToggleSessionPicker>(
+                &this,
+                |panel, window, cx| panel.toggle_session_picker(window, cx),
+            ))
             .on_action(cx.listener(Self::toggle_zoom))
             .on_action(cx.listener(|panel, _: &ToggleExpandItem, _, cx| {
                 let Some(session) = panel.active_session() else {

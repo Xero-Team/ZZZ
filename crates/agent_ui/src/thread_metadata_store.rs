@@ -277,16 +277,14 @@ fn migrate_thread_ids(cx: &mut App) {
             return Ok(());
         }
 
-        let mut reloaded = false;
-        for metadata in db.list()? {
-            db.save(metadata).await?;
-            reloaded = true;
-        }
-
-        let reloaded_task = if reloaded {
-            store.update(cx, |store, cx| store.reload(cx))
-        } else {
+        let rows = db.list()?;
+        let reloaded_task = if rows.is_empty() {
             Task::ready(()).shared()
+        } else {
+            for metadata in rows {
+                db.save(metadata).await?;
+            }
+            store.update(cx, |store, cx| store.reload(cx))
         };
 
         kvp.write_kvp(THREAD_ID_MIGRATION_KEY.to_owned(), "1".to_owned())
@@ -723,6 +721,19 @@ impl ThreadMetadataStore {
         }
     }
 
+    /// A copy of `thread` whose folder paths are `folder_paths`, keeping the
+    /// main worktree list when it is still consistent with the new folders.
+    fn with_folder_paths(thread: &ThreadMetadata, folder_paths: PathList) -> ThreadMetadata {
+        ThreadMetadata {
+            worktree_paths: WorktreePaths::from_path_lists(
+                thread.main_worktree_paths().clone(),
+                folder_paths.clone(),
+            )
+            .unwrap_or_else(|_| WorktreePaths::from_folder_paths(&folder_paths)),
+            ..thread.clone()
+        }
+    }
+
     pub fn update_working_directories(
         &mut self,
         thread_id: ThreadId,
@@ -734,14 +745,8 @@ impl ThreadMetadataStore {
                 !thread.archived,
                 "update_working_directories called on archived thread"
             );
-            self.save_internal(ThreadMetadata {
-                worktree_paths: WorktreePaths::from_path_lists(
-                    thread.main_worktree_paths().clone(),
-                    work_dirs.clone(),
-                )
-                .unwrap_or_else(|_| WorktreePaths::from_folder_paths(&work_dirs)),
-                ..thread.clone()
-            });
+            let metadata = Self::with_folder_paths(thread, work_dirs);
+            self.save_internal(metadata);
             cx.notify();
         }
     }
@@ -851,52 +856,22 @@ impl ThreadMetadataStore {
         path_replacements: &[(PathBuf, PathBuf)],
         cx: &mut Context<Self>,
     ) {
-        if let Some(thread) = self.threads.get(&thread_id).cloned() {
-            let mut paths: Vec<PathBuf> = thread.folder_paths().paths().to_vec();
-            for (old_path, new_path) in path_replacements {
-                if let Some(pos) = paths.iter().position(|p| p == old_path) {
-                    paths[pos] = new_path.clone();
-                }
-            }
-            let new_folder_paths = PathList::new(&paths);
-            self.save_internal(ThreadMetadata {
-                worktree_paths: WorktreePaths::from_path_lists(
-                    thread.main_worktree_paths().clone(),
-                    new_folder_paths.clone(),
-                )
-                .unwrap_or_else(|_| WorktreePaths::from_folder_paths(&new_folder_paths)),
-                ..thread
-            });
-            cx.notify();
-        }
-    }
+        let Some(thread) = self.threads.get(&thread_id).cloned() else {
+            return;
+        };
 
-    pub fn complete_worktree_restore(
-        &mut self,
-        thread_id: ThreadId,
-        path_replacements: &[(PathBuf, PathBuf)],
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(thread) = self.threads.get(&thread_id).cloned() {
-            let mut paths: Vec<PathBuf> = thread.folder_paths().paths().to_vec();
-            for (old_path, new_path) in path_replacements {
-                for path in &mut paths {
-                    if path == old_path {
-                        *path = new_path.clone();
-                    }
+        let mut paths: Vec<PathBuf> = thread.folder_paths().paths().to_vec();
+        for (old_path, new_path) in path_replacements {
+            for path in &mut paths {
+                if path == old_path {
+                    *path = new_path.clone();
                 }
             }
-            let new_folder_paths = PathList::new(&paths);
-            self.save_internal(ThreadMetadata {
-                worktree_paths: WorktreePaths::from_path_lists(
-                    thread.main_worktree_paths().clone(),
-                    new_folder_paths.clone(),
-                )
-                .unwrap_or_else(|_| WorktreePaths::from_folder_paths(&new_folder_paths)),
-                ..thread
-            });
-            cx.notify();
         }
+
+        let metadata = Self::with_folder_paths(&thread, PathList::new(&paths));
+        self.save_internal(metadata);
+        cx.notify();
     }
 
     /// Apply a mutation to the worktree paths of all threads whose current
@@ -954,10 +929,12 @@ impl ThreadMetadataStore {
 
                 mutate(&mut thread.worktree_paths);
 
-                self.threads_by_main_paths
-                    .entry(thread.main_worktree_paths().clone())
-                    .or_default()
-                    .insert(*thread_id);
+                if !thread.main_worktree_paths().is_empty() {
+                    self.threads_by_main_paths
+                        .entry(thread.main_worktree_paths().clone())
+                        .or_default()
+                        .insert(*thread_id);
+                }
                 self.threads_by_paths
                     .entry(thread.folder_paths().clone())
                     .or_default()
@@ -1161,10 +1138,7 @@ impl ThreadMetadataStore {
     fn dedup_db_operations(operations: Vec<DbOperation>) -> Vec<DbOperation> {
         let mut ops = HashMap::default();
         for operation in operations.into_iter().rev() {
-            if ops.contains_key(&operation.id()) {
-                continue;
-            }
-            ops.insert(operation.id(), operation);
+            ops.entry(operation.id()).or_insert(operation);
         }
         ops.into_values().collect()
     }
@@ -3259,85 +3233,6 @@ mod tests {
         assert_eq!(wt1.len(), 1);
         assert_eq!(wt2.len(), 1);
         assert_eq!(wt1[0].id, wt2[0].id);
-    }
-
-    #[gpui::test]
-    async fn test_complete_worktree_restore_multiple_paths(cx: &mut TestAppContext) {
-        init_test(cx);
-        let store = cx.update(|cx| ThreadMetadataStore::global(cx));
-
-        let original_paths = PathList::new(&[
-            Path::new("/projects/worktree-a"),
-            Path::new("/projects/worktree-b"),
-            Path::new("/other/unrelated"),
-        ]);
-        let meta = make_metadata("session-multi", "Multi Thread", Utc::now(), original_paths);
-        let thread_id = meta.thread_id;
-
-        store.update(cx, |store, cx| {
-            store.save(meta, cx);
-        });
-
-        let replacements = vec![
-            (
-                PathBuf::from("/projects/worktree-a"),
-                PathBuf::from("/restored/worktree-a"),
-            ),
-            (
-                PathBuf::from("/projects/worktree-b"),
-                PathBuf::from("/restored/worktree-b"),
-            ),
-        ];
-
-        store.update(cx, |store, cx| {
-            store.complete_worktree_restore(thread_id, &replacements, cx);
-        });
-
-        let entry = store.read_with(cx, |store, _cx| store.entry(thread_id).cloned());
-        let entry = entry.unwrap();
-        let paths = entry.folder_paths().paths();
-        assert_eq!(paths.len(), 3);
-        assert!(paths.contains(&PathBuf::from("/restored/worktree-a")));
-        assert!(paths.contains(&PathBuf::from("/restored/worktree-b")));
-        assert!(paths.contains(&PathBuf::from("/other/unrelated")));
-    }
-
-    #[gpui::test]
-    async fn test_complete_worktree_restore_preserves_unmatched_paths(cx: &mut TestAppContext) {
-        init_test(cx);
-        let store = cx.update(|cx| ThreadMetadataStore::global(cx));
-
-        let original_paths =
-            PathList::new(&[Path::new("/projects/worktree-a"), Path::new("/other/path")]);
-        let meta = make_metadata("session-partial", "Partial", Utc::now(), original_paths);
-        let thread_id = meta.thread_id;
-
-        store.update(cx, |store, cx| {
-            store.save(meta, cx);
-        });
-
-        let replacements = vec![
-            (
-                PathBuf::from("/projects/worktree-a"),
-                PathBuf::from("/new/worktree-a"),
-            ),
-            (
-                PathBuf::from("/nonexistent/path"),
-                PathBuf::from("/should/not/appear"),
-            ),
-        ];
-
-        store.update(cx, |store, cx| {
-            store.complete_worktree_restore(thread_id, &replacements, cx);
-        });
-
-        let entry = store.read_with(cx, |store, _cx| store.entry(thread_id).cloned());
-        let entry = entry.unwrap();
-        let paths = entry.folder_paths().paths();
-        assert_eq!(paths.len(), 2);
-        assert!(paths.contains(&PathBuf::from("/new/worktree-a")));
-        assert!(paths.contains(&PathBuf::from("/other/path")));
-        assert!(!paths.contains(&PathBuf::from("/should/not/appear")));
     }
 
     #[gpui::test]

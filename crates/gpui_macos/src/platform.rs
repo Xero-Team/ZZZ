@@ -544,16 +544,23 @@ impl gpui::AppLifecycle for MacPlatform {
         use std::os::unix::process::CommandExt as _;
 
         let app_pid = std::process::id().to_string();
-        let app_path = binary_path
-            .or_else(|| {
-                self.app_path()
-                    .ok()
-                    // When the app is not bundled, `app_path` returns the
-                    // directory containing the executable. Disregard this
-                    // and get the path to the executable itself.
-                    .and_then(|path| (path.extension()?.to_str()? == "app").then_some(path))
-            })
-            .unwrap_or_else(|| std::env::current_exe().expect("current_exe should be present"));
+        let app_path = match binary_path.or_else(|| {
+            self.app_path()
+                .ok()
+                // When the app is not bundled, `app_path` returns the
+                // directory containing the executable. Disregard this
+                // and get the path to the executable itself.
+                .and_then(|path| (path.extension()?.to_str()? == "app").then_some(path))
+        }) {
+            Some(app_path) => app_path,
+            None => match std::env::current_exe() {
+                Ok(app_path) => app_path,
+                Err(error) => {
+                    log::error!("unable to find the running app to restart it: {error}");
+                    return;
+                }
+            },
+        };
 
         // Wait until this process has exited and then re-open this path.
         let script = r#"
@@ -798,7 +805,12 @@ impl Platform for MacPlatform {
         use objc2_app_kit::{NSModalResponse, NSModalResponseOK, NSOpenPanel};
         use objc2_foundation::NSString;
 
-        let marker = MainThreadMarker::new().expect("path prompts run on the main thread");
+        let Some(marker) = MainThreadMarker::new() else {
+            log::error!("path prompts must be shown from the main thread");
+            return failed_prompt(anyhow::anyhow!(
+                "path prompts must be shown from the main thread"
+            ));
+        };
         let (done_tx, done_rx) = oneshot::channel();
         self.foreground_executor()
             .spawn(async move {
@@ -852,8 +864,13 @@ impl Platform for MacPlatform {
 
         let url = NSURL::from_directory_path(directory);
         let suggested_name = suggested_name.map(NSString::from_str);
+        let Some(marker) = MainThreadMarker::new() else {
+            log::error!("path prompts must be shown from the main thread");
+            return failed_prompt(anyhow::anyhow!(
+                "path prompts must be shown from the main thread"
+            ));
+        };
         let (done_tx, done_rx) = oneshot::channel();
-        let marker = MainThreadMarker::new().expect("path prompts run on the main thread");
         self.foreground_executor()
             .spawn(async move {
                 let panel = NSSavePanel::savePanel(marker);
@@ -1275,12 +1292,26 @@ unsafe fn apply_window_appearance(appearance: Option<WindowAppearance>) {
     }
 }
 
+/// Returns a prompt channel that reports `error` instead of panicking when the
+/// prompt cannot be shown.
+fn failed_prompt<T>(error: anyhow::Error) -> oneshot::Receiver<Result<T>> {
+    let (done_tx, done_rx) = oneshot::channel();
+    if done_tx.send(Err(error)).is_err() {
+        log::error!("path prompt failed to show and the caller had already gone away");
+    }
+    done_rx
+}
+
 unsafe fn path_from_objc(path: id) -> PathBuf {
     let len = msg_send![path, lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
     let bytes = unsafe { path.UTF8String().cast::<u8>() };
-    let path = str::from_utf8(unsafe { slice::from_raw_parts(bytes, len) })
-        .expect("value should be present");
-    PathBuf::from(path)
+    if bytes.is_null() {
+        return PathBuf::new();
+    }
+    // Paths on macOS are not guaranteed to be valid UTF-8, so lossily convert
+    // rather than panicking on a name the filesystem allowed but Rust does not.
+    let bytes = unsafe { slice::from_raw_parts(bytes, len) };
+    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
 }
 
 unsafe fn get_mac_platform(object: &mut Object) -> &MacPlatform {

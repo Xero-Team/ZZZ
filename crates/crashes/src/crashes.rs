@@ -98,6 +98,10 @@ pub fn init<F: Future<Output = ()> + Send + Sync + 'static>(
                 // On macOS this "ping" is needed to ensure that all our
                 // `client.send_message` calls have been processed before we
                 // trigger the minidump request.
+                //
+                // The error is deliberately dropped: this runs inside a crash
+                // signal handler, where taking the logger's lock could deadlock.
+                // A failed ping surfaces through `request_dump` below anyway.
                 client.ping().ok();
                 client.request_dump(crash_context).is_ok()
             } else {
@@ -165,15 +169,19 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
 
     // Publishing the client to the OnceLock makes it visible to the signal
     // handler callback installed earlier.
-    CRASH_HANDLER.set(client.clone()).ok();
+    if CRASH_HANDLER.set(client.clone()).is_err() {
+        log::error!("crash handler client was already registered, keeping the first one");
+    }
     let messages: Vec<_> = mem::take(PENDING_CRASH_SERVER_MESSAGES.lock().as_mut());
-    for message in messages.into_iter() {
+    for message in messages {
         send_crash_server_message(message);
     }
     info!("crash handler registered");
 
     loop {
-        client.ping().ok();
+        if let Err(err) = client.ping() {
+            log::warn!("failed to ping the crash handler process: {err:?}");
+        }
         wait_timer(Duration::from_secs(10)).await;
     }
 }
@@ -392,7 +400,7 @@ fn strip_user_string_from_panic(message: &str) -> String {
             .any(|prefix| message.starts_with(prefix))
         && let Some(open) = message.find('`')
     {
-        return format!("{} `<redacted>`", &message[..open]);
+        return format!("{} `<redacted>`", message[..open].trim_end());
     }
     message.to_owned()
 }
@@ -438,6 +446,32 @@ pub fn panic_hook(info: &PanicHookInfo) {
         } else {
             std::process::abort();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_user_string_from_panic;
+
+    #[test]
+    fn redacts_the_user_string_of_a_slice_panic() {
+        assert_eq!(
+            strip_user_string_from_panic("byte index 4 is out of bounds of `secret`"),
+            "byte index 4 is out of bounds of `<redacted>`"
+        );
+        assert_eq!(
+            strip_user_string_from_panic("begin <= end (4 <= 2) when slicing `secret`"),
+            "begin <= end (4 <= 2) when slicing `<redacted>`"
+        );
+    }
+
+    #[test]
+    fn keeps_messages_that_do_not_embed_a_user_string() {
+        let message = "called `Option::unwrap()` on a `None` value";
+        assert_eq!(strip_user_string_from_panic(message), message);
+
+        let message = "byte index 4 is out of bounds";
+        assert_eq!(strip_user_string_from_panic(message), message);
     }
 }
 

@@ -7,7 +7,6 @@ use std::{
 use bytes::Bytes;
 use futures::AsyncRead;
 use http_body::{Body, Frame};
-use serde::Serialize;
 
 /// Based on the implementation of AsyncBody in
 /// <https://github.com/sagebind/isahc/blob/5c533f1ef4d6bdf1fd291b5103c22110f41d0bf0/src/body/mod.rs>.
@@ -18,7 +17,7 @@ pub enum Inner {
     Empty,
 
     /// A body stored in memory.
-    Bytes(std::io::Cursor<Bytes>),
+    Bytes(Cursor<Bytes>),
 
     /// An asynchronous reader.
     AsyncReader(Pin<Box<dyn futures::AsyncRead + Send + Sync>>),
@@ -89,19 +88,6 @@ impl From<&'static str> for AsyncBody {
     }
 }
 
-/// Newtype wrapper that serializes a value as JSON into an `AsyncBody`.
-pub struct Json<T: Serialize>(pub T);
-
-impl<T: Serialize> From<Json<T>> for AsyncBody {
-    fn from(json: Json<T>) -> Self {
-        Self::from_bytes(
-            serde_json::to_vec(&json.0)
-                .expect("failed to serialize JSON")
-                .into(),
-        )
-    }
-}
-
 impl<T: Into<Self>> From<Option<T>> for AsyncBody {
     fn from(body: Option<T>) -> Self {
         match body {
@@ -138,7 +124,9 @@ impl Body for AsyncBody {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        let mut buffer = vec![0; 8192];
+        // A stack buffer keeps frame reads allocation-free; every frame used to
+        // allocate a fresh 8 KiB vector.
+        let mut buffer = [0; 8192];
         match AsyncRead::poll_read(self.as_mut(), cx, &mut buffer) {
             Poll::Ready(Ok(0)) => Poll::Ready(None),
             Poll::Ready(Ok(n)) => {

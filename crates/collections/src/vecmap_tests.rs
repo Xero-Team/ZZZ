@@ -4,6 +4,8 @@
 //! states that can be created by the public API.
 
 use crate::vecmap::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 #[test]
 fn test_entry_vacant_or_insert() {
@@ -96,9 +98,6 @@ fn test_multiple_entries_independent() {
 }
 
 // entry_ref tests
-
-use std::cell::Cell;
-use std::rc::Rc;
 
 #[derive(PartialEq, Eq)]
 struct CountedKey {

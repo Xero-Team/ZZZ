@@ -12,8 +12,8 @@ use util::ResultExt;
 use crate::extension_locator_adapter::ExtensionLocatorAdapter;
 
 pub fn init(extension_host_proxy: Arc<ExtensionHostProxy>, cx: &mut App) {
-    let language_server_registry_proxy = DebugAdapterRegistryProxy::new(cx);
-    extension_host_proxy.register_debug_adapter_proxy(language_server_registry_proxy);
+    let debug_adapter_registry_proxy = DebugAdapterRegistryProxy::new(cx);
+    extension_host_proxy.register_debug_adapter_proxy(debug_adapter_registry_proxy);
 }
 
 #[derive(Clone)]

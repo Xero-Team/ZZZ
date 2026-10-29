@@ -19,5 +19,6 @@ i18n.workspace = true
 language.workspace = true
 project.workspace = true
 ui.workspace = true
+util.workspace = true
 workspace.workspace = true
 zzz_actions.workspace = true

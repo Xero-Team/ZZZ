@@ -41,8 +41,8 @@ impl ComponentPreviewDb {
                 active_page_id = ?3";
         self.write(move |conn| {
             let mut statement = Statement::prepare(conn, query)?;
-            let mut next_index = statement.bind(&item_id, 1)?;
-            next_index = statement.bind(&workspace_id, next_index)?;
+            let next_index = statement.bind(&item_id, 1)?;
+            let next_index = statement.bind(&workspace_id, next_index)?;
             statement.bind(&active_page_id, next_index)?;
             statement.exec()
         })

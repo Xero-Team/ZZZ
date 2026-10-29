@@ -919,9 +919,11 @@ async fn do_create_worktree(
                 }
             }
             Ok(Err(err)) => {
-                Err::<(), _>(err).log_err();
+                log::error!("failed to list existing worktrees: {err:#}");
             }
-            Err(_) => {}
+            Err(canceled) => {
+                log::error!("listing existing worktrees was cancelled: {canceled}");
+            }
         }
     }
 
@@ -983,14 +985,12 @@ async fn do_create_worktree(
     }
 
     let mut all_paths = created_paths;
-    let has_non_git = !non_git_paths.is_empty();
     all_paths.extend(non_git_paths.iter().cloned());
 
     open_worktree_workspace(
         all_paths,
         path_remapping,
         non_git_paths,
-        has_non_git,
         previous_state,
         workspace,
         window_handle,
@@ -1017,14 +1017,12 @@ async fn do_switch_worktree(
         .collect();
 
     let mut all_paths = vec![worktree_path];
-    let has_non_git = !non_git_paths.is_empty();
     all_paths.extend(non_git_paths.iter().cloned());
 
     open_worktree_workspace(
         all_paths,
         path_remapping,
         non_git_paths,
-        has_non_git,
         previous_state,
         workspace,
         window_handle,
@@ -1040,7 +1038,6 @@ async fn open_worktree_workspace(
     all_paths: Vec<PathBuf>,
     path_remapping: Vec<(PathBuf, PathBuf)>,
     non_git_paths: Vec<PathBuf>,
-    has_non_git: bool,
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
     window_handle: Option<gpui::WindowHandle<MultiWorkspace>>,
@@ -1052,6 +1049,7 @@ async fn open_worktree_workspace(
         .ok_or_else(|| anyhow!("No window handle available for workspace creation"))?;
 
     let focused_dock = previous_state.focused_dock;
+    let has_non_git = !non_git_paths.is_empty();
 
     let is_creating_new_worktree = matches!(operation, WorktreeOperation::Create);
 
@@ -1149,14 +1147,13 @@ async fn open_worktree_workspace(
                     struct WorktreeCreationToast;
                     let toast_id =
                         workspace::notifications::NotificationId::unique::<WorktreeCreationToast>();
-                    workspace.show_toast(
-                        workspace::Toast::new(
-                            toast_id,
-                            "Some project folders are not git repositories. \
-                             They were included as-is without creating a worktree.",
-                        ),
+                    let message = tr(
                         cx,
+                        "git_ui.worktree_service.non_git_folders_included",
+                        "Some project folders are not git repositories. They were included as-is \
+                         without creating a worktree.",
                     );
+                    workspace.show_toast(workspace::Toast::new(toast_id, message), cx);
                 }
 
                 // Remap every previously-open file path into the new worktree.
@@ -1174,10 +1171,11 @@ async fn open_worktree_workspace(
                         return Some(remapped_path);
                     }
 
-                    for non_git in &non_git_paths {
-                        if original_path.starts_with(non_git) {
-                            return Some(original_path);
-                        }
+                    if non_git_paths
+                        .iter()
+                        .any(|non_git| original_path.starts_with(non_git))
+                    {
+                        return Some(original_path);
                     }
                     None
                 };

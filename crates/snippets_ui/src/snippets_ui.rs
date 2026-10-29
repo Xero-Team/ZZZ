@@ -238,13 +238,13 @@ impl PickerDelegate for ScopeSelectorDelegate {
                                         window,
                                         cx,
                                     )
-                                    .detach();
+                                    .detach_and_log_err(cx);
                             })
-                            .detach();
+                            .detach_and_log_err(cx);
                     })
                 })
                 .detach_and_log_err(cx);
-            };
+            }
         }
         self.dismissed(window, cx);
     }

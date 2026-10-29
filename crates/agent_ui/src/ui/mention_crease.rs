@@ -243,9 +243,9 @@ fn open_thread(
         return;
     };
 
-    // Thread mentions from legacy data reference threads by session ID only.
-    // Use NativeAgent as the fallback agent key so stale mentions degrade gracefully
-    // (the removed-agent stub returns a clear error rather than crashing).
+    // Thread mentions from legacy data reference threads by session ID only, so the
+    // owning agent is unknown. `Agent::Absent` degrades gracefully: it resolves to a
+    // stub agent that reports a clear error instead of panicking.
     panel.update(cx, |panel, cx| {
         panel.load_agent_thread(
             Agent::Absent,

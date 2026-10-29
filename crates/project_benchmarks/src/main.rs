@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use askpass::EncryptedPassword;
 use clap::Parser;
 use client::{Client, UserStore};
@@ -115,96 +115,118 @@ fn main() -> Result<(), anyhow::Error> {
         let registry = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
         let fs = Arc::new(RealFs::new(None, cx.background_executor().clone()));
 
-
-
-            cx.spawn(async move |cx| {
-                let project = if let Some(ssh_target) = args.ssh {
-                    println!("Setting up SSH connection for {}", ssh_target);
-                    let ssh_connection_options = SshConnectionOptions::parse_command_line(&ssh_target)?;
-
-                    let connection_options = remote::RemoteConnectionOptions::from(ssh_connection_options);
-                    let delegate = Arc::new(BenchmarkRemoteClient);
-                    let remote_connection = remote::connect(connection_options.clone(), delegate.clone(), cx).await.expect("value should be present");
-
-                    let (_tx, rx) = oneshot::channel();
-                    let remote_client =  cx.update(|cx| remote::RemoteClient::new(ConnectionIdentifier::setup(), remote_connection, rx, delegate.clone(), cx )).await?.ok_or_else(|| anyhow!("ssh initialization returned None"))?;
-
-                    cx.update(|cx| Project::remote(remote_client,  client, node, user_store, registry, fs, false, cx))
-                } else {
-                    println!("Setting up local project");
-                    cx.update(|cx| Project::local(
-                    client,
-                    node,
-                    user_store,
-                    registry,
-                    fs,
-                    Some(Default::default()),
-                    project::LocalProjectFlags {
-                        init_worktree_trust: false,
-                        ..Default::default()
-                    },
-                    cx,
-                ))
-                };
-                println!("Loading worktrees");
-                let worktrees = project.update(cx, |this, cx| {
-                    args.worktrees
-                        .into_iter()
-                        .map(|worktree| this.find_or_create_worktree(worktree, true, cx))
-                        .collect::<Vec<_>>()
-                });
-
-                let worktrees = futures::future::join_all(worktrees)
+        cx.spawn(async move |cx| {
+            let project = if let Some(ssh_target) = args.ssh {
+                println!("Setting up SSH connection for {ssh_target}");
+                let ssh_connection_options = SshConnectionOptions::parse_command_line(&ssh_target)?;
+                let connection_options = remote::RemoteConnectionOptions::from(ssh_connection_options);
+                let delegate = Arc::new(BenchmarkRemoteClient);
+                let remote_connection = remote::connect(connection_options, delegate.clone(), cx)
                     .await
+                    .with_context(|| format!("failed to connect to {ssh_target}"))?;
+
+                let (_tx, rx) = oneshot::channel();
+                let remote_client = cx
+                    .update(|cx| {
+                        remote::RemoteClient::new(
+                            ConnectionIdentifier::setup(),
+                            remote_connection,
+                            rx,
+                            delegate.clone(),
+                            cx,
+                        )
+                    })
+                    .await?
+                    .ok_or_else(|| anyhow!("SSH initialization returned None"))?;
+
+                cx.update(|cx| {
+                    Project::remote(
+                        remote_client,
+                        client,
+                        node,
+                        user_store,
+                        registry,
+                        fs,
+                        false,
+                        cx,
+                    )
+                })
+            } else {
+                println!("Setting up local project");
+                cx.update(|cx| {
+                    Project::local(
+                        client,
+                        node,
+                        user_store,
+                        registry,
+                        fs,
+                        Some(Default::default()),
+                        project::LocalProjectFlags {
+                            init_worktree_trust: false,
+                            ..Default::default()
+                        },
+                        cx,
+                    )
+                })
+            };
+
+            println!("Loading worktrees");
+            let worktrees = project.update(cx, |this, cx| {
+                args.worktrees
                     .into_iter()
-                    .collect::<Result<Vec<_>, anyhow::Error>>()?;
+                    .map(|worktree| this.find_or_create_worktree(worktree, true, cx))
+                    .collect::<Vec<_>>()
+            });
 
-                for (worktree, _) in &worktrees {
-                    let scan_complete = worktree
-                        .update(cx, |this, _| {
-                            this.as_local().map(|local| local.scan_complete())
-                        });
-                    if let Some(scan_complete) = scan_complete {
-                        scan_complete.await;
-                    } else {
-                        cx.background_executor().timer(Duration::from_secs(10)).await;
-                    }
+            let worktrees = futures::future::join_all(worktrees)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
+            for (worktree, _) in &worktrees {
+                let scan_complete = worktree
+                    .update(cx, |this, _| this.as_local().map(|local| local.scan_complete()));
+                if let Some(scan_complete) = scan_complete {
+                    scan_complete.await;
+                } else {
+                    cx.background_executor()
+                        .timer(Duration::from_secs(10))
+                        .await;
                 }
-                println!("Worktrees loaded");
+            }
+            println!("Worktrees loaded");
 
-                println!("Starting a project search");
-                let timer = std::time::Instant::now();
-                let mut first_match = None;
-                let matches = project.update(cx, |this, cx| this.search(query, cx));
-                let mut matched_files = 0;
-                let mut matched_chunks = 0;
-                while let Ok(match_result) = matches.rx.recv().await {
-                    if first_match.is_none() {
-                        let time = timer.elapsed();
-                        first_match = Some(time);
-                        println!("First match found after {time:?}");
-                    }
-                    match match_result {
-                        SearchResult::Buffer { ranges, .. } => {
-                            matched_files += 1;
-                            matched_chunks += ranges.len();
-                        }
-                        SearchResult::LimitReached => break,
-                        SearchResult::WaitingForScan | SearchResult::Searching => {}
-                    }
+            println!("Starting a project search");
+            let timer = std::time::Instant::now();
+            let mut first_match = None;
+            let matches = project.update(cx, |this, cx| this.search(query, cx));
+            let mut matched_files = 0;
+            let mut matched_chunks = 0;
+            while let Ok(match_result) = matches.rx.recv().await {
+                if first_match.is_none() {
+                    let time = timer.elapsed();
+                    first_match = Some(time);
+                    println!("First match found after {time:?}");
                 }
-                let elapsed = timer.elapsed();
-                println!(
-                    "Finished project search after {elapsed:?}. Matched {matched_files} files and {matched_chunks} excerpts"
-                );
-                drop(project);
-                cx.update(|cx| cx.quit());
+                match match_result {
+                    SearchResult::Buffer { ranges, .. } => {
+                        matched_files += 1;
+                        matched_chunks += ranges.len();
+                    }
+                    SearchResult::LimitReached => break,
+                    SearchResult::WaitingForScan | SearchResult::Searching => {}
+                }
+            }
+            let elapsed = timer.elapsed();
+            println!(
+                "Finished project search after {elapsed:?}. Matched {matched_files} files and {matched_chunks} excerpts"
+            );
+            drop(project);
+            cx.update(|cx| cx.quit());
 
-                anyhow::Ok(())
-            })
-            .detach_and_log_err(cx);
-
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
     });
     Ok(())
 }

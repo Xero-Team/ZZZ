@@ -225,17 +225,7 @@ fn conflicts_updated(
             removed_block_ids.insert(block_id);
         }
 
-        editor.remove_gutter_highlights::<ConflictsOuter>(removed_highlighted_ranges.clone(), cx);
-
-        editor.remove_highlighted_rows::<ConflictsOuter>(removed_highlighted_ranges.clone(), cx);
-        editor.remove_highlighted_rows::<ConflictsOurs>(removed_highlighted_ranges.clone(), cx);
-        editor
-            .remove_highlighted_rows::<ConflictsOursMarker>(removed_highlighted_ranges.clone(), cx);
-        editor.remove_highlighted_rows::<ConflictsTheirs>(removed_highlighted_ranges.clone(), cx);
-        editor.remove_highlighted_rows::<ConflictsTheirsMarker>(
-            removed_highlighted_ranges.clone(),
-            cx,
-        );
+        remove_conflict_highlights(editor, removed_highlighted_ranges, cx);
         editor.remove_blocks(removed_block_ids, None, cx);
     }
 
@@ -294,6 +284,21 @@ fn conflicts_updated(
     }
 }
 
+/// Removes every conflict highlight kind (gutter and row highlights) for
+/// `ranges`, so callers do not have to keep the full list in sync by hand.
+fn remove_conflict_highlights(
+    editor: &mut Editor,
+    ranges: Vec<Range<editor::Anchor>>,
+    cx: &mut Context<Editor>,
+) {
+    editor.remove_gutter_highlights::<ConflictsOuter>(ranges.clone(), cx);
+    editor.remove_highlighted_rows::<ConflictsOuter>(ranges.clone(), cx);
+    editor.remove_highlighted_rows::<ConflictsOurs>(ranges.clone(), cx);
+    editor.remove_highlighted_rows::<ConflictsOursMarker>(ranges.clone(), cx);
+    editor.remove_highlighted_rows::<ConflictsTheirs>(ranges.clone(), cx);
+    editor.remove_highlighted_rows::<ConflictsTheirsMarker>(ranges, cx);
+}
+
 #[ztracing::instrument(skip_all)]
 fn update_conflict_highlighting(
     editor: &mut Editor,
@@ -337,6 +342,23 @@ fn update_conflict_highlighting(
     );
 }
 
+/// A button that resolves `conflict` keeping only `ranges`.
+fn resolve_button(
+    id: &'static str,
+    label: SharedString,
+    ranges: Vec<Range<Anchor>>,
+    conflict: &ConflictRegion,
+    editor: &WeakEntity<Editor>,
+) -> Button {
+    let editor = editor.clone();
+    let conflict = conflict.clone();
+    Button::new(id, label)
+        .label_size(LabelSize::Small)
+        .on_click(move |_, window, cx| {
+            resolve_conflict(editor.clone(), conflict.clone(), ranges.clone(), window, cx).detach()
+        })
+}
+
 fn render_conflict_buttons(
     conflict: &ConflictRegion,
     editor: WeakEntity<Editor>,
@@ -350,78 +372,31 @@ fn render_conflict_buttons(
         .ml(cx.margins.gutter.width)
         .gap_1()
         .bg(cx.theme().colors().editor_background)
-        .child(
-            Button::new(
-                "head",
-                tr(cx, "git_ui.conflict_view.use_branch", "Use {}").replacen(
-                    "{}",
-                    &conflict.ours_branch_name,
-                    1,
-                ),
-            )
-            .label_size(LabelSize::Small)
-            .on_click({
-                let editor = editor.clone();
-                let conflict = conflict.clone();
-                let ours = conflict.ours.clone();
-                move |_, window, cx| {
-                    resolve_conflict(
-                        editor.clone(),
-                        conflict.clone(),
-                        vec![ours.clone()],
-                        window,
-                        cx,
-                    )
-                    .detach()
-                }
-            }),
-        )
-        .child(
-            Button::new(
-                "origin",
-                tr(cx, "git_ui.conflict_view.use_branch", "Use {}").replacen(
-                    "{}",
-                    &conflict.theirs_branch_name,
-                    1,
-                ),
-            )
-            .label_size(LabelSize::Small)
-            .on_click({
-                let editor = editor.clone();
-                let conflict = conflict.clone();
-                let theirs = conflict.theirs.clone();
-                move |_, window, cx| {
-                    resolve_conflict(
-                        editor.clone(),
-                        conflict.clone(),
-                        vec![theirs.clone()],
-                        window,
-                        cx,
-                    )
-                    .detach()
-                }
-            }),
-        )
-        .child(
-            Button::new("both", tr(cx, "git_ui.conflict_view.use_both", "Use Both"))
-                .label_size(LabelSize::Small)
-                .on_click({
-                    let editor = editor.clone();
-                    let conflict = conflict.clone();
-                    let ours = conflict.ours.clone();
-                    let theirs = conflict.theirs.clone();
-                    move |_, window, cx| {
-                        resolve_conflict(
-                            editor.clone(),
-                            conflict.clone(),
-                            vec![ours.clone(), theirs.clone()],
-                            window,
-                            cx,
-                        )
-                        .detach()
-                    }
-                }),
-        )
+        .child(resolve_button(
+            "head",
+            tr(cx, "git_ui.conflict_view.use_branch", "Use {}")
+                .replacen("{}", &conflict.ours_branch_name, 1)
+                .into(),
+            vec![conflict.ours.clone()],
+            conflict,
+            &editor,
+        ))
+        .child(resolve_button(
+            "origin",
+            tr(cx, "git_ui.conflict_view.use_branch", "Use {}")
+                .replacen("{}", &conflict.theirs_branch_name, 1)
+                .into(),
+            vec![conflict.theirs.clone()],
+            conflict,
+            &editor,
+        ))
+        .child(resolve_button(
+            "both",
+            tr(cx, "git_ui.conflict_view.use_both", "Use Both").into(),
+            vec![conflict.ours.clone(), conflict.theirs.clone()],
+            conflict,
+            &editor,
+        ))
         .when(is_ai_enabled, |this| {
             this.child(Divider::vertical()).child(
                 Button::new(
@@ -547,13 +522,7 @@ pub(crate) fn resolve_conflict(
                 return;
             };
 
-            editor.remove_gutter_highlights::<ConflictsOuter>(vec![range.clone()], cx);
-
-            editor.remove_highlighted_rows::<ConflictsOuter>(vec![range.clone()], cx);
-            editor.remove_highlighted_rows::<ConflictsOurs>(vec![range.clone()], cx);
-            editor.remove_highlighted_rows::<ConflictsTheirs>(vec![range.clone()], cx);
-            editor.remove_highlighted_rows::<ConflictsOursMarker>(vec![range.clone()], cx);
-            editor.remove_highlighted_rows::<ConflictsTheirsMarker>(vec![range], cx);
+            remove_conflict_highlights(editor, vec![range], cx);
             editor.remove_blocks(HashSet::from_iter([block_id]), None, cx);
         });
     })
@@ -654,21 +623,34 @@ impl Render for MergeConflictIndicator {
 
         let file_count = self.conflicted_paths.len();
 
-        let message: SharedString = format!(
-            "Resolve Merge Conflict{} with Agent",
-            if file_count == 1 { "" } else { "s" }
-        )
-        .into();
+        let message = if file_count == 1 {
+            tr(
+                cx,
+                "git_ui.conflict_view.resolve_merge_conflict_with_agent",
+                "Resolve Merge Conflict with Agent",
+            )
+        } else {
+            tr(
+                cx,
+                "git_ui.conflict_view.resolve_merge_conflicts_with_agent",
+                "Resolve Merge Conflicts with Agent",
+            )
+        };
 
-        let tooltip_label: SharedString = format!(
-            "Found {} {} across the codebase",
-            file_count,
-            if file_count == 1 {
-                "conflict"
-            } else {
-                "conflicts"
-            }
-        )
+        let tooltip_label: SharedString = if file_count == 1 {
+            tr(
+                cx,
+                "git_ui.conflict_view.found_one_conflict",
+                "Found 1 conflict across the codebase",
+            )
+        } else {
+            tr(
+                cx,
+                "git_ui.conflict_view.found_many_conflicts",
+                "Found {} conflicts across the codebase",
+            )
+            .replacen("{}", &file_count.to_string(), 1)
+        }
         .into();
 
         let border_color = cx.theme().colors().text_accent.opacity(0.2);

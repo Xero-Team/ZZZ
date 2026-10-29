@@ -6,10 +6,11 @@ use std::{
 use cpal::DeviceId;
 use gpui::App;
 use settings::{RegisterSetting, Settings, SettingsStore};
+use util::ResultExt;
 
 #[derive(Clone, Debug, RegisterSetting)]
 pub struct AudioSettings {
-    /// Automatically increase or decrease you microphone's volume. This affects how
+    /// Automatically increase or decrease your microphone's volume. This affects how
     /// loud you sound to others.
     ///
     /// Recommended: off (default)
@@ -33,12 +34,21 @@ impl Settings for AudioSettings {
                 .unwrap_or(false),
             output_audio_device: audio
                 .and_then(|audio| audio.output_audio_device.as_ref())
-                .and_then(|x| x.0.as_ref().and_then(|id| DeviceId::from_str(&id).ok())),
+                .and_then(|device| parse_device_id(device.0.as_ref())),
             input_audio_device: audio
                 .and_then(|audio| audio.input_audio_device.as_ref())
-                .and_then(|x| x.0.as_ref().and_then(|id| DeviceId::from_str(&id).ok())),
+                .and_then(|device| parse_device_id(device.0.as_ref())),
         }
     }
+}
+
+/// Parses a device id stored in the settings file.
+///
+/// An unparsable id is logged and treated as "no device selected", so a stale
+/// or hand-edited setting falls back to the default device instead of failing.
+fn parse_device_id(id: Option<&String>) -> Option<DeviceId> {
+    let id = id?;
+    DeviceId::from_str(id).log_err()
 }
 
 /// See docs on [LIVE_SETTINGS]
@@ -70,3 +80,26 @@ impl LiveSettings {
 pub static LIVE_SETTINGS: LiveSettings = LiveSettings {
     auto_microphone_volume: AtomicBool::new(false),
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unparsable_device_ids_fall_back_to_no_device() {
+        assert_eq!(parse_device_id(None), None);
+        assert_eq!(parse_device_id(Some(&"not-a-device-id".to_owned())), None);
+    }
+
+    #[test]
+    fn parsable_device_ids_are_kept() {
+        // Derive the string from the host of the current platform: `FromStr`
+        // rejects host names that the running platform does not support, so a
+        // hard-coded backend name would make this test platform-specific.
+        let device_id = cpal::DeviceId::new(cpal::default_host().id(), "device-0");
+        assert_eq!(
+            parse_device_id(Some(&device_id.to_string())),
+            Some(device_id)
+        );
+    }
+}

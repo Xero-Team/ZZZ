@@ -8,28 +8,29 @@ fn main() {
         return;
     };
 
-    let _ = headless().run(|cx| {
+    headless().run(|cx| {
         let fs = fs::RealFs::new(None, cx.background_executor().clone());
         cx.background_spawn(async move {
             let timer = std::time::Instant::now();
-            let result = fs.load_bytes(path_to_read.as_ref()).await;
-            let elapsed = timer.elapsed();
-            if let Err(e) = result {
-                println!("Failed `load_bytes` after {elapsed:?} with error `{e}`");
-            } else {
-                println!(
-                    "Took {elapsed:?} to read {} bytes",
-                    result.expect("value should be present").len()
-                );
-            };
+            match fs.load_bytes(path_to_read.as_ref()).await {
+                Ok(bytes) => {
+                    println!("Took {:?} to read {} bytes", timer.elapsed(), bytes.len())
+                }
+                Err(error) => println!(
+                    "Failed `load_bytes` after {:?} with error `{error}`",
+                    timer.elapsed()
+                ),
+            }
+
             let timer = std::time::Instant::now();
-            let result = fs.metadata(path_to_read.as_ref()).await;
-            let elapsed = timer.elapsed();
-            if let Err(e) = result {
-                println!("Failed `metadata` after {elapsed:?} with error `{e}`");
-            } else {
-                println!("Took {elapsed:?} to query metadata");
-            };
+            match fs.metadata(path_to_read.as_ref()).await {
+                Ok(_) => println!("Took {:?} to query metadata", timer.elapsed()),
+                Err(error) => println!(
+                    "Failed `metadata` after {:?} with error `{error}`",
+                    timer.elapsed()
+                ),
+            }
+
             std::process::exit(0);
         })
         .detach();

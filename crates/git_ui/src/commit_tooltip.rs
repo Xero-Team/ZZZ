@@ -244,11 +244,10 @@ impl CommitTooltip {
             CommitDetails {
                 sha: blame.sha.to_string().into(),
                 commit_time,
-                author_name: blame
-                    .author
-                    .clone()
-                    .unwrap_or("<no name>".to_owned())
-                    .into(),
+                author_name: blame.author.clone().map_or_else(
+                    || tr(cx, "git_ui.blame_ui.no_author_name", "<no name>").into(),
+                    SharedString::from,
+                ),
                 author_email: blame.author_mail.clone().unwrap_or(String::new()).into(),
                 message: details,
                 tag_names,
@@ -299,7 +298,7 @@ impl Render for CommitTooltip {
             .commit
             .sha
             .get(0..8)
-            .map_or_else(|| self.commit.sha.clone(), |sha| sha.to_owned().into());
+            .map_or_else(|| self.commit.sha.clone(), SharedString::from);
         let full_sha = self.commit.sha.to_string();
         let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
         let absolute_timestamp = time_format::format_localized_timestamp(
@@ -308,20 +307,23 @@ impl Render for CommitTooltip {
             local_offset,
             time_format::TimestampFormat::MediumAbsolute,
         );
-        let markdown_style = {
-            let style = hover_markdown_style(window, cx);
-            style
-        };
+        let markdown_style = hover_markdown_style(window, cx);
 
-        let message = self
-            .commit
-            .message
-            .as_ref()
-            .map_or("<no commit message>".into_any(), |_| {
+        let message = self.commit.message.as_ref().map_or_else(
+            || {
+                SharedString::from(tr(
+                    cx,
+                    "git_ui.blame_ui.no_commit_message",
+                    "<no commit message>",
+                ))
+                .into_any_element()
+            },
+            |_| {
                 MarkdownElement::new(self.markdown.clone(), markdown_style)
                     .scroll_handle(self.scroll_handle.clone())
                     .into_any()
-            });
+            },
+        );
 
         let pull_request = self
             .commit
@@ -340,16 +342,10 @@ impl Render for CommitTooltip {
                 .commit
                 .message
                 .as_ref()
-                .map_or(Default::default(), |message| {
-                    message
-                        .message
-                        .split('\n')
-                        .next()
-                        .expect("iterator should yield an item")
-                        .trim_end()
-                        .to_owned()
-                        .into()
-                }),
+                .and_then(|message| message.message.lines().next())
+                .map(str::trim_end)
+                .unwrap_or_default()
+                .into(),
             commit_timestamp: self.commit.commit_time.unix_timestamp(),
             author_name: self.commit.author_name.clone(),
             has_parent: false,
@@ -464,23 +460,4 @@ impl Render for CommitTooltip {
                 )
         })
     }
-}
-
-fn blame_entry_timestamp(blame_entry: &BlameEntry, format: time_format::TimestampFormat) -> String {
-    match blame_entry.author_offset_date_time() {
-        Ok(timestamp) => {
-            let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-            time_format::format_localized_timestamp(
-                timestamp,
-                time::OffsetDateTime::now_utc(),
-                local_offset,
-                format,
-            )
-        }
-        Err(_) => "Error parsing date".to_owned(),
-    }
-}
-
-pub fn blame_entry_relative_timestamp(blame_entry: &BlameEntry) -> String {
-    blame_entry_timestamp(blame_entry, time_format::TimestampFormat::Relative)
 }

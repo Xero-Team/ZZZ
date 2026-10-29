@@ -171,9 +171,7 @@ impl AgentSettings {
     pub fn message_editor_max_lines(&self) -> usize {
         self.message_editor_min_lines * 2
     }
-}
 
-impl AgentSettings {
     pub fn get_layout(cx: &App) -> WindowLayout {
         let store = cx.global::<SettingsStore>();
         let merged = store.merged_settings();
@@ -424,27 +422,21 @@ fn compile_tool_permissions(content: Option<settings::ToolPermissionsContent>) -
         .into_iter()
         .map(|(tool_name, rules_content)| {
             let mut invalid_patterns = Vec::new();
-
-            let (always_allow, allow_errors) = compile_regex_rules(
-                rules_content.always_allow.map(|v| v.0).unwrap_or_default(),
+            let always_allow = compile_regex_rules(
+                rules_content.always_allow,
                 "always_allow",
+                &mut invalid_patterns,
             );
-            invalid_patterns.extend(allow_errors);
-
-            let (always_deny, deny_errors) = compile_regex_rules(
-                rules_content.always_deny.map(|v| v.0).unwrap_or_default(),
+            let always_deny = compile_regex_rules(
+                rules_content.always_deny,
                 "always_deny",
+                &mut invalid_patterns,
             );
-            invalid_patterns.extend(deny_errors);
-
-            let (always_confirm, confirm_errors) = compile_regex_rules(
-                rules_content
-                    .always_confirm
-                    .map(|v| v.0)
-                    .unwrap_or_default(),
+            let always_confirm = compile_regex_rules(
+                rules_content.always_confirm,
                 "always_confirm",
+                &mut invalid_patterns,
             );
-            invalid_patterns.extend(confirm_errors);
 
             // Log invalid patterns for debugging. Users will see an error when they
             // attempt to use a tool with invalid patterns in their settings.
@@ -476,16 +468,17 @@ fn compile_tool_permissions(content: Option<settings::ToolPermissionsContent>) -
     }
 }
 
+/// Compiles one rule list, appending every invalid pattern to `invalid_patterns`.
 fn compile_regex_rules(
-    rules: Vec<settings::ToolRegexRule>,
+    rules: Option<settings::ExtendingVec<settings::ToolRegexRule>>,
     rule_type: &str,
-) -> (Vec<CompiledRegex>, Vec<InvalidRegexPattern>) {
+    invalid_patterns: &mut Vec<InvalidRegexPattern>,
+) -> Vec<CompiledRegex> {
     let mut compiled = Vec::new();
-    let mut errors = Vec::new();
 
-    for rule in rules {
+    for rule in rules.map(|rules| rules.0).unwrap_or_default() {
         if rule.pattern.is_empty() {
-            errors.push(InvalidRegexPattern {
+            invalid_patterns.push(InvalidRegexPattern {
                 pattern: rule.pattern,
                 rule_type: rule_type.to_owned(),
                 error: "empty regex patterns are not allowed".to_owned(),
@@ -495,17 +488,15 @@ fn compile_regex_rules(
         let case_sensitive = rule.case_sensitive.unwrap_or(false);
         match CompiledRegex::try_new(&rule.pattern, case_sensitive) {
             Ok(regex) => compiled.push(regex),
-            Err(error) => {
-                errors.push(InvalidRegexPattern {
-                    pattern: rule.pattern,
-                    rule_type: rule_type.to_owned(),
-                    error: error.to_string(),
-                });
-            }
+            Err(error) => invalid_patterns.push(InvalidRegexPattern {
+                pattern: rule.pattern,
+                rule_type: rule_type.to_owned(),
+                error: error.to_string(),
+            }),
         }
     }
 
-    (compiled, errors)
+    compiled
 }
 
 #[cfg(test)]

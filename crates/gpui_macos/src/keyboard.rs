@@ -36,14 +36,9 @@ impl PlatformKeyboardMapper for MacKeyboardMapper {
         use_key_equivalents: bool,
     ) -> KeybindingKeystroke {
         if use_key_equivalents && let Some(key_equivalents) = &self.key_equivalents {
-            if keystroke.key.chars().count() == 1
-                && let Some(key) = key_equivalents.get(
-                    &keystroke
-                        .key
-                        .chars()
-                        .next()
-                        .expect("iterator should yield an item"),
-                )
+            if let Some(key_char) = keystroke.key.chars().next()
+                && keystroke.key.chars().count() == 1
+                && let Some(key) = key_equivalents.get(&key_char)
             {
                 keystroke.key = key.to_string();
             }
@@ -65,27 +60,30 @@ impl MacKeyboardLayout {
                 current_keyboard,
                 kTISPropertyInputSourceID.cast::<c_void>(),
             );
-            let id: *const std::os::raw::c_char = msg_send![id, UTF8String];
-            let id = CStr::from_ptr(id)
-                .to_str()
-                .expect("path should be valid UTF-8")
-                .to_owned();
+            let id = string_from_utf8(msg_send![id, UTF8String]);
 
             let name: *mut Object = TISGetInputSourceProperty(
                 current_keyboard,
                 kTISPropertyLocalizedName.cast::<c_void>(),
             );
-            let name: *const std::os::raw::c_char = msg_send![name, UTF8String];
-            let name = CStr::from_ptr(name)
-                .to_str()
-                .expect("path should be valid UTF-8")
-                .to_owned();
+            let name = string_from_utf8(msg_send![name, UTF8String]);
 
             let _: () = msg_send![current_keyboard, release];
 
             Self { id, name }
         }
     }
+}
+
+/// Reads a UTF-8 C string, tolerating the null pointer that `TISGetInputSourceProperty`
+/// hands back when a property is missing for the current input source.
+unsafe fn string_from_utf8(pointer: *const std::os::raw::c_char) -> String {
+    if pointer.is_null() {
+        return String::new();
+    }
+    unsafe { CStr::from_ptr(pointer) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 impl MacKeyboardMapper {

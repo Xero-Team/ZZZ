@@ -169,7 +169,10 @@ impl MetalAtlasTexture {
         match self.metal_texture.pixel_format() {
             A8Unorm | R8Unorm => 1,
             RGBA8Unorm | BGRA8Unorm => 4,
-            _ => unreachable!("atlas textures use only A8 or 32-bit color formats"),
+            pixel_format => {
+                log::error!("unexpected atlas pixel format {pixel_format:?}; assuming 32 bits");
+                4
+            }
         }
     }
 }

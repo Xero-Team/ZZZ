@@ -345,7 +345,7 @@ fn extension() -> &'static mut dyn Extension {
     unsafe {
         EXTENSION
             .as_deref_mut()
-            .expect("as_deref_mut should be present")
+            .expect("invariant: `register_extension` runs before any host call")
     }
 }
 
@@ -370,6 +370,14 @@ mod wit {
 
 wit::export!(Component);
 
+/// Serializes a value an extension returned for the host.
+///
+/// Every JSON value produced by an extension is turned into a string here, so a
+/// failure is reported rather than folded into `None`.
+fn serialize_json(value: serde_json::Value) -> Result<String> {
+    serde_json::to_string(&value).map_err(|error| format!("failed to serialize JSON: {error}"))
+}
+
 struct Component;
 
 impl wit::Guest for Component {
@@ -386,9 +394,9 @@ impl wit::Guest for Component {
         worktree: &Worktree,
     ) -> Result<Option<String>, String> {
         let language_server_id = LanguageServerId(language_server_id);
-        Ok(extension()
-            .language_server_initialization_options(&language_server_id, worktree)?
-            .and_then(|value| serde_json::to_string(&value).ok()))
+        let options =
+            extension().language_server_initialization_options(&language_server_id, worktree)?;
+        options.map(serialize_json).transpose()
     }
 
     fn language_server_workspace_configuration(
@@ -396,9 +404,9 @@ impl wit::Guest for Component {
         worktree: &Worktree,
     ) -> Result<Option<String>, String> {
         let language_server_id = LanguageServerId(language_server_id);
-        Ok(extension()
-            .language_server_workspace_configuration(&language_server_id, worktree)?
-            .and_then(|value| serde_json::to_string(&value).ok()))
+        let configuration =
+            extension().language_server_workspace_configuration(&language_server_id, worktree)?;
+        configuration.map(serialize_json).transpose()
     }
 
     fn language_server_initialization_options_schema(
@@ -408,7 +416,7 @@ impl wit::Guest for Component {
         let language_server_id = LanguageServerId(language_server_id);
         extension()
             .language_server_initialization_options_schema(&language_server_id, worktree)
-            .and_then(|value| serde_json::to_string(&value).ok())
+            .and_then(|value| serialize_json(value).ok())
     }
 
     fn language_server_workspace_configuration_schema(
@@ -418,7 +426,7 @@ impl wit::Guest for Component {
         let language_server_id = LanguageServerId(language_server_id);
         extension()
             .language_server_workspace_configuration_schema(&language_server_id, worktree)
-            .and_then(|value| serde_json::to_string(&value).ok())
+            .and_then(|value| serialize_json(value).ok())
     }
 
     fn language_server_additional_initialization_options(
@@ -428,13 +436,12 @@ impl wit::Guest for Component {
     ) -> Result<Option<String>, String> {
         let language_server_id = LanguageServerId(language_server_id);
         let target_language_server_id = LanguageServerId(target_language_server_id);
-        Ok(extension()
-            .language_server_additional_initialization_options(
-                &language_server_id,
-                &target_language_server_id,
-                worktree,
-            )?
-            .and_then(|value| serde_json::to_string(&value).ok()))
+        let options = extension().language_server_additional_initialization_options(
+            &language_server_id,
+            &target_language_server_id,
+            worktree,
+        )?;
+        options.map(serialize_json).transpose()
     }
 
     fn language_server_additional_workspace_configuration(
@@ -444,13 +451,12 @@ impl wit::Guest for Component {
     ) -> Result<Option<String>, String> {
         let language_server_id = LanguageServerId(language_server_id);
         let target_language_server_id = LanguageServerId(target_language_server_id);
-        Ok(extension()
-            .language_server_additional_workspace_configuration(
-                &language_server_id,
-                &target_language_server_id,
-                worktree,
-            )?
-            .and_then(|value| serde_json::to_string(&value).ok()))
+        let configuration = extension().language_server_additional_workspace_configuration(
+            &language_server_id,
+            &target_language_server_id,
+            worktree,
+        )?;
+        configuration.map(serialize_json).transpose()
     }
 
     fn labels_for_completions(
@@ -458,15 +464,10 @@ impl wit::Guest for Component {
         completions: Vec<Completion>,
     ) -> Result<Vec<Option<CodeLabel>>, String> {
         let language_server_id = LanguageServerId(language_server_id);
-        let mut labels = Vec::new();
-        for (ix, completion) in completions.into_iter().enumerate() {
-            let label = extension().label_for_completion(&language_server_id, completion);
-            if let Some(label) = label {
-                labels.resize(ix + 1, None);
-                *labels.last_mut().expect("collection should not be empty") = Some(label);
-            }
-        }
-        Ok(labels)
+        Ok(completions
+            .into_iter()
+            .map(|completion| extension().label_for_completion(&language_server_id, completion))
+            .collect())
     }
 
     fn labels_for_symbols(
@@ -474,15 +475,10 @@ impl wit::Guest for Component {
         symbols: Vec<Symbol>,
     ) -> Result<Vec<Option<CodeLabel>>, String> {
         let language_server_id = LanguageServerId(language_server_id);
-        let mut labels = Vec::new();
-        for (ix, symbol) in symbols.into_iter().enumerate() {
-            let label = extension().label_for_symbol(&language_server_id, symbol);
-            if let Some(label) = label {
-                labels.resize(ix + 1, None);
-                *labels.last_mut().expect("collection should not be empty") = Some(label);
-            }
-        }
-        Ok(labels)
+        Ok(symbols
+            .into_iter()
+            .map(|symbol| extension().label_for_symbol(&language_server_id, symbol))
+            .collect())
     }
 
     fn complete_slash_command_argument(

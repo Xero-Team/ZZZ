@@ -1765,8 +1765,16 @@ impl gpui::SystemServices for MacWindow {
             let block = ConcreteBlock::new(move |answer: NSInteger| {
                 let _: () = msg_send![alert, release];
                 if let Some(done_tx) = done_tx.take() {
-                    let _ =
-                        done_tx.send(answer.try_into().expect("channel receiver should be alive"));
+                    match usize::try_from(answer) {
+                        Ok(answer) => {
+                            if let Err(answer) = done_tx.send(answer) {
+                                log::error!(
+                                    "prompt answer {answer} arrived after its receiver went away"
+                                );
+                            }
+                        }
+                        Err(_) => log::error!("NSAlert returned a negative answer: {answer}"),
+                    }
                 }
             });
             let block = block.copy();

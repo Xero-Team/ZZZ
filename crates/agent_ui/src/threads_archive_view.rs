@@ -23,7 +23,6 @@ use gpui::{
     Focusable, ListState, Render, SharedString, Subscription, Task, WeakEntity, Window, list,
     prelude::*, px,
 };
-use i18n as app_i18n;
 use itertools::Itertools as _;
 use menu::{Confirm, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{
@@ -47,12 +46,9 @@ use workspace::{
     WorkspaceDb, WorkspaceId,
 };
 
+use crate::tr;
 use zzz_actions::agents_sidebar::FocusSidebarFilter;
 use zzz_actions::editor::{MoveDown, MoveUp};
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum ThreadFilter {
@@ -207,7 +203,7 @@ impl ThreadsArchiveView {
         let filter_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_placeholder_text(
-                &app_i18n::tr(
+                &tr(
                     cx,
                     "agent_ui.threads_archive.search_all_threads",
                     "Search all threads...",
@@ -996,14 +992,12 @@ impl ThreadsArchiveView {
             store.archived_entries().next().is_some()
         };
 
-        let count_label = if entry_count == 1 {
-            app_i18n::tr(cx, "agent_ui.threads_archive.one_thread", "1 thread")
+        let count_label: SharedString = if entry_count == 1 {
+            tr(cx, "agent_ui.threads_archive.one_thread", "1 thread")
         } else {
-            app_i18n::tr(cx, "agent_ui.threads_archive.thread_count", "{} threads").replacen(
-                "{}",
-                &entry_count.to_string(),
-                1,
-            )
+            tr(cx, "agent_ui.threads_archive.thread_count", "{} threads")
+                .replacen("{}", &entry_count.to_string(), 1)
+                .into()
         };
 
         h_flex()
@@ -1291,6 +1285,25 @@ enum ProjectPickerEntry {
     Workspace(StringMatch),
 }
 
+/// An entry for a workspace that is rendered as-is, without match positions.
+fn unmatched_entry(id: usize) -> ProjectPickerEntry {
+    ProjectPickerEntry::Workspace(StringMatch {
+        candidate_id: id,
+        score: 0.0,
+        positions: Vec::new(),
+        string: String::new(),
+    })
+}
+
+/// The searchable text of a workspace: its identity paths, concatenated.
+fn combined_identity_paths(workspace: &RecentWorkspace) -> String {
+    workspace
+        .identity_paths
+        .ordered_paths()
+        .map(|path| path.compact().to_string_lossy().into_owned())
+        .collect()
+}
+
 struct ProjectPickerDelegate {
     thread: ThreadMetadata,
     archive_view: WeakEntity<ThreadsArchiveView>,
@@ -1303,6 +1316,42 @@ struct ProjectPickerDelegate {
 }
 
 impl ProjectPickerDelegate {
+    /// Ids of the workspaces rendered under the "This Window" heading.
+    fn sibling_workspace_ids(&self) -> Vec<usize> {
+        self.workspaces
+            .iter()
+            .enumerate()
+            .filter(|(_, workspace)| self.is_sibling_workspace(workspace.workspace_id))
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    /// Ids of the workspaces rendered under the "Recent Projects" heading.
+    fn recent_workspace_ids(&self) -> Vec<usize> {
+        self.workspaces
+            .iter()
+            .enumerate()
+            .filter(|(_, workspace)| {
+                !self.is_current_workspace(workspace.workspace_id)
+                    && !self.is_sibling_workspace(workspace.workspace_id)
+            })
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    /// Fuzzy-match candidates for the workspaces at `ids`.
+    fn candidates_for(&self, ids: &[usize]) -> Vec<StringMatchCandidate> {
+        ids.iter()
+            .filter_map(|&id| {
+                let workspace = self.workspaces.get(id)?;
+                Some(StringMatchCandidate::new(
+                    id,
+                    &combined_identity_paths(workspace),
+                ))
+            })
+            .collect()
+    }
+
     fn update_working_directories_and_unarchive(
         &mut self,
         paths: PathList,
@@ -1385,7 +1434,7 @@ impl PickerDelegate for ProjectPickerDelegate {
     type ListItem = AnyElement;
 
     fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
-        app_i18n::tr(
+        tr(
             cx,
             "agent_ui.threads_archive.associate_thread_with",
             "Associate the \"{}\" thread with...",
@@ -1454,49 +1503,25 @@ impl PickerDelegate for ProjectPickerDelegate {
         let smart_case = query.chars().any(|c| c.is_uppercase());
         if query.is_empty() {
             let mut entries = Vec::new();
-            if self
-                .workspaces
-                .iter()
-                .any(|workspace| self.is_sibling_workspace(workspace.workspace_id))
-            {
+
+            let sibling_ids = self.sibling_workspace_ids();
+            if !sibling_ids.is_empty() {
                 entries.push(ProjectPickerEntry::Header(tr(
                     cx,
                     "agent_ui.threads_archive.this_window",
                     "This Window",
                 )));
-                for (id, workspace) in self.workspaces.iter().enumerate() {
-                    if self.is_sibling_workspace(workspace.workspace_id) {
-                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
-                            candidate_id: id,
-                            score: 0.0,
-                            positions: Vec::new(),
-                            string: String::new(),
-                        }));
-                    }
-                }
+                entries.extend(sibling_ids.into_iter().map(unmatched_entry));
             }
 
-            if self.workspaces.iter().any(|workspace| {
-                !self.is_current_workspace(workspace.workspace_id)
-                    && !self.is_sibling_workspace(workspace.workspace_id)
-            }) {
+            let recent_ids = self.recent_workspace_ids();
+            if !recent_ids.is_empty() {
                 entries.push(ProjectPickerEntry::Header(tr(
                     cx,
                     "agent_ui.threads_archive.recent_projects",
                     "Recent Projects",
                 )));
-                for (id, workspace) in self.workspaces.iter().enumerate() {
-                    if !self.is_current_workspace(workspace.workspace_id)
-                        && !self.is_sibling_workspace(workspace.workspace_id)
-                    {
-                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
-                            candidate_id: id,
-                            score: 0.0,
-                            positions: Vec::new(),
-                            string: String::new(),
-                        }));
-                    }
-                }
+                entries.extend(recent_ids.into_iter().map(unmatched_entry));
             }
 
             self.set_filtered_entries(entries);
@@ -1504,38 +1529,8 @@ impl PickerDelegate for ProjectPickerDelegate {
             return Task::ready(());
         }
 
-        let sibling_candidates: Vec<_> = self
-            .workspaces
-            .iter()
-            .enumerate()
-            .filter(|(_, workspace)| self.is_sibling_workspace(workspace.workspace_id))
-            .map(|(id, workspace)| {
-                let combined_string = workspace
-                    .identity_paths
-                    .ordered_paths()
-                    .map(|path| path.compact().to_string_lossy().into_owned())
-                    .collect::<String>();
-                StringMatchCandidate::new(id, &combined_string)
-            })
-            .collect();
-
-        let recent_candidates: Vec<_> = self
-            .workspaces
-            .iter()
-            .enumerate()
-            .filter(|(_, workspace)| {
-                !self.is_current_workspace(workspace.workspace_id)
-                    && !self.is_sibling_workspace(workspace.workspace_id)
-            })
-            .map(|(id, workspace)| {
-                let combined_string = workspace
-                    .identity_paths
-                    .ordered_paths()
-                    .map(|path| path.compact().to_string_lossy().into_owned())
-                    .collect::<String>();
-                StringMatchCandidate::new(id, &combined_string)
-            })
-            .collect();
+        let sibling_candidates = self.candidates_for(&self.sibling_workspace_ids());
+        let recent_candidates = self.candidates_for(&self.recent_workspace_ids());
         let background_executor = cx.background_executor().clone();
 
         cx.spawn_in(window, async move |this, cx| {
@@ -1625,15 +1620,15 @@ impl PickerDelegate for ProjectPickerDelegate {
 
     fn dismissed(&mut self, _window: &mut Window, _cx: &mut Context<Picker<Self>>) {}
 
-    fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
+    fn no_matches_text(&self, _window: &mut Window, cx: &mut App) -> Option<SharedString> {
         let text = if self.workspaces.is_empty() {
             tr(
-                _cx,
+                cx,
                 "agent_ui.threads_archive.no_recent_projects_found",
                 "No recent projects found",
             )
         } else {
-            tr(_cx, "agent_ui.threads_archive.no_matches", "No matches")
+            tr(cx, "agent_ui.threads_archive.no_matches", "No matches")
         };
         Some(text)
     }
@@ -1672,9 +1667,7 @@ impl PickerDelegate for ProjectPickerDelegate {
                     .ordered_paths()
                     .map(|p| p.compact())
                     .map(|path| {
-                        let path_string = path.to_string_lossy();
-                        let path_text = path_string.to_string();
-                        let path_byte_len = path_text.len();
+                        let path_byte_len = path.to_string_lossy().len();
 
                         let path_positions: Vec<usize> = hit
                             .positions
@@ -1758,7 +1751,7 @@ impl PickerDelegate for ProjectPickerDelegate {
                             "Choose from Local Folders",
                         ),
                     )
-                    .key_binding(KeyBinding::for_action_in(
+                    .key_binding(crate::footer_key_binding(
                         &workspace::Open::default(),
                         &focus_handle,
                         cx,
@@ -1773,7 +1766,7 @@ impl PickerDelegate for ProjectPickerDelegate {
                         tr(cx, "agent_ui.threads_archive.select", "Select"),
                     )
                     .disabled(!has_selection)
-                    .key_binding(KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx))
+                    .key_binding(crate::footer_key_binding(&menu::Confirm, &focus_handle, cx))
                     .on_click(cx.listener(move |picker, _, window, cx| {
                         picker.delegate.confirm(false, window, cx);
                     })),

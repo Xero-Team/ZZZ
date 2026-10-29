@@ -31,9 +31,9 @@ use syn::{Data, DeriveInput, Fields, Ident, LitStr, parse_macro_input};
 /// }
 /// ```
 // `attributes(default)` lets users write `#[default]` on a variant even when
-// they're not also deriving `Default`. If `#[derive(Default)]` is present in
-// the same list, it reuses the same attribute — there's no conflict, because
-// helper attributes aren't consumed.
+// they're not also deriving `Default`. Note that this derive already emits an
+// `impl Default` for the annotated variant, so the same type must not also
+// derive `Default` — that would be a conflicting implementation.
 #[proc_macro_derive(EnumFeatureFlag, attributes(default))]
 pub fn derive_enum_feature_flag(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

@@ -64,13 +64,13 @@ impl Assets {
     }
 
     pub fn load_test_fonts(&self, cx: &App) {
+        let lilex = self
+            .load("fonts/lilex/Lilex-Regular.ttf")
+            .expect("test font should be embedded")
+            .expect("test font path should resolve to an embedded asset");
         cx.text_system()
-            .add_fonts(vec![
-                self.load("fonts/lilex/Lilex-Regular.ttf")
-                    .expect("load should be present")
-                    .expect("expect should be present"),
-            ])
-            .expect("value should be present")
+            .add_fonts(vec![lilex])
+            .expect("the test font should load into the text system")
     }
 }
 

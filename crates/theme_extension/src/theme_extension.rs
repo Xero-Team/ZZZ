@@ -6,7 +6,6 @@ use extension::{ExtensionHostProxy, ExtensionThemeProxy};
 use fs::Fs;
 use gpui::{App, BackgroundExecutor, SharedString, Task};
 use theme::{ThemeRegistry, deserialize_icon_theme};
-use theme_settings;
 
 pub fn init(
     extension_host_proxy: Arc<ExtensionHostProxy>,
@@ -59,7 +58,7 @@ impl ExtensionThemeProxy for ThemeRegistryProxy {
     ) -> Task<Result<Vec<String>>> {
         self.executor.spawn(async move {
             let icon_theme_family =
-                theme::deserialize_icon_theme(&fs.load_bytes(&icon_theme_path).await?)?;
+                deserialize_icon_theme(&fs.load_bytes(&icon_theme_path).await?)?;
             Ok(icon_theme_family
                 .themes
                 .into_iter()

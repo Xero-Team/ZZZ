@@ -5,7 +5,7 @@ use collections::HashMap;
 use gpui::{
     App, Entity, EventEmitter, FocusHandle, Focusable, Task, WeakEntity, Window, list, prelude::*,
 };
-use gpui::{ListState, ScrollHandle, ScrollStrategy, UniformListScrollHandle};
+use gpui::{ListState, ScrollStrategy, UniformListScrollHandle};
 use language::LanguageRegistry;
 use notifications::status_toast::StatusToast;
 use persistence::ComponentPreviewDb;
@@ -103,7 +103,6 @@ pub struct ComponentPreview {
     user_store: Entity<UserStore>,
     workspace: WeakEntity<Workspace>,
     workspace_id: Option<WorkspaceId>,
-    _view_scroll_handle: ScrollHandle,
 }
 
 impl ComponentPreview {
@@ -147,7 +146,6 @@ impl ComponentPreview {
             user_store,
             workspace,
             workspace_id: None,
-            _view_scroll_handle: ScrollHandle::new(),
         };
 
         component_preview.update_component_list(cx);
@@ -272,11 +270,6 @@ impl ComponentPreview {
             }
         }
 
-        // Sort the components in each group
-        for components in scope_groups.values_mut() {
-            components.sort_by_key(|(c, _)| c.sort_name());
-        }
-
         let mut entries = Vec::new();
 
         // Always show all components first
@@ -367,32 +360,20 @@ impl ComponentPreview {
         match entry {
             PreviewEntry::Component(component_metadata, highlight_positions) => {
                 let id = component_metadata.id();
-                let selected = self.active_page == PreviewPage::Component(id.clone());
+                let selected = self.active_page == PreviewPage::Component(id);
                 let name = component_metadata.scopeless_name();
 
                 ListItem::new(ix)
-                    .child(if let Some(_positions) = highlight_positions {
-                        let name_lower = name.to_lowercase();
-                        let filter_lower = self.filter_text.to_lowercase();
-                        let valid_positions = if let Some(start) = name_lower.find(&filter_lower) {
-                            let end = start + filter_lower.len();
-                            (start..end).collect()
-                        } else {
-                            Vec::new()
-                        };
-                        if valid_positions.is_empty() {
-                            Label::new(name).into_any_element()
-                        } else {
-                            HighlightedLabel::new(name, valid_positions).into_any_element()
+                    .child(match highlight_positions {
+                        Some(positions) if !positions.is_empty() => {
+                            HighlightedLabel::new(name, positions.clone()).into_any_element()
                         }
-                    } else {
-                        Label::new(name).into_any_element()
+                        _ => Label::new(name).into_any_element(),
                     })
                     .selectable(true)
                     .toggle_state(selected)
                     .inset(true)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        let id = id.clone();
                         this.set_active_page(PreviewPage::Component(id), cx);
                     }))
                     .into_any_element()
@@ -592,7 +573,6 @@ impl Render for ComponentPreview {
             self.filter_text = current_filter;
             self.update_component_list(cx);
         }
-        let sidebar_entries = self.scope_ordered_entries();
         let active_page = self.active_page.clone();
 
         h_flex()
@@ -611,19 +591,12 @@ impl Render for ComponentPreview {
                     .child(
                         gpui::uniform_list(
                             "component-nav",
-                            sidebar_entries.len(),
-                            cx.processor(move |this, range: Range<usize>, _window, cx| {
+                            self.entries.len(),
+                            cx.processor(|this, range: Range<usize>, _window, cx| {
                                 range
                                     .filter_map(|ix| {
-                                        if ix < sidebar_entries.len() {
-                                            Some(this.render_sidebar_entry(
-                                                ix,
-                                                &sidebar_entries[ix],
-                                                cx,
-                                            ))
-                                        } else {
-                                            None
-                                        }
+                                        let entry = this.entries.get(ix)?;
+                                        Some(this.render_sidebar_entry(ix, entry, cx))
                                     })
                                     .collect()
                             }),

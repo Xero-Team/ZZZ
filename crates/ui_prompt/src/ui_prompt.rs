@@ -28,6 +28,7 @@ fn zzz_prompt_renderer(
             _level: level,
             message: cx.new(|cx| Markdown::new(SharedString::new(message), None, None, cx)),
             actions: actions.iter().map(|a| a.label().to_string()).collect(),
+            cancel_action_id: cancel_action_id(actions),
             focus: cx.focus_handle(),
             active_action_id: 0,
             detail: detail
@@ -39,10 +40,21 @@ fn zzz_prompt_renderer(
     handle.with_view(renderer, window, cx)
 }
 
+/// Index of the button that answers the prompt with "cancelled", if it offers
+/// one. Derived from the button kinds rather than their labels, which are
+/// localized by the caller.
+fn cancel_action_id(actions: &[PromptButton]) -> Option<usize> {
+    actions.iter().position(PromptButton::is_cancel)
+}
+
 pub struct ZZZPromptRenderer {
     _level: PromptLevel,
     message: Entity<Markdown>,
     actions: Vec<String>,
+    /// Index of the button that answers the prompt with "cancelled", so
+    /// `menu::Cancel` does not have to compare against a label that may be
+    /// localized.
+    cancel_action_id: Option<usize>,
     focus: FocusHandle,
     active_action_id: usize,
     detail: Option<Entity<Markdown>>,
@@ -54,8 +66,8 @@ impl ZZZPromptRenderer {
     }
 
     fn cancel(&mut self, _: &menu::Cancel, _window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(ix) = self.actions.iter().position(|a| a == "Cancel") {
-            cx.emit(PromptResponse(ix));
+        if let Some(action_id) = self.cancel_action_id {
+            cx.emit(PromptResponse(action_id));
         }
     }
 
@@ -65,12 +77,14 @@ impl ZZZPromptRenderer {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.active_action_id = self.actions.len().saturating_sub(1);
+        // Buttons render in `actions` order, so the first action is the topmost
+        // one and `SelectNext`/`SelectPrevious` walk down and up the list.
+        self.active_action_id = 0;
         cx.notify();
     }
 
     fn select_last(&mut self, _: &menu::SelectLast, _window: &mut Window, cx: &mut Context<Self>) {
-        self.active_action_id = 0;
+        self.active_action_id = self.actions.len().saturating_sub(1);
         cx.notify();
     }
 
@@ -191,5 +205,36 @@ impl EventEmitter<PromptResponse> for ZZZPromptRenderer {}
 impl Focusable for ZZZPromptRenderer {
     fn focus_handle(&self, _: &crate::App) -> FocusHandle {
         self.focus.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cancel_action_id;
+    use gpui::PromptButton;
+
+    #[test]
+    fn cancel_action_id_finds_the_cancel_button_by_kind() {
+        let actions = [
+            PromptButton::ok("OK"),
+            PromptButton::new("Later"),
+            PromptButton::cancel("Cancel"),
+        ];
+
+        assert_eq!(cancel_action_id(&actions), Some(2));
+    }
+
+    #[test]
+    fn cancel_action_id_ignores_localized_labels() {
+        let actions = [PromptButton::ok("确定"), PromptButton::cancel("取消")];
+
+        assert_eq!(cancel_action_id(&actions), Some(1));
+    }
+
+    #[test]
+    fn cancel_action_id_is_none_without_a_cancel_button() {
+        let actions = [PromptButton::ok("OK"), PromptButton::new("Later")];
+
+        assert_eq!(cancel_action_id(&actions), None);
     }
 }

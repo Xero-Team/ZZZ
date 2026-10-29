@@ -177,6 +177,6 @@ fn main() {
                 )
                 .detach();
             })
-            .expect("value should be present");
+            .expect("failed to run the benchmark inside the editor window");
     });
 }

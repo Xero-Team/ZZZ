@@ -65,8 +65,8 @@ impl AskPassDelegate {
         let mut this_tx = self.tx.clone();
         self.executor.spawn(async move {
             let (tx, rx) = oneshot::channel();
-            this_tx.send((prompt, tx)).await.ok()?;
-            rx.await.ok()
+            this_tx.send((prompt, tx)).await.log_err()?;
+            rx.await.log_err()
         })
     }
 }
@@ -113,8 +113,10 @@ impl AskPassSession {
                 #[cfg(target_os = "windows")]
                 let askpass_secret = askpass_secret.clone();
                 executor.spawn(async move {
-                    if let Some(askpass_opened_tx) = askpass_opened_tx.lock().await.take() {
-                        askpass_opened_tx.send(()).ok();
+                    if let Some(askpass_opened_tx) = askpass_opened_tx.lock().await.take()
+                        && askpass_opened_tx.send(()).is_err()
+                    {
+                        log::warn!("askpass session was dropped before a prompt was opened");
                     }
                     if let Some(password) = prompt.await {
                         #[cfg(target_os = "windows")]
@@ -126,8 +128,10 @@ impl AskPassSession {
                         }
                         ControlFlow::Continue(Ok(password))
                     } else {
-                        if let Some(kill_tx) = kill_tx.lock().await.take() {
-                            kill_tx.send(()).ok();
+                        if let Some(kill_tx) = kill_tx.lock().await.take()
+                            && kill_tx.send(()).is_err()
+                        {
+                            log::warn!("askpass session was dropped before a prompt was cancelled");
                         }
                         ControlFlow::Break(())
                     }
@@ -176,7 +180,7 @@ impl AskPassSession {
         select_biased! {
             _ = askpass_opened_rx.fuse() => {
                 // Note: this await can only resolve after we are dropped.
-                askpass_kill_master_rx.await.ok();
+                askpass_kill_master_rx.await.log_err();
                 AskPassResult::CancelledByUser
             }
 
@@ -233,6 +237,8 @@ impl PasswordProxy {
         let askpass_program = ASKPASS_PROGRAM.get_or_init(|| current_exec);
         // Create an askpass script that communicates back to this process.
         let askpass_script = generate_askpass_script(shell_kind, askpass_program, &askpass_socket)?;
+        // Holding on to the task keeps the accept loop (and the temp dir it owns)
+        // alive for as long as this proxy exists.
         let _task = executor.spawn(async move {
             maybe!(async move {
                 let _temp_dir = temp_dir;
@@ -391,7 +397,7 @@ fn generate_askpass_script(
     let print_args = "printf '%s\\0' \"$@\"";
     let shebang = "#!/bin/sh";
     Ok(format!(
-        "{shebang}\n{print_args} | {askpass_program} --askpass={askpass_socket} 2> /dev/null \n",
+        "{shebang}\n{print_args} | {askpass_program} --askpass={askpass_socket} 2> /dev/null\n",
     ))
 }
 

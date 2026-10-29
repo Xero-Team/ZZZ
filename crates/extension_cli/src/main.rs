@@ -134,6 +134,28 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Copies a single file into the flat output directory `output_dir`.
+fn copy_flat_asset(
+    extension_path: &Path,
+    output_dir: &Path,
+    asset_path: &Path,
+    kind: &str,
+) -> Result<()> {
+    let file_name = asset_path
+        .file_name()
+        .with_context(|| format!("invalid {kind} path '{}'", asset_path.display()))?;
+    fs::copy(extension_path.join(asset_path), output_dir.join(file_name))
+        .with_context(|| format!("failed to copy {kind} '{}'", asset_path.display()))?;
+    Ok(())
+}
+
+/// Packaging always overwrites the archive directory, which is recreated from
+/// scratch on every run.
+const OVERWRITE_COPY: CopyOptions = CopyOptions {
+    overwrite: true,
+    ignore_if_exists: false,
+};
+
 async fn copy_extension_resources(
     manifest: &ExtensionManifest,
     extension_path: &Path,
@@ -173,12 +195,12 @@ async fn copy_extension_resources(
         let output_themes_dir = output_dir.join("themes");
         fs::create_dir_all(&output_themes_dir)?;
         for theme_path in &manifest.themes {
-            let theme_path = theme_path.as_std_path();
-            fs::copy(
-                extension_path.join(theme_path),
-                output_themes_dir.join(theme_path.file_name().context("invalid theme path")?),
-            )
-            .with_context(|| format!("failed to copy theme '{}'", theme_path.display()))?;
+            copy_flat_asset(
+                extension_path,
+                &output_themes_dir,
+                theme_path.as_std_path(),
+                "theme",
+            )?;
         }
     }
 
@@ -186,18 +208,12 @@ async fn copy_extension_resources(
         let output_icon_themes_dir = output_dir.join("icon_themes");
         fs::create_dir_all(&output_icon_themes_dir)?;
         for icon_theme_path in &manifest.icon_themes {
-            let icon_theme_path = icon_theme_path.as_std_path();
-            fs::copy(
-                extension_path.join(icon_theme_path),
-                output_icon_themes_dir.join(
-                    icon_theme_path
-                        .file_name()
-                        .context("invalid icon theme path")?,
-                ),
-            )
-            .with_context(|| {
-                format!("failed to copy icon theme '{}'", icon_theme_path.display())
-            })?;
+            copy_flat_asset(
+                extension_path,
+                &output_icon_themes_dir,
+                icon_theme_path.as_std_path(),
+                "icon theme",
+            )?;
         }
 
         let output_icons_dir = output_dir.join("icons");
@@ -206,10 +222,7 @@ async fn copy_extension_resources(
             fs.as_ref(),
             &extension_path.join("icons"),
             &output_icons_dir,
-            CopyOptions {
-                overwrite: true,
-                ignore_if_exists: false,
-            },
+            OVERWRITE_COPY,
         )
         .await
         .context("failed to copy icons")?;
@@ -225,10 +238,7 @@ async fn copy_extension_resources(
                 &extension_path.join(language_path),
                 &output_languages_dir
                     .join(language_path.file_name().context("invalid language path")?),
-                CopyOptions {
-                    overwrite: true,
-                    ignore_if_exists: false,
-                },
+                OVERWRITE_COPY,
             )
             .await
             .with_context(|| {
@@ -249,10 +259,7 @@ async fn copy_extension_resources(
                 fs.as_ref(),
                 &extension_path.join(&schema_path),
                 &output_dir.join(&schema_path),
-                CopyOptions {
-                    overwrite: true,
-                    ignore_if_exists: false,
-                },
+                OVERWRITE_COPY,
             )
             .await
             .with_context(|| {
@@ -266,18 +273,17 @@ async fn copy_extension_resources(
 
     if let Some(snippets) = manifest.snippets.as_ref() {
         for snippets_path in snippets.paths() {
-            let parent = snippets_path.parent();
-            if let Some(parent) = parent.filter(|p| p.components().next().is_some()) {
+            if let Some(parent) = snippets_path
+                .parent()
+                .filter(|parent| parent.components().next().is_some())
+            {
                 fs::create_dir_all(output_dir.join(parent))?;
             }
             copy_recursive(
                 fs.as_ref(),
                 &extension_path.join(&snippets_path),
                 &output_dir.join(&snippets_path),
-                CopyOptions {
-                    overwrite: true,
-                    ignore_if_exists: false,
-                },
+                OVERWRITE_COPY,
             )
             .await
             .with_context(|| {
@@ -410,7 +416,7 @@ fn validate_extension_manifest(
         return Err(ExtensionManifestValidationError::InvalidRepository(
             repository.to_string(),
         ));
-    };
+    }
 
     if !manifest.language_model_providers.is_empty() {
         return Err(ExtensionManifestValidationError::LanguageModelProvidersUnsupported);
@@ -443,8 +449,17 @@ fn test_grammars(
         let mut grammar_path = grammars_dir.join(grammar_name.as_ref());
         grammar_path.set_extension("wasm");
 
-        let wasm = fs::read(&grammar_path)?;
-        let language = wasm_store.load_language(grammar_name, &wasm)?;
+        let wasm = fs::read(&grammar_path)
+            .with_context(|| format!("failed to read grammar '{}'", grammar_path.display()))?;
+        let language = wasm_store
+            .load_language(grammar_name, &wasm)
+            .with_context(|| {
+                format!(
+                    "failed to load grammar '{}' from '{}'",
+                    grammar_name,
+                    grammar_path.display()
+                )
+            })?;
         log::info!("loaded grammar {grammar_name}");
         grammars.insert(grammar_name.to_string(), language);
     }
@@ -488,7 +503,7 @@ fn test_languages(
                     let _token_rules = SemanticTokenRules::load(&file_path)?;
                 }
                 TaskTemplates::FILE_NAME => {
-                    let task_file_content = std::fs::read(&file_path).with_context(|| {
+                    let task_file_content = fs::read(&file_path).with_context(|| {
                         anyhow!(
                             "Failed to read tasks file at {path}",
                             path = file_path.display()

@@ -32,14 +32,7 @@ impl AlacModifiers {
     }
 
     fn any(&self) -> bool {
-        match &self {
-            AlacModifiers::None => false,
-            AlacModifiers::Alt => true,
-            AlacModifiers::Ctrl => true,
-            AlacModifiers::Shift => true,
-            AlacModifiers::CtrlShift => true,
-            AlacModifiers::Other => true,
-        }
+        !matches!(self, AlacModifiers::None)
     }
 }
 
@@ -374,7 +367,7 @@ mod test {
         }
 
         let gpui_keys = [
-            "up", "down", "right", "left", "f1", "f2", "f3", "f4", "F5", "f6", "f7", "f8", "f9",
+            "up", "down", "right", "left", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9",
             "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "insert",
             "pageup", "pagedown", "end", "home",
         ];

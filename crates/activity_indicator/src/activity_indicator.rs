@@ -15,17 +15,16 @@ use project::{
     git_store::{GitStoreEvent, Repository},
 };
 use smallvec::SmallVec;
-use std::{
-    cmp::Reverse,
-    collections::HashSet,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{cmp::Reverse, collections::HashSet, sync::Arc, time::Duration};
 use ui::{CommonAnimationExt, ContextMenu, PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*};
 use util::truncate_and_trailoff;
 use workspace::{HideStatusItem, StatusItemView, Workspace, item::ItemHandle};
 
 const GIT_OPERATION_DELAY: Duration = Duration::from_millis(0);
+
+/// Status item messages longer than this are truncated; the full text is
+/// offered as a tooltip instead.
+const MAX_MESSAGE_LEN: usize = 50;
 
 actions!(
     activity_indicator,
@@ -56,6 +55,15 @@ struct ServerStatus {
     status: LanguageServerStatusUpdate,
 }
 
+impl ActivityIndicator {
+    /// Replaces the last known status of `name`, keeping the list free of stale
+    /// entries for the same language server.
+    fn upsert_status(&mut self, name: LanguageServerName, status: LanguageServerStatusUpdate) {
+        self.statuses.retain(|existing| existing.name != name);
+        self.statuses.push(ServerStatus { name, status });
+    }
+}
+
 struct PendingWork<'a> {
     language_server_id: LanguageServerId,
     progress_token: &'a ProgressToken,
@@ -76,6 +84,17 @@ fn tr_args(
     tr(cx, key, fallback)
         .replacen("{}", first, 1)
         .replacen("{}", second, 1)
+}
+
+fn small_icon(icon: IconName) -> gpui::AnyElement {
+    Icon::new(icon).size(IconSize::Small).into_any_element()
+}
+
+fn spinner_icon() -> gpui::AnyElement {
+    Icon::new(IconName::ArrowCircle)
+        .size(IconSize::Small)
+        .with_rotate_animation(2)
+        .into_any_element()
 }
 
 fn format_server_names(names: &[LanguageServerName]) -> String {
@@ -112,11 +131,7 @@ impl ActivityIndicator {
             cx.spawn(async move |this, cx| {
                 while let Some((name, binary_status)) = status_events.next().await {
                     this.update(cx, |this: &mut ActivityIndicator, cx| {
-                        this.statuses.retain(|s| s.name != name);
-                        this.statuses.push(ServerStatus {
-                            name,
-                            status: LanguageServerStatusUpdate::Binary(binary_status),
-                        });
+                        this.upsert_status(name, LanguageServerStatusUpdate::Binary(binary_status));
                         cx.notify();
                     })?;
                 }
@@ -216,10 +231,7 @@ impl ActivityIndicator {
                                 None => return,
                             };
 
-                            activity_indicator.statuses.retain(|s| s.name != name);
-                            activity_indicator
-                                .statuses
-                                .push(ServerStatus { name, status });
+                            activity_indicator.upsert_status(name, status);
                         }
                         cx.notify()
                     }
@@ -333,11 +345,11 @@ impl ActivityIndicator {
         self.project.update(cx, |project, cx| {
             if project.last_formatting_failure(cx).is_some() {
                 project.reset_last_formatting_failure(cx);
-                true
-            } else {
-                false
             }
         });
+        // The dismissed message is expected to disappear, and none of the
+        // events the reset emits re-renders this status item.
+        cx.notify();
     }
 
     fn pending_language_server_work<'a>(
@@ -376,11 +388,7 @@ impl ActivityIndicator {
         // Show if any direnv calls failed
         if let Some(message) = self.pending_environment_error(cx) {
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::Warning)
-                        .size(IconSize::Small)
-                        .into_any_element(),
-                ),
+                icon: Some(small_icon(IconName::Warning)),
                 message: message.clone(),
                 interaction: ContentInteraction::Action(Arc::new(move |this, window, cx| {
                     this.project.update(cx, |project, cx| {
@@ -424,12 +432,7 @@ impl ActivityIndicator {
                 }
 
                 return Some(Content {
-                    icon: Some(
-                        Icon::new(IconName::ArrowCircle)
-                            .size(IconSize::Small)
-                            .with_rotate_animation(2)
-                            .into_any_element(),
-                    ),
+                    icon: Some(spinner_icon()),
                     message,
                     interaction: ContentInteraction::Menu,
                     tooltip_message: None,
@@ -446,12 +449,7 @@ impl ActivityIndicator {
             .find(|s| !s.read(cx).is_started())
         {
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::ArrowCircle)
-                        .size(IconSize::Small)
-                        .with_rotate_animation(2)
-                        .into_any_element(),
-                ),
+                icon: Some(spinner_icon()),
                 message: tr_arg(
                     cx,
                     "activity_indicator.debug_session",
@@ -474,12 +472,7 @@ impl ActivityIndicator {
             && job_info.start.elapsed() >= GIT_OPERATION_DELAY
         {
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::ArrowCircle)
-                        .size(IconSize::Small)
-                        .with_rotate_animation(2)
-                        .into_any_element(),
-                ),
+                icon: Some(spinner_icon()),
                 message: job_info.message.into(),
                 interaction: ContentInteraction::Passive,
                 tooltip_message: None,
@@ -488,14 +481,9 @@ impl ActivityIndicator {
 
         // Show any long-running fs command
         for fs_job in &self.fs_jobs {
-            if Instant::now().duration_since(fs_job.start) >= GIT_OPERATION_DELAY {
+            if fs_job.start.elapsed() >= GIT_OPERATION_DELAY {
                 return Some(Content {
-                    icon: Some(
-                        Icon::new(IconName::ArrowCircle)
-                            .size(IconSize::Small)
-                            .with_rotate_animation(2)
-                            .into_any_element(),
-                    ),
+                    icon: Some(spinner_icon()),
                     message: fs_job.message.clone().into(),
                     interaction: ContentInteraction::Passive,
                     tooltip_message: None,
@@ -549,11 +537,7 @@ impl ActivityIndicator {
         if !downloading.is_empty() {
             let downloading_list = format_server_names(&downloading);
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::Download)
-                        .size(IconSize::Small)
-                        .into_any_element(),
-                ),
+                icon: Some(small_icon(IconName::Download)),
                 message: tr_arg(
                     cx,
                     "activity_indicator.language_server.downloading",
@@ -572,11 +556,7 @@ impl ActivityIndicator {
         if !checking_for_update.is_empty() {
             let checking_for_update_list = format_server_names(&checking_for_update);
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::Download)
-                        .size(IconSize::Small)
-                        .into_any_element(),
-                ),
+                icon: Some(small_icon(IconName::Download)),
                 message: tr_arg(
                     cx,
                     "activity_indicator.language_server.checking_for_updates",
@@ -595,11 +575,7 @@ impl ActivityIndicator {
         if !failed.is_empty() {
             let failed_list = format_server_names(&failed);
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::Warning)
-                        .size(IconSize::Small)
-                        .into_any_element(),
-                ),
+                icon: Some(small_icon(IconName::Warning)),
                 message: tr_arg(
                     cx,
                     "activity_indicator.language_server.failed_to_run",
@@ -616,11 +592,7 @@ impl ActivityIndicator {
         // Show any formatting failure
         if let Some(failure) = self.project.read(cx).last_formatting_failure(cx) {
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::Warning)
-                        .size(IconSize::Small)
-                        .into_any_element(),
-                ),
+                icon: Some(small_icon(IconName::Warning)),
                 message: tr_arg(
                     cx,
                     "activity_indicator.formatting_failed",
@@ -678,11 +650,7 @@ impl ActivityIndicator {
             };
 
             return Some(Content {
-                icon: Some(
-                    Icon::new(IconName::Warning)
-                        .size(IconSize::Small)
-                        .into_any_element(),
-                ),
+                icon: Some(small_icon(IconName::Warning)),
                 message: final_message,
                 tooltip_message,
                 interaction: ContentInteraction::Action(Arc::new(
@@ -749,7 +717,7 @@ impl ActivityIndicator {
                 })),
                 message,
                 interaction: ContentInteraction::Action(Arc::new(|this, window, cx| {
-                    this.dismiss_message(&Default::default(), window, cx)
+                    this.dismiss_message(&DismissMessage, window, cx)
                 })),
                 tooltip_message: None,
             });
@@ -760,8 +728,6 @@ impl ActivityIndicator {
 }
 
 impl EventEmitter<Event> for ActivityIndicator {}
-
-const MAX_MESSAGE_LEN: usize = 50;
 
 impl Render for ActivityIndicator {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

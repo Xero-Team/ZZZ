@@ -473,7 +473,7 @@ impl TerminalThreadMetadataStore {
 
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             })
             .shared(),
         );

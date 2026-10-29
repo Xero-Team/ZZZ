@@ -10,13 +10,13 @@ use crate::html_element::HtmlElement;
 
 fn empty_line_regex() -> &'static Regex {
     static REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"^\s*$").expect("Failed to create empty_line_regex"));
+        LazyLock::new(|| Regex::new(r"^\s*$").expect("valid empty_line_regex literal"));
     &REGEX
 }
 
 fn more_than_three_newlines_regex() -> &'static Regex {
     static REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
+        LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid excessive_newlines_regex literal"));
     &REGEX
 }
 
@@ -26,6 +26,9 @@ pub enum StartTagOutcome {
 }
 
 pub type TagHandler = Rc<RefCell<dyn HandleTag>>;
+
+/// Maximum element nesting depth rendered into Markdown.
+const MAX_ELEMENT_DEPTH: usize = 200;
 
 pub struct MarkdownWriter {
     current_element_stack: VecDeque<HtmlElement>,
@@ -46,8 +49,10 @@ impl MarkdownWriter {
         }
     }
 
-    pub fn current_element_stack(&self) -> &VecDeque<HtmlElement> {
-        &self.current_element_stack
+    /// Returns the element that currently encloses the node being visited, if
+    /// any.
+    pub fn current_parent(&self) -> Option<&HtmlElement> {
+        self.current_element_stack.back()
     }
 
     pub fn is_inside(&self, tag: &str) -> bool {
@@ -120,7 +125,9 @@ impl MarkdownWriter {
                 .push_back(current_element.clone());
         }
 
-        if self.current_element_stack.len() < 200 {
+        // Deeply nested pages would otherwise recurse without bound. Past this
+        // depth the remaining subtree is dropped rather than rendered.
+        if self.current_element_stack.len() < MAX_ELEMENT_DEPTH {
             for child in node.children.borrow().iter() {
                 self.visit_node(child, handlers)?;
             }

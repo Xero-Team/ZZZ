@@ -380,6 +380,28 @@ fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) ->
     }
 }
 
+/// How many lines of scrollback a terminal keeps.
+///
+/// The cap exists so a terminal cannot grow without bound; a task's terminal
+/// is allowed the maximum because its output can be long and it stops
+/// accepting new output once the task exits.
+fn scroll_history_limit(max_scroll_history_lines: Option<usize>) -> usize {
+    max_scroll_history_lines
+        .unwrap_or(DEFAULT_SCROLL_HISTORY_LINES)
+        .min(MAX_SCROLL_HISTORY_LINES)
+}
+
+fn terminal_config(cursor_shape: CursorShape, scrolling_history: usize) -> Config {
+    Config {
+        scrolling_history,
+        default_cursor_style: AlacCursorStyle::from(cursor_shape),
+        // Added so that paths ending at a box-drawing character still break on
+        // the character boundary the user sees.
+        semantic_escape_chars: format!("{SEMANTIC_ESCAPE_CHARS}─"),
+        ..Config::default()
+    }
+}
+
 pub struct TerminalBuilder {
     terminal: Terminal,
     events_rx: UnboundedReceiver<AlacTermEvent>,
@@ -395,16 +417,7 @@ impl TerminalBuilder {
         path_style: PathStyle,
     ) -> Result<TerminalBuilder> {
         // Create a display-only terminal (no actual PTY).
-        let default_cursor_style = AlacCursorStyle::from(cursor_shape);
-        let scrolling_history = max_scroll_history_lines
-            .unwrap_or(DEFAULT_SCROLL_HISTORY_LINES)
-            .min(MAX_SCROLL_HISTORY_LINES);
-        let config = Config {
-            scrolling_history,
-            default_cursor_style,
-            semantic_escape_chars: format!("{SEMANTIC_ESCAPE_CHARS}─"),
-            ..Config::default()
-        };
+        let config = terminal_config(cursor_shape, scroll_history_limit(max_scroll_history_lines));
 
         let (events_tx, events_rx) = unbounded();
         let mut term = Term::new(
@@ -587,23 +600,18 @@ impl TerminalBuilder {
                 }
             };
 
-            let default_cursor_style = AlacCursorStyle::from(cursor_shape);
-            let scrolling_history = if task.is_some() {
-                // Tasks like `cargo build --all` may produce a lot of output, ergo allow maximum scrolling.
-                // After the task finishes, we do not allow appending to that terminal, so small tasks output should not
-                // cause excessive memory usage over time.
-                MAX_SCROLL_HISTORY_LINES
-            } else {
-                max_scroll_history_lines
-                    .unwrap_or(DEFAULT_SCROLL_HISTORY_LINES)
-                    .min(MAX_SCROLL_HISTORY_LINES)
-            };
-            let config = Config {
-                scrolling_history,
-                default_cursor_style,
-                semantic_escape_chars: format!("{SEMANTIC_ESCAPE_CHARS}─"),
-                ..Config::default()
-            };
+            let config = terminal_config(
+                cursor_shape,
+                if task.is_some() {
+                    // Tasks like `cargo build --all` may produce a lot of output,
+                    // ergo allow maximum scrolling. After the task finishes, we do
+                    // not allow appending to that terminal, so small tasks output
+                    // should not cause excessive memory usage over time.
+                    MAX_SCROLL_HISTORY_LINES
+                } else {
+                    scroll_history_limit(max_scroll_history_lines)
+                },
+            );
 
             //Setup the pty...
             let pty = match tty::new(&pty_options, TerminalBounds::default().into(), window_id) {

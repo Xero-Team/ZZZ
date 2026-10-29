@@ -627,11 +627,12 @@ impl HeadlessProject {
         event: &LspStoreEvent,
         cx: &mut Context<Self>,
     ) {
+        // Only the log-related events below need the global log store.
+        let log_store = cx
+            .try_global::<GlobalLogStore>()
+            .map(|lsp_logs| lsp_logs.0.clone());
         match event {
             LspStoreEvent::LanguageServerAdded(id, name, worktree_id) => {
-                let log_store = cx
-                    .try_global::<GlobalLogStore>()
-                    .map(|lsp_logs| lsp_logs.0.clone());
                 if let Some(log_store) = log_store {
                     log_store.update(cx, |log_store, cx| {
                         log_store.add_language_server(
@@ -648,9 +649,6 @@ impl HeadlessProject {
                 }
             }
             LspStoreEvent::LanguageServerRemoved(id) => {
-                let log_store = cx
-                    .try_global::<GlobalLogStore>()
-                    .map(|lsp_logs| lsp_logs.0.clone());
                 if let Some(log_store) = log_store {
                     log_store.update(cx, |log_store, cx| {
                         log_store.remove_language_server(*id, cx);
@@ -1061,16 +1059,22 @@ impl HeadlessProject {
     async fn handle_spawn_kernel(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::SpawnKernel>,
-        cx: AsyncApp,
+        mut cx: AsyncApp,
     ) -> Result<proto::SpawnKernelResponse> {
-        let fs = this.update(&mut cx.clone(), |this, _| this.fs.clone());
+        let fs = this.update(&mut cx, |this, _| this.fs.clone());
 
-        let mut ports = Vec::new();
+        // Keep the listeners alive until the kernel has been spawned: dropping a
+        // `TcpListener` returns its port to the OS, so the loop below could be
+        // handed the same ephemeral port twice, and a concurrent spawn request
+        // would collide with this one.
+        let mut listeners = Vec::with_capacity(5);
         for _ in 0..5 {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-            let port = listener.local_addr()?.port();
-            ports.push(port);
+            listeners.push(std::net::TcpListener::bind("127.0.0.1:0")?);
         }
+        let ports = listeners
+            .iter()
+            .map(|listener| listener.local_addr().map(|address| address.port()))
+            .collect::<std::io::Result<Vec<u16>>>()?;
 
         let connection_info = serde_json::json!({
             "shell_port": ports[0],
@@ -1164,9 +1168,13 @@ impl HeadlessProject {
                 .context("failed to spawn kernel process (tried python3 and python)")?
         };
 
-        this.update(&mut cx.clone(), |this, _cx| {
+        this.update(&mut cx, |this, _cx| {
             this.kernels.insert(kernel_id.clone(), child);
         });
+
+        // The kernel inherited the ports in its connection file; release them so
+        // it can bind them itself.
+        drop(listeners);
 
         Ok(proto::SpawnKernelResponse {
             kernel_id,
@@ -1204,7 +1212,9 @@ impl HeadlessProject {
         let project_id = message.project_id;
         let buffer_store = this.read_with(&cx, |this, _| this.buffer_store.clone());
         let handle = message.handle;
-        let _buffer_store = buffer_store.clone();
+        // The task below moves `buffer_store`; keep a second handle to register
+        // (and thus keep alive) the search with the store.
+        let registration_store = buffer_store.clone();
         let client = this.read_with(&cx, |this, _| this.session.clone());
         let task = cx.spawn(async move |cx| {
             let results = this.update(cx, |this, cx| {
@@ -1269,10 +1279,9 @@ impl HeadlessProject {
                 .await?;
             anyhow::Ok(())
         });
-        _buffer_store.update(&mut cx, |this, _| {
+        registration_store.update(&mut cx, |this, _| {
             this.register_ongoing_project_search((peer_id, handle), task);
         });
-
         Ok(proto::Ack {})
     }
 
@@ -1389,10 +1398,15 @@ impl HeadlessProject {
                 .with_cmd(UpdateKind::Always),
         );
 
-        for process in System::new_with_specifics(refresh_kind)
-            .processes()
-            .values()
-        {
+        let system = match System::new_with_specifics(refresh_kind) {
+            Ok(system) => system,
+            Err(error) => {
+                log::error!("failed to read process information: {error}");
+                return Ok(proto::GetProcessesResponse { processes });
+            }
+        };
+
+        for process in system.processes().values() {
             let name = process.name().to_string_lossy().into_owned();
             let command = process
                 .cmd()
@@ -1529,21 +1543,110 @@ fn prompt_to_proto(
 }
 
 fn find_venv_python(working_directory: &std::path::Path) -> Option<std::path::PathBuf> {
-    let wd = working_directory;
-    for dir_name in &[".venv", "venv", ".env", "env"] {
-        let venv_dir = wd.join(dir_name);
-        let has_pyvenv_cfg = venv_dir.join("pyvenv.cfg").is_file();
-        let has_activate = venv_dir.join("bin").join("activate").is_file();
-        if has_pyvenv_cfg || has_activate {
-            let python = venv_dir.join("bin").join("python");
+    // A virtualenv keeps its interpreter in `bin/` on POSIX and `Scripts/` on
+    // Windows; the activation script differs for the same reason.
+    let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
+    let interpreters: &[&str] = if cfg!(windows) {
+        &["python.exe"]
+    } else {
+        &["python", "python3"]
+    };
+
+    for dir_name in [".venv", "venv", ".env", "env"] {
+        let venv_dir = working_directory.join(dir_name);
+        let bin = venv_dir.join(bin_dir);
+        let looks_like_venv = venv_dir.join("pyvenv.cfg").is_file()
+            || bin.join("activate").is_file()
+            || bin.join("activate.bat").is_file();
+        if !looks_like_venv {
+            continue;
+        }
+        for interpreter in interpreters {
+            let python = bin.join(interpreter);
             if python.is_file() {
                 return Some(python);
-            }
-            let python3 = venv_dir.join("bin").join("python3");
-            if python3.is_file() {
-                return Some(python3);
             }
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_files(root: &Path, files: impl IntoIterator<Item = impl AsRef<Path>>) {
+        for file in files {
+            let path = root.join(file);
+            std::fs::create_dir_all(path.parent().expect("file has a parent directory"))
+                .expect("create parent directory");
+            std::fs::write(&path, "").expect("create file");
+        }
+    }
+
+    #[test]
+    fn find_venv_python_detects_venv_with_pyvenv_cfg() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
+        let interpreter = if cfg!(windows) {
+            "python.exe"
+        } else {
+            "python3"
+        };
+        create_files(
+            temp_dir.path(),
+            [
+                ".venv/pyvenv.cfg".to_owned(),
+                format!(".venv/{bin_dir}/{interpreter}"),
+            ],
+        );
+
+        assert_eq!(
+            find_venv_python(temp_dir.path()),
+            Some(
+                temp_dir
+                    .path()
+                    .join(".venv")
+                    .join(bin_dir)
+                    .join(interpreter)
+            )
+        );
+    }
+
+    #[test]
+    fn find_venv_python_detects_venv_with_activate_script() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
+        let interpreter = if cfg!(windows) {
+            "python.exe"
+        } else {
+            "python"
+        };
+        create_files(
+            temp_dir.path(),
+            [
+                format!(".venv/{bin_dir}/activate"),
+                format!(".venv/{bin_dir}/{interpreter}"),
+            ],
+        );
+
+        assert_eq!(
+            find_venv_python(temp_dir.path()),
+            Some(
+                temp_dir
+                    .path()
+                    .join(".venv")
+                    .join(bin_dir)
+                    .join(interpreter)
+            )
+        );
+    }
+
+    #[test]
+    fn find_venv_python_ignores_directories_without_an_interpreter() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        create_files(temp_dir.path(), [".venv/pyvenv.cfg"]);
+
+        assert_eq!(find_venv_python(temp_dir.path()), None);
+    }
 }

@@ -1,4 +1,4 @@
-use std::cmp::{self, min};
+use std::cmp;
 use std::iter::repeat;
 
 use alacritty_terminal::grid::Dimensions;
@@ -55,8 +55,8 @@ impl AlacMouseButton {
     fn from_button(e: MouseButton) -> Self {
         match e {
             gpui::MouseButton::Left => AlacMouseButton::LeftButton,
-            gpui::MouseButton::Right => AlacMouseButton::MiddleButton,
-            gpui::MouseButton::Middle => AlacMouseButton::RightButton,
+            gpui::MouseButton::Middle => AlacMouseButton::MiddleButton,
+            gpui::MouseButton::Right => AlacMouseButton::RightButton,
             gpui::MouseButton::Navigate(_) => AlacMouseButton::Other,
         }
     }
@@ -123,6 +123,30 @@ mod tests {
     }
 
     #[test]
+    fn mouse_button_report_sends_x10_button_codes() {
+        // X10 encoding numbers the buttons left=0, middle=1, right=2. The drag
+        // mapping above already follows that order, so a press must agree with
+        // it, otherwise middle and right clicks arrive swapped in the
+        // application.
+        let point = AlacPoint::new(GridLine(0), GridCol(0));
+        let mode = TermMode::MOUSE_MODE | TermMode::SGR_MOUSE;
+
+        for (button, code) in [
+            (MouseButton::Left, 0),
+            (MouseButton::Middle, 1),
+            (MouseButton::Right, 2),
+        ] {
+            let report = mouse_button_report(point, button, Modifiers::none(), true, mode)
+                .expect("mouse mode should produce a press report");
+            assert_eq!(
+                report,
+                format!("\x1b[<{code};1;1M").into_bytes(),
+                "unexpected button code for {button:?}"
+            );
+        }
+    }
+
+    #[test]
     fn scroll_report_repeats_for_positive_scroll_lines() {
         let grid_point = AlacPoint::new(GridLine(0), GridCol(0));
 
@@ -145,7 +169,7 @@ pub fn alt_scroll(scroll_lines: i32) -> Vec<u8> {
     let cmd = if scroll_lines > 0 { b'A' } else { b'B' };
 
     let mut content = Vec::with_capacity(scroll_lines.unsigned_abs() as usize * 3);
-    for _ in 0..scroll_lines.abs() {
+    for _ in 0..scroll_lines.unsigned_abs() {
         content.push(0x1b);
         content.push(b'O');
         content.push(cmd);
@@ -220,7 +244,7 @@ pub fn grid_point_and_side(
         col = cur_size.last_column();
         side = Side::Right;
     }
-    let col = min(col, cur_size.last_column());
+
     let mut line = (pos.y / cur_size.line_height) as i32;
     if line > cur_size.bottommost_line() {
         line = cur_size.bottommost_line().0;

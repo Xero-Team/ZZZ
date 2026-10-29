@@ -79,7 +79,13 @@ pub fn key_to_native(key: &str) -> Cow<'_, str> {
         "f35" => NSF35FunctionKey,
         _ => return Cow::Borrowed(key),
     };
-    Cow::Owned(String::from_utf16(&[code]).expect("from_utf16 should be present"))
+    match String::from_utf16(&[code]) {
+        Ok(key) => Cow::Owned(key),
+        Err(error) => {
+            log::error!("function key constant {code:#x} is not a valid UTF-16 scalar: {error}");
+            Cow::Borrowed(key)
+        }
+    }
 }
 
 unsafe fn read_modifiers(native_event: id) -> Modifiers {

@@ -226,13 +226,15 @@ impl DivInspector {
                             // true (such as for `p_1_3`). This can cause these values to
                             // erroneously appear in `json_style_overrides` since they are not
                             // perfectly equal. Roundtripping before `subtract` fixes this.
-                            unconvertible_plus_rust =
+                            if let Some(roundtripped) =
                                 serde_json::to_string(&unconvertible_plus_rust)
-                                    .ok()
+                                    .log_err()
                                     .and_then(|json| {
-                                        serde_json_lenient::from_str_lenient(&json).ok()
+                                        serde_json_lenient::from_str_lenient(&json).log_err()
                                     })
-                                    .unwrap_or(unconvertible_plus_rust);
+                            {
+                                unconvertible_plus_rust = roundtripped;
+                            }
 
                             this.json_style_overrides =
                                 new_style.subtract(&unconvertible_plus_rust);
@@ -277,19 +279,20 @@ impl DivInspector {
     }
 
     fn reset_style(&mut self, cx: &mut App) {
-        if let State::Ready {
+        let State::Ready {
             rust_style_buffer,
             json_style_buffer,
             ..
         } = &self.state
-        {
-            if let Err(err) =
-                self.reset_style_editors(&rust_style_buffer.clone(), &json_style_buffer.clone(), cx)
-            {
-                self.json_style_error = Some(format!("{err}").into());
-            } else {
-                self.json_style_error = None;
-            }
+        else {
+            return;
+        };
+        let (rust_style_buffer, json_style_buffer) =
+            (rust_style_buffer.clone(), json_style_buffer.clone());
+
+        match self.reset_style_editors(&rust_style_buffer, &json_style_buffer, cx) {
+            Ok(_rust_style) => self.json_style_error = None,
+            Err(err) => self.json_style_error = Some(format!("{err}").into()),
         }
     }
 
@@ -339,18 +342,18 @@ impl DivInspector {
         cx: &mut Context<Self>,
     ) {
         self.rust_completion = rust_completion;
-        if let State::Ready {
+        let State::Ready {
             rust_style_buffer,
             json_style_buffer,
             ..
         } = &self.state
-        {
-            self.update_json_style_from_rust(
-                &json_style_buffer.clone(),
-                &rust_style_buffer.clone(),
-                cx,
-            );
-        }
+        else {
+            return;
+        };
+        let (rust_style_buffer, json_style_buffer) =
+            (rust_style_buffer.clone(), json_style_buffer.clone());
+
+        self.update_json_style_from_rust(&json_style_buffer, &rust_style_buffer, cx);
     }
 
     fn update_json_style_from_rust(
@@ -720,7 +723,8 @@ impl CompletionProvider for RustStyleCompletionProvider {
             .update(cx, |div_inspector, _cx| {
                 div_inspector.rust_completion_replace_range = Some(replace_range.clone());
             })
-            .is_err()
+            .log_err()
+            .is_none()
         {
             return Task::ready(Ok(Vec::new()));
         }
@@ -793,6 +797,10 @@ fn completion_replace_range(snapshot: &BufferSnapshot, anchor: &Anchor) -> Optio
     let start_in_line = &line[..offset - line_start]
         .rfind(|character| is_not_identifier_char(character) && character != '.')
         .map_or(0, |index| index + 1);
+    // Note: `rfind` yields an index relative to the cursor, while
+    // `start_in_line` and the `unwrap_or` fallback are relative to the line
+    // start. This only agrees when the cursor is at the end of the line, which
+    // is the only position completions are requested from today.
     let end_in_line = &line[offset - line_start..]
         .rfind(|character| {
             is_not_identifier_char(character) && character != '(' && character != ')'
@@ -805,5 +813,29 @@ fn completion_replace_range(snapshot: &BufferSnapshot, anchor: &Anchor) -> Optio
         Some(replace_start..replace_end)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::TestAppContext;
+
+    use super::*;
+
+    #[gpui::test]
+    fn completion_replace_range_replaces_the_partial_method_name(cx: &mut TestAppContext) {
+        let buffer = cx.new(|cx| Buffer::local("div().w_4\n", cx));
+        let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
+        let anchor = snapshot.anchor_after(9);
+
+        let replace_range =
+            completion_replace_range(&snapshot, &anchor).expect("cursor is after a dot");
+        let replaced = snapshot
+            .text_for_range(
+                replace_range.start.to_offset(&snapshot)..replace_range.end.to_offset(&snapshot),
+            )
+            .collect::<String>();
+
+        assert_eq!(replaced, ".w_4");
     }
 }

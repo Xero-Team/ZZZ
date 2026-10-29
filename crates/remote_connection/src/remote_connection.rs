@@ -203,13 +203,33 @@ impl RemoteConnectionPrompt {
     }
 
     pub fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.prompt.is_none() {
+            return;
+        }
+
+        let password_text = self.editor.text(cx);
+        let password = match EncryptedPassword::try_from(password_text.as_ref()) {
+            Ok(password) => password,
+            Err(error) => {
+                // Keep the prompt so the user can try again instead of leaving
+                // the connection waiting for a password that never arrives.
+                log::error!("failed to encrypt the remote connection password: {error}");
+                self.status_message = Some(
+                    tr(
+                        cx,
+                        "remote_connection.password_encryption_failed",
+                        "Could not encrypt the password",
+                    )
+                    .into(),
+                );
+                cx.notify();
+                return;
+            }
+        };
+
         if let Some((_, password_sender)) = self.prompt.take() {
             self.status_message = Some(tr(cx, "remote_connection.connecting", "Connecting").into());
-
-            let password_text = self.editor.text(cx);
-            if let Ok(password) = EncryptedPassword::try_from(password_text.as_ref()) {
-                send_password(password_sender, password);
-            }
+            send_password(password_sender, password);
             self.editor.clear(window, cx);
         }
     }
@@ -694,6 +714,8 @@ fn connect_with_delegate(
     cx.spawn(async move |cx| {
         let connection = remote::connect(connection_options, delegate.clone(), cx).await?;
 
+        // Nothing can cancel a background connection, so the sender lives only
+        // as long as this task and the client observes a closed channel.
         let (_cancel_guard, cancel_rx) = oneshot::channel::<()>();
         cx.update(|cx| {
             RemoteClient::new(

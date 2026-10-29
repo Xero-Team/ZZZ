@@ -138,7 +138,7 @@ impl PickerDelegate for LineEndingSelectorDelegate {
             let project = self.project.clone();
             cx.defer(move |cx| {
                 project.update(cx, |this, cx| {
-                    this.save_buffer(buffer, cx).detach();
+                    this.save_buffer(buffer, cx).detach_and_log_err(cx);
                 });
             });
         }
@@ -170,7 +170,7 @@ impl PickerDelegate for LineEndingSelectorDelegate {
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) -> gpui::Task<()> {
-        return Task::ready(());
+        Task::ready(())
     }
 
     fn render_match(

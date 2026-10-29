@@ -1,3 +1,4 @@
+use crate::tr;
 pub mod configure_context_server_modal;
 mod configure_context_server_tools_modal;
 mod manage_profiles_modal;
@@ -17,7 +18,6 @@ use gpui::{
     Action, Anchor, App, AsyncWindowContext, Entity, FocusHandle, Focusable, ScrollHandle,
     Subscription, Task, WeakEntity,
 };
-use i18n as app_i18n;
 use itertools::Itertools;
 use language::LanguageRegistry;
 use notifications::status_toast::StatusToast;
@@ -44,8 +44,75 @@ use crate::{
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
 };
 
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
+/// Maps a context server status to the badge shown on its settings row.
+fn context_server_item_status(status: &ContextServerStatus) -> AiSettingItemStatus {
+    match status {
+        ContextServerStatus::Starting => AiSettingItemStatus::Starting,
+        ContextServerStatus::Running => AiSettingItemStatus::Running,
+        ContextServerStatus::Error(_) => AiSettingItemStatus::Error,
+        ContextServerStatus::Stopped => AiSettingItemStatus::Stopped,
+        ContextServerStatus::AuthRequired => AiSettingItemStatus::AuthRequired,
+        ContextServerStatus::ClientSecretRequired { .. } => {
+            AiSettingItemStatus::ClientSecretRequired
+        }
+        ContextServerStatus::Authenticating => AiSettingItemStatus::Authenticating,
+    }
+}
+
+/// The trailing detail label for a running server: how many tools it exposes.
+fn context_server_tool_label(
+    is_running: bool,
+    tool_count: usize,
+    cx: &App,
+) -> Option<SharedString> {
+    if !is_running {
+        return None;
+    }
+
+    Some(if tool_count == 1 {
+        tr(cx, "agent_ui.agent_configuration.tool_count_one", "1 tool")
+    } else {
+        tr(
+            cx,
+            "agent_ui.agent_configuration.tool_count_many",
+            "{} tools",
+        )
+        .replacen("{}", &tool_count.to_string(), 1)
+        .into()
+    })
+}
+
+/// A context server status banner: an icon, a muted message, and an optional
+/// trailing action.
+fn context_server_feedback_row(
+    icon: IconName,
+    icon_color: Color,
+    message: impl Into<SharedString>,
+    action: Option<AnyElement>,
+) -> AnyElement {
+    h_flex()
+        .py_1()
+        .min_w_0()
+        .w_full()
+        .gap_1()
+        .justify_between()
+        .child(
+            h_flex()
+                .pr_4()
+                .min_w_0()
+                .w_full()
+                .gap_2()
+                .child(Icon::new(icon).size(IconSize::XSmall).color(icon_color))
+                .child(
+                    div().min_w_0().flex_1().child(
+                        Label::new(message)
+                            .color(Color::Muted)
+                            .size(LabelSize::Small),
+                    ),
+                ),
+        )
+        .children(action)
+        .into_any_element()
 }
 
 pub struct AgentConfiguration {
@@ -292,8 +359,6 @@ impl AgentConfiguration {
             .read(cx)
             .configuration_for_server(&context_server_id);
 
-        let is_running = matches!(server_status, ContextServerStatus::Running);
-        let item_id = SharedString::from(context_server_id.0.clone());
         // Servers without a configuration can only be provided by extensions.
         let provided_by_extension = server_configuration.as_ref().is_none_or(|config| {
             matches!(
@@ -301,67 +366,130 @@ impl AgentConfiguration {
                 ContextServerConfiguration::Extension { .. }
             )
         });
-
-        let display_name = if provided_by_extension {
-            resolve_extension_for_context_server(&context_server_id, cx).map_or_else(
-                || item_id.clone(),
-                |(_, manifest)| {
-                    let name = manifest.name.as_str();
-                    let stripped = name
-                        .strip_suffix(" MCP Server")
-                        .or_else(|| name.strip_suffix(" MCP"))
-                        .or_else(|| name.strip_suffix(" Context Server"))
-                        .unwrap_or(name);
-                    SharedString::from(stripped.to_owned())
-                },
-            )
-        } else {
-            item_id.clone()
-        };
-
-        let error = if let ContextServerStatus::Error(error) = server_status.clone() {
-            Some(error)
-        } else {
-            None
-        };
-        let auth_required = matches!(server_status, ContextServerStatus::AuthRequired);
-        let client_secret_required = matches!(
-            server_status,
-            ContextServerStatus::ClientSecretRequired { .. }
-        );
-        let authenticating = matches!(server_status, ContextServerStatus::Authenticating);
-        let context_server_store = self.context_server_store.clone();
-        let workspace = self.workspace.clone();
-        let language_registry = self.language_registry.clone();
-
+        let should_show_logout_button = server_configuration.as_ref().is_some_and(|config| {
+            matches!(config.as_ref(), ContextServerConfiguration::Http { .. })
+                && !config.has_static_auth_header()
+        });
         let tool_count = self
             .context_server_registry
             .read(cx)
             .tools_for_server(&context_server_id)
             .count();
-
+        let is_running = matches!(server_status, ContextServerStatus::Running);
         let source = if provided_by_extension {
             AiSettingItemSource::Extension
         } else {
             AiSettingItemSource::Custom
         };
 
-        let status = match server_status {
-            ContextServerStatus::Starting => AiSettingItemStatus::Starting,
-            ContextServerStatus::Running => AiSettingItemStatus::Running,
-            ContextServerStatus::Error(_) => AiSettingItemStatus::Error,
-            ContextServerStatus::Stopped => AiSettingItemStatus::Stopped,
-            ContextServerStatus::AuthRequired => AiSettingItemStatus::AuthRequired,
-            ContextServerStatus::ClientSecretRequired { .. } => {
-                AiSettingItemStatus::ClientSecretRequired
-            }
-            ContextServerStatus::Authenticating => AiSettingItemStatus::Authenticating,
-        };
+        let item_id = SharedString::from(context_server_id.0.clone());
+        let display_name =
+            self.context_server_display_name(&context_server_id, provided_by_extension, cx);
+        let status = context_server_item_status(&server_status);
+        let details = self.render_context_server_status_details(
+            &context_server_id,
+            &server_status,
+            should_show_logout_button,
+            cx,
+        );
+        let tool_label = context_server_tool_label(is_running, tool_count, cx);
+        let configuration_menu = self.render_context_server_configuration_menu(
+            &context_server_id,
+            tool_count,
+            provided_by_extension,
+            should_show_logout_button,
+            cx,
+        );
 
-        let should_show_logout_button = server_configuration.as_ref().is_some_and(|config| {
-            matches!(config.as_ref(), ContextServerConfiguration::Http { .. })
-                && !config.has_static_auth_header()
-        });
+        AiSettingItem::new(item_id, display_name, status, source)
+            .action(configuration_menu)
+            .action(
+                Switch::new("context-server-switch", is_running.into()).on_click({
+                    let context_server_manager = self.context_server_store.clone();
+                    let fs = self.fs.clone();
+
+                    move |state, _window, cx| {
+                        let is_enabled = match state {
+                            ToggleState::Unselected | ToggleState::Indeterminate => {
+                                context_server_manager.update(cx, |this, cx| {
+                                    this.stop_server(&context_server_id, cx).log_err();
+                                });
+                                false
+                            }
+                            ToggleState::Selected => {
+                                context_server_manager.update(cx, |this, cx| {
+                                    if let Some(server) = this.get_server(&context_server_id) {
+                                        this.start_server(server, cx);
+                                    }
+                                });
+                                true
+                            }
+                        };
+                        update_settings_file(fs.clone(), cx, {
+                            let context_server_id = context_server_id.clone();
+
+                            move |settings, _| {
+                                settings
+                                    .project
+                                    .context_servers
+                                    .entry(context_server_id.0)
+                                    .or_insert_with(|| {
+                                        settings::ContextServerSettingsContent::Extension {
+                                            enabled: is_enabled,
+                                            remote: false,
+                                            settings: serde_json::json!({}),
+                                        }
+                                    })
+                                    .set_enabled(is_enabled);
+                            }
+                        });
+                    }
+                }),
+            )
+            .when_some(tool_label, |this, label| this.detail_label(label))
+            .when_some(details, |this, details| this.details(details))
+    }
+
+    /// The name shown for a context server: the extension manifest's name when
+    /// an extension provides it, otherwise the raw server id.
+    fn context_server_display_name(
+        &self,
+        context_server_id: &ContextServerId,
+        provided_by_extension: bool,
+        cx: &Context<Self>,
+    ) -> SharedString {
+        let item_id = SharedString::from(context_server_id.0.clone());
+        if !provided_by_extension {
+            return item_id;
+        }
+
+        resolve_extension_for_context_server(context_server_id, cx).map_or_else(
+            || item_id.clone(),
+            |(_, manifest)| {
+                let name = manifest.name.as_str();
+                let stripped = name
+                    .strip_suffix(" MCP Server")
+                    .or_else(|| name.strip_suffix(" MCP"))
+                    .or_else(|| name.strip_suffix(" Context Server"))
+                    .unwrap_or(name);
+                SharedString::from(stripped.to_owned())
+            },
+        )
+    }
+
+    fn render_context_server_configuration_menu(
+        &self,
+        context_server_id: &ContextServerId,
+        tool_count: usize,
+        provided_by_extension: bool,
+        should_show_logout_button: bool,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let fs = self.fs.clone();
+        let language_registry = self.language_registry.clone();
+        let workspace = self.workspace.clone();
+        let context_server_registry = self.context_server_registry.clone();
+        let context_server_store = self.context_server_store.clone();
         let configure_server_label = tr(
             cx,
             "agent_ui.agent_configuration.configure_server",
@@ -371,7 +499,7 @@ impl AgentConfiguration {
         let log_out_label = tr(cx, "agent_ui.agent_configuration.log_out", "Log Out");
         let uninstall_label = tr(cx, "agent_ui.agent_configuration.uninstall", "Uninstall");
 
-        let context_server_configuration_menu = PopoverMenu::new("context-server-config-menu")
+        PopoverMenu::new("context-server-config-menu")
             .trigger_with_tooltip(
                 IconButton::new("context-server-config-menu", IconName::Settings)
                     .icon_color(Color::Muted)
@@ -384,12 +512,7 @@ impl AgentConfiguration {
             )
             .anchor(Anchor::TopRight)
             .menu({
-                let fs = self.fs.clone();
                 let context_server_id = context_server_id.clone();
-                let language_registry = self.language_registry.clone();
-                let workspace = self.workspace.clone();
-                let context_server_registry = self.context_server_registry.clone();
-                let context_server_store = context_server_store.clone();
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _window, _cx| {
                         menu.entry(configure_server_label.clone(), None, {
@@ -492,149 +615,112 @@ impl AgentConfiguration {
                         })
                     }))
                 }
-            });
+            })
+            .into_any_element()
+    }
 
-        let feedback_base_container =
-            || h_flex().py_1().min_w_0().w_full().gap_1().justify_between();
-
-        let details: Option<AnyElement> = if let Some(error) = error {
-            Some(
-                feedback_base_container()
-                    .child(
-                        h_flex()
-                            .pr_4()
-                            .min_w_0()
-                            .w_full()
-                            .gap_2()
-                            .child(
-                                Icon::new(IconName::XCircle)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Error),
-                            )
-                            .child(div().min_w_0().flex_1().child(
-                                Label::new(error).color(Color::Muted).size(LabelSize::Small),
-                            )),
+    /// The status banner shown under a context server row, if the server needs
+    /// the user's attention.
+    fn render_context_server_status_details(
+        &self,
+        context_server_id: &ContextServerId,
+        server_status: &ContextServerStatus,
+        should_show_logout_button: bool,
+        cx: &Context<Self>,
+    ) -> Option<AnyElement> {
+        match server_status {
+            ContextServerStatus::Error(error) => Some(context_server_feedback_row(
+                IconName::XCircle,
+                Color::Error,
+                error.clone(),
+                should_show_logout_button.then(|| {
+                    Button::new(
+                        "error-logout-server",
+                        tr(cx, "agent_ui.agent_configuration.log_out", "Log Out"),
                     )
-                    .when(should_show_logout_button, |this| {
-                        this.child(
-                            Button::new(
-                                "error-logout-server",
-                                tr(cx, "agent_ui.agent_configuration.log_out", "Log Out"),
-                            )
-                            .style(ButtonStyle::Outlined)
-                            .label_size(LabelSize::Small)
-                            .on_click({
-                                let context_server_store = context_server_store.clone();
-                                let context_server_id = context_server_id.clone();
-                                move |_event, _window, cx| {
-                                    context_server_store.update(cx, |store, cx| {
-                                        store.logout_server(&context_server_id, cx).log_err();
-                                    });
-                                }
-                            }),
-                        )
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .on_click({
+                        let context_server_store = self.context_server_store.clone();
+                        let context_server_id = context_server_id.clone();
+                        move |_event, _window, cx| {
+                            context_server_store.update(cx, |store, cx| {
+                                store.logout_server(&context_server_id, cx).log_err();
+                            });
+                        }
+                    })
+                    .into_any_element()
+                }),
+            )),
+            ContextServerStatus::AuthRequired => Some(context_server_feedback_row(
+                IconName::Info,
+                Color::Muted,
+                tr(
+                    cx,
+                    "agent_ui.agent_configuration.authenticate_to_connect_server",
+                    "Authenticate to connect this server",
+                ),
+                Some(
+                    Button::new(
+                        "authenticate-server",
+                        tr(
+                            cx,
+                            "agent_ui.agent_configuration.authenticate",
+                            "Authenticate",
+                        ),
+                    )
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .on_click({
+                        let context_server_store = self.context_server_store.clone();
+                        let context_server_id = context_server_id.clone();
+                        move |_event, _window, cx| {
+                            context_server_store.update(cx, |store, cx| {
+                                store.authenticate_server(&context_server_id, cx).log_err();
+                            });
+                        }
                     })
                     .into_any_element(),
-            )
-        } else if auth_required {
-            Some(
-                feedback_base_container()
-                    .child(
-                        h_flex()
-                            .pr_4()
-                            .min_w_0()
-                            .w_full()
-                            .gap_2()
-                            .child(
-                                Icon::new(IconName::Info)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Muted),
-                            )
-                            .child(
-                                Label::new(tr(
-                                    cx,
-                                    "agent_ui.agent_configuration.authenticate_to_connect_server",
-                                    "Authenticate to connect this server",
-                                ))
-                                .color(Color::Muted)
-                                .size(LabelSize::Small),
-                            ),
+                ),
+            )),
+            ContextServerStatus::ClientSecretRequired { .. } => Some(context_server_feedback_row(
+                IconName::Info,
+                Color::Muted,
+                tr(
+                    cx,
+                    "agent_ui.agent_configuration.enter_client_secret_to_connect_server",
+                    "Enter a client secret to connect this server",
+                ),
+                Some(
+                    Button::new(
+                        "enter-client-secret",
+                        tr(
+                            cx,
+                            "agent_ui.agent_configuration.enter_client_secret",
+                            "Enter Client Secret",
+                        ),
                     )
-                    .child(
-                        Button::new(
-                            "authenticate-server",
-                            tr(
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .on_click({
+                        let context_server_id = context_server_id.clone();
+                        let language_registry = self.language_registry.clone();
+                        let workspace = self.workspace.clone();
+                        move |_event, window, cx| {
+                            ConfigureContextServerModal::show_modal_for_existing_server(
+                                context_server_id.clone(),
+                                language_registry.clone(),
+                                workspace.clone(),
+                                window,
                                 cx,
-                                "agent_ui.agent_configuration.authenticate",
-                                "Authenticate",
-                            ),
-                        )
-                        .style(ButtonStyle::Outlined)
-                        .label_size(LabelSize::Small)
-                        .on_click({
-                            let context_server_id = context_server_id.clone();
-                            move |_event, _window, cx| {
-                                context_server_store.update(cx, |store, cx| {
-                                    store.authenticate_server(&context_server_id, cx).log_err();
-                                });
-                            }
-                        }),
-                    )
-                    .into_any_element(),
-            )
-        } else if client_secret_required {
-            Some(
-                feedback_base_container()
-                    .child(
-                        h_flex()
-                            .pr_4()
-                            .min_w_0()
-                            .w_full()
-                            .gap_2()
-                            .child(
-                                Icon::new(IconName::Info)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Muted),
                             )
-                            .child(
-                                Label::new(tr(
-                                    cx,
-                                    "agent_ui.agent_configuration.enter_client_secret_to_connect_server",
-                                    "Enter a client secret to connect this server",
-                                ))
-                                    .color(Color::Muted)
-                                    .size(LabelSize::Small),
-                            ),
-                    )
-                    .child(
-                        Button::new(
-                            "enter-client-secret",
-                            tr(
-                                cx,
-                                "agent_ui.agent_configuration.enter_client_secret",
-                                "Enter Client Secret",
-                            ),
-                        )
-                            .style(ButtonStyle::Outlined)
-                            .label_size(LabelSize::Small)
-                            .on_click({
-                                let context_server_id = context_server_id.clone();
-                                move |_event, window, cx| {
-                                    ConfigureContextServerModal::show_modal_for_existing_server(
-                                        context_server_id.clone(),
-                                        language_registry.clone(),
-                                        workspace.clone(),
-                                        window,
-                                        cx,
-                                    )
-                                    .detach_and_log_err(cx);
-                                }
-                            }),
-                    )
+                            .detach_and_log_err(cx);
+                        }
+                    })
                     .into_any_element(),
-            )
-        } else if authenticating {
-            Some(
+                ),
+            )),
+            ContextServerStatus::Authenticating => Some(
                 h_flex()
                     .mt_1()
                     .pr_4()
@@ -652,75 +738,9 @@ impl AgentConfiguration {
                         .size(LabelSize::Small),
                     )
                     .into_any_element(),
-            )
-        } else {
-            None
-        };
-
-        let tool_label = if is_running {
-            Some(if tool_count == 1 {
-                tr(cx, "agent_ui.agent_configuration.tool_count_one", "1 tool")
-            } else {
-                SharedString::from(
-                    tr(
-                        cx,
-                        "agent_ui.agent_configuration.tool_count_many",
-                        "{} tools",
-                    )
-                    .replacen("{}", &tool_count.to_string(), 1),
-                )
-            })
-        } else {
-            None
-        };
-
-        AiSettingItem::new(item_id, display_name, status, source)
-            .action(context_server_configuration_menu)
-            .action(
-                Switch::new("context-server-switch", is_running.into()).on_click({
-                    let context_server_manager = self.context_server_store.clone();
-                    let fs = self.fs.clone();
-
-                    move |state, _window, cx| {
-                        let is_enabled = match state {
-                            ToggleState::Unselected | ToggleState::Indeterminate => {
-                                context_server_manager.update(cx, |this, cx| {
-                                    this.stop_server(&context_server_id, cx).log_err();
-                                });
-                                false
-                            }
-                            ToggleState::Selected => {
-                                context_server_manager.update(cx, |this, cx| {
-                                    if let Some(server) = this.get_server(&context_server_id) {
-                                        this.start_server(server, cx);
-                                    }
-                                });
-                                true
-                            }
-                        };
-                        update_settings_file(fs.clone(), cx, {
-                            let context_server_id = context_server_id.clone();
-
-                            move |settings, _| {
-                                settings
-                                    .project
-                                    .context_servers
-                                    .entry(context_server_id.0)
-                                    .or_insert_with(|| {
-                                        settings::ContextServerSettingsContent::Extension {
-                                            enabled: is_enabled,
-                                            remote: false,
-                                            settings: serde_json::json!({}),
-                                        }
-                                    })
-                                    .set_enabled(is_enabled);
-                            }
-                        });
-                    }
-                }),
-            )
-            .when_some(tool_label, |this, label| this.detail_label(label))
-            .when_some(details, |this, details| this.details(details))
+            ),
+            _ => None,
+        }
     }
 
     fn render_agent_servers_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -931,71 +951,54 @@ impl AgentConfiguration {
             }))
         });
 
-        let uninstall_button = match source {
-            ExternalAgentSource::Registry => {
-                let fs = self.fs.clone();
-                Some(
-                    IconButton::new(
-                        SharedString::from(format!("uninstall-{}", id)),
-                        IconName::Trash,
-                    )
-                    .icon_color(Color::Muted)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text(tr(
-                        cx,
-                        "agent_ui.agent_configuration.remove_registry_agent",
-                        "Remove Registry Agent",
-                    )))
-                    .on_click(cx.listener(move |_, _, _window, cx| {
-                        let agent_name = agent_server_name.clone();
-                        update_settings_file(fs.clone(), cx, move |settings, _| {
-                            let Some(agent_servers) = settings.agent_servers.as_mut() else {
-                                return;
-                            };
-                            if let Some(entry) = agent_servers.get(agent_name.0.as_ref())
-                                && matches!(
-                                    entry,
-                                    settings::CustomAgentServerSettings::Registry { .. }
-                                )
-                            {
-                                agent_servers.remove(agent_name.0.as_ref());
-                            }
-                        });
-                    })),
+        let (uninstall_tooltip_key, uninstall_tooltip_fallback) = match source {
+            ExternalAgentSource::Registry => (
+                "agent_ui.agent_configuration.remove_registry_agent",
+                "Remove Registry Agent",
+            ),
+            ExternalAgentSource::Custom => (
+                "agent_ui.agent_configuration.remove_custom_agent",
+                "Remove Custom Agent",
+            ),
+        };
+        let uninstall_button = {
+            let fs = self.fs.clone();
+            Some(
+                IconButton::new(
+                    SharedString::from(format!("uninstall-{}", id)),
+                    IconName::Trash,
                 )
-            }
-            ExternalAgentSource::Custom => {
-                let fs = self.fs.clone();
-                Some(
-                    IconButton::new(
-                        SharedString::from(format!("uninstall-{}", id)),
-                        IconName::Trash,
-                    )
-                    .icon_color(Color::Muted)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text(tr(
-                        cx,
-                        "agent_ui.agent_configuration.remove_custom_agent",
-                        "Remove Custom Agent",
-                    )))
-                    .on_click(cx.listener(move |_, _, _window, cx| {
-                        let agent_name = agent_server_name.clone();
-                        update_settings_file(fs.clone(), cx, move |settings, _| {
-                            let Some(agent_servers) = settings.agent_servers.as_mut() else {
-                                return;
-                            };
-                            if let Some(entry) = agent_servers.get(agent_name.0.as_ref())
-                                && matches!(
-                                    entry,
-                                    settings::CustomAgentServerSettings::Custom { .. }
-                                )
-                            {
-                                agent_servers.remove(agent_name.0.as_ref());
+                .icon_color(Color::Muted)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text(tr(
+                    cx,
+                    uninstall_tooltip_key,
+                    uninstall_tooltip_fallback,
+                )))
+                .on_click(cx.listener(move |_, _, _window, cx| {
+                    let agent_name = agent_server_name.clone();
+                    update_settings_file(fs.clone(), cx, move |settings, _| {
+                        let Some(agent_servers) = settings.agent_servers.as_mut() else {
+                            return;
+                        };
+                        let has_source = |entry: &settings::CustomAgentServerSettings| match source
+                        {
+                            ExternalAgentSource::Registry => matches!(
+                                entry,
+                                settings::CustomAgentServerSettings::Registry { .. }
+                            ),
+                            ExternalAgentSource::Custom => {
+                                matches!(entry, settings::CustomAgentServerSettings::Custom { .. })
                             }
-                        });
-                    })),
-                )
-            }
+                        };
+                        if let Some(entry) = agent_servers.get(agent_name.0.as_ref())
+                            && has_source(entry)
+                        {
+                            agent_servers.remove(agent_name.0.as_ref());
+                        }
+                    });
+                })),
+            )
         };
 
         let status = match connection_status {
@@ -1083,7 +1086,7 @@ fn show_unable_to_uninstall_extension_with_context_server(
         )
         .replacen("{}", id.0.as_ref(), 1),
         cx,
-        move |this, _cx| {
+        move |this, cx| {
             let workspace_handle = workspace_handle.clone();
 
             this.icon(
@@ -1093,19 +1096,19 @@ fn show_unable_to_uninstall_extension_with_context_server(
             )
             .dismiss_button(true)
             .action(
-                tr(_cx, "agent_ui.agent_configuration.uninstall", "Uninstall"),
-                move |_, _cx| {
+                tr(cx, "agent_ui.agent_configuration.uninstall", "Uninstall"),
+                move |_, cx| {
                     if let Some((extension_id, _)) =
-                        resolve_extension_for_context_server(&context_server_id, _cx)
+                        resolve_extension_for_context_server(&context_server_id, cx)
                     {
-                        ExtensionStore::global(_cx).update(_cx, |store, cx| {
+                        ExtensionStore::global(cx).update(cx, |store, cx| {
                             store
                                 .uninstall_extension(extension_id, cx)
                                 .detach_and_log_err(cx);
                         });
 
                         workspace_handle
-                            .update(_cx, |workspace, cx| {
+                            .update(cx, |workspace, cx| {
                                 let fs = workspace.app_state().fs.clone();
                                 cx.spawn({
                                     let context_server_id = context_server_id.clone();
@@ -1248,7 +1251,7 @@ fn find_text_in_buffer(
         if char_offset >= chars.len() {
             break;
         }
-        offset += 1;
+        offset += c.len_utf8();
 
         if c == chars[char_offset] {
             char_offset += 1;
@@ -1261,5 +1264,25 @@ fn find_text_in_buffer(
         Some(offset.saturating_sub(chars.len())..offset)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{AppContext as _, TestAppContext};
+
+    use super::find_text_in_buffer;
+
+    #[gpui::test]
+    fn test_find_text_in_buffer_reports_byte_offsets(cx: &mut TestAppContext) {
+        // `find_text_in_buffer` works on byte offsets, so multi-byte characters
+        // before the match must not shift the returned range.
+        let buffer = cx.new(|cx| language::Buffer::local("é→ your_agent", cx));
+        let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
+
+        let found = find_text_in_buffer("your_agent", 0, &snapshot)
+            .expect("the needle is present in the buffer");
+        let text = snapshot.text();
+        assert_eq!(&text[found], "your_agent");
     }
 }

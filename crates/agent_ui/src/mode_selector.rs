@@ -12,14 +12,11 @@ use ui::{
     prelude::*,
 };
 
+use crate::tr;
 use crate::{
     CycleModeSelector, ToggleProfileSelector,
     ui::{HoldForDefault, documentation_aside_side},
 };
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 pub struct ModeSelector {
     connection: Rc<dyn AgentSessionModes>,
@@ -103,7 +100,7 @@ impl ModeSelector {
             let side = documentation_aside_side(cx);
 
             for mode in all_modes {
-                let is_selected = &mode.id == &current_mode;
+                let is_selected = mode.id == current_mode;
                 let is_default = Some(&mode.id) == default_mode.as_ref();
                 let entry = ContextMenuEntry::new(mode.name.clone())
                     .toggleable(IconPosition::End, is_selected);
@@ -168,7 +165,7 @@ impl Render for ModeSelector {
                 |mode| mode.name.clone(),
             );
 
-        let this = cx.weak_entity();
+        let weak_self = cx.weak_entity();
 
         let icon = if self.menu_handle.is_deployed() {
             IconName::ChevronUp
@@ -226,7 +223,7 @@ impl Render for ModeSelector {
                 y: px(-2.0),
             })
             .menu(move |window, cx| {
-                let this = this.upgrade()?;
+                let this = weak_self.upgrade()?;
                 Some(this.update(cx, |this, cx| this.build_context_menu(window, cx)))
             })
     }

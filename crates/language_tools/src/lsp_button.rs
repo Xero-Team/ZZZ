@@ -71,7 +71,8 @@ impl std::fmt::Debug for LanguageServerState {
 const PROCESS_MEMORY_CACHE_DURATION: Duration = Duration::from_secs(5);
 
 struct ProcessMemoryCache {
-    system: System,
+    /// `None` when the platform cannot provide process information.
+    system: Option<System>,
     memory_usage: HashMap<u32, u64>,
     last_refresh: Option<Instant>,
 }
@@ -79,13 +80,23 @@ struct ProcessMemoryCache {
 impl ProcessMemoryCache {
     fn new() -> Self {
         Self {
-            system: System::new(),
+            system: match System::new() {
+                Ok(system) => Some(system),
+                Err(error) => {
+                    log::error!("failed to initialize sysinfo: {error}");
+                    None
+                }
+            },
             memory_usage: HashMap::new(),
             last_refresh: None,
         }
     }
 
     fn get_memory_usage(&mut self, process_id: u32) -> u64 {
+        let Some(system) = self.system.as_mut() else {
+            return 0;
+        };
+
         let cache_expired = self
             .last_refresh
             .is_none_or(|last| last.elapsed() >= PROCESS_MEMORY_CACHE_DURATION);
@@ -93,7 +104,7 @@ impl ProcessMemoryCache {
         if cache_expired {
             let refresh_kind = RefreshKind::nothing()
                 .with_processes(ProcessRefreshKind::nothing().without_tasks().with_memory());
-            self.system.refresh_specifics(refresh_kind);
+            system.refresh_specifics(refresh_kind);
             self.memory_usage.clear();
             self.last_refresh = Some(Instant::now());
         }
@@ -104,18 +115,16 @@ impl ProcessMemoryCache {
 
         let root_pid = Pid::from_u32(process_id);
 
-        let parent_map: HashMap<Pid, Pid> = self
-            .system
+        let parent_map: HashMap<Pid, Pid> = system
             .processes()
             .iter()
             .filter_map(|(&pid, process)| Some((pid, process.parent()?)))
             .collect();
 
-        let total_memory = self
-            .system
+        let total_memory = system
             .processes()
             .iter()
-            .filter(|(pid, _)| self.is_descendant_of(**pid, root_pid, &parent_map))
+            .filter(|(pid, _)| Self::is_descendant_of(**pid, root_pid, &parent_map))
             .map(|(_, process)| process.memory())
             .sum();
 
@@ -123,7 +132,7 @@ impl ProcessMemoryCache {
         total_memory
     }
 
-    fn is_descendant_of(&self, pid: Pid, root_pid: Pid, parent_map: &HashMap<Pid, Pid>) -> bool {
+    fn is_descendant_of(pid: Pid, root_pid: Pid, parent_map: &HashMap<Pid, Pid>) -> bool {
         let mut current = pid;
         let mut visited = HashSet::default();
         while current != root_pid {

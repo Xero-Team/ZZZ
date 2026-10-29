@@ -36,7 +36,7 @@ impl ActiveToolchain {
                                 .active_item(cx)
                                 .and_then(|item| item.downcast::<Editor>())
                         })
-                        .ok()
+                        .log_err()
                         .flatten();
                     if let Some(editor) = editor {
                         this.update_lister(editor, window, cx);
@@ -63,19 +63,21 @@ impl ActiveToolchain {
                             .as_ref()
                             .map(|(_, buffer, _)| buffer.clone())
                     })
-                    .ok()
+                    .log_err()
                     .flatten()?;
-                let workspace = this.read_with(cx, |this, _| this.workspace.clone()).ok()?;
+                let workspace = this
+                    .read_with(cx, |this, _| this.workspace.clone())
+                    .log_err()?;
                 let language_name = active_file
                     .read_with(cx, |this, _| Some(this.language()?.name()))
-                    .ok()
+                    .log_err()
                     .flatten()?;
                 let meta = workspace
                     .update(cx, |workspace, cx| {
                         let languages = workspace.project().read(cx).languages();
                         Project::toolchain_metadata(languages.clone(), language_name.clone())
                     })
-                    .ok()?
+                    .log_err()?
                     .await?;
                 this.update(cx, |this, cx| {
                     this.term = meta.term;
@@ -88,7 +90,7 @@ impl ActiveToolchain {
                             Some((file.worktree_id(cx), file.path().parent()?.into()))
                         })
                     })
-                    .ok()
+                    .log_err()
                     .flatten()?;
                 let toolchain =
                     Self::active_toolchain(workspace, worktree_id, path, language_name, cx).await?;
@@ -97,7 +99,7 @@ impl ActiveToolchain {
 
                     cx.notify();
                 })
-                .ok()
+                .log_err()
             })
             .await
             .is_some();
@@ -106,7 +108,7 @@ impl ActiveToolchain {
                     this.active_toolchain = None;
                     cx.notify();
                 })
-                .ok();
+                .log_err();
             }
             did_set_toolchain.then_some(())
         })
@@ -118,24 +120,45 @@ impl ActiveToolchain {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let editor = editor.read(cx);
-        if let Some(buffer) = editor.active_buffer(cx)
-            && let Some(worktree_id) = buffer.read(cx).file().map(|file| file.worktree_id(cx))
-        {
-            let subscription = cx.subscribe_in(
-                &buffer,
-                window,
-                |this, _, event: &BufferEvent, window, cx| {
-                    if matches!(event, BufferEvent::LanguageChanged(_)) {
-                        this._update_toolchain_task = Self::spawn_tracker_task(window, cx);
-                    }
-                },
-            );
-            self.active_buffer = Some((worktree_id, buffer.downgrade(), subscription));
-            self._update_toolchain_task = Self::spawn_tracker_task(window, cx);
-        }
+        let active_buffer = {
+            let editor = editor.read(cx);
+            editor.active_buffer(cx).and_then(|buffer| {
+                let worktree_id = buffer.read(cx).file().map(|file| file.worktree_id(cx))?;
+                Some((worktree_id, buffer))
+            })
+        };
+
+        let Some((worktree_id, buffer)) = active_buffer else {
+            self.clear_active_buffer();
+            cx.notify();
+            return;
+        };
+
+        let subscription = cx.subscribe_in(
+            &buffer,
+            window,
+            |this, _, event: &BufferEvent, window, cx| {
+                if matches!(event, BufferEvent::LanguageChanged(_)) {
+                    this._update_toolchain_task = Self::spawn_tracker_task(window, cx);
+                }
+            },
+        );
+        self.active_buffer = Some((worktree_id, buffer.downgrade(), subscription));
+        self._update_toolchain_task = Self::spawn_tracker_task(window, cx);
 
         cx.notify();
+    }
+
+    /// Forgets the tracked buffer, its toolchain, and the pending detection
+    /// task.
+    ///
+    /// Without this the status item keeps rendering the toolchain of the last
+    /// file-backed editor after the active item stops being one (e.g. a settings
+    /// page or a buffer without a file on disk).
+    fn clear_active_buffer(&mut self) {
+        self.active_buffer = None;
+        self.active_toolchain = None;
+        self._update_toolchain_task = Task::ready(None);
     }
 
     fn active_toolchain(
@@ -148,7 +171,7 @@ impl ActiveToolchain {
         cx.spawn(async move |cx| {
             let workspace_id = workspace
                 .read_with(cx, |this, _| this.database_id())
-                .ok()
+                .log_err()
                 .flatten()?;
             let selected_toolchain = workspace
                 .update(cx, |this, cx| {
@@ -161,17 +184,17 @@ impl ActiveToolchain {
                         cx,
                     )
                 })
-                .ok()?
+                .log_err()?
                 .await;
             if let Some(toolchain) = selected_toolchain {
                 Some(toolchain)
             } else {
                 let project = workspace
                     .read_with(cx, |this, _| this.project().clone())
-                    .ok()?;
+                    .log_err()?;
                 let Toolchains {
                     toolchains,
-                    root_path: relative_path,
+                    root_path,
                     user_toolchains,
                 } = cx
                     .update(|_, cx| {
@@ -184,7 +207,7 @@ impl ActiveToolchain {
                             cx,
                         )
                     })
-                    .ok()?
+                    .log_err()?
                     .await?;
                 // Since we don't have a selected toolchain, pick one for user here.
                 let default_choice = user_toolchains
@@ -204,21 +227,23 @@ impl ActiveToolchain {
                         this.worktree_for_id(worktree_id, cx)
                             .map(|worktree| worktree.read(cx).abs_path())
                     })?;
-                    let db = cx.update(|_, cx| workspace::WorkspaceDb::global(cx)).ok()?;
+                    let db = cx
+                        .update(|_, cx| workspace::WorkspaceDb::global(cx))
+                        .log_err()?;
                     db.set_toolchain(
                         workspace_id,
                         worktree_root_path,
-                        relative_path.clone(),
+                        root_path.clone(),
                         toolchain.clone(),
                     )
                     .await
-                    .ok()?;
+                    .log_err()?;
                     project
                         .update(cx, |this, cx| {
                             this.activate_toolchain(
                                 ProjectPath {
                                     worktree_id,
-                                    path: relative_path,
+                                    path: root_path,
                                 },
                                 toolchain.clone(),
                                 cx,
@@ -269,6 +294,8 @@ impl StatusItemView for ActiveToolchain {
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
             self.update_lister(editor, window, cx);
+        } else {
+            self.clear_active_buffer();
         }
         cx.notify();
     }

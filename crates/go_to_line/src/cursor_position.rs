@@ -1,20 +1,59 @@
 use editor::{Editor, EditorEvent, MBTextSummary, MultiBufferSnapshot};
 use gpui::{App, Entity, FocusHandle, Focusable, Styled, Subscription, Task, WeakEntity};
+use i18n::tr;
 use settings::{RegisterSetting, Settings};
-use std::{fmt::Write, num::NonZeroU32, time::Duration};
+use std::{num::NonZeroU32, time::Duration};
 use text::{Point, Selection};
 use ui::{
     Button, ButtonCommon, Clickable, Context, FluentBuilder, IntoElement, LabelSize, ParentElement,
     Render, Tooltip, Window, div,
 };
-use util::paths::FILE_ROW_COLUMN_DELIMITER;
+use util::{ResultExt, paths::FILE_ROW_COLUMN_DELIMITER};
 use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
 
-#[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub(crate) struct SelectionStats {
     pub lines: usize,
     pub characters: usize,
     pub selections: usize,
+}
+
+impl SelectionStats {
+    /// Whether this describes a single collapsed caret, which is the state the
+    /// status bar stays silent about.
+    fn is_single_caret(&self) -> bool {
+        self.lines == 0 && self.characters == 0 && self.selections <= 1
+    }
+}
+
+/// A counted selection statistic, rendered as e.g. `3 lines` or, in the short
+/// format, `3 l`.
+#[derive(Clone, Copy, Debug)]
+enum CountUnit {
+    Selection,
+    Line,
+    Character,
+}
+
+impl CountUnit {
+    /// Renders this unit together with `count`.
+    ///
+    /// The short format uses its own keys instead of truncating the long label,
+    /// which would panic on the multi-byte units of non-Latin locales.
+    fn label(self, count: usize, short: bool, cx: &App) -> String {
+        let key = match (self, short, count > 1) {
+            (Self::Selection, true, _) => ("go_to_line.count.selection_short", "{} s"),
+            (Self::Selection, false, false) => ("go_to_line.count.selection", "{} selection"),
+            (Self::Selection, false, true) => ("go_to_line.count.selections", "{} selections"),
+            (Self::Line, true, _) => ("go_to_line.count.line_short", "{} l"),
+            (Self::Line, false, false) => ("go_to_line.count.line", "{} line"),
+            (Self::Line, false, true) => ("go_to_line.count.lines", "{} lines"),
+            (Self::Character, true, _) => ("go_to_line.count.character_short", "{} c"),
+            (Self::Character, false, false) => ("go_to_line.count.character", "{} character"),
+            (Self::Character, false, true) => ("go_to_line.count.characters", "{} characters"),
+        };
+        tr(cx, key.0, key.1).replacen("{}", &count.to_string(), 1)
+    }
 }
 
 pub struct CursorPosition {
@@ -87,9 +126,11 @@ impl CursorPosition {
     ) {
         let editor = editor.downgrade();
         self.update_position = cx.spawn_in(window, async move |cursor_position, cx| {
+            // A released editor is treated as a singleton: there is nothing left
+            // to debounce for.
             let is_singleton = editor
                 .update(cx, |editor, cx| editor.buffer().read(cx).is_singleton())
-                .ok()
+                .log_err()
                 .unwrap_or(true);
 
             if !is_singleton && let Some(debounce) = debounce {
@@ -147,20 +188,14 @@ impl CursorPosition {
                         cx.notify();
                     })
                 })
-                .ok()
+                .log_err()
                 .transpose()
-                .ok()
-                .flatten();
+                .log_err();
         });
     }
 
     fn write_position(&self, text: &mut String, cx: &App) {
-        if self.selected_count
-            <= (SelectionStats {
-                selections: 1,
-                ..Default::default()
-            })
-        {
+        if self.selected_count.is_single_caret() {
             // Do not write out anything if we have just one empty selection.
             return;
         }
@@ -169,28 +204,25 @@ impl CursorPosition {
             characters,
             selections,
         } = self.selected_count;
-        let format = LineIndicatorFormat::get(None, cx);
-        let is_short_format = format == &LineIndicatorFormat::Short;
-        let lines = (lines > 1).then_some((lines, "line"));
-        let selections = (selections > 1).then_some((selections, "selection"));
-        let characters = (characters > 0).then_some((characters, "character"));
-        if (None, None, None) == (characters, selections, lines) {
+        let is_short_format = LineIndicatorFormat::get(None, cx) == &LineIndicatorFormat::Short;
+        let counts = [
+            (selections > 1).then_some((selections, CountUnit::Selection)),
+            (lines > 1).then_some((lines, CountUnit::Line)),
+            (characters > 0).then_some((characters, CountUnit::Character)),
+        ];
+        if counts.iter().all(Option::is_none) {
             // Nothing to display.
             return;
         }
-        write!(text, " (").expect("value should be present");
+        let separator = tr(cx, "go_to_line.count.separator", ", ");
+
+        text.push_str(" (");
         let mut wrote_once = false;
-        for (count, name) in [selections, lines, characters].into_iter().flatten() {
+        for (count, unit) in counts.into_iter().flatten() {
             if wrote_once {
-                write!(text, ", ").expect("value should be present");
+                text.push_str(&separator);
             }
-            let name = if is_short_format { &name[..1] } else { name };
-            let plural_suffix = if count > 1 && !is_short_format {
-                "s"
-            } else {
-                ""
-            };
-            write!(text, "{count} {name}{plural_suffix}").expect("value should be present");
+            text.push_str(&unit.label(count, is_short_format, cx));
             wrote_once = true;
         }
         text.push(')');
@@ -240,18 +272,19 @@ impl Render for CursorPosition {
                             });
                         }
                     }))
-                    .tooltip(move |_window, cx| match context.as_ref() {
-                        Some(context) => Tooltip::for_action_in(
-                            "Go to Line/Column",
-                            &editor::actions::ToggleGoToLine,
-                            context,
-                            cx,
-                        ),
-                        None => Tooltip::for_action(
-                            "Go to Line/Column",
-                            &editor::actions::ToggleGoToLine,
-                            cx,
-                        ),
+                    .tooltip(move |_window, cx| {
+                        let title = tr(cx, "go_to_line.go_to_line_column", "Go to Line/Column");
+                        match context.as_ref() {
+                            Some(context) => Tooltip::for_action_in(
+                                title,
+                                &editor::actions::ToggleGoToLine,
+                                context,
+                                cx,
+                            ),
+                            None => {
+                                Tooltip::for_action(title, &editor::actions::ToggleGoToLine, cx)
+                            }
+                        }
                     }),
             )
         })

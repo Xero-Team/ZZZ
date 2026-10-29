@@ -13,8 +13,8 @@ use agent::ThreadStore;
 use agent_client_protocol::schema::v1 as acp;
 use anyhow::{Context as _, Result, anyhow};
 use editor::{
-    Addon, AnchorRangeExt, ContextMenuOptions, Editor, EditorElement, EditorEvent, EditorMode,
-    EditorStyle, Inlay, MultiBuffer, MultiBufferOffset, MultiBufferSnapshot, ToOffset,
+    Addon, Anchor, AnchorRangeExt, ContextMenuOptions, Editor, EditorElement, EditorEvent,
+    EditorMode, EditorStyle, Inlay, MultiBuffer, MultiBufferOffset, MultiBufferSnapshot, ToOffset,
     actions::{Copy, Cut, Paste},
     code_context_menus::CodeContextMenu,
     display_map::{CreaseId, CreaseSnapshot},
@@ -35,7 +35,7 @@ use project::{
 use prompt_store::PromptStore;
 use rope::Point;
 use settings::Settings;
-use std::{cmp::min, ops::Range, rc::Rc, sync::Arc};
+use std::{cmp::min, ops::Range, ops::RangeInclusive, path::PathBuf, rc::Rc, sync::Arc};
 use theme_settings::ThemeSettings;
 use ui::{ContextMenu, prelude::*};
 use util::paths::PathStyle;
@@ -952,237 +952,295 @@ impl MessageEditor {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
-        let editor_clipboard_selections =
-            clipboard.entries().iter().find_map(|entry| match entry {
-                ClipboardEntry::String(text) => {
-                    text.metadata_json::<Vec<editor::ClipboardSelection>>()
-                }
-                _ => None,
-            });
 
-        // Insert creases for pasted clipboard selections that:
-        // 1. Contain exactly one selection
-        // 2. Have an associated file path
-        // 3. Span multiple lines (not single-line selections)
-        // 4. Belong to a file that exists in the current project
-        let should_insert_creases = util::maybe!({
-            let selections = editor_clipboard_selections.as_ref()?;
-            if selections.len() > 1 {
-                return Some(false);
-            }
-            let selection = selections.first()?;
-            let file_path = selection.file_path.as_ref()?;
-            let line_range = selection.line_range.as_ref()?;
-
-            if line_range.start() == line_range.end() {
-                return Some(false);
-            }
-
-            Some(
-                workspace
-                    .read(cx)
-                    .project()
-                    .read(cx)
-                    .project_path_for_absolute_path(file_path, cx)
-                    .is_some(),
-            )
-        })
-        .unwrap_or(false);
-
-        if should_insert_creases && let Some(selections) = editor_clipboard_selections {
-            let snapshot = self.editor.read(cx).buffer().read(cx).snapshot(cx);
-            let insertion_target = snapshot
-                .anchor_to_buffer_anchor(self.editor.read(cx).selections.newest_anchor().start)
-                .map(|(anchor, buffer_snapshot)| anchor.bias_left(buffer_snapshot));
-
-            if let Some(insertion_target) = insertion_target {
-                let project = workspace.read(cx).project().clone();
-                for selection in selections {
-                    let (Some(file_path), Some(line_range)) =
-                        (selection.file_path, selection.line_range)
-                    else {
-                        continue;
-                    };
-                    let crease_text =
-                        acp_thread::selection_name(Some(file_path.as_ref()), &line_range);
-
-                    let mention_uri = MentionUri::Selection {
-                        abs_path: Some(file_path.clone()),
-                        line_range: line_range.clone(),
-                        column: None,
-                    };
-
-                    let mention_text = mention_uri.as_link().to_string();
-                    let (text_anchor, content_len) = self.editor.update(cx, |editor, cx| {
-                        editor.insert(&mention_text, window, cx);
-                        editor.insert(" ", window, cx);
-
-                        (insertion_target, mention_text.len())
-                    });
-
-                    let Some((crease_id, tx)) = insert_crease_for_mention(
-                        text_anchor,
-                        content_len,
-                        crease_text.into(),
-                        mention_uri.icon_path(cx),
-                        mention_uri.tooltip_text(),
-                        Some(mention_uri.clone()),
-                        Some(self.workspace.clone()),
-                        None,
-                        self.editor.clone(),
-                        window,
-                        cx,
-                    ) else {
-                        continue;
-                    };
-                    drop(tx);
-
-                    let mention_task = cx
-                        .spawn({
-                            let project = project.clone();
-                            async move |_, cx| {
-                                let project_path = project
-                                    .update(cx, |project, cx| {
-                                        project.project_path_for_absolute_path(&file_path, cx)
-                                    })
-                                    .ok_or_else(|| {
-                                        format!(
-                                            "project path not found for pasted selection {file_path:?}"
-                                        )
-                                    })?;
-
-                                let buffer = project
-                                    .update(cx, |project, cx| project.open_buffer(project_path, cx))
-                                    .await
-                                    .map_err(|e| e.to_string())?;
-
-                                Ok(buffer.update(cx, |buffer, cx| {
-                                    let start =
-                                        Point::new(*line_range.start(), 0).min(buffer.max_point());
-                                    let end = Point::new(*line_range.end() + 1, 0)
-                                        .min(buffer.max_point());
-                                    let content = buffer.text_for_range(start..end).collect();
-                                    Mention::Text {
-                                        content,
-                                        tracked_buffers: vec![cx.entity()],
-                                    }
-                                }))
-                            }
-                        })
-                        .shared();
-
-                    self.mention_set.update(cx, |mention_set, _cx| {
-                        mention_set.insert_mention(crease_id, mention_uri.clone(), mention_task)
-                    });
-                }
-                return;
-            }
-        }
-        // Handle text paste with potential markdown mention links before
-        // clipboard context entries so markdown text still pastes as text.
-        let clipboard_text = clipboard.entries().iter().find_map(|entry| match entry {
-            ClipboardEntry::String(text) => Some(text.text().clone()),
-            _ => None,
-        });
-        if let Some(clipboard_text) = clipboard_text.as_deref() {
-            if clipboard_text.contains("[@") {
-                let selections_before = self.editor.update(cx, |editor, cx| {
-                    let snapshot = editor.buffer().read(cx).snapshot(cx);
-                    editor
-                        .selections
-                        .disjoint_anchors()
-                        .iter()
-                        .map(|selection| {
-                            (
-                                selection.start.bias_left(&snapshot),
-                                selection.end.bias_right(&snapshot),
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                });
-
-                self.editor.update(cx, |editor, cx| {
-                    editor.insert(clipboard_text, window, cx);
-                });
-
-                let snapshot = self.editor.read(cx).buffer().read(cx).snapshot(cx);
-                let path_style = workspace.read(cx).project().read(cx).path_style(cx);
-
-                let mut all_mentions = Vec::new();
-                for (start_anchor, end_anchor) in selections_before {
-                    let start_offset = start_anchor.to_offset(&snapshot);
-                    let end_offset = end_anchor.to_offset(&snapshot);
-
-                    // Get the actual inserted text from the buffer (may differ due to auto-indent)
-                    let inserted_text: String =
-                        snapshot.text_for_range(start_offset..end_offset).collect();
-
-                    let parsed_mentions = parse_mention_links(&inserted_text, path_style);
-                    for (range, mention_uri) in parsed_mentions {
-                        let mention_start_offset = MultiBufferOffset(start_offset.0 + range.start);
-                        let anchor = snapshot.anchor_before(mention_start_offset);
-                        let content_len = range.end - range.start;
-                        all_mentions.push((anchor, content_len, mention_uri));
-                    }
-                }
-
-                if !all_mentions.is_empty() {
-                    let supports_images = self.session_capabilities.read().supports_images();
-                    let http_client = workspace.read(cx).client().http_client();
-
-                    for (anchor, content_len, mention_uri) in all_mentions {
-                        let Some((anchor, _)) = snapshot.anchor_to_buffer_anchor(anchor) else {
-                            continue;
-                        };
-                        let Some((crease_id, tx)) = insert_crease_for_mention(
-                            anchor,
-                            content_len,
-                            mention_uri.name().into(),
-                            mention_uri.icon_path(cx),
-                            mention_uri.tooltip_text(),
-                            Some(mention_uri.clone()),
-                            Some(self.workspace.clone()),
-                            None,
-                            self.editor.clone(),
-                            window,
-                            cx,
-                        ) else {
-                            continue;
-                        };
-
-                        // Create the confirmation task based on the mention URI type.
-                        // This properly loads file content, fetches URLs, etc.
-                        let task = self.mention_set.update(cx, |mention_set, cx| {
-                            mention_set.confirm_mention_for_uri(
-                                mention_uri.clone(),
-                                supports_images,
-                                http_client.clone(),
-                                cx,
-                            )
-                        });
-                        let task = cx
-                            .spawn(async move |_, _| task.await.map_err(|e| e.to_string()))
-                            .shared();
-
-                        self.mention_set.update(cx, |mention_set, _cx| {
-                            mention_set.insert_mention(crease_id, mention_uri.clone(), task.clone())
-                        });
-
-                        // Drop the tx after inserting to signal the crease is ready
-                        drop(tx);
-                    }
-                    return;
-                }
-            }
-        }
-
-        if self.handle_pasted_context(clipboard, window, cx) {
+        if self.paste_selection_creases(clipboard, &workspace, window, cx)
+            || self.paste_mention_links(clipboard, &workspace, window, cx)
+            || self.handle_pasted_context(clipboard, window, cx)
+        {
             return;
         }
 
         self.editor.update(cx, |editor, cx| {
             editor.paste_item(clipboard, window, cx);
         });
+    }
+
+    /// Inserts a crease over the mention that spans `content_len` bytes from
+    /// `anchor`, and returns the crease id plus the barrier sender that marks
+    /// the crease ready.
+    ///
+    /// The sender is returned rather than dropped here because the two pastes
+    /// disagree about when the crease should stop spinning relative to the
+    /// mention being registered, and that order is observable.
+    fn insert_mention_crease(
+        &self,
+        anchor: text::Anchor,
+        content_len: usize,
+        crease_label: SharedString,
+        mention_uri: &MentionUri,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<(CreaseId, postage::barrier::Sender)> {
+        insert_crease_for_mention(
+            anchor,
+            content_len,
+            crease_label,
+            mention_uri.icon_path(cx),
+            mention_uri.tooltip_text(),
+            Some(mention_uri.clone()),
+            Some(self.workspace.clone()),
+            None,
+            self.editor.clone(),
+            window,
+            cx,
+        )
+    }
+
+    /// Pastes the selections carried by an editor copy as one crease each.
+    ///
+    /// Returns whether it handled the paste. It declines when the insertion
+    /// point cannot be resolved, so that the caller still falls back to a plain
+    /// text paste.
+    fn paste_selection_creases(
+        &mut self,
+        clipboard: &ClipboardItem,
+        workspace: &Entity<Workspace>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(selections) = clipboard_editor_selections(clipboard) else {
+            return false;
+        };
+        if !should_insert_selection_creases(&selections, workspace, cx) {
+            return false;
+        }
+
+        let snapshot = self.editor.read(cx).buffer().read(cx).snapshot(cx);
+        let insertion_target = snapshot
+            .anchor_to_buffer_anchor(self.editor.read(cx).selections.newest_anchor().start)
+            .map(|(anchor, buffer_snapshot)| anchor.bias_left(buffer_snapshot));
+        let Some(insertion_target) = insertion_target else {
+            return false;
+        };
+
+        let project = workspace.read(cx).project().clone();
+        for selection in selections {
+            let (Some(file_path), Some(line_range)) = (selection.file_path, selection.line_range)
+            else {
+                continue;
+            };
+            let crease_text = acp_thread::selection_name(Some(file_path.as_ref()), &line_range);
+
+            let mention_uri = MentionUri::Selection {
+                abs_path: Some(file_path.clone()),
+                line_range: line_range.clone(),
+                column: None,
+            };
+
+            let mention_text = mention_uri.as_link().to_string();
+            let (text_anchor, content_len) = self.editor.update(cx, |editor, cx| {
+                editor.insert(&mention_text, window, cx);
+                editor.insert(" ", window, cx);
+
+                (insertion_target, mention_text.len())
+            });
+
+            let Some((crease_id, tx)) = self.insert_mention_crease(
+                text_anchor,
+                content_len,
+                crease_text.into(),
+                &mention_uri,
+                window,
+                cx,
+            ) else {
+                continue;
+            };
+            drop(tx);
+
+            self.insert_pasted_selection_mention(
+                crease_id,
+                mention_uri,
+                project.clone(),
+                file_path,
+                line_range,
+                cx,
+            );
+        }
+
+        true
+    }
+
+    /// Reads the pasted selection's line range out of the project so the crease
+    /// can render its contents and track the buffer it came from.
+    fn insert_pasted_selection_mention(
+        &self,
+        crease_id: CreaseId,
+        mention_uri: MentionUri,
+        project: Entity<Project>,
+        file_path: PathBuf,
+        line_range: RangeInclusive<u32>,
+        cx: &mut Context<Self>,
+    ) {
+        let mention_task = cx
+            .spawn(async move |_, cx| {
+                let project_path = project
+                    .update(cx, |project, cx| {
+                        project.project_path_for_absolute_path(&file_path, cx)
+                    })
+                    .ok_or_else(|| {
+                        format!("project path not found for pasted selection {file_path:?}")
+                    })?;
+
+                let buffer = project
+                    .update(cx, |project, cx| project.open_buffer(project_path, cx))
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                Ok(buffer.update(cx, |buffer, cx| {
+                    let start = Point::new(*line_range.start(), 0).min(buffer.max_point());
+                    let end = Point::new(*line_range.end() + 1, 0).min(buffer.max_point());
+                    let content = buffer.text_for_range(start..end).collect();
+                    Mention::Text {
+                        content,
+                        tracked_buffers: vec![cx.entity()],
+                    }
+                }))
+            })
+            .shared();
+
+        self.mention_set.update(cx, |mention_set, _cx| {
+            mention_set.insert_mention(crease_id, mention_uri, mention_task)
+        });
+    }
+
+    /// Pastes text that contains markdown mention links, inserting a crease for
+    /// each link instead of the raw text.
+    ///
+    /// Returns whether it handled the paste. Text without any link is left to
+    /// the caller.
+    fn paste_mention_links(
+        &mut self,
+        clipboard: &ClipboardItem,
+        workspace: &Entity<Workspace>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // Handle text paste with potential markdown mention links before
+        // clipboard context entries so markdown text still pastes as text.
+        let Some(clipboard_text) = clipboard_text(clipboard) else {
+            return false;
+        };
+
+        let path_style = workspace.read(cx).project().read(cx).path_style(cx);
+        // The text is inserted before the links are located, so it must be known
+        // to contain at least one link beforehand: declining after the insert
+        // would send the caller on to a plain paste that inserts the same text a
+        // second time. Text that merely looks like a link (`[@name]` with no
+        // target) stays on the plain-paste path.
+        if parse_mention_links(clipboard_text, path_style).is_empty() {
+            return false;
+        }
+
+        let (snapshot, all_mentions) =
+            self.insert_text_and_collect_mentions(clipboard_text, path_style, window, cx);
+        if all_mentions.is_empty() {
+            return true;
+        }
+
+        let supports_images = self.session_capabilities.read().supports_images();
+        let http_client = workspace.read(cx).client().http_client();
+
+        for (anchor, content_len, mention_uri) in all_mentions {
+            let Some((anchor, _)) = snapshot.anchor_to_buffer_anchor(anchor) else {
+                continue;
+            };
+            let Some((crease_id, tx)) = self.insert_mention_crease(
+                anchor,
+                content_len,
+                mention_uri.name().into(),
+                &mention_uri,
+                window,
+                cx,
+            ) else {
+                continue;
+            };
+
+            // Create the confirmation task based on the mention URI type.
+            // This properly loads file content, fetches URLs, etc.
+            let task = self.mention_set.update(cx, |mention_set, cx| {
+                mention_set.confirm_mention_for_uri(
+                    mention_uri.clone(),
+                    supports_images,
+                    http_client.clone(),
+                    cx,
+                )
+            });
+            let task = cx
+                .spawn(async move |_, _| task.await.map_err(|e| e.to_string()))
+                .shared();
+
+            self.mention_set.update(cx, |mention_set, _cx| {
+                mention_set.insert_mention(crease_id, mention_uri.clone(), task.clone())
+            });
+
+            // Drop the tx after inserting to signal the crease is ready
+            drop(tx);
+        }
+
+        true
+    }
+
+    /// Inserts `text` at every selection and reports where the markdown mention
+    /// links it contained ended up.
+    ///
+    /// The two steps cannot be separated: the selections must be captured
+    /// before the insert, while the links have to be parsed from the text the
+    /// buffer actually ended up with, which auto-indent may have changed.
+    fn insert_text_and_collect_mentions(
+        &mut self,
+        text: &str,
+        path_style: PathStyle,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (MultiBufferSnapshot, Vec<(Anchor, usize, MentionUri)>) {
+        let selections_before = self.editor.update(cx, |editor, cx| {
+            let snapshot = editor.buffer().read(cx).snapshot(cx);
+            editor
+                .selections
+                .disjoint_anchors()
+                .iter()
+                .map(|selection| {
+                    (
+                        selection.start.bias_left(&snapshot),
+                        selection.end.bias_right(&snapshot),
+                    )
+                })
+                .collect::<Vec<_>>()
+        });
+
+        self.editor.update(cx, |editor, cx| {
+            editor.insert(text, window, cx);
+        });
+
+        let snapshot = self.editor.read(cx).buffer().read(cx).snapshot(cx);
+        let mut all_mentions = Vec::new();
+        for (start_anchor, end_anchor) in selections_before {
+            let start_offset = start_anchor.to_offset(&snapshot);
+            let end_offset = end_anchor.to_offset(&snapshot);
+
+            // Get the actual inserted text from the buffer (may differ due to auto-indent)
+            let inserted_text: String = snapshot.text_for_range(start_offset..end_offset).collect();
+
+            let parsed_mentions = parse_mention_links(&inserted_text, path_style);
+            for (range, mention_uri) in parsed_mentions {
+                let mention_start_offset = MultiBufferOffset(start_offset.0 + range.start);
+                let anchor = snapshot.anchor_before(mention_start_offset);
+                let content_len = range.end - range.start;
+                all_mentions.push((anchor, content_len, mention_uri));
+            }
+        }
+
+        (snapshot, all_mentions)
     }
 
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
@@ -1974,6 +2032,57 @@ fn mention_to_content_block(
             uri.to_uri().to_string(),
         )),
     }
+}
+
+/// The editor selections carried by a clipboard item, when it was copied from
+/// inside an editor.
+fn clipboard_editor_selections(
+    clipboard: &ClipboardItem,
+) -> Option<Vec<editor::ClipboardSelection>> {
+    clipboard.entries().iter().find_map(|entry| match entry {
+        ClipboardEntry::String(text) => text.metadata_json::<Vec<editor::ClipboardSelection>>(),
+        _ => None,
+    })
+}
+
+/// The plain text carried by a clipboard item, when it holds any.
+fn clipboard_text(clipboard: &ClipboardItem) -> Option<&str> {
+    clipboard.entries().iter().find_map(|entry| match entry {
+        ClipboardEntry::String(text) => Some(text.text().as_str()),
+        _ => None,
+    })
+}
+
+/// Whether a pasted selection should get a crease: exactly one selection, with
+/// a file path and a line range, spanning more than one line, in a file this
+/// project can address.
+fn should_insert_selection_creases(
+    selections: &[editor::ClipboardSelection],
+    workspace: &Entity<Workspace>,
+    cx: &App,
+) -> bool {
+    util::maybe!({
+        if selections.len() > 1 {
+            return Some(false);
+        }
+        let selection = selections.first()?;
+        let file_path = selection.file_path.as_ref()?;
+        let line_range = selection.line_range.as_ref()?;
+
+        if line_range.start() == line_range.end() {
+            return Some(false);
+        }
+
+        Some(
+            workspace
+                .read(cx)
+                .project()
+                .read(cx)
+                .project_path_for_absolute_path(file_path, cx)
+                .is_some(),
+        )
+    })
+    .unwrap_or(false)
 }
 
 /// Parses markdown mention links in the format `[@name](uri)` from text.
@@ -3988,6 +4097,25 @@ mod tests {
             "Expected mention link to be pasted, got: {}",
             text
         );
+    }
+
+    #[gpui::test]
+    async fn test_paste_text_with_unparseable_mention_link_pastes_once(cx: &mut TestAppContext) {
+        init_test(cx);
+        let (message_editor, editor, mut cx) =
+            setup_paste_test_message_editor(json!({"file.txt": "content"}), cx).await;
+
+        // A bracketed `@name` with no target parses as no mention at all, so the
+        // text has to stay on the plain-paste path.
+        let pasted_text = "ping [@someone] about the report";
+        cx.write_to_clipboard(ClipboardItem::new_string(pasted_text.into()));
+
+        message_editor.update_in(&mut cx, |message_editor, window, cx| {
+            message_editor.paste(&Paste, window, cx);
+        });
+
+        let text = editor.update(&mut cx, |editor, cx| editor.text(cx));
+        assert_eq!(text, pasted_text, "text must be pasted exactly once");
     }
 
     #[gpui::test]

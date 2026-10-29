@@ -220,7 +220,7 @@ impl DocumentationView {
         h_flex()
             .gap_1()
             .child(
-                IconButton::new("docs-search", IconName::MagnifyingGlass)
+                IconButton::new(("docs-search", cx.entity_id()), IconName::MagnifyingGlass)
                     .tooltip(Tooltip::text(i18n::tr(
                         cx,
                         "docs.search_documentation",
@@ -235,13 +235,13 @@ impl DocumentationView {
                     })),
             )
             .child(
-                IconButton::new("docs-back", IconName::ArrowLeft)
+                IconButton::new(("docs-back", cx.entity_id()), IconName::ArrowLeft)
                     .disabled(self.back.is_empty())
                     .tooltip(Tooltip::text(i18n::tr(cx, "docs.go_back", "Back")))
                     .on_click(cx.listener(|this, _, _, cx| this.go_back(cx))),
             )
             .child(
-                IconButton::new("docs-forward", IconName::ArrowRight)
+                IconButton::new(("docs-forward", cx.entity_id()), IconName::ArrowRight)
                     .disabled(self.forward.is_empty())
                     .tooltip(Tooltip::text(i18n::tr(cx, "docs.go_forward", "Forward")))
                     .on_click(cx.listener(|this, _, _, cx| this.go_forward(cx))),
@@ -318,15 +318,16 @@ impl DocTarget {
         }
     }
 
-    /// Parses a `path` or `path#fragment` string into a target.
+    /// Parses a `path` or `path#fragment` string into a target. A trailing `#`
+    /// without a fragment is treated as plain page reference.
     fn from_href(href: impl AsRef<str>) -> Self {
         let href = href.as_ref();
-        match href.split_once('#') {
-            Some((path, fragment)) if !fragment.is_empty() => Self {
+        match split_fragment(href) {
+            (path, Some(fragment)) => Self {
                 path: path.into(),
                 fragment: Some(fragment.into()),
             },
-            _ => Self::page(href),
+            (path, None) => Self::page(path),
         }
     }
 }
@@ -341,6 +342,15 @@ enum DocLink {
     External(SharedString),
     /// A `zzz://` URL handled elsewhere in the application.
     AppUrl(SharedString),
+}
+
+/// Splits a `path#fragment` reference, dropping an empty fragment so a
+/// trailing `#` never ends up in the page path.
+fn split_fragment(href: &str) -> (&str, Option<&str>) {
+    match href.split_once('#') {
+        Some((path, fragment)) => (path, (!fragment.is_empty()).then_some(fragment)),
+        None => (href, None),
+    }
 }
 
 /// Parses a link from a documentation page. Returns `None` when the link
@@ -364,10 +374,7 @@ fn resolve_doc_link(current_path: &str, href: &str) -> Option<DocLink> {
         return Some(DocLink::AppUrl(href.to_string().into()));
     }
 
-    let (path, fragment) = match href.split_once('#') {
-        Some((path, fragment)) if !fragment.is_empty() => (path, Some(fragment)),
-        _ => (href, None),
-    };
+    let (path, fragment) = split_fragment(href);
 
     // A bare `#fragment` scrolls within the current page.
     if path.is_empty() {
@@ -504,16 +511,18 @@ struct DocEntry {
 }
 
 impl DocEntry {
-    fn new(path: SharedString) -> Self {
-        let content = lookup_docs_text(&path).unwrap_or_default();
+    /// Builds a search entry for an embedded page, or `None` when the page is
+    /// listed by [`all_docs`] but not actually embedded.
+    fn new(path: SharedString) -> Option<Self> {
+        let content = lookup_docs_text(&path)?;
         let title =
             first_heading(&content).map_or_else(|| humanize_path(&path).into(), SharedString::from);
         let search_text = format!("{} {}", path, content).to_lowercase();
-        Self {
+        Some(Self {
             path,
             title,
             search_text,
-        }
+        })
     }
 }
 
@@ -529,7 +538,7 @@ impl DocsSearchDelegate {
         let entries: Vec<DocEntry> = all_docs()
             .into_iter()
             .filter(|path| path.ends_with(".md"))
-            .map(DocEntry::new)
+            .filter_map(DocEntry::new)
             .collect();
         let matches = (0..entries.len()).collect();
         Self {
@@ -765,5 +774,33 @@ mod tests {
     #[test]
     fn resolve_doc_link_ignores_links_that_escape_the_root() {
         assert!(resolve_doc_link("index.md", "../../etc/passwd").is_none());
+    }
+
+    #[test]
+    fn doc_target_parses_page_and_fragment() {
+        let target = DocTarget::from_href("ai/external-agents.md#claude");
+        assert_eq!(target.path.as_ref(), "ai/external-agents.md");
+        assert_eq!(target.fragment.as_deref(), Some("claude"));
+
+        let target = DocTarget::from_href("repl.md#");
+        assert_eq!(target.path.as_ref(), "repl.md");
+        assert_eq!(target.fragment, None);
+    }
+
+    #[test]
+    fn resolve_doc_link_drops_an_empty_fragment() {
+        let link = resolve_doc_link("index.md", "repl.md#");
+        let Some(DocLink::Docs(target)) = link else {
+            panic!("expected a documentation link");
+        };
+        assert_eq!(target.path.as_ref(), "repl.md");
+        assert_eq!(target.fragment, None);
+    }
+
+    #[test]
+    fn humanize_path_falls_back_to_the_file_name_without_extension() {
+        assert_eq!(humanize_path("development/debuggers.md"), "debuggers");
+        assert_eq!(humanize_path("key-bindings.md"), "key bindings");
+        assert_eq!(humanize_path("ai/external_agents"), "external agents");
     }
 }

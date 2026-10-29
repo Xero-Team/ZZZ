@@ -11,7 +11,6 @@ use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, MouseDownEvent,
     Render, SharedString, Task, WeakEntity, Window,
 };
-use i18n as app_i18n;
 use itertools::Itertools as _;
 use notifications::status_toast::StatusToast;
 use project::{AgentId, AgentRegistryStore, AgentServerStore};
@@ -24,15 +23,12 @@ use ui::{
 use util::ResultExt;
 use workspace::{ModalView, MultiWorkspace, Workspace};
 
+use crate::tr;
 use crate::{
     Agent, AgentPanel,
     agent_connection_store::AgentConnectionStore,
     thread_metadata_store::{ThreadId, ThreadMetadata, ThreadMetadataStore, WorktreePaths},
 };
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 pub struct AcpThreadImportOnboarding;
 pub struct CrossChannelImportOnboarding;
@@ -227,15 +223,16 @@ impl ThreadImportModal {
         }
 
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-            self.is_importing = false;
-            cx.notify();
             return;
         };
 
         let stores = resolve_agent_connection_stores(&multi_workspace, cx);
         if stores.is_empty() {
-            log::error!("Did not find any workspaces to import from");
-            self.is_importing = false;
+            self.last_error = Some(tr(
+                cx,
+                "agent_ui.thread_import.no_workspaces_to_import_from",
+                "No workspaces to import threads from.",
+            ));
             cx.notify();
             return;
         }
@@ -282,7 +279,7 @@ impl ThreadImportModal {
     fn show_imported_threads_toast(&self, imported_count: usize, cx: &mut App) {
         let status_toast = if imported_count == 0 {
             StatusToast::new(
-                app_i18n::tr(
+                tr(
                     cx,
                     "agent_ui.thread_import.no_threads_found_to_import",
                     "No threads found to import.",
@@ -299,18 +296,19 @@ impl ThreadImportModal {
             )
         } else {
             let message = if imported_count == 1 {
-                app_i18n::tr(
+                tr(
                     cx,
                     "agent_ui.thread_import.imported_one_thread",
                     "Imported 1 thread.",
                 )
             } else {
-                app_i18n::tr(
+                tr(
                     cx,
                     "agent_ui.thread_import.imported_threads",
                     "Imported {} threads.",
                 )
                 .replacen("{}", &imported_count.to_string(), 1)
+                .into()
             };
             StatusToast::new(message, cx, |this, _cx| {
                 this.icon(
@@ -418,7 +416,7 @@ impl Render for ThreadImportModal {
                                 "Import External Agent Threads",
                             ))
                             .description(
-                                app_i18n::tr(
+                                tr(
                                     cx,
                                     "agent_ui.thread_import.import_external_agent_threads_description",
                                     "Import threads from agents like Claude Agent, Codex, and more, whether started in ZZZ or another client. Choose which agents to include, and their threads will appear in your thread history.",
@@ -493,8 +491,8 @@ fn resolve_agent_connection_stores(
         let workspace = workspace.read(cx);
         let project = workspace.project().read(cx);
 
-        // We only want to include scores from one local workspace, since we
-        // know that they live on the same machine
+        // Only one local workspace is needed, since all local workspaces share
+        // the same machine-level agent connections.
         let include_store = if project.is_remote() {
             true
         } else if project.is_local() && !included_local_store {
@@ -757,18 +755,19 @@ fn show_cross_channel_import_toast(
         )
     } else {
         let message = if imported_count == 1 {
-            app_i18n::tr(
+            tr(
                 cx,
                 "agent_ui.thread_import.imported_one_thread_from_other_channels",
                 "Imported 1 thread from other channels.",
             )
         } else {
-            app_i18n::tr(
+            tr(
                 cx,
                 "agent_ui.thread_import.imported_threads_from_other_channels",
                 "Imported {} threads from other channels.",
             )
             .replacen("{}", &imported_count.to_string(), 1)
+            .into()
         };
         StatusToast::new(message, cx, |this, _cx| {
             this.icon(Icon::new(IconName::Check).color(Color::Success))

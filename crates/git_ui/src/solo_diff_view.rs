@@ -256,26 +256,31 @@ impl SoloDiffView {
         let multibuffer = editor.buffer().read(cx);
         let snapshot = multibuffer.snapshot(cx);
         let prev_next = snapshot.diff_hunks().nth(1).is_some();
-        let mut selection = true;
 
-        let mut ranges = editor
+        let selection_ranges = editor
             .selections
             .disjoint_anchor_ranges()
             .collect::<Vec<_>>();
-        if !ranges.iter().any(|range| range.start != range.end) {
-            selection = false;
+        let selection = selection_ranges
+            .iter()
+            .any(|range| range.start != range.end);
+        // Without a selection, the buttons act on the whole excerpt under the
+        // cursor instead of a single hunk.
+        let ranges = if selection {
+            selection_ranges
+        } else {
             let anchor = editor.selections.newest_anchor().head();
-            if let Some((_, excerpt_range)) = snapshot.excerpt_containing(anchor..anchor)
-                && let Some(range) = snapshot
-                    .anchor_in_buffer(excerpt_range.context.start)
-                    .zip(snapshot.anchor_in_buffer(excerpt_range.context.end))
-                    .map(|(start, end)| start..end)
-            {
-                ranges = vec![range];
-            } else {
-                ranges = Vec::new();
-            }
-        }
+            snapshot
+                .excerpt_containing(anchor..anchor)
+                .and_then(|(_, excerpt_range)| {
+                    snapshot
+                        .anchor_in_buffer(excerpt_range.context.start)
+                        .zip(snapshot.anchor_in_buffer(excerpt_range.context.end))
+                        .map(|(start, end)| start..end)
+                })
+                .into_iter()
+                .collect::<Vec<_>>()
+        };
 
         let mut stage = false;
         let mut unstage = false;
@@ -377,12 +382,9 @@ impl Item for SoloDiffView {
             .read(cx)
             .file()
             .and_then(|file| {
-                Some(
-                    file.full_path(cx)
-                        .file_name()?
-                        .to_string_lossy()
-                        .to_string(),
-                )
+                file.full_path(cx)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
             })
             .unwrap_or_else(|| {
                 self.repo_path
@@ -705,18 +707,10 @@ impl SoloDiffGitToolbar {
         }
     }
 
-    fn stage_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn change_file_stage(&mut self, stage: bool, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(solo_diff) = self.solo_diff() {
             solo_diff.update(cx, |solo_diff, cx| {
-                solo_diff.change_file_stage(true, window, cx);
-            });
-        }
-    }
-
-    fn unstage_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(solo_diff) = self.solo_diff() {
-            solo_diff.update(cx, |solo_diff, cx| {
-                solo_diff.change_file_stage(false, window, cx);
+                solo_diff.change_file_stage(stage, window, cx);
             });
         }
     }
@@ -909,7 +903,9 @@ impl Render for SoloDiffGitToolbar {
                             &focus_handle,
                         ))
                         .disabled(!button_states.stage_file)
-                        .on_click(cx.listener(|this, _, window, cx| this.stage_file(window, cx))),
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.change_file_stage(true, window, cx)
+                        })),
                     )
                     .child(
                         Button::new(
@@ -926,7 +922,9 @@ impl Render for SoloDiffGitToolbar {
                             &focus_handle,
                         ))
                         .disabled(!button_states.unstage_file)
-                        .on_click(cx.listener(|this, _, window, cx| this.unstage_file(window, cx))),
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.change_file_stage(false, window, cx)
+                        })),
                     )
                     .child(Divider::vertical())
                     .child(

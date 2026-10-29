@@ -8,57 +8,46 @@ struct DynamicSpacingInput {
     values: Punctuated<DynamicSpacingValue, Token![,]>,
 }
 
-// The input for the derive macro is a list of values.
+// The input for the macro is a comma-separated list of values.
 //
-// When a single value is provided, the standard spacing formula is
-// used to derive the of spacing values.
+// When a single value is provided, the standard spacing formula is used to
+// derive the compact/default/comfortable spacing values.
 //
-// When a tuple of three values is provided, the values are used as
-// the spacing values directly.
+// When a tuple of three values is provided, the values are used as the
+// compact/default/comfortable spacing values directly.
 enum DynamicSpacingValue {
     Single(LitInt),
     Tuple(LitInt, LitInt, LitInt),
 }
 
 impl DynamicSpacingValue {
-    fn variant_name(&self) -> syn::Ident {
-        match self {
-            DynamicSpacingValue::Single(n) => {
-                format_ident!(
-                    "Base{:02}",
-                    n.base10_parse::<u32>().expect("value should be present")
-                )
-            }
-            DynamicSpacingValue::Tuple(_, b, _) => {
-                format_ident!(
-                    "Base{:02}",
-                    b.base10_parse::<u32>().expect("value should be present")
-                )
-            }
-        }
+    /// The variant is named after the value used at the default UI density.
+    fn variant_name(&self) -> syn::Result<syn::Ident> {
+        let default_density_value = match self {
+            DynamicSpacingValue::Single(n) => n,
+            DynamicSpacingValue::Tuple(_, default, _) => default,
+        };
+        // `base10_parse` reports failures (e.g. a value that does not fit in
+        // `u32`) with the span of the offending literal.
+        let suffix = default_density_value.base10_parse::<u32>()?;
+        Ok(format_ident!("Base{:02}", suffix))
     }
 
-    fn doc_string(&self) -> String {
-        match self {
+    fn doc_string(&self) -> syn::Result<String> {
+        let (compact, default, comfortable) = match self {
             DynamicSpacingValue::Single(n) => {
-                let n = n.base10_parse::<f32>().expect("value should be present");
-                let compact = (n - 4.0).max(0.0);
-                let comfortable = n + 4.0;
-                format!(
-                    "`{}px`|`{}px`|`{}px (@16px/rem)` - Scales with the user's rem size.",
-                    compact, n, comfortable
-                )
+                let n = n.base10_parse::<f32>()?;
+                ((n - 4.0).max(0.0), n, n + 4.0)
             }
-            DynamicSpacingValue::Tuple(a, b, c) => {
-                let a = a.base10_parse::<f32>().expect("value should be present");
-                let b = b.base10_parse::<f32>().expect("value should be present");
-                let c = c.base10_parse::<f32>().expect("value should be present");
-                format!(
-                    "`{}px`|`{}px`|`{}px (@16px/rem)` - Scales with the user's rem size.",
-                    a, b, c
-                )
-            }
-        }
+            DynamicSpacingValue::Tuple(compact, default, comfortable) => (
+                compact.base10_parse::<f32>()?,
+                default.base10_parse::<f32>()?,
+                comfortable.base10_parse::<f32>()?,
+            ),
+        };
+        Ok(format!(
+            "`{compact}px`|`{default}px`|`{comfortable}px (@16px/rem)` - Scales with the user's rem size."
+        ))
     }
 }
 
@@ -90,15 +79,21 @@ impl Parse for DynamicSpacingValue {
 /// Derives the spacing method for the `DynamicSpacing` enum.
 pub fn derive_spacing(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DynamicSpacingInput);
+    match expand(&input) {
+        Ok(expanded) => expanded,
+        Err(error) => error.to_compile_error().into(),
+    }
+}
 
-    let spacing_ratios: Vec<_> = input
+fn expand(input: &DynamicSpacingInput) -> syn::Result<TokenStream> {
+    let spacing_ratios = input
         .values
         .iter()
         .map(|v| {
-            let variant = v.variant_name();
-            match v {
+            let variant = v.variant_name()?;
+            Ok(match v {
                 DynamicSpacingValue::Single(n) => {
-                    let n = n.base10_parse::<f32>().expect("value should be present");
+                    let n = n.base10_parse::<f32>()?;
                     quote! {
                         DynamicSpacing::#variant => match ::theme::theme_settings(cx).ui_density(cx) {
                             ::theme::UiDensity::Compact => (#n - 4.0).max(0.0) / BASE_REM_SIZE_IN_PX,
@@ -107,30 +102,30 @@ pub fn derive_spacing(input: TokenStream) -> TokenStream {
                         }
                     }
                 }
-                DynamicSpacingValue::Tuple(a, b, c) => {
-                    let a = a.base10_parse::<f32>().expect("value should be present");
-                    let b = b.base10_parse::<f32>().expect("value should be present");
-                    let c = c.base10_parse::<f32>().expect("value should be present");
+                DynamicSpacingValue::Tuple(compact, default, comfortable) => {
+                    let compact = compact.base10_parse::<f32>()?;
+                    let default = default.base10_parse::<f32>()?;
+                    let comfortable = comfortable.base10_parse::<f32>()?;
                     quote! {
                         DynamicSpacing::#variant => match ::theme::theme_settings(cx).ui_density(cx) {
-                            ::theme::UiDensity::Compact => #a / BASE_REM_SIZE_IN_PX,
-                            ::theme::UiDensity::Default => #b / BASE_REM_SIZE_IN_PX,
-                            ::theme::UiDensity::Comfortable => #c / BASE_REM_SIZE_IN_PX,
+                            ::theme::UiDensity::Compact => #compact / BASE_REM_SIZE_IN_PX,
+                            ::theme::UiDensity::Default => #default / BASE_REM_SIZE_IN_PX,
+                            ::theme::UiDensity::Comfortable => #comfortable / BASE_REM_SIZE_IN_PX,
                         }
                     }
                 }
-            }
+            })
         })
-        .collect();
+        .collect::<syn::Result<Vec<_>>>()?;
 
-    let (variant_names, doc_strings): (Vec<_>, Vec<_>) = input
+    let variants_with_docs = input
         .values
         .iter()
-        .map(|v| {
-            let variant = v.variant_name();
-            let doc_string = v.doc_string();
-            (quote!(#variant), quote!(#doc_string))
-        })
+        .map(|v| Ok((v.variant_name()?, v.doc_string()?)))
+        .collect::<syn::Result<Vec<_>>>()?;
+    let (variant_names, doc_strings): (Vec<_>, Vec<_>) = variants_with_docs
+        .into_iter()
+        .map(|(variant, doc_string)| (quote!(#variant), quote!(#doc_string)))
         .unzip();
 
     let expanded = quote! {
@@ -172,7 +167,7 @@ pub fn derive_spacing(input: TokenStream) -> TokenStream {
         }
     };
 
-    TokenStream::from(expanded)
+    Ok(TokenStream::from(expanded))
 }
 
 #[cfg(test)]
@@ -196,8 +191,8 @@ mod tests {
         let single: DynamicSpacingValue = syn::parse_str("4").unwrap();
         let tuple: DynamicSpacingValue = syn::parse_str("(2, 8, 12)").unwrap();
 
-        assert_eq!(single.variant_name().to_string(), "Base04");
-        assert_eq!(tuple.variant_name().to_string(), "Base08");
+        assert_eq!(single.variant_name().unwrap().to_string(), "Base04");
+        assert_eq!(tuple.variant_name().unwrap().to_string(), "Base08");
     }
 
     #[test]
@@ -206,12 +201,24 @@ mod tests {
         let tuple: DynamicSpacingValue = syn::parse_str("(1, 6, 9)").unwrap();
 
         assert_eq!(
-            single.doc_string(),
+            single.doc_string().unwrap(),
             "`0px`|`2px`|`6px (@16px/rem)` - Scales with the user's rem size."
         );
         assert_eq!(
-            tuple.doc_string(),
+            tuple.doc_string().unwrap(),
             "`1px`|`6px`|`9px (@16px/rem)` - Scales with the user's rem size."
+        );
+    }
+
+    #[test]
+    fn unsupported_spacing_value_reports_a_spanned_error() {
+        let input: DynamicSpacingInput = syn::parse_str("99999999999").unwrap();
+
+        let error = input.values[0].variant_name().unwrap_err();
+
+        assert!(
+            error.to_string().contains("number too large"),
+            "unexpected error message: {error}"
         );
     }
 }

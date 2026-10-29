@@ -11,7 +11,6 @@ use fuzzy_nucleo::StringMatchCandidate;
 use gpui::{
     App, BackgroundExecutor, Context, DismissEvent, Entity, Subscription, Task, Window, prelude::*,
 };
-use i18n as app_i18n;
 use picker::popover_menu::PickerPopoverMenu;
 use picker::{Picker, PickerDelegate};
 use settings::{AgentConfigOptionValue, SettingsStore};
@@ -23,15 +22,12 @@ use util::ResultExt as _;
 use zzz_actions::agent::ToggleModelSelector;
 
 use crate::model_search;
+use crate::tr;
 use crate::ui::{HoldForDefault, documentation_aside_side};
 use crate::{
     CycleFavoriteModels, CycleModeSelector, CycleThinkingEffort, ToggleProfileSelector,
     ToggleThinkingEffortMenu,
 };
-
-fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
-    app_i18n::tr(cx, key, fallback).into()
-}
 
 fn separator_label(title: &SharedString, cx: &App) -> SharedString {
     match title.as_ref() {
@@ -394,18 +390,19 @@ impl ConfigOptionSelector {
         }
     }
 
-    fn current_value_name(&self, cx: &App) -> String {
+    fn current_value_name(&self, cx: &App) -> SharedString {
         let Some(option) = self.current_option() else {
-            return app_i18n::tr(cx, "agent_ui.config_options.unknown", "Unknown");
+            return tr(cx, "agent_ui.config_options.unknown", "Unknown");
         };
 
         match &option.kind {
             acp::SessionConfigKind::Select(select) => {
-                find_option_name(&select.options, &select.current_value).unwrap_or_else(|| {
-                    app_i18n::tr(cx, "agent_ui.config_options.unknown", "Unknown")
-                })
+                find_option_name(&select.options, &select.current_value).map_or_else(
+                    || tr(cx, "agent_ui.config_options.unknown", "Unknown"),
+                    Into::into,
+                )
             }
-            _ => app_i18n::tr(cx, "agent_ui.config_options.unknown", "Unknown"),
+            _ => tr(cx, "agent_ui.config_options.unknown", "Unknown"),
         }
     }
 
@@ -420,11 +417,11 @@ impl ConfigOptionSelector {
             .is_some_and(|option| option.id == self.config_id)
     }
 
-    fn render_trigger_button(&self, _window: &mut Window, _cx: &mut Context<Self>) -> Button {
+    fn render_trigger_button(&self, _window: &mut Window, cx: &mut Context<Self>) -> Button {
         let Some(option) = self.current_option() else {
             return Button::new(
                 "config-option-trigger",
-                tr(_cx, "agent_ui.config_options.unknown", "Unknown"),
+                tr(cx, "agent_ui.config_options.unknown", "Unknown"),
             )
             .label_size(LabelSize::Small)
             .color(Color::Muted)
@@ -441,7 +438,7 @@ impl ConfigOptionSelector {
             IconName::ChevronDown
         };
 
-        let value_name = self.current_value_name(_cx);
+        let value_name = self.current_value_name(cx);
         let display_name = truncate_button_label(&value_name, Self::TRUNCATED_LABEL_LIMIT);
 
         Button::new(
@@ -499,7 +496,7 @@ impl Render for ConfigOptionSelector {
                         );
                     }
 
-                    let action_tooltip_container = |label: &str, keybinding: KeyBinding| {
+                    let action_tooltip_container = |label: SharedString, keybinding: KeyBinding| {
                         h_flex()
                             .pt_1()
                             .gap_2()
@@ -515,63 +512,53 @@ impl Render for ConfigOptionSelector {
                             acp::SessionConfigOptionCategory::Mode => {
                                 content = content
                                     .child(action_tooltip_container(
-                                        app_i18n::tr(
-                                            cx,
-                                            "agent_ui.mode_selector.change_mode",
-                                            "Change Mode",
-                                        )
-                                        .as_str(),
+                                        tr(cx, "agent_ui.mode_selector.change_mode", "Change Mode"),
                                         KeyBinding::for_action(&ToggleProfileSelector, cx),
                                     ))
                                     .child(action_tooltip_container(
-                                        app_i18n::tr(
+                                        tr(
                                             cx,
                                             "agent_ui.mode_selector.cycle_through_modes",
                                             "Cycle Through Modes",
-                                        )
-                                        .as_str(),
+                                        ),
                                         KeyBinding::for_action(&CycleModeSelector, cx),
                                     ));
                             }
                             acp::SessionConfigOptionCategory::Model => {
                                 content = content
                                     .child(action_tooltip_container(
-                                        app_i18n::tr(
+                                        tr(
                                             cx,
                                             "agent_ui.model_selector.change_model",
                                             "Change Model",
-                                        )
-                                        .as_str(),
+                                        ),
                                         KeyBinding::for_action(&ToggleModelSelector, cx),
                                     ))
                                     .child(action_tooltip_container(
-                                        app_i18n::tr(
+                                        tr(
                                             cx,
                                             "agent_ui.model_selector.cycle_favorite_models",
                                             "Cycle Favorite Models",
-                                        )
-                                        .as_str(),
+                                        ),
                                         KeyBinding::for_action(&CycleFavoriteModels, cx),
                                     ));
                             }
                             acp::SessionConfigOptionCategory::ThoughtLevel => {
                                 content = content
                                     .child(action_tooltip_container(
-                                        app_i18n::tr(
+                                        tr(
                                             cx,
                                             "agent_ui.config_options.change_thinking_effort",
                                             "Change Thinking Effort",
-                                        )
-                                        .as_str(),
+                                        ),
                                         KeyBinding::for_action(&ToggleThinkingEffortMenu, cx),
                                     ))
                                     .child(action_tooltip_container(
-                                        app_i18n::tr(
+                                        tr(
                                             cx,
                                             "agent_ui.config_options.cycle_thinking_effort",
                                             "Cycle Thinking Effort",
-                                        )
-                                        .as_str(),
+                                        ),
                                         KeyBinding::for_action(&CycleThinkingEffort, cx),
                                     ));
                             }
@@ -772,7 +759,7 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> Arc<str> {
-        Arc::from(app_i18n::tr(
+        Arc::from(tr(
             cx,
             "agent_ui.config_options.select_an_option",
             "Select an option...",

@@ -14,7 +14,16 @@ pub struct VideoFrame {
 
 impl VideoFrame {
     /// Build a frame from tightly packed BGRA bytes.
+    ///
+    /// `bgra` must hold exactly `width * height * 4` bytes: [`VideoFrame::stride`]
+    /// and the render path both derive the row length from `width`, so a short
+    /// buffer would be read out of bounds.
     pub fn new(width: u32, height: u32, bgra: Vec<u8>, pts: Duration) -> Self {
+        debug_assert_eq!(
+            bgra.len(),
+            width as usize * height as usize * 4,
+            "packed BGRA buffer must hold exactly one pixel per (width, height) pair"
+        );
         Self {
             width,
             height,

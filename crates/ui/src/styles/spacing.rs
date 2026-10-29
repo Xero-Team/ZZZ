@@ -11,8 +11,8 @@ use ui_macros::derive_dynamic_spacing;
 // Example: (1, 2, 4) => Compact: 1px, Default: 2px, Comfortable: 4px
 //
 // When a single value is provided, the standard spacing formula is
-// used to derive the of spacing values. This formula can be found in
-// the macro.
+// used to derive the compact, default, and comfortable spacing values.
+// This formula can be found in the macro.
 //
 // Example:
 //

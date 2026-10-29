@@ -35,6 +35,15 @@ impl<'a> Matcher<'a> {
         smart_case: bool,
         penalize_length: bool,
     ) -> Self {
+        // Both matrices are indexed by `query_index` over `self.query`, and
+        // `recursive_score_match` reads `self.lowercase_query[query_index]`, so
+        // the two slices must describe the same characters. Every producer
+        // lowercases with `simple_lowercase`, which is one `char` to one `char`.
+        debug_assert_eq!(
+            query.len(),
+            lowercase_query.len(),
+            "the query and its lowercased form must have the same length"
+        );
         Self {
             query,
             lowercase_query,
@@ -86,6 +95,13 @@ impl<'a> Matcher<'a> {
             if !self.find_last_positions(lowercase_prefix, &lowercase_candidate_chars) {
                 continue;
             }
+
+            // The matrices are sized from the lowercased character counts, while
+            // `score_match` indexes them with `prefix.len() + path.len()`. Those
+            // agree only because `simple_lowercase` preserves the character
+            // count; a case folding that changed it would index out of bounds.
+            debug_assert_eq!(prefix.len(), lowercase_prefix.len());
+            debug_assert_eq!(candidate_chars.len(), lowercase_candidate_chars.len());
 
             let matrix_len =
                 self.query.len() * (lowercase_prefix.len() + lowercase_candidate_chars.len());

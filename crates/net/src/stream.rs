@@ -15,6 +15,8 @@ use crate::{
 
 pub struct UnixStream(Arc<UnixSocket>);
 
+// SAFETY: `UnixStream` is a thin wrapper around a non-blocking socket that does
+// no buffering of its own, so it is safe for `async_io` to poll its readiness.
 unsafe impl IoSafe for UnixStream {}
 
 impl UnixStream {
@@ -55,6 +57,7 @@ impl Write for UnixStream {
     }
 
     fn flush(&mut self) -> Result<()> {
+        // Sockets have no user-space buffering, so there is nothing to flush.
         Ok(())
     }
 }
@@ -81,6 +84,7 @@ impl Write for OwnedWriteHalf {
     }
 
     fn flush(&mut self) -> Result<()> {
+        // Sockets have no user-space buffering, so there is nothing to flush.
         Ok(())
     }
 }

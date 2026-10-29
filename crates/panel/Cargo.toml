@@ -12,6 +12,4 @@ workspace = true
 path = "src/panel.rs"
 
 [dependencies]
-gpui.workspace = true
-ui.workspace = true
 workspace.workspace = true

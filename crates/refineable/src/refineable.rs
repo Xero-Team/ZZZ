@@ -93,6 +93,11 @@ impl<S: Refineable + Default> Default for Cascade<S> {
 pub struct CascadeSlot(usize);
 
 impl<S: Refineable + Default> Cascade<S> {
+    /// Index of the base refinement, which is the only slot that is never
+    /// removable: `Cascade::default` populates it and `Cascade::reserve` only
+    /// ever hands out slots after it.
+    const BASE_SLOT: usize = 0;
+
     /// Reserves a new slot in the cascade and returns a handle to it.
     ///
     /// The new slot is initially empty (`None`) and can be populated later
@@ -107,15 +112,20 @@ impl<S: Refineable + Default> Cascade<S> {
     /// The base refinement is always present and serves as the foundation
     /// for the cascade.
     pub fn base(&mut self) -> &mut S::Refinement {
-        self.0[0]
+        self.0[Self::BASE_SLOT]
             .as_mut()
-            .expect("value should have the expected type")
+            .expect("the base slot of a cascade is always populated")
     }
 
     /// Sets the refinement for a specific slot in the cascade.
     ///
     /// Setting a slot to `None` effectively removes it from consideration
     /// during merging.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `slot` was not handed out by [`Cascade::reserve`] on this
+    /// cascade.
     pub fn set(&mut self, slot: CascadeSlot, refinement: Option<S::Refinement>) {
         self.0[slot.0] = refinement
     }
@@ -125,7 +135,9 @@ impl<S: Refineable + Default> Cascade<S> {
     /// Refinements are applied in order, with later slots taking precedence.
     /// Empty slots (`None`) are skipped during merging.
     pub fn merged(&self) -> S::Refinement {
-        let mut merged = self.0[0].clone().expect("value should be present");
+        let mut merged = self.0[Self::BASE_SLOT]
+            .clone()
+            .expect("the base slot of a cascade is always populated");
         for refinement in self.0.iter().skip(1).flatten() {
             merged.refine(refinement);
         }

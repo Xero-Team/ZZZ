@@ -1,4 +1,3 @@
-use indexmap::IndexMap;
 use serde::Deserialize;
 use strum::EnumIter;
 
@@ -122,35 +121,26 @@ impl ZZZSyntaxToken {
         &self,
         token_colors: &'a [VsCodeTokenColor],
     ) -> Option<&'a VsCodeTokenColor> {
-        let mut ranked_matches = IndexMap::new();
-
-        for (ix, token_color) in token_colors.iter().enumerate() {
-            if token_color.settings.foreground.is_none() {
-                continue;
-            }
-
-            let Some(rank) = self.rank_match(token_color) else {
-                continue;
-            };
-
-            if rank > 0 {
-                ranked_matches.insert(ix, rank);
-            }
-        }
-
-        ranked_matches
-            .into_iter()
-            .max_by_key(|(_, rank)| *rank)
-            .map(|(ix, _)| &token_colors[ix])
+        token_colors
+            .iter()
+            .filter(|token_color| token_color.settings.foreground.is_some())
+            .filter_map(|token_color| {
+                let rank = self.rank_match(token_color)?;
+                (rank > 0).then_some((rank, token_color))
+            })
+            // Later entries win ties, matching VS Code's last-wins override
+            // semantics.
+            .max_by_key(|(rank, _)| *rank)
+            .map(|(_, token_color)| token_color)
     }
 
     fn rank_match(&self, token_color: &VsCodeTokenColor) -> Option<u32> {
         let candidate_scopes = match token_color.scope.as_ref()? {
-            VsCodeTokenScope::One(scope) => vec![scope],
-            VsCodeTokenScope::Many(scopes) => scopes.iter().collect(),
+            VsCodeTokenScope::One(scope) => std::slice::from_ref(scope),
+            VsCodeTokenScope::Many(scopes) => scopes.as_slice(),
         }
         .iter()
-        .flat_map(|scope| scope.split(',').map(|s| s.trim()))
+        .flat_map(|scope| scope.split(',').map(str::trim))
         .collect::<Vec<_>>();
 
         let scopes_to_match = self.to_vscode();
@@ -350,6 +340,26 @@ mod tests {
             .unwrap();
 
         assert_eq!(best_match.settings.foreground.as_deref(), Some("#333333"));
+    }
+
+    #[test]
+    fn test_find_best_token_color_match_prefers_the_later_entry_on_a_tie() {
+        let token_colors = vec![
+            token_color(
+                VsCodeTokenScope::One("entity.name.function".into()),
+                Some("#111111"),
+            ),
+            token_color(
+                VsCodeTokenScope::One("entity.name.function".into()),
+                Some("#222222"),
+            ),
+        ];
+
+        let best_match = ZZZSyntaxToken::Function
+            .find_best_token_color_match(&token_colors)
+            .expect("both entries have the same rank");
+
+        assert_eq!(best_match.settings.foreground.as_deref(), Some("#222222"));
     }
 
     #[test]

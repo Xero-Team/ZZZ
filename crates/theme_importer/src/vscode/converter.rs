@@ -1,4 +1,3 @@
-use anyhow::Result;
 use collections::IndexMap;
 use strum::IntoEnumIterator;
 use theme_settings::{
@@ -11,18 +10,24 @@ use crate::vscode::{VsCodeTheme, VsCodeTokenScope};
 
 use super::ZZZSyntaxToken;
 
+/// Fallback for themes that do not specify an inlay hint colour.
+const VSCODE_DEFAULT_HINT_COLOR: &str = "#969696ff";
+
+/// VS Code packs weight into the free-form `fontStyle` string, so a simple
+/// substring test is the only reliable signal.
 pub(crate) fn try_parse_font_weight(font_style: &str) -> Option<FontWeightContent> {
-    match font_style {
-        style if style.contains("bold") => Some(FontWeightContent::BOLD),
-        _ => None,
-    }
+    font_style
+        .contains("bold")
+        .then_some(FontWeightContent::BOLD)
 }
 
 pub(crate) fn try_parse_font_style(font_style: &str) -> Option<FontStyleContent> {
-    match font_style {
-        style if style.contains("italic") => Some(FontStyleContent::Italic),
-        style if style.contains("oblique") => Some(FontStyleContent::Oblique),
-        _ => None,
+    if font_style.contains("italic") {
+        Some(FontStyleContent::Italic)
+    } else if font_style.contains("oblique") {
+        Some(FontStyleContent::Oblique)
+    } else {
+        None
     }
 }
 
@@ -45,14 +50,14 @@ impl VsCodeThemeConverter {
         }
     }
 
-    pub fn convert(self) -> Result<ThemeContent> {
+    pub fn convert(self) -> ThemeContent {
         let appearance = self.theme_metadata.appearance.into();
 
-        let status_colors = self.convert_status_colors()?;
-        let theme_colors = self.convert_theme_colors()?;
-        let syntax_theme = self.convert_syntax_theme()?;
+        let status_colors = self.convert_status_colors();
+        let theme_colors = self.convert_theme_colors();
+        let syntax_theme = self.convert_syntax_theme();
 
-        Ok(ThemeContent {
+        ThemeContent {
             name: self.theme_metadata.name,
             appearance,
             style: ThemeStyleContent {
@@ -63,18 +68,13 @@ impl VsCodeThemeConverter {
                 players: Vec::new(),
                 syntax: syntax_theme,
             },
-        })
+        }
     }
 
-    fn convert_status_colors(&self) -> Result<StatusColorsContent> {
+    fn convert_status_colors(&self) -> StatusColorsContent {
         let vscode_colors = &self.theme.colors;
 
-        let vscode_base_status_colors = StatusColorsContent {
-            hint: Some("#969696ff".to_owned()),
-            ..Default::default()
-        };
-
-        Ok(StatusColorsContent {
+        StatusColorsContent {
             conflict: vscode_colors
                 .git_decoration
                 .conflicting_resource_foreground
@@ -89,7 +89,7 @@ impl VsCodeThemeConverter {
                 .editor_inlay_hint
                 .foreground
                 .clone()
-                .or(vscode_base_status_colors.hint),
+                .or_else(|| Some(VSCODE_DEFAULT_HINT_COLOR.to_owned())),
             hint_border: vscode_colors.editor_hint.border.clone(),
             ignored: vscode_colors
                 .git_decoration
@@ -105,10 +105,10 @@ impl VsCodeThemeConverter {
             warning_background: vscode_colors.editor_warning.background.clone(),
             warning_border: vscode_colors.editor_warning.border.clone(),
             ..Default::default()
-        })
+        }
     }
 
-    fn convert_theme_colors(&self) -> Result<ThemeColorsContent> {
+    fn convert_theme_colors(&self) -> ThemeColorsContent {
         let vscode_colors = &self.theme.colors;
 
         let vscode_panel_border = vscode_colors.panel.border.clone();
@@ -124,7 +124,7 @@ impl VsCodeThemeConverter {
             .and_then(|token_color| token_color.settings.foreground.as_ref())
             .cloned();
 
-        Ok(ThemeColorsContent {
+        ThemeColorsContent {
             border: vscode_panel_border.clone(),
             border_variant: vscode_panel_border.clone(),
             border_focused: vscode_colors.focus_border.clone(),
@@ -209,10 +209,10 @@ impl VsCodeThemeConverter {
             link_text_hover: vscode_colors.text_link.active_foreground.clone(),
             vim_yank_background: vscode_colors.editor.range_highlight_background.clone(),
             ..Default::default()
-        })
+        }
     }
 
-    fn convert_syntax_theme(&self) -> Result<IndexMap<String, HighlightStyleContent>> {
+    fn convert_syntax_theme(&self) -> IndexMap<String, HighlightStyleContent> {
         let mut highlight_styles = IndexMap::default();
 
         for syntax_token in ZZZSyntaxToken::iter() {
@@ -238,17 +238,13 @@ impl VsCodeThemeConverter {
                 continue;
             };
 
-            log::info!(
-                "Matched '{syntax_token}' to '{}'",
-                token_color
-                    .name
-                    .clone()
-                    .or_else(|| token_color
-                        .scope
-                        .as_ref()
-                        .map(|scope| format!("{:?}", scope)))
-                    .unwrap_or_else(|| "no identifier".to_owned())
-            );
+            let matched_label = token_color
+                .name
+                .as_deref()
+                .map(str::to_owned)
+                .or_else(|| token_color.scope.as_ref().map(|scope| format!("{scope:?}")))
+                .unwrap_or_else(|| "no identifier".to_owned());
+            log::info!("Matched '{syntax_token}' to '{matched_label}'");
 
             let highlight_style = HighlightStyleContent {
                 color: token_color.settings.foreground.clone(),
@@ -272,7 +268,7 @@ impl VsCodeThemeConverter {
             highlight_styles.insert(syntax_token.to_string(), highlight_style);
         }
 
-        Ok(highlight_styles)
+        highlight_styles
     }
 }
 

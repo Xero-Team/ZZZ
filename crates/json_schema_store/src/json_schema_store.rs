@@ -1,7 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
 use anyhow::{Context as _, Result};
-use collections::HashMap;
+use collections::{HashMap, HashSet};
 use gpui::{App, AsyncApp, BorrowAppContext as _, Entity, Task, WeakEntity};
 use language::{
     LanguageRegistry, LanguageServerName, LspAdapterDelegate,
@@ -156,20 +156,27 @@ pub fn handle_schema_request(
     }
 
     let path = path.to_owned();
-    let uri_clone = uri.clone();
     cx.spawn(async move |cx| {
         let schema = resolve_dynamic_schema(lsp_store, &path, cx).await?;
         let json = serde_json::to_string(&schema).context("Failed to serialize schema")?;
 
-        DYNAMIC_SCHEMA_CACHE.write().insert(uri_clone, json.clone());
+        DYNAMIC_SCHEMA_CACHE.write().insert(uri, json.clone());
 
         Ok(json)
     })
 }
 
+/// Splits a schema path such as `settings/lsp/rust-analyzer/settings` into the
+/// schema name and the optional remainder.
+fn split_schema_path(path: &str) -> (&str, Option<&str>) {
+    match path.split_once('/') {
+        Some((schema_name, rest)) => (schema_name, Some(rest)),
+        None => (path, None),
+    }
+}
+
 fn resolve_static_schema(path: &str) -> Option<String> {
-    let (schema_name, rest) = path.split_once('/').unzip();
-    let schema_name = schema_name.unwrap_or(path);
+    let (schema_name, rest) = split_schema_path(path);
 
     match schema_name {
         "tsconfig" => Some(TSCONFIG_SCHEMA.to_owned()),
@@ -226,8 +233,7 @@ async fn resolve_dynamic_schema(
     cx: &mut AsyncApp,
 ) -> Result<serde_json::Value> {
     let languages = lsp_store.read_with(cx, |lsp_store, _| lsp_store.languages.clone());
-    let (schema_name, rest) = path.split_once('/').unzip();
-    let schema_name = schema_name.unwrap_or(path);
+    let (schema_name, rest) = split_schema_path(path);
 
     let schema = match schema_name {
         "settings" if rest.is_some_and(|r| r.starts_with("lsp/")) => {
@@ -307,26 +313,15 @@ async fn resolve_dynamic_schema(
             })
         }
         "settings" => {
-            let mut lsp_adapter_names: Vec<String> = languages
+            let mut seen_adapter_names = HashSet::default();
+            let lsp_adapter_names: Vec<String> = languages
                 .all_lsp_adapters()
                 .into_iter()
                 .map(|adapter| adapter.name())
                 .chain(languages.available_lsp_adapter_names())
                 .map(|name| name.to_string())
+                .filter(|name| seen_adapter_names.insert(name.clone()))
                 .collect();
-
-            let mut i = 0;
-            while i < lsp_adapter_names.len() {
-                let mut j = i + 1;
-                while j < lsp_adapter_names.len() {
-                    if lsp_adapter_names[i] == lsp_adapter_names[j] {
-                        lsp_adapter_names.swap_remove(j);
-                    } else {
-                        j += 1;
-                    }
-                }
-                i += 1;
-            }
 
             cx.update(|cx| {
                 let font_names = &cx.text_system().all_font_names();
@@ -502,23 +497,17 @@ pub fn all_schema_file_associations(
         },
     ]);
 
-    #[cfg(debug_assertions)]
-    {
-        file_associations
-            .as_array_mut()
-            .expect("as_array_mut should be present")
-            .push(serde_json::json!({
-                "fileMatch": [
-                    "zzz-inspector-style.json"
-                ],
-                "url": format!("{SCHEMA_URI_PREFIX}zzz_inspector_style")
-            }));
-    }
+    // The array above always builds a JSON array, so this branch always applies.
+    if let Some(file_associations) = file_associations.as_array_mut() {
+        #[cfg(debug_assertions)]
+        file_associations.push(serde_json::json!({
+            "fileMatch": [
+                "zzz-inspector-style.json"
+            ],
+            "url": format!("{SCHEMA_URI_PREFIX}zzz_inspector_style")
+        }));
 
-    file_associations
-        .as_array_mut()
-        .expect("as_array_mut should be present")
-        .extend(cx.all_action_names().into_iter().map(|&name| {
+        file_associations.extend(cx.all_action_names().into_iter().map(|&name| {
             let normalized_name = normalize_action_name(name);
             let file_name = normalized_action_name_to_file_name(normalized_name.clone());
             serde_json::json!({
@@ -526,6 +515,7 @@ pub fn all_schema_file_associations(
                 "url": format!("{SCHEMA_URI_PREFIX}action/{normalized_name}")
             })
         }));
+    }
 
     file_associations
 }
@@ -617,16 +607,45 @@ fn root_schema_from_action_schema(
     schema
 }
 
-#[inline]
+/// Turns an absolute path into a glob that matches it relative to its
+/// grandparent directory, e.g. `/home/me/.config/zzz/settings.json` becomes
+/// `zzz/settings.json`. Paths without a grandparent are matched as-is.
 fn schema_file_match(path: &std::path::Path) -> String {
-    path.strip_prefix(
-        path.parent()
-            .expect("path should have the expected component")
-            .parent()
-            .expect("path should have the expected component"),
-    )
-    .expect("value should be present")
-    .display()
-    .to_string()
-    .replace('\\', "/")
+    path.parent()
+        .and_then(|parent| parent.parent())
+        .and_then(|grandparent| path.strip_prefix(grandparent).ok())
+        .unwrap_or(path)
+        .display()
+        .to_string()
+        .replace('\\', "/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schema_file_match_strips_the_grandparent_directory() {
+        assert_eq!(
+            schema_file_match(std::path::Path::new("/home/me/.config/zzz/settings.json")),
+            "zzz/settings.json"
+        );
+    }
+
+    #[test]
+    fn schema_file_match_keeps_paths_without_a_grandparent() {
+        assert_eq!(
+            schema_file_match(std::path::Path::new("settings.json")),
+            "settings.json"
+        );
+    }
+
+    #[test]
+    fn schema_paths_split_into_name_and_remainder() {
+        assert_eq!(
+            split_schema_path("action/workspace__OpenSettings"),
+            ("action", Some("workspace__OpenSettings"))
+        );
+        assert_eq!(split_schema_path("settings"), ("settings", None));
+    }
 }

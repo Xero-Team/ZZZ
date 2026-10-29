@@ -64,12 +64,13 @@ use gpui::{
     Action, AnyEntity, AnyView, AnyWeakView, App, AsyncApp, AsyncWindowContext, Axis, Bounds,
     Context, CursorStyle, Decorations, DragMoveEvent, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, Global, HitboxBehavior, Hsla, KeyContext, Keystroke, ManagedView, MouseButton,
-    PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, SharedString, Size, Stateful,
-    Subscription, SystemWindowTabController, Task, Tiling, WeakEntity, WindowBounds, WindowHandle,
-    WindowId, WindowOptions, actions, canvas, point, relative, size, transparent_black,
+    PathPromptOptions, Point, PromptButton, PromptLevel, Render, ResizeEdge, SharedString, Size,
+    Stateful, Subscription, SystemWindowTabController, Task, Tiling, WeakEntity, WindowBounds,
+    WindowHandle, WindowId, WindowOptions, actions, canvas, point, relative, size,
+    transparent_black,
 };
 pub use history_manager::*;
-use i18n::{prompt_button, tr};
+use i18n::tr;
 pub use item::{
     FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, PreviewTabsSettings,
     ProjectItem, SerializableItem, SerializableItemHandle, WeakItemHandle,
@@ -3687,9 +3688,9 @@ impl Workspace {
                             ),
                             Some(&detail),
                             &[
-                                prompt_button(cx, "prompt.save_all.save", "Save all"),
-                                prompt_button(cx, "prompt.save_all.discard", "Discard all"),
-                                prompt_button(cx, "prompt.common.cancel", "Cancel"),
+                                PromptButton::ok(tr(cx, "prompt.save_all.save", "Save all")),
+                                PromptButton::new(tr(cx, "prompt.save_all.discard", "Discard all")),
+                                PromptButton::cancel(tr(cx, "prompt.common.cancel", "Cancel")),
                             ],
                             cx,
                         )
@@ -9880,8 +9881,8 @@ pub fn reload(cx: &mut App) {
                     ),
                     None,
                     &[
-                        prompt_button(cx, "prompt.app.restart.confirm", "Restart"),
-                        prompt_button(cx, "prompt.common.cancel", "Cancel"),
+                        PromptButton::ok(tr(cx, "prompt.app.restart.confirm", "Restart")),
+                        PromptButton::cancel(tr(cx, "prompt.common.cancel", "Cancel")),
                     ],
                     cx,
                 )

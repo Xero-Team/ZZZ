@@ -18,14 +18,13 @@ fn git_sha() -> Option<String> {
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-fn product_version() -> String {
+fn product_version(pkg_version: &str) -> String {
     let commit_sha = git_sha();
-    let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
     let channel = std::env::var("RELEASE_CHANNEL").unwrap_or_else(|_| "dev".into());
     let build_id = std::env::var("GITHUB_RUN_NUMBER").ok();
 
     format_product_version(
-        &pkg_version,
+        pkg_version,
         &channel,
         build_id.as_deref(),
         commit_sha.as_deref(),
@@ -64,17 +63,14 @@ fn format_product_version(
 }
 
 fn file_version(pkg_version: &str) -> String {
-    let mut version_parts = pkg_version
-        .split('.')
-        .map(|part| part.parse::<u16>().unwrap_or(0))
-        .chain(std::iter::repeat(0));
-    format!(
-        "{},{},{},{}",
-        version_parts.next().unwrap_or(0),
-        version_parts.next().unwrap_or(0),
-        version_parts.next().unwrap_or(0),
-        version_parts.next().unwrap_or(0),
-    )
+    // Windows file versions always have exactly four numeric components; any
+    // missing or unparsable segment is written as zero.
+    let mut parts = [0u16; 4];
+    for (part, segment) in parts.iter_mut().zip(pkg_version.split('.')) {
+        *part = segment.parse().unwrap_or(0);
+    }
+
+    format!("{},{},{},{}", parts[0], parts[1], parts[2], parts[3])
 }
 
 pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -109,7 +105,7 @@ pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
-    let product_version = product_version();
+    let product_version = product_version(&pkg_version);
     let file_version = file_version(&pkg_version);
 
     // The resource paths can contain non-ASCII characters (e.g. when the
@@ -163,7 +159,7 @@ END
 
     embed_resource::compile(&rc_path, embed_resource::NONE)
         .manifest_optional()
-        .expect("manifest_optional should be present");
+        .expect("failed to embed Windows resources");
 
     Ok(())
 }

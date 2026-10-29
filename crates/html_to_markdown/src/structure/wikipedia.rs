@@ -22,11 +22,7 @@ impl HandleTag for WikipediaChromeRemover {
                 }
             }
             "div" | "span" | "a" => {
-                if tag.attr("id").as_deref() == Some("p-lang-btn") {
-                    return StartTagOutcome::Skip;
-                }
-
-                if tag.attr("id").as_deref() == Some("p-search") {
+                if matches!(tag.attr("id").as_deref(), Some("p-lang-btn" | "p-search")) {
                     return StartTagOutcome::Skip;
                 }
 
@@ -62,6 +58,16 @@ impl HandleTag for WikipediaInfoboxHandler {
     }
 }
 
+/// Returns the `mw-highlight-lang-<language>` class of a Wikipedia highlight
+/// wrapper, if any.
+fn highlight_language(tag: &HtmlElement) -> Option<String> {
+    tag.classes()
+        .iter()
+        .filter_map(|class| class.split_once("mw-highlight-lang-"))
+        .map(|(_, language)| language.trim().to_owned())
+        .find(|language| !language.is_empty())
+}
+
 pub struct WikipediaCodeHandler {
     language: Option<String>,
 }
@@ -94,16 +100,7 @@ impl HandleTag for WikipediaCodeHandler {
                     writer.push_str("`");
                 }
             }
-            "div" => {
-                let classes = tag.classes();
-                self.language = classes.iter().find_map(|class| {
-                    if let Some((_, language)) = class.split_once("mw-highlight-lang-") {
-                        Some(language.trim().to_owned())
-                    } else {
-                        None
-                    }
-                });
-            }
+            "div" => self.language = highlight_language(tag),
             "pre" => {
                 writer.push_blank_line();
                 writer.push_str("```");
@@ -126,6 +123,9 @@ impl HandleTag for WikipediaCodeHandler {
                 }
             }
             "pre" => writer.push_str("\n```\n"),
+            // A highlight wrapper that contained no `<pre>` must not leak its
+            // language onto an unrelated code block further down the page.
+            "div" if highlight_language(tag).is_some() => self.language = None,
             _ => {}
         }
     }
@@ -177,6 +177,16 @@ mod tests {
             convert_html_to_markdown(html.as_bytes(), &mut wikipedia_handlers()).unwrap(),
             expected
         )
+    }
+
+    #[test]
+    fn test_highlight_language_does_not_leak_to_unrelated_pre_blocks() {
+        let html = "<div class=\"mw-highlight mw-highlight-lang-rust\"><span>no code</span></div><pre>plain</pre>";
+
+        let mut handlers = vec![Rc::new(RefCell::new(WikipediaCodeHandler::new())) as TagHandler];
+        let markdown = convert_html_to_markdown(html.as_bytes(), &mut handlers).unwrap();
+
+        assert_eq!(markdown, "no code\n\n```\nplain\n```");
     }
 
     #[test]

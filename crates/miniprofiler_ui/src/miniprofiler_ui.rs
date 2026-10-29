@@ -278,7 +278,7 @@ impl ProfilerWindow {
                 filter_timings(visible.iter().cloned(), include_self)
             })
             .collect();
-        self.display_timings = Rc::new(kway_merge(per_thread));
+        self.display_timings = Rc::new(merge_by_start(per_thread));
     }
 
     fn now_nanos(&self) -> u128 {
@@ -343,19 +343,16 @@ impl ProfilerWindow {
                     })
                     .await;
 
-                match response {
-                    Ok(response) => {
-                        let ok = weak.update(&mut cx.clone(), |this, cx| {
+                if let Some(response) = response.log_err()
+                    && weak
+                        .update(cx, |this, cx| {
                             this.apply_remote_response(response);
                             cx.notify();
-                        });
-                        if ok.is_err() {
-                            break;
-                        }
-                    }
-                    Err(error) => {
-                        Err::<(), _>(error).log_err();
-                    }
+                        })
+                        .is_err()
+                {
+                    // The profiler window is gone, so stop polling.
+                    break;
                 }
 
                 cx.background_executor().timer(REMOTE_POLL_INTERVAL).await;
@@ -748,37 +745,11 @@ fn location_color_index(location: &SerializedLocation) -> u32 {
     hasher.finish() as u32
 }
 
-/// Merge K sorted `Vec<SerializedTaskTiming>` into a single sorted vec.
-/// Each input vec must already be sorted by `start`.
-fn kway_merge(lists: Vec<Vec<SerializedTaskTiming>>) -> Vec<SerializedTaskTiming> {
-    let total_len: usize = lists.iter().map(|l| l.len()).sum();
-    let mut result = Vec::with_capacity(total_len);
-    let mut cursors = vec![0usize; lists.len()];
-
-    loop {
-        let mut min_start = u128::MAX;
-        let mut min_list = None;
-
-        for (list_idx, list) in lists.iter().enumerate() {
-            let cursor = cursors[list_idx];
-            if let Some(timing) = list.get(cursor) {
-                if timing.start < min_start {
-                    min_start = timing.start;
-                    min_list = Some(list_idx);
-                }
-            }
-        }
-
-        match min_list {
-            Some(idx) => {
-                result.push(lists[idx][cursors[idx]].clone());
-                cursors[idx] += 1;
-            }
-            None => break,
-        }
-    }
-
-    result
+/// Flattens per-thread timing lists into one list ordered by task start time.
+fn merge_by_start(lists: Vec<Vec<SerializedTaskTiming>>) -> Vec<SerializedTaskTiming> {
+    let mut merged: Vec<SerializedTaskTiming> = lists.into_iter().flatten().collect();
+    merged.sort_by_key(|timing| timing.start);
+    merged
 }
 
 fn append_to_thread(
@@ -798,5 +769,67 @@ fn append_to_thread(
             thread_id,
             timings: new_timings,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn timing(start: u128, duration: u128, file: &str) -> SerializedTaskTiming {
+        SerializedTaskTiming {
+            location: SerializedLocation {
+                file: file.into(),
+                line: 1,
+                column: 1,
+            },
+            start,
+            duration,
+        }
+    }
+
+    #[test]
+    fn merge_by_start_orders_timings_across_threads() {
+        let merged = merge_by_start(vec![
+            vec![timing(20, 1, "a.rs"), timing(40, 1, "a.rs")],
+            vec![timing(10, 1, "b.rs"), timing(30, 1, "b.rs")],
+        ]);
+
+        assert_eq!(
+            merged.iter().map(|t| t.start).collect::<Vec<_>>(),
+            vec![10, 20, 30, 40]
+        );
+    }
+
+    #[test]
+    fn visible_tail_keeps_only_timings_inside_the_window() {
+        let timings = vec![
+            timing(0, 10, "a.rs"),
+            timing(1_000, 10, "a.rs"),
+            timing(2_000, 10, "a.rs"),
+        ];
+
+        let visible = visible_tail(&timings, 1_500);
+
+        assert_eq!(
+            visible.iter().map(|t| t.start).collect::<Vec<_>>(),
+            vec![2_000]
+        );
+    }
+
+    #[test]
+    fn filter_timings_hides_sub_millisecond_and_self_timings() {
+        let timings = [
+            timing(0, NANOS_PER_MS - 1, "app.rs"),
+            timing(0, NANOS_PER_MS, "app.rs"),
+            timing(0, NANOS_PER_MS, "miniprofiler_ui.rs"),
+        ];
+
+        let filtered = filter_timings(timings.iter().cloned(), false);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].location.file.as_ref(), "app.rs");
+
+        let with_self = filter_timings(timings.iter().cloned(), true);
+        assert_eq!(with_self.len(), 2);
     }
 }

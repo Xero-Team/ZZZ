@@ -23,6 +23,7 @@ gpui.workspace = true
 i18n.workspace = true
 itertools.workspace = true
 language.workspace = true
+log.workspace = true
 lsp.workspace = true
 menu.workspace = true
 project.workspace = true

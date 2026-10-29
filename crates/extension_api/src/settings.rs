@@ -4,7 +4,6 @@
 mod types;
 
 use crate::{Project, Result, SettingsLocation, Worktree, wit};
-use serde_json;
 pub use types::*;
 
 impl LanguageSettings {

@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use ::ui::IconName;
+use ::ui::{IconName, KeyBinding, rems_from_px};
 use agent_client_protocol::schema::v1 as acp;
 use agent_settings::{AgentProfileId, AgentSettings};
 use command_palette_hooks::CommandPaletteFilter;
@@ -41,7 +41,8 @@ use editor::{Editor, SelectionEffects, scroll::Autoscroll};
 use feature_flags::FeatureFlagAppExt as _;
 use fs::Fs;
 use gpui::{
-    Action, App, Context, Entity, ImageSource, Resource, SharedString, SharedUri, Window, actions,
+    Action, App, Context, Entity, FocusHandle, ImageSource, Resource, SharedString, SharedUri,
+    Window, actions,
 };
 use i18n as app_i18n;
 use language::LanguageRegistry;
@@ -50,6 +51,7 @@ use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{Settings as _, SettingsStore};
+use util::ResultExt as _;
 use workspace::{OpenOptions, Workspace};
 
 use crate::agent_configuration::{ConfigureContextServerModal, ManageProfilesModal};
@@ -71,6 +73,22 @@ pub use thread_import::{
 };
 use zzz_actions;
 pub use zzz_actions::{CreateWorktree, NewWorktreeBranchTarget, SwitchWorktree};
+
+/// A key binding sized to match the small labels used on toolbar and footer
+/// buttons.
+pub(crate) fn footer_key_binding(
+    action: &dyn Action,
+    focus_handle: &FocusHandle,
+    cx: &App,
+) -> KeyBinding {
+    let key_binding = KeyBinding::for_action_in(action, focus_handle, cx);
+    key_binding.size(rems_from_px(12.))
+}
+
+/// [`i18n::tr`] returning a [`SharedString`], which is what GPUI renders take.
+pub(crate) fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedString {
+    app_i18n::tr(cx, key, fallback).into()
+}
 
 pub(crate) fn resolve_agent_image(
     dest_url: &str,
@@ -160,7 +178,7 @@ pub(crate) fn open_abs_path_at_point(
 pub const DEFAULT_THREAD_TITLE: &str = "New Agent Thread";
 
 pub(crate) fn default_thread_title(cx: &App) -> SharedString {
-    app_i18n::tr(cx, "agent_ui.default_thread_title", DEFAULT_THREAD_TITLE).into()
+    tr(cx, "agent_ui.default_thread_title", DEFAULT_THREAD_TITLE)
 }
 
 /// Maximum number of characters kept when deriving a thread title from a user prompt.
@@ -509,12 +527,14 @@ impl Agent {
         }
     }
 
+    /// The bindings are the only localized variant, so this stays `_cx` outside
+    /// of test builds.
     pub fn localized_label(&self, _cx: &App) -> SharedString {
         match self {
             Self::Absent => SharedString::default(),
             Self::Custom { id, .. } => id.0.clone(),
             #[cfg(any(test, feature = "test-support"))]
-            Self::Stub => app_i18n::tr(_cx, "agent_ui.agent.stub", "Stub Agent").into(),
+            Self::Stub => tr(_cx, "agent_ui.agent.stub", "Stub Agent"),
         }
     }
 
@@ -648,7 +668,7 @@ pub fn init(
                     });
                     workspace.activate_item(&existing, true, true, window, cx);
                 } else {
-                    let registry_page = AgentRegistryPage::new(workspace, window, cx);
+                    let registry_page = AgentRegistryPage::new(window, cx);
                     workspace.add_item_to_active_pane(
                         Box::new(registry_page),
                         None,
@@ -694,25 +714,30 @@ pub fn init(
 
 fn maybe_backfill_editor_layout(fs: Arc<dyn Fs>, is_new_install: bool, cx: &mut App) {
     let kvp = db::kvp::KeyValueStore::global(cx);
-    let already_backfilled =
-        util::ResultExt::log_err(kvp.read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY))
-            .flatten()
-            .is_some();
-
-    if !already_backfilled {
-        if !is_new_install {
-            AgentSettings::backfill_editor_layout(fs, cx);
-        }
-
-        db::write_and_log(cx, move || async move {
-            kvp.write_kvp(
-                PARALLEL_AGENT_LAYOUT_BACKFILL_KEY.to_owned(),
-                "1".to_owned(),
-            )
-            .await
-        });
+    let already_backfilled = kvp
+        .read_kvp(PARALLEL_AGENT_LAYOUT_BACKFILL_KEY)
+        .log_err()
+        .flatten()
+        .is_some();
+    if already_backfilled {
+        return;
     }
+
+    if !is_new_install {
+        AgentSettings::backfill_editor_layout(fs, cx);
+    }
+
+    db::write_and_log(cx, move || async move {
+        kvp.write_kvp(
+            PARALLEL_AGENT_LAYOUT_BACKFILL_KEY.to_owned(),
+            "1".to_owned(),
+        )
+        .await
+    });
 }
+
+/// Command palette namespaces that are only reachable while the agent is enabled.
+const AGENT_NAMESPACES: [&str; 3] = ["agent", "agents", "assistant"];
 
 fn update_command_palette_filter(cx: &mut App) {
     let disable_ai = DisableAiSettings::get_global(cx).disable_ai;
@@ -720,19 +745,16 @@ fn update_command_palette_filter(cx: &mut App) {
 
     CommandPaletteFilter::update_global(cx, |filter, _| {
         if disable_ai {
-            filter.hide_namespace("agent");
-            filter.hide_namespace("agents");
-            filter.hide_namespace("assistant");
-            filter.hide_namespace("copilot");
+            for namespace in AGENT_NAMESPACES.into_iter().chain(["copilot"]) {
+                filter.hide_namespace(namespace);
+            }
         } else {
-            if agent_enabled {
-                filter.show_namespace("agent");
-                filter.show_namespace("agents");
-                filter.show_namespace("assistant");
-            } else {
-                filter.hide_namespace("agent");
-                filter.hide_namespace("agents");
-                filter.hide_namespace("assistant");
+            for namespace in AGENT_NAMESPACES {
+                if agent_enabled {
+                    filter.show_namespace(namespace);
+                } else {
+                    filter.hide_namespace(namespace);
+                }
             }
 
             filter.show_namespace("multi_workspace");
