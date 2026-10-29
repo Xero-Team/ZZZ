@@ -855,8 +855,10 @@ pub struct SettingsObserver {
     worktree_store: Entity<WorktreeStore>,
     project_id: u64,
     task_store: Entity<TaskStore>,
-    pending_local_settings:
-        HashMap<PathTrust, BTreeMap<(WorktreeId, Arc<RelPath>), Option<String>>>,
+    pending_local_settings: HashMap<
+        PathTrust,
+        BTreeMap<(WorktreeId, Arc<RelPath>), HashMap<LocalSettingsKind, Option<String>>>,
+    >,
     _trusted_worktrees_watcher: Option<Subscription>,
     _user_settings_watcher: Option<Subscription>,
     _editorconfig_watcher: Option<Subscription>,
@@ -899,47 +901,26 @@ impl SettingsObserver {
                                     for ((worktree_id, directory_path), settings_contents) in
                                         pending_local_settings
                                     {
-                                        let path =
-                                            LocalSettingsPath::InWorktree(directory_path.clone());
-                                        let vfs_path = settings_observer
+                                        let Some(worktree) = settings_observer
                                             .worktree_store
                                             .read(cx)
                                             .worktree_for_id(worktree_id, cx)
-                                            .and_then(|worktree| {
-                                                worktree.read(cx).vfs_path_for_path(&directory_path)
-                                            });
-                                        apply_local_settings(
-                                            worktree_id,
-                                            path.clone(),
-                                            vfs_path.clone(),
-                                            LocalSettingsKind::Settings,
-                                            &settings_contents,
+                                        else {
+                                            continue;
+                                        };
+                                        settings_observer.update_settings(
+                                            worktree,
+                                            settings_contents.into_iter().map(|(kind, content)| {
+                                                (
+                                                    LocalSettingsPath::InWorktree(
+                                                        directory_path.clone(),
+                                                    ),
+                                                    kind,
+                                                    content,
+                                                )
+                                            }),
                                             cx,
                                         );
-                                        if let (Some(downstream_client), Some(vfs_path)) = (
-                                            &settings_observer.downstream_client,
-                                            vfs_path.as_ref(),
-                                        )
-                                        {
-                                            downstream_client
-                                                .send(proto::UpdateWorktreeSettings {
-                                                    project_id: settings_observer.project_id,
-                                                    worktree_id: worktree_id.to_proto(),
-                                                    content: settings_contents,
-                                                    kind: Some(
-                                                        local_settings_kind_to_proto(
-                                                            LocalSettingsKind::Settings,
-                                                        )
-                                                        .into(),
-                                                    ),
-                                                    path_v2: Some(
-                                                        proto::update_worktree_settings::PathV2::VfsPath(
-                                                            proto::VfsPathV2::from_vfs_path(vfs_path),
-                                                        ),
-                                                    ),
-                                                })
-                                                .log_err();
-                                        }
                                     }
                                 }
                             }
@@ -1391,33 +1372,38 @@ impl SettingsObserver {
         let task_store = self.task_store.clone();
         let can_trust_worktree = OnceCell::new();
         for (directory_path, kind, file_content) in settings_contents {
-            let mut applied = true;
+            if kind != LocalSettingsKind::Editorconfig
+                && !*can_trust_worktree.get_or_init(|| {
+                    if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
+                        trusted_worktrees.update(cx, |trusted_worktrees, cx| {
+                            trusted_worktrees.can_trust(&self.worktree_store, worktree_id, cx)
+                        })
+                    } else {
+                        true
+                    }
+                })
+            {
+                if let LocalSettingsPath::InWorktree(directory) = directory_path {
+                    self.pending_local_settings
+                        .entry(PathTrust::Worktree(worktree_id))
+                        .or_default()
+                        .entry((worktree_id, directory))
+                        .or_default()
+                        .insert(kind, file_content);
+                }
+                continue;
+            }
+
             match (&directory_path, kind) {
                 (LocalSettingsPath::InWorktree(directory), LocalSettingsKind::Settings) => {
-                    if *can_trust_worktree.get_or_init(|| {
-                        if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
-                            trusted_worktrees.update(cx, |trusted_worktrees, cx| {
-                                trusted_worktrees.can_trust(&self.worktree_store, worktree_id, cx)
-                            })
-                        } else {
-                            true
-                        }
-                    }) {
-                        apply_local_settings(
-                            worktree_id,
-                            LocalSettingsPath::InWorktree(directory.clone()),
-                            worktree.read(cx).vfs_path_for_path(directory),
-                            kind,
-                            &file_content,
-                            cx,
-                        )
-                    } else {
-                        applied = false;
-                        self.pending_local_settings
-                            .entry(PathTrust::Worktree(worktree_id))
-                            .or_default()
-                            .insert((worktree_id, directory.clone()), file_content.clone());
-                    }
+                    apply_local_settings(
+                        worktree_id,
+                        LocalSettingsPath::InWorktree(directory.clone()),
+                        worktree.read(cx).vfs_path_for_path(directory),
+                        kind,
+                        &file_content,
+                        cx,
+                    )
                 }
                 (LocalSettingsPath::InWorktree(directory), LocalSettingsKind::Tasks) => {
                     let result = task_store.update(cx, |task_store, cx| {
@@ -1507,23 +1493,21 @@ impl SettingsObserver {
                 }
             };
 
-            if applied {
-                if let Some(downstream_client) = &self.downstream_client {
-                    let Some(path_v2) =
-                        local_settings_path_to_proto(&directory_path, worktree.read(cx)).log_err()
-                    else {
-                        continue;
-                    };
-                    downstream_client
-                        .send(proto::UpdateWorktreeSettings {
-                            project_id: self.project_id,
-                            worktree_id: remote_worktree_id.to_proto(),
-                            content: file_content.clone(),
-                            kind: Some(local_settings_kind_to_proto(kind).into()),
-                            path_v2: Some(path_v2),
-                        })
-                        .log_err();
-                }
+            if let Some(downstream_client) = &self.downstream_client {
+                let Some(path_v2) =
+                    local_settings_path_to_proto(&directory_path, worktree.read(cx)).log_err()
+                else {
+                    continue;
+                };
+                downstream_client
+                    .send(proto::UpdateWorktreeSettings {
+                        project_id: self.project_id,
+                        worktree_id: remote_worktree_id.to_proto(),
+                        content: file_content.clone(),
+                        kind: Some(local_settings_kind_to_proto(kind).into()),
+                        path_v2: Some(path_v2),
+                    })
+                    .log_err();
             }
         }
     }

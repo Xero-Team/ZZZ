@@ -30,6 +30,8 @@ This feature works locally and on SSH and WSL remote hosts. ZZZ tracks trust inf
 Restricted Mode prevents:
 
 - Project settings (`.ZZZ/settings.json`) from being parsed and applied
+- Project tasks (`.ZZZ/tasks.json`, `.vscode/tasks.json`) and debug configurations (`.ZZZ/debug.json`, `.vscode/launch.json`) from being applied
+- Automatic task hooks from running, including hooks defined in global tasks
 - Language servers from being installed and spawned
 - MCP servers from being installed and spawned
 
