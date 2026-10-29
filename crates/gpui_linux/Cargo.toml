@@ -130,7 +130,7 @@ x11rb = { version = "0.14.0", features = [
     "sync",
     "dri3",
 ], optional = true }
-# Vendored from https://github.com/Riey/xim-rs @ c4b897800137f022fbf617cd1e81756c6f3bc955
+# Vendored from https://github.com/Riey/xim-rs @ f8f99ab38893f61b11b7618eac43d8210e1e5a75
 xim = { path = "../../vendor/xim-rs", features = [
     "x11rb-xcb",
     "x11rb-client",

@@ -56,8 +56,8 @@ patches = ["vendor/patches/lsp-types/0001-zzz-integration.patch"]
 [[package]]
 name = "notify"
 repository = "https://github.com/notify-rs/notify.git"
-source_ref = "refs/tags/notify-8.2.0"
-revision = "a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf"
+source_ref = "refs/tags/notify-8.2.1"
+revision = "7f6995de25f07bf28ab513c64375d94b4ccd08a1"
 include = [
     "Cargo.toml",
     "README.md",
@@ -184,7 +184,7 @@ patches = ["vendor/patches/wprcontrol/0001-zzz-local.patch"]
 name = "xim-rs"
 repository = "https://github.com/Riey/xim-rs.git"
 source_ref = "refs/heads/master"
-revision = "c4b897800137f022fbf617cd1e81756c6f3bc955"
+revision = "f8f99ab38893f61b11b7618eac43d8210e1e5a75"
 include = [
     "Cargo.toml",
     "LICENSE",

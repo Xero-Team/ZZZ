@@ -447,37 +447,33 @@ impl<C: HasConnection> X11rbClient<C> {
                 let server_owner = conn.get_selection_owner(server_atom)?.reply()?.owner;
                 let name = conn.get_atom_name(server_atom)?.reply()?.name;
 
-                let name = match String::from_utf8(name) {
-                    Ok(name) => name,
-                    _ => continue,
-                };
+                if let Ok(name) = String::from_utf8(name)
+                    && let Some(name) = name.strip_prefix("@server=")
+                    && name == im_name
+                {
+                    conn.convert_selection(
+                        client_window,
+                        server_atom,
+                        atoms.TRANSPORT,
+                        atoms.TRANSPORT,
+                        CURRENT_TIME,
+                    )?;
 
-                if let Some(name) = name.strip_prefix("@server=") {
-                    if name == im_name {
-                        conn.convert_selection(
-                            client_window,
-                            server_atom,
-                            atoms.TRANSPORT,
-                            atoms.TRANSPORT,
-                            CURRENT_TIME,
-                        )?;
+                    conn.flush()?;
 
-                        conn.flush()?;
-
-                        return Ok(Self {
-                            has_conn,
-                            atoms,
-                            server_atom,
-                            server_owner_window: server_owner,
-                            im_attributes: AHashMap::with_hasher(Default::default()),
-                            ic_attributes: AHashMap::with_hasher(Default::default()),
-                            im_window: x11rb::NONE,
-                            transport_max: 20,
-                            client_window,
-                            sequence: 0,
-                            buf: Vec::with_capacity(1024),
-                        });
-                    }
+                    return Ok(Self {
+                        has_conn,
+                        atoms,
+                        server_atom,
+                        server_owner_window: server_owner,
+                        im_attributes: AHashMap::with_hasher(Default::default()),
+                        ic_attributes: AHashMap::with_hasher(Default::default()),
+                        im_window: x11rb::NONE,
+                        transport_max: 20,
+                        client_window,
+                        sequence: 0,
+                        buf: Vec::with_capacity(1024),
+                    });
                 }
             }
 
@@ -567,7 +563,7 @@ impl<C: HasConnection> X11rbClient<C> {
                     Ok(false)
                 }
             }
-            Event::Error(ref err)
+            Event::Error(err)
                 if err.error_kind == x11rb::protocol::ErrorKind::Window
                     && err.bad_value == self.im_window =>
             {
