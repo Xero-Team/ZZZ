@@ -31,7 +31,13 @@ fn address() -> SocketAddr {
         ReleaseChannel::Stable => 43737 + USER_BLOCK,
     };
     let mut user_port = port;
-    let mut sys = System::new_all();
+    let mut sys = match System::new_all() {
+        Ok(system) => system,
+        Err(error) => {
+            log::error!("failed to initialize sysinfo: {error}");
+            return SocketAddr::V4(SocketAddrV4::new(LOCALHOST, user_port));
+        }
+    };
     sys.refresh_all();
     if let Ok(current_pid) = sysinfo::get_current_pid()
         && let Some(uid) = sys
