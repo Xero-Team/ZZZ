@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+#
+# Asserts that a Linux bundle only reaches outside of itself for glibc and the
+# compiler runtime.
+#
+# The editor has to start on systems where the third-party libraries it uses are
+# missing, older than expected, or otherwise broken. The dynamic loader aborts
+# before `main` when a single `DT_NEEDED` entry cannot be resolved, so every such
+# library has to ship inside the bundle (see `script/bundle-linux`). This script
+# is the gate that keeps it that way: it walks `DT_NEEDED` of the bundled
+# binaries and of every bundled library, and fails when one of them would be
+# resolved from the host.
+#
+# Usage: script/check-runtime-deps [--robustness] APP_DIR
+#
+# Arguments:
+#   APP_DIR        Directory containing bin/, libexec/ and lib/, i.e. the staged
+#                  `.app` directory produced by `script/bundle-linux`.
+#
+# Options:
+#   --robustness   Additionally verify that the editor still starts when the
+#                  host copies of the bundled libraries are unusable. Requires
+#                  `bwrap`; skipped with a warning when it is unavailable.
+
+set -euo pipefail
+
+usage() {
+    echo "Usage: ${0##*/} [--robustness] APP_DIR" >&2
+}
+
+die() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+# Libraries that come from glibc or the compiler runtime. They cannot be bundled:
+# they have to match the loader and the C library of the running system.
+is_glibc_library() {
+    case "$1" in
+        ld-linux* | libc.so.* | libm.so.* | libmvec.so.* | libpthread.so.* | \
+            libdl.so.* | librt.so.* | libresolv.so.* | libgcc_s.so.*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+needed_libraries() {
+    local binary="$1"
+    readelf -d "$binary" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'
+}
+
+# Bundled libraries are found relative to the binaries, so the bundle must keep
+# searching `$ORIGIN` instead of the build machine's paths.
+#
+# The tag has to stay `DT_RPATH` rather than `DT_RUNPATH`: the bundled libraries
+# carry no search path of their own, and only `DT_RPATH` is inherited by their
+# own dependencies. `DT_RUNPATH` would leave e.g. `libavcodec.so.63` unable to
+# find the bundled `libavutil.so.61`. That is why `script/bundle-linux` passes
+# `--disable-new-dtags`.
+check_runtime_search_path() {
+    local binary="$1"
+    local tag
+    local search_path
+
+    tag="$(readelf -d "$binary" | sed -n 's/.*(\(RPATH\|RUNPATH\)).*/\1/p')"
+    search_path="$(readelf -d "$binary" | sed -n 's/.*(RPATH\|RUNPATH).*\[\(.*\)\]/\1/p')"
+
+    if [[ -z "$tag" ]]; then
+        echo "error: ${binary#"$app_dir"/} has no RPATH, so bundled libraries cannot be found" >&2
+        return 1
+    fi
+    if [[ "$tag" != "RPATH" ]]; then
+        echo "error: ${binary#"$app_dir"/} uses RUNPATH, which bundled libraries do not inherit" >&2
+        return 1
+    fi
+    # shellcheck disable=SC2016 # `$ORIGIN` is a literal dynamic linker token here.
+    if [[ "$search_path" != *'$ORIGIN'* ]]; then
+        echo "error: ${binary#"$app_dir"/} does not search \$ORIGIN (found '${search_path}')" >&2
+        return 1
+    fi
+}
+
+check_dependencies() {
+    local binary="$1"
+    local library
+    local failures=0
+
+    while IFS= read -r library; do
+        if [[ -z "$library" ]] || is_glibc_library "$library"; then
+            continue
+        fi
+        if [[ -e "$app_dir/lib/$library" ]]; then
+            continue
+        fi
+
+        echo "error: ${binary#"$app_dir"/} needs '$library', which is neither bundled in lib/ nor provided by glibc" >&2
+        failures=$((failures + 1))
+    done < <(needed_libraries "$binary")
+
+    if [[ "$failures" -ne 0 ]]; then
+        return 1
+    fi
+}
+
+# Proves the contract by hiding the host copy of every bundled library and
+# checking that the editor still loads. This catches a bundle that silently
+# falls back to the system for one of its libraries.
+check_robustness() {
+    local editor="$app_dir/libexec/zzz-editor"
+
+    if ! command -v bwrap >/dev/null 2>&1; then
+        echo "warning: skipping robustness check; bwrap is not installed" >&2
+        return 0
+    fi
+
+    local empty_file
+    empty_file="$(mktemp)"
+    local -a sandbox_arguments=(--dev-bind / /)
+    local bundled_library
+    local library_name
+    local host_library
+    local hidden_libraries=0
+
+    for bundled_library in "$app_dir"/lib/*.so*; do
+        library_name="$(basename "$bundled_library")"
+        host_library="$(ldconfig -p | awk -v name="$library_name" '$1 == name { print $NF; exit }')"
+        if [[ -z "$host_library" ]]; then
+            continue
+        fi
+        # `ldconfig` reports the soname, which is usually a symlink; bwrap can
+        # only shadow the file the symlink points at.
+        host_library="$(readlink -f "$host_library")"
+
+        sandbox_arguments+=(--ro-bind "$empty_file" "$host_library")
+        hidden_libraries=$((hidden_libraries + 1))
+    done
+
+    if [[ "$hidden_libraries" -eq 0 ]]; then
+        rm -f "$empty_file"
+        echo "warning: skipping robustness check; no bundled library is present on this host" >&2
+        return 0
+    fi
+
+    local status=0
+    if ! bwrap "${sandbox_arguments[@]}" "$editor" --help >/dev/null 2>&1; then
+        echo "error: the editor does not start when the host copies of the bundled libraries are unusable" >&2
+        status=1
+    fi
+    rm -f "$empty_file"
+
+    if [[ "$status" -ne 0 ]]; then
+        return 1
+    fi
+
+    echo "robustness: the editor starts with $hidden_libraries host libraries made unusable"
+}
+
+run_robustness_check=false
+arguments=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        --robustness)
+            run_robustness_check=true
+            shift
+            ;;
+        -*)
+            usage
+            exit 1
+            ;;
+        *)
+            arguments+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ "${#arguments[@]}" -ne 1 ]]; then
+    usage
+    exit 1
+fi
+
+app_dir="${arguments[0]}"
+if [[ ! -d "$app_dir" ]]; then
+    die "$app_dir is not a directory"
+fi
+
+for required_path in libexec/zzz-editor bin/zzz lib; do
+    if [[ ! -e "$app_dir/$required_path" ]]; then
+        die "$app_dir does not look like a ZZZ bundle; $required_path is missing"
+    fi
+done
+
+if ! command -v readelf >/dev/null 2>&1; then
+    die "readelf is required; install binutils"
+fi
+
+failed=false
+for binary in "$app_dir/libexec/zzz-editor" "$app_dir/bin/zzz"; do
+    if ! check_dependencies "$binary"; then
+        failed=true
+    fi
+    if ! check_runtime_search_path "$binary"; then
+        failed=true
+    fi
+done
+
+for bundled_library in "$app_dir"/lib/*.so*; do
+    if [[ ! -f "$bundled_library" ]]; then
+        continue
+    fi
+    if ! check_dependencies "$bundled_library"; then
+        failed=true
+    fi
+done
+
+if [[ "$run_robustness_check" == true ]] && ! check_robustness; then
+    failed=true
+fi
+
+if [[ "$failed" == true ]]; then
+    die "the bundle would resolve libraries from the host system"
+fi
+
+echo "runtime dependencies: only glibc and the compiler runtime are resolved from the host"

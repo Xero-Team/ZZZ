@@ -29,6 +29,7 @@ Environment:
   ZZZ_BOLT_FDATA=/abs/file        Build host binary, then optimize it with BOLT using this .fdata
   ZZZ_BUILD_JOBS=<n>              Number of parallel Cargo jobs (defaults to host CPU count)
   ZZZ_CROSS_BUILD_JOBS=<n>        Jobs per optional cross-target build (defaults to half)
+  ZZZ_CHECK_RUNTIME_ROBUSTNESS=1  Also verify the editor starts when the host copies of the bundled libraries are unusable
   ZZZ_CARGO_DEB_VERSION=3.8.0     Required cargo-deb version when --deb is used
   ZZZ_CARGO_GENERATE_RPM_VERSION=0.21.0  Required cargo-generate-rpm version when --rpm is used
   "
@@ -293,6 +294,10 @@ export CC=${CC:-$(which clang)}
 # (see https://github.com/rust-lang/cargo/issues/5376), the
 # [target.aarch64-unknown-linux-gnu] section in config.toml has no effect here.
 base_rustflags="${RUSTFLAGS:-}"
+# `--disable-new-dtags` keeps DT_RPATH rather than DT_RUNPATH. The bundled
+# libraries have no search path of their own, and only DT_RPATH is inherited by
+# their dependencies, so RUNPATH would leave e.g. `libavcodec.so.63` unable to
+# find the bundled `libavutil.so.61`. `script/check-runtime-deps` enforces this.
 if [[ "$(uname -m)" == "aarch64" ]]; then
     link_rustflags=" -C link-arg=-fuse-ld=lld -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
 else
@@ -562,14 +567,27 @@ cp "${host_artifact_dir}/cli" "${zzz_dir}/bin/zzz"
 # Bundle libstdc++ so older supported systems can run binaries built with our
 # toolchain even when their system libstdc++.so.6 lacks required GLIBCXX symbols.
 #
+# Everything the editor links has to come from this directory except glibc and
+# the compiler runtime: a missing or mismatched host copy of any other library
+# makes the dynamic loader refuse to start the binary at all.
+#
 # Never bundle the GLib family or its private dependencies: host libraries that
 # get dlopen'd are built against the system GLib, and resolving them against an
 # older bundled copy fails with missing symbols.
+#
+# libasound is bundled for the same reason as the rest: the editor links it
+# through cpal, so a broken or absent system archive would abort startup before
+# the window opens. Bundling it can only affect audio, which already degrades
+# gracefully when ALSA refuses to enumerate devices.
+#
+# libz stays excluded on purpose: the build statically links its own zlib. If a
+# dependency ever reintroduces a dynamic zlib, `script/check-runtime-deps` fails
+# and this exclusion has to be revisited.
 find_libs() {
     LD_LIBRARY_PATH="${FFMPEG_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
       ldd "${host_artifact_dir}/zzz" |\
         sed -n 's/^[[:space:]]*.*=> \(.*\) (0x[[:xdigit:]]*)$/\1/p' |\
-        grep -v '\<\(ld-linux\|libc.so\|libgcc_s.so\|libm.so\|libmvec.so\|libpthread.so\|libdl.so\|librt.so\|libasound.so\)' |\
+        grep -v '\<\(ld-linux\|libc.so\|libgcc_s.so\|libm.so\|libmvec.so\|libpthread.so\|libdl.so\|librt.so\)' |\
         grep -v '\<\(libglib-2.0.so\|libgobject-2.0.so\|libgio-2.0.so\|libgmodule-2.0.so\|libpcre.so\|libpcre2-8.so\|libmount.so\|libblkid.so\|libselinux.so\|libffi.so\|libresolv.so\|libz.so\)'
 }
 
@@ -613,6 +631,16 @@ chmod +x "${zzz_dir}/share/applications/$APP_ID.desktop"
 
 # Copy generated licenses so they'll end up in archive too
 cp "assets/licenses.md" "${zzz_dir}/licenses.md"
+
+# Refuse to ship a bundle that would fall back to the host for a library: the
+# dynamic loader aborts before `main` when one of those is missing or
+# incompatible. Set ZZZ_CHECK_RUNTIME_ROBUSTNESS=1 to additionally prove that the
+# editor still starts when the host copies of the bundled libraries are broken.
+if [[ "${ZZZ_CHECK_RUNTIME_ROBUSTNESS:-}" == "1" ]]; then
+    script/check-runtime-deps --robustness "${zzz_dir}"
+else
+    script/check-runtime-deps "${zzz_dir}"
+fi
 
 # Create archive out of everything that's in the temp directory
 arch=$(uname -m)
