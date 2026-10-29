@@ -13,12 +13,13 @@ use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World, WorldExt};
 use typst_kit::datetime::Time;
-use typst_kit::downloader::SystemDownloader;
 use typst_kit::files::{FileLoader, FileStore, FsRoot};
 use typst_kit::fonts::{self, FontStore};
 use typst_kit::packages::{FsPackages, SystemPackages, UniversePackages};
 use typst_layout::PagedDocument;
 use typst_svg::SvgOptions;
+
+use crate::package_downloader::PackageDownloader;
 
 static LIBRARY: LazyLock<LazyHash<Library>> =
     LazyLock::new(|| LazyHash::new(Library::builder().build()));
@@ -300,7 +301,8 @@ fn escape_typst_string(value: &str) -> String {
 }
 
 pub(crate) fn download_package(package: &PackageSpec) -> Result<()> {
-    SystemPackages::new(SystemDownloader::new("ZZZ Typst Preview"))
+    let downloader = PackageDownloader::new().context("failed to initialize the downloader")?;
+    SystemPackages::new(downloader)
         .obtain(package)
         .with_context(|| format!("failed to download Typst package {package}"))?;
     Ok(())

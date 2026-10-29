@@ -1,6 +1,7 @@
 use gpui::{App, actions};
 use workspace::Workspace;
 
+mod package_downloader;
 pub mod typst_preview_view;
 mod typst_world;
 
