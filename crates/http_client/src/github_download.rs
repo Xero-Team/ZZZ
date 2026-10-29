@@ -147,9 +147,12 @@ fn ensure_download_success(status: http::StatusCode, url: &str) -> Result<()> {
 }
 
 /// Checks the SHA-256 digest of a downloaded asset against the expected one.
+///
+/// Hex digests are compared case-insensitively: release metadata may spell them
+/// with either case.
 fn verify_sha256(url: &str, expected: &str, actual: &str) -> Result<()> {
     anyhow::ensure!(
-        actual == expected,
+        actual.eq_ignore_ascii_case(expected),
         "{url} asset got SHA-256 mismatch. Expected: {expected}, Got: {actual}",
     );
     Ok(())
@@ -495,6 +498,33 @@ mod tests {
                     .mode();
                 assert_eq!(mode & 0o111, 0o111, "binary should be executable");
             }
+        });
+    }
+
+    #[test]
+    fn downloads_raw_binary_with_uppercase_digest_into_destination_dir() {
+        futures::executor::block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let destination_path = temp_dir.path().join("v_1");
+            let contents = b"#!/bin/sh\necho hello\n".to_vec();
+            let expected_sha_256 = hex::encode(Sha256::digest(&contents)).to_uppercase();
+            let client = StaticResponseClient::ok(contents);
+
+            download_server_raw_binary(
+                &client,
+                "https://example.com/agent-binary",
+                Some(&expected_sha_256),
+                &destination_path,
+                "agent-binary",
+            )
+            .await
+            .unwrap();
+
+            let binary_path = destination_path.join("agent-binary");
+            assert_eq!(
+                std::fs::read(&binary_path).unwrap(),
+                b"#!/bin/sh\necho hello\n"
+            );
         });
     }
 
