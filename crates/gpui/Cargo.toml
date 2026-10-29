@@ -62,6 +62,7 @@ futures-concurrency.workspace = true
 gpui_macros.workspace = true
 gpui_shared_string.workspace = true
 http_client.workspace = true
+icu_segmenter.workspace = true
 image.workspace = true
 inventory.workspace = true
 itertools.workspace = true
@@ -99,6 +100,7 @@ strum.workspace = true
 sum_tree.workspace = true
 taffy = "=0.15.0"
 thiserror.workspace = true
+unicode-segmentation.workspace = true
 gpui_util.workspace = true
 hdrhistogram = { workspace = true, optional = true }
 waker-fn = "1.2.0"
@@ -157,7 +159,7 @@ gpui_util = { workspace = true }
 lyon = { version = "1.0", features = ["extra"] }
 rand.workspace = true
 scheduler = { workspace = true, features = ["test-support"] }
-unicode-segmentation = { workspace = true }
+util_macros.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 http_client = { workspace = true, features = ["test-support"] }

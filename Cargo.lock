@@ -6400,6 +6400,7 @@ dependencies = [
  "gpui_web",
  "hdrhistogram",
  "http_client",
+ "icu_segmenter",
  "image",
  "inventory",
  "itertools 0.15.0",
