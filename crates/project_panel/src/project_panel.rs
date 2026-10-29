@@ -7400,7 +7400,8 @@ impl ProjectPanel {
             .is_none_or(|entry| entry.is_ignored && !entry.is_always_included);
         if skip_ignored && is_ignored {
             if self.index_for_entry(entry_id, worktree_id).is_none() {
-                anyhow::bail!("can't reveal an ignored entry in the project panel");
+                log::debug!("skipping reveal of an ignored entry not shown in the project panel");
+                return Ok(());
             }
 
             self.selection = Some(SelectedEntry {
