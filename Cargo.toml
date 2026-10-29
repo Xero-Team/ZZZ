@@ -229,6 +229,7 @@ default-members = ["crates/zzz"]
 # dependencies but are kept out of the workspace so that workspace-wide
 # lint/fmt/test runs do not touch upstream code.
 exclude = [
+    "vendor/any_vec",
     "vendor/async-pipe",
     "vendor/dap-types",
     "vendor/font-kit",
@@ -970,6 +971,11 @@ features = [
 ]
 
 [patch.crates-io]
+# `any_vec` 0.15.0 reaches for `Layout::dangling` under `cfg(miri)`, which
+# nightly removed in favour of `Layout::dangling_ptr`. Keep the published API
+# and build the same aligned, non-null pointer with the stable strict-provenance
+# helper so `cargo miri test` works again.
+any_vec = { path = "vendor/any_vec" }
 async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd71e4e94fbda54ce6302444de14f4d190e" }
 # `block` 0.1.6 models `_NSConcreteStackBlock` as an uninhabited enum, which
 # newer Rust versions reject for extern statics. Keep its API while using an

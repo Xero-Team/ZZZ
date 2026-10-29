@@ -1,6 +1,14 @@
 schema = 1
 
 [[package]]
+name = "any_vec"
+repository = "https://github.com/tower120/any_vec.git"
+source_ref = "refs/tags/v0.15.0"
+revision = "1a0ccfc53730e8b66fb7d3e479762712767957ab"
+include = ["Cargo.toml", "LICENSE-APACHE", "LICENSE-MIT", "Readme.md", "src"]
+patches = ["vendor/patches/any_vec/0001-miri-dangling-pointer.patch"]
+
+[[package]]
 name = "async-pipe"
 repository = "https://github.com/routerify/async-pipe-rs.git"
 source_ref = "refs/tags/v0.1.3"
