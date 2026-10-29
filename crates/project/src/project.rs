@@ -218,6 +218,13 @@ pub trait ProjectItem: 'static {
     fn is_dirty(&self) -> bool;
 }
 
+/// The host that owns a set of paths: either this machine or a remote server.
+#[derive(Debug, Clone)]
+pub enum ProjectHost<'a> {
+    Local,
+    Remote(&'a RemoteConnectionOptions),
+}
+
 #[derive(Clone)]
 pub enum OpenedBufferEvent {
     Disconnected,
@@ -2259,9 +2266,8 @@ impl Project {
     ) -> Option<bool> {
         paths
             .iter()
-            .map(|path| self.visibility_for_path(path, exclude_sub_dirs, cx))
+            .filter_map(|path| self.visibility_for_path(path, exclude_sub_dirs, cx))
             .max()
-            .flatten()
     }
 
     pub fn visibility_for_path(
@@ -2298,9 +2304,8 @@ impl Project {
     pub fn visibility_for_subpaths(&self, paths: &[PathBuf], cx: &App) -> Option<bool> {
         paths
             .iter()
-            .map(|path| self.visibility_for_subpath(path, cx))
+            .filter_map(|path| self.visibility_for_subpath(path, cx))
             .max()
-            .flatten()
     }
 
     fn visibility_for_subpath(&self, path: &Path, cx: &App) -> Option<bool> {

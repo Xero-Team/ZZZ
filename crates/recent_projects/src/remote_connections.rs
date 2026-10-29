@@ -18,9 +18,9 @@ use remote::{
 pub use settings::SshConnection;
 use settings::{DevContainerConnection, ExtendingVec, RegisterSetting, Settings, WslConnection};
 use util::{ResultExt, paths::PathWithPosition};
+use project::ProjectHost;
 use workspace::{
-    AppState, MultiWorkspace, OpenOptions, SerializedWorkspaceLocation, Workspace,
-    find_existing_workspace,
+    AppState, MultiWorkspace, OpenOptions, Workspace, find_existing_workspace,
 };
 
 pub use remote_connection::{
@@ -137,15 +137,19 @@ pub async fn open_remote_project(
 ) -> Result<WindowHandle<MultiWorkspace>> {
     let created_new_window = open_options.requesting_window.is_none();
 
-    let (existing, open_visible) = find_existing_workspace(
+    let existing = find_existing_workspace(
         &paths,
         &open_options,
-        &SerializedWorkspaceLocation::Remote(connection_options.clone()),
+        &ProjectHost::Remote(&connection_options),
         cx,
-    )
-    .await;
+    );
 
-    if let Some((existing_window, existing_workspace)) = existing {
+    if let Some(workspace::WorkspaceOpenTarget {
+        window: existing_window,
+        workspace: existing_workspace,
+        visible: open_visible,
+    }) = existing
+    {
         let remote_connection = cx.update(|cx| {
             existing_workspace
                 .read(cx)
@@ -591,7 +595,7 @@ mod tests {
     use rpc::proto;
     use serde_json::json;
     use util::path;
-    use workspace::find_existing_workspace;
+    use workspace::{find_existing_workspace, open_paths};
 
     #[gpui::test]
     async fn test_open_remote_project_with_mock_connection(
@@ -785,32 +789,33 @@ mod tests {
             .unwrap();
 
         let search_paths = vec![PathBuf::from(path!("/project/src/lib.rs"))];
-        let (found, _) = find_existing_workspace(
+        let found = find_existing_workspace(
             &search_paths,
             &workspace::OpenOptions::default(),
-            &SerializedWorkspaceLocation::Remote(other_opts),
+            &ProjectHost::Remote(&other_opts),
             &mut async_cx,
-        )
-        .await;
+        );
         assert!(
             found.is_none(),
             "a matching path on another remote must not satisfy the request"
         );
 
         // Verify find_existing_workspace discovers the remote workspace.
-        let (found, _open_visible) = find_existing_workspace(
+        let found = find_existing_workspace(
             &search_paths,
             &workspace::OpenOptions::default(),
-            &SerializedWorkspaceLocation::Remote(opts.clone()),
+            &ProjectHost::Remote(&opts),
             &mut async_cx,
-        )
-        .await;
-
-        assert!(
-            found.is_some(),
-            "find_existing_workspace should locate the existing remote workspace"
         );
-        let (found_window, found_workspace) = found.unwrap();
+
+        let Some(workspace::WorkspaceOpenTarget {
+            window: found_window,
+            workspace: found_workspace,
+            ..
+        }) = found
+        else {
+            panic!("find_existing_workspace should locate the existing remote workspace");
+        };
         assert_eq!(
             found_window, first_window,
             "find_existing_workspace should return the same window"
@@ -846,6 +851,134 @@ mod tests {
             still_first_window, first_window,
             "The window handle should be the same after reuse"
         );
+    }
+
+    #[gpui::test]
+    async fn test_local_files_reuse_local_workspace_when_remote_workspace_is_active(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        let app_state = init_test(cx);
+        let executor = cx.executor();
+
+        cx.update(|cx| {
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+        });
+        server_cx.update(|cx| {
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+        });
+
+        let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
+
+        let remote_fs = FakeFs::new(server_cx.executor());
+        remote_fs
+            .insert_tree(path!("/project"), json!({ "README.md": "" }))
+            .await;
+
+        server_cx.update(HeadlessProject::init);
+        let languages = Arc::new(language::LanguageRegistry::new(server_cx.executor()));
+        let _headless = server_cx.new(|cx| {
+            HeadlessProject::new(
+                HeadlessAppState {
+                    session: server_session,
+                    fs: remote_fs.clone(),
+                    http_client: Arc::new(BlockedHttpClient),
+                    node_runtime: NodeRuntime::unavailable(),
+                    languages,
+                    extension_host_proxy: Arc::new(ExtensionHostProxy::new()),
+                    startup_time: std::time::Instant::now(),
+                },
+                false,
+                cx,
+            )
+        });
+        drop(connect_guard);
+
+        let mut async_cx = cx.to_async();
+        open_remote_project(
+            opts,
+            vec![PathBuf::from(path!("/project"))],
+            app_state.clone(),
+            workspace::OpenOptions::default(),
+            &mut async_cx,
+        )
+        .await
+        .expect("opening the remote project should succeed");
+        executor.run_until_parked();
+
+        let window = cx.update(|cx| cx.windows()[0].downcast::<MultiWorkspace>().unwrap());
+        let remote_workspace = window
+            .read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone())
+            .unwrap();
+
+        app_state
+            .fs
+            .as_fake()
+            .insert_tree(
+                path!("/"),
+                json!({
+                    "local": { "inside.txt": "" },
+                    "outside": { "loose.txt": "" },
+                }),
+            )
+            .await;
+        let local_project = Project::test(
+            app_state.fs.clone(),
+            [path!("/local").as_ref()],
+            cx,
+        )
+        .await;
+        let local_workspace = window
+            .update(cx, |multi_workspace, window, cx| {
+                multi_workspace.open_sidebar(cx);
+                multi_workspace.test_add_workspace(local_project, window, cx)
+            })
+            .unwrap();
+
+        for (path, wait) in [
+            (path!("/outside/loose.txt"), false),
+            (path!("/local/inside.txt"), true),
+        ] {
+            window
+                .update(cx, |multi_workspace, window, cx| {
+                    multi_workspace.activate(remote_workspace.clone(), None, window, cx);
+                    window.activate_window();
+                })
+                .unwrap();
+
+            let result = cx
+                .update(|cx| {
+                    open_paths(
+                        &[PathBuf::from(path)],
+                        app_state.clone(),
+                        workspace::OpenOptions {
+                            wait,
+                            ..Default::default()
+                        },
+                        cx,
+                    )
+                })
+                .await;
+
+            let result = result.expect("opening a local file should succeed");
+            assert_eq!(result.window, window, "{path}, wait: {wait}");
+            assert_ne!(
+                result.workspace, remote_workspace,
+                "a local file must not open in the active remote workspace: {path}, wait: {wait}"
+            );
+            assert!(
+                result
+                    .workspace
+                    .read_with(cx, |workspace, cx| workspace.project.read(cx).is_local()),
+                "a local file must open in a local workspace: {path}, wait: {wait}"
+            );
+            assert_eq!(cx.update(|cx| cx.windows().len()), 1);
+            window
+                .read_with(cx, |multi_workspace, _| {
+                    assert_ne!(multi_workspace.workspace(), &remote_workspace);
+                })
+                .unwrap();
+        }
     }
 
     #[gpui::test]
