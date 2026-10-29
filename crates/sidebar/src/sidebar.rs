@@ -814,16 +814,12 @@ fn workspace_menu_worktree_labels(
 
             if let Some(snapshot) = repository_snapshot {
                 let worktree_name = if snapshot.is_linked_worktree() {
-                    snapshot
-                        .main_worktree_abs_path()
-                        .and_then(|main_worktree_path| {
-                            project::linked_worktree_short_name(
-                                main_worktree_path,
-                                root_path,
-                                snapshot.path_style,
-                            )
-                        })
-                        .unwrap_or_else(|| folder_name.clone())
+                    project::linked_worktree_short_name(
+                        snapshot.linked_worktree_anchor_path(),
+                        root_path,
+                        snapshot.path_style,
+                    )
+                    .unwrap_or_else(|| folder_name.clone())
                 } else {
                     tr(cx, "sidebar.worktree.main", "main")
                 };
