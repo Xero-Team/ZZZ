@@ -23,3 +23,7 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [env]
 MACOSX_DEPLOYMENT_TARGET = "10.15.7"
+# `cargo miri test` keeps the harness's global executor threads alive until the
+# process exits, which Miri rejects as a leak. Ignore that check so the test
+# suite can run under Miri; an explicit MIRIFLAGS in the environment still wins.
+MIRIFLAGS = { value = "-Zmiri-ignore-leaks", force = false }
