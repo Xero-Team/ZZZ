@@ -17,6 +17,8 @@ use git_ui::{file_diff_view::FileDiffView, multi_diff_view::MultiDiffView};
 use gpui::{App, AsyncApp, Global, WindowHandle};
 use onboarding::FIRST_OPEN;
 use onboarding::show_onboarding_view;
+#[cfg(test)]
+use project::ProjectHost;
 use recent_projects::{RemoteSettings, navigate_to_positions, open_remote_project};
 use remote::{RemoteConnectionOptions, WslConnectionOptions};
 use settings::Settings;
@@ -1891,13 +1893,11 @@ mod tests {
         let window_to_replace = workspace::find_existing_workspace(
             &paths,
             &workspace::OpenOptions::default(),
-            &workspace::SerializedWorkspaceLocation::Local,
+            &ProjectHost::Local,
             &mut cx.to_async(),
         )
-        .await
-        .0
         .unwrap()
-        .0;
+        .window;
 
         let errored_reuse = cx
             .spawn({
