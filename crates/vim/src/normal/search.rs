@@ -541,7 +541,7 @@ impl Vim {
                     if search_bar.should_use_smartcase_search(cx) {
                         options.set(
                             SearchOptions::CASE_SENSITIVE,
-                            search_bar.is_contains_uppercase(&query),
+                            search_bar.contains_uppercase(&query),
                         );
                     }
 
@@ -616,7 +616,7 @@ impl Vim {
             } else if search_bar.should_use_smartcase_search(cx) {
                 options.set(
                     SearchOptions::CASE_SENSITIVE,
-                    search_bar.is_contains_uppercase(&search),
+                    search_bar.contains_uppercase(&search),
                 );
             } else {
                 // Fallback: no explicit i/I flags and smartcase disabled;

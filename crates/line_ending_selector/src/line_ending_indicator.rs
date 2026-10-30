@@ -4,7 +4,8 @@ use i18n::tr;
 use language::LineEnding;
 use ui::{Tooltip, prelude::*};
 use workspace::{
-    HideStatusItem, StatusBarSettings, StatusItemView, item::ItemHandle, item::Settings,
+    HideStatusItem, StatusBarSettings, StatusItemView,
+    item::{ItemHandle, Settings},
 };
 
 use crate::{LineEndingSelector, Toggle};

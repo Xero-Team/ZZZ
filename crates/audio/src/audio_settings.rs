@@ -34,10 +34,10 @@ impl Settings for AudioSettings {
                 .unwrap_or(false),
             output_audio_device: audio
                 .and_then(|audio| audio.output_audio_device.as_ref())
-                .and_then(|device| parse_device_id(device.0.as_ref())),
+                .and_then(|device| parse_device_id(device.0.as_deref())),
             input_audio_device: audio
                 .and_then(|audio| audio.input_audio_device.as_ref())
-                .and_then(|device| parse_device_id(device.0.as_ref())),
+                .and_then(|device| parse_device_id(device.0.as_deref())),
         }
     }
 }
@@ -46,7 +46,7 @@ impl Settings for AudioSettings {
 ///
 /// An unparsable id is logged and treated as "no device selected", so a stale
 /// or hand-edited setting falls back to the default device instead of failing.
-fn parse_device_id(id: Option<&String>) -> Option<DeviceId> {
+fn parse_device_id(id: Option<&str>) -> Option<DeviceId> {
     let id = id?;
     DeviceId::from_str(id).log_err()
 }
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn unparsable_device_ids_fall_back_to_no_device() {
         assert_eq!(parse_device_id(None), None);
-        assert_eq!(parse_device_id(Some(&"not-a-device-id".to_owned())), None);
+        assert_eq!(parse_device_id(Some("not-a-device-id")), None);
     }
 
     #[test]
@@ -98,7 +98,7 @@ mod tests {
         // hard-coded backend name would make this test platform-specific.
         let device_id = cpal::DeviceId::new(cpal::default_host().id(), "device-0");
         assert_eq!(
-            parse_device_id(Some(&device_id.to_string())),
+            parse_device_id(Some(device_id.to_string().as_str())),
             Some(device_id)
         );
     }

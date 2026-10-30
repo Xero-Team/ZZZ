@@ -120,24 +120,25 @@ fn total_memory() -> u64 {
 impl Display for SystemSpecs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let os_information = format!("OS: {} {}", self.os_name, self.os_version);
+
+        let release_information = match &self.commit_sha {
+            Some(commit_sha) => format!("{} {}", self.release_channel, commit_sha),
+            None => self.release_channel.to_owned(),
+        };
+        let bundle_type_information = match &self.bundle_type {
+            Some(bundle_type) => format!("({bundle_type})"),
+            None => String::new(),
+        };
+        let build_flavor = if cfg!(debug_assertions) {
+            "(Taylor's Version)"
+        } else {
+            ""
+        };
         let app_version_information = format!(
-            "ZZZ: v{} ({}) {}{}",
+            "ZZZ: v{} ({release_information}) {bundle_type_information}{build_flavor}",
             self.app_version,
-            match &self.commit_sha {
-                Some(commit_sha) => format!("{} {}", self.release_channel, commit_sha),
-                None => self.release_channel.to_owned(),
-            },
-            if let Some(bundle_type) = &self.bundle_type {
-                format!("({bundle_type})")
-            } else {
-                String::new()
-            },
-            if cfg!(debug_assertions) {
-                "(Taylor's Version)"
-            } else {
-                ""
-            },
         );
+
         let system_specs = [
             app_version_information,
             os_information,
@@ -169,7 +170,7 @@ fn try_determine_available_gpus() -> Option<String> {
                 .args(["--summary"])
                 .output()
                 .map_or_else(
-                    |_| "Failed to run `vulkaninfo --summary`".to_owned(),
+                    |error| format!("Failed to run `vulkaninfo --summary`: {error}"),
                     |output| {
                         [
                             "<details><summary>`vulkaninfo --summary` output</summary>",
@@ -285,11 +286,10 @@ pub fn read_gpu_info_from_sys_class_drm() -> anyhow::Result<Vec<GpuInfo>> {
 fn read_pci_id_from_path(path: impl AsRef<std::path::Path>) -> anyhow::Result<u16> {
     use anyhow::Context as _;
     let id = std::fs::read_to_string(path)?;
+    let id = id.trim();
     let id = id
-        .trim()
         .strip_prefix("0x")
-        .context("Not a device ID")
-        .context(id.clone())?;
+        .with_context(|| format!("not a device id: {id:?}"))?;
     anyhow::ensure!(
         id.len() == 4,
         "Not a device id, expected 4 digits, found {}",
@@ -396,5 +396,31 @@ mod tests {
         assert!(rendered.contains("Memory:"));
         assert!(rendered.contains("Architecture: x86_64"));
         assert!(rendered.contains("GPU: GPU A || Driver B || Info C"));
+    }
+
+    #[test]
+    fn display_preserves_spacing_without_bundle_type() {
+        let specs = SystemSpecs {
+            app_version: "1.2.3".to_string(),
+            release_channel: "ZZZ Dev",
+            os_name: "TestOS".to_string(),
+            os_version: "9.9".to_string(),
+            memory: 1024,
+            architecture: "x86_64",
+            commit_sha: Some("abcdef0".to_string()),
+            bundle_type: None,
+            gpu_specs: None,
+        };
+
+        let expected_flavor = if cfg!(debug_assertions) {
+            "(Taylor's Version)"
+        } else {
+            ""
+        };
+        assert!(
+            specs
+                .to_string()
+                .starts_with(&format!("ZZZ: v1.2.3 (ZZZ Dev abcdef0) {expected_flavor}"))
+        );
     }
 }

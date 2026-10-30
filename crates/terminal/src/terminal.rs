@@ -51,7 +51,7 @@ use terminal_hyperlinks::RegexSearches;
 use terminal_settings::{AlternateScroll, CursorShape, TerminalSettings};
 use theme::{ActiveTheme, Theme};
 use urlencoding;
-use util::{paths::PathStyle, truncate_and_trailoff};
+use util::{ResultExt as _, paths::PathStyle, truncate_and_trailoff};
 
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
@@ -568,8 +568,6 @@ impl TerminalBuilder {
 
             #[cfg(windows)]
             let shell_program = shell_params.as_ref().map(|params| {
-                use util::ResultExt;
-
                 Self::resolve_path(&params.program)
                     .log_err()
                     .unwrap_or(params.program.clone())
@@ -1119,7 +1117,7 @@ impl Terminal {
                     ..
                 } = &self.terminal_type
                 {
-                    pty_tx.0.send(Msg::Resize(new_bounds.into())).ok();
+                    pty_tx.0.send(Msg::Resize(new_bounds.into())).log_err();
                 }
 
                 term.resize(new_bounds);
@@ -1587,7 +1585,7 @@ impl Terminal {
         let Some(pty_tx) = pty_tx.take() else {
             return;
         };
-        pty_tx.0.send(Msg::Shutdown).ok();
+        pty_tx.0.send(Msg::Shutdown).log_err();
         info.terminate_child_process();
         let info = info.clone();
         let timer = self.background_executor.timer(Duration::from_millis(100));
@@ -2505,7 +2503,7 @@ impl Terminal {
         });
 
         if let Some(tx) = &self.completion_tx {
-            tx.try_send(exit_status).ok();
+            tx.try_send(exit_status).log_err();
         }
         if let Some(e) = exit_status {
             self.child_exited = Some(e);

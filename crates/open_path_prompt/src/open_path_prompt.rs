@@ -344,7 +344,9 @@ impl PickerDelegate for OpenPathDelegate {
                 ..
             } => {
                 if parent_path == &dir
-                    && user_input.as_ref().map(|input| &input.file.string) == Some(&suffix)
+                    && user_input
+                        .as_ref()
+                        .is_some_and(|input| input.file.string == suffix)
                 {
                     None
                 } else {
@@ -536,8 +538,7 @@ impl PickerDelegate for OpenPathDelegate {
             let candidates = new_entries
                 .iter()
                 .filter_map(|entry| {
-                    if is_create_state && !entry.is_dir && Some(&suffix) == Some(&entry.path.string)
-                    {
+                    if is_create_state && !entry.is_dir && entry.path.string == suffix {
                         None
                     } else if !suffix.is_empty() && entry.path.string == current_dir {
                         None

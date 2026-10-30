@@ -390,7 +390,11 @@ impl ExtensionStore {
                             event_path.components().next()
                             && let Some(extension_id) = extension_dir_name.to_str()
                         {
-                            reload_tx.unbounded_send(Some(extension_id.into())).ok();
+                            if let Err(error) = reload_tx.unbounded_send(Some(extension_id.into()))
+                                && !error.is_disconnected()
+                            {
+                                log::warn!("failed to schedule extension reload: {error}");
+                            }
                         }
                     }
                 }
@@ -406,14 +410,24 @@ impl ExtensionStore {
         cx: &mut Context<Self>,
     ) -> impl Future<Output = ()> + use<> {
         let (tx, rx) = oneshot::channel();
-        self.reload_complete_senders.push(tx);
-        self.reload_tx
-            .unbounded_send(modified_extension)
-            .expect("reload task exited");
-        cx.emit(Event::StartedReloading);
+        let reload_scheduled = match self.reload_tx.unbounded_send(modified_extension) {
+            Ok(()) => {
+                self.reload_complete_senders.push(tx);
+                cx.emit(Event::StartedReloading);
+                true
+            }
+            Err(error) => {
+                log::error!("failed to schedule extension reload: {error}");
+                false
+            }
+        };
 
         async move {
-            rx.await.ok();
+            if reload_scheduled {
+                if let Err(error) = rx.await {
+                    log::error!("extension reload was canceled before completion: {error}");
+                }
+            }
         }
     }
 

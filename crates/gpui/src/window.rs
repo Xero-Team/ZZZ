@@ -6721,7 +6721,8 @@ mod tests {
         assert!(!pacer.should_defer(start + interval * 2, Some(interval)));
 
         // Even a stall just short of another full interval must not cause a burst.
-        let after_stall = start + interval * 4 - std::time::Duration::from_millis(1);
+        let after_stall =
+            start + interval * 3 + interval.saturating_sub(std::time::Duration::from_millis(1));
         assert!(!pacer.should_defer(after_stall, Some(interval)));
         assert!(pacer.should_defer(after_stall + interval / 2, Some(interval)));
         assert!(!pacer.should_defer(after_stall + interval, Some(interval)));

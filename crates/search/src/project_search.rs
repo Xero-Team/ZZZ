@@ -7,6 +7,7 @@ use crate::{
         ActionButtonState, HistoryNavigationDirection, alignment_element, input_base_styles,
         render_action_button, render_text_input, should_navigate_history,
     },
+    text_contains_uppercase,
     text_finder::TextFinder,
 };
 use anyhow::Context as _;
@@ -228,10 +229,6 @@ pub fn init(cx: &mut App) {
         });
     })
     .detach();
-}
-
-fn contains_uppercase(str: &str) -> bool {
-    str.chars().any(|c| c.is_uppercase())
 }
 
 pub struct ProjectSearch {
@@ -1129,7 +1126,7 @@ impl ProjectSearchView {
                     let query = this.search_query_text(cx);
                     if !query.is_empty()
                         && this.search_options.contains(SearchOptions::CASE_SENSITIVE)
-                            != contains_uppercase(&query)
+                            != text_contains_uppercase(&query)
                     {
                         this.toggle_search_option(SearchOptions::CASE_SENSITIVE, cx);
                     }
@@ -1818,7 +1815,7 @@ impl ProjectSearchView {
         if EditorSettings::get_global(cx).use_smartcase_search
             && !query.is_empty()
             && self.search_options.contains(SearchOptions::CASE_SENSITIVE)
-                != contains_uppercase(query)
+                != text_contains_uppercase(query)
         {
             self.toggle_search_option(SearchOptions::CASE_SENSITIVE, cx)
         }

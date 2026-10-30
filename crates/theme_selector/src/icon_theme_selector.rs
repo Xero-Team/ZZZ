@@ -74,7 +74,7 @@ impl IconThemeSelectorDelegate {
     pub fn new(
         selector: WeakEntity<IconThemeSelector>,
         fs: Arc<dyn Fs>,
-        themes_filter: Option<&Vec<String>>,
+        themes_filter: Option<&[String]>,
         cx: &mut Context<IconThemeSelector>,
     ) -> Self {
         let theme_settings = ThemeSettings::get_global(cx);
@@ -88,7 +88,9 @@ impl IconThemeSelectorDelegate {
             .into_iter()
             .filter(|meta| {
                 if let Some(theme_filter) = themes_filter {
-                    theme_filter.contains(&meta.name.to_string())
+                    theme_filter
+                        .iter()
+                        .any(|theme_name| theme_name.as_str() == meta.name.as_ref())
                 } else {
                     true
                 }

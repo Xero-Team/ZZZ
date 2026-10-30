@@ -19,13 +19,21 @@ const ZZZ_REPO_URL: &str = "https://github.com/Xero-Team/ZZZ";
 
 const REQUEST_FEATURE_URL: &str = "https://github.com/Xero-Team/ZZZ/issues/new";
 
+fn copied_into_clipboard_title(cx: &App) -> String {
+    i18n::tr(
+        cx,
+        "auto.feedback.feedback.prompt.title.copied.into.clipboard",
+        "Copied into clipboard",
+    )
+}
+
+fn ok_button_label(cx: &App) -> String {
+    i18n::tr(cx, "auto.feedback.feedback.prompt_button.ok", "OK")
+}
+
 fn file_bug_report_url(specs: &SystemSpecs) -> String {
     format!(
-        concat!(
-            "https://github.com/Xero-Team/ZZZ/issues/new",
-            "?",
-            "body=Bug%20report%0A%0AEnvironment%3A%20{}"
-        ),
+        "{REQUEST_FEATURE_URL}?body=Bug%20report%0A%0AEnvironment%3A%20{}",
         urlencoding::encode(&specs.to_string())
     )
 }
@@ -35,12 +43,8 @@ pub fn init(cx: &mut App) {
         workspace
             .register_action(|_, _: &CopySystemSpecsIntoClipboard, window, cx| {
                 let specs = SystemSpecs::new(window, cx);
-                let copied_into_clipboard = i18n::tr(
-                    cx,
-                    "auto.feedback.feedback.prompt.title.copied.into.clipboard",
-                    "Copied into clipboard",
-                );
-                let ok = i18n::tr(cx, "auto.feedback.feedback.prompt_button.ok", "OK");
+                let copied_into_clipboard = copied_into_clipboard_title(cx);
+                let ok = ok_button_label(cx);
 
                 cx.spawn_in(window, async move |_, cx| {
                     let specs = specs.await.to_string();
@@ -65,17 +69,9 @@ pub fn init(cx: &mut App) {
                 cx.write_to_clipboard(ClipboardItem::new_string(clipboard_text.clone()));
                 drop(window.prompt(
                     PromptLevel::Info,
-                    &i18n::tr(
-                        cx,
-                        "auto.feedback.feedback.prompt.title.copied.into.clipboard",
-                        "Copied into clipboard",
-                    ),
+                    &copied_into_clipboard_title(cx),
                     Some(&clipboard_text),
-                    &[gpui::PromptButton::ok(i18n::tr(
-                        cx,
-                        "auto.feedback.feedback.prompt_button.ok",
-                        "OK",
-                    ))],
+                    &[gpui::PromptButton::ok(ok_button_label(cx))],
                     cx,
                 ));
             })

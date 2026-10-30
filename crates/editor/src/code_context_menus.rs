@@ -356,7 +356,7 @@ impl CompletionsMenu {
     pub fn new_snippet_choices(
         id: CompletionId,
         sort_completions: bool,
-        choices: &Vec<String>,
+        choices: &[String],
         initial_position: Anchor,
         selection: Range<text::Anchor>,
         buffer: Entity<Buffer>,

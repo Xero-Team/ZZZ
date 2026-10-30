@@ -978,10 +978,16 @@ impl WindowsPlatformInner {
             return false;
         };
         let mut lock = all_windows.write();
-        let index = lock
+        let Some(index) = lock
             .iter()
             .position(|handle| handle.as_raw() == target_window)
-            .expect("value should be present");
+        else {
+            log::error!(
+                "failed to close window: no tracked handle matched HWND {}",
+                target_window.0
+            );
+            return false;
+        };
         lock.remove(index);
 
         lock.is_empty()

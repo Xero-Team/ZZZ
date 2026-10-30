@@ -1060,7 +1060,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                 .docker_compose_build(
                     &docker_compose_resources.files,
                     &project_name,
-                    dev_container.run_services.as_ref(),
+                    dev_container.run_services.as_deref(),
                 )
                 .await?;
             (
@@ -1157,7 +1157,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                     .docker_compose_build(
                         &docker_compose_resources.files,
                         &project_name,
-                        dev_container.run_services.as_ref(),
+                        dev_container.run_services.as_deref(),
                     )
                     .await?;
 
@@ -6307,7 +6307,7 @@ RUN echo $RUBY_VERSION2
 
     #[async_trait]
     impl DockerClient for FakeDocker {
-        async fn inspect(&self, id: &String) -> Result<DockerInspect, DevContainerError> {
+        async fn inspect(&self, id: &str) -> Result<DockerInspect, DevContainerError> {
             if id == "mcr.microsoft.com/devcontainers/typescript-node:1-18-bookworm" {
                 return Ok(DockerInspect {
                     id: "sha256:610e6cfca95280188b021774f8cf69dd6f49bdb6eebc34c5ee2010f4d51cc104"
@@ -6424,7 +6424,7 @@ RUN echo $RUBY_VERSION2
         }
         async fn get_docker_compose_config(
             &self,
-            config_files: &Vec<PathBuf>,
+            config_files: &[PathBuf],
         ) -> Result<Option<DockerComposeConfig>, DevContainerError> {
             let project_path = PathBuf::from(TEST_PROJECT_PATH);
             if config_files.len() == 1
@@ -6575,9 +6575,9 @@ RUN echo $RUBY_VERSION2
         }
         async fn docker_compose_build(
             &self,
-            _config_files: &Vec<PathBuf>,
+            _config_files: &[PathBuf],
             _project_name: &str,
-            _services: Option<&Vec<String>>,
+            _services: Option<&[String]>,
         ) -> Result<(), DevContainerError> {
             Ok(())
         }

@@ -13,7 +13,6 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use util::ResultExt;
 use util::command::Stdio;
 use util::redact::{is_valid_environment_name, redact_command};
 use util::shell::ShellKind;
@@ -409,8 +408,7 @@ impl DockerExecConnection {
             &Default::default(),
             &args,
         )
-        .await
-        .log_err();
+        .await?;
         Ok(())
     }
 

@@ -67,7 +67,12 @@ impl Connection {
     /// Attempts to open the database at uri. If it fails, a shared memory db will be opened
     /// instead.
     pub fn open_file(uri: &str) -> Self {
-        Self::open(uri, true).unwrap_or_else(|_| Self::open_memory(Some(uri)))
+        Self::open(uri, true).unwrap_or_else(|error| {
+            log::error!(
+                "failed to open database at {uri}: {error:#}; falling back to an in-memory database"
+            );
+            Self::open_memory(Some(uri))
+        })
     }
 
     pub fn open_memory(uri: Option<&str>) -> Self {

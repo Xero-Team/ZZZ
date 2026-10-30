@@ -54,7 +54,7 @@ fn toggle_theme_selector(
         let delegate = ThemeSelectorDelegate::new(
             cx.entity().downgrade(),
             fs,
-            toggle.themes_filter.as_ref(),
+            toggle.themes_filter.as_deref(),
             cx,
         );
         ThemeSelector::new(delegate, window, cx)
@@ -72,7 +72,7 @@ fn toggle_icon_theme_selector(
         let delegate = IconThemeSelectorDelegate::new(
             cx.entity().downgrade(),
             fs,
-            toggle.themes_filter.as_ref(),
+            toggle.themes_filter.as_deref(),
             cx,
         );
         IconThemeSelector::new(delegate, window, cx)
@@ -148,7 +148,7 @@ impl ThemeSelectorDelegate {
     fn new(
         selector: WeakEntity<ThemeSelector>,
         fs: Arc<dyn Fs>,
-        themes_filter: Option<&Vec<String>>,
+        themes_filter: Option<&[String]>,
         cx: &mut Context<ThemeSelector>,
     ) -> Self {
         let original_theme = cx.theme().clone();
@@ -161,7 +161,9 @@ impl ThemeSelectorDelegate {
             .into_iter()
             .filter(|meta| {
                 if let Some(theme_filter) = themes_filter {
-                    theme_filter.contains(&meta.name.to_string())
+                    theme_filter
+                        .iter()
+                        .any(|theme_name| theme_name.as_str() == meta.name.as_ref())
                 } else {
                     true
                 }

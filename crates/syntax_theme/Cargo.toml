@@ -19,6 +19,7 @@ doctest = false
 
 [dependencies]
 gpui.workspace = true
+log.workspace = true
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 

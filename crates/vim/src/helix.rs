@@ -2572,29 +2572,6 @@ mod test {
         );
     }
 
-    // #[gpui::test]
-    // async fn test_delete_character_end_of_buffer(cx: &mut gpui::TestAppContext) {
-    //     let mut cx = VimTestContext::new(cx, true).await;
-
-    //     cx.set_state(
-    //         indoc! {"
-    //         The quick brown
-    //         fox jumps over
-    //         the lazy dog.ˇ"},
-    //         Mode::HelixNormal,
-    //     );
-
-    //     cx.simulate_keystrokes("d");
-
-    //     cx.assert_state(
-    //         indoc! {"
-    //         The quick brown
-    //         fox jumps over
-    //         the lazy dog.ˇ"},
-    //         Mode::HelixNormal,
-    //     );
-    // }
-
     #[gpui::test]
     async fn test_f_and_t(cx: &mut gpui::TestAppContext) {
         let mut cx = VimTestContext::new(cx, true).await;

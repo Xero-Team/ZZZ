@@ -811,7 +811,9 @@ impl Client {
 
         if credentials.is_none() {
             let mut status_rx = self.status();
-            let _ = status_rx.next().await;
+            if status_rx.next().await.is_none() {
+                return Err(anyhow!("client status channel closed"));
+            }
             futures::select_biased! {
                 authenticate = self.authenticate(cx).fuse() => {
                     match authenticate {
@@ -822,13 +824,15 @@ impl Client {
                         }
                     }
                 }
-                _ = status_rx.next().fuse() => {
-                    return Err(anyhow!("authentication canceled"));
-                }
+                status = status_rx.next().fuse() => match status {
+                    Some(_) => return Err(anyhow!("authentication canceled")),
+                    None => return Err(anyhow!("client status channel closed")),
+                },
             }
         }
 
-        let credentials = credentials.expect("value should be present");
+        let credentials =
+            credentials.ok_or_else(|| anyhow!("authentication did not return credentials"))?;
         self.set_id(credentials.user_id);
         self.state.write().credentials = Some(credentials.clone());
         self.set_status(
@@ -1128,7 +1132,7 @@ impl Client {
                     Https => "wss",
                     Http => "ws",
                 })
-                .expect("set_scheme should be present");
+                .map_err(|()| anyhow!("failed to set websocket scheme on {rpc_url}"))?;
 
             // We call `into_client_request` to let `tungstenite` construct the WebSocket request
             // for us from the RPC URL.

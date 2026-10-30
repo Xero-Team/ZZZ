@@ -70,6 +70,27 @@ use worktree::Worktree;
 const MAX_TRACKED_OUTPUT_EVENTS: usize = 5000;
 const DEBUG_HISTORY_LIMIT: usize = 10;
 
+fn error_response_body(request_seq: u64, error: impl std::fmt::Display) -> Option<Value> {
+    let error = dap::ErrorResponse {
+        error: Some(dap::Message {
+            id: request_seq,
+            format: error.to_string(),
+            variables: None,
+            send_telemetry: None,
+            show_user: None,
+            url: None,
+            url_label: None,
+        }),
+    };
+    match serde_json::to_value(error) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            log::error!("failed to serialize debug adapter error response: {error}");
+            None
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, PartialOrd, Ord, Eq)]
 #[repr(transparent)]
 pub struct ThreadId(pub i64);
@@ -234,7 +255,7 @@ impl RunningMode {
         &self.worktree
     }
 
-    fn unset_breakpoints_from_paths(&self, paths: &Vec<Arc<Path>>, cx: &mut App) -> Task<()> {
+    fn unset_breakpoints_from_paths(&self, paths: &[Arc<Path>], cx: &mut App) -> Task<()> {
         let tasks: Vec<_> = paths
             .iter()
             .map(|path| {
@@ -311,7 +332,7 @@ impl RunningMode {
                     .update(cx, |this, _| {
                         this.mark_breakpoints_verified(session_id, &abs_path, breakpoints);
                     })
-                    .ok();
+                    .log_err();
             }
             Err(err) => log::warn!("Set breakpoints request failed for path: {}", err),
         })
@@ -397,7 +418,7 @@ impl RunningMode {
                         .update(cx, |this, _| {
                             this.mark_breakpoints_verified(session_id, &path, breakpoints);
                         })
-                        .ok();
+                        .log_err();
 
                     Ok(())
                 }
@@ -540,7 +561,7 @@ impl RunningMode {
                     cx.notify();
                 }
             })
-            .ok();
+            .log_err();
 
             result?;
             anyhow::Ok(())
@@ -1194,18 +1215,7 @@ impl Session {
             Ok(args) => args,
             Err(error) => {
                 return cx.spawn(async move |session, cx| {
-                    let error = serde_json::to_value(dap::ErrorResponse {
-                        error: Some(dap::Message {
-                            id: request.seq,
-                            format: error.to_string(),
-                            variables: None,
-                            send_telemetry: None,
-                            show_user: None,
-                            url: None,
-                            url_label: None,
-                        }),
-                    })
-                    .ok();
+                    let error = error_response_body(request.seq, error);
 
                     session
                         .update(cx, |this, cx| {
@@ -1249,21 +1259,7 @@ impl Session {
                     })
                     .ok(),
                 ),
-                Err(error) => (
-                    false,
-                    serde_json::to_value(dap::ErrorResponse {
-                        error: Some(dap::Message {
-                            id: seq,
-                            format: error.to_string(),
-                            variables: None,
-                            send_telemetry: None,
-                            show_user: None,
-                            url: None,
-                            url_label: None,
-                        }),
-                    })
-                    .ok(),
-                ),
+                Err(error) => (false, error_response_body(seq, error)),
             };
 
             session

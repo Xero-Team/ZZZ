@@ -115,9 +115,9 @@ impl Render for ActiveBufferEncoding {
                         });
                     }
                 }))
-                .tooltip(move |_window, cx| {
+                .tooltip(move |window, cx| {
                     if disabled {
-                        Tooltip::text(tooltip_text.clone())(_window, cx)
+                        Tooltip::text(tooltip_text.clone())(window, cx)
                     } else {
                         Tooltip::for_action(tooltip_text.clone(), &Toggle, cx)
                     }

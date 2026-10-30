@@ -107,7 +107,7 @@ pub struct CommandInterceptItem {
 /// The result of intercepting a command palette command.
 #[derive(Default, Debug)]
 pub struct CommandInterceptResult {
-    /// The items
+    /// The intercepted items to display.
     pub results: Vec<CommandInterceptItem>,
     /// Whether or not to continue to show the normal matches
     pub exclusive: bool,

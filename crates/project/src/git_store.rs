@@ -6284,8 +6284,14 @@ impl Repository {
             },
             cx,
             async move |this, cx| {
-                for save_task in save_tasks {
-                    save_task.await?;
+                let mut save_error = None;
+                for save_result in future::join_all(save_tasks).await {
+                    if let Err(error) = save_result {
+                        save_error.get_or_insert(error);
+                    }
+                }
+                if let Some(error) = save_error {
+                    return Err(error);
                 }
 
                 this.update(cx, |this, cx| {

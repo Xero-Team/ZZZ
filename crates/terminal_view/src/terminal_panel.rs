@@ -1485,9 +1485,8 @@ impl Render for TerminalPanel {
                                     terminal_panel.new_pane_with_active_terminal(true, window, cx);
                                 cx.spawn_in(window, async move |terminal_panel, cx| {
                                     if let Some(new_pane) = future.await {
-                                        _ = terminal_panel.update_in(
-                                            cx,
-                                            |terminal_panel, window, cx| {
+                                        terminal_panel
+                                            .update_in(cx, |terminal_panel, window, cx| {
                                                 terminal_panel.center.split(
                                                     &terminal_panel.active_pane,
                                                     &new_pane,
@@ -1496,8 +1495,8 @@ impl Render for TerminalPanel {
                                                 );
                                                 let new_pane = new_pane.read(cx);
                                                 window.focus(&new_pane.focus_handle(cx), cx);
-                                            },
-                                        );
+                                            })
+                                            .log_err();
                                     }
                                 })
                                 .detach();

@@ -1997,7 +1997,7 @@ impl SerializableItem for TerminalView {
                         .filter(|title| !title.trim().is_empty());
                     (cwd, custom_title)
                 })
-                .ok()
+                .log_err()
                 .unwrap_or((None, None));
 
             let terminal = project

@@ -2383,7 +2383,7 @@ impl ThreadView {
     pub fn reject_all(&mut self, _: &RejectAll, _window: &mut Window, cx: &mut Context<Self>) {
         let thread = &self.thread;
         let action_log = thread.read(cx).action_log().clone();
-        let has_changes = action_log.read(cx).changed_buffers(cx).len() > 0;
+        let has_changes = !action_log.read(cx).changed_buffers(cx).is_empty();
 
         action_log
             .update(cx, |action_log, cx| action_log.reject_all_edits(cx))

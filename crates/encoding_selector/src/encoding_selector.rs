@@ -24,6 +24,8 @@ actions!(
     ]
 );
 
+const PANEL_WIDTH_REMS: f32 = 34.;
+
 pub fn init(cx: &mut App) {
     cx.observe_new(EncodingSelector::register).detach();
 }
@@ -105,7 +107,7 @@ impl Render for EncodingSelector {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl gpui::IntoElement {
         v_flex()
             .key_context("EncodingSelector")
-            .w(gpui::rems(34.))
+            .w(gpui::rems(PANEL_WIDTH_REMS))
             .child(self.picker.clone())
     }
 }

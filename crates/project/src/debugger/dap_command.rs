@@ -1376,11 +1376,11 @@ impl DapCommand for super::session::CompletionsQuery {
     }
 
     fn response_to_proto(
-        _debug_client_id: SessionId,
+        debug_client_id: SessionId,
         message: Self::Response,
     ) -> Self::ProtoResponse {
         proto::DapCompletionResponse {
-            client_id: _debug_client_id.to_proto(),
+            client_id: debug_client_id.to_proto(),
             completions: message.targets.to_proto(),
         }
     }
@@ -1455,7 +1455,7 @@ impl DapCommand for EvaluateCommand {
             named_variables: message.named_variables,
             indexed_variables: message.indexed_variables,
             memory_reference: message.memory_reference,
-            value_location_reference: None, //TODO
+            value_location_reference: None, // TODO
         })
     }
 
@@ -1698,9 +1698,9 @@ impl LocalDapCommand for DataBreakpointInfoCommand {
     const CACHEABLE: bool = true;
 
     // todo(debugger): We should expand this trait in the future to take a &self
-    // Depending on this command is_supported could be differentb
+    // Depending on this command, is_supported could differ.
     fn is_supported(capabilities: &Capabilities) -> bool {
-        capabilities.supports_data_breakpoints.unwrap_or(false)
+        capabilities.supports_data_breakpoints.unwrap_or_default()
     }
 
     fn to_dap(&self) -> <Self::DapRequest as dap::requests::Request>::Arguments {
@@ -1753,7 +1753,7 @@ impl LocalDapCommand for SetDataBreakpointsCommand {
     type DapRequest = dap::requests::SetDataBreakpoints;
 
     fn is_supported(capabilities: &Capabilities) -> bool {
-        capabilities.supports_data_breakpoints.unwrap_or(false)
+        capabilities.supports_data_breakpoints.unwrap_or_default()
     }
 
     fn to_dap(&self) -> <Self::DapRequest as dap::requests::Request>::Arguments {

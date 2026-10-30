@@ -2214,7 +2214,7 @@ fn icon_for_project_group(key: &ProjectGroupKey) -> IconName {
 // Compute the highlighted text for the name and path
 pub(crate) fn highlights_for_path(
     path: &Path,
-    match_positions: &Vec<usize>,
+    match_positions: &[usize],
     path_start_offset: usize,
 ) -> (Option<HighlightedMatch>, HighlightedMatch) {
     let path_string = path.to_string_lossy();

@@ -33,7 +33,10 @@ impl Snippet {
                 choices: None,
             };
 
-            if !tabstops.last().is_some_and(|t| *t == end_tabstop) {
+            if !tabstops
+                .last()
+                .is_some_and(|tabstop| *tabstop == end_tabstop)
+            {
                 tabstops.push(end_tabstop);
             }
         }
@@ -59,9 +62,9 @@ fn parse_snippet<'a>(
                 // backslashes can escape some characters:
                 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#snippet_syntax
                 source = &source[1..];
-                if let Some(c) = source.chars().next() {
-                    if c == '$' || c == '\\' || c == '}' {
-                        text.push(c);
+                if let Some(character) = source.chars().next() {
+                    if character == '$' || character == '\\' || character == '}' {
+                        text.push(character);
                         // All escapable characters are 1 byte long:
                         source = &source[1..];
                     } else {
@@ -155,12 +158,12 @@ fn parse_choices<'a>(
             Some('\\') => {
                 source = &source[1..];
 
-                if let Some(c) = source.chars().next() {
-                    current_choice.push(c);
+                if let Some(character) = source.chars().next() {
+                    current_choice.push(character);
                     if !found_default_choice {
-                        text.push(c);
+                        text.push(character);
                     }
-                    source = &source[c.len_utf8()..];
+                    source = &source[character.len_utf8()..];
                 }
             }
             Some(',') => {

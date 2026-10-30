@@ -70,22 +70,7 @@ pub fn new_journal_entry(workspace: &Workspace, window: &mut Window, cx: &mut Ap
 
     // Decide whether the journal directory is already open before the spawn
     // below takes ownership of it.
-    let worktrees = workspace.visible_worktrees(cx).collect::<Vec<_>>();
-    let mut open_new_workspace = true;
-    'outer: for worktree in &worktrees {
-        let worktree_root = worktree.read(cx).abs_path();
-        if *worktree_root == journal_dir {
-            open_new_workspace = false;
-            break;
-        }
-        for directory in worktree.read(cx).directories(true, 1) {
-            let full_directory_path = worktree_root.join(directory.path.as_std_path());
-            if full_directory_path.ends_with(&journal_dir) {
-                open_new_workspace = false;
-                break 'outer;
-            }
-        }
-    }
+    let open_new_workspace = !journal_dir_is_open(workspace, &journal_dir, cx);
 
     let create_entry = cx.background_spawn(async move {
         std::fs::create_dir_all(month_dir)?;
@@ -173,6 +158,21 @@ pub fn new_journal_entry(workspace: &Workspace, window: &mut Window, cx: &mut Ap
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);
+}
+
+/// Returns whether `journal_dir` is already open, either as a worktree root or
+/// as a descendant directory of one.
+fn journal_dir_is_open(workspace: &Workspace, journal_dir: &Path, cx: &App) -> bool {
+    workspace.visible_worktrees(cx).any(|worktree| {
+        let worktree = worktree.read(cx);
+        let worktree_root = worktree.abs_path();
+        worktree_root.as_ref() == journal_dir
+            || worktree.directories(true, 1).any(|directory| {
+                worktree_root
+                    .join(directory.path.as_std_path())
+                    .ends_with(journal_dir)
+            })
+    })
 }
 
 fn journal_dir(path: &str) -> Option<PathBuf> {

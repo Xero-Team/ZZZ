@@ -136,7 +136,8 @@ impl Global {
         }
 
         let mut new_len = 0;
-        for (ix, (left, &right)) in self.values.iter_mut().zip(&other.values).enumerate() {
+        for (replica_index, (left, &right)) in self.values.iter_mut().zip(&other.values).enumerate()
+        {
             match (*left, right) {
                 // left has not observed the replica
                 (0, _) => *left = right,
@@ -145,7 +146,7 @@ impl Global {
                 (_, _) => *left = cmp::min(*left, right),
             }
             if *left != 0 {
-                new_len = ix + 1;
+                new_len = replica_index + 1;
             }
         }
         if other.values.len() == self.values.len() {

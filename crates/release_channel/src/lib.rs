@@ -89,10 +89,21 @@ impl AppVersion {
         build_id: Option<&str>,
         commit_sha: Option<AppCommitSha>,
     ) -> Version {
-        let mut version: Version = if let Ok(from_env) = env::var("ZZZ_APP_VERSION") {
-            from_env.parse().expect("invalid ZZZ_APP_VERSION")
-        } else {
-            pkg_version.parse().expect("invalid version in Cargo.toml")
+        // A malformed override must not take the app down during startup, so fall
+        // through to the embedded package version, which is valid by construction.
+        let mut version: Version = match env::var("ZZZ_APP_VERSION") {
+            Ok(from_env) => match Version::parse(&from_env) {
+                Ok(version) => version,
+                Err(error) => {
+                    log::error!("invalid ZZZ_APP_VERSION {from_env:?}: {error}");
+                    package_version(pkg_version)
+                }
+            },
+            Err(env::VarError::NotPresent) => package_version(pkg_version),
+            Err(error) => {
+                log::error!("failed to read ZZZ_APP_VERSION: {error}");
+                package_version(pkg_version)
+            }
         };
         let mut pre = String::from(RELEASE_CHANNEL.dev_name());
 
@@ -117,6 +128,16 @@ impl AppVersion {
         if cx.has_global::<GlobalAppVersion>() {
             cx.global::<GlobalAppVersion>().0.clone()
         } else {
+            Version::new(0, 0, 0)
+        }
+    }
+}
+
+fn package_version(pkg_version: &str) -> Version {
+    match Version::parse(pkg_version) {
+        Ok(version) => version,
+        Err(error) => {
+            log::error!("invalid package version {pkg_version:?}: {error}");
             Version::new(0, 0, 0)
         }
     }
@@ -275,6 +296,17 @@ mod tests {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
         let _restore = EnvRestore::new("ZZZ_APP_VERSION");
         unsafe { env::remove_var("ZZZ_APP_VERSION") };
+
+        let version = AppVersion::load("0.9.1", None, None);
+
+        assert_eq!(version, Version::parse("0.9.1+dev").expect("valid semver"));
+    }
+
+    #[test]
+    fn app_version_load_ignores_invalid_env_override() {
+        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _restore = EnvRestore::new("ZZZ_APP_VERSION");
+        unsafe { env::set_var("ZZZ_APP_VERSION", "not-a-version") };
 
         let version = AppVersion::load("0.9.1", None, None);
 

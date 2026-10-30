@@ -27,7 +27,10 @@ fn zzz_prompt_renderer(
         |cx| ZZZPromptRenderer {
             _level: level,
             message: cx.new(|cx| Markdown::new(SharedString::new(message), None, None, cx)),
-            actions: actions.iter().map(|a| a.label().to_string()).collect(),
+            actions: actions
+                .iter()
+                .map(|button| button.label().to_string())
+                .collect(),
             cancel_action_id: cancel_action_id(actions),
             focus: cx.focus_handle(),
             active_action_id: 0,
@@ -144,18 +147,23 @@ impl Render for ZZZPromptRenderer {
             .child(
                 v_flex()
                     .gap_1()
-                    .children(self.actions.iter().enumerate().map(|(ix, action)| {
-                        Button::new(ix, action.clone())
-                            .full_width()
-                            .style(ButtonStyle::Outlined)
-                            .when(ix == self.active_action_id, |s| {
-                                s.style(ButtonStyle::Tinted(TintColor::Accent))
-                            })
-                            .tab_index(ix as isize)
-                            .on_click(cx.listener(move |_, _, _window, cx| {
-                                cx.emit(PromptResponse(ix));
-                            }))
-                    })),
+                    .children(
+                        self.actions
+                            .iter()
+                            .enumerate()
+                            .map(|(action_index, action)| {
+                                Button::new(action_index, action.clone())
+                                    .full_width()
+                                    .style(ButtonStyle::Outlined)
+                                    .when(action_index == self.active_action_id, |s| {
+                                        s.style(ButtonStyle::Tinted(TintColor::Accent))
+                                    })
+                                    .tab_index(action_index as isize)
+                                    .on_click(cx.listener(move |_, _, _window, cx| {
+                                        cx.emit(PromptResponse(action_index));
+                                    }))
+                            }),
+                    ),
             );
 
         div()

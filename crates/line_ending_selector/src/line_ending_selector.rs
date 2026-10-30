@@ -12,6 +12,8 @@ use ui::{ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
 use workspace::ModalView;
 
+const PANEL_WIDTH_REMS: f32 = 34.;
+
 actions!(
     line_ending_selector,
     [
@@ -73,7 +75,9 @@ impl LineEndingSelector {
 
 impl Render for LineEndingSelector {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex().w(rems(34.)).child(self.picker.clone())
+        v_flex()
+            .w(rems(PANEL_WIDTH_REMS))
+            .child(self.picker.clone())
     }
 }
 
@@ -166,11 +170,11 @@ impl PickerDelegate for LineEndingSelectorDelegate {
 
     fn set_selected_index(
         &mut self,
-        ix: usize,
+        selected_index: usize,
         _window: &mut Window,
         _: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = selected_index;
     }
 
     fn update_matches(

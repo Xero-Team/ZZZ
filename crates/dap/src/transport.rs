@@ -701,7 +701,6 @@ pub struct StdioTransport {
 }
 
 impl StdioTransport {
-    // #[allow(dead_code, reason = "This is used in non test builds of ZZZ")]
     async fn start(
         binary: &DebugAdapterBinary,
         log_handlers: LogHandlers,

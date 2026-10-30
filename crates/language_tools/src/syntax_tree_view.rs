@@ -265,9 +265,7 @@ impl SyntaxTreeView {
                 .buffer_snapshot()
                 .range_to_buffer_ranges(selection_range.start..selection_range.end)
                 .pop()?;
-            let buffer = multi_buffer
-                .buffer(buffer.remote_id())
-                .expect("value should be present");
+            let buffer = multi_buffer.buffer(buffer.remote_id())?;
             Some((buffer, range))
         })?;
 

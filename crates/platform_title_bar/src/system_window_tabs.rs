@@ -424,7 +424,7 @@ impl Render for SystemWindowTabs {
         let tabs = controller
             .tabs(window.window_handle().window_id())
             .unwrap_or(&current_window_tab)
-            .clone();
+            .to_vec();
 
         let tab_items = tabs
             .iter()

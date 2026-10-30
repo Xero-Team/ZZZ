@@ -2237,6 +2237,9 @@ mod tests {
 
         assert!(!errored);
 
+        // Let the worktree update event be handled before inspecting the flag.
+        cx.run_until_parked();
+
         let multi_workspace = cx.update(|cx| cx.windows()[0].downcast::<MultiWorkspace>().unwrap());
         multi_workspace
             .update(cx, |multi_workspace, _, cx| {

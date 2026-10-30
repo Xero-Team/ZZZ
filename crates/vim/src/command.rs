@@ -1934,7 +1934,7 @@ struct VimCommands(Vec<VimCommand>);
 unsafe impl Sync for VimCommands {}
 impl Global for VimCommands {}
 
-fn commands(cx: &App) -> &Vec<VimCommand> {
+fn commands(cx: &App) -> &[VimCommand] {
     static COMMANDS: OnceLock<VimCommands> = OnceLock::new();
     &COMMANDS
         .get_or_init(|| VimCommands(generate_commands(cx)))

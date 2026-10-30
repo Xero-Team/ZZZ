@@ -169,7 +169,7 @@ impl StackFrameList {
     }
 
     #[cfg(test)]
-    pub(crate) fn entries(&self) -> &Vec<StackFrameEntry> {
+    pub(crate) fn entries(&self) -> &[StackFrameEntry] {
         &self.entries
     }
 

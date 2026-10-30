@@ -427,7 +427,9 @@ impl DebugAdapter for CodeLldbDebugAdapter {
         }
 
         Ok(DebugAdapterBinary {
-            command: Some(command.expect("value should be present")),
+            command: Some(
+                command.context("CodeLLDB adapter path should be resolved after installation")?,
+            ),
             cwd: Some(delegate.worktree_root_path().to_path_buf()),
             arguments: user_args.unwrap_or_else(|| {
                 if let Some(config) = json_config.as_object_mut()

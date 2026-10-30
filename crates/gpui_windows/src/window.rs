@@ -536,7 +536,7 @@ impl WindowsWindow {
         // so check the inner result first.
         let this = context.inner.take().transpose()?;
         let hwnd = creation_result?;
-        let this = this.expect("value should be present");
+        let this = this.context("window creation completed without initializing window state")?;
 
         register_drag_drop(&this)?;
         set_non_rude_hwnd(hwnd, true);

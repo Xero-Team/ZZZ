@@ -81,7 +81,9 @@ impl PaneGroup {
                     self.root = Member::new_axis(first_pane, new_pane.clone(), direction);
                 }
                 Member::Axis(axis) => {
-                    let _ = axis.split(&first_pane, new_pane, direction);
+                    if !axis.split(&first_pane, new_pane, direction) {
+                        log::error!("failed to split pane: pane was not present in the pane group");
+                    }
                 }
             }
         }
@@ -195,7 +197,9 @@ impl PaneGroup {
         match &mut self.root {
             Member::Pane(_) => {}
             Member::Axis(axis) => {
-                let _ = axis.resize(pane, direction, amount, bounds);
+                if axis.resize(pane, direction, amount, bounds).is_none() {
+                    log::error!("failed to resize pane: pane was not present in the pane group");
+                }
             }
         };
         self.mark_positions(cx);

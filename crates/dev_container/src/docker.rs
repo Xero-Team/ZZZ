@@ -226,7 +226,7 @@ impl Docker {
         self.docker_cli == "podman"
     }
 
-    async fn pull_image(&self, image: &String) -> Result<(), DevContainerError> {
+    async fn pull_image(&self, image: &str) -> Result<(), DevContainerError> {
         let mut command = Command::new(&self.docker_cli);
         command.args(&["pull", "--", image]);
 
@@ -261,7 +261,7 @@ impl Docker {
         command
     }
 
-    fn create_docker_compose_config_command(&self, config_files: &Vec<PathBuf>) -> Command {
+    fn create_docker_compose_config_command(&self, config_files: &[PathBuf]) -> Command {
         let mut command = Command::new(&self.docker_cli);
         command.arg("compose");
         for file_path in config_files {
@@ -296,7 +296,7 @@ impl Docker {
 
 #[async_trait]
 impl DockerClient for Docker {
-    async fn inspect(&self, id: &String) -> Result<DockerInspect, DevContainerError> {
+    async fn inspect(&self, id: &str) -> Result<DockerInspect, DevContainerError> {
         let command = self.create_docker_inspect(id);
         match evaluate_json_command::<DockerInspect>(command).await {
             Ok(Some(docker_inspect)) => return Ok(docker_inspect),
@@ -320,7 +320,7 @@ impl DockerClient for Docker {
 
     async fn get_docker_compose_config(
         &self,
-        config_files: &Vec<PathBuf>,
+        config_files: &[PathBuf],
     ) -> Result<Option<DockerComposeConfig>, DevContainerError> {
         let command = self.create_docker_compose_config_command(config_files);
         evaluate_yaml_command(command).await
@@ -328,9 +328,9 @@ impl DockerClient for Docker {
 
     async fn docker_compose_build(
         &self,
-        config_files: &Vec<PathBuf>,
+        config_files: &[PathBuf],
         project_name: &str,
-        services: Option<&Vec<String>>,
+        services: Option<&[String]>,
     ) -> Result<(), DevContainerError> {
         let mut command = Command::new(&self.docker_cli);
         if !self.is_podman() {
@@ -480,16 +480,16 @@ fn parse_find_process_output(raw: &str) -> Result<Option<DockerPs>, DevContainer
 
 #[async_trait]
 pub(crate) trait DockerClient {
-    async fn inspect(&self, id: &String) -> Result<DockerInspect, DevContainerError>;
+    async fn inspect(&self, id: &str) -> Result<DockerInspect, DevContainerError>;
     async fn get_docker_compose_config(
         &self,
-        config_files: &Vec<PathBuf>,
+        config_files: &[PathBuf],
     ) -> Result<Option<DockerComposeConfig>, DevContainerError>;
     async fn docker_compose_build(
         &self,
-        config_files: &Vec<PathBuf>,
+        config_files: &[PathBuf],
         project_name: &str,
-        services: Option<&Vec<String>>,
+        services: Option<&[String]>,
     ) -> Result<(), DevContainerError>;
     async fn run_docker_exec(
         &self,

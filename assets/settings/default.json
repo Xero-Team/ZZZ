@@ -2685,6 +2685,9 @@
   //   }
   // ]
   "ssh_connections": [],
+  // wsl_connections is an array of WSL distributions.
+  // You can configure these from `project: Open WSL` in the command palette.
+  "wsl_connections": [],
   // Whether to read ~/.ssh/config for ssh connection sources.
   "read_ssh_config": true,
   // Default timeout in seconds for all context server tool calls.

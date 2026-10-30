@@ -11,12 +11,10 @@ use clap::Parser;
 use collections::IndexMap;
 use log::LevelFilter;
 use serde::Deserialize;
-use simplelog::ColorChoice;
-use simplelog::{TermLogger, TerminalMode};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use theme::{Appearance, AppearanceContent};
 
-use crate::vscode::VsCodeTheme;
-use crate::vscode::VsCodeThemeConverter;
+use crate::vscode::{VsCodeTheme, VsCodeThemeConverter};
 
 const ZZZ_THEME_SCHEMA_URL: &str = "https://zed.dev/schema/themes/v0.2.0.json";
 
@@ -107,15 +105,17 @@ fn main() -> Result<()> {
     let converter = VsCodeThemeConverter::new(vscode_theme, theme_metadata, IndexMap::default());
 
     let theme = converter.convert();
-    let mut theme = serde_json::to_value(theme).expect("converting to a JSON value cannot fail");
+    let mut theme =
+        serde_json::to_value(theme).context("failed to convert theme to a JSON value")?;
     theme
         .as_object_mut()
-        .expect("value should have the expected type")
+        .context("serialized theme is not a JSON object")?
         .insert(
             "$schema".to_owned(),
             serde_json::Value::String(ZZZ_THEME_SCHEMA_URL.to_owned()),
         );
-    let theme_json = serde_json::to_string_pretty(&theme).expect("serializing to JSON cannot fail");
+    let theme_json =
+        serde_json::to_string_pretty(&theme).context("failed to serialize theme to JSON")?;
 
     if let Some(output) = args.output {
         let mut file = File::create(&output)

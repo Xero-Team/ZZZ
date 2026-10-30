@@ -14079,6 +14079,7 @@ name = "release_channel"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "log",
  "semver",
 ]
 
@@ -16640,6 +16641,7 @@ name = "syntax_theme"
 version = "0.1.0"
 dependencies = [
  "gpui",
+ "log",
  "serde",
  "serde_json",
 ]

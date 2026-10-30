@@ -106,7 +106,7 @@ mod tool_result_content_vec {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(
-        value: &Vec<LanguageModelToolResultContent>,
+        value: &[LanguageModelToolResultContent],
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where

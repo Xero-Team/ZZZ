@@ -148,14 +148,14 @@ impl ZZZSyntaxToken {
 
         let mut matches = 0;
 
-        for (ix, scope) in scopes_to_match.into_iter().enumerate() {
+        for (scope_index, scope) in scopes_to_match.iter().enumerate() {
             // Assign each entry a weight that is inversely proportional to its
             // position in the list.
             //
             // Entries towards the front are weighted higher than those towards the end.
-            let weight = (number_of_scopes_to_match - ix) as u32;
+            let weight = (number_of_scopes_to_match - scope_index) as u32;
 
-            if candidate_scopes.contains(&scope) {
+            if candidate_scopes.contains(scope) {
                 matches += 1 + weight;
             }
         }
@@ -180,34 +180,32 @@ impl ZZZSyntaxToken {
         }
     }
 
-    fn to_vscode(self) -> Vec<&'static str> {
+    fn to_vscode(self) -> &'static [&'static str] {
         match self {
-            ZZZSyntaxToken::Attribute => vec!["entity.other.attribute-name"],
-            ZZZSyntaxToken::Boolean => vec!["constant.language"],
-            ZZZSyntaxToken::Comment => vec!["comment"],
-            ZZZSyntaxToken::CommentDoc => vec!["comment.block.documentation"],
-            ZZZSyntaxToken::Constant => vec!["constant", "constant.language", "constant.character"],
-            ZZZSyntaxToken::Constructor => {
-                vec![
-                    "entity.name.tag",
-                    "entity.name.function.definition.special.constructor",
-                ]
-            }
-            ZZZSyntaxToken::Embedded => vec!["meta.embedded"],
-            ZZZSyntaxToken::Emphasis => vec!["markup.italic"],
-            ZZZSyntaxToken::EmphasisStrong => vec![
+            ZZZSyntaxToken::Attribute => &["entity.other.attribute-name"],
+            ZZZSyntaxToken::Boolean => &["constant.language"],
+            ZZZSyntaxToken::Comment => &["comment"],
+            ZZZSyntaxToken::CommentDoc => &["comment.block.documentation"],
+            ZZZSyntaxToken::Constant => &["constant", "constant.language", "constant.character"],
+            ZZZSyntaxToken::Constructor => &[
+                "entity.name.tag",
+                "entity.name.function.definition.special.constructor",
+            ],
+            ZZZSyntaxToken::Embedded => &["meta.embedded"],
+            ZZZSyntaxToken::Emphasis => &["markup.italic"],
+            ZZZSyntaxToken::EmphasisStrong => &[
                 "markup.bold",
                 "markup.italic markup.bold",
                 "markup.bold markup.italic",
             ],
-            ZZZSyntaxToken::Enum => vec!["support.type.enum"],
-            ZZZSyntaxToken::Function => vec![
+            ZZZSyntaxToken::Enum => &["support.type.enum"],
+            ZZZSyntaxToken::Function => &[
                 "entity.function",
                 "entity.name.function",
                 "variable.function",
             ],
-            ZZZSyntaxToken::Hint => vec![],
-            ZZZSyntaxToken::Keyword => vec![
+            ZZZSyntaxToken::Hint => &[],
+            ZZZSyntaxToken::Keyword => &[
                 "keyword",
                 "keyword.other.fn.rust",
                 "keyword.control",
@@ -216,63 +214,63 @@ impl ZZZSyntaxToken {
                 "punctuation.accessor",
                 "entity.name.tag",
             ],
-            ZZZSyntaxToken::Label => vec![
+            ZZZSyntaxToken::Label => &[
                 "label",
                 "entity.name",
                 "entity.name.import",
                 "entity.name.package",
             ],
-            ZZZSyntaxToken::LinkText => vec!["markup.underline.link", "string.other.link"],
-            ZZZSyntaxToken::LinkUri => vec!["markup.underline.link", "string.other.link"],
-            ZZZSyntaxToken::Number => vec!["constant.numeric", "number"],
-            ZZZSyntaxToken::Operator => vec!["operator", "keyword.operator"],
-            ZZZSyntaxToken::Predictive => vec![],
-            ZZZSyntaxToken::Preproc => vec![
+            ZZZSyntaxToken::LinkText => &["markup.underline.link", "string.other.link"],
+            ZZZSyntaxToken::LinkUri => &["markup.underline.link", "string.other.link"],
+            ZZZSyntaxToken::Number => &["constant.numeric", "number"],
+            ZZZSyntaxToken::Operator => &["operator", "keyword.operator"],
+            ZZZSyntaxToken::Predictive => &[],
+            ZZZSyntaxToken::Preproc => &[
                 "preproc",
                 "meta.preprocessor",
                 "punctuation.definition.preprocessor",
             ],
-            ZZZSyntaxToken::Primary => vec![],
-            ZZZSyntaxToken::Property => vec![
+            ZZZSyntaxToken::Primary => &[],
+            ZZZSyntaxToken::Property => &[
                 "variable.member",
                 "support.type.property-name",
                 "variable.object.property",
                 "variable.other.field",
             ],
-            ZZZSyntaxToken::Punctuation => vec![
+            ZZZSyntaxToken::Punctuation => &[
                 "punctuation",
                 "punctuation.section",
                 "punctuation.accessor",
                 "punctuation.separator",
                 "punctuation.definition.tag",
             ],
-            ZZZSyntaxToken::PunctuationBracket => vec![
+            ZZZSyntaxToken::PunctuationBracket => &[
                 "punctuation.bracket",
                 "punctuation.definition.tag.begin",
                 "punctuation.definition.tag.end",
             ],
-            ZZZSyntaxToken::PunctuationDelimiter => vec![
+            ZZZSyntaxToken::PunctuationDelimiter => &[
                 "punctuation.delimiter",
                 "punctuation.separator",
                 "punctuation.terminator",
             ],
             ZZZSyntaxToken::PunctuationListMarker => {
-                vec!["markup.list punctuation.definition.list.begin"]
+                &["markup.list punctuation.definition.list.begin"]
             }
-            ZZZSyntaxToken::PunctuationSpecial => vec!["punctuation.special"],
-            ZZZSyntaxToken::String => vec!["string"],
+            ZZZSyntaxToken::PunctuationSpecial => &["punctuation.special"],
+            ZZZSyntaxToken::String => &["string"],
             ZZZSyntaxToken::StringEscape => {
-                vec!["string.escape", "constant.character", "constant.other"]
+                &["string.escape", "constant.character", "constant.other"]
             }
-            ZZZSyntaxToken::StringRegex => vec!["string.regex"],
-            ZZZSyntaxToken::StringSpecial => vec!["string.special", "constant.other.symbol"],
+            ZZZSyntaxToken::StringRegex => &["string.regex"],
+            ZZZSyntaxToken::StringSpecial => &["string.special", "constant.other.symbol"],
             ZZZSyntaxToken::StringSpecialSymbol => {
-                vec!["string.special.symbol", "constant.other.symbol"]
+                &["string.special.symbol", "constant.other.symbol"]
             }
-            ZZZSyntaxToken::Tag => vec!["tag", "entity.name.tag", "meta.tag.sgml"],
-            ZZZSyntaxToken::TextLiteral => vec!["text.literal", "string"],
-            ZZZSyntaxToken::Title => vec!["title", "entity.name"],
-            ZZZSyntaxToken::Type => vec![
+            ZZZSyntaxToken::Tag => &["tag", "entity.name.tag", "meta.tag.sgml"],
+            ZZZSyntaxToken::TextLiteral => &["text.literal", "string"],
+            ZZZSyntaxToken::Title => &["title", "entity.name"],
+            ZZZSyntaxToken::Type => &[
                 "entity.name.type",
                 "entity.name.type.primitive",
                 "entity.name.type.numeric",
@@ -281,20 +279,20 @@ impl ZZZSyntaxToken {
                 "support.type.primitive",
                 "support.class",
             ],
-            ZZZSyntaxToken::Variable => vec![
+            ZZZSyntaxToken::Variable => &[
                 "variable",
                 "variable.language",
                 "variable.member",
                 "variable.parameter",
                 "variable.parameter.function-call",
             ],
-            ZZZSyntaxToken::VariableSpecial => vec![
+            ZZZSyntaxToken::VariableSpecial => &[
                 "variable.special",
                 "variable.member",
                 "variable.annotation",
                 "variable.language",
             ],
-            ZZZSyntaxToken::Variant => vec!["variant"],
+            ZZZSyntaxToken::Variant => &["variant"],
         }
     }
 }

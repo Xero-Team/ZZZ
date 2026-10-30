@@ -79,10 +79,10 @@ impl RecentFiles {
         let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx));
 
         cx.spawn(async move |this, cx| {
-            let paths = cx
+            if let Some(paths) = cx
                 .update(|cx| WorkspaceDb::global(cx).recent_files(100))
-                .log_err();
-            if let Some(paths) = paths {
+                .log_err()
+            {
                 // Stat up to 100 paths. Doing it here keeps the file system off
                 // the UI thread that opens the picker.
                 let paths = cx
@@ -217,7 +217,7 @@ impl PickerDelegate for RecentFilesDelegate {
                 .iter()
                 .enumerate()
                 .filter(|(_, file)| file.search_path.contains(&query))
-                .map(|(ix, _)| ix)
+                .map(|(index, _)| index)
                 .collect();
         }
         self.selected_index = 0;
@@ -228,7 +228,7 @@ impl PickerDelegate for RecentFilesDelegate {
         let Some(path) = self
             .matches
             .get(self.selected_index)
-            .and_then(|ix| self.files.get(*ix))
+            .and_then(|match_index| self.files.get(*match_index))
             .map(|file| file.path.clone())
         else {
             return;

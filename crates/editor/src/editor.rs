@@ -7787,7 +7787,7 @@ impl Editor {
 
     fn show_snippet_choices(
         &mut self,
-        choices: &Vec<String>,
+        choices: &[String],
         selection: Range<Anchor>,
         cx: &mut Context<Self>,
     ) {

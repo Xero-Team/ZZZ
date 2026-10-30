@@ -1284,16 +1284,16 @@ where
         f: impl FnOnce(&anyhow::Error, &mut Window, &mut App) -> Option<String> + 'static,
     ) -> Task<Option<R>> {
         let msg = msg.to_owned();
-        window.spawn(cx, async move |cx| {
-            let result = self.await;
-            if let Err(err) = result.as_ref() {
+        window.spawn(cx, async move |cx| match self.await {
+            Ok(value) => Some(value),
+            Err(err) => {
                 log::error!("{err:#}");
                 if let Ok(prompt) = cx.update(|window, cx| {
                     let mut display = format!("{err:#}");
                     if !display.ends_with('\n') {
                         display.push('.');
                     }
-                    let detail = f(err, window, cx).unwrap_or(display);
+                    let detail = f(&err, window, cx).unwrap_or(display);
                     let ok = tr(cx, "zzz.common.ok", "Ok");
                     window.prompt(
                         PromptLevel::Critical,
@@ -1305,9 +1305,8 @@ where
                 }) {
                     prompt.await.ok();
                 }
-                return None;
+                None
             }
-            Some(result.expect("value should be present"))
         })
     }
 

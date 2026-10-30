@@ -157,11 +157,11 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
 
     let query = query
         .chars()
-        .map(|char| {
-            if path_style.is_windows() && char == '\\' {
+        .map(|character| {
+            if path_style.is_windows() && character == '\\' {
                 '/'
             } else {
-                char
+                character
             }
         })
         .collect::<Vec<_>>();

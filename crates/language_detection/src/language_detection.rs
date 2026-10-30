@@ -69,7 +69,8 @@ pub fn detect_language(
     let current_language_name = buffer.language().map(|language| language.name());
     cx.background_spawn(async move {
         let detection = betlang::detect(source);
-        let (mut pending_languages, mut confirmed_languages) = (Vec::new(), Vec::new());
+        let mut pending_languages = Vec::new();
+        let mut confirmed_languages = Vec::new();
         // As in VS Code, retain only high-confidence candidate groups followed by a clear confidence gap.
         for (score, language) in detection.top_languages() {
             if pending_languages.last().is_some_and(|(previous_score, _)| {

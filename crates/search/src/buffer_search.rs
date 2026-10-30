@@ -1955,15 +1955,15 @@ impl BufferSearchBar {
         EditorSettings::get_global(cx).use_smartcase_search
     }
 
-    pub fn is_contains_uppercase(&mut self, str: &String) -> bool {
-        str.chars().any(|c| c.is_uppercase())
+    pub fn contains_uppercase(&self, text: &str) -> bool {
+        crate::text_contains_uppercase(text)
     }
 
     fn smartcase(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.should_use_smartcase_search(cx) {
             let query = self.query(cx);
             if !query.is_empty() {
-                let is_case = self.is_contains_uppercase(&query);
+                let is_case = self.contains_uppercase(&query);
                 if self.has_search_option(SearchOptions::CASE_SENSITIVE) != is_case {
                     self.toggle_search_option(SearchOptions::CASE_SENSITIVE, window, cx);
                 }

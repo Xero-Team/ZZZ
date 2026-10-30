@@ -49,14 +49,14 @@ impl Render for ActiveBufferLanguage {
         }
 
         div().when_some(self.active_language.as_ref(), |el, active_language| {
-            let active_language_text = if let Some(active_language_text) = active_language {
-                active_language_text.to_string()
+            let label = if let Some(language_name) = active_language {
+                language_name.to_string()
             } else {
                 tr(cx, "language_selector.unknown", "Unknown")
             };
 
             el.child(
-                Button::new("change-language", active_language_text)
+                Button::new("change-language", label)
                     .label_size(LabelSize::Small)
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(workspace) = this.workspace.upgrade() {

@@ -13,6 +13,7 @@ use settings::Settings;
 use std::{
     borrow::{Borrow, Cow},
     collections::HashSet,
+    ffi::OsStr,
     fs,
     path::Path,
     sync::Arc,
@@ -34,6 +35,7 @@ impl ScopeFileName {
 
 const GLOBAL_SCOPE_NAME: &str = "global";
 const GLOBAL_SCOPE_FILE_NAME: &str = "snippets";
+const PANEL_WIDTH_REMS: f32 = 34.;
 
 impl From<ScopeName> for ScopeFileName {
     fn from(value: ScopeName) -> Self {
@@ -130,7 +132,9 @@ impl Focusable for ScopeSelector {
 
 impl Render for ScopeSelector {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex().w(rems(34.)).child(self.picker.clone())
+        v_flex()
+            .w(rems(PANEL_WIDTH_REMS))
+            .child(self.picker.clone())
     }
 }
 
@@ -164,12 +168,13 @@ impl ScopeSelectorDelegate {
             for entry in read_dir {
                 if let Some(entry) = entry.log_err() {
                     let path = entry.path();
-                    if let (Some(stem), Some(extension)) = (path.file_stem(), path.extension())
-                        && extension.to_os_string().to_str() == Some("json")
-                        && let Ok(file_name) = stem.to_os_string().into_string()
+                    if path
+                        .extension()
+                        .is_some_and(|extension| extension == "json")
+                        && let Some(stem) = path.file_stem().and_then(OsStr::to_str)
                     {
                         existing_scopes
-                            .insert(ScopeName::from(ScopeFileName(Cow::Owned(file_name))));
+                            .insert(ScopeName::from(ScopeFileName(Cow::Owned(stem.to_owned()))));
                     }
                 }
             }
@@ -220,10 +225,11 @@ impl PickerDelegate for ScopeSelectorDelegate {
 
             if let Some(workspace) = self.workspace.upgrade() {
                 cx.spawn_in(window, async move |_, cx| {
-                    let scope_file_name = ScopeFileName(match scope_name.to_lowercase().as_str() {
-                        GLOBAL_SCOPE_NAME => Cow::Borrowed(GLOBAL_SCOPE_FILE_NAME),
-                        _ => Cow::Owned(language.await?.lsp_id()),
-                    });
+                    let scope_file_name = if scope_name.eq_ignore_ascii_case(GLOBAL_SCOPE_NAME) {
+                        ScopeFileName(Cow::Borrowed(GLOBAL_SCOPE_FILE_NAME))
+                    } else {
+                        ScopeFileName(Cow::Owned(language.await?.lsp_id()))
+                    };
 
                     workspace.update_in(cx, |workspace, window, cx| {
                         workspace

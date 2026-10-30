@@ -1,5 +1,6 @@
 use db::kvp::KeyValueStore;
 use gpui::{App, AppContext as _, Context, Subscription, Task, WindowId};
+use std::time::Duration;
 use util::ResultExt;
 
 pub struct Session {
@@ -10,6 +11,7 @@ pub struct Session {
 
 const SESSION_ID_KEY: &str = "session_id";
 const SESSION_WINDOW_STACK_KEY: &str = "session_window_stack";
+const WINDOW_STACK_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 impl Session {
     pub async fn new(session_id: String, db: KeyValueStore) -> Self {
@@ -24,8 +26,9 @@ impl Session {
             .log_err()
             .flatten()
             .and_then(|json| serde_json::from_str::<Vec<u64>>(&json).log_err())
-            .map(|vec: Vec<u64>| {
-                vec.into_iter()
+            .map(|window_ids| {
+                window_ids
+                    .into_iter()
                     .map(WindowId::from)
                     .collect::<Vec<WindowId>>()
             });
@@ -85,7 +88,7 @@ impl AppSession {
                     }
 
                     cx.background_executor()
-                        .timer(std::time::Duration::from_millis(500))
+                        .timer(WINDOW_STACK_POLL_INTERVAL)
                         .await;
                 }
             })
@@ -128,12 +131,12 @@ impl AppSession {
 }
 
 fn window_stack(cx: &App) -> Option<Vec<u64>> {
-    Some(
-        cx.window_stack()?
+    cx.window_stack().map(|windows| {
+        windows
             .into_iter()
             .map(|window| window.window_id().as_u64())
-            .collect(),
-    )
+            .collect()
+    })
 }
 
 async fn store_window_stack(db: KeyValueStore, windows: &[u64]) {

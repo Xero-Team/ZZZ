@@ -162,29 +162,28 @@ impl LanguageSelectorDelegate {
     fn language_data_for_match(&self, mat: &StringMatch, cx: &App) -> (String, Option<Icon>) {
         let mut label = mat.string.clone();
         let buffer_language = self.buffer.read(cx).language();
-        let need_icon = FileFinderSettings::get_global(cx).file_icons;
+        let buffer_language_matches = buffer_language
+            .as_ref()
+            .is_some_and(|buffer_language| buffer_language.name().as_ref() == mat.string.as_str());
 
-        if let Some(buffer_language) = buffer_language
-            .filter(|buffer_language| buffer_language.name().as_ref() == mat.string.as_str())
-        {
+        if buffer_language_matches {
             label.push_str(&tr(cx, "language_selector.current_suffix", " (current)"));
-            let icon = need_icon
-                .then(|| self.language_icon(&buffer_language.config().matcher, cx))
-                .flatten();
-            (label, icon)
-        } else {
-            let icon = need_icon
-                .then(|| {
-                    let language_name = LanguageName::new(mat.string.as_str());
-                    self.language_registry
-                        .available_language_for_name(language_name.as_ref())
-                        .and_then(|available_language| {
-                            self.language_icon(available_language.matcher(), cx)
-                        })
-                })
-                .flatten();
-            (label, icon)
         }
+
+        let icon = if !FileFinderSettings::get_global(cx).file_icons {
+            None
+        } else if buffer_language_matches {
+            buffer_language.as_ref().and_then(|buffer_language| {
+                self.language_icon(&buffer_language.config().matcher, cx)
+            })
+        } else {
+            let language_name = LanguageName::new(mat.string.as_str());
+            self.language_registry
+                .available_language_for_name(language_name.as_ref())
+                .and_then(|available_language| self.language_icon(available_language.matcher(), cx))
+        };
+
+        (label, icon)
     }
 
     fn language_icon(&self, matcher: &LanguageMatcher, cx: &App) -> Option<Icon> {

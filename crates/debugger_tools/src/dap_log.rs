@@ -507,9 +507,9 @@ impl LogStore {
     fn initialization_sequence_for_session(
         &mut self,
         id: &LogStoreEntryIdentifier<'_>,
-    ) -> Option<&Vec<SharedString>> {
+    ) -> Option<&[SharedString]> {
         self.get_debug_adapter_state(id)
-            .map(|state| &state.rpc_messages.initialization_sequence)
+            .map(|state| state.rpc_messages.initialization_sequence.as_slice())
     }
 }
 

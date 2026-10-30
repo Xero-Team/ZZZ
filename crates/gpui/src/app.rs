@@ -473,10 +473,11 @@ impl SystemWindowTabController {
     }
 
     /// Get all tabs in the same window.
-    pub fn tabs(&self, id: WindowId) -> Option<&Vec<SystemWindowTab>> {
+    pub fn tabs(&self, id: WindowId) -> Option<&[SystemWindowTab]> {
         self.tab_groups
             .values()
             .find(|tabs| tabs.iter().any(|tab| tab.id == id))
+            .map(Vec::as_slice)
     }
 
     /// Initialize the visibility of the system window tab controller.
@@ -615,7 +616,7 @@ impl SystemWindowTabController {
         };
 
         let initial_tabs_len = initial_tabs.len();
-        let mut all_tabs = initial_tabs.clone();
+        let mut all_tabs = initial_tabs.to_vec();
 
         for (_, mut tabs) in controller.tab_groups.drain() {
             tabs.retain(|tab| !all_tabs[..initial_tabs_len].contains(tab));
@@ -1243,7 +1244,7 @@ impl App {
         self.update(|cx| {
             let id = cx.windows.insert(None);
             let handle = WindowHandle::new(id);
-            match Window::new(handle.into(), options, cx) {
+            let result = match Window::new(handle.into(), options, cx) {
                 Ok(mut window) => {
                     cx.window_update_stack.push(id);
                     let root_view = build_root_view(&mut window, cx);
@@ -1258,18 +1259,25 @@ impl App {
                     let clear = window.draw(cx);
                     clear.clear();
 
-                    cx.window_handles.insert(id, window.handle);
-                    cx.windows
-                        .get_mut(id)
-                        .expect("entry should be present")
-                        .replace(Box::new(window));
-                    Ok(handle)
+                    match cx.windows.get_mut(id) {
+                        Some(window_slot) => {
+                            window_slot.replace(Box::new(window));
+                            cx.window_handles.insert(id, handle.into());
+                            Ok(handle)
+                        }
+                        None => Err(anyhow!("window entry disappeared while opening")),
+                    }
                 }
-                Err(e) => {
-                    cx.windows.remove(id);
-                    Err(e)
-                }
+                Err(error) => Err(error),
+            };
+
+            if result.is_err() {
+                cx.window_handles.remove(&id);
+                cx.windows.remove(id);
+                SystemWindowTabController::remove_tab(cx, id);
             }
+
+            result
         })
     }
 
@@ -1654,7 +1662,7 @@ impl App {
                     .collect::<Vec<_>>()
                 {
                     self.update_window(window, |_, window, cx| window.draw(cx).clear())
-                        .expect("value should be present");
+                        .log_err();
                 }
 
                 if self.pending_effects.is_empty() {
@@ -1779,7 +1787,7 @@ impl App {
                     let entity = entity.clone();
                     |_, window, cx| (observer)(entity, &mut Some(window), cx)
                 })
-                .expect("All windows should be off the stack when flushing effects");
+                .log_err();
             } else {
                 (observer)(entity.clone(), &mut None, self)
             }
@@ -2749,7 +2757,7 @@ impl AppContext for App {
             .get(window.id)
             .context("window not found")?
             .as_deref()
-            .expect("attempted to read a window that is already on the stack");
+            .context("attempted to read a window that is already on the stack")?;
 
         let root_view = window.root.clone().expect("value should be present");
         let view = root_view

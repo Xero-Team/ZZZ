@@ -10,14 +10,18 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-pub fn channel<T>(value: T) -> (Sender<T>, Receiver<T>) {
-    let state = Arc::new(RwLock::new(State {
+fn new_state<T>(value: T) -> Arc<RwLock<State<T>>> {
+    Arc::new(RwLock::new(State {
         value,
         wakers: BTreeMap::new(),
         next_waker_id: WakerId::default(),
         version: 0,
         closed: false,
-    }));
+    }))
+}
+
+pub fn channel<T>(value: T) -> (Sender<T>, Receiver<T>) {
+    let state = new_state(value);
 
     (
         Sender {
@@ -168,15 +172,10 @@ impl<T> Receiver<T> {
 
     /// Creates a new [`Receiver`] holding an initial value that will never change.
     pub fn constant(value: T) -> Self {
-        let state = Arc::new(RwLock::new(State {
-            value,
-            wakers: BTreeMap::new(),
-            next_waker_id: WakerId::default(),
+        Self {
+            state: new_state(value),
             version: 0,
-            closed: false,
-        }));
-
-        Self { state, version: 0 }
+        }
     }
 }
 

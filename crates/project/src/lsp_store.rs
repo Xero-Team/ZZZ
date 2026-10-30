@@ -10999,7 +10999,7 @@ impl LspStore {
                                 new_uri: new_uri.clone(),
                             }],
                         })
-                        .ok();
+                        .log_err();
                 }
             }
             Some(())

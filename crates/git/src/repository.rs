@@ -3676,10 +3676,10 @@ impl GitBinary {
         askpass: Option<AskPassDelegate>,
         env: &HashMap<String, String>,
         args: &[S],
-        configure: impl FnOnce(&mut util::command::Command),
+        configure: impl FnOnce(&mut util::command::Command) + Send,
     ) -> Result<RemoteCommandOutput>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         let mut config = Vec::new();
         if askpass.is_none() {

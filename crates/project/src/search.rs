@@ -57,8 +57,8 @@ impl SearchInputs {
     pub fn files_to_exclude(&self) -> &PathMatcher {
         &self.files_to_exclude
     }
-    pub fn buffers(&self) -> &Option<Vec<Entity<Buffer>>> {
-        &self.buffers
+    pub fn buffers(&self) -> Option<&[Entity<Buffer>]> {
+        self.buffers.as_deref()
     }
 }
 #[derive(Clone, Debug)]
@@ -676,8 +676,8 @@ impl SearchQuery {
         self.as_inner().files_to_exclude()
     }
 
-    pub fn buffers(&self) -> Option<&Vec<Entity<Buffer>>> {
-        self.as_inner().buffers.as_ref()
+    pub fn buffers(&self) -> Option<&[Entity<Buffer>]> {
+        self.as_inner().buffers()
     }
 
     pub fn is_opened_only(&self) -> bool {

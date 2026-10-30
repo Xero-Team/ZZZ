@@ -145,7 +145,7 @@ impl BatchedTextRun {
             origin.y + self.start_point.line as f32 * dimensions.line_height,
         );
 
-        let _ = window
+        window
             .text_system()
             .shape_line(
                 self.text.clone().into(),

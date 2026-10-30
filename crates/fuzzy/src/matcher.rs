@@ -8,6 +8,16 @@ use crate::{CharBag, char_bag::simple_lowercase};
 const BASE_DISTANCE_PENALTY: f64 = 0.6;
 const ADDITIONAL_DISTANCE_PENALTY: f64 = 0.05;
 const MIN_DISTANCE_PENALTY: f64 = 0.2;
+/// Score for a match right after a path separator.
+const SEPARATOR_BOUNDARY_SCORE: f64 = 0.9;
+/// Score for a match right after `-`, `_`, a space, a digit, or a case change.
+const WORD_BOUNDARY_SCORE: f64 = 0.8;
+/// Score for a match right after a `.`.
+const DOT_BOUNDARY_SCORE: f64 = 0.7;
+/// Multiplier applied when only the case differs from the query.
+const CASE_MISMATCH_PENALTY: f64 = 0.001;
+/// Non-zero filler for the memo table, so a failed branch is not rescored.
+const NON_ZERO_MEMOIZED_SCORE: f64 = 1e-18;
 
 pub struct Matcher<'a> {
     query: &'a [char],
@@ -266,16 +276,16 @@ impl<'a> Matcher<'a> {
                     };
 
                     if previous_character == '/' {
-                        char_score = 0.9;
+                        char_score = SEPARATOR_BOUNDARY_SCORE;
                     } else if (previous_character == '-'
                         || previous_character == '_'
                         || previous_character == ' '
                         || previous_character.is_numeric())
                         || (previous_character.is_lowercase() && current_character.is_uppercase())
                     {
-                        char_score = 0.8;
+                        char_score = WORD_BOUNDARY_SCORE;
                     } else if previous_character == '.' {
-                        char_score = 0.7;
+                        char_score = DOT_BOUNDARY_SCORE;
                     } else if query_index == 0 {
                         char_score = BASE_DISTANCE_PENALTY;
                     } else {
@@ -293,7 +303,7 @@ impl<'a> Matcher<'a> {
                 if (self.smart_case || current_character == '/')
                     && self.query[query_index] != current_character
                 {
-                    char_score *= 0.001;
+                    char_score *= CASE_MISMATCH_PENALTY;
                 }
 
                 let mut multiplier = char_score;
@@ -310,7 +320,7 @@ impl<'a> Matcher<'a> {
                     if next_score < self.min_score {
                         // Ensure that score is non-zero so we use it in the memo table.
                         if score == 0.0 {
-                            score = 1e-18;
+                            score = NON_ZERO_MEMOIZED_SCORE;
                         }
                         continue;
                     }

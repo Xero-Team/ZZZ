@@ -62,7 +62,7 @@ impl VsCodeThemeConverter {
             appearance,
             style: ThemeStyleContent {
                 window_background_appearance: Some(WindowBackgroundContent::Opaque),
-                accents: Vec::new(), //TODO can we read this from the theme?
+                accents: Vec::new(), // TODO: can we read this from the theme?
                 colors: theme_colors,
                 status: status_colors,
                 players: Vec::new(),
@@ -99,8 +99,6 @@ impl VsCodeThemeConverter {
             info_background: vscode_colors.editor_info.background.clone(),
             info_border: vscode_colors.editor_info.border.clone(),
             modified: vscode_colors.editor_gutter.modified_background.clone(),
-            // renamed: None,
-            // success: None,
             warning: vscode_colors.editor_warning.foreground.clone(),
             warning_background: vscode_colors.editor_warning.background.clone(),
             warning_border: vscode_colors.editor_warning.border.clone(),
@@ -246,19 +244,12 @@ impl VsCodeThemeConverter {
                 .unwrap_or_else(|| "no identifier".to_owned());
             log::info!("Matched '{syntax_token}' to '{matched_label}'");
 
+            let vscode_font_style = token_color.settings.font_style.as_deref();
             let highlight_style = HighlightStyleContent {
                 color: token_color.settings.foreground.clone(),
                 background_color: token_color.settings.background.clone(),
-                font_style: token_color
-                    .settings
-                    .font_style
-                    .as_ref()
-                    .and_then(|style| try_parse_font_style(style)),
-                font_weight: token_color
-                    .settings
-                    .font_style
-                    .as_ref()
-                    .and_then(|style| try_parse_font_weight(style)),
+                font_style: vscode_font_style.and_then(try_parse_font_style),
+                font_weight: vscode_font_style.and_then(try_parse_font_weight),
             };
 
             if highlight_style.is_empty() {

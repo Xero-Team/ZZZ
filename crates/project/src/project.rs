@@ -78,7 +78,7 @@ pub use environment::ProjectEnvironment;
 use futures::{
     StreamExt,
     channel::mpsc::{self, UnboundedReceiver},
-    future::try_join_all,
+    future::join_all,
 };
 pub use image_store::{ImageItem, ImageStore};
 use image_store::{ImageItemEvent, ImageStoreEvent};
@@ -1760,7 +1760,7 @@ impl Project {
     }
 
     #[cfg(feature = "test-support")]
-    pub fn client_subscriptions(&self) -> &Vec<client::Subscription> {
+    pub fn client_subscriptions(&self) -> &[client::Subscription] {
         &self.client_subscriptions
     }
 
@@ -2422,7 +2422,7 @@ impl Project {
                 .read_with(cx, |this, _| {
                     this.did_rename_entry(worktree_id, &old_abs_path, &new_abs_path, is_dir);
                 })
-                .ok();
+                .log_err();
             Ok(entry)
         })
     }
@@ -2826,14 +2826,31 @@ impl Project {
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         cx.spawn(async move |this, cx| {
-            let save_tasks = buffers.into_iter().filter_map(|buffer| {
-                this.update(cx, |this, cx| {
+            let mut save_tasks = Vec::with_capacity(buffers.len());
+            let mut project_error = None;
+            for buffer in buffers {
+                match this.update(cx, |this, cx| {
                     this.save_buffer_with_force(buffer, force, cx)
-                })
-                .ok()
-            });
-            try_join_all(save_tasks).await?;
-            Ok(())
+                }) {
+                    Ok(save_task) => save_tasks.push(save_task),
+                    Err(error) => {
+                        project_error.get_or_insert(error);
+                        break;
+                    }
+                }
+            }
+
+            let mut save_error = None;
+            for save_result in join_all(save_tasks).await {
+                if let Err(error) = save_result {
+                    save_error.get_or_insert(error);
+                }
+            }
+
+            match project_error.or(save_error) {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
         })
     }
 
@@ -3150,7 +3167,7 @@ impl Project {
                             name: name.clone(),
                         },
                     )
-                    .ok();
+                    .log_err();
                 }
 
                 match message {

@@ -16,6 +16,14 @@ pub use search_status_button::SEARCH_ICON;
 
 use crate::project_search::ProjectSearchBar;
 
+/// Whether `text` contains at least one uppercase character.
+///
+/// Smart-case search needs this both for the buffer search bar and the project
+/// search view, so it lives at the crate root instead of being duplicated.
+pub(crate) fn text_contains_uppercase(text: &str) -> bool {
+    text.chars().any(|character| character.is_uppercase())
+}
+
 pub mod buffer_search;
 pub mod project_search;
 pub(crate) mod search_bar;

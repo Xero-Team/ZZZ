@@ -26,11 +26,11 @@ impl SyntaxTheme {
         }
     }
 
-    fn create_capture_name_map(highlights: Vec<String>) -> BTreeMap<String, usize> {
-        highlights
+    fn create_capture_name_map(capture_names: Vec<String>) -> BTreeMap<String, usize> {
+        capture_names
             .into_iter()
             .enumerate()
-            .map(|(i, key)| (key, i))
+            .map(|(index, name)| (name, index))
             .collect()
     }
 
@@ -181,11 +181,13 @@ mod bundled_themes {
             HighlightStyle {
                 color: self.color.as_deref().map(hex_to_hsla),
                 font_weight: self.font_weight.map(FontWeight),
-                font_style: self.font_style.as_deref().and_then(|s| match s {
-                    "italic" => Some(FontStyle::Italic),
-                    "normal" => Some(FontStyle::Normal),
-                    "oblique" => Some(FontStyle::Oblique),
-                    _ => None,
+                font_style: self.font_style.as_deref().and_then(|font_style_name| {
+                    match font_style_name {
+                        "italic" => Some(FontStyle::Italic),
+                        "normal" => Some(FontStyle::Normal),
+                        "oblique" => Some(FontStyle::Oblique),
+                        _ => None,
+                    }
                 }),
                 ..Default::default()
             }
@@ -194,10 +196,17 @@ mod bundled_themes {
 
     fn hex_to_hsla(hex: &str) -> Hsla {
         let hex = hex.trim_start_matches('#');
+        let parse_hex = |hex: &str| match u32::from_str_radix(hex, 16) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                log::error!("invalid hex color {hex:?}: {error}");
+                None
+            }
+        };
         let rgba: Rgba = match hex.len() {
-            6 => rgb(u32::from_str_radix(hex, 16).unwrap_or(0)),
+            6 => rgb(parse_hex(hex).unwrap_or(0)),
             8 => {
-                let value = u32::from_str_radix(hex, 16).unwrap_or(0);
+                let value = parse_hex(hex).unwrap_or(0);
                 Rgba {
                     r: ((value >> 24) & 0xff) as f32 / 255.0,
                     g: ((value >> 16) & 0xff) as f32 / 255.0,
@@ -205,7 +214,10 @@ mod bundled_themes {
                     a: (value & 0xff) as f32 / 255.0,
                 }
             }
-            _ => rgb(0),
+            _ => {
+                log::error!("invalid hex color {hex:?}: expected 6 or 8 hexadecimal digits");
+                rgb(0)
+            }
         };
         rgba.into()
     }
@@ -381,5 +393,12 @@ mod tests {
         assert_eq!(theme.highlight_id("function.method.async"), Some(1));
         assert_eq!(theme.highlight_id("functionality"), None);
         assert_eq!(theme.highlight_id("missing"), None);
+    }
+
+    #[cfg(feature = "bundled-themes")]
+    #[test]
+    fn test_bundled_one_dark_theme_parses() {
+        let theme = SyntaxTheme::one_dark();
+        assert!(theme.highlight_id("keyword").is_some());
     }
 }

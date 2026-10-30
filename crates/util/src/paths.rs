@@ -1067,9 +1067,11 @@ impl PathWithPosition {
                 .rsplitn(3, delimiter)
                 .collect::<Vec<_>>()
                 .into_iter()
-                .rev()
-                .fuse();
-            let mut path_string = path_parts.next().expect("rsplitn should have the rest of the string as its last parameter that we reversed").to_owned();
+                .rev();
+            let Some(first_part) = path_parts.next() else {
+                return Self::from_path(path.to_path_buf());
+            };
+            let mut path_string = first_part.to_owned();
             let mut row = None;
             let mut column = None;
             if let Some(maybe_row) = path_parts.next() {

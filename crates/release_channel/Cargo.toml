@@ -10,4 +10,5 @@ workspace = true
 
 [dependencies]
 gpui.workspace = true
+log.workspace = true
 semver.workspace = true

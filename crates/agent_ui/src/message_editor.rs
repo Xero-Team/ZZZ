@@ -249,13 +249,11 @@ async fn resolve_pasted_context_items(
     project_is_local: bool,
     supports_images: bool,
     entries: Vec<ClipboardEntry>,
+    default_image_name: SharedString,
     cx: &mut gpui::AsyncWindowContext,
 ) -> (Vec<ResolvedPastedContextItem>, Vec<Entity<Worktree>>) {
     let mut items = Vec::new();
     let mut added_worktrees = Vec::new();
-    let default_image_name: SharedString = cx
-        .update(|_, cx| app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into())
-        .unwrap_or_else(|_| SharedString::from("Image"));
     // A bitmap and image files in the clipboard are usually the same image (e.g. a
     // screenshot saved to a temporary file), so skip image files when there's a bitmap.
     let has_clipboard_image = entries
@@ -1304,6 +1302,8 @@ impl MessageEditor {
         let mention_set = self.mention_set.clone();
         let workspace = self.workspace.clone();
         let entries = clipboard.clone().into_entries().collect::<Vec<_>>();
+        let default_image_name =
+            app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into();
 
         window
             .spawn(cx, async move |cx| {
@@ -1312,6 +1312,7 @@ impl MessageEditor {
                     project_is_local,
                     supports_images,
                     entries,
+                    default_image_name,
                     &mut *cx,
                 )
                 .await;
@@ -1497,6 +1498,8 @@ impl MessageEditor {
         let editor = self.editor.clone();
         let mention_set = self.mention_set.clone();
         let workspace = self.workspace.clone();
+        let default_image_name =
+            app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into();
 
         let paths_receiver = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
@@ -1513,11 +1516,6 @@ impl MessageEditor {
                     return Ok::<(), anyhow::Error>(());
                 };
 
-                let default_image_name: SharedString = cx
-                    .update(|_, cx| {
-                        app_i18n::tr(cx, "agent_ui.mention_set.default_image_name", "Image").into()
-                    })
-                    .unwrap_or_else(|_| SharedString::from("Image"));
                 let images = cx
                     .background_spawn(async move {
                         paths

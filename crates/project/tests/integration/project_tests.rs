@@ -7432,6 +7432,58 @@ async fn test_save_file(cx: &mut gpui::TestAppContext) {
     assert_eq!(new_text, buffer.update(cx, |buffer, _| buffer.text()));
 }
 
+#[gpui::test]
+async fn test_save_buffers_waits_for_all_saves_before_returning_an_error(
+    cx: &mut gpui::TestAppContext,
+) {
+    init_test(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/dir"),
+        json!({
+            "file1": "the old contents",
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    let file_buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/dir/file1"), cx)
+        })
+        .await
+        .unwrap();
+    file_buffer.update(cx, |buffer, cx| {
+        buffer.edit([(0..0, "updated contents\n")], None, cx);
+    });
+
+    let fileless_buffer = project.update(cx, |project, cx| {
+        project.create_local_buffer("", None, false, cx)
+    });
+    let write_count_before_save = fs.write_count_for_path(path!("/dir/file1"));
+    let buffers = HashSet::from_iter([file_buffer.clone(), fileless_buffer]);
+
+    let result = project
+        .update(cx, |project, cx| project.save_buffers(buffers, false, cx))
+        .await;
+
+    assert!(
+        result.is_err(),
+        "a buffer without a file should make save_buffers return an error"
+    );
+    assert_eq!(
+        fs.write_count_for_path(path!("/dir/file1")) - write_count_before_save,
+        1,
+        "the saveable buffer should still be written after another buffer fails"
+    );
+    let on_disk_text = fs.load(path!("/dir/file1").as_ref()).await.unwrap();
+    assert_eq!(
+        on_disk_text,
+        file_buffer.update(cx, |buffer, _| buffer.text())
+    );
+}
+
 #[gpui::test(iterations = 10)]
 async fn test_save_file_spawns_language_server(cx: &mut gpui::TestAppContext) {
     // Issue: #24349

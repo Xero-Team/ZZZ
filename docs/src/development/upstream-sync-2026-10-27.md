@@ -195,7 +195,7 @@ The reviewed baseline advances to
 | 2a74c8dff6 | B     | e17c46238f             | Deletes the unused hash-keyed layout cache and its key types. Replayed by hand, and no caller outside `text_system` existed.                                                                                 |
 | 1808df02c0 | C     | --                     | Removes `block` by bumping vendored `scap` and rewriting the upstream `gpui_apple` Metal renderer. The upstream `gpui_apple` renderer is absent locally and ZZZ vendors an older `scap`, so nothing applies. |
 | f14592c4a5 | C     | --                     | Raises the macOS floor to 12 and replaces a deprecated icon API. The local window has no `iconForFileType` path, and the floor bump is release metadata.                                                     |
-| 96b617fa37 | B     | d0217b7d0d             | Drops navigation history and persisted recent paths for deleted entries. The `zed` test hunk was omitted; one test drives the path change directly.                                                          |
+| 96b617fa37 | B     | d0217b7d0d             | Drops navigation history and persisted recent paths for deleted entries. The moved test expectation was ported to `crates/zzz`; one test drives the path change directly.                                    |
 | 087340e2d7 | C     | --                     | Only moves the `crash-context` pin to a minidump-writer git SHA in the manifest and lockfile. Dependency churn with no local code path.                                                                      |
 | 5e548b8ad9 | B     | 254659a2c9             | Focuses the zoomed panel from its status bar button. The click-through test needs a panel type ZZZ does not carry; a focused test asserts the handle instead.                                                |
 | e0f4f28001 | B     | 1f8cbc13e5             | Anchors submenus to their trigger row and stacks nested menus by depth. The accessibility refactor and its focus tests were omitted because ZZZ's context menu keeps cfg-gated roles.                        |
@@ -281,11 +281,11 @@ macOS version is release metadata that the sync does not decide.
 `Workspace` listens to `WorktreeUpdatedEntries`, drops navigation history
 and persisted recent paths for entries removed from disk, and
 `recent_navigation_history_iter` skips entries whose buffer is gone;
-`NavHistory` gains `remove_items` and `retain_entries`. The `crates/zed`
-expectation update was omitted because ZZZ has no `zed` crate, and one
-test calls `active_item_path_changed` directly because the local
-`workspace/item.rs` has no `ItemEvent::UpdateBreadcrumbs` arm. Nine tests
-pass.
+`NavHistory` gains `remove_items` and `retain_entries`. The upstream
+`crates/zed` expectation update was ported to the equivalent
+`crates/zzz` test; one test calls `active_item_path_changed` directly
+because the local `workspace/item.rs` has no
+`ItemEvent::UpdateBreadcrumbs` arm. The ported navigation test passes.
 
 #### 087340e2d7 — cmd-q panic (C)
 

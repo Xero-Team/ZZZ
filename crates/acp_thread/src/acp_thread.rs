@@ -244,7 +244,7 @@ impl AssistantMessageChunk {
     }
 }
 
-fn can_merge_message_chunks(existing: Option<&String>, incoming: Option<&String>) -> bool {
+fn can_merge_message_chunks(existing: Option<&str>, incoming: Option<&str>) -> bool {
     match (existing, incoming) {
         (Some(existing), Some(incoming)) => existing == incoming,
         _ => true,
@@ -2310,8 +2310,8 @@ impl AcpThread {
                         let already_in_user_message = message.is_optimistic
                             && message.chunks.contains(&content)
                             && can_merge_message_chunks(
-                                message.protocol_id.as_ref(),
-                                message_id.as_ref(),
+                                message.protocol_id.as_deref(),
+                                message_id.as_deref(),
                             );
                         if already_in_user_message && message.protocol_id.is_none() {
                             message.protocol_id = message_id.clone();
@@ -2455,7 +2455,7 @@ impl AcpThread {
                 ..
             }) = last_entry
             && *existing_indented == indented
-            && can_merge_message_chunks(existing_protocol_id.as_ref(), protocol_id.as_ref())
+            && can_merge_message_chunks(existing_protocol_id.as_deref(), protocol_id.as_deref())
             && !(*existing_is_optimistic
                 && !is_optimistic
                 && existing_protocol_id.is_none()
@@ -2521,7 +2521,7 @@ impl AcpThread {
         // streaming instead of appending all at once which may feel more choppy.
         if let acp::ContentBlock::Text(text_content) = &chunk {
             if let Some(markdown) =
-                self.streaming_markdown_target(message_id.as_ref(), is_thought, indented)
+                self.streaming_markdown_target(message_id.as_deref(), is_thought, indented)
             {
                 let entries_len = self.entries.len();
                 cx.emit(AcpThreadEvent::EntryUpdated(entries_len - 1));
@@ -2557,7 +2557,7 @@ impl AcpThread {
                         block,
                     }),
                     true,
-                ) if can_merge_message_chunks(existing_id.as_ref(), message_id.as_ref()) => {
+                ) if can_merge_message_chunks(existing_id.as_deref(), message_id.as_deref()) => {
                     if existing_id.is_none() {
                         *existing_id = message_id;
                     }
@@ -2605,7 +2605,7 @@ impl AcpThread {
 
     fn streaming_markdown_target(
         &mut self,
-        message_id: Option<&String>,
+        message_id: Option<&str>,
         is_thought: bool,
         indented: bool,
     ) -> Option<Entity<Markdown>> {
@@ -2632,9 +2632,9 @@ impl AcpThread {
                         block: ContentBlock::Markdown { markdown },
                     },
                     true,
-                ) if can_merge_message_chunks(existing_id.as_ref(), message_id) => {
+                ) if can_merge_message_chunks(existing_id.as_deref(), message_id) => {
                     if existing_id.is_none() {
-                        *existing_id = message_id.cloned();
+                        *existing_id = message_id.map(str::to_owned);
                     }
                     Some(markdown.clone())
                 }
