@@ -48,9 +48,23 @@ impl AudioView {
             .child(self.render_transport(cx))
             .when_some(self.playback_error.clone(), |this, message| {
                 this.child(
-                    Label::new(message)
-                        .size(LabelSize::Small)
-                        .color(Color::Error),
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            Label::new(message)
+                                .size(LabelSize::Small)
+                                .color(Color::Error),
+                        )
+                        .child(
+                            Button::new(
+                                "audio-retry-playback",
+                                tr(cx, "audio_viewer.error.retry", "Retry"),
+                            )
+                            .style(ButtonStyle::Outlined)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(Self::retry_playback)),
+                        ),
                 )
             })
             .when_some(self.metadata_parts(cx), |this, parts| {

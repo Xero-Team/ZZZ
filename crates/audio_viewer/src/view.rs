@@ -523,11 +523,16 @@ impl AudioView {
             handle.stop();
         }
         self.scrub = None;
+        self.reset_stopped_state();
+        cx.notify();
+    }
+
+    fn reset_stopped_state(&mut self) {
         self.playback = PlaybackStatus::Stopped;
+        self.playback_error = None;
         self.position = Duration::ZERO;
         self.last_notified_position = Duration::ZERO;
         self._position_task = None;
-        cx.notify();
     }
 
     fn clamp_position(&self, position: Duration) -> Duration {
@@ -555,15 +560,11 @@ impl AudioView {
         };
         let path = loaded.path.clone();
         let format_hint = loaded.format_hint.clone();
-        let duration = loaded.metadata.duration;
-        if let Some(duration) = duration
-            && self.position >= duration
-        {
-            self.position = Duration::ZERO;
-            self.last_notified_position = Duration::ZERO;
+        let start = playback_start_position(self.position, loaded.metadata.duration);
+        if start != self.position {
+            self.position = start;
+            self.last_notified_position = start;
         }
-
-        let start = self.position;
         let volume = self.output_volume();
 
         match player::play_path(&path, &format_hint, start, volume, cx) {
@@ -623,6 +624,15 @@ impl AudioView {
 
     pub(crate) fn stop(&mut self, _: &Stop, _window: &mut Window, cx: &mut Context<Self>) {
         self.stop_playback(cx);
+    }
+
+    pub(crate) fn retry_playback(
+        &mut self,
+        _: &gpui::ClickEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.start_playback(cx);
     }
 
     pub(crate) fn seek_forward(
@@ -789,6 +799,13 @@ fn gain_for_fader(fader: f32) -> f32 {
     fader.clamp(0.0, 1.0).powi(3)
 }
 
+fn playback_start_position(position: Duration, duration: Option<Duration>) -> Duration {
+    match duration {
+        Some(duration) if position >= duration => Duration::ZERO,
+        _ => position,
+    }
+}
+
 pub(crate) fn format_timestamp(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
     let hours = total_seconds / 3600;
@@ -836,7 +853,8 @@ fn format_channels(channels: u16, cx: &App) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_bit_depth, format_bitrate, format_timestamp, gain_for_fader, position_visible_change,
+        format_bit_depth, format_bitrate, format_timestamp, gain_for_fader,
+        playback_start_position, position_visible_change,
     };
     use std::time::Duration;
 
@@ -889,5 +907,22 @@ mod tests {
         assert_eq!(gain_for_fader(1.0), 1.0);
         assert_eq!(gain_for_fader(-0.5), 0.0);
         assert_eq!(gain_for_fader(1.5), 1.0);
+    }
+
+    #[test]
+    fn playback_retry_preserves_position_until_end() {
+        let duration = Some(Duration::from_secs(60));
+        assert_eq!(
+            playback_start_position(Duration::from_secs(42), duration),
+            Duration::from_secs(42)
+        );
+        assert_eq!(
+            playback_start_position(Duration::from_secs(60), duration),
+            Duration::ZERO
+        );
+        assert_eq!(
+            playback_start_position(Duration::from_secs(42), None),
+            Duration::from_secs(42)
+        );
     }
 }

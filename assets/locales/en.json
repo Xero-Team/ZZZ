@@ -3277,6 +3277,7 @@
     "audio_viewer.error.missing_extension": "Audio file has no extension",
     "audio_viewer.error.not_local": "Audio file is not available locally",
     "audio_viewer.error.playback": "Could not open audio output",
+    "audio_viewer.error.retry": "Retry",
     "audio_viewer.channels.mono": "Mono",
     "audio_viewer.channels.stereo": "Stereo",
     "audio_viewer.channels.count": "{} channels",
