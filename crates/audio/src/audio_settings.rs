@@ -5,8 +5,13 @@ use std::{
 
 use cpal::DeviceId;
 use gpui::App;
+use parking_lot::Mutex;
 use settings::{RegisterSetting, Settings, SettingsStore};
 use util::ResultExt;
+
+use crate::Audio;
+
+static LAST_OUTPUT_DEVICE: Mutex<Option<DeviceId>> = Mutex::new(None);
 
 #[derive(Clone, Debug, RegisterSetting)]
 pub struct AudioSettings {
@@ -64,7 +69,19 @@ pub struct LiveSettings {
 
 impl LiveSettings {
     pub(crate) fn initialize(&self, cx: &mut App) {
+        let initial_output_device = AudioSettings::get_global(cx).output_audio_device.clone();
+        *LAST_OUTPUT_DEVICE.lock() = initial_output_device;
+
         cx.observe_global::<SettingsStore>(move |cx| {
+            let current_output_device = AudioSettings::get_global(cx).output_audio_device.clone();
+            let previous_output_device = {
+                let mut last_output_device = LAST_OUTPUT_DEVICE.lock();
+                std::mem::replace(&mut *last_output_device, current_output_device.clone())
+            };
+            if previous_output_device != current_output_device {
+                Audio::invalidate_output(cx);
+            }
+
             LIVE_SETTINGS.auto_microphone_volume.store(
                 AudioSettings::get_global(cx).auto_microphone_volume,
                 Ordering::Relaxed,

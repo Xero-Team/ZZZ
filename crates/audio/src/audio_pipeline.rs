@@ -18,7 +18,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use util::ResultExt;
 
@@ -32,30 +32,64 @@ use crate::Sound;
 
 use super::{CHANNEL_COUNT, SAMPLE_RATE};
 
+const DEVICE_ENUMERATION_INTERVAL: Duration = Duration::from_secs(10);
+static LAST_ENUMERATION: Mutex<Option<Instant>> = Mutex::new(None);
+
 pub fn init(cx: &mut App) {
     LIVE_SETTINGS.initialize(cx);
 }
 
-// TODO(jk): this is currently cached only once - we should observe and react instead
 pub fn ensure_devices_initialized(cx: &mut App) {
-    if cx.has_global::<AvailableAudioDevices>() {
+    let initialized = cx.has_global::<AvailableAudioDevices>();
+    if !initialized {
+        cx.default_global::<AvailableAudioDevices>();
+    }
+
+    let now = Instant::now();
+    let should_enumerate = {
+        let mut last_enumeration = LAST_ENUMERATION.lock();
+        let due = device_enumeration_due(*last_enumeration, now);
+        if !initialized || due {
+            *last_enumeration = Some(now);
+        }
+        !initialized || due
+    };
+    if !should_enumerate {
         return;
     }
-    cx.default_global::<AvailableAudioDevices>();
-    let task = cx
+
+    let enumeration_task = cx
         .background_executor()
         .spawn(async move { get_available_audio_devices() });
     cx.spawn(async move |cx: &mut AsyncApp| {
-        let devices = task.await;
+        let devices = enumeration_task.await;
         cx.update(|cx| cx.set_global(AvailableAudioDevices(devices)));
         cx.refresh();
     })
     .detach();
 }
 
+fn device_enumeration_due(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|last| now.saturating_duration_since(last) >= DEVICE_ENUMERATION_INTERVAL)
+}
+
+struct OutputSink {
+    _handle: MixerDeviceSink,
+    mixer: Mixer,
+    failed: Arc<AtomicBool>,
+}
+
+fn output_needs_rebuild(output: Option<&OutputSink>) -> bool {
+    output_failure_needs_rebuild(output.map(|output| output.failed.as_ref()))
+}
+
+fn output_failure_needs_rebuild(failed: Option<&AtomicBool>) -> bool {
+    failed.is_none_or(|failed| failed.load(Ordering::Acquire))
+}
+
 #[derive(Default)]
 pub struct Audio {
-    output: Option<(MixerDeviceSink, Mixer)>,
+    output: Option<OutputSink>,
     source_cache: HashMap<Sound, Buffered<Decoder<Cursor<Vec<u8>>>>>,
     preview: Option<PlaybackHandle>,
     player: Option<Arc<Player>>,
@@ -70,15 +104,19 @@ impl Audio {
             "Audio does not sound correct without optimizations. Use a release build to debug audio issues"
         );
 
-        if self.output.is_none() {
-            let (output_handle, output_mixer) = open_output_stream(output_audio_device)?;
-            self.output = Some((output_handle, output_mixer));
+        if output_needs_rebuild(self.output.as_ref()) {
+            self.output.take();
+            self.stop_playback();
+
+            let output =
+                open_output_stream(output_audio_device).context("Could not open output stream")?;
+            self.output = Some(output);
         }
 
-        let Some((_, mixer)) = self.output.as_ref() else {
+        let Some(output) = self.output.as_ref() else {
             anyhow::bail!("output stream was not retained after opening")
         };
-        Ok(mixer)
+        Ok(&output.mixer)
     }
 
     pub fn play_sound(sound: Sound, cx: &mut App) {
@@ -96,15 +134,11 @@ impl Audio {
     }
 
     pub fn end_call(cx: &mut App) {
-        cx.update_default_global(|this: &mut Self, _cx| {
-            if let Some(preview) = this.preview.take() {
-                preview.stop();
-            }
-            if let Some(player) = this.player.take() {
-                player.stop();
-            }
-            this.output.take();
-        });
+        cx.update_default_global(|this: &mut Self, _cx| this.invalidate_output_state());
+    }
+
+    pub(crate) fn invalidate_output(cx: &mut App) {
+        cx.update_default_global(|this: &mut Self, _cx| this.invalidate_output_state());
     }
 
     pub fn play_source<S>(source: S, cx: &mut App) -> Result<PlaybackHandle>
@@ -145,14 +179,21 @@ impl Audio {
     }
 
     pub fn stop_preview(cx: &mut App) {
-        cx.update_default_global(|this: &mut Self, _cx| {
-            if let Some(preview) = this.preview.take() {
-                preview.stop();
-            }
-            if let Some(player) = this.player.take() {
-                player.stop();
-            }
-        });
+        cx.update_default_global(|this: &mut Self, _cx| this.stop_playback());
+    }
+
+    fn stop_playback(&mut self) {
+        if let Some(preview) = self.preview.take() {
+            preview.stop();
+        }
+        if let Some(player) = self.player.take() {
+            player.stop();
+        }
+    }
+
+    fn invalidate_output_state(&mut self) {
+        self.stop_playback();
+        self.output.take();
     }
 
     fn start_preview<S>(
@@ -403,6 +444,31 @@ mod tests {
         );
         assert!(control.finished.load(Ordering::Relaxed));
     }
+
+    #[test]
+    fn output_rebuild_state_covers_missing_healthy_and_failed() {
+        assert!(output_failure_needs_rebuild(None));
+
+        let failed = AtomicBool::new(false);
+        assert!(!output_failure_needs_rebuild(Some(&failed)));
+
+        failed.store(true, Ordering::Release);
+        assert!(output_failure_needs_rebuild(Some(&failed)));
+    }
+
+    #[test]
+    fn device_enumeration_is_throttled_for_ten_seconds() {
+        let now = Instant::now();
+        assert!(device_enumeration_due(None, now));
+        assert!(!device_enumeration_due(
+            Some(now),
+            now + Duration::from_millis(9_999)
+        ));
+        assert!(device_enumeration_due(
+            Some(now),
+            now + DEVICE_ENUMERATION_INTERVAL
+        ));
+    }
 }
 
 pub fn open_input_stream(
@@ -471,9 +537,26 @@ pub fn open_test_output(device_id: Option<DeviceId>) -> anyhow::Result<MixerDevi
         .context("Could not open output stream")
 }
 
-pub fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<(MixerDeviceSink, Mixer)> {
+fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<OutputSink> {
     let device = resolve_device(device_id.as_ref(), AudioDeviceKind::Output)?;
-    let builder = DeviceSinkBuilder::from_device(device)?;
+    let failed = Arc::new(AtomicBool::new(false));
+    let callback_failed = failed.clone();
+    let builder = DeviceSinkBuilder::from_device(device)?.with_error_callback(move |error| {
+        match error.kind() {
+            cpal::ErrorKind::DeviceNotAvailable
+            | cpal::ErrorKind::BackendError
+            | cpal::ErrorKind::DeviceBusy => {
+                callback_failed.store(true, Ordering::Release);
+                log::warn!("Audio output stream failed and will be rebuilt: {error}");
+            }
+            cpal::ErrorKind::DeviceChanged => {
+                log::info!("Audio output stream was rerouted to a new device: {error}");
+            }
+            _ => {
+                log::warn!("Audio output stream error: {error}");
+            }
+        }
+    });
     let mut output_handle = builder
         .open_sink_or_fallback()
         .context("Could not open output stream")?;
@@ -484,7 +567,11 @@ pub fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<(MixerD
     output_mixer.add(rodio::source::Zero::new(CHANNEL_COUNT, SAMPLE_RATE));
     output_handle.mixer().add(source);
 
-    Ok((output_handle, output_mixer))
+    Ok(OutputSink {
+        _handle: output_handle,
+        mixer: output_mixer,
+        failed,
+    })
 }
 
 #[derive(Clone, Debug)]
