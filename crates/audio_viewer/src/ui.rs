@@ -6,7 +6,7 @@ use gpui::{
     ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, img, px, relative,
 };
 use i18n::tr;
-use ui::{Tooltip, prelude::*};
+use ui::{ContextMenu, DropdownMenu, DropdownStyle, IconPosition, Tooltip, prelude::*};
 use workspace::{
     HideStatusItem, ItemHandle, StatusItemView, ToolbarItemEvent, ToolbarItemLocation,
     ToolbarItemView, Workspace,
@@ -15,12 +15,12 @@ use workspace::{
 use crate::{
     Stop, ToggleMute, TogglePlay,
     scrubber::ScrubKind,
-    view::{AudioView, AudioViewEvent, LoadState},
+    view::{AudioView, AudioViewEvent, LoadState, SPEED_OPTIONS},
     waveform::{self, paint_waveform},
 };
 
 impl AudioView {
-    fn render_content(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_content(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match &self.load_state {
             LoadState::Loading => centered(
                 Label::new(tr(cx, "audio_viewer.loading", "Loading audio...")).color(Color::Muted),
@@ -31,11 +31,11 @@ impl AudioView {
                     .child(Icon::new(IconName::Warning).color(Color::Error))
                     .child(Label::new(message.clone()).color(Color::Error)),
             ),
-            LoadState::Loaded(_) => centered(self.render_player(cx)),
+            LoadState::Loaded(_) => centered(self.render_player(window, cx)),
         }
     }
 
-    fn render_player(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_player(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         v_flex()
             .w_full()
             .max_w_128()
@@ -45,7 +45,7 @@ impl AudioView {
                 this.child(identity)
             })
             .child(self.render_waveform(cx))
-            .child(self.render_transport(cx))
+            .child(self.render_transport(window, cx))
             .when_some(self.playback_error.clone(), |this, message| {
                 this.child(
                     h_flex()
@@ -211,7 +211,7 @@ impl AudioView {
         }
     }
 
-    fn render_transport(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_transport(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let playing = self.is_playing();
         let play_icon = if playing {
             IconName::DebugPause
@@ -226,7 +226,38 @@ impl AudioView {
         let time_label = self.current_time_label();
         let playhead_ratio = self.playhead_ratio();
         let volume = self.effective_volume();
+        let speed_label = self.speed_label(cx);
         let view = cx.entity().downgrade();
+        let speed_view = view.clone();
+        let speed_menu = ContextMenu::build(window, cx, {
+            let view = speed_view;
+            let selected_speed = self.speed;
+            move |menu, _window, cx| {
+                SPEED_OPTIONS.into_iter().fold(menu, |menu, speed| {
+                    let label = tr(cx, "audio_viewer.speed.value", "{}×").replacen(
+                        "{}",
+                        &crate::view::format_speed_value(speed),
+                        1,
+                    );
+                    menu.toggleable_entry(
+                        label,
+                        speed == selected_speed,
+                        IconPosition::End,
+                        None,
+                        {
+                            let view = view.clone();
+                            move |_window, cx| {
+                                if let Err(error) =
+                                    view.update(cx, |view, cx| view.set_speed(speed, cx))
+                                {
+                                    log::warn!("updating audio playback speed: {error:#}");
+                                }
+                            }
+                        },
+                    )
+                })
+            }
+        });
 
         h_flex()
             .w_full()
@@ -273,6 +304,16 @@ impl AudioView {
                     })),
             )
             .child(self.render_volume_track(volume, view, cx))
+            .child(
+                DropdownMenu::new("audio-speed", speed_label, speed_menu)
+                    .style(DropdownStyle::Subtle)
+                    .trigger_size(ButtonSize::Compact)
+                    .trigger_tooltip(Tooltip::text(tr(
+                        cx,
+                        "audio_viewer.speed",
+                        "Playback speed",
+                    ))),
+            )
     }
 
     fn render_seek_track(
@@ -427,8 +468,8 @@ fn centered(child: impl IntoElement) -> AnyElement {
 }
 
 impl Render for AudioView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let content = self.render_content(cx);
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = self.render_content(window, cx);
 
         div()
             .id("AudioView")

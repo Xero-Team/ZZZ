@@ -24,6 +24,9 @@ const POSITION_TICK: Duration = Duration::from_millis(100);
 const POSITION_NOTIFY_QUANTUM: Duration = Duration::from_millis(200);
 const VOLUME_STEP: f32 = 0.05;
 const VOLUME_PERSIST_DEBOUNCE: Duration = Duration::from_millis(500);
+pub(crate) const SPEED_OPTIONS: [f32; 6] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+const MIN_SPEED: f32 = 0.25;
+const MAX_SPEED: f32 = 4.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PlaybackStatus {
@@ -60,6 +63,7 @@ pub struct AudioView {
     pub(crate) position: Duration,
     last_notified_position: Duration,
     pub(crate) volume: f32,
+    pub(crate) speed: f32,
     pub(crate) muted: bool,
     pub(crate) volume_before_mute: f32,
     pub(crate) handle: Option<PlaybackHandle>,
@@ -116,6 +120,7 @@ impl AudioView {
             position: Duration::ZERO,
             last_notified_position: Duration::ZERO,
             volume,
+            speed: 1.0,
             muted: false,
             volume_before_mute: volume.max(0.01),
             handle: None,
@@ -653,6 +658,7 @@ impl AudioView {
 
         match player::play_path(&path, &format_hint, start, volume, cx) {
             Ok(handle) => {
+                handle.set_speed(self.speed);
                 self.handle = Some(handle);
                 self.playback = PlaybackStatus::Playing;
                 self.playback_error = None;
@@ -880,6 +886,32 @@ impl AudioView {
             handle.set_volume(self.output_volume());
         }
     }
+
+    pub(crate) fn set_speed(&mut self, speed: f32, cx: &mut Context<Self>) {
+        self.speed = if speed.is_finite() {
+            speed.clamp(MIN_SPEED, MAX_SPEED)
+        } else {
+            1.0
+        };
+        if let Some(handle) = &self.handle {
+            handle.set_speed(self.speed);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn speed_label(&self, cx: &App) -> String {
+        tr(cx, "audio_viewer.speed.value", "{}×").replacen("{}", &format_speed_value(self.speed), 1)
+    }
+}
+
+pub(crate) fn format_speed_value(speed: f32) -> String {
+    let text = format!("{speed:.2}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    if text.contains('.') {
+        text.to_owned()
+    } else {
+        format!("{text}.0")
+    }
 }
 
 fn gain_for_fader(fader: f32) -> f32 {
@@ -1005,8 +1037,8 @@ fn format_channels(channels: u16, cx: &App) -> String {
 mod tests {
     use super::{
         advance_load_generation, format_bit_depth, format_bitrate, format_sample_rate,
-        format_timestamp, gain_for_fader, load_result_is_current, playback_start_position,
-        position_visible_change, seek_is_available,
+        format_speed_value, format_timestamp, gain_for_fader, load_result_is_current,
+        playback_start_position, position_visible_change, seek_is_available,
     };
     use std::time::Duration;
 
@@ -1028,6 +1060,15 @@ mod tests {
         assert!(!seek_is_available(None));
         assert!(!seek_is_available(Some(Duration::ZERO)));
         assert!(seek_is_available(Some(Duration::from_millis(1))));
+    }
+
+    #[test]
+    fn speed_label_always_has_one_decimal_place() {
+        assert_eq!(format_speed_value(0.5), "0.5");
+        assert_eq!(format_speed_value(0.75), "0.75");
+        assert_eq!(format_speed_value(1.0), "1.0");
+        assert_eq!(format_speed_value(1.25), "1.25");
+        assert_eq!(format_speed_value(2.0), "2.0");
     }
 
     #[test]

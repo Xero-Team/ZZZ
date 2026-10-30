@@ -3273,6 +3273,8 @@
     "audio_viewer.stop": "Stop",
     "audio_viewer.mute": "Mute",
     "audio_viewer.volume": "Volume",
+    "audio_viewer.speed": "Playback speed",
+    "audio_viewer.speed.value": "{}×",
     "audio_viewer.file_name.fallback": "Audio",
     "audio_viewer.error.missing_extension": "Audio file has no extension",
     "audio_viewer.error.not_local": "Audio file is not available locally",
