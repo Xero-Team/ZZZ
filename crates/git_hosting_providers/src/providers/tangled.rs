@@ -22,7 +22,7 @@ impl Tangled {
     pub fn public_instance() -> Self {
         Self::new(
             "Tangled",
-            Url::parse("https://tangled.org").expect("URL literal should be valid"),
+            Url::parse("https://tangled.org").expect("invariant: the URL literal is valid"),
         )
     }
 

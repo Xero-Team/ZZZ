@@ -191,7 +191,7 @@ impl<'a> Matcher<'a> {
                 let character = prefix
                     .get(character_index)
                     .or_else(|| path.get(character_index - prefix.len()))
-                    .expect("entry should be present");
+                    .expect("invariant: match position lies within the path");
                 byte_index += character.len_utf8();
                 character_index += 1;
             }
@@ -201,7 +201,7 @@ impl<'a> Matcher<'a> {
             let matched_character = prefix
                 .get(matched_character_index)
                 .or_else(|| path.get(matched_character_index - prefix.len()))
-                .expect("entry should be present");
+                .expect("invariant: match position lies within the path");
             byte_index += matched_character.len_utf8();
 
             current_start = matched_character_index + 1;

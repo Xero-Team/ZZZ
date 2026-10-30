@@ -11,8 +11,9 @@ use git::{
 };
 
 fn pull_request_regex() -> &'static Regex {
-    static PULL_REQUEST_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"^Merged PR (\d+):").expect("valid regex literal"));
+    static PULL_REQUEST_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"^Merged PR (\d+):").expect("invariant: the regex literal is valid")
+    });
     &PULL_REQUEST_REGEX
 }
 
@@ -92,7 +93,7 @@ impl GitHostingProvider for Azure {
     }
 
     fn base_url(&self) -> Url {
-        Url::parse("https://dev.azure.com").expect("URL literal should be valid")
+        Url::parse("https://dev.azure.com").expect("invariant: the URL literal is valid")
     }
 
     fn supports_avatars(&self) -> bool {

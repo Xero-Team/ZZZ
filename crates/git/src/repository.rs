@@ -1323,7 +1323,7 @@ fn parse_remote_urls(stdout: &str) -> HashMap<String, String> {
 impl GitRepository for RealGitRepository {
     fn reload_index(&self) {
         if let Ok(mut index) = self.repository.lock().index() {
-            _ = index.read(false);
+            index.read(false).log_err();
         }
     }
 
@@ -1684,7 +1684,10 @@ impl GitRepository for RealGitRepository {
                         .stdin(Stdio::piped())
                         .stdout(Stdio::piped())
                         .spawn()?;
-                    let mut stdin = child.stdin.take().expect("entry should be present");
+                    let mut stdin = child
+                        .stdin
+                        .take()
+                        .context("git hash-object process has no stdin")?;
                     stdin.write_all(content.as_bytes()).await?;
                     stdin.flush().await?;
                     drop(stdin);
@@ -2638,7 +2641,7 @@ impl GitRepository for RealGitRepository {
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
         let working_directory = self.working_directory().unwrap_or(self.path());
         let git_directory = self.path();
-        let remote_name = format!("{}", fetch_options);
+        let remote_name = fetch_options.to_string();
         let git_binary_path = self.system_git_binary_path.clone();
         let executor = cx.background_executor().clone();
         let is_trusted = self.is_trusted();

@@ -13,8 +13,9 @@ pub struct RemoteUrl(Url);
 // username may contain anything but the `@`/`:`/`/` that delimit the user,
 // host, and path, so match by exclusion rather than an allowlist that misses
 // names like `first.last`.
-static USERNAME_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[^/@:]+@").expect("Failed to create USERNAME_REGEX"));
+static USERNAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[^/@:]+@").expect("invariant: USERNAME_REGEX is a valid pattern")
+});
 
 impl FromStr for RemoteUrl {
     type Err = url::ParseError;

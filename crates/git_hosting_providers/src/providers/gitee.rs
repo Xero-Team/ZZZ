@@ -70,7 +70,7 @@ impl GitHostingProvider for Gitee {
     }
 
     fn base_url(&self) -> Url {
-        Url::parse("https://gitee.com").expect("URL literal should be valid")
+        Url::parse("https://gitee.com").expect("invariant: the URL literal is valid")
     }
 
     fn supports_avatars(&self) -> bool {

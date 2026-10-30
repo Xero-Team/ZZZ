@@ -85,7 +85,7 @@ impl Forgejo {
     pub fn public_instance() -> Self {
         Self::new(
             "Codeberg",
-            Url::parse("https://codeberg.org").expect("URL literal should be valid"),
+            Url::parse("https://codeberg.org").expect("invariant: the URL literal is valid"),
         )
     }
 

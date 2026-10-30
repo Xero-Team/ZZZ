@@ -26,7 +26,7 @@ impl SourceHut {
     pub fn public_instance() -> Self {
         Self::new(
             "SourceHut",
-            Url::parse("https://git.sr.ht").expect("URL literal should be valid"),
+            Url::parse("https://git.sr.ht").expect("invariant: the URL literal is valid"),
         )
     }
 

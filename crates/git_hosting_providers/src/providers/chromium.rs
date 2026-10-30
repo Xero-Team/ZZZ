@@ -23,7 +23,7 @@ fn pull_request_regex() -> &'static Regex {
         Regex::new(&format!(
             r#"Reviewed-on: ({CHROMIUM_REVIEW_URL}/c/(.*)/\+/(\d+))"#
         ))
-        .expect("valid regex literal")
+        .expect("invariant: the regex literal is valid")
     });
     &PULL_REQUEST_NUMBER_REGEX
 }
@@ -87,7 +87,8 @@ impl GitHostingProvider for Chromium {
     }
 
     fn base_url(&self) -> Url {
-        Url::parse("https://chromium.googlesource.com").expect("URL literal should be valid")
+        Url::parse("https://chromium.googlesource.com")
+            .expect("invariant: the URL literal is valid")
     }
 
     fn supports_avatars(&self) -> bool {
@@ -155,7 +156,7 @@ impl GitHostingProvider for Chromium {
 
     fn extract_pull_request(&self, remote: &ParsedGitRemote, message: &str) -> Option<PullRequest> {
         let capture = pull_request_regex().captures(message)?;
-        let url = Url::parse(capture.get(1)?.as_str()).expect("entry should be present");
+        let url = Url::parse(capture.get(1)?.as_str()).ok()?;
         let repo = capture.get(2)?.as_str();
         if repo != remote.repo.as_ref() {
             return None;

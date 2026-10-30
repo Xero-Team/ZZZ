@@ -42,7 +42,7 @@ impl Gitea {
     pub fn public_instance() -> Self {
         Self::new(
             "Gitea",
-            Url::parse("https://gitea.com").expect("URL literal should be valid"),
+            Url::parse("https://gitea.com").expect("invariant: the URL literal is valid"),
         )
     }
 

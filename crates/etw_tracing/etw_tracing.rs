@@ -405,7 +405,9 @@ trait WprContext<T> {
 impl<T> WprContext<T> for windows_core::Result<T> {
     fn wpr_context(self, source: &impl Interface) -> Result<T> {
         self.map_err(|e| {
-            let unknown: windows_core::IUnknown = source.cast().expect("cast to IUnknown");
+            let unknown: windows_core::IUnknown = source
+                .cast()
+                .expect("invariant: any COM interface casts to IUnknown");
             let context = wpr_error_context(e.code(), &unknown);
             anyhow::anyhow!("{context}")
         })

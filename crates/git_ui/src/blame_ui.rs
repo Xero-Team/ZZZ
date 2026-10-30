@@ -433,7 +433,7 @@ fn deploy_blame_entry_context_menu(
     let copy_commit_sha = tr(cx, "git_ui.blame_ui.copy_commit_sha", "Copy Commit SHA");
     let open_permalink = tr(cx, "git_ui.blame_ui.open_permalink", "Open Permalink");
     let context_menu = ContextMenu::build(window, cx, move |menu, _, _| {
-        let sha = format!("{}", blame_entry.sha);
+        let sha = blame_entry.sha.to_string();
         menu.on_blur_subscription(Subscription::new(|| {}))
             .entry(copy_commit_sha.clone(), None, move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(sha.clone()));

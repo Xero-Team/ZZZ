@@ -21,7 +21,8 @@ fn merge_request_number_regex() -> &'static Regex {
         // Matches GitLab MR references:
         // - "(!123)" at the end of line (squash merge pattern)
         // - "See merge request group/project!123" (standard merge commit)
-        Regex::new(r"(?:\(!(\d+)\)$|See merge request [^\s]+!(\d+))").expect("valid regex literal")
+        Regex::new(r"(?:\(!(\d+)\)$|See merge request [^\s]+!(\d+))")
+            .expect("invariant: the regex literal is valid")
     });
     &MERGE_REQUEST_NUMBER_REGEX
 }
@@ -55,7 +56,7 @@ impl Gitlab {
     pub fn public_instance() -> Self {
         Self::new(
             "GitLab",
-            Url::parse("https://gitlab.com").expect("URL literal should be valid"),
+            Url::parse("https://gitlab.com").expect("invariant: the URL literal is valid"),
         )
     }
 

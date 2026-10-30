@@ -19,8 +19,9 @@ use git::{
 use crate::get_host_from_git_remote_url;
 
 fn pull_request_number_regex() -> &'static Regex {
-    static PULL_REQUEST_NUMBER_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\(#(\d+)\)$").expect("valid regex literal"));
+    static PULL_REQUEST_NUMBER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\(#(\d+)\)$").expect("invariant: the regex literal is valid")
+    });
     &PULL_REQUEST_NUMBER_REGEX
 }
 
@@ -101,7 +102,7 @@ impl Github {
     pub fn public_instance() -> Self {
         Self::new(
             "GitHub",
-            Url::parse("https://github.com").expect("URL literal should be valid"),
+            Url::parse("https://github.com").expect("invariant: the URL literal is valid"),
         )
     }
 

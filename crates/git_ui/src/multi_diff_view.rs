@@ -120,7 +120,7 @@ fn register_entry(
 /// cannot be determined.
 fn untitled_rel_path() -> Arc<RelPath> {
     RelPath::unix("untitled")
-        .expect("path should be a valid relative path")
+        .expect("invariant: the literal \"untitled\" is a valid relative path")
         .into()
 }
 

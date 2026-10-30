@@ -22,7 +22,7 @@ use crate::get_host_from_git_remote_url;
 fn pull_request_regex() -> &'static Regex {
     static PULL_REQUEST_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         // This matches Bitbucket PR reference pattern: (pull request #xxx)
-        Regex::new(r"\(pull request #(\d+)\)").expect("valid regex literal")
+        Regex::new(r"\(pull request #(\d+)\)").expect("invariant: the regex literal is valid")
     });
     &PULL_REQUEST_REGEX
 }
@@ -79,7 +79,7 @@ impl Bitbucket {
     pub fn public_instance() -> Self {
         Self::new(
             "Bitbucket",
-            Url::parse("https://bitbucket.org").expect("URL literal should be valid"),
+            Url::parse("https://bitbucket.org").expect("invariant: the URL literal is valid"),
         )
     }
 
