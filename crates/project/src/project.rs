@@ -2708,18 +2708,11 @@ impl Project {
         path: Arc<RelPath>,
         cx: &mut Context<Self>,
     ) -> Task<Result<(PathBuf, tempfile::TempPath)>> {
-        let read = self.read_file_bytes(worktree_id, path, cx);
-        cx.spawn(async move |_this, cx| {
-            let bytes = read.await?;
-            cx.background_spawn(async move {
-                use std::io::Write as _;
-                let mut file = tempfile::NamedTempFile::new()?;
-                file.write_all(&bytes)?;
-                let temp_path = file.into_temp_path();
-                let path = temp_path.to_path_buf();
-                anyhow::Ok((path, temp_path))
-            })
-            .await
+        let Some(worktree) = self.worktree_for_id(worktree_id, cx) else {
+            return Task::ready(Err(anyhow!("no such worktree")));
+        };
+        worktree.update(cx, |worktree, cx| {
+            worktree.stage_binary_file(path.as_ref(), cx)
         })
     }
 

@@ -1,6 +1,7 @@
 mod worktree_settings_tests;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use encoding_rs;
 use fs::{FakeFs, Fs, PathEventKind, RealFs, RemoveOptions};
 use git::{DOT_GIT, GITIGNORE, REPO_EXCLUDE};
@@ -31,7 +32,70 @@ use util::{
     rel_path::{RelPath, rel_path},
     test::TempTree,
 };
-use vfs::{MountId, NativePath, PathEncoding, ProviderPath, ResourceId, VfsErrorCode, VfsPath};
+use vfs::{
+    MountId, NativePath, OperationContext, PathEncoding, ProviderId, ProviderPath, ResourceId,
+    VfsError, VfsErrorCode, VfsFile, VfsOperation, VfsPath, VfsResult, WriteAtOptions,
+};
+use worktree::test_support::stage_binary_file_from_vfs;
+
+struct ChunkRecordingFile {
+    contents: Vec<u8>,
+    requested_buffer_sizes: Arc<Mutex<Vec<usize>>>,
+}
+
+fn unsupported_vfs_error(operation: VfsOperation) -> VfsError {
+    VfsError::new(
+        VfsErrorCode::Unsupported,
+        operation,
+        ProviderId::new("chunk-recording-file"),
+    )
+}
+
+#[async_trait]
+impl VfsFile for ChunkRecordingFile {
+    async fn len(&self, _context: OperationContext) -> VfsResult<u64> {
+        Ok(self.contents.len() as u64)
+    }
+
+    async fn read_at(
+        &self,
+        offset: u64,
+        buffer: &mut [u8],
+        _context: OperationContext,
+    ) -> VfsResult<usize> {
+        self.requested_buffer_sizes.lock().push(buffer.len());
+        let offset = usize::try_from(offset).map_err(|_| {
+            unsupported_vfs_error(VfsOperation::Read).with_detail("offset exceeds usize")
+        })?;
+        let Some(remaining) = self.contents.get(offset..) else {
+            return Ok(0);
+        };
+        let read_length = remaining.len().min(buffer.len());
+        buffer[..read_length].copy_from_slice(&remaining[..read_length]);
+        Ok(read_length)
+    }
+
+    async fn write_at(
+        &self,
+        _offset: u64,
+        _buffer: &[u8],
+        _options: WriteAtOptions,
+    ) -> VfsResult<usize> {
+        Err(unsupported_vfs_error(VfsOperation::Write))
+    }
+
+    async fn set_len(&self, _len: u64, _options: WriteAtOptions) -> VfsResult<()> {
+        Err(unsupported_vfs_error(VfsOperation::SetLength))
+    }
+
+    async fn flush(&self, _context: OperationContext) -> VfsResult<()> {
+        Err(unsupported_vfs_error(VfsOperation::Flush))
+    }
+
+    async fn sync(&self, _context: OperationContext) -> VfsResult<()> {
+        Err(unsupported_vfs_error(VfsOperation::Sync))
+    }
+}
 
 fn native_path_wire(path: &str) -> Option<proto::NativePathV2> {
     let native_path = NativePath::from_unix_bytes(path.as_bytes());
@@ -73,6 +137,33 @@ fn test_remote_worktree_rejects_missing_exact_root(cx: &mut TestAppContext) {
         )
     });
     assert!(result.is_err());
+}
+
+#[gpui::test]
+async fn test_stage_binary_file_from_vfs_uses_bounded_chunks(_cx: &mut TestAppContext) {
+    let contents = (0..700 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let requested_buffer_sizes = Arc::new(Mutex::new(Vec::new()));
+    let file = Arc::new(ChunkRecordingFile {
+        contents: contents.clone(),
+        requested_buffer_sizes: requested_buffer_sizes.clone(),
+    });
+
+    let (path, temporary_path) = stage_binary_file_from_vfs(file, contents.len() as u64)
+        .await
+        .expect("stage VFS file");
+
+    assert_eq!(std::fs::read(&path).expect("read staged file"), contents);
+    let requested_buffer_sizes = requested_buffer_sizes.lock();
+    assert!(requested_buffer_sizes.len() >= 3);
+    assert!(
+        requested_buffer_sizes
+            .iter()
+            .all(|size| *size <= 256 * 1024)
+    );
+    drop(temporary_path);
+    assert!(!path.exists());
 }
 
 #[gpui::test]
