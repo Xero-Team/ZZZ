@@ -10,6 +10,7 @@ use extension_host::ExtensionStore;
 use futures::{FutureExt as _, channel::oneshot, select};
 use gpui::{AppContext, AsyncApp, PromptLevel, WindowHandle};
 
+use project::ProjectHost;
 use project::trusted_worktrees;
 use remote::{
     DockerConnectionOptions, Interactive, RemoteConnection, RemoteConnectionOptions,
@@ -18,10 +19,7 @@ use remote::{
 pub use settings::SshConnection;
 use settings::{DevContainerConnection, ExtendingVec, RegisterSetting, Settings, WslConnection};
 use util::{ResultExt, paths::PathWithPosition};
-use project::ProjectHost;
-use workspace::{
-    AppState, MultiWorkspace, OpenOptions, Workspace, find_existing_workspace,
-};
+use workspace::{AppState, MultiWorkspace, OpenOptions, Workspace, find_existing_workspace};
 
 pub use remote_connection::{
     RemoteClientDelegate, RemoteConnectionModal, RemoteConnectionPrompt, SshConnectionHeader,
@@ -922,12 +920,8 @@ mod tests {
                 }),
             )
             .await;
-        let local_project = Project::test(
-            app_state.fs.clone(),
-            [path!("/local").as_ref()],
-            cx,
-        )
-        .await;
+        let local_project =
+            Project::test(app_state.fs.clone(), [path!("/local").as_ref()], cx).await;
         let local_workspace = window
             .update(cx, |multi_workspace, window, cx| {
                 multi_workspace.open_sidebar(cx);
@@ -935,9 +929,13 @@ mod tests {
             })
             .unwrap();
 
-        for (path, wait) in [
-            (path!("/outside/loose.txt"), false),
-            (path!("/local/inside.txt"), true),
+        // A file opened with `wait: true` goes to the active local workspace,
+        // not necessarily the one that owns it: after the first iteration opens
+        // a loose file in a new workspace, the second iteration reuses it.
+        let mut expected_workspace = local_workspace.clone();
+        for (path, wait, reuses_expected_workspace) in [
+            (path!("/outside/loose.txt"), false, false),
+            (path!("/local/inside.txt"), true, true),
         ] {
             window
                 .update(cx, |multi_workspace, window, cx| {
@@ -969,9 +967,15 @@ mod tests {
             assert!(
                 result
                     .workspace
-                    .read_with(cx, |workspace, cx| workspace.project.read(cx).is_local()),
+                    .read_with(cx, |workspace, cx| workspace.project().read(cx).is_local()),
                 "a local file must open in a local workspace: {path}, wait: {wait}"
             );
+            assert_eq!(
+                result.workspace == expected_workspace,
+                reuses_expected_workspace,
+                "a local file opens in the active local workspace: {path}, wait: {wait}"
+            );
+            expected_workspace = result.workspace.clone();
             assert_eq!(cx.update(|cx| cx.windows().len()), 1);
             window
                 .read_with(cx, |multi_workspace, _| {
