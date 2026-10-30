@@ -75,6 +75,7 @@ pub struct AudioView {
 
 pub enum AudioViewEvent {
     TitleChanged,
+    MetadataChanged,
 }
 
 impl EventEmitter<AudioViewEvent> for AudioView {}
@@ -237,6 +238,7 @@ impl AudioView {
                         }));
                         view.start_waveform(cx);
                         cx.emit(AudioViewEvent::TitleChanged);
+                        cx.emit(AudioViewEvent::MetadataChanged);
                         cx.notify();
                     });
                 }
@@ -308,6 +310,7 @@ impl AudioView {
                         Err(error) => log::error!("analyzing audio waveform: {error:#}"),
                     }
                 }
+                cx.emit(AudioViewEvent::MetadataChanged);
                 cx.notify();
             });
         }));

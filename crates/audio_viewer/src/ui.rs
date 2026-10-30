@@ -15,7 +15,7 @@ use workspace::{
 use crate::{
     Stop, ToggleMute, TogglePlay,
     scrubber::ScrubKind,
-    view::{AudioView, LoadState},
+    view::{AudioView, AudioViewEvent, LoadState},
     waveform::{self, paint_waveform},
 };
 
@@ -511,14 +511,14 @@ impl ToolbarItemView for AudioToolbarControls {
 
 pub struct AudioInfo {
     parts: Option<Vec<String>>,
-    _observe_active: Option<gpui::Subscription>,
+    _subscription: Option<gpui::Subscription>,
 }
 
 impl AudioInfo {
     pub fn new(_workspace: &Workspace) -> Self {
         Self {
             parts: None,
-            _observe_active: None,
+            _subscription: None,
         }
     }
 }
@@ -540,14 +540,19 @@ impl StatusItemView for AudioInfo {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self._observe_active = None;
+        self._subscription = None;
 
         if let Some(audio_view) = active_pane_item.and_then(|item| item.act_as::<AudioView>(cx)) {
             self.parts = audio_view.read(cx).metadata_parts(cx);
-            self._observe_active = Some(cx.observe(&audio_view, |this, view, cx| {
-                this.parts = view.read(cx).metadata_parts(cx);
-                cx.notify();
-            }));
+            self._subscription = Some(cx.subscribe(
+                &audio_view,
+                |this, view, event: &AudioViewEvent, cx| {
+                    if matches!(event, AudioViewEvent::MetadataChanged) {
+                        this.parts = view.read(cx).metadata_parts(cx);
+                        cx.notify();
+                    }
+                },
+            ));
         } else {
             self.parts = None;
         }
