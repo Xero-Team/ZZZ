@@ -11,7 +11,7 @@ use lofty::{
 use rodio::{Decoder, Source};
 
 pub(crate) const SUPPORTED_EXTENSIONS: &[&str] =
-    &["mp3", "wav", "flac", "ogg", "oga", "m4a", "aac"];
+    &["mp3", "wav", "flac", "ogg", "oga", "m4a", "m4b", "aac", "opus"];
 
 pub(crate) fn is_supported_audio_extension(extension: &str) -> bool {
     SUPPORTED_EXTENSIONS
@@ -26,7 +26,9 @@ pub(crate) fn format_label(extension: &str) -> &'static str {
         "flac" => "FLAC",
         "ogg" | "oga" => "OGG",
         "m4a" => "M4A",
+        "m4b" => "M4B",
         "aac" => "AAC",
+        "opus" => "OPUS",
         _ => "Audio",
     }
 }
@@ -240,7 +242,8 @@ pub(crate) fn play_path(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_cover, is_supported_audio_extension, nonempty_tag, read_audio, read_with_lofty,
+        extract_cover, format_label, is_supported_audio_extension, nonempty_tag, read_audio,
+        read_with_lofty,
     };
     use lofty::{
         config::WriteOptions,
@@ -264,17 +267,35 @@ mod tests {
     }
 
     #[test]
-    fn flac_ogg_m4a_aac_are_supported() {
+    fn flac_ogg_m4a_m4b_aac_opus_are_supported() {
         assert!(is_supported_audio_extension("flac"));
         assert!(is_supported_audio_extension("ogg"));
         assert!(is_supported_audio_extension("oga"));
         assert!(is_supported_audio_extension("m4a"));
+        assert!(is_supported_audio_extension("m4b"));
         assert!(is_supported_audio_extension("aac"));
+        assert!(is_supported_audio_extension("opus"));
     }
 
     #[test]
-    fn opus_wma_wv_mka_are_not_supported() {
-        assert!(!is_supported_audio_extension("opus"));
+    fn opus_and_m4b_extensions_are_case_insensitive() {
+        assert!(is_supported_audio_extension("OPUS"));
+        assert!(is_supported_audio_extension("Opus"));
+        assert!(is_supported_audio_extension("M4B"));
+        assert!(is_supported_audio_extension("M4b"));
+    }
+
+    #[test]
+    fn format_labels_include_opus_and_m4b() {
+        assert_eq!(format_label("opus"), "OPUS");
+        assert_eq!(format_label("OPUS"), "OPUS");
+        assert_eq!(format_label("m4b"), "M4B");
+        assert_eq!(format_label("M4B"), "M4B");
+        assert_eq!(format_label("unknown"), "Audio");
+    }
+
+    #[test]
+    fn wma_wv_mka_are_not_supported() {
         assert!(!is_supported_audio_extension("wma"));
         assert!(!is_supported_audio_extension("wv"));
         assert!(!is_supported_audio_extension("mka"));
