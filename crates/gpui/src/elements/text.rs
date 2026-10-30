@@ -534,19 +534,19 @@ fn add_emergency_breaks(breakable: &mut [bool], widths: &[f32], target_width: f3
     }
 
     let mut run_width = 0.;
-    for index in 0..widths.len() {
+    for (index, &width) in widths.iter().enumerate() {
         if breakable[index] {
             run_width = 0.;
             continue;
         }
 
-        if run_width > 0. && run_width + widths[index] > target_width {
+        if run_width > 0. && run_width + width > target_width {
             // Break before `index`, so the current line ends at `index` without exceeding the
             // target width. The glyph at `index` starts the next line.
             breakable[index - 1] = true;
-            run_width = widths[index];
+            run_width = width;
         } else {
-            run_width += widths[index];
+            run_width += width;
         }
     }
 }

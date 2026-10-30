@@ -31,7 +31,7 @@ pub(crate) fn try_to_recover_from_device_lost<T>(mut f: impl FnMut() -> Result<T
             f()
         })
         .find_or_last(Result::is_ok)
-        .expect("find_or_last should be present")
+        .ok_or_else(|| anyhow::anyhow!("retry loop should always produce a result"))?
         .context("DirectXRenderer failed to recover from lost device after multiple attempts")
 }
 

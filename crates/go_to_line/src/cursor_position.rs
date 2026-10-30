@@ -351,9 +351,6 @@ impl From<settings::LineIndicatorFormat> for LineIndicatorFormat {
 
 impl Settings for LineIndicatorFormat {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        content
-            .line_indicator_format
-            .expect("line_indicator_format should be present")
-            .into()
+        content.line_indicator_format.unwrap_or_default().into()
     }
 }

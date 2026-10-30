@@ -883,8 +883,6 @@ impl Drop for X11Window {
 }
 
 enum WmHintPropertyState {
-    // Remove = 0,
-    // Add = 1,
     Toggle = 2,
 }
 

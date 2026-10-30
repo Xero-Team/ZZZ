@@ -175,7 +175,9 @@ impl PlatformHeadlessRenderer for WgpuHeadlessRenderer {
     ) -> anyhow::Result<image::RgbaImage> {
         self.ensure_target(size)?;
         let Self { renderer, target } = self;
-        let target = target.as_ref().expect("headless target was ensured");
+        let target = target
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("headless target was ensured"))?;
         let submission = renderer
             .render_to_view(scene, &target.view, Some(target.readback_copy()))
             .ok_or_else(|| anyhow::anyhow!("failed to render headless scene"))?;
