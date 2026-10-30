@@ -2246,7 +2246,7 @@ impl Vim {
                             globals.read_register(text.chars().next(), Some(editor), cx)
                         }) {
                             editor.do_paste(
-                                &register.text.to_string(),
+                                register.text.as_ref(),
                                 register.clipboard_selections,
                                 false,
                                 window,

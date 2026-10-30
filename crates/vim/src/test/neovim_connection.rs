@@ -481,7 +481,7 @@ impl NeovimConnection {
     #[cfg(not(feature = "neovim"))]
     pub async fn state(&mut self) -> (Mode, String) {
         if let Some(NeovimData::Get { state: raw, mode }) = self.data.front() {
-            (*mode, raw.to_string())
+            (*mode, raw.clone())
         } else {
             panic!("operation does not match recorded script. re-record with --features=neovim");
         }
