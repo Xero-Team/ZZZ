@@ -199,7 +199,7 @@ impl AudioView {
         } else {
             IconName::PlayFilled
         };
-        let mute_icon = if self.muted {
+        let mute_icon = if self.muted || self.volume == 0.0 {
             IconName::AudioOff
         } else {
             IconName::AudioOn
@@ -328,6 +328,16 @@ impl AudioView {
             .child(bounds_capture(view, |view, bounds| {
                 view.volume_track_bounds = Some(bounds);
             }))
+            .tooltip(move |_window, cx| {
+                Tooltip::simple(
+                    format!(
+                        "{}: {}%",
+                        tr(cx, "audio_viewer.volume", "Volume"),
+                        (volume.clamp(0.0, 1.0) * 100.0).round() as i32
+                    ),
+                    cx,
+                )
+            })
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, _window, cx| {
@@ -336,6 +346,7 @@ impl AudioView {
                     }
                 }),
             )
+            .on_scroll_wheel(cx.listener(Self::scroll_volume))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
     }
 

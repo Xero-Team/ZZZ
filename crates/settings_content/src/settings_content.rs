@@ -484,6 +484,13 @@ pub struct AudioSettingsContent {
     /// Select specific input audio device.
     #[serde(rename = "experimental.input_audio_device")]
     pub input_audio_device: Option<AudioInputDeviceName>,
+    /// Preview volume for audio files.
+    /// Values are clamped to the [0.0, 1.0] range.
+    ///
+    /// Default: `1.0`
+    #[serde(serialize_with = "serialize_optional_f32_with_two_decimal_places")]
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub preview_volume: Option<f32>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]

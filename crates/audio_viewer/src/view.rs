@@ -4,10 +4,11 @@ use audio::PlaybackHandle;
 use editor::RevealInFileManager;
 use gpui::{
     App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Image, Pixels,
-    SharedString, Subscription, Task, WeakEntity, Window,
+    ScrollDelta, ScrollWheelEvent, SharedString, Subscription, Task, WeakEntity, Window,
 };
 use i18n::tr;
 use project::{Project, ProjectPath};
+use settings::Settings;
 use util::rel_path::RelPath;
 
 use crate::{
@@ -20,6 +21,8 @@ use crate::{
 const SEEK_STEP: Duration = Duration::from_secs(5);
 const POSITION_TICK: Duration = Duration::from_millis(100);
 const POSITION_NOTIFY_QUANTUM: Duration = Duration::from_millis(200);
+const VOLUME_STEP: f32 = 0.05;
+const VOLUME_PERSIST_DEBOUNCE: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PlaybackStatus {
@@ -66,6 +69,7 @@ pub struct AudioView {
     _load_task: Task<()>,
     _waveform_task: Option<Task<()>>,
     _position_task: Option<Task<()>>,
+    volume_persist_task: Option<Task<()>>,
     _worktree_subscription: Subscription,
 }
 
@@ -98,6 +102,7 @@ impl AudioView {
 
         let load_task = Self::start_load(cx);
         let worktree_subscription = cx.subscribe(&project, Self::on_project_event);
+        let volume = audio::AudioSettings::get_global(cx).preview_volume;
 
         Self {
             audio_item,
@@ -107,9 +112,9 @@ impl AudioView {
             playback: PlaybackStatus::Stopped,
             position: Duration::ZERO,
             last_notified_position: Duration::ZERO,
-            volume: 1.0,
+            volume,
             muted: false,
-            volume_before_mute: 1.0,
+            volume_before_mute: volume.max(0.01),
             handle: None,
             playback_error: None,
             waveform_bounds: None,
@@ -119,6 +124,7 @@ impl AudioView {
             _load_task: load_task,
             _waveform_task: None,
             _position_task: None,
+            volume_persist_task: None,
             _worktree_subscription: worktree_subscription,
         }
     }
@@ -432,7 +438,34 @@ impl AudioView {
     }
 
     fn output_volume(&self) -> f32 {
-        self.effective_volume()
+        gain_for_fader(self.effective_volume())
+    }
+
+    fn persist_volume(&mut self, cx: &mut Context<Self>) {
+        let volume = self.volume;
+        let fs = self.project.read(cx).fs().clone();
+        settings::update_settings_file(fs, cx, move |settings, _| {
+            settings.audio.get_or_insert_default().preview_volume = Some(volume);
+        });
+    }
+
+    fn persist_volume_debounced(&mut self, cx: &mut Context<Self>) {
+        if let Some(task) = self.volume_persist_task.take() {
+            drop(task);
+        }
+
+        let volume = self.volume;
+        let fs = self.project.read(cx).fs().clone();
+        self.volume_persist_task = Some(cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(VOLUME_PERSIST_DEBOUNCE)
+                .await;
+            cx.update(|cx| {
+                settings::update_settings_file(fs, cx, move |settings, _| {
+                    settings.audio.get_or_insert_default().preview_volume = Some(volume);
+                });
+            });
+        }));
     }
 
     fn start_position_tick(&mut self, cx: &mut Context<Self>) {
@@ -643,6 +676,7 @@ impl AudioView {
         if let Some(handle) = &self.handle {
             handle.set_volume(self.output_volume());
         }
+        self.persist_volume(cx);
         cx.notify();
     }
 
@@ -706,12 +740,36 @@ impl AudioView {
         let Some(scrub) = self.scrub.take() else {
             return;
         };
-        if scrub.kind == ScrubKind::Seek
-            && let Some(position) = scrub.pending_position()
-        {
-            self.seek_to(position, cx);
+        match scrub.kind {
+            ScrubKind::Seek => {
+                if let Some(position) = scrub.pending_position() {
+                    self.seek_to(position, cx);
+                    return;
+                }
+            }
+            ScrubKind::Volume => self.persist_volume(cx),
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn scroll_volume(
+        &mut self,
+        event: &ScrollWheelEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let delta = match event.delta {
+            ScrollDelta::Pixels(pixels) => f32::from(pixels.y),
+            ScrollDelta::Lines(lines) => lines.y,
+        };
+        if delta == 0.0 {
             return;
         }
+
+        let direction = delta.signum();
+        let volume = (self.volume + direction * VOLUME_STEP).clamp(0.0, 1.0);
+        self.set_volume_from_ratio(volume);
+        self.persist_volume_debounced(cx);
         cx.notify();
     }
 
@@ -722,6 +780,10 @@ impl AudioView {
             handle.set_volume(self.output_volume());
         }
     }
+}
+
+fn gain_for_fader(fader: f32) -> f32 {
+    fader.clamp(0.0, 1.0).powi(3)
 }
 
 pub(crate) fn format_timestamp(duration: Duration) -> String {
@@ -770,7 +832,9 @@ fn format_channels(channels: u16, cx: &App) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_bit_depth, format_bitrate, format_timestamp, position_visible_change};
+    use super::{
+        format_bit_depth, format_bitrate, format_timestamp, gain_for_fader, position_visible_change,
+    };
     use std::time::Duration;
 
     #[test]
@@ -813,5 +877,14 @@ mod tests {
             Duration::from_millis(201),
             Duration::ZERO
         ));
+    }
+
+    #[test]
+    fn fader_uses_perceptual_gain_curve_and_clamps() {
+        assert_eq!(gain_for_fader(0.0), 0.0);
+        assert_eq!(gain_for_fader(0.5), 0.125);
+        assert_eq!(gain_for_fader(1.0), 1.0);
+        assert_eq!(gain_for_fader(-0.5), 0.0);
+        assert_eq!(gain_for_fader(1.5), 1.0);
     }
 }

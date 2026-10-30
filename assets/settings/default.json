@@ -609,6 +609,9 @@
     // `null` means use system default.
     // Any unrecognized input device will fall back to system default.
     "experimental.input_audio_device": null,
+    // Preview volume for audio files. Values are clamped to the [0.0, 1.0] range.
+    // Playback gain follows a perceptual curve so lower values remain useful.
+    "preview_volume": 1.0,
   },
   // Scrollbar related settings
   "scrollbar": {

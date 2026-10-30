@@ -3272,6 +3272,7 @@
     "audio_viewer.play_pause": "播放/暂停",
     "audio_viewer.stop": "停止",
     "audio_viewer.mute": "静音",
+    "audio_viewer.volume": "音量",
     "audio_viewer.file_name.fallback": "音频",
     "audio_viewer.error.missing_extension": "音频文件没有扩展名",
     "audio_viewer.error.not_local": "音频文件在本地不可用",
