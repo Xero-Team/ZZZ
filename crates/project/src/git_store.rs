@@ -66,7 +66,7 @@ use rpc::{
     proto::{self, git_reset, split_repository_update},
 };
 use serde::Deserialize;
-use settings::{Settings, WorktreeId};
+use settings::{Settings, SettingsStore, WorktreeId};
 use smallvec::SmallVec;
 use smol::future::yield_now;
 use std::{
@@ -455,6 +455,23 @@ pub struct Repository {
     initial_graph_data: HashMap<(LogSource, LogOrder), InitialGitGraphData>,
     commit_data_handler: CommitDataHandlerState,
     commit_data: HashMap<Oid, CommitDataState>,
+    auto_fetch: AutoFetchState,
+}
+
+struct AutoFetchState {
+    enabled: bool,
+    interval_secs: u64,
+    task: Option<Task<()>>,
+}
+
+impl Default for AutoFetchState {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_secs: 60,
+            task: None,
+        }
+    }
 }
 
 impl std::ops::Deref for Repository {
@@ -2438,7 +2455,7 @@ impl GitStore {
 
         let remote_output = repository_handle
             .update(&mut cx, |repository_handle, cx| {
-                repository_handle.fetch(fetch_options, askpass, cx)
+                repository_handle.fetch(fetch_options, Some(askpass), cx)
             })
             .await??;
 
@@ -4773,7 +4790,9 @@ impl MergeDetails {
 
 impl Repository {
     pub fn is_trusted(&self) -> bool {
-        match self.repository_state.peek() {
+        // The worker awaits its own shared state. Poll this wrapper too, so
+        // auto-fetch does not depend on a manual operation initializing it first.
+        match self.repository_state.clone().now_or_never() {
             Some(Ok(RepositoryState::Local(state))) => state.backend.is_trusted(),
             _ => false,
         }
@@ -4887,6 +4906,19 @@ impl Repository {
             PathStyle::local(),
         );
 
+        cx.observe_global::<SettingsStore>(|this: &mut Self, cx| {
+            this.restart_auto_fetch_timer(cx);
+        })
+        .detach();
+
+        let weak = cx.weak_entity();
+        cx.defer(move |cx| {
+            weak.update(cx, |this, cx| {
+                this.restart_auto_fetch_timer(cx);
+            })
+            .ok();
+        });
+
         let mut repo = Repository {
             this: cx.weak_entity(),
             git_store,
@@ -4906,6 +4938,7 @@ impl Repository {
             initial_graph_data: Default::default(),
             commit_data: Default::default(),
             commit_data_handler: CommitDataHandlerState::Closed,
+            auto_fetch: AutoFetchState::default(),
         };
         repo.respawn_local_worker(
             project_environment,
@@ -4962,6 +4995,7 @@ impl Repository {
             initial_graph_data: Default::default(),
             commit_data: Default::default(),
             commit_data_handler: CommitDataHandlerState::Closed,
+            auto_fetch: AutoFetchState::default(),
         }
     }
 
@@ -6796,50 +6830,198 @@ impl Repository {
         )
     }
 
+    async fn refresh_branch_list(
+        this: &WeakEntity<Self>,
+        backend: Arc<dyn GitRepository>,
+        updates_tx: Option<mpsc::UnboundedSender<DownstreamUpdate>>,
+        cx: &mut AsyncApp,
+    ) -> Result<()> {
+        let branches_scan = backend.branches().await?;
+        let branch_list_error = branches_scan.error;
+        let branch_list: Arc<[Branch]> = branches_scan.branches.into();
+        let branch = branch_list.iter().find(|branch| branch.is_head).cloned();
+        log::info!("head branch after scan is {branch:?}");
+        let snapshot = this.update(cx, |this, cx| {
+            let head_changed = branch != this.snapshot.branch;
+            let branch_list_changed = *branch_list != *this.snapshot.branch_list;
+            let branch_list_error_changed = this.snapshot.branch_list_error != branch_list_error;
+            this.snapshot.branch = branch;
+            this.snapshot.branch_list = branch_list;
+            this.snapshot.branch_list_error = branch_list_error;
+            if head_changed {
+                cx.emit(RepositoryEvent::HeadChanged);
+            }
+            if branch_list_changed || branch_list_error_changed {
+                cx.emit(RepositoryEvent::BranchListChanged);
+            }
+            this.snapshot.clone()
+        })?;
+        if let Some(updates_tx) = updates_tx {
+            updates_tx
+                .unbounded_send(DownstreamUpdate::UpdateRepository(snapshot))
+                .ok();
+        }
+        Ok(())
+    }
+
+    fn restart_auto_fetch_timer(&mut self, cx: &mut Context<Self>) {
+        let git_settings = &ProjectSettings::get_global(cx).git;
+        let enabled = git_settings.auto_fetch.enabled;
+        let interval_secs = git_settings.auto_fetch.interval_secs;
+
+        if self.auto_fetch.enabled == enabled && self.auto_fetch.interval_secs == interval_secs {
+            return;
+        }
+
+        self.auto_fetch.enabled = enabled;
+        self.auto_fetch.interval_secs = interval_secs;
+
+        if !enabled {
+            self.auto_fetch.task = None;
+            return;
+        }
+
+        let interval = Duration::from_secs(interval_secs);
+
+        self.auto_fetch.task = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(interval).await;
+                // Re-checked every tick rather than once up front, because a
+                // repository can be trusted (or restricted) at any point in the
+                // session.
+                let fetch = this.update(cx, |this, cx| {
+                    this.is_trusted().then(|| this.auto_fetch(cx))
+                });
+                match fetch {
+                    Ok(Some(fetch)) => {
+                        if let Err(error) = fetch.await {
+                            log::debug!("auto-fetch failed: {error:#}");
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(_) => break,
+                }
+            }
+        }));
+    }
+
+    fn auto_fetch(&mut self, cx: &mut Context<Self>) -> Task<Result<()>> {
+        let default_branch = self.default_branch(true);
+        let remotes = self.get_remotes(None, false);
+        cx.spawn(async move |this, cx| {
+            let default_branch = default_branch.await??;
+            let remotes = remotes.await??;
+            let (default_remote, branch_remote) = this.read_with(cx, |this, _| {
+                let default_remote = default_branch
+                    .and_then(|name| {
+                        this.branch_list
+                            .iter()
+                            .find(|branch| branch.is_remote() && branch.name() == name.as_ref())
+                            .or_else(|| {
+                                this.branch_list.iter().find(|branch| {
+                                    !branch.is_remote() && branch.name() == name.as_ref()
+                                })
+                            })
+                    })
+                    .and_then(|branch| {
+                        branch.remote_name().or_else(|| {
+                            branch
+                                .upstream
+                                .as_ref()
+                                .and_then(|upstream| upstream.remote_name())
+                        })
+                    })
+                    .map(str::to_owned);
+                let branch_remote = this
+                    .branch
+                    .as_ref()
+                    .and_then(|branch| branch.upstream.as_ref())
+                    .and_then(|upstream| upstream.remote_name())
+                    .map(str::to_owned);
+                (default_remote, branch_remote)
+            })?;
+            for remote in remotes {
+                if Some(remote.name.as_ref()) != default_remote.as_deref()
+                    && Some(remote.name.as_ref()) != branch_remote.as_deref()
+                {
+                    continue;
+                }
+                let fetch = this.update(cx, |this, cx| {
+                    this.fetch(FetchOptions::Remote(remote), None, cx)
+                })?;
+                if let Err(error) = fetch.await? {
+                    log::debug!("auto-fetch failed: {error:#}");
+                }
+            }
+            Ok(())
+        })
+    }
+
     pub fn fetch(
         &mut self,
         fetch_options: FetchOptions,
-        askpass: AskPassDelegate,
-        _cx: &mut App,
+        askpass: Option<AskPassDelegate>,
+        cx: &mut Context<Self>,
     ) -> oneshot::Receiver<Result<RemoteCommandOutput>> {
         let askpass_delegates = self.askpass_delegates.clone();
         let askpass_id = util::post_inc(&mut self.latest_askpass_id);
         let id = self.id;
 
-        self.send_job(
-            "fetch",
-            Some("git fetch".into()),
-            move |git_repo, cx| async move {
-                match git_repo {
-                    RepositoryState::Local(LocalRepositoryState {
-                        backend,
-                        environment,
-                        ..
-                    }) => backend.fetch(fetch_options, askpass, environment, cx).await,
-                    RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
-                        askpass_delegates.lock().insert(askpass_id, askpass);
-                        let _defer = util::defer(|| {
-                            let askpass_delegate = askpass_delegates.lock().remove(&askpass_id);
-                            debug_assert!(askpass_delegate.is_some());
-                        });
+        let updates_tx = self
+            .git_store()
+            .and_then(|git_store| match &git_store.read(cx).state {
+                GitStoreState::Local { downstream, .. } => downstream
+                    .as_ref()
+                    .map(|downstream| downstream.updates_tx.clone()),
+                _ => None,
+            });
 
-                        let response = client
-                            .request(proto::Fetch {
-                                project_id: project_id.0,
-                                repository_id: id.to_proto(),
-                                askpass_id,
-                                remote: fetch_options.to_proto(),
-                            })
-                            .await?;
-
-                        Ok(RemoteCommandOutput {
-                            stdout: response.stdout,
-                            stderr: response.stderr,
-                        })
+        let this = cx.weak_entity();
+        let status = askpass.is_some().then(|| "git fetch".into());
+        self.send_job("fetch", status, move |git_repo, mut cx| async move {
+            match git_repo {
+                RepositoryState::Local(LocalRepositoryState {
+                    backend,
+                    environment,
+                    ..
+                }) => {
+                    if askpass.is_none() && !backend.is_trusted() {
+                        bail!("auto-fetch requires a trusted repository");
                     }
+                    let result = backend
+                        .fetch(fetch_options, askpass, environment, cx.clone())
+                        .await;
+                    if result.is_ok() {
+                        Self::refresh_branch_list(&this, backend, updates_tx, &mut cx).await?;
+                    }
+                    result
                 }
-            },
-        )
+                RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
+                    let Some(askpass) = askpass else {
+                        bail!("auto-fetch must run on the repository host");
+                    };
+                    askpass_delegates.lock().insert(askpass_id, askpass);
+                    let _defer = util::defer(|| {
+                        let askpass_delegate = askpass_delegates.lock().remove(&askpass_id);
+                        debug_assert!(askpass_delegate.is_some());
+                    });
+
+                    let response = client
+                        .request(proto::Fetch {
+                            project_id: project_id.0,
+                            repository_id: id.to_proto(),
+                            askpass_id,
+                            remote: fetch_options.to_proto(),
+                        })
+                        .await?;
+
+                    Ok(RemoteCommandOutput {
+                        stdout: response.stdout,
+                        stderr: response.stderr,
+                    })
+                }
+            }
+        })
     }
 
     pub fn push(
@@ -9429,6 +9611,175 @@ mod tests {
 
     fn repo_paths(paths: &[&str]) -> Vec<RepoPath> {
         paths.iter().map(repo_path).collect()
+    }
+
+    #[gpui::test]
+    async fn test_auto_fetch_without_manual_git_operation(cx: &mut TestAppContext) {
+        use git::repository::{Upstream, UpstreamTracking};
+        use gpui::UpdateGlobal;
+        use util::path;
+
+        init_test(cx);
+        cx.update(|cx| {
+            crate::trusted_worktrees::init(Default::default(), cx);
+            SettingsStore::update_global(cx, |store, cx| {
+                store.set_user_settings(
+                    r#"{"session":{"trust_all_worktrees":true},"git":{"auto_fetch":{"enabled":true,"interval_secs":15}}}"#,
+                    cx,
+                ).expect("valid settings");
+            });
+        });
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            path!("/project"),
+            json!({".git": {}, "README.md": "project"}),
+        )
+        .await;
+        let project = Project::test(fs.clone(), [Path::new(path!("/project"))], cx).await;
+        project
+            .update(cx, |project, cx| project.git_scans_complete(cx))
+            .await;
+        cx.run_until_parked();
+        let fetches = fs
+            .with_git_state(Path::new(path!("/project/.git")), false, |state| {
+                state.fetches.clone()
+            })
+            .expect("repository exists");
+        assert!(fetches.lock().is_empty());
+        cx.executor().advance_clock(Duration::from_secs(15));
+        cx.run_until_parked();
+        assert!(fetches.lock().is_empty(), "no remotes to fetch");
+
+        for (default_branch, branch, upstream, expected) in [
+            (
+                Some("refs/remotes/upstream/main"),
+                Some("refs/heads/feature"),
+                Some("refs/remotes/fork/topic"),
+                vec!["fork", "upstream"],
+            ),
+            (
+                Some("refs/remotes/upstream/main"),
+                Some("refs/heads/feature"),
+                Some("refs/remotes/upstream/topic"),
+                vec!["upstream"],
+            ),
+            (
+                Some("refs/remotes/origin/main"),
+                Some("refs/heads/feature"),
+                Some("refs/remotes/fork/topic"),
+                vec!["fork", "origin"],
+            ),
+            (
+                Some("refs/heads/main"),
+                Some("refs/heads/feature"),
+                Some("refs/remotes/fork/topic"),
+                vec!["central", "fork"],
+            ),
+            (
+                Some("refs/heads/release/stable"),
+                Some("refs/heads/feature"),
+                Some("refs/remotes/central/topic"),
+                vec!["central"],
+            ),
+            (
+                Some("refs/heads/untracked"),
+                Some("refs/heads/feature"),
+                Some("refs/remotes/fork/topic"),
+                vec!["fork"],
+            ),
+            (
+                Some("refs/remotes/upstream/main"),
+                Some("refs/heads/feature"),
+                None,
+                vec!["upstream"],
+            ),
+            (
+                Some("refs/remotes/upstream/main"),
+                None,
+                None,
+                vec!["upstream"],
+            ),
+            (
+                None,
+                Some("refs/heads/feature"),
+                Some("refs/remotes/fork/topic"),
+                vec!["fork"],
+            ),
+            (
+                None,
+                Some("refs/heads/feature"),
+                Some("refs/heads/other"),
+                vec![],
+            ),
+            (None, None, None, vec![]),
+        ] {
+            fs.with_git_state(Path::new(path!("/project/.git")), true, |state| {
+                state.branches = [
+                    "refs/heads/main",
+                    "refs/heads/release/stable",
+                    "refs/heads/untracked",
+                    "refs/heads/feature",
+                    "refs/remotes/origin/main",
+                    "refs/remotes/upstream/main",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+                state.default_branch_ref = default_branch.map(str::to_owned);
+                state.current_branch_name = branch.map(str::to_owned);
+                state.branch_upstreams.clear();
+                for (branch, upstream) in [
+                    ("refs/heads/main", Some("refs/remotes/central/main")),
+                    (
+                        "refs/heads/release/stable",
+                        Some("refs/remotes/central/stable"),
+                    ),
+                    ("refs/heads/feature", upstream),
+                ] {
+                    let Some(upstream) = upstream else {
+                        continue;
+                    };
+                    state.branch_upstreams.insert(
+                        branch.into(),
+                        Upstream {
+                            ref_name: upstream.into(),
+                            tracking: UpstreamTracking::Tracked(UpstreamTrackingStatus {
+                                ahead: 0,
+                                behind: 0,
+                            }),
+                        },
+                    );
+                }
+                state.remotes = ["origin", "upstream", "central", "fork", "unrelated"]
+                    .into_iter()
+                    .map(|remote| {
+                        (
+                            remote.to_owned(),
+                            format!("https://example.com/{remote}.git"),
+                        )
+                    })
+                    .collect();
+                state.fetches.lock().clear();
+            })
+            .expect("repository exists");
+            project
+                .update(cx, |project, cx| project.git_scans_complete(cx))
+                .await;
+            cx.run_until_parked();
+            cx.executor().advance_clock(Duration::from_secs(15));
+            cx.run_until_parked();
+
+            let mut fetched_remotes = fetches
+                .lock()
+                .iter()
+                .map(|options| options.name().to_string())
+                .collect::<Vec<_>>();
+            fetched_remotes.sort();
+            assert_eq!(
+                fetched_remotes, expected,
+                "default_branch={default_branch:?}, branch={branch:?}, upstream={upstream:?}"
+            );
+        }
     }
 
     #[test]

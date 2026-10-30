@@ -176,6 +176,12 @@ When opening a remote project there are three relevant settings locations:
 
 Both the local ZZZ and the server ZZZ read the project settings, but they are not aware of the other's main settings file.
 
+Git auto-fetch runs on the server that owns the checkout and sends updated branch
+information to your local ZZZ window. Enable `git.auto_fetch` in your user settings
+or the server's settings. Git settings are not read from project `.ZZZ/settings.json`
+files. See [Auto Fetch](./reference/all-settings.md#auto-fetch) for configuration and
+credential requirements.
+
 Which settings file you should use depends on the kind of setting you want to make:
 
 - Project settings should be used for things that affect the project: indentation settings, which formatter / language server to use, etc.
