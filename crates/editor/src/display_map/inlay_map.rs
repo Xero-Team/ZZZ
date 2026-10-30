@@ -1433,7 +1433,9 @@ fn push_isomorphic(sum_tree: &mut SumTree<Transform>, summary: MBTextSummary) {
     sum_tree.update_last(
         |transform| {
             if let Transform::Isomorphic(transform) = transform {
-                *transform += summary.take().expect("entry should be present");
+                *transform += summary
+                    .take()
+                    .expect("invariant: summary is Some for the single update_last call");
             }
         },
         (),

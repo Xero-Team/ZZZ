@@ -9463,7 +9463,7 @@ impl LineWithInvisibles {
                 LineFragment::Element { element, size, .. } => {
                     let mut element = element
                         .take()
-                        .expect("you can't prepaint LineWithInvisibles twice");
+                        .expect("invariant: a LineWithInvisibles is prepainted at most once");
 
                     // Center the element vertically within the line.
                     let mut element_origin = fragment_origin;

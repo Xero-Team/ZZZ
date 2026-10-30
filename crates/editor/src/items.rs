@@ -118,7 +118,9 @@ impl FollowableItem for Editor {
                     let mut multibuffer;
                     if state.singleton && buffers.len() == 1 {
                         multibuffer = MultiBuffer::singleton(
-                            buffers.pop().expect("collection should not be empty"),
+                            buffers
+                                .pop()
+                                .expect("invariant: buffers.len() == 1 in this branch"),
                             cx,
                         )
                     } else {
@@ -1018,11 +1020,9 @@ impl Item for Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        let buffer = self
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .expect("cannot call save_as on an excerpt list");
+        let Some(buffer) = self.buffer().read(cx).as_singleton() else {
+            return Task::ready(Err(anyhow!("cannot call save_as on an excerpt list")));
+        };
 
         project.update(cx, |project, cx| project.save_buffer_as(buffer, path, cx))
     }
@@ -1710,8 +1710,9 @@ impl Editor {
                         data
                     } else {
                         *data = Box::new(EditorRestorationData::default());
-                        data.downcast_mut::<EditorRestorationData>()
-                            .expect("just written the type downcasted to")
+                        data.downcast_mut::<EditorRestorationData>().expect(
+                            "invariant: the value was just replaced with EditorRestorationData",
+                        )
                     };
 
                     let data = data.entries.entry(file_abs_path).or_default();

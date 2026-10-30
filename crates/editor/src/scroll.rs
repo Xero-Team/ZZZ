@@ -94,7 +94,7 @@ impl SharedScrollAnchor {
             && display_map_id != snapshot.display_map_id
         {
             let companion_snapshot = snapshot.companion_snapshot().expect(
-                "shared scroll anchor references a non native display map, but snapshot has no companion",
+                "invariant: a shared scroll anchor outside the snapshot id has a companion snapshot",
             );
             assert_eq!(
                 companion_snapshot.display_map_id, display_map_id,
@@ -113,7 +113,7 @@ impl SharedScrollAnchor {
             && display_map_id != snapshot.display_map_id
         {
             let companion_snapshot = snapshot.companion_snapshot().expect(
-                "shared scroll anchor references a non native display map, but snapshot has no companion",
+                "invariant: a shared scroll anchor outside the snapshot id has a companion snapshot",
             );
             assert_eq!(
                 companion_snapshot.display_map_id, display_map_id,
@@ -319,7 +319,7 @@ impl ScrollManager {
             && display_map_id != snapshot.display_map_id
         {
             let companion_snapshot = snapshot.companion_snapshot().expect(
-                "shared scroll anchor references a non native display map, but the snapshot has no companion",
+                "invariant: a shared scroll anchor outside the snapshot id has a companion snapshot",
             );
             assert_eq!(
                 companion_snapshot.display_map_id, display_map_id,

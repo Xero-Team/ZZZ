@@ -764,7 +764,7 @@ impl SplittableEditor {
         let lhs = self
             .lhs
             .as_ref()
-            .expect("value should have the expected type");
+            .expect("invariant: LhsEditor is set immediately before this point");
 
         let shared_scroll_anchor = self
             .rhs_editor
@@ -1346,7 +1346,7 @@ impl SplittableEditor {
 
         let lhs_companion = lhs_snapshot
             .companion_snapshot()
-            .expect("lhs display snapshot should have rhs companion while split");
+            .expect("invariant: a split lhs snapshot has an rhs companion");
         assert_eq!(
             lhs_companion.display_map_id, rhs_snapshot.display_map_id,
             "lhs display snapshot companion should point to rhs display map"
@@ -1358,7 +1358,7 @@ impl SplittableEditor {
 
         let rhs_companion = rhs_snapshot
             .companion_snapshot()
-            .expect("rhs display snapshot should have lhs companion while split");
+            .expect("invariant: a split rhs snapshot has an lhs companion");
         assert_eq!(
             rhs_companion.display_map_id, lhs_snapshot.display_map_id,
             "rhs display snapshot companion should point to lhs display map"
@@ -1758,7 +1758,10 @@ impl SplittableEditor {
     }
 
     fn check_excerpt_invariants(&self, quiesced: bool, cx: &gpui::App) {
-        let lhs = self.lhs.as_ref().expect("should have lhs editor");
+        let lhs = self
+            .lhs
+            .as_ref()
+            .expect("invariant: check_excerpt_invariants runs only while split");
 
         let rhs_snapshot = self.rhs_multibuffer.read(cx).snapshot(cx);
         let rhs_excerpts = rhs_snapshot.excerpts().collect::<Vec<_>>();
@@ -1780,7 +1783,7 @@ impl SplittableEditor {
                 .rhs_multibuffer
                 .read(cx)
                 .diff_for(rhs_excerpt.context.start.buffer_id)
-                .expect("missing diff");
+                .expect("invariant: the rhs excerpt belongs to a diff buffer");
             assert_eq!(
                 lhs_excerpt.context.start.buffer_id,
                 diff.read(cx).base_text(cx).remote_id(),

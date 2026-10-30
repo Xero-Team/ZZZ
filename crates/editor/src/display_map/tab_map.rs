@@ -13,7 +13,8 @@ const MAX_ROW_SCAN_CHUNKS: usize = 8;
 
 // Handles a tab width <= 128
 const SPACES: &[u8; rope::Chunk::MASK_BITS] = &[b' '; _];
-const MAX_TABS: NonZeroU32 = NonZeroU32::new(SPACES.len() as u32).expect("SPACES is non-empty");
+const MAX_TABS: NonZeroU32 =
+    NonZeroU32::new(SPACES.len() as u32).expect("invariant: SPACES is a non-empty constant");
 
 /// Keeps track of hard tabs in a text buffer.
 ///

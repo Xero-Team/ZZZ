@@ -212,7 +212,8 @@ fn handle_preprocessing() -> Result<()> {
 }
 
 fn handle_frontmatter(book: &mut Book, errors: &mut HashSet<PreprocessorError>) {
-    let frontmatter_regex = Regex::new(r"(?s)^\s*---(.*?)---").expect("valid regex literal");
+    let frontmatter_regex =
+        Regex::new(r"(?s)^\s*---(.*?)---").expect("invariant: the regex literal is valid");
     for_each_chapter_mut(book, |chapter| {
         let new_content = frontmatter_regex.replace(&chapter.content, |caps: &regex::Captures| {
             let frontmatter = caps[1].trim();
@@ -233,7 +234,8 @@ fn handle_frontmatter(book: &mut Book, errors: &mut HashSet<PreprocessorError>) 
             }
             FRONT_MATTER_COMMENT.replace(
                 "{}",
-                &serde_json::to_string(&metadata).expect("Failed to serialize metadata"),
+                &serde_json::to_string(&metadata)
+                    .expect("invariant: a string map always serializes to JSON"),
             )
         });
         if let Cow::Owned(content) = new_content {
@@ -275,7 +277,8 @@ fn template_and_validate_keybindings(
     actions: &ActionManifest,
     errors: &mut HashSet<PreprocessorError>,
 ) -> Result<()> {
-    let regex = Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").expect("valid regex literal");
+    let regex =
+        Regex::new(r"\{#kb(?::(\w+))?\s+(.*?)\}").expect("invariant: the regex literal is valid");
     let keymaps = LoadedKeymaps::load()?;
 
     for_each_chapter_mut(book, |chapter| {
@@ -330,7 +333,7 @@ fn template_and_validate_actions(
     actions: &ActionManifest,
     errors: &mut HashSet<PreprocessorError>,
 ) {
-    let regex = Regex::new(r"\{#action (.*?)\}").expect("valid regex literal");
+    let regex = Regex::new(r"\{#action (.*?)\}").expect("invariant: the regex literal is valid");
 
     for_each_chapter_mut(book, |chapter| {
         chapter.content = regex
@@ -757,8 +760,8 @@ fn handle_postprocessing() -> Result<()> {
     }
 
     zlog::info!(logger => "Processing {} `.html` files", files.len());
-    let meta_regex =
-        Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).expect("valid regex literal");
+    let meta_regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)"))
+        .expect("invariant: the regex literal is valid");
     for file in files {
         let contents = std::fs::read_to_string(&file)
             .with_context(|| format!("failed to read rendered page {}", file.display()))?;
@@ -847,8 +850,9 @@ fn handle_postprocessing() -> Result<()> {
 
 fn title_regex() -> &'static Regex {
     static TITLE_REGEX: OnceLock<Regex> = OnceLock::new();
-    TITLE_REGEX
-        .get_or_init(|| Regex::new(r"<title>\s*(.*?)\s*</title>").expect("valid regex literal"))
+    TITLE_REGEX.get_or_init(|| {
+        Regex::new(r"<title>\s*(.*?)\s*</title>").expect("invariant: the regex literal is valid")
+    })
 }
 
 fn generate_big_table_of_actions(actions: &ActionManifest) -> String {
@@ -964,8 +968,8 @@ mod tests {
 
         assert!(errors.is_empty());
         let chapter = book.chapters().next().unwrap();
-        let regex =
-            Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)")).expect("valid regex literal");
+        let regex = Regex::new(&FRONT_MATTER_COMMENT.replace("{}", "(.*)"))
+            .expect("invariant: the regex literal is valid");
         let captures = regex.captures(&chapter.content).unwrap();
         let metadata: HashMap<String, String> =
             serde_json::from_str(&captures[1]).expect("parsing a JSON literal cannot fail");

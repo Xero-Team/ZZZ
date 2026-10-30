@@ -143,7 +143,8 @@ impl FoldPoint {
         let overshoot = self.0 - start.1.output.lines;
         let mut offset = start.1.output.len;
         if !overshoot.is_zero() {
-            let transform = item.expect("display point out of range");
+            let transform =
+                item.expect("invariant: a display point inside the snapshot has a transform");
             assert!(transform.placeholder.is_none());
             let end_inlay_offset = snapshot
                 .inlay_snapshot

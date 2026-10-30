@@ -1829,7 +1829,7 @@ impl BlockMapWriter<'_> {
         let mut companion_blocks = Vec::new();
         for block in blocks {
             if let BlockPlacement::Replace(_) = &block.placement {
-                debug_assert!(block.height.expect("height should be present") > 0);
+                debug_assert!(block.height.is_some_and(|height| height > 0));
             }
 
             let id = self.block_map.insert_block_raw(block.clone(), &buffer);

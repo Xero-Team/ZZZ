@@ -155,8 +155,9 @@ impl SelectionsCollection {
                         next_selection.end,
                         false,
                     ) {
-                        let next_selection =
-                            disjoint.next().expect("iterator should yield an item");
+                        let Some(next_selection) = disjoint.next() else {
+                            break;
+                        };
                         if next_selection.start < pending.start {
                             pending.start = next_selection.start;
                         }
@@ -275,8 +276,9 @@ impl SelectionsCollection {
                         next_selection.end,
                         false,
                     ) {
-                        let next_selection =
-                            disjoint.next().expect("iterator should yield an item");
+                        let Some(next_selection) = disjoint.next() else {
+                            break;
+                        };
                         if next_selection.start < pending.start {
                             pending.start = next_selection.start;
                         }
