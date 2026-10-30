@@ -18,7 +18,8 @@ use crate::{
 };
 
 const SEEK_STEP: Duration = Duration::from_secs(5);
-const POSITION_TICK: Duration = Duration::from_millis(50);
+const POSITION_TICK: Duration = Duration::from_millis(100);
+const POSITION_NOTIFY_QUANTUM: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PlaybackStatus {
@@ -52,6 +53,7 @@ pub struct AudioView {
     pub(crate) load_state: LoadState,
     pub(crate) playback: PlaybackStatus,
     pub(crate) position: Duration,
+    last_notified_position: Duration,
     pub(crate) volume: f32,
     pub(crate) muted: bool,
     pub(crate) volume_before_mute: f32,
@@ -104,6 +106,7 @@ impl AudioView {
             load_state: LoadState::Loading,
             playback: PlaybackStatus::Stopped,
             position: Duration::ZERO,
+            last_notified_position: Duration::ZERO,
             volume: 1.0,
             muted: false,
             volume_before_mute: 1.0,
@@ -438,7 +441,9 @@ impl AudioView {
                 cx.background_executor().timer(POSITION_TICK).await;
                 if this
                     .update(cx, |view, cx| {
-                        view.sync_playback_position(cx);
+                        if view.sync_playback_position() {
+                            cx.notify();
+                        }
                     })
                     .is_err()
                 {
@@ -448,10 +453,11 @@ impl AudioView {
         }));
     }
 
-    fn sync_playback_position(&mut self, cx: &mut Context<Self>) {
+    fn sync_playback_position(&mut self) -> bool {
         let Some(handle) = &self.handle else {
-            return;
+            return false;
         };
+        let previous_playback = self.playback;
         let finished = handle.is_finished();
         if self.scrub.is_none() {
             self.position = handle.position();
@@ -466,7 +472,14 @@ impl AudioView {
             }
             self._position_task = None;
         }
-        cx.notify();
+        let playback_changed = self.playback != previous_playback;
+        let position_changed = self.scrub.is_none()
+            && position_visible_change(self.last_notified_position, self.position);
+        let should_notify = finished || playback_changed || position_changed;
+        if should_notify {
+            self.last_notified_position = self.position;
+        }
+        should_notify
     }
 
     pub(crate) fn stop_playback(&mut self, cx: &mut Context<Self>) {
@@ -476,6 +489,7 @@ impl AudioView {
         self.scrub = None;
         self.playback = PlaybackStatus::Stopped;
         self.position = Duration::ZERO;
+        self.last_notified_position = Duration::ZERO;
         self._position_task = None;
         cx.notify();
     }
@@ -490,6 +504,7 @@ impl AudioView {
     fn seek_to(&mut self, position: Duration, cx: &mut Context<Self>) {
         let position = self.clamp_position(position);
         self.position = position;
+        self.last_notified_position = position;
         if let Some(handle) = &self.handle
             && let Err(error) = handle.try_seek(position)
         {
@@ -509,6 +524,7 @@ impl AudioView {
             && self.position >= duration
         {
             self.position = Duration::ZERO;
+            self.last_notified_position = Duration::ZERO;
         }
 
         let start = self.position;
@@ -720,6 +736,10 @@ pub(crate) fn format_timestamp(duration: Duration) -> String {
     }
 }
 
+fn position_visible_change(previous: Duration, current: Duration) -> bool {
+    current.abs_diff(previous) >= POSITION_NOTIFY_QUANTUM
+}
+
 fn format_bitrate(bitrate: u32) -> String {
     format!("{bitrate} kbps")
 }
@@ -750,7 +770,7 @@ fn format_channels(channels: u16, cx: &App) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_bit_depth, format_bitrate, format_timestamp};
+    use super::{format_bit_depth, format_bitrate, format_timestamp, position_visible_change};
     use std::time::Duration;
 
     #[test]
@@ -772,5 +792,26 @@ mod tests {
     fn format_timestamp_hours() {
         assert_eq!(format_timestamp(Duration::from_secs(3600)), "1:00:00");
         assert_eq!(format_timestamp(Duration::from_secs(3661)), "1:01:01");
+    }
+
+    #[test]
+    fn position_notification_uses_visible_quantum() {
+        assert!(!position_visible_change(Duration::ZERO, Duration::ZERO));
+        assert!(!position_visible_change(
+            Duration::ZERO,
+            Duration::from_millis(199)
+        ));
+        assert!(position_visible_change(
+            Duration::ZERO,
+            Duration::from_millis(200)
+        ));
+        assert!(position_visible_change(
+            Duration::ZERO,
+            Duration::from_millis(201)
+        ));
+        assert!(position_visible_change(
+            Duration::from_millis(201),
+            Duration::ZERO
+        ));
     }
 }
