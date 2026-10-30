@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{mem, path::PathBuf, sync::Arc, time::Duration};
 
 use audio::PlaybackHandle;
 use editor::RevealInFileManager;
@@ -38,6 +38,7 @@ pub(crate) enum LoadState {
 }
 
 pub(crate) struct LoadedAudio {
+    generation: u64,
     pub path: PathBuf,
     pub format_hint: String,
     pub metadata: AudioMetadata,
@@ -66,6 +67,7 @@ pub struct AudioView {
     pub(crate) seek_track_bounds: Option<Bounds<Pixels>>,
     pub(crate) volume_track_bounds: Option<Bounds<Pixels>>,
     pub(crate) scrub: Option<Scrub>,
+    load_generation: u64,
     _load_task: Task<()>,
     _waveform_task: Option<Task<()>>,
     _position_task: Option<Task<()>>,
@@ -101,11 +103,10 @@ impl AudioView {
         })
         .detach();
 
-        let load_task = Self::start_load(cx);
         let worktree_subscription = cx.subscribe(&project, Self::on_project_event);
         let volume = audio::AudioSettings::get_global(cx).preview_volume;
 
-        Self {
+        let mut this = Self {
             audio_item,
             project,
             focus_handle: cx.focus_handle(),
@@ -122,12 +123,15 @@ impl AudioView {
             seek_track_bounds: None,
             volume_track_bounds: None,
             scrub: None,
-            _load_task: load_task,
+            load_generation: 0,
+            _load_task: Task::ready(()),
             _waveform_task: None,
             _position_task: None,
             volume_persist_task: None,
             _worktree_subscription: worktree_subscription,
-        }
+        };
+        this.start_load(cx);
+        this
     }
 
     fn on_project_event(
@@ -155,11 +159,15 @@ impl AudioView {
     fn reload(&mut self, cx: &mut Context<Self>) {
         self.scrub = None;
         self.stop_playback(cx);
-        self._load_task = Self::start_load(cx);
+        self.start_load(cx);
     }
 
-    fn start_load(cx: &mut Context<Self>) -> Task<()> {
-        cx.spawn(async move |this, cx| {
+    fn start_load(&mut self, cx: &mut Context<Self>) {
+        let generation = advance_load_generation(&mut self.load_generation);
+        drop(self._waveform_task.take());
+        drop(mem::replace(&mut self._load_task, Task::ready(())));
+
+        self._load_task = cx.spawn(async move |this, cx| {
             let prepared = this.update(cx, |view, cx| {
                 let item = view.audio_item.read(cx);
                 let format_hint = item.path.extension().map(ToOwned::to_owned);
@@ -174,7 +182,7 @@ impl AudioView {
             let (format_hint, project_path, local_path, project) = match prepared {
                 Ok(prepared) => prepared,
                 Err(error) => {
-                    Self::set_error(&this, error.to_string(), cx);
+                    Self::set_error(&this, generation, error.to_string(), cx);
                     return;
                 }
             };
@@ -187,7 +195,7 @@ impl AudioView {
                         "Audio file has no extension",
                     )
                 });
-                Self::set_error(&this, message, cx);
+                Self::set_error(&this, generation, message, cx);
                 return;
             };
 
@@ -206,7 +214,7 @@ impl AudioView {
                 match staged {
                     Ok((path, temp_path)) => (path, Some(temp_path)),
                     Err(error) => {
-                        Self::set_error(&this, error.to_string(), cx);
+                        Self::set_error(&this, generation, error.to_string(), cx);
                         return;
                     }
                 }
@@ -226,7 +234,15 @@ impl AudioView {
                         return;
                     };
                     this.update(cx, |view, cx| {
+                        if !load_result_is_current(view.load_generation, generation) {
+                            log::debug!(
+                                "discarding stale audio load result (generation {generation}, current {})",
+                                view.load_generation
+                            );
+                            return;
+                        }
                         view.load_state = LoadState::Loaded(Box::new(LoadedAudio {
+                            generation,
                             path,
                             format_hint,
                             metadata: info.metadata,
@@ -246,21 +262,29 @@ impl AudioView {
                     let Some(this) = this.upgrade() else {
                         return;
                     };
-                    let keep_existing = this.update(cx, |view, _cx| {
-                        matches!(view.load_state, LoadState::Loaded(_))
+                    this.update(cx, |view, cx| {
+                        if !load_result_is_current(view.load_generation, generation) {
+                            log::debug!(
+                                "discarding stale audio load error (generation {generation}, current {})",
+                                view.load_generation
+                            );
+                            return;
+                        }
+                        if matches!(view.load_state, LoadState::Loaded(_)) {
+                            log::error!("reloading audio preview: {error:#}");
+                        } else {
+                            view.load_state = LoadState::Error(error.to_string().into());
+                            cx.notify();
+                        }
                     });
-                    if keep_existing {
-                        log::error!("reloading audio preview: {error:#}");
-                    } else {
-                        Self::set_error(&this.downgrade(), error.to_string(), cx);
-                    }
                 }
             }
-        })
+        });
     }
 
     fn set_error(
         this: &WeakEntity<Self>,
+        generation: u64,
         message: impl Into<SharedString>,
         cx: &mut gpui::AsyncApp,
     ) {
@@ -269,6 +293,13 @@ impl AudioView {
             return;
         };
         this.update(cx, |view, cx| {
+            if !load_result_is_current(view.load_generation, generation) {
+                log::debug!(
+                    "discarding stale audio load error (generation {generation}, current {})",
+                    view.load_generation
+                );
+                return;
+            }
             view.load_state = LoadState::Error(message);
             cx.notify();
         });
@@ -280,7 +311,9 @@ impl AudioView {
         };
         let path = loaded.path.clone();
         let format_hint = loaded.format_hint.clone();
+        let generation = loaded.generation;
 
+        drop(self._waveform_task.take());
         self._waveform_task = Some(cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
@@ -297,6 +330,13 @@ impl AudioView {
                 return;
             };
             this.update(cx, |view, cx| {
+                if !load_result_is_current(view.load_generation, generation) {
+                    log::debug!(
+                        "discarding stale audio waveform (generation {generation}, current {})",
+                        view.load_generation
+                    );
+                    return;
+                }
                 if let LoadState::Loaded(loaded) = &mut view.load_state {
                     loaded.analyzing = false;
                     match result {
@@ -799,6 +839,15 @@ fn gain_for_fader(fader: f32) -> f32 {
     fader.clamp(0.0, 1.0).powi(3)
 }
 
+fn advance_load_generation(generation: &mut u64) -> u64 {
+    *generation = generation.wrapping_add(1);
+    *generation
+}
+
+fn load_result_is_current(current_generation: u64, result_generation: u64) -> bool {
+    current_generation == result_generation
+}
+
 fn playback_start_position(position: Duration, duration: Option<Duration>) -> Duration {
     match duration {
         Some(duration) if position >= duration => Duration::ZERO,
@@ -853,8 +902,8 @@ fn format_channels(channels: u16, cx: &App) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_bit_depth, format_bitrate, format_timestamp, gain_for_fader,
-        playback_start_position, position_visible_change,
+        advance_load_generation, format_bit_depth, format_bitrate, format_timestamp,
+        gain_for_fader, load_result_is_current, playback_start_position, position_visible_change,
     };
     use std::time::Duration;
 
@@ -924,5 +973,22 @@ mod tests {
             playback_start_position(Duration::from_secs(42), None),
             Duration::from_secs(42)
         );
+    }
+
+    #[test]
+    fn load_generation_rejects_results_from_previous_load() {
+        let mut current_generation = 0;
+        let first_generation = advance_load_generation(&mut current_generation);
+        assert!(load_result_is_current(current_generation, first_generation));
+
+        let second_generation = advance_load_generation(&mut current_generation);
+        assert!(!load_result_is_current(
+            current_generation,
+            first_generation
+        ));
+        assert!(load_result_is_current(
+            current_generation,
+            second_generation
+        ));
     }
 }
