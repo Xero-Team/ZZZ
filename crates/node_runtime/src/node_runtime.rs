@@ -1244,7 +1244,7 @@ fn proxy_argument(proxy: Option<&Url>) -> Option<String> {
     {
         proxy
             .set_ip_host(IpAddr::V4(Ipv4Addr::LOCALHOST))
-            .expect("IPv4 loopback should be a valid URL host");
+            .expect("invariant: IPv4 loopback is a valid URL host");
     }
 
     Some(proxy.as_str().to_owned())

@@ -2891,7 +2891,9 @@ impl LspAdapter for PyreflyLspAdapter {
             if !user_settings.is_object() {
                 user_settings = Value::Object(serde_json::Map::default());
             }
-            let object = user_settings.as_object_mut().unwrap();
+            let object = user_settings
+                .as_object_mut()
+                .expect("invariant: user_settings was coerced to an object above");
 
             if let Some(interpreter_path) = &env.environment.executable {
                 object.insert(

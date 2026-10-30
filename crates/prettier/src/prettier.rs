@@ -119,9 +119,9 @@ impl Prettier {
                             Some(serde_json::Value::Array(workspaces)) => {
                                 let subproject_path = closest_package_json_path
                                     .strip_prefix(&path_to_check)
-                                    .expect(
+                                    .context(
                                         "traversing path parents, should be able to strip prefix",
-                                    );
+                                    )?;
                                 if workspaces
                                     .iter()
                                     .filter_map(|value| {
@@ -234,7 +234,9 @@ impl Prettier {
                         {
                             let subproject_path = closest_package_json_path
                                 .strip_prefix(&path_to_check)
-                                .expect("traversing path parents, should be able to strip prefix");
+                                .context(
+                                    "traversing path parents, should be able to strip prefix",
+                                )?;
 
                             if workspaces
                                 .iter()

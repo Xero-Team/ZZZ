@@ -86,7 +86,7 @@ fn run_migrations(text: &str, migrations: &[MigrationType]) -> Result<Option<Str
                 let old_content: serde_json_lenient::Value =
                     parse_json_with_comments(&current_text)?;
                 let old_value = serde_json::to_value(&old_content)
-                    .expect("converting to a JSON value cannot fail");
+                    .expect("invariant: converting a JSON value cannot fail");
                 let mut new_value = old_value.clone();
                 callback(&mut new_value)?;
                 if new_value == old_value {

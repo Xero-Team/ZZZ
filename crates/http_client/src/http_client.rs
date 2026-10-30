@@ -419,22 +419,16 @@ impl FakeHttpClient {
 
     pub fn with_404_response() -> Arc<HttpClientWithUrl> {
         log::warn!("Using fake HTTP client with 404 response");
-        Self::create(|_| async move {
-            Ok(Response::builder()
-                .status(404)
-                .body(Default::default())
-                .expect("value should be present"))
-        })
+        Self::create(
+            |_| async move { Ok(Response::builder().status(404).body(Default::default())?) },
+        )
     }
 
     pub fn with_200_response() -> Arc<HttpClientWithUrl> {
         log::warn!("Using fake HTTP client with 200 response");
-        Self::create(|_| async move {
-            Ok(Response::builder()
-                .status(200)
-                .body(Default::default())
-                .expect("value should be present"))
-        })
+        Self::create(
+            |_| async move { Ok(Response::builder().status(200).body(Default::default())?) },
+        )
     }
 
     pub fn replace_handler<Fut, F>(&self, new_handler: F)

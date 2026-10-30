@@ -907,7 +907,11 @@ impl LanguageRegistry {
                                 state.mark_language_loaded(id);
                                 if let Some(mut txs) = state.loading_languages.remove(&id) {
                                     for tx in txs.drain(..) {
-                                        let _ = tx.send(Ok(language.clone()));
+                                        if tx.send(Ok(language.clone())).is_err() {
+                                            log::debug!(
+                                                "language load receiver dropped before delivery"
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -917,9 +921,16 @@ impl LanguageRegistry {
                                 state.mark_language_loaded(id);
                                 if let Some(mut txs) = state.loading_languages.remove(&id) {
                                     for tx in txs.drain(..) {
-                                        let _ = tx.send(Err(anyhow!(
-                                            "failed to load language {name}: {e}",
-                                        )));
+                                        if tx
+                                            .send(Err(anyhow!(
+                                                "failed to load language {name}: {e}",
+                                            )))
+                                            .is_err()
+                                        {
+                                            log::debug!(
+                                                "language load receiver dropped before delivery"
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -946,7 +957,9 @@ impl LanguageRegistry {
     ) -> oneshot::Receiver<Result<Arc<Language>>> {
         let Some(language) = self.find_matching_language(callback) else {
             let (tx, rx) = oneshot::channel();
-            let _ = tx.send(Err(anyhow!(LanguageNotFound)));
+            if tx.send(Err(anyhow!(LanguageNotFound))).is_err() {
+                log::debug!("language lookup receiver dropped before delivery");
+            }
             return rx;
         };
 

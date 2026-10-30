@@ -27,7 +27,7 @@ async fn install_script(cx: &AsyncApp) -> Result<Option<PathBuf>> {
     let link_path = Path::new("/usr/local/bin/zzz");
     let bin_dir_path = link_path
         .parent()
-        .expect("path should have the expected component");
+        .ok_or_else(|| anyhow::anyhow!("link path has no parent: {}", link_path.display()))?;
 
     // Don't re-create symlink if it points to the same CLI binary.
     if smol::fs::read_link(link_path).await.ok().as_ref() == Some(&cli_path) {

@@ -451,9 +451,18 @@ impl LanguageServer {
             .spawn()
             .with_context(|| format!("failed to spawn command {command:?}",))?;
 
-        let stdin = server.stdin.take().expect("entry should be present");
-        let stdout = server.stdout.take().expect("entry should be present");
-        let stderr = server.stderr.take().expect("entry should be present");
+        let stdin = server
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow!("language server stdin was not piped"))?;
+        let stdout = server
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("language server stdout was not piped"))?;
+        let stderr = server
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow!("language server stderr was not piped"))?;
         let server = Self::new_internal(
             server_id,
             server_name,
@@ -473,7 +482,7 @@ impl LanguageServer {
                     server_id,
                     notification.method,
                     serde_json::to_string_pretty(&notification.params)
-                        .expect("serializing to JSON cannot fail"),
+                        .expect("invariant: serializing a JSON value to a string cannot fail"),
                 );
                 false
             },

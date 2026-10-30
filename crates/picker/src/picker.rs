@@ -1029,11 +1029,11 @@ impl<D: PickerDelegate> Picker<D> {
                 let delegate_pending_update_matches = this.update(cx, |this, _| {
                     this.pending_update_matches
                         .as_mut()
-                        .expect("value should have the expected type")
-                        .delegate_update_matches
-                        .take()
-                        .expect("entry should be present")
+                        .and_then(|pending| pending.delegate_update_matches.take())
                 })?;
+                let Some(delegate_pending_update_matches) = delegate_pending_update_matches else {
+                    return Ok(());
+                };
                 delegate_pending_update_matches.await;
                 this.update_in(cx, |this, window, cx| {
                     this.matches_updated(scroll_behavior, window, cx);

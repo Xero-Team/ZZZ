@@ -33,12 +33,11 @@ const FAMILY_NAMES: [SharedString; 3] = [
 ];
 
 fn get_theme_family_themes(theme_name: &str) -> Option<(&'static str, &'static str)> {
-    for i in 0..LIGHT_THEMES.len() {
-        if LIGHT_THEMES[i] == theme_name || DARK_THEMES[i] == theme_name {
-            return Some((LIGHT_THEMES[i], DARK_THEMES[i]));
-        }
-    }
-    None
+    let index = LIGHT_THEMES
+        .iter()
+        .zip(DARK_THEMES.iter())
+        .position(|(light, dark)| *light == theme_name || *dark == theme_name)?;
+    Some((LIGHT_THEMES[index], DARK_THEMES[index]))
 }
 
 fn render_theme_section(tab_index: &mut isize, cx: &mut App) -> impl IntoElement {

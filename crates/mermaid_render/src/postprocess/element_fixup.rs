@@ -93,7 +93,8 @@ fn is_hardcoded_text_fill(val: &str) -> bool {
 }
 
 fn push_font_style(style: &mut String, font_family: &str) {
-    write!(style, "font-family: {font_family};").expect("write to String cannot fail");
+    write!(style, "font-family: {font_family};")
+        .expect("invariant: writing to a String cannot fail");
 }
 
 fn font_style(font_family: &str) -> String {

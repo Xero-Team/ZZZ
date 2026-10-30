@@ -544,7 +544,7 @@ fn generate_jsonc_schema() -> serde_json::Value {
         .settings()
         .meta_schema
         .as_ref()
-        .expect("meta_schema should be present in schemars settings")
+        .expect("invariant: draft2019_09 settings set a meta_schema")
         .to_string();
     let defs = generator.definitions();
     let schema = schemars::json_schema!({
@@ -552,7 +552,7 @@ fn generate_jsonc_schema() -> serde_json::Value {
         "allowTrailingCommas": true,
         "$defs": defs,
     });
-    serde_json::to_value(schema).expect("converting to a JSON value cannot fail")
+    serde_json::to_value(schema).expect("invariant: converting a JSON value cannot fail")
 }
 
 #[cfg(debug_assertions)]
@@ -562,7 +562,7 @@ fn generate_inspector_style_schema() -> serde_json::Value {
         .into_generator()
         .root_schema_for::<gpui::StyleRefinement>();
 
-    serde_json::to_value(schema).expect("converting to a JSON value cannot fail")
+    serde_json::to_value(schema).expect("invariant: converting a JSON value cannot fail")
 }
 
 pub fn normalize_action_name(action_name: &str) -> String {
@@ -593,7 +593,7 @@ fn root_schema_from_action_schema(
         .settings()
         .meta_schema
         .as_ref()
-        .expect("meta_schema should be present in schemars settings")
+        .expect("invariant: draft2019_09 settings set a meta_schema")
         .to_string();
     let defs = generator.definitions();
     let mut schema = schemars::json_schema!({

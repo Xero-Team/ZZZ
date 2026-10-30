@@ -470,7 +470,9 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
             let label = self.label_for_completion(completion, language).await;
             if let Some(label) = label {
                 labels.resize(ix + 1, None);
-                *labels.last_mut().expect("collection should not be empty") = Some(label);
+                if let Some(last) = labels.last_mut() {
+                    *last = Some(label);
+                }
             }
         }
         Ok(labels)
@@ -494,7 +496,9 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
             let label = self.label_for_symbol(symbol, language).await;
             if let Some(label) = label {
                 labels.resize(ix + 1, None);
-                *labels.last_mut().expect("collection should not be empty") = Some(label);
+                if let Some(last) = labels.last_mut() {
+                    *last = Some(label);
+                }
             }
         }
         Ok(labels)

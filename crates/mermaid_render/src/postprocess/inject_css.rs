@@ -131,7 +131,7 @@ fn mindmap_section_css(theme: &MermaidTheme) -> String {
              {{ color: {txt} !important; }}\n\
              .section-edge{section_index} {{ stroke: {color} !important; }}\n",
         )
-        .expect("write to String cannot fail");
+        .expect("invariant: writing to a String cannot fail");
     };
 
     emit(
@@ -166,7 +166,7 @@ fn git_branch_css(theme: &MermaidTheme) -> String {
              .label{i} {{ fill: {label_fill}; stroke: {c}; }}\n\
              .branch-label{i} {{ fill: {text}; }}\n"
         )
-        .expect("write to String cannot fail");
+        .expect("invariant: writing to a String cannot fail");
     }
     css
 }
@@ -217,7 +217,7 @@ fn accent_css(theme: &MermaidTheme) -> String {
              {class} text, {class} tspan, text{class}, tspan{class} \
              {{ fill: {text} !important; }}\n",
         )
-        .expect("write to String cannot fail");
+        .expect("invariant: writing to a String cannot fail");
     }
     css
 }
@@ -234,7 +234,7 @@ fn chart_color_css(theme: &MermaidTheme) -> String {
              .plot rect{class}, .legend rect{class} {{ fill: {color} !important; stroke: {color} !important; }}\n\
              .plot path{class} {{ stroke: {color} !important; }}\n"
         )
-        .expect("write to String cannot fail");
+        .expect("invariant: writing to a String cannot fail");
     }
     css
 }
@@ -252,7 +252,7 @@ fn timeline_css(theme: &MermaidTheme) -> String {
         write!(
             css,
             "rect.task-type-{i}, rect.section-type-{i} {{ fill: {fill} !important; stroke: {c} !important; }}\n"
-        ).expect("write to String cannot fail");
+        ).expect("invariant: writing to a String cannot fail");
     }
     for i in 0..4 {
         let c = crate::css_color(theme.git_branch_colors[i % 8]);
@@ -268,7 +268,7 @@ fn timeline_css(theme: &MermaidTheme) -> String {
              .taskText{i} {{ fill: {text} !important; }}\n\
              .taskTextOutside{i} {{ fill: {text} !important; }}\n"
         )
-        .expect("write to String cannot fail");
+        .expect("invariant: writing to a String cannot fail");
     }
     css
 }
@@ -318,13 +318,13 @@ fn scope_css(raw_css: &str, svg_id: &str) -> String {
                     }
                     first = false;
                     write!(result, "#{svg_id} {}", selector.trim())
-                        .expect("write to String cannot fail");
+                        .expect("invariant: writing to a String cannot fail");
                 }
-                writeln!(result, "{rest}").expect("write to String cannot fail");
+                writeln!(result, "{rest}").expect("invariant: writing to a String cannot fail");
                 continue;
             }
         }
-        writeln!(result, "{line}").expect("write to String cannot fail");
+        writeln!(result, "{line}").expect("invariant: writing to a String cannot fail");
     }
     result
 }

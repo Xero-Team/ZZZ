@@ -77,7 +77,8 @@ impl Global for GlobalI18nService {}
 
 pub fn init(cx: &mut App) {
     let configured_locale = resolve_locale(DisplayLanguageSetting::get_global(cx));
-    let fallback_catalog = load_catalog(DEFAULT_LOCALE).expect("missing default locale catalog");
+    let fallback_catalog =
+        load_catalog(DEFAULT_LOCALE).expect("invariant: default locale catalog is embedded");
     let active_catalog = catalog_for(configured_locale, &fallback_catalog);
 
     cx.set_global(GlobalI18nService(Arc::new(RwLock::new(I18nService {
