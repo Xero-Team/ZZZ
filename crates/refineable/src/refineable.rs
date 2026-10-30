@@ -114,7 +114,7 @@ impl<S: Refineable + Default> Cascade<S> {
     pub fn base(&mut self) -> &mut S::Refinement {
         self.0[Self::BASE_SLOT]
             .as_mut()
-            .expect("the base slot of a cascade is always populated")
+            .expect("invariant: the base slot of a cascade is always populated")
     }
 
     /// Sets the refinement for a specific slot in the cascade.
@@ -137,7 +137,7 @@ impl<S: Refineable + Default> Cascade<S> {
     pub fn merged(&self) -> S::Refinement {
         let mut merged = self.0[Self::BASE_SLOT]
             .clone()
-            .expect("the base slot of a cascade is always populated");
+            .expect("invariant: the base slot of a cascade is always populated");
         for refinement in self.0.iter().skip(1).flatten() {
             merged.refine(refinement);
         }

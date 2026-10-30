@@ -231,8 +231,7 @@ impl DockerExecConnection {
             super::remote_server_binary_version(release_channel, &version, commit.as_ref());
         let binary_name =
             paths::remote_server_binary_name(release_channel.dev_name(), &version_str, false);
-        let dst_path = paths::remote_server_dir_relative()
-            .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
+        let dst_path = paths::remote_server_dir_relative().join(RelPath::unix(&binary_name)?);
 
         let binary_exists_on_server = match self
             .remote_server_version(&dst_path, remote_dir_for_server)
@@ -272,17 +271,14 @@ impl DockerExecConnection {
         )
         .await?
         {
-            let tmp_path = paths::remote_server_dir_relative().join(
-                RelPath::unix(&format!(
-                    "download-{}-{}",
-                    std::process::id(),
-                    remote_server_path
-                        .file_name()
-                        .expect("path should have the expected component")
-                        .to_string_lossy()
-                ))
-                .expect("value should be present"),
-            );
+            let tmp_path = paths::remote_server_dir_relative().join(RelPath::unix(&format!(
+                "download-{}-{}",
+                std::process::id(),
+                remote_server_path
+                    .file_name()
+                    .ok_or_else(|| anyhow!("remote server path has no file name"))?
+                    .to_string_lossy()
+            ))?);
             self.upload_local_server_binary(
                 &remote_server_path,
                 &tmp_path,
@@ -309,14 +305,11 @@ impl DockerExecConnection {
         }
 
         if let Some(embedded) = super::materialize_embedded_remote_server(remote_platform)? {
-            let tmp_path_gz = paths::remote_server_dir_relative().join(
-                RelPath::unix(&format!(
-                    "{}-download-{}.gz",
-                    binary_name,
-                    std::process::id()
-                ))
-                .expect("value should be present"),
-            );
+            let tmp_path_gz = paths::remote_server_dir_relative().join(RelPath::unix(&format!(
+                "{}-download-{}.gz",
+                binary_name,
+                std::process::id()
+            ))?);
             self.upload_local_server_binary(
                 embedded.path(),
                 &tmp_path_gz,
@@ -842,7 +835,7 @@ fn redact_arguments(docker_cli: &str, subcommand: &str, args: &[impl AsRef<str>]
         } else {
             redact_command(argument)
         };
-        write!(redacted, " {argument:?}").expect("writing to a String should not fail");
+        write!(redacted, " {argument:?}").expect("invariant: writing to a String cannot fail");
     }
 
     redacted

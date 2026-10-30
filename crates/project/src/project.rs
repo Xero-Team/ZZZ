@@ -1381,7 +1381,7 @@ impl Project {
                     toolchain_store
                         .read(cx)
                         .as_local_store()
-                        .expect("Toolchain store to be local")
+                        .expect("invariant: the toolchain store is created as local")
                         .clone(),
                     environment.clone(),
                     manifest_tree,

@@ -448,11 +448,12 @@ impl AnyProtoClient {
                 TypeId::of::<M>(),
                 entity.into(),
                 Arc::new(move |entity, envelope, client, cx| {
-                    let entity = entity.downcast::<E>().expect("downcast should succeed");
-                    let envelope = envelope
-                        .into_any()
-                        .downcast::<TypedEnvelope<M>>()
-                        .expect("downcast should succeed");
+                    let entity = entity.downcast::<E>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
                     let request_id = envelope.message_id();
                     handler(entity, *envelope, cx)
                         .then(move |result| async move {
@@ -484,7 +485,7 @@ impl AnyProtoClient {
         let entity_id_extractor = |envelope: &dyn AnyTypedEnvelope| {
             (envelope as &dyn Any)
                 .downcast_ref::<TypedEnvelope<M>>()
-                .expect("downcast should succeed")
+                .expect("invariant: downcast matches the registered message and entity type")
                 .payload
                 .remote_entity_id()
         };
@@ -497,11 +498,12 @@ impl AnyProtoClient {
                 entity_type_id,
                 entity_id_extractor,
                 Arc::new(move |entity, envelope, client, cx| {
-                    let entity = entity.downcast::<E>().expect("downcast should succeed");
-                    let envelope = envelope
-                        .into_any()
-                        .downcast::<TypedEnvelope<M>>()
-                        .expect("downcast should succeed");
+                    let entity = entity.downcast::<E>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
                     let request_id = envelope.message_id();
                     handler(entity, *envelope, cx)
                         .then(move |result| async move {
@@ -534,7 +536,7 @@ impl AnyProtoClient {
         let entity_id_extractor = |envelope: &dyn AnyTypedEnvelope| {
             (envelope as &dyn Any)
                 .downcast_ref::<TypedEnvelope<M>>()
-                .expect("downcast should succeed")
+                .expect("invariant: downcast matches the registered message and entity type")
                 .payload
                 .remote_entity_id()
         };
@@ -547,11 +549,12 @@ impl AnyProtoClient {
                 entity_type_id,
                 entity_id_extractor,
                 Arc::new(move |entity, envelope, client, cx| {
-                    let entity = entity.downcast::<E>().expect("downcast should succeed");
-                    let envelope = envelope
-                        .into_any()
-                        .downcast::<TypedEnvelope<M>>()
-                        .expect("downcast should succeed");
+                    let entity = entity.downcast::<E>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
                     let request_id = envelope.message_id();
                     handler(entity, *envelope, cx)
                         .then(move |result| async move {
@@ -597,7 +600,7 @@ impl AnyProtoClient {
         let entity_id_extractor = |envelope: &dyn AnyTypedEnvelope| {
             (envelope as &dyn Any)
                 .downcast_ref::<TypedEnvelope<M>>()
-                .expect("downcast should succeed")
+                .expect("invariant: downcast matches the registered message and entity type")
                 .payload
                 .remote_entity_id()
         };
@@ -610,11 +613,12 @@ impl AnyProtoClient {
                 entity_type_id,
                 entity_id_extractor,
                 Arc::new(move |entity, envelope, _, cx| {
-                    let entity = entity.downcast::<E>().expect("downcast should succeed");
-                    let envelope = envelope
-                        .into_any()
-                        .downcast::<TypedEnvelope<M>>()
-                        .expect("downcast should succeed");
+                    let entity = entity.downcast::<E>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
+                    let envelope = envelope.into_any().downcast::<TypedEnvelope<M>>().expect(
+                        "invariant: downcast matches the registered message and entity type",
+                    );
                     handler(entity, *envelope, cx).boxed_local()
                 }),
             );

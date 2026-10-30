@@ -701,7 +701,7 @@ impl SshRemoteConnection {
                     .as_mut()
                     .stderr
                     .take()
-                    .expect("entry should be present");
+                    .ok_or_else(|| anyhow!("ssh stderr was not piped"))?;
                 stderr.read_to_end(&mut output).await?;
 
                 let error_message = format!(
@@ -766,7 +766,7 @@ impl SshRemoteConnection {
                     .as_mut()
                     .stderr
                     .take()
-                    .expect("entry should be present");
+                    .ok_or_else(|| anyhow!("ssh stderr was not piped"))?;
                 stderr.read_to_end(&mut output).await?;
 
                 let error_message = format!(
@@ -885,8 +885,7 @@ impl SshRemoteConnection {
             &version_str,
             self.ssh_platform.os.is_windows(),
         );
-        let dst_path = paths::remote_server_dir_relative()
-            .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
+        let dst_path = paths::remote_server_dir_relative().join(RelPath::unix(&binary_name)?);
 
         let binary_exists_on_server = match self.remote_server_version(&dst_path).await {
             Ok(remote_version) => {
@@ -924,17 +923,14 @@ impl SshRemoteConnection {
         )
         .await?
         {
-            let tmp_path = paths::remote_server_dir_relative().join(
-                RelPath::unix(&format!(
-                    "download-{}-{}",
-                    std::process::id(),
-                    remote_server_path
-                        .file_name()
-                        .expect("path should have the expected component")
-                        .to_string_lossy()
-                ))
-                .expect("value should be present"),
-            );
+            let tmp_path = paths::remote_server_dir_relative().join(RelPath::unix(&format!(
+                "download-{}-{}",
+                std::process::id(),
+                remote_server_path
+                    .file_name()
+                    .ok_or_else(|| anyhow!("remote server path has no file name"))?
+                    .to_string_lossy()
+            ))?);
             self.upload_local_server_binary(&remote_server_path, &tmp_path, delegate, cx)
                 .await?;
             self.extract_server_binary(&dst_path, &tmp_path, delegate, cx)
@@ -960,14 +956,11 @@ impl SshRemoteConnection {
                 } else {
                     "gz"
                 });
-            let tmp_path_compressed = remote_server_dir_relative().join(
-                RelPath::unix(&format!(
-                    "{}-download-{}.{archive_extension}",
-                    binary_name,
-                    std::process::id(),
-                ))
-                .expect("value should be present"),
-            );
+            let tmp_path_compressed = remote_server_dir_relative().join(RelPath::unix(&format!(
+                "{}-download-{}.{archive_extension}",
+                binary_name,
+                std::process::id(),
+            ))?);
             self.upload_local_server_binary(embedded.path(), &tmp_path_compressed, delegate, cx)
                 .await
                 .context("uploading embedded server binary")?;
@@ -1605,7 +1598,7 @@ impl SshConnectionOptions {
                 } else {
                     Some(
                         arg.strip_prefix("-L")
-                            .expect("strip_prefix should be present")
+                            .ok_or_else(|| anyhow!("expected -L prefix"))?
                             .to_owned(),
                     )
                 };
@@ -1912,15 +1905,6 @@ fn build_command_windows(
 
     // Windows OpenSSH has an 8K character limit for command lines. Sending a lot of environment variables easily puts us over the limit.
     // Until we have a better solution for this, we just won't set environment variables for now.
-    // for (k, v) in input_env.iter() {
-    //     write!(
-    //         exec,
-    //         "$env:{}={} {} ",
-    //         k,
-    //         shell_kind.try_quote(v).context("shell quoting")?,
-    //         shell_kind.sequential_and_commands_separator()
-    //     )?;
-    // }
 
     if let Some(input_program) = input_program {
         write!(

@@ -361,7 +361,7 @@ impl http_client::HttpClient for ReqwestClient {
                 .version(response.version());
             *builder
                 .headers_mut()
-                .expect("headers_mut should be present") = headers;
+                .ok_or_else(|| anyhow::anyhow!("response builder has no headers"))? = headers;
 
             let (mut body_tx, body_rx) = futures::channel::mpsc::channel(1);
             drop(handle.spawn(async move {

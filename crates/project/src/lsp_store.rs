@@ -7712,7 +7712,7 @@ impl LspStore {
                         return Ok(());
                     }
                     serde_json::to_string(lsp_completion)
-                        .expect("serializing to JSON cannot fail")
+                        .context("serializing completion to JSON")?
                         .into_bytes()
                 }
                 CompletionSource::Custom
@@ -13061,7 +13061,6 @@ impl LspStore {
         language_server_ids.sort_unstable();
         language_server_ids.dedup();
 
-        // let abs_path = worktree_handle.read(cx).abs_path();
         for server_id in &language_server_ids {
             if let Some(LanguageServerState::Running { server, .. }) =
                 local.language_servers.get(server_id)

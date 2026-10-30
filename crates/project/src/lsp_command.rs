@@ -4201,26 +4201,25 @@ impl GetDocumentDiagnostics {
             .map(|info| {
                 let start = info
                     .location_range_start
-                    .expect("location_range_start should be present");
+                    .context("missing location_range_start")?;
                 let end = info
                     .location_range_end
-                    .expect("location_range_end should be present");
+                    .context("missing location_range_end")?;
 
-                lsp::DiagnosticRelatedInformation {
+                Ok(lsp::DiagnosticRelatedInformation {
                     location: lsp::Location {
                         range: lsp::Range {
                             start: point_to_lsp(PointUtf16::new(start.row, start.column)),
                             end: point_to_lsp(PointUtf16::new(end.row, end.column)),
                         },
                         uri: lsp::Uri::from_str(
-                            &info.location_url.expect("location_url should be present"),
-                        )
-                        .expect("value should parse"),
+                            &info.location_url.context("missing location_url")?,
+                        )?,
                     },
                     message: info.message,
-                }
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
 
         let tags = diagnostic
             .tags
@@ -4250,9 +4249,12 @@ impl GetDocumentDiagnostics {
             code,
             code_description: diagnostic
                 .code_description
-                .map(|code_description| CodeDescription {
-                    href: Some(lsp::Uri::from_str(&code_description).expect("value should parse")),
-                }),
+                .map(|code_description| -> Result<CodeDescription> {
+                    Ok(CodeDescription {
+                        href: Some(lsp::Uri::from_str(&code_description)?),
+                    })
+                })
+                .transpose()?,
             related_information: Some(related_information),
             tags: Some(tags),
             source: diagnostic.source.clone(),

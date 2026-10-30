@@ -210,18 +210,15 @@ fn handle_rpc_messages_over_child_process_stdio(
     mut connection_activity_sender: Sender<()>,
     cx: &AsyncApp,
 ) -> Task<Result<i32>> {
-    let mut child_stderr = remote_proxy_process
-        .stderr
-        .take()
-        .expect("remote proxy stderr should be piped");
-    let mut child_stdout = remote_proxy_process
-        .stdout
-        .take()
-        .expect("remote proxy stdout should be piped");
-    let mut child_stdin = remote_proxy_process
-        .stdin
-        .take()
-        .expect("remote proxy stdin should be piped");
+    let Some(mut child_stderr) = remote_proxy_process.stderr.take() else {
+        return Task::ready(Err(anyhow::anyhow!("remote proxy stderr was not piped")));
+    };
+    let Some(mut child_stdout) = remote_proxy_process.stdout.take() else {
+        return Task::ready(Err(anyhow::anyhow!("remote proxy stdout was not piped")));
+    };
+    let Some(mut child_stdin) = remote_proxy_process.stdin.take() else {
+        return Task::ready(Err(anyhow::anyhow!("remote proxy stdin was not piped")));
+    };
 
     let mut stdin_buffer = Vec::new();
     let mut stdout_buffer = Vec::new();

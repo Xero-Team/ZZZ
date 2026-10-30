@@ -3853,7 +3853,6 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GetPermalinkToLineResponse> {
         let buffer_id = BufferId::new(envelope.payload.buffer_id)?;
-        // let version = deserialize_version(&envelope.payload.version);
         let selection = {
             let proto_selection = envelope
                 .payload
@@ -9227,7 +9226,7 @@ fn get_permalink_in_rust_registry_src(
         .context("parsing package.repository field of manifest")?;
     let path = PathBuf::from(cargo_vcs_info.path_in_vcs).join(
         path.strip_prefix(dir)
-            .expect("strip_prefix should be present"),
+            .map_err(|_| anyhow!("cargo package path is not inside its manifest directory"))?,
     );
     let permalink = provider.build_permalink(
         remote,

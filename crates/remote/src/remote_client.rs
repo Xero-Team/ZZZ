@@ -621,7 +621,10 @@ impl RemoteClient {
             );
         }
 
-        let state = self.state.take().expect("entry should be present");
+        let state = self
+            .state
+            .take()
+            .ok_or_else(|| anyhow!("reconnect state was already taken"))?;
         let (attempts, remote_connection, delegate) = match state {
             State::Connected {
                 remote_connection,

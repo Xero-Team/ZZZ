@@ -61,7 +61,7 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         .map(|f| {
             f.ident
                 .as_ref()
-                .expect("named fields always have an identifier")
+                .expect("invariant: named fields always have an identifier")
         })
         .collect();
     let field_visibilities: Vec<_> = fields.iter().map(|f| &f.vis).collect();

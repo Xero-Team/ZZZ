@@ -498,7 +498,7 @@ impl Inner {
         let undo_change = self
             .history
             .remove(before_cursor)
-            .expect("we can undo")
+            .ok_or_else(|| anyhow!("undo history is inconsistent: can_undo was true"))?
             .to_inverse()
             .execute(self, cx)
             .await?;
@@ -518,7 +518,7 @@ impl Inner {
         let redo_change = self
             .history
             .remove(self.cursor)
-            .expect("we can redo")
+            .ok_or_else(|| anyhow!("redo history is inconsistent: can_redo was true"))?
             .to_inverse()
             .execute(self, cx)
             .await?;

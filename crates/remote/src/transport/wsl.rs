@@ -219,8 +219,7 @@ impl WslRemoteConnection {
         let binary_name =
             paths::remote_server_binary_name(release_channel.dev_name(), &version_str, false);
 
-        let dst_path = paths::remote_server_dir_relative()
-            .join(RelPath::unix(&binary_name).expect("path should be a valid relative path"));
+        let dst_path = paths::remote_server_dir_relative().join(RelPath::unix(&binary_name)?);
 
         if let Some(parent) = dst_path.parent() {
             let parent = parent.display(PathStyle::Posix);
@@ -266,17 +265,14 @@ impl WslRemoteConnection {
         )
         .await?
         {
-            let tmp_path = paths::remote_server_dir_relative().join(
-                &RelPath::unix(&format!(
-                    "download-{}-{}",
-                    std::process::id(),
-                    remote_server_path
-                        .file_name()
-                        .expect("path should have the expected component")
-                        .to_string_lossy()
-                ))
-                .expect("value should be present"),
-            );
+            let tmp_path = paths::remote_server_dir_relative().join(&RelPath::unix(&format!(
+                "download-{}-{}",
+                std::process::id(),
+                remote_server_path
+                    .file_name()
+                    .ok_or_else(|| anyhow!("remote server path has no file name"))?
+                    .to_string_lossy()
+            ))?);
             self.upload_file(&remote_server_path, &tmp_path, delegate, cx)
                 .await?;
             self.extract_and_install(&tmp_path, &dst_path, delegate, cx)
@@ -301,7 +297,7 @@ impl WslRemoteConnection {
                 dst_path.display(PathStyle::Posix),
                 std::process::id()
             );
-            let tmp_path = RelPath::unix(&tmp_path).expect("path should be a valid relative path");
+            let tmp_path = RelPath::unix(&tmp_path)?;
             self.upload_file(embedded.path(), &tmp_path, delegate, cx)
                 .await?;
             self.extract_and_install(&tmp_path, &dst_path, delegate, cx)
