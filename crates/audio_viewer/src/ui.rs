@@ -14,6 +14,7 @@ use workspace::{
 
 use crate::{
     Stop, ToggleMute, TogglePlay,
+    scrubber::ScrubKind,
     view::{AudioView, LoadState},
     waveform::{self, paint_waveform},
 };
@@ -289,10 +290,8 @@ impl AudioView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, _window, cx| {
-                    view.dragging_seek = true;
                     if let Some(bounds) = view.seek_track_bounds {
-                        let ratio = AudioView::ratio_from_position(event.position, bounds);
-                        view.seek_from_ratio(ratio, cx);
+                        view.begin_scrub(ScrubKind::Seek, bounds, event.position, cx);
                     }
                 }),
             )
@@ -331,10 +330,8 @@ impl AudioView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, _window, cx| {
-                    view.dragging_volume = true;
                     if let Some(bounds) = view.volume_track_bounds {
-                        let ratio = AudioView::ratio_from_position(event.position, bounds);
-                        view.set_volume_from_ratio(ratio, cx);
+                        view.begin_scrub(ScrubKind::Volume, bounds, event.position, cx);
                     }
                 }),
             )
@@ -346,10 +343,8 @@ impl AudioView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.dragging_seek = true;
         if let Some(bounds) = self.waveform_bounds {
-            let ratio = Self::ratio_from_position(event.position, bounds);
-            self.seek_from_ratio(ratio, cx);
+            self.begin_scrub(ScrubKind::Seek, bounds, event.position, cx);
         }
     }
 
@@ -359,24 +354,11 @@ impl AudioView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.dragging_seek {
-            let bounds = self.waveform_bounds.or(self.seek_track_bounds);
-            if let Some(bounds) = bounds {
-                let ratio = Self::ratio_from_position(event.position, bounds);
-                self.seek_from_ratio(ratio, cx);
-            }
-        } else if self.dragging_volume
-            && let Some(bounds) = self.volume_track_bounds
-        {
-            let ratio = Self::ratio_from_position(event.position, bounds);
-            self.set_volume_from_ratio(ratio, cx);
-        }
+        self.update_scrub(event.position, cx);
     }
 
     fn on_mouse_up(&mut self, _: &MouseUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
-        self.dragging_seek = false;
-        self.dragging_volume = false;
-        cx.notify();
+        self.end_scrub(cx);
     }
 }
 

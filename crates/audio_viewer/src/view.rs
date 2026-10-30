@@ -13,6 +13,7 @@ use util::rel_path::RelPath;
 use crate::{
     AudioItem, SeekBackward, SeekForward, SeekToEnd, SeekToStart, Stop, ToggleMute, TogglePlay,
     player::{self, AudioMetadata},
+    scrubber::{Scrub, ScrubKind},
     waveform::{self, WAVEFORM_ANALYSIS_LIMIT, WAVEFORM_BUCKETS},
 };
 
@@ -59,8 +60,7 @@ pub struct AudioView {
     pub(crate) waveform_bounds: Option<Bounds<Pixels>>,
     pub(crate) seek_track_bounds: Option<Bounds<Pixels>>,
     pub(crate) volume_track_bounds: Option<Bounds<Pixels>>,
-    pub(crate) dragging_seek: bool,
-    pub(crate) dragging_volume: bool,
+    pub(crate) scrub: Option<Scrub>,
     _load_task: Task<()>,
     _waveform_task: Option<Task<()>>,
     _position_task: Option<Task<()>>,
@@ -112,8 +112,7 @@ impl AudioView {
             waveform_bounds: None,
             seek_track_bounds: None,
             volume_track_bounds: None,
-            dragging_seek: false,
-            dragging_volume: false,
+            scrub: None,
             _load_task: load_task,
             _waveform_task: None,
             _position_task: None,
@@ -452,11 +451,16 @@ impl AudioView {
         let Some(handle) = &self.handle else {
             return;
         };
-        self.position = handle.position();
-        if handle.is_finished() {
+        let finished = handle.is_finished();
+        if self.scrub.is_none() {
+            self.position = handle.position();
+        }
+        if finished {
             self.handle = None;
             self.playback = PlaybackStatus::Stopped;
-            if let Some(duration) = self.duration() {
+            if self.scrub.is_none()
+                && let Some(duration) = self.duration()
+            {
                 self.position = duration;
             }
             self._position_task = None;
@@ -636,34 +640,70 @@ impl AudioView {
         }
     }
 
-    pub(crate) fn seek_from_ratio(&mut self, ratio: f32, cx: &mut Context<Self>) {
-        let Some(duration) = self.duration() else {
-            return;
-        };
-        self.seek_to(position_from_ratio(duration, ratio), cx);
+    pub(crate) fn begin_scrub(
+        &mut self,
+        kind: ScrubKind,
+        bounds: Bounds<Pixels>,
+        position: gpui::Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let mut scrub = Scrub::new(kind, bounds);
+        self.update_scrub_state(&mut scrub, position, kind);
+        self.scrub = Some(scrub);
+        cx.notify();
     }
 
-    pub(crate) fn set_volume_from_ratio(&mut self, ratio: f32, cx: &mut Context<Self>) {
+    pub(crate) fn update_scrub(&mut self, position: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        let Some(mut scrub) = self.scrub.take() else {
+            return;
+        };
+        let kind = scrub.kind;
+        self.update_scrub_state(&mut scrub, position, kind);
+        self.scrub = Some(scrub);
+        cx.notify();
+    }
+
+    fn update_scrub_state(
+        &mut self,
+        scrub: &mut Scrub,
+        position: gpui::Point<Pixels>,
+        kind: ScrubKind,
+    ) {
+        match kind {
+            ScrubKind::Seek => {
+                let duration = self.duration();
+                scrub.update(position, duration);
+                if let Some(position) = scrub.pending_position() {
+                    self.position = position;
+                }
+            }
+            ScrubKind::Volume => {
+                let ratio = crate::scrubber::ratio_from_position(position, scrub.bounds);
+                self.set_volume_from_ratio(ratio);
+            }
+        }
+    }
+
+    pub(crate) fn end_scrub(&mut self, cx: &mut Context<Self>) {
+        let Some(scrub) = self.scrub.take() else {
+            return;
+        };
+        if scrub.kind == ScrubKind::Seek
+            && let Some(position) = scrub.pending_position()
+        {
+            self.seek_to(position, cx);
+            return;
+        }
+        cx.notify();
+    }
+
+    fn set_volume_from_ratio(&mut self, ratio: f32) {
         self.volume = ratio.clamp(0.0, 1.0);
         self.muted = false;
         if let Some(handle) = &self.handle {
             handle.set_volume(self.output_volume());
         }
-        cx.notify();
     }
-
-    pub(crate) fn ratio_from_position(
-        position: gpui::Point<Pixels>,
-        bounds: Bounds<Pixels>,
-    ) -> f32 {
-        let x = f32::from(position.x - bounds.origin.x);
-        let width = f32::from(bounds.size.width).max(1.0);
-        (x / width).clamp(0.0, 1.0)
-    }
-}
-
-fn position_from_ratio(duration: Duration, ratio: f32) -> Duration {
-    Duration::from_secs_f64(duration.as_secs_f64() * ratio.clamp(0.0, 1.0) as f64)
 }
 
 pub(crate) fn format_timestamp(duration: Duration) -> String {
@@ -708,7 +748,7 @@ fn format_channels(channels: u16, cx: &App) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_bit_depth, format_bitrate, format_timestamp, position_from_ratio};
+    use super::{format_bit_depth, format_bitrate, format_timestamp};
     use std::time::Duration;
 
     #[test]
@@ -716,16 +756,6 @@ mod tests {
         assert_eq!(format_bitrate(320), "320 kbps");
         assert_eq!(format_bit_depth(16), "16-bit");
         assert_eq!(format_bit_depth(24), "24-bit");
-    }
-
-    #[test]
-    fn position_from_ratio_maps_seconds() {
-        let duration = Duration::from_secs(200);
-        assert_eq!(position_from_ratio(duration, 0.0), Duration::ZERO);
-        assert_eq!(position_from_ratio(duration, 0.5), Duration::from_secs(100));
-        assert_eq!(position_from_ratio(duration, 1.0), duration);
-        assert_eq!(position_from_ratio(duration, -0.5), Duration::ZERO);
-        assert_eq!(position_from_ratio(duration, 2.0), duration);
     }
 
     #[test]

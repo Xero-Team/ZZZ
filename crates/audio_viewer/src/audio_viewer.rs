@@ -1,6 +1,7 @@
 mod item;
 mod persistence;
 mod player;
+mod scrubber;
 mod serializable;
 mod ui;
 mod view;
