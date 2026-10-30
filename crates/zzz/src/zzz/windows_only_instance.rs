@@ -190,11 +190,12 @@ fn send_args_to_instance(args: &Args) -> anyhow::Result<()> {
                 }
                 Ok(())
             }
-        })
-        .expect("value should be present");
+        })?;
 
     write_message_to_instance_pipe(url.as_bytes())?;
-    sender.join().expect("join should be present")?;
+    sender
+        .join()
+        .expect("invariant: receiver thread does not return a non-Error payload")?;
     if let Some(exit_status) = exit_status.lock().take() {
         std::process::exit(exit_status);
     }

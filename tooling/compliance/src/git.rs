@@ -246,8 +246,9 @@ impl CommitDetails {
     }
 
     pub(crate) fn co_authors(&self) -> Option<Vec<Committer>> {
-        static CO_AUTHOR_REGEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"Co-authored-by: (.+) <(.+)>").unwrap());
+        static CO_AUTHOR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"Co-authored-by: (.+) <(.+)>").expect("invariant: regex literal is valid")
+        });
 
         let mut co_authors = Vec::new();
 
@@ -279,11 +280,12 @@ impl CommitDetails {
 
     pub(crate) fn detect_automated_change(&self) -> Option<(AutomatedChangeKind, &str)> {
         static VERSION_BUMP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"^Bump to [0-9]+\.[0-9]+\.[0-9]+ for @([a-zA-Z0-9][a-zA-Z0-9-]*)$").unwrap()
+            Regex::new(r"^Bump to [0-9]+\.[0-9]+\.[0-9]+ for @([a-zA-Z0-9][a-zA-Z0-9-]*)$")
+                .expect("invariant: regex literal is valid")
         });
         static RELEASE_CHANNEL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"^v[0-9]+\.[0-9]+\.x (?:stable|preview) for @([a-zA-Z0-9][a-zA-Z0-9-]*)$")
-                .unwrap()
+                .expect("invariant: regex literal is valid")
         });
 
         VERSION_BUMP_REGEX
@@ -324,20 +326,18 @@ impl FromStr for CommitList {
     type Err = anyhow::Error;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        Ok(CommitList(
-            input
-                .split(CommitDetails::COMMIT_DELIMITER)
-                .filter(|commit_details| !commit_details.is_empty())
-                .map(|commit_details| {
-                    let (line, body) = commit_details
-                        .trim()
-                        .split_once(CommitDetails::BODY_DELIMITER)
-                        .expect("Missing body delimiter");
-                    CommitDetails::parse(line, body)
-                        .expect("Parsing from the output should succeed")
-                })
-                .collect(),
-        ))
+        let commits = input
+            .split(CommitDetails::COMMIT_DELIMITER)
+            .filter(|commit_details| !commit_details.is_empty())
+            .map(|commit_details| {
+                let (line, body) = commit_details
+                    .trim()
+                    .split_once(CommitDetails::BODY_DELIMITER)
+                    .context("commit details are missing the body delimiter")?;
+                CommitDetails::parse(line, body)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(CommitList(commits))
     }
 }
 

@@ -143,7 +143,7 @@ impl RelPath {
             self.as_std_path()
                 .file_stem()?
                 .to_str()
-                .expect("path should be valid UTF-8"),
+                .expect("invariant: RelPath content is always valid UTF-8"),
         )
     }
 
@@ -152,7 +152,7 @@ impl RelPath {
             self.as_std_path()
                 .extension()?
                 .to_str()
-                .expect("path should be valid UTF-8"),
+                .expect("invariant: RelPath content is always valid UTF-8"),
         )
     }
 

@@ -80,7 +80,7 @@ pub fn run_web_examples(args: WebExamplesArgs) -> Result<()> {
         cmd.arg("--release");
     }
 
-    let _ = cmd.status().context("failed to run cargo build")?;
+    cmd.status().context("failed to run cargo build")?;
 
     // Run wasm-bindgen on each .wasm that was produced.
     let mut succeeded: Vec<String> = Vec::new();

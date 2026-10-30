@@ -1852,24 +1852,32 @@ impl MultiWorkspace {
         let weak_workspace = new_workspace.downgrade();
         let db = crate::persistence::WorkspaceDb::global(cx);
         cx.spawn_in(window, async move |this, cx| {
-            let workspace_id = db.next_id().await.expect("value should be present");
-            let workspace = weak_workspace.upgrade().expect("entity should be alive");
-            let task: Task<()> = this
-                .update_in(cx, |this, window, cx| {
-                    let session_id = workspace.read(cx).session_id();
-                    let window_id = window.window_handle().window_id().as_u64();
-                    workspace.update(cx, |workspace, _cx| {
-                        workspace.set_database_id(workspace_id);
-                    });
-                    this.serialize(cx);
-                    let db = db.clone();
-                    cx.background_spawn(async move {
-                        db.set_session_binding(workspace_id, session_id, Some(window_id))
-                            .await
-                            .log_err();
-                    })
+            let Some(workspace_id) = db.next_id().await.log_err() else {
+                return;
+            };
+            let Some(workspace) = weak_workspace.upgrade() else {
+                return;
+            };
+            let task: Task<()> = match this.update_in(cx, |this, window, cx| {
+                let session_id = workspace.read(cx).session_id();
+                let window_id = window.window_handle().window_id().as_u64();
+                workspace.update(cx, |workspace, _cx| {
+                    workspace.set_database_id(workspace_id);
+                });
+                this.serialize(cx);
+                let db = db.clone();
+                cx.background_spawn(async move {
+                    db.set_session_binding(workspace_id, session_id, Some(window_id))
+                        .await
+                        .log_err();
                 })
-                .expect("value should be present");
+            }) {
+                Ok(task) => task,
+                Err(error) => {
+                    log::error!("failed to record workspace session binding: {error:#}");
+                    return;
+                }
+            };
             task.await
         })
     }

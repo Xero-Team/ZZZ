@@ -525,7 +525,7 @@ pub fn merge_non_null_json_value_into(source: serde_json::Value, target: &mut se
             *target = Value::Object(Default::default());
             target
                 .as_object_mut()
-                .expect("value should have the expected type")
+                .expect("invariant: value was just set to an object")
         };
         for (key, value) in source_object {
             if let Some(target) = target_object.get_mut(&key) {
@@ -645,11 +645,11 @@ mod rng {
                 0..=19 => [' ', '\n', '\r', '\t'].choose(&mut self.rng).copied(),
                 // two-byte greek letters
                 20..=32 => char::from_u32(self.rng.random_range(('α' as u32)..('ω' as u32 + 1))),
-                // // three-byte characters
+                // three-byte characters
                 33..=45 => ['✋', '✅', '❌', '❎', '⭐']
                     .choose(&mut self.rng)
                     .copied(),
-                // // four-byte characters
+                // four-byte characters
                 46..=58 => ['🍐', '🏀', '🍗', '🎉'].choose(&mut self.rng).copied(),
                 // ascii letters
                 _ => Some(self.rng.random_range(b'a'..b'z' + 1).into()),
@@ -759,8 +759,9 @@ impl PartialOrd for NumericPrefixWithSuffix<'_> {
 }
 
 fn emoji_regex() -> &'static Regex {
-    static EMOJI_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new("(\\p{Emoji}|\u{200D})").expect("valid regex literal"));
+    static EMOJI_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("(\\p{Emoji}|\u{200D})").expect("invariant: regex literal is valid")
+    });
     &EMOJI_REGEX
 }
 

@@ -1024,8 +1024,9 @@ impl PathWithPosition {
         // Let's avoid repeated init cost on this. It is subject to thread contention, but
         // so far this code isn't called from multiple hot paths. Getting contention here
         // in the future seems unlikely.
-        static SUFFIX_RE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).expect("valid regex literal"));
+        static SUFFIX_RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(ROW_COL_CAPTURE_REGEX).expect("invariant: regex literal is valid")
+        });
         // `Path::with_file_name` inserts the host's separator, which can
         // corrupt Unix paths when the editor runs on Windows.
         let replace_file_name = |input: &str, file_name: &str, replacement: &str| {

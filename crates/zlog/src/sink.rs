@@ -84,7 +84,8 @@ fn open_or_create_log_file(
     let size_bytes = std::fs::metadata(path).map(|metadata| metadata.len());
     match size_bytes {
         Ok(size_bytes) if size_bytes >= sink_file_size_bytes_max => {
-            rotate_log_file(Some(path), path_rotate).map(|it| it.expect("value should be present"))
+            rotate_log_file(Some(path), path_rotate)
+                .map(|it| it.expect("invariant: a path is always supplied when rotating"))
         }
         _ => std::fs::OpenOptions::new()
             .create(true)

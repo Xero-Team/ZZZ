@@ -143,7 +143,7 @@ impl PathList {
             if !order.is_empty() {
                 order.push(',');
             }
-            write!(&mut order, "{}", *ix).expect("value should be present");
+            write!(&mut order, "{}", *ix).expect("invariant: writing to a String cannot fail");
         }
         SerializedPathList { paths, order }
     }

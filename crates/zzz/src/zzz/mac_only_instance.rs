@@ -8,6 +8,7 @@ use std::{
 use sysinfo::System;
 
 use release_channel::ReleaseChannel;
+use util::ResultExt;
 
 const LOCALHOST: Ipv4Addr = Ipv4Addr::LOCALHOST;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(10);
@@ -115,9 +116,9 @@ pub fn ensure_only_instance() -> IsOnlyInstance {
                     return;
                 };
 
-                _ = stream.set_nodelay(true);
-                _ = stream.set_read_timeout(Some(SEND_TIMEOUT));
-                _ = stream.write_all(instance_handshake().as_bytes());
+                stream.set_nodelay(true).log_err();
+                stream.set_read_timeout(Some(SEND_TIMEOUT)).log_err();
+                stream.write_all(instance_handshake().as_bytes()).log_err();
             }
         })
         .expect("value should be present");
@@ -130,9 +131,10 @@ fn check_got_handshake() -> bool {
         Ok(mut stream) => {
             let mut buf = vec![0u8; instance_handshake().len()];
 
-            stream
-                .set_read_timeout(Some(RECEIVE_TIMEOUT))
-                .expect("value should be present");
+            if let Err(err) = stream.set_read_timeout(Some(RECEIVE_TIMEOUT)) {
+                log::warn!("Failed to set read timeout on single instance port: {err}");
+                return false;
+            }
             if let Err(err) = stream.read_exact(&mut buf) {
                 log::warn!("Connected to single instance port but failed to read: {err}");
                 return false;

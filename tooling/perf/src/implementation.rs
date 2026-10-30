@@ -308,10 +308,28 @@ impl Output {
                 && let Ok(timings) = entry.2
             {
                 if let Some(handle) = categories.get_mut(&mdata.importance) {
-                    handle.insert(entry.0, (timings, mdata.iterations.unwrap(), mdata.weight));
+                    handle.insert(
+                        entry.0,
+                        (
+                            timings,
+                            mdata
+                                .iterations
+                                .expect("invariant: iterations is Some for a successful test"),
+                            mdata.weight,
+                        ),
+                    );
                 } else {
                     let mut new = HashMap::default();
-                    new.insert(entry.0, (timings, mdata.iterations.unwrap(), mdata.weight));
+                    new.insert(
+                        entry.0,
+                        (
+                            timings,
+                            mdata
+                                .iterations
+                                .expect("invariant: iterations is Some for a successful test"),
+                            mdata.weight,
+                        ),
+                    );
                     categories.insert(mdata.importance, new);
                 }
             }
@@ -347,7 +365,11 @@ impl std::fmt::Display for Output {
                             f,
                             "| {} | {:.2} | {} | {:.2} | {} | {} ({}) |",
                             name,
-                            timings.iters_per_sec(metadata.iterations.unwrap()),
+                            timings.iters_per_sec(
+                                metadata
+                                    .iterations
+                                    .expect("invariant: iterations is Some for a successful test"),
+                            ),
                             {
                                 // Very small mean runtimes will give inaccurate
                                 // results. Should probably also penalise weight.
@@ -359,7 +381,9 @@ impl std::fmt::Display for Output {
                                 }
                             },
                             timings.stddev.as_secs_f64() * 1000.,
-                            metadata.iterations.unwrap(),
+                            metadata
+                                .iterations
+                                .expect("invariant: iterations is Some for a successful test"),
                             metadata.importance,
                             metadata.weight,
                         )?;

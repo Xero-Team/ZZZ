@@ -5618,7 +5618,8 @@ impl Workspace {
         if self
             .center
             .move_to_border(&self.active_pane, direction, cx)
-            .expect("move_to_border should be present")
+            .log_err()
+            .unwrap_or(false)
         {
             cx.notify();
         }
@@ -5985,11 +5986,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .center
-            .remove(&pane, cx)
-            .expect("entry should be present")
-        {
+        if self.center.remove(&pane, cx).log_err().unwrap_or(false) {
             if self
                 .maximized_pane
                 .as_ref()
@@ -9622,7 +9619,7 @@ pub fn open_paths(
                         });
                     });
                 })
-                .expect("value should be present");
+                .log_err();
         };
         result
     })
