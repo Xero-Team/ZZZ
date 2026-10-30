@@ -5,7 +5,9 @@ description: Selective Zed upstream sync audit.
 
 # Upstream Sync 2026-10-29
 
-## Scope
+## Batch 1 {#batch-1}
+
+### Scope
 
 - Local base: `main` at `61c947bee9`
 - Target branch: `sync/upstream-2026-10-29-sync`
@@ -20,7 +22,7 @@ The previous reviewed baseline is an ancestor of the queried head. The
 range contains 38 commits; this batch covers the first 20, up to and
 including `f0210f1621`. The next batch starts at `2c2f737ab2`.
 
-## Decisions
+### Decisions
 
 | Upstream   | Class | Local commit | Disposition                                                                                                                                                                                                                                                            |
 | ---------- | ----- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,7 +49,7 @@ including `f0210f1621`. The next batch starts at `2c2f737ab2`.
 
 Totals: zero `A`, seven `B`, thirteen `C` across twenty commits.
 
-## Applied Work
+### Applied Work
 
 - `8b5f601787` is a `B` port of `2580a00264`.
 - `18083ad35d` is a `B` port of `fae4b2ea4f`.
@@ -60,7 +62,7 @@ Totals: zero `A`, seven `B`, thirteen `C` across twenty commits.
 No commit in this batch was a clean `A`; each candidate either touched a
 crate ZZZ does not carry or needed a local API shape before it fit.
 
-## Per-Commit Narrative
+### Per-Commit Narrative
 
 #### 2580a00264 — frame limits and pacing (B)
 
@@ -196,7 +198,7 @@ extracting prebuilt WebRTC archives. ZZZ has no `livekit`, `libwebrtc`, or
 `webrtc-sys` dependency in the workspace manifest, so there is no build
 script or advisory path to update.
 
-## Verification
+### Verification
 
 | Check                                                                              | Result  | Notes                                               |
 | ---------------------------------------------------------------------------------- | ------- | --------------------------------------------------- |
@@ -220,3 +222,275 @@ script or advisory path to update.
 
 The reviewed baseline advances to
 `f0210f1621c6be9df4510a4356fa5049680e1c01` for this batch.
+
+## Batch 2 {#batch-2}
+
+### Scope
+
+- Local base: `8eb1dcf53b` on `sync/upstream-2026-10-29-sync`
+- Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
+- Previous reviewed baseline: `f0210f1621c6be9df4510a4356fa5049680e1c01`
+- Live upstream head queried: `d4014230735e4265d98066420b9271df2324ccab`
+- Query time: `2026-10-30`
+- Reviewed range: `f0210f1621..d4014230735e`, nineteen commits, oldest
+  first
+- Remaining after this batch: zero; the range ends at the queried head
+
+The previous baseline is an ancestor of the queried head, and the whole
+remaining range fits in one batch, so this batch closes the `2026-10-29`
+sync. The next sync starts after `d401423073`.
+
+### Decisions
+
+| Upstream   | Class | Local commit           | Disposition                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ----- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2c2f737ab2 | C     | --                     | Adds a `Send`-able foreground executor so wasm code can dispatch foreground futures from background workers, lifts the web `Application` out of `gpui_platform`'s compile-time wasm branch, and renames the binary in fifteen manifests. ZZZ builds no wasm target and has no web HTTP client; the port would be an unused executor variant plus manifest churn. |
+| 7c8dbadcb5 | B     | bbbe9043d4             | Makes Low Power Mode and thermal-state frame intervals configurable per window and takes the longest applicable interval instead of walking a fixed ladder. The profiler journal skip reason is the only omission.                                                                                                                                               |
+| 87ce147829 | C     | --                     | Gives the git graph refs their own resizable column. It is built on the unabsorbed `fcd0f76952` table refactor (`TableRow<bool>` visibility, `redistribute_hidden_fractions`, `toggle_column_visibility`); a three-way application against `crates/git_graph` produced twenty conflicts, so it is not isolatable.                                                |
+| 9cb5f90e3c | B     | a51905c8c9             | Drops the synthetic `WM_MOUSEMOVE` that Windows emits while repainting under a stationary cursor, so repaints no longer move the editor cursor. Windows-only; reviewed by inspection on this Linux host.                                                                                                                                                         |
+| 28917a970d | B     | de725f2903             | Keeps helix registers off the system clipboard while `vim.use_system_clipboard` is `always`, and rebinds `R` to `HelixReplaceWithYanked`.                                                                                                                                                                                                                        |
+| 4112666801 | A     | 63bf38b8f8             | Clean cherry-pick; refreshes the macOS Spanish-ISO key-equivalent table in `gpui_macos`.                                                                                                                                                                                                                                                                         |
+| 5a534d7b5d | B     | df4bbfd91b             | Adds an off-by-default `git.auto_fetch` setting that periodically fetches in trusted repositories with every interactive prompt disabled. Rebuilt on ZZZ's `GitBinary` askpass plumbing instead of `git_ui_core`.                                                                                                                                                |
+| 99cda17e05 | B     | c97e8c49b2             | Falls back to user-level MCP settings when no worktree is visible, so the first ACP thread still receives the user's context servers.                                                                                                                                                                                                                            |
+| e8e579d6ea | C     | --                     | Fixes project skill mentions, share links, and deletion in remote workspaces. ZZZ has no project skills: `crates/agent_skills`, `skills_setup.rs`, and the `Project` skill methods are all absent.                                                                                                                                                               |
+| 2eb2928c15 | B     | eb4f1d99f5             | Keeps worktree hooks and local task settings unapplied until the worktree is trusted, and replays the pending bundle on trust. The collab trust source is omitted.                                                                                                                                                                                               |
+| 3524cb2297 | C     | --                     | Saves new project skills to the remote workspace. Same missing project-skill support as `e8e579d6ea`; there is no `skill_creator.rs` locally.                                                                                                                                                                                                                    |
+| bc7041c600 | B     | 08b09579a8             | Flushes a lone modifier keystroke after the pending-input timeout instead of leaving it in the sequence for the rest of the session.                                                                                                                                                                                                                             |
+| 33156f0d81 | C     | --                     | Streams language-model background events through `async-channel`. ZZZ's `crates/language_model` is an eight-line shim with no `stream_in_background` event pipeline to reroute.                                                                                                                                                                                  |
+| 2529740084 | A     | -- (main `0610da51e9`) | Wraps the GPUI arena in an `Rc` to remove aliasing UB. ZZZ's own equivalent landed on `main` as `0610da51e9`; it is not replayed here because this branch is not an ancestor of `main` and the fix already exists in the merge target.                                                                                                                           |
+| 5882c67dc3 | C     | --                     | Deletes unreferenced notification store code and rewrites collab notification tests. `crates/notifications` holds only `notifications.rs` and `status_toast.rs` locally; there is no `notification_store.rs` and no collab crate.                                                                                                                                |
+| 025d2a06ee | C     | --                     | Stops ACP v2 prompt submission status rows from flashing. Locally there is no `acp_v2` session model and no `SubmissionId`, so the rows do not exist.                                                                                                                                                                                                            |
+| 0373366f43 | C     | --                     | Fixes 30 fps animation on M5 Macs by pacing each window with `CAMetalDisplayLink`. The shared wrapper lives in the absent `gpui_apple` crate and the macOS window rewrite depends on it (`MainThreadMarker`, `MainThreadOnly` delegate), so no hunk applies.                                                                                                     |
+| e20d19d32f | B     | 0e4e3c7601             | Configures the wgpu surface once at creation with the format the renderer will use, and skips the renderer's redundant configure. Reuse, recovery, and web paths still configure in the renderer.                                                                                                                                                                |
+| d401423073 | C     | --                     | Removes collab extension endpoints now served by Cloud. ZZZ has no `crates/collab` and no Cloud endpoints.                                                                                                                                                                                                                                                       |
+
+Totals: one `A`, one `A` already equivalent on `main`, eight `B`, nine
+`C` across nineteen commits.
+
+### Applied Work
+
+- `bbbe9043d4` is a `B` port of `7c8dbadcb5`.
+- `a51905c8c9` is a `B` port of `9cb5f90e3c`.
+- `de725f2903` is a `B` port of `28917a970d`.
+- `63bf38b8f8` is a clean `A` cherry-pick of `4112666801`.
+- `df4bbfd91b` is a `B` port of `5a534d7b5d`.
+- `c97e8c49b2` is a `B` port of `99cda17e05`.
+- `eb4f1d99f5` is a `B` port of `2eb2928c15`.
+- `08b09579a8` is a `B` port of `bc7041c600`.
+- `0e4e3c7601` is a `B` port of `e20d19d32f`.
+- `7c2a042e95` is a formatting-only follow-up so `cargo fmt --check`
+  passes for the frame-interval port.
+
+### Per-Commit Narrative
+
+#### 2c2f737ab2 — web HTTP client execution (C)
+
+The commit adds a `Send`-able `ForegroundExecutor` variant, moves the web
+`Application` constructor out of `gpui_platform`'s `target_family =
+"wasm"` branch into explicit callers, and fixes binary-name warnings in
+fifteen manifests. ZZZ builds no wasm target, its web client is not
+dispatched from `cx.background_spawn`, and `gpui_platform::application`
+still selects the web backend by `cfg`. Nothing would call the new
+executor locally, and the manifest half is dependency-only churn, so the
+commit is rejected rather than partly imported.
+
+#### 7c8dbadcb5 — power and thermal frame intervals (B)
+
+`WindowOptions` gains `low_power_frame_interval` and
+`thermal_frame_interval` next to the existing `inactive_frame_interval`,
+and `minimum_frame_interval` returns the longest interval that currently
+applies instead of walking a fixed ladder. A window in Low Power Mode
+with a serious thermal state now throttles to 30 fps, and an inactive
+window under Low Power Mode no longer ignores a configured interval
+longer than 30 fps. The upstream `frame_limits_combine_*` coverage was
+ported and the frame tests were rewritten against `WindowOptions::default()`
+now that the fixed `THIRTY_FPS_INTERVAL`/`SIXTY_FPS_INTERVAL` constants
+are gone. Only the `profiler::journal::record_frame_skipped` call was
+dropped, because ZZZ carries no profiler journal.
+
+#### 87ce147829 — git graph refs column (C)
+
+The refs column is not a self-contained layout change. It renders through
+the table column-visibility machinery introduced by `fcd0f76952`
+(`TableRow<bool>` rows, `redistribute_hidden_fractions`,
+`toggle_column_visibility`), none of which exists in ZZZ's
+`crates/git_graph/src/git_graph.rs`. A three-way application against the
+local tree produced twenty conflicts across the graph, the table, and the
+picker, so the behavior cannot be isolated; it needs the table refactor
+first.
+
+#### 9cb5f90e3c — synthetic mouse moves (B)
+
+`WindowsWindowState` now remembers the last reported cursor position and
+`handle_mouse_move_msg` drops a `WM_MOUSEMOVE` that repeats that position
+with no button held. Windows synthesizes those events when a window
+repaints under a stationary cursor, which moved the editor cursor and
+cleared the selection whenever the command palette opened. The
+accessibility field keeps ZZZ's feature-flagged shape; only
+`mouse_position` was added. The target cannot be compiled on this host
+because of pre-existing `windows`/`windows-core` API drift, so the change
+was reviewed by inspection.
+
+#### 28917a970d — helix and the system clipboard (B)
+
+In helix mode the unnamed register no longer mirrors into the system
+clipboard when `vim.use_system_clipboard` is `always`, so plain
+`y`/`d`/`c`/`p` leave the OS clipboard alone and only `+`/`*` touch it.
+`R` is bound to `vim::HelixReplaceWithYanked`, which replaces each
+selection with the default register, seeds a bare cursor from the next
+character, keeps the replacement selected, and returns to helix normal
+mode. The upstream register and paste tests came along; the new shift-`R`
+test was merged with ZZZ's local CRLF replace test.
+
+#### 4112666801 — Spanish-ISO mappings (A)
+
+A table-only change in `gpui_macos/src/keyboard.rs`; the cherry-pick
+applied without conflicts and keeps the upstream author plus the DCO
+trailer.
+
+#### 5a534d7b5d — git auto fetch (B)
+
+An off-by-default `git.auto_fetch` setting periodically fetches the
+default branch's remote and the current branch's upstream remote for
+trusted repositories. Unattended fetches never prompt: the terminal
+prompt, credential helpers, askpass, and ssh batch mode are all disabled
+in one place, and git never runs auto-maintenance on the user's behalf.
+Fetches run off the repository job queue, refresh the branch list, and
+are cancelled when the timer restarts or the repository closes. Upstream
+builds the command in the new `git_ui_core` crate and toggles askpass
+through `RemoteAskPassOperation`; both are absent locally, so
+`run_remote_command` was rebuilt on ZZZ's `GitBinary` askpass insertion,
+and the settings UI strings go through `i18n::tr` with four new keys in
+both locale catalogs.
+
+#### 99cda17e05 — user MCP servers before the first worktree (B)
+
+`ContextServerStore::resolve_all_context_server_settings` falls back to
+`ProjectSettings::get(None, cx)` when no visible worktree exists, marking
+the entries with `worktree_id: None`. An ACP thread created before the
+project's first folder finishes loading therefore still receives the
+user's MCP servers in `session/new`. The regression test asserts that a
+user-level stdio server starts with no worktrees.
+
+#### e8e579d6ea — remote project skills (C)
+
+The patch extends `agent_ui` mention sets and `settings_ui` skill setup so
+project skills keep working when the project lives on a remote host. ZZZ
+removed project skills with the native agent surface: there is no
+`crates/agent_skills`, no `skills_setup.rs`, no `skill_creator.rs`, and no
+`Project` skill methods. Nothing local would consume the changed code.
+
+#### 2eb2928c15 — restricted mode hooks (B)
+
+`SettingsObserver::update_settings` checks worktree trust before applying
+any non-editorconfig local settings, so `.ZZZ/tasks.json`,
+`.ZZZ/debug.json`, and their `.vscode` equivalents stay unapplied until
+the worktree is trusted, and every pending kind is recorded per folder.
+Trusting a worktree replays the pending bundle through
+`update_settings`. `Workspace::run_create_worktree_tasks` filters through
+`TrustedWorktrees`, so global task hooks no longer fire in a restricted
+workspace. Upstream's `is_via_collab` parameter was omitted because trust
+is always resolved through `TrustedWorktrees` here. The upstream
+regression test and both behaviors were documented in `worktree-trust.md`.
+
+#### 3524cb2297 — project skills to the remote (C)
+
+Extends the same project-skill surface to persist newly created skills on
+the remote host. It edits `settings_ui/src/pages/skill_creator.rs`, which
+does not exist locally, and the `Project` skill methods that `e8e579d6ea`
+also depends on. Same rejection.
+
+#### bc7041c600 — standalone modifier timeout (B)
+
+`Keystroke::is_modifier_key` identifies bare `shift`, `control`, `alt`,
+`platform`, and `function` keystrokes, and the pending-input timer now
+starts when the only pending keystroke is one of them. A tap of `shift`
+to toggle an IME no longer lingers for the rest of the session and no
+longer turns a later tap into `shift shift`. Both upstream regression
+tests were ported into the local `key_dispatch` test module; the first
+fails without the new timeout condition. The upstream change lives in
+`Window::dispatch_key_event`, which ZZZ keeps in `interaction.rs`.
+
+#### 33156f0d81 — language-model event streaming (C)
+
+The commit replaces the background-event fan-in of `LanguageModel` with
+`async-channel` receivers. ZZZ's `crates/language_model` was reduced to an
+eight-line type shim when the native agent tools were removed; it has no
+`stream_in_background`, no event types, and no subscribers, so there is no
+pipeline to reroute.
+
+#### 2529740084 — GPUI arena aliasing (A, already equivalent)
+
+Upstream wraps the element arena in an `Rc` to stop `&mut` aliasing when
+an element holds a reference into the arena across a re-entrant update.
+ZZZ fixed the same defect on `main` in `0610da51e9` with its own shape.
+This branch predates that commit, and replaying the upstream patch here
+would collide with it at merge time, so no local commit was made. The
+branch therefore keeps the `RefCell<Arena>`-based code until it merges
+`main`.
+
+#### 5882c67dc3 — notification cleanup (C)
+
+Upstream deletes unreferenced notification-store helpers and rewrites the
+collab integration tests that used them. ZZZ's `crates/notifications`
+contains only `notifications.rs` and `status_toast.rs`; the targeted file
+and the collab test crate do not exist, so there is nothing to remove.
+
+#### 025d2a06ee — ACP v2 submission rows (C)
+
+The patch keeps submission-status rows from flashing on ACP v2 prompts by
+tracking `SubmissionId`s on `acp_v2` sessions. ZZZ's conversation view
+uses the v1 ACP schema and has neither the v2 session type nor submission
+ids, so the rows being fixed are not rendered locally.
+
+#### 0373366f43 — M5 animation rate (C)
+
+On macOS 14 and later each window is paced by a `CAMetalDisplayLink`
+owned by `gpui_apple::display_link::MetalFrameSource`, and the renderer
+draws into the drawable that link hands out instead of calling
+`nextDrawable`. ZZZ has no `gpui_apple` crate; the macOS backend is
+`gpui_macos`, which has no `MainThreadMarker`/`MainThreadOnly` wrapper and
+no shared Apple display-link module. Recreating that module is new
+infrastructure rather than a port, and the result could not be built or
+measured on this Linux host.
+
+#### e20d19d32f — wgpu surface configuration (B)
+
+Adapter selection now configures the surface with the format, alpha mode,
+present mode, and size the renderer will use, and the renderer skips its
+own configure when the context was just created against that surface.
+Windows that reuse an existing context, device recovery with an existing
+context, and the web path still configure in the renderer. ZZZ's
+`WgpuRenderer::surface_configuration` reads the window render target
+configuration lazily, so the port takes an `Option<&Surface>` and falls
+back to the local headless configuration when no surface is attached.
+
+#### d401423073 — collab extension endpoints (C)
+
+Removes extension endpoints that Cloud now serves. ZZZ has no
+`crates/collab`, no Cloud endpoints, and no extension-hosting endpoint
+code, so the deletion targets nothing local.
+
+### Verification
+
+| Check                                                                                                                        | Result  | Notes                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |
+| `cargo check --locked --workspace --all-targets`                                                                             | PASS    | after all ten commits                                            |
+| `cargo fmt --all -- --check`                                                                                                 | PASS    | after `7c2a042e95`                                               |
+| `./script/check-philosophy`                                                                                                  | PASS    | no account, telemetry, collab, or native-agent surface added     |
+| `cargo test --locked -p fs -p git -p project -p git_ui --lib`                                                                | PASS    | 19 / 64 / 56 (+1 ignored) / 122 tests                            |
+| `cargo test --locked -p vim --lib`                                                                                           | PASS    | 576 tests, including the helix register and shift-`R` coverage   |
+| `cargo test --locked -p gpui --lib key_dispatch`                                                                             | PASS    | 8 tests, including both standalone-modifier regression tests     |
+| `cargo test --locked -p gpui_wgpu --lib`                                                                                     | PASS    | 23 tests after the surface-configuration port                    |
+| `cargo test --locked -p agent_ui --lib context_server_configuration`                                                         | PASS    | user-level MCP servers with no worktrees                         |
+| `cargo test --locked -p git --lib compose_batch_mode`                                                                        | PASS    | auto-fetch command composition                                   |
+| `cargo clippy -p git -p fs -p project -p git_ui -p settings_ui -p gpui_wgpu --all-targets --all-features -- --deny warnings` | PASS    | clean after fixing a `single_match_else`                         |
+| `assets/locales/en.json` and `zh-CN.json` key parity                                                                         | PASS    | 3750 keys in each catalog                                        |
+| DCO check over the ten batch commits                                                                                         | PASS    | every commit has `Signed-off-by`                                 |
+| macOS / Windows runtime checks                                                                                               | NOT RUN | host is Linux; `gpui_macos` and `gpui_windows` are platform-only |
+| `cargo test --workspace`                                                                                                     | NOT RUN | per-crate checks were used instead                               |
+| Remaining commits through the queried head                                                                                   | NONE    | `d401423073` is the live head                                    |
+
+The reviewed baseline advances to
+`d4014230735e4265d98066420b9271df2324ccab` for this batch, which is the
+live upstream head at query time.
