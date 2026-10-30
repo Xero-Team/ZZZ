@@ -758,6 +758,9 @@ pub fn python_env_kernel_specifications(
 
 pub trait RunningKernel: Send + Debug {
     fn request_tx(&self) -> mpsc::Sender<JupyterMessage>;
+    fn connection_error(&self) -> Option<anyhow::Error> {
+        None
+    }
     fn stdin_tx(&self) -> mpsc::Sender<JupyterMessage>;
     fn working_directory(&self) -> &PathBuf;
     fn execution_state(&self) -> &ExecutionState;
@@ -766,6 +769,65 @@ pub trait RunningKernel: Send + Debug {
     fn set_kernel_info(&mut self, info: KernelInfoReply);
     fn force_shutdown(&mut self, window: &mut Window, cx: &mut App) -> Task<anyhow::Result<()>>;
     fn kill(&mut self);
+}
+
+#[derive(Debug)]
+pub(crate) enum RequestSendError {
+    Unavailable(anyhow::Error),
+    Backpressure(anyhow::Error),
+}
+
+impl RequestSendError {
+    pub(crate) fn reason(&self, cx: &App) -> String {
+        match self {
+            Self::Unavailable(error) => format!("{error:#}"),
+            Self::Backpressure(_) => tr(
+                cx,
+                "repl.outputs.request_queue_full",
+                "The kernel request queue is full; the request was not sent",
+            ),
+        }
+    }
+
+    pub(crate) fn is_backpressure(&self) -> bool {
+        matches!(self, Self::Backpressure(_))
+    }
+
+    pub(crate) fn log(&self, context: &str) {
+        match self {
+            Self::Unavailable(error) => log::error!("{context}: {error:#}"),
+            Self::Backpressure(error) => log::warn!("{context}: {error}"),
+        }
+    }
+}
+
+pub(crate) fn try_send_message(
+    sender: &mut mpsc::Sender<JupyterMessage>,
+    message: JupyterMessage,
+) -> Result<(), RequestSendError> {
+    match sender.try_send(message) {
+        Ok(()) => Ok(()),
+        Err(error) if error.is_full() => {
+            Err(RequestSendError::Backpressure(anyhow::Error::new(error)))
+        }
+        Err(error) => Err(RequestSendError::Unavailable(anyhow::Error::new(error))),
+    }
+}
+
+fn running_kernel_request_sender(
+    kernel: &dyn RunningKernel,
+) -> Result<mpsc::Sender<JupyterMessage>, RequestSendError> {
+    ensure_kernel_connected(kernel)?;
+    Ok(kernel.request_tx())
+}
+
+fn ensure_kernel_connected(kernel: &dyn RunningKernel) -> Result<(), RequestSendError> {
+    if let Some(error) = kernel.connection_error() {
+        return Err(RequestSendError::Unavailable(anyhow::anyhow!(
+            "kernel request channel is closed: {error:#}"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -851,6 +913,27 @@ impl From<&Kernel> for KernelStatus {
 }
 
 impl Kernel {
+    pub(crate) fn send_request(&self, message: JupyterMessage) -> Result<(), RequestSendError> {
+        let Kernel::RunningKernel(kernel) = self else {
+            return Err(RequestSendError::Unavailable(anyhow::anyhow!(
+                "cannot send a request while the kernel is not running"
+            )));
+        };
+        let mut sender = running_kernel_request_sender(kernel.as_ref())?;
+        try_send_message(&mut sender, message)
+    }
+
+    pub(crate) fn send_stdin(&self, message: JupyterMessage) -> Result<(), RequestSendError> {
+        let Kernel::RunningKernel(kernel) = self else {
+            return Err(RequestSendError::Unavailable(anyhow::anyhow!(
+                "cannot send an input reply while the kernel is not running"
+            )));
+        };
+        ensure_kernel_connected(kernel.as_ref())?;
+        let mut sender = kernel.stdin_tx();
+        try_send_message(&mut sender, message)
+    }
+
     pub fn status(&self) -> KernelStatus {
         self.into()
     }
@@ -875,5 +958,38 @@ impl Kernel {
             | Kernel::ErroredLaunch(_)
             | Kernel::Shutdown => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use runtimelib::KernelInfoRequest;
+
+    fn kernel_info_request() -> JupyterMessage {
+        JupyterMessageContent::KernelInfoRequest(KernelInfoRequest {}).into()
+    }
+
+    #[test]
+    fn try_send_message_classifies_backpressure() {
+        let (mut sender, _receiver) = mpsc::channel(0);
+
+        try_send_message(&mut sender, kernel_info_request())
+            .expect("the first message should fit in the channel");
+        let error = try_send_message(&mut sender, kernel_info_request())
+            .expect_err("the second message should exceed channel capacity");
+
+        assert!(error.is_backpressure());
+    }
+
+    #[test]
+    fn try_send_message_classifies_disconnected_channel() {
+        let (mut sender, receiver) = mpsc::channel(1);
+        drop(receiver);
+
+        let error = try_send_message(&mut sender, kernel_info_request())
+            .expect_err("a channel without a receiver should reject messages");
+
+        assert!(!error.is_backpressure());
     }
 }

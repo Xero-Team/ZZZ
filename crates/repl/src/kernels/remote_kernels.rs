@@ -1,5 +1,5 @@
 use futures::{SinkExt as _, channel::mpsc};
-use gpui::{App, AppContext as _, Entity, Task, Window};
+use gpui::{App, AppContext as _, AsyncWindowContext, Entity, Task, Window};
 use http_client::{AsyncBody, HttpClient, Request};
 use jupyter_protocol::{ExecutionState, JupyterKernelspec, JupyterMessage, KernelInfoReply};
 
@@ -7,6 +7,7 @@ use async_tungstenite::tokio::connect_async;
 use async_tungstenite::tungstenite::{client::IntoClientRequest, http::HeaderValue};
 
 use futures::StreamExt;
+use i18n::tr;
 use smol::io::AsyncReadExt as _;
 
 use super::{KernelSession, RunningKernel};
@@ -15,7 +16,14 @@ use jupyter_websocket_client::{
     JupyterWebSocket, JupyterWebSocketReader, JupyterWebSocketWriter, KernelLaunchRequest,
     KernelSpecsResponse, ProtocolMode, RemoteServer,
 };
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+use util::ResultExt as _;
 
 #[derive(Debug, Clone)]
 pub struct RemoteKernelSpecification {
@@ -116,6 +124,9 @@ pub struct RemoteRunningKernel {
     remote_server: RemoteServer,
     _receiving_task: Task<Result<()>>,
     _routing_task: Task<Result<()>>,
+    _write_error_task: Task<()>,
+    connection_error: Arc<Mutex<Option<String>>>,
+    shutdown_requested: Arc<AtomicBool>,
     http_client: Arc<dyn HttpClient>,
     pub working_directory: std::path::PathBuf,
     pub request_tx: mpsc::Sender<JupyterMessage>,
@@ -123,6 +134,52 @@ pub struct RemoteRunningKernel {
     pub execution_state: ExecutionState,
     pub kernel_info: Option<KernelInfoReply>,
     pub kernel_id: String,
+}
+
+enum KernelConnectionFailure {
+    Lost(String),
+    Closed,
+}
+
+fn should_report_connection_failure(
+    connection_error_reported: &AtomicBool,
+    shutdown_requested: &AtomicBool,
+) -> bool {
+    !shutdown_requested.load(Ordering::Relaxed)
+        && connection_error_reported
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+}
+
+fn report_kernel_connection_failure<S: KernelSession + 'static>(
+    session: &Entity<S>,
+    failure: KernelConnectionFailure,
+    connection_error_reported: &AtomicBool,
+    shutdown_requested: &AtomicBool,
+    cx: &mut AsyncWindowContext,
+) {
+    if !should_report_connection_failure(connection_error_reported, shutdown_requested) {
+        return;
+    }
+
+    session
+        .update_in(cx, |session, _window, cx| {
+            let message = match failure {
+                KernelConnectionFailure::Lost(error) => tr(
+                    cx,
+                    "repl.kernels.connection_lost",
+                    "Lost connection to the kernel: {}",
+                )
+                .replacen("{}", &error, 1),
+                KernelConnectionFailure::Closed => tr(
+                    cx,
+                    "repl.kernels.connection_closed",
+                    "The kernel connection was closed",
+                ),
+            };
+            session.kernel_errored(message, cx);
+        })
+        .log_err();
 }
 
 impl RemoteRunningKernel {
@@ -183,17 +240,59 @@ impl RemoteRunningKernel {
             let (request_tx, mut request_rx) =
                 futures::channel::mpsc::channel::<JupyterMessage>(100);
 
+            let connection_error = Arc::new(Mutex::new(None));
+            let shutdown_requested = Arc::new(AtomicBool::new(false));
+            let connection_error_reported = Arc::new(AtomicBool::new(false));
+            let (write_error_tx, write_error_rx) = futures::channel::oneshot::channel::<String>();
             let routing_task = cx.background_spawn({
+                let connection_error = connection_error.clone();
+                let mut write_error_tx = Some(write_error_tx);
                 async move {
                     while let Some(message) = request_rx.next().await {
-                        w.send(message).await.ok();
+                        if let Err(error) = w.send(message).await {
+                            log::error!("Error sending message to remote kernel: {error:?}");
+                            let error_message = format!("{error:#}");
+                            *connection_error
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                                Some(error_message.clone());
+                            if let Some(write_error_tx) = write_error_tx.take()
+                                && let Err(error) = write_error_tx.send(error_message)
+                            {
+                                log::warn!(
+                                    "failed to notify the session of a kernel write error: {error}"
+                                );
+                            }
+                            return Err(error);
+                        }
                     }
                     Ok(())
                 }
             });
 
+            let write_error_task = cx.spawn({
+                let session = session.clone();
+                let connection_error_reported = connection_error_reported.clone();
+                let shutdown_requested = shutdown_requested.clone();
+
+                async move |cx| {
+                    let Ok(error_message) = write_error_rx.await else {
+                        return;
+                    };
+                    report_kernel_connection_failure(
+                        &session,
+                        KernelConnectionFailure::Lost(error_message),
+                        &connection_error_reported,
+                        &shutdown_requested,
+                        cx,
+                    );
+                }
+            });
+
             let receiving_task = cx.spawn({
                 let session = session.clone();
+                let connection_error = connection_error.clone();
+                let shutdown_requested = shutdown_requested.clone();
 
                 async move |cx| {
                     while let Some(message) = r.next().await {
@@ -203,13 +302,37 @@ impl RemoteRunningKernel {
                                     .update_in(cx, |session, window, cx| {
                                         session.route(&message, window, cx);
                                     })
-                                    .ok();
+                                    .log_err();
                             }
                             Err(e) => {
                                 log::error!("Error receiving message: {:?}", e);
+                                let error_message = format!("{e:#}");
+                                *connection_error
+                                    .lock()
+                                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                                    Some(error_message.clone());
+                                report_kernel_connection_failure(
+                                    &session,
+                                    KernelConnectionFailure::Lost(error_message),
+                                    &connection_error_reported,
+                                    &shutdown_requested,
+                                    cx,
+                                );
+                                return Err(e);
                             }
                         }
                     }
+                    let error_message = "remote kernel closed the connection".to_owned();
+                    *connection_error
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(error_message);
+                    report_kernel_connection_failure(
+                        &session,
+                        KernelConnectionFailure::Closed,
+                        &connection_error_reported,
+                        &shutdown_requested,
+                        cx,
+                    );
                     Ok(())
                 }
             });
@@ -219,6 +342,9 @@ impl RemoteRunningKernel {
             anyhow::Ok(Box::new(Self {
                 _routing_task: routing_task,
                 _receiving_task: receiving_task,
+                _write_error_task: write_error_task,
+                connection_error,
+                shutdown_requested,
                 remote_server,
                 working_directory,
                 request_tx,
@@ -251,6 +377,14 @@ impl RunningKernel for RemoteRunningKernel {
         self.request_tx.clone()
     }
 
+    fn connection_error(&self) -> Option<anyhow::Error> {
+        self.connection_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+            .map(|error| anyhow::anyhow!(error.clone()))
+    }
+
     fn stdin_tx(&self) -> futures::channel::mpsc::Sender<runtimelib::JupyterMessage> {
         self.stdin_tx.clone()
     }
@@ -276,6 +410,7 @@ impl RunningKernel for RemoteRunningKernel {
     }
 
     fn force_shutdown(&mut self, window: &mut Window, cx: &mut App) -> Task<anyhow::Result<()>> {
+        self.shutdown_requested.store(true, Ordering::Relaxed);
         let url = self
             .remote_server
             .api_url(&format!("/kernels/{}", self.kernel_id));
@@ -301,7 +436,40 @@ impl RunningKernel for RemoteRunningKernel {
     }
 
     fn kill(&mut self) {
+        self.shutdown_requested.store(true, Ordering::Relaxed);
         self.request_tx.close_channel();
         self.stdin_tx.close_channel();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_failure_is_reported_once_until_shutdown() {
+        let connection_error_reported = AtomicBool::new(false);
+        let shutdown_requested = AtomicBool::new(false);
+
+        assert!(should_report_connection_failure(
+            &connection_error_reported,
+            &shutdown_requested,
+        ));
+        assert!(!should_report_connection_failure(
+            &connection_error_reported,
+            &shutdown_requested,
+        ));
+    }
+
+    #[test]
+    fn shutdown_suppresses_connection_failure() {
+        let connection_error_reported = AtomicBool::new(false);
+        let shutdown_requested = AtomicBool::new(true);
+
+        assert!(!should_report_connection_failure(
+            &connection_error_reported,
+            &shutdown_requested,
+        ));
+        assert!(!connection_error_reported.load(Ordering::Relaxed));
     }
 }

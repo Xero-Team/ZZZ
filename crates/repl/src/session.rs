@@ -3,7 +3,7 @@ use crate::setup_editor_session_actions;
 use crate::{
     kernels::{
         Kernel, KernelSession, KernelSpecification, NativeRunningKernel, RemoteRunningKernel,
-        SshRunningKernel, WslRunningKernel,
+        RequestSendError, SshRunningKernel, WslRunningKernel, try_send_message,
     },
     outputs::{
         ExecutionStatus, ExecutionView, ExecutionViewFinishedEmpty, ExecutionViewFinishedSmall,
@@ -252,7 +252,7 @@ impl Session {
             .update(cx, |editor, _cx| {
                 setup_editor_session_actions(editor, editor_handle);
             })
-            .ok();
+            .log_err();
 
         let mut session = Self {
             fs,
@@ -369,15 +369,17 @@ impl Session {
                             session.kernel(Kernel::RunningKernel(kernel), cx);
                             let request =
                                 JupyterMessageContent::KernelInfoRequest(KernelInfoRequest {});
-                            session.send(request.into(), cx).log_err();
+                            if let Err(error) = session.send(request.into()) {
+                                error.log("failed to request kernel information");
+                            }
                         })
-                        .ok();
+                        .log_err();
                     }
                     Err(err) => {
                         this.update(cx, |session, cx| {
                             session.kernel_errored(err.to_string(), cx);
                         })
-                        .ok();
+                        .log_err();
                     }
                 }
             })
@@ -468,18 +470,62 @@ impl Session {
                             );
                         }
                     })
-                    .ok();
+                    .log_err();
                 cx.notify();
             }
         }
     }
 
-    fn send(&mut self, message: JupyterMessage, _cx: &mut Context<Self>) -> anyhow::Result<()> {
-        if let Kernel::RunningKernel(kernel) = &mut self.kernel {
-            kernel.request_tx().try_send(message).ok();
-        }
+    fn send(&self, message: JupyterMessage) -> Result<(), RequestSendError> {
+        self.kernel.send_request(message)
+    }
 
-        anyhow::Ok(())
+    fn handle_send_result(
+        &mut self,
+        message_id: &str,
+        result: Result<(), RequestSendError>,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
+            Ok(()) => {}
+            Err(error) if error.is_backpressure() => {
+                let error_message = error.reason(cx);
+                error.log("failed to send request to the REPL kernel");
+                if let Some(block) = self.blocks.get(message_id) {
+                    block.execution_view.update(cx, |execution_view, cx| {
+                        execution_view.status = ExecutionStatus::SendFailed(error_message);
+                        cx.notify();
+                    });
+                }
+                cx.notify();
+            }
+            Err(error) => {
+                let reason = error.reason(cx);
+                let error_message = tr(
+                    cx,
+                    "repl.session.failed_to_send_to_kernel",
+                    "Failed to send request to the kernel: {}",
+                )
+                .replacen("{}", &reason, 1);
+                error.log("failed to send request to the REPL kernel");
+                self.mark_execution_error(message_id, error_message, cx);
+            }
+        }
+    }
+
+    fn mark_execution_error(
+        &mut self,
+        message_id: &str,
+        error_message: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(block) = self.blocks.get(message_id) {
+            block.execution_view.update(cx, |execution_view, cx| {
+                execution_view.status = ExecutionStatus::KernelErrored(error_message);
+                cx.notify();
+            });
+        }
+        cx.notify();
     }
 
     fn send_stdin_reply(
@@ -488,14 +534,16 @@ impl Session {
         parent_message: &JupyterMessage,
         _cx: &mut Context<Self>,
     ) {
-        if let Kernel::RunningKernel(kernel) = &mut self.kernel {
+        if matches!(self.kernel, Kernel::RunningKernel(_)) {
             let reply = InputReply {
                 value,
                 status: ReplyStatus::Ok,
                 error: None,
             };
             let message = reply.as_child_of(parent_message);
-            kernel.stdin_tx().try_send(message).log_err();
+            if let Err(error) = self.kernel.send_stdin(message) {
+                error.log("failed to send input reply to the REPL kernel");
+            }
         }
     }
 
@@ -561,7 +609,7 @@ impl Session {
                 editor.splice_inlays(&inlays_to_remove, vec![], cx);
                 editor.clear_gutter_highlights::<ReplExecutedRange>(cx);
             })
-            .ok();
+            .log_err();
 
         self.blocks.clear();
         self.result_inlays.clear();
@@ -607,7 +655,7 @@ impl Session {
 
                 editor.remove_gutter_highlights::<ReplExecutedRange>(vec![code_range], cx);
             })
-            .ok();
+            .log_err();
 
         cx.notify();
     }
@@ -674,7 +722,7 @@ impl Session {
                         .remove_gutter_highlights::<ReplExecutedRange>(gutter_ranges_to_remove, cx);
                 }
             })
-            .ok();
+            .log_err();
 
         let status = match &self.kernel {
             Kernel::Restarting => ExecutionStatus::Restarting,
@@ -731,7 +779,7 @@ impl Session {
                     cx,
                 );
             })
-            .ok();
+            .log_err();
 
         let new_cursor_pos = if let Some(next_cursor) = next_cell {
             next_cursor
@@ -768,9 +816,11 @@ impl Session {
         self.blocks
             .insert(message.header.msg_id.clone(), editor_block);
 
+        let message_id = message.header.msg_id.clone();
         match &self.kernel {
             Kernel::RunningKernel(_) => {
-                self.send(message, cx).ok();
+                let result = self.send(message);
+                self.handle_send_result(&message_id, result, cx);
             }
             Kernel::StartingKernel(task) => {
                 // Queue up the execution as a task to run after the kernel starts
@@ -779,13 +829,43 @@ impl Session {
                 cx.spawn(async move |this, cx| {
                     task.await;
                     this.update(cx, |session, cx| {
-                        session.send(message, cx).ok();
+                        let result = session.send(message);
+                        session.handle_send_result(&message_id, result, cx);
                     })
-                    .ok();
+                    .log_err();
                 })
                 .detach();
             }
-            _ => {}
+            Kernel::ErroredLaunch(error) => {
+                log::error!(
+                    "cannot execute REPL code because the kernel failed to launch: {error}"
+                );
+                let error_message = tr(
+                    cx,
+                    "repl.notebook.kernel_failed_to_launch",
+                    "The kernel failed to launch: {}",
+                )
+                .replacen("{}", &error, 1);
+                self.mark_execution_error(&message_id, error_message, cx);
+            }
+            Kernel::ShuttingDown | Kernel::Shutdown => {
+                log::warn!("cannot execute REPL code because the kernel is shut down");
+                let error_message = tr(
+                    cx,
+                    "repl.notebook.kernel_shut_down",
+                    "The kernel is shut down",
+                );
+                self.mark_execution_error(&message_id, error_message, cx);
+            }
+            Kernel::Restarting => {
+                log::warn!("cannot execute REPL code because the kernel is restarting");
+                let error_message = tr(
+                    cx,
+                    "repl.notebook.kernel_restarting",
+                    "The kernel is restarting",
+                );
+                self.mark_execution_error(&message_id, error_message, cx);
+            }
         }
 
         if move_down {
@@ -802,10 +882,12 @@ impl Session {
         }
     }
 
-    pub fn interrupt(&mut self, cx: &mut Context<Self>) {
+    pub fn interrupt(&mut self, _cx: &mut Context<Self>) {
         match &mut self.kernel {
             Kernel::RunningKernel(_kernel) => {
-                self.send(InterruptRequest {}.into(), cx).ok();
+                if let Err(error) = self.send(InterruptRequest {}.into()) {
+                    error.log("failed to interrupt the REPL kernel");
+                }
             }
             Kernel::StartingKernel(_task) => {
                 // NOTE: If we switch to a literal queue instead of chaining on to the task, clear all queued executions
@@ -833,7 +915,9 @@ impl Session {
 
                 cx.spawn(async move |this, cx| {
                     let message: JupyterMessage = ShutdownRequest { restart: false }.into();
-                    request_tx.try_send(message).ok();
+                    if let Err(error) = try_send_message(&mut request_tx, message) {
+                        error.log("failed to send shutdown request to the REPL kernel");
+                    }
 
                     forced.await.log_err();
 
@@ -845,7 +929,7 @@ impl Session {
                         session.kernel(Kernel::Shutdown, cx);
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
                 })
                 .detach();
             }
@@ -872,7 +956,9 @@ impl Session {
                     // Send shutdown request with restart flag
                     log::debug!("restarting kernel");
                     let message: JupyterMessage = ShutdownRequest { restart: true }.into();
-                    request_tx.try_send(message).ok();
+                    if let Err(error) = try_send_message(&mut request_tx, message) {
+                        error.log("failed to send restart request to the REPL kernel");
+                    }
 
                     // Wait for kernel to shutdown
                     cx.background_executor().timer(Duration::from_secs(1)).await;
@@ -886,7 +972,7 @@ impl Session {
                         session.clear_outputs(cx);
                         session.start_kernel(window, cx);
                     })
-                    .ok();
+                    .log_err();
                 })
                 .detach();
             }

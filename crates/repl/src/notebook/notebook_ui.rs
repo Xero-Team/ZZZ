@@ -20,6 +20,7 @@ use log;
 use project::{Project, ProjectEntryId, ProjectPath};
 use settings::Settings as _;
 use ui::{CommonAnimationExt, KeyBinding, Tooltip, prelude::*};
+use util::ResultExt as _;
 use workspace::item::{ItemEvent, SaveOptions, TabContentParams};
 use workspace::searchable::SearchableItemHandle;
 use workspace::{Item, ItemHandle, Pane, ProjectItem, ToolbarItemLocation};
@@ -509,7 +510,7 @@ impl NotebookEditor {
                             editor.kernel = Kernel::RunningKernel(kernel);
                             cx.notify();
                         })
-                        .ok();
+                        .log_err();
                     }
                     Err(err) => {
                         log::error!("Kernel failed to start: {:?}", err);
@@ -517,7 +518,7 @@ impl NotebookEditor {
                             editor.kernel = Kernel::ErroredLaunch(err.to_string());
                             cx.notify();
                         })
-                        .ok();
+                        .log_err();
                     }
                 }
             })
@@ -566,10 +567,12 @@ impl NotebookEditor {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Kernel::RunningKernel(kernel) = &self.kernel {
+        if matches!(self.kernel, Kernel::RunningKernel(_)) {
             let interrupt_request = runtimelib::InterruptRequest {};
             let message: JupyterMessage = interrupt_request.into();
-            kernel.request_tx().try_send(message).ok();
+            if let Err(error) = self.kernel.send_request(message) {
+                error.log("failed to interrupt the notebook kernel");
+            }
             cx.notify();
         }
     }
@@ -593,18 +596,19 @@ impl NotebookEditor {
         let message: JupyterMessage = request.into();
         let msg_id = message.header.msg_id.clone();
 
-        let send_result = match &mut self.kernel {
-            Kernel::RunningKernel(kernel) => kernel
-                .request_tx()
-                .try_send(message)
-                .map_err(|err| {
+        let send_result = match &self.kernel {
+            Kernel::RunningKernel(_) => self.kernel.send_request(message).map_err(|error| {
+                let message = if error.is_backpressure() {
+                    tr(cx, "repl.outputs.send_failed", "Failed to send request: {}")
+                } else {
                     tr(
                         cx,
                         "repl.notebook.execute_request_failed",
-                        "Failed to send execute request to the kernel (the kernel process may have died): {}",
+                        "Failed to send execute request to the kernel: {}",
                     )
-                    .replace("{}", &err.to_string())
-                }),
+                };
+                message.replacen("{}", &error.reason(cx), 1)
+            }),
             Kernel::StartingKernel(_) => Err(tr(
                 cx,
                 "repl.notebook.kernel_still_starting",
@@ -630,12 +634,12 @@ impl NotebookEditor {
 
         if let Some(Cell::Code(cell)) = self.cell_map.get(&cell_id) {
             cell.update(cx, |cell, cx| {
-                if cell.has_outputs() {
-                    cell.clear_outputs();
-                }
                 if let Err(error) = &send_result {
-                    cell.show_kernel_error(error, window, cx);
+                    cell.show_output_error(error, window, cx);
                 } else {
+                    if cell.has_outputs() {
+                        cell.clear_outputs();
+                    }
                     cell.start_execution();
                 }
                 cx.notify();
@@ -819,12 +823,9 @@ impl NotebookEditor {
         }
     }
 
-    fn open_notebook(&mut self, _: &OpenNotebook, _window: &mut Window, _cx: &mut Context<Self>) {
-        println!("Open notebook triggered");
-    }
+    fn open_notebook(&mut self, _: &OpenNotebook, _window: &mut Window, _cx: &mut Context<Self>) {}
 
     fn move_cell_up(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        println!("Move cell up triggered");
         if self.selected_cell_index > 0 {
             self.cell_order
                 .swap(self.selected_cell_index, self.selected_cell_index - 1);
@@ -834,7 +835,6 @@ impl NotebookEditor {
     }
 
     fn move_cell_down(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        println!("Move cell down triggered");
         if !self.cell_order.is_empty() && self.selected_cell_index < self.cell_order.len() - 1 {
             self.cell_order
                 .swap(self.selected_cell_index, self.selected_cell_index + 1);
@@ -1878,7 +1878,11 @@ impl NotebookItem {
 
         async move {
             if let Some(language_name) = language_name {
-                languages.language_for_name(&language_name).await.ok()
+                languages
+                    .language_for_name(&language_name)
+                    .await
+                    .context("notebook language could not be loaded")
+                    .log_err()
             } else {
                 None
             }
@@ -2116,7 +2120,17 @@ impl KernelSession for NotebookEditor {
     }
 
     fn kernel_errored(&mut self, error_message: String, cx: &mut Context<Self>) {
-        self.kernel = Kernel::ErroredLaunch(error_message);
+        self.kernel = Kernel::ErroredLaunch(error_message.clone());
+        self.execution_requests.clear();
+        for cell in self.cell_map.values() {
+            if let Cell::Code(cell) = cell {
+                cell.update(cx, |cell, cx| {
+                    if cell.is_executing() {
+                        cell.fail_execution(&error_message, cx);
+                    }
+                });
+            }
+        }
         cx.notify();
     }
 }

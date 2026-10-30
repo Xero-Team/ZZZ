@@ -861,6 +861,19 @@ impl CodeCell {
         self.is_executing = true;
     }
 
+    pub fn fail_execution(&mut self, error_message: &str, cx: &mut Context<Self>) {
+        self.outputs.push(Output::Message(
+            tr(cx, "repl.outputs.kernel_error", "Kernel error: {}").replacen(
+                "{}",
+                error_message,
+                1,
+            ),
+        ));
+        self.execution_start_time = None;
+        self.is_executing = false;
+        cx.notify();
+    }
+
     pub fn finish_execution(&mut self) {
         if let Some(start_time) = self.execution_start_time.take() {
             self.execution_duration = Some(start_time.elapsed());
@@ -872,15 +885,15 @@ impl CodeCell {
         self.is_executing
     }
 
-    /// Displays a kernel-level failure (e.g. the kernel failed to launch because
-    /// Python is not installed) as an error output on this cell, so the user gets
-    /// feedback instead of a spinner that never resolves.
-    pub fn show_kernel_error(
+    /// Displays a failure to start an execution as an error output on this cell,
+    /// so the user gets feedback instead of a spinner that never resolves.
+    pub fn show_output_error(
         &mut self,
         error_message: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.clear_outputs();
         self.outputs.push(Output::ErrorOutput(ErrorView {
             ename: tr(cx, "repl.notebook.cell.kernel_error_title", "Kernel Error"),
             evalue: tr(
@@ -890,6 +903,7 @@ impl CodeCell {
             ),
             traceback: cx.new(|cx| TerminalOutput::from(error_message, window, cx)),
         }));
+        self.execution_duration = None;
         self.execution_start_time = None;
         self.is_executing = false;
         cx.notify();
@@ -934,7 +948,7 @@ impl CodeCell {
             }
             JupyterMessageContent::ExecuteInput(input) => {
                 self.execution_count = serde_json::to_value(&input.execution_count)
-                    .ok()
+                    .log_err()
                     .and_then(|v| v.as_i64())
                     .map(|v| v as i32);
             }
@@ -1398,6 +1412,7 @@ mod tests {
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
+            i18n::init(cx);
             editor::init(cx);
         });
     }
@@ -1569,6 +1584,46 @@ mod tests {
 
         cell.read_with(cx, |cell, cx| {
             assert_layer_languages(&cell.editor, &["Markdown", "Markdown-Inline"], cx)
+        });
+    }
+
+    #[gpui::test]
+    fn test_fail_execution_stops_running_cell_and_reports_error(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let languages = Arc::new(LanguageRegistry::test(cx.executor()));
+        let notebook_language = Task::ready(None).shared();
+        let metadata: CellMetadata = serde_json::from_str("{}").unwrap();
+
+        let cx = cx.add_empty_window();
+        let cell = cx.update(|window, cx| {
+            cx.new(|cx| {
+                CodeCell::new(
+                    CellSource::None,
+                    uuid::Uuid::new_v4().into(),
+                    metadata,
+                    "print('hello')".to_string(),
+                    languages,
+                    notebook_language,
+                    window,
+                    cx,
+                )
+            })
+        });
+
+        cell.update(cx, |cell, cx| {
+            cell.start_execution();
+            assert!(cell.is_executing());
+
+            cell.fail_execution("Lost connection to the kernel: disconnected", cx);
+
+            assert!(!cell.is_executing());
+            assert!(cell.execution_start_time.is_none());
+            assert!(matches!(
+                cell.outputs.as_slice(),
+                [Output::Message(message)]
+                    if message == "Kernel error: Lost connection to the kernel: disconnected"
+            ));
         });
     }
 }

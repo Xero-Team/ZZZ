@@ -510,6 +510,7 @@ pub enum ExecutionStatus {
     ShuttingDown,
     Shutdown,
     KernelErrored(String),
+    SendFailed(String),
     Restarting,
 }
 
@@ -807,6 +808,13 @@ impl ExecutionView {
             }
         })
     }
+
+    pub(crate) fn displays_status_below_outputs(&self) -> bool {
+        matches!(
+            self.status,
+            ExecutionStatus::Executing | ExecutionStatus::Queued | ExecutionStatus::SendFailed(_)
+        )
+    }
 }
 
 impl Render for ExecutionView {
@@ -867,6 +875,12 @@ impl Render for ExecutionView {
             )
             .color(Color::Error)
             .into_any_element(),
+            ExecutionStatus::SendFailed(error) => Label::new(
+                tr(cx, "repl.outputs.send_failed", "Failed to send request: {}")
+                    .replace("{}", error),
+            )
+            .color(Color::Error)
+            .into_any_element(),
         };
 
         let pending_input_element = self.pending_input.as_ref().map(|pending_input| {
@@ -913,10 +927,10 @@ impl Render for ExecutionView {
                     .map(|output| output.render(self.workspace.clone(), window, cx)),
             )
             .children(pending_input_element)
-            .children(match self.status {
-                ExecutionStatus::Executing => vec![status],
-                ExecutionStatus::Queued => vec![status],
-                _ => vec![],
+            .children(if self.displays_status_below_outputs() {
+                vec![status]
+            } else {
+                vec![]
             })
             .into_any_element()
     }
@@ -1338,6 +1352,26 @@ mod tests {
             emitted.load(std::sync::atomic::Ordering::SeqCst),
             "should emit ExecutionViewFinishedEmpty when idle with no outputs"
         );
+    }
+
+    #[gpui::test]
+    async fn test_send_failed_status_remains_visible_with_outputs(cx: &mut TestAppContext) {
+        let (mut cx, workspace) = init_test(cx).await;
+        let execution_view = create_execution_view(&mut cx, workspace);
+
+        cx.update(|window, cx| {
+            execution_view.update(cx, |view, cx| {
+                let stream = JupyterMessageContent::StreamContent(StreamContent {
+                    name: Stdio::Stdout,
+                    text: "partial output\n".to_string(),
+                });
+                view.push_message(&stream, window, cx);
+                view.status = ExecutionStatus::SendFailed("queue is full".to_string());
+
+                assert_eq!(view.outputs.len(), 1);
+                assert!(view.displays_status_below_outputs());
+            });
+        });
     }
 
     #[gpui::test]
