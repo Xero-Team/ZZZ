@@ -35,31 +35,31 @@ pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock
                 &format!(r"^rm\s+{FLAGS}(--\s+)?/\*?{TRAILING_FLAGS}$"),
                 false,
             )
-            .expect("hardcoded regex should compile"),
+            .expect("invariant: hardcoded security regex compiles"),
             // Recursive deletion of home - "rm -rf ~" or "rm -rf ~/" or "rm -rf ~/*" or "rm ~ -rf" (but not ~/subdir)
             CompiledRegex::new(
                 &format!(r"^rm\s+{FLAGS}(--\s+)?~/?\*?{TRAILING_FLAGS}$"),
                 false,
             )
-            .expect("hardcoded regex should compile"),
+            .expect("invariant: hardcoded security regex compiles"),
             // Recursive deletion of home via $HOME - "rm -rf $HOME" or "rm -rf ${HOME}" or "rm $HOME -rf" or with /*
             CompiledRegex::new(
                 &format!(r"^rm\s+{FLAGS}(--\s+)?(\$HOME|\$\{{HOME\}})/?(\*)?{TRAILING_FLAGS}$"),
                 false,
             )
-            .expect("hardcoded regex should compile"),
+            .expect("invariant: hardcoded security regex compiles"),
             // Recursive deletion of current directory - "rm -rf ." or "rm -rf ./" or "rm -rf ./*" or "rm . -rf"
             CompiledRegex::new(
                 &format!(r"^rm\s+{FLAGS}(--\s+)?\./?\*?{TRAILING_FLAGS}$"),
                 false,
             )
-            .expect("hardcoded regex should compile"),
+            .expect("invariant: hardcoded security regex compiles"),
             // Recursive deletion of parent directory - "rm -rf .." or "rm -rf ../" or "rm -rf ../*" or "rm .. -rf"
             CompiledRegex::new(
                 &format!(r"^rm\s+{FLAGS}(--\s+)?\.\./?\*?{TRAILING_FLAGS}$"),
                 false,
             )
-            .expect("hardcoded regex should compile"),
+            .expect("invariant: hardcoded security regex compiles"),
         ],
     }
 });

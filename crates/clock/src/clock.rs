@@ -254,14 +254,14 @@ impl Lamport {
         self.value = self
             .value
             .checked_add(1)
-            .expect("Lamport sequence exhausted");
+            .expect("invariant: the Lamport value stays within u32 range");
         timestamp
     }
 
     pub fn observe(&mut self, timestamp: Self) {
         self.value = cmp::max(self.value, timestamp.value)
             .checked_add(1)
-            .expect("Lamport sequence exhausted");
+            .expect("invariant: the Lamport value stays within u32 range");
     }
 }
 
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Lamport sequence exhausted")]
+    #[should_panic(expected = "invariant: the Lamport value stays within u32 range")]
     fn lamport_tick_rejects_sequence_overflow() {
         let mut lamport = Lamport {
             replica_id: ReplicaId::LOCAL,

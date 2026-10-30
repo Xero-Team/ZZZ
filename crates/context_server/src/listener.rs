@@ -174,7 +174,7 @@ impl McpServer {
                                     code: -32700,
                                 })),
                             })
-                            .expect("serializing to JSON cannot fail"),
+                            .expect("invariant: serializing JSON-RPC values cannot fail"),
                         );
                     }
                 };
@@ -186,7 +186,7 @@ impl McpServer {
                             id: req_id,
                             value: CspResult::Ok(Some(result)),
                         })
-                        .expect("serializing to JSON cannot fail"),
+                        .expect("invariant: serializing JSON-RPC values cannot fail"),
                         Err(e) => serde_json::to_string(&Response {
                             jsonrpc: "2.0",
                             id: req_id,
@@ -195,7 +195,7 @@ impl McpServer {
                                 code: -32603,
                             })),
                         })
-                        .expect("serializing to JSON cannot fail"),
+                        .expect("invariant: serializing JSON-RPC values cannot fail"),
                     }
                 })
             }),
@@ -273,7 +273,7 @@ impl McpServer {
             id: request_id,
             value: CspResult::Ok(Some(response)),
         })
-        .expect("serializing a JSON-RPC response cannot fail");
+        .expect("invariant: serializing JSON-RPC values cannot fail");
         if outgoing_tx.unbounded_send(response).is_err() {
             log::debug!("MCP response receiver was dropped");
         }
@@ -324,7 +324,7 @@ impl McpServer {
                             id: request_id,
                             value: CspResult::Ok(Some(response)),
                         })
-                        .expect("serializing a JSON-RPC response cannot fail");
+                        .expect("invariant: serializing JSON-RPC values cannot fail");
                         if outgoing_tx.unbounded_send(response).is_err() {
                             log::debug!("MCP response receiver was dropped");
                         }
@@ -357,7 +357,7 @@ impl McpServer {
                 code: -32601,
             })),
         })
-        .expect("serializing a JSON-RPC response cannot fail");
+        .expect("invariant: serializing JSON-RPC values cannot fail");
         if outgoing_tx.unbounded_send(response).is_err() {
             log::debug!("MCP response receiver was dropped");
         }

@@ -437,7 +437,7 @@ impl DebugAdapter for GoDebugAdapter {
 
         let map = args
             .as_object_mut()
-            .expect("value should have the expected type");
+            .expect("invariant: the request arguments are built as a JSON object");
 
         if let Some(stop_on_entry) = zzz_scenario.stop_on_entry {
             map.insert("stopOnEntry".into(), stop_on_entry.into());

@@ -40,8 +40,8 @@ fn main() {
             .load_fonts(cx)
             .expect("Failed to load embedded fonts");
 
-        let http_client =
-            ReqwestClient::user_agent("component_preview").expect("Failed to create HTTP client");
+        let http_client = ReqwestClient::user_agent("component_preview")
+            .expect("invariant: the hardcoded HTTP client user agent is valid");
         cx.set_http_client(Arc::new(http_client));
 
         let fs = Arc::new(RealFs::new(None, cx.background_executor().clone()));

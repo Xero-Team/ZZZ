@@ -35,25 +35,34 @@ pub struct DebuggerSettings {
 
 impl Settings for DebuggerSettings {
     fn from_settings(content: &SettingsContent) -> Self {
-        let content = content.debugger.clone().expect("value should be present");
+        let content = content
+            .debugger
+            .clone()
+            .expect("invariant: settings defaults provide the debugger section");
         Self {
             stepping_granularity: dap_granularity_from_settings(
                 content
                     .stepping_granularity
-                    .expect("stepping_granularity should be present"),
+                    .expect("invariant: settings defaults provide stepping_granularity"),
             ),
             save_breakpoints: content
                 .save_breakpoints
-                .expect("save_breakpoints should be present"),
-            button: content.button.expect("button should be present"),
-            timeout: content.timeout.expect("timeout should be present"),
+                .expect("invariant: settings defaults provide save_breakpoints"),
+            button: content
+                .button
+                .expect("invariant: settings defaults provide button"),
+            timeout: content
+                .timeout
+                .expect("invariant: settings defaults provide timeout"),
             log_dap_communications: content
                 .log_dap_communications
-                .expect("log_dap_communications should be present"),
+                .expect("invariant: settings defaults provide log_dap_communications"),
             format_dap_log_messages: content
                 .format_dap_log_messages
-                .expect("format_dap_log_messages should be present"),
-            dock: content.dock.expect("dock should be present"),
+                .expect("invariant: settings defaults provide format_dap_log_messages"),
+            dock: content
+                .dock
+                .expect("invariant: settings defaults provide dock"),
         }
     }
 }

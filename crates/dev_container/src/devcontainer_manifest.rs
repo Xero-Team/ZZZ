@@ -2243,7 +2243,8 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
         })?;
         let mut parsed_lines: Vec<String> = Vec::new();
         let mut inline_args: Vec<(String, String)> = Vec::new();
-        let key_regex = Regex::new(r"(?:^|\s)(\w+)=").expect("valid regex");
+        let key_regex =
+            Regex::new(r"(?:^|\s)(\w+)=").expect("invariant: hardcoded regex literal is valid");
 
         for line in contents.lines() {
             let mut parsed_line = line.to_owned();
@@ -2260,9 +2261,15 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                 for (i, captures) in key_matches.iter().enumerate() {
                     let key = captures[1].to_string();
                     // Insert the devcontainer overrides here if needed
-                    let value_start = captures.get(0).expect("full match").end();
+                    let value_start = captures
+                        .get(0)
+                        .expect("invariant: capture group 0 is always present")
+                        .end();
                     let value_end = if i + 1 < key_matches.len() {
-                        key_matches[i + 1].get(0).expect("full match").start()
+                        key_matches[i + 1]
+                            .get(0)
+                            .expect("invariant: capture group 0 is always present")
+                            .start()
                     } else {
                         trimmed.len()
                     };

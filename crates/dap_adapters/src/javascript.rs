@@ -231,7 +231,7 @@ impl DebugAdapter for JsDebugAdapter {
 
         let map = args
             .as_object_mut()
-            .expect("value should have the expected type");
+            .expect("invariant: the request arguments are built as a JSON object");
         match &zzz_scenario.request {
             DebugRequest::Attach(attach) => {
                 map.insert("processId".into(), attach.process_id.into());

@@ -901,16 +901,15 @@ impl FakeTransport {
                                 || request.command == StartDebugging::COMMAND
                             {
                                 let message = serde_json::to_string(&Message::Request(request))
-                                    .expect("serializing to JSON cannot fail");
+                                    .expect("invariant: DAP messages always serialize");
 
                                 let mut writer = stdout_writer.lock().await;
                                 writer
                                     .write_all(
                                         TransportDelegate::build_rpc_message(message).as_bytes(),
                                     )
-                                    .await
-                                    .unwrap();
-                                writer.flush().await.unwrap();
+                                    .await?;
+                                writer.flush().await?;
                             } else {
                                 let response = if let Some(handle) =
                                     request_handlers.lock().get_mut(request.command.as_str())
@@ -927,15 +926,14 @@ impl FakeTransport {
                                 };
                                 let success = response.success;
                                 let message = serde_json::to_string(&Message::Response(response))
-                                    .expect("serializing to JSON cannot fail");
+                                    .expect("invariant: DAP messages always serialize");
 
                                 let mut writer = stdout_writer.lock().await;
                                 writer
                                     .write_all(
                                         TransportDelegate::build_rpc_message(message).as_bytes(),
                                     )
-                                    .await
-                                    .unwrap();
+                                    .await?;
 
                                 if request.command == dap_types::requests::Initialize::COMMAND
                                     && success
@@ -945,29 +943,27 @@ impl FakeTransport {
                                             Default::default(),
                                         )),
                                     )))
-                                    .expect("serializing to JSON cannot fail");
+                                    .expect("invariant: DAP messages always serialize");
                                     writer
                                         .write_all(
                                             TransportDelegate::build_rpc_message(message)
                                                 .as_bytes(),
                                         )
-                                        .await
-                                        .unwrap();
+                                        .await?;
                                 }
 
-                                writer.flush().await.unwrap();
+                                writer.flush().await?;
                             }
                         }
                         Message::Event(event) => {
                             let message = serde_json::to_string(&Message::Event(event))
-                                .expect("serializing to JSON cannot fail");
+                                .expect("invariant: DAP messages always serialize");
 
                             let mut writer = stdout_writer.lock().await;
                             writer
                                 .write_all(TransportDelegate::build_rpc_message(message).as_bytes())
-                                .await
-                                .unwrap();
-                            writer.flush().await.unwrap();
+                                .await?;
+                            writer.flush().await?;
                         }
                         Message::Response(response) => {
                             if let Some(handle) =

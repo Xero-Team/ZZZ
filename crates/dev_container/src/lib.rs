@@ -1646,7 +1646,7 @@ fn dispatch_apply_templates(
 
             if files.project_files.contains(&Arc::from(
                 RelPath::unix(".devcontainer/devcontainer.json")
-                    .expect("path should be a valid relative path"),
+                    .expect("invariant: hardcoded relative path literal is valid"),
             )) {
                 let Some(workspace_task) = workspace
                     .update_in(cx, |workspace, window, cx| {

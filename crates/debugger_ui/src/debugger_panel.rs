@@ -1161,14 +1161,17 @@ impl DebugPanel {
                 ..
             } => {
                 let relative_path = if dir.ends_with(
-                    RelPath::unix(".vscode").expect("path should be a valid relative path"),
+                    RelPath::unix(".vscode")
+                        .expect("invariant: hardcoded relative path literal is valid"),
                 ) {
                     dir.join(
-                        RelPath::unix("launch.json").expect("path should be a valid relative path"),
+                        RelPath::unix("launch.json")
+                            .expect("invariant: hardcoded relative path literal is valid"),
                     )
                 } else {
                     dir.join(
-                        RelPath::unix("debug.json").expect("path should be a valid relative path"),
+                        RelPath::unix("debug.json")
+                            .expect("invariant: hardcoded relative path literal is valid"),
                     )
                 };
                 ProjectPath {
@@ -1293,14 +1296,14 @@ impl DebugPanel {
                 &tree_sitter_json::LANGUAGE.into(),
                 "(document (array (object) @object))", // TODO: use "." anchor to only match last object
             )
-            .expect("Failed to create LAST_ITEM_QUERY")
+            .expect("invariant: hardcoded LAST_ITEM_QUERY is valid")
         });
         static EMPTY_ARRAY_QUERY: LazyLock<Query> = LazyLock::new(|| {
             Query::new(
                 &tree_sitter_json::LANGUAGE.into(),
                 "(document (array) @array)",
             )
-            .expect("Failed to create EMPTY_ARRAY_QUERY")
+            .expect("invariant: hardcoded EMPTY_ARRAY_QUERY is valid")
         });
 
         let content = editor.text(cx);

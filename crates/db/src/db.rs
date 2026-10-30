@@ -250,9 +250,7 @@ async fn open_fallback_db<M: Migrator>() -> ThreadSafeConnection {
         .with_connection_initialize_query(CONNECTION_INITIALIZE_QUERY)
         .build()
         .await
-        .expect(
-            "Fallback in memory database failed. Likely initialization queries or migrations have fundamental errors",
-        )
+        .expect("invariant: the hardcoded in-memory database schema is valid")
 }
 
 #[cfg(any(test, feature = "test-support"))]

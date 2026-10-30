@@ -338,75 +338,88 @@ impl CompiledRegex {
 
 impl Settings for AgentSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let agent = content.agent.clone().expect("value should be present");
+        let agent = content
+            .agent
+            .clone()
+            .expect("invariant: settings defaults provide the section");
         Self {
-            enabled: agent.enabled.expect("enabled should be present"),
-            button: agent.button.expect("button should be present"),
-            dock: agent.dock.expect("dock should be present"),
-            sidebar_side: agent.sidebar_side.expect("sidebar_side should be present"),
+            enabled: agent
+                .enabled
+                .expect("invariant: settings defaults provide enabled"),
+            button: agent
+                .button
+                .expect("invariant: settings defaults provide button"),
+            dock: agent
+                .dock
+                .expect("invariant: settings defaults provide dock"),
+            sidebar_side: agent
+                .sidebar_side
+                .expect("invariant: settings defaults provide sidebar_side"),
             default_width: px(agent
                 .default_width
-                .expect("default_width should be present")),
+                .expect("invariant: settings defaults provide default_width")),
             default_height: px(agent
                 .default_height
-                .expect("default_height should be present")),
+                .expect("invariant: settings defaults provide default_height")),
             max_content_width: if agent
                 .limit_content_width
-                .expect("limit_content_width should be present")
+                .expect("invariant: settings defaults provide limit_content_width")
             {
-                Some(px(agent
-                    .max_content_width
-                    .expect("max_content_width should be present")))
+                Some(px(agent.max_content_width.expect(
+                    "invariant: settings defaults provide max_content_width",
+                )))
             } else {
                 None
             },
-            flexible: agent.flexible.expect("flexible should be present"),
+            flexible: agent
+                .flexible
+                .expect("invariant: settings defaults provide flexible"),
             default_profile: AgentProfileId(
                 agent
                     .default_profile
-                    .expect("default_profile should be present"),
+                    .expect("invariant: settings defaults provide default_profile"),
             ),
             profiles: agent
                 .profiles
-                .expect("profiles should be present")
+                .expect("invariant: settings defaults provide profiles")
                 .into_iter()
                 .map(|(key, val)| (AgentProfileId(key), val.into()))
                 .collect(),
 
             notify_when_agent_waiting: agent
                 .notify_when_agent_waiting
-                .expect("notify_when_agent_waiting should be present"),
+                .expect("invariant: settings defaults provide notify_when_agent_waiting"),
             play_sound_when_agent_done: agent.play_sound_when_agent_done.unwrap_or_default(),
             single_file_review: agent
                 .single_file_review
-                .expect("single_file_review should be present"),
+                .expect("invariant: settings defaults provide single_file_review"),
             expand_edit_card: agent
                 .expand_edit_card
-                .expect("expand_edit_card should be present"),
+                .expect("invariant: settings defaults provide expand_edit_card"),
             expand_terminal_card: agent
                 .expand_terminal_card
-                .expect("expand_terminal_card should be present"),
+                .expect("invariant: settings defaults provide expand_terminal_card"),
             terminal_init_command: agent
                 .terminal_init_command
                 .filter(|command| !command.trim().is_empty()),
             thinking_display: agent
                 .thinking_display
-                .expect("thinking_display should be present"),
+                .expect("invariant: settings defaults provide thinking_display"),
             cancel_generation_on_terminal_stop: agent
                 .cancel_generation_on_terminal_stop
-                .expect("cancel_generation_on_terminal_stop should be present"),
+                .expect("invariant: settings defaults provide cancel_generation_on_terminal_stop"),
             use_modifier_to_send: agent
                 .use_modifier_to_send
-                .expect("use_modifier_to_send should be present"),
+                .expect("invariant: settings defaults provide use_modifier_to_send"),
             message_editor_min_lines: agent
                 .message_editor_min_lines
-                .expect("message_editor_min_lines should be present"),
+                .expect("invariant: settings defaults provide message_editor_min_lines"),
             show_turn_stats: agent
                 .show_turn_stats
-                .expect("show_turn_stats should be present"),
+                .expect("invariant: settings defaults provide show_turn_stats"),
             show_merge_conflict_indicator: agent
                 .show_merge_conflict_indicator
-                .expect("show_merge_conflict_indicator should be present"),
+                .expect("invariant: settings defaults provide show_merge_conflict_indicator"),
             tool_permissions: compile_tool_permissions(agent.tool_permissions),
         }
     }

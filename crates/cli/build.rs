@@ -1,7 +1,7 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 use std::process::Command;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rustc-check-cfg=cfg(zzz_bundled_uninstall)");
 
     if std::env::var("ZZZ_UPDATE_EXPLANATION").is_err() {
@@ -33,6 +33,8 @@ fn main() {
         println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
         println!("cargo:rerun-if-env-changed=GITHUB_RUN_NUMBER");
 
-        windows_resources::compile(false).expect("failed to compile Windows resources");
+        windows_resources::compile(false)?;
     }
+
+    Ok(())
 }

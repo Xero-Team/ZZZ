@@ -1389,7 +1389,7 @@ fn process_patch_hunk(
 ) -> InternalDiffHunk {
     let line_item_count = patch
         .num_lines_in_hunk(hunk_index)
-        .expect("num_lines_in_hunk should be present");
+        .expect("invariant: hunk_index comes from the patch hunk list");
     assert!(line_item_count > 0);
 
     let mut first_deletion_buffer_row: Option<u32> = None;
@@ -1400,7 +1400,7 @@ fn process_patch_hunk(
     for line_index in 0..line_item_count {
         let line = patch
             .line_in_hunk(hunk_index, line_index)
-            .expect("line_in_hunk should be present");
+            .expect("invariant: line_index is within the hunk line count");
         let kind = line.origin_value();
         let content_offset = line.content_offset() as isize;
         let content_len = line.content().len() as isize;
@@ -1408,7 +1408,10 @@ fn process_patch_hunk(
             GitDiffLineType::Addition => {
                 if first_addition_old_row.is_none() {
                     first_addition_old_row = Some(
-                        (line.new_lineno().expect("new_lineno should be present") as i64
+                        (line
+                            .new_lineno()
+                            .expect("invariant: addition lines always have a new line number")
+                            as i64
                             - *buffer_row_divergence
                             - 1) as u32,
                     );
@@ -1416,7 +1419,7 @@ fn process_patch_hunk(
                 *buffer_row_divergence += 1;
                 let row = line
                     .new_lineno()
-                    .expect("new_lineno should be present")
+                    .expect("invariant: addition lines always have a new line number")
                     .saturating_sub(1);
 
                 match &mut buffer_row_range {
@@ -1435,7 +1438,7 @@ fn process_patch_hunk(
                 if first_deletion_buffer_row.is_none() {
                     let old_row = line
                         .old_lineno()
-                        .expect("old_lineno should be present")
+                        .expect("invariant: deletion lines always have an old line number")
                         .saturating_sub(1);
                     let row = old_row as i64 + *buffer_row_divergence;
                     first_deletion_buffer_row = Some(row as u32);
@@ -1449,12 +1452,14 @@ fn process_patch_hunk(
 
     let buffer_row_range = buffer_row_range.unwrap_or_else(|| {
         // Pure deletion hunk without addition.
-        let row = first_deletion_buffer_row.expect("value should be present");
+        let row =
+            first_deletion_buffer_row.expect("invariant: a pure deletion hunk has a deletion row");
         row..row
     });
     let diff_base_byte_range = diff_base_byte_range.unwrap_or_else(|| {
         // Pure addition hunk without deletion.
-        let row = first_addition_old_row.expect("value should be present");
+        let row =
+            first_addition_old_row.expect("invariant: a pure addition hunk has an addition row");
         let offset = diff_base.point_to_offset(Point::new(row, 0));
         offset..offset
     });

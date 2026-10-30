@@ -110,7 +110,6 @@ struct AnyResponse<'a> {
 }
 
 #[derive(Serialize, Deserialize)]
-#[allow(dead_code)]
 pub(crate) struct Response<T> {
     pub jsonrpc: &'static str,
     pub id: RequestId,
@@ -123,7 +122,6 @@ pub(crate) struct Response<T> {
 pub(crate) enum CspResult<T> {
     #[serde(rename = "result")]
     Ok(Option<T>),
-    #[allow(dead_code)]
     Error(Option<Error>),
 }
 

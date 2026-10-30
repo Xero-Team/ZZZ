@@ -730,11 +730,13 @@ impl Client {
         let prev_handler = state.message_handlers.insert(
             message_type_id,
             Arc::new(move |subscriber, envelope, client, cx| {
-                let subscriber = subscriber.downcast::<E>().expect("downcast should succeed");
+                let subscriber = subscriber
+                    .downcast::<E>()
+                    .expect("invariant: handler is registered for the entity type");
                 let envelope = envelope
                     .into_any()
                     .downcast::<TypedEnvelope<M>>()
-                    .expect("downcast should succeed");
+                    .expect("invariant: handler is registered for the message type");
                 handler(subscriber, *envelope, client, cx).boxed_local()
             }),
         );

@@ -1217,11 +1217,11 @@ pub async fn start_callback_server() -> Result<(
                     .with_status_code(status_code)
                     .with_header(
                         tiny_http::Header::from_str("Content-Type: text/html")
-                            .expect("failed to construct response header"),
+                            .expect("invariant: hardcoded response header is valid"),
                     )
                     .with_header(
                         tiny_http::Header::from_str("Keep-Alive: timeout=0,max=0")
-                            .expect("failed to construct response header"),
+                            .expect("invariant: hardcoded response header is valid"),
                     );
                 request.respond(response).log_err();
 

@@ -418,18 +418,20 @@ impl MentionUri {
     pub fn to_uri(&self) -> Url {
         match self {
             MentionUri::File { abs_path } => {
-                let mut url = Url::parse("file:///").expect("URL literal should be valid");
+                let mut url =
+                    Url::parse("file:///").expect("invariant: hardcoded URL literal is valid");
                 url.set_path(&abs_path.to_string_lossy());
                 url
             }
             MentionUri::PastedImage { name } => {
-                let mut url =
-                    Url::parse("zzz:///agent/pasted-image").expect("URL literal should be valid");
+                let mut url = Url::parse("zzz:///agent/pasted-image")
+                    .expect("invariant: hardcoded URL literal is valid");
                 url.query_pairs_mut().append_pair("name", name);
                 url
             }
             MentionUri::Directory { abs_path } => {
-                let mut url = Url::parse("file:///").expect("URL literal should be valid");
+                let mut url =
+                    Url::parse("file:///").expect("invariant: hardcoded URL literal is valid");
                 let mut path = abs_path.to_string_lossy().into_owned();
                 if !path.ends_with('/') && !path.ends_with('\\') {
                     path.push('/');
@@ -443,7 +445,8 @@ impl MentionUri {
                 line_range,
                 ..
             } => {
-                let mut url = Url::parse("file:///").expect("URL literal should be valid");
+                let mut url =
+                    Url::parse("file:///").expect("invariant: hardcoded URL literal is valid");
                 url.set_path(&abs_path.to_string_lossy());
                 url.query_pairs_mut().append_pair("symbol", name);
                 url.set_fragment(Some(&format!(
@@ -459,11 +462,13 @@ impl MentionUri {
                 column,
             } => {
                 let mut url = if let Some(path) = abs_path {
-                    let mut url = Url::parse("file:///").expect("URL literal should be valid");
+                    let mut url =
+                        Url::parse("file:///").expect("invariant: hardcoded URL literal is valid");
                     url.set_path(&path.to_string_lossy());
                     url
                 } else {
-                    let mut url = Url::parse("zzz:///").expect("URL literal should be valid");
+                    let mut url =
+                        Url::parse("zzz:///").expect("invariant: hardcoded URL literal is valid");
                     url.set_path("/agent/untitled-buffer");
                     url
                 };
@@ -479,13 +484,15 @@ impl MentionUri {
                 url
             }
             MentionUri::Thread { name, id } => {
-                let mut url = Url::parse("zzz:///").expect("URL literal should be valid");
+                let mut url =
+                    Url::parse("zzz:///").expect("invariant: hardcoded URL literal is valid");
                 url.set_path(&format!("/agent/thread/{id}"));
                 url.query_pairs_mut().append_pair("name", name);
                 url
             }
             MentionUri::Rule { name, id } => {
-                let mut url = Url::parse("zzz:///").expect("URL literal should be valid");
+                let mut url =
+                    Url::parse("zzz:///").expect("invariant: hardcoded URL literal is valid");
                 url.set_path(&format!("/agent/rule/{id}"));
                 url.query_pairs_mut().append_pair("name", name);
                 url
@@ -494,7 +501,8 @@ impl MentionUri {
                 include_errors,
                 include_warnings,
             } => {
-                let mut url = Url::parse("zzz:///").expect("URL literal should be valid");
+                let mut url =
+                    Url::parse("zzz:///").expect("invariant: hardcoded URL literal is valid");
                 url.set_path("/agent/diagnostics");
                 if *include_warnings {
                     url.query_pairs_mut()
@@ -508,20 +516,20 @@ impl MentionUri {
             MentionUri::Fetch { url } => url.clone(),
             MentionUri::TerminalSelection { line_count } => {
                 let mut url = Url::parse("zzz:///agent/terminal-selection")
-                    .expect("URL literal should be valid");
+                    .expect("invariant: hardcoded URL literal is valid");
                 url.query_pairs_mut()
                     .append_pair("lines", &line_count.to_string());
                 url
             }
             MentionUri::GitDiff { base_ref } => {
-                let mut url =
-                    Url::parse("zzz:///agent/git-diff").expect("URL literal should be valid");
+                let mut url = Url::parse("zzz:///agent/git-diff")
+                    .expect("invariant: hardcoded URL literal is valid");
                 url.query_pairs_mut().append_pair("base", base_ref);
                 url
             }
             MentionUri::MergeConflict { file_path } => {
-                let mut url =
-                    Url::parse("zzz:///agent/merge-conflict").expect("URL literal should be valid");
+                let mut url = Url::parse("zzz:///agent/merge-conflict")
+                    .expect("invariant: hardcoded URL literal is valid");
                 url.query_pairs_mut().append_pair("path", file_path);
                 url
             }

@@ -171,13 +171,14 @@ pub fn find_devcontainer_configs(workspace: &Workspace, cx: &gpui::App) -> Vec<D
 pub fn find_configs_in_snapshot(snapshot: &Snapshot) -> Vec<DevContainerConfig> {
     let mut configs = Vec::new();
 
-    let devcontainer_dir_path = RelPath::unix(".devcontainer").expect("valid path");
+    let devcontainer_dir_path =
+        RelPath::unix(".devcontainer").expect("invariant: hardcoded path literal is valid");
 
     if let Some(devcontainer_entry) = snapshot.entry_for_path(devcontainer_dir_path) {
         if devcontainer_entry.is_dir() {
             log::debug!("find_configs_in_snapshot: Scanning .devcontainer directory");
-            let devcontainer_json_path =
-                RelPath::unix(".devcontainer/devcontainer.json").expect("valid path");
+            let devcontainer_json_path = RelPath::unix(".devcontainer/devcontainer.json")
+                .expect("invariant: hardcoded path literal is valid");
             for entry in snapshot.child_entries(devcontainer_dir_path) {
                 log::debug!(
                     "find_configs_in_snapshot: Found entry: {:?}, is_file: {}, is_dir: {}",
@@ -222,7 +223,8 @@ pub fn find_configs_in_snapshot(snapshot: &Snapshot) -> Vec<DevContainerConfig> 
 
     // Always include `.devcontainer.json` so the user can pick it from the UI
     // even when `.devcontainer/devcontainer.json` also exists.
-    let root_config_path = RelPath::unix(".devcontainer.json").expect("valid path");
+    let root_config_path =
+        RelPath::unix(".devcontainer.json").expect("invariant: hardcoded path literal is valid");
     if snapshot
         .entry_for_path(root_config_path)
         .is_some_and(|entry| entry.is_file())

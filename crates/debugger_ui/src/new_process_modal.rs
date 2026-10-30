@@ -1203,13 +1203,13 @@ impl DebugDelegate {
                         Some(".ZZZ") => {
                             path.push(
                                 RelPath::unix("debug.json")
-                                    .expect("path should be a valid relative path"),
+                                    .expect("invariant: hardcoded relative path literal is valid"),
                             );
                         }
                         Some(".vscode") => {
                             path.push(
                                 RelPath::unix("launch.json")
-                                    .expect("path should be a valid relative path"),
+                                    .expect("invariant: hardcoded relative path literal is valid"),
                             );
                         }
                         _ => {}
@@ -1304,7 +1304,8 @@ impl DebugDelegate {
                         directory_in_worktree: dir,
                         id_base: _,
                     } => dir.ends_with(
-                        RelPath::unix(".ZZZ").expect("path should be a valid relative path"),
+                        RelPath::unix(".ZZZ")
+                            .expect("invariant: hardcoded relative path literal is valid"),
                     ),
                     _ => false,
                 });
@@ -1326,10 +1327,9 @@ impl DebugDelegate {
                                     id_base: _,
                                 } => {
                                     !(hide_vscode
-                                        && dir.ends_with(
-                                            RelPath::unix(".vscode")
-                                                .expect("path should be a valid relative path"),
-                                        ))
+                                        && dir.ends_with(RelPath::unix(".vscode").expect(
+                                            "invariant: hardcoded relative path literal is valid",
+                                        )))
                                 }
                                 _ => true,
                             })

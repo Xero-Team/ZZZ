@@ -98,7 +98,7 @@ impl DebugAdapter for CodeLldbDebugAdapter {
         });
         let map = configuration
             .as_object_mut()
-            .expect("value should have the expected type");
+            .expect("invariant: the request arguments are built as a JSON object");
         // CodeLLDB uses `name` for a terminal label.
         map.insert(
             "name".into(),
