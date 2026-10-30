@@ -16,6 +16,7 @@ use crate::{
     player::{self, AudioMetadata},
     scrubber::{Scrub, ScrubKind},
     waveform::{self, WAVEFORM_ANALYSIS_LIMIT, WAVEFORM_BUCKETS},
+    waveform_cache::{CachedWaveform, WaveformCache},
 };
 
 const SEEK_STEP: Duration = Duration::from_secs(5);
@@ -312,17 +313,45 @@ impl AudioView {
         let path = loaded.path.clone();
         let format_hint = loaded.format_hint.clone();
         let generation = loaded.generation;
+        let waveform_cache = WaveformCache::default_cache();
 
         drop(self._waveform_task.take());
         self._waveform_task = Some(cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
+                    let cache_key = waveform_cache.key_for_path(
+                        &path,
+                        WAVEFORM_BUCKETS,
+                        WAVEFORM_ANALYSIS_LIMIT,
+                    );
+                    if let Some(cached) =
+                        cache_key.as_ref().and_then(|key| waveform_cache.load(key))
+                    {
+                        return anyhow::Ok(cached);
+                    }
+
+                    let decode_permit = waveform_cache.acquire().await;
+                    if let Some(cached) =
+                        cache_key.as_ref().and_then(|key| waveform_cache.load(key))
+                    {
+                        return anyhow::Ok(cached);
+                    }
+
                     let decoder = player::open_decoder(&path, &format_hint)?;
-                    anyhow::Ok(waveform::extract_waveform_peaks(
+                    let waveform = waveform::extract_waveform_peaks(
                         decoder,
                         WAVEFORM_BUCKETS,
                         WAVEFORM_ANALYSIS_LIMIT,
-                    ))
+                    );
+
+                    if let Some(cache_key) = cache_key.as_ref()
+                        && let Err(error) = waveform_cache.store(cache_key, &waveform)
+                    {
+                        log::warn!("could not cache audio waveform: {error:#}");
+                    }
+                    drop(decode_permit);
+
+                    anyhow::Ok(CachedWaveform::from_peaks(&waveform))
                 })
                 .await;
 
@@ -341,7 +370,11 @@ impl AudioView {
                     loaded.analyzing = false;
                     match result {
                         Ok(waveform) => {
-                            loaded.peaks = Some(Arc::from(waveform.peaks));
+                            log::debug!(
+                                "audio waveform ready with {} samples",
+                                waveform.sample_count
+                            );
+                            loaded.peaks = Some(waveform.peaks);
                             loaded.waveform_duration = Some(waveform.duration);
                             if waveform.reached_end && !waveform.duration.is_zero() {
                                 loaded.metadata.duration = Some(waveform.duration);

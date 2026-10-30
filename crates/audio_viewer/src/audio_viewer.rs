@@ -6,6 +6,7 @@ mod serializable;
 mod ui;
 mod view;
 mod waveform;
+mod waveform_cache;
 
 use anyhow::Context as _;
 use gpui::{App, AppContext, Entity, Task, actions};
