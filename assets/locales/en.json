@@ -3272,6 +3272,7 @@
     "audio_viewer.play_pause": "Play/Pause",
     "audio_viewer.stop": "Stop",
     "audio_viewer.mute": "Mute",
+    "audio_viewer.seek": "Playback position",
     "audio_viewer.volume": "Volume",
     "audio_viewer.speed": "Playback speed",
     "audio_viewer.speed.value": "{}×",

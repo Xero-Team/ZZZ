@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, Bounds, Context, CursorStyle, EventEmitter, Focusable, FontWeight,
-    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    ObjectFit, ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, img, px,
-    relative,
+    AnyElement, App, Context, CursorStyle, EventEmitter, Focusable, FontWeight, InteractiveElement,
+    IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit,
+    ParentElement, Render, SharedString, Styled, WeakEntity, Window, canvas, div, img, px,
 };
 use i18n::tr;
 use ui::{ContextMenu, DropdownMenu, DropdownStyle, IconPosition, Tooltip, prelude::*};
@@ -16,7 +15,7 @@ use workspace::{
 use crate::{
     Stop, ToggleMute, TogglePlay,
     lyrics::current_line_index,
-    scrubber::ScrubKind,
+    scrubber::{ScrubKind, ScrubberStyle, render_scrubber},
     view::{AudioView, AudioViewEvent, LoadState, SPEED_OPTIONS},
     waveform::{self, paint_waveform},
 };
@@ -331,46 +330,81 @@ impl AudioView {
             .gap_2()
             .items_center()
             .child(
-                IconButton::new("audio-play", play_icon)
-                    .icon_size(IconSize::Small)
-                    .tooltip(move |_window, cx| {
-                        Tooltip::for_action(
-                            tr(cx, "audio_viewer.play_pause", "Play/Pause"),
-                            &TogglePlay,
-                            cx,
-                        )
-                    })
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.toggle_play(&TogglePlay, window, cx);
-                    })),
+                with_aria_label(
+                    IconButton::new("audio-play", play_icon),
+                    tr(cx, "audio_viewer.play_pause", "Play/Pause"),
+                )
+                .icon_size(IconSize::Small)
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action(
+                        tr(cx, "audio_viewer.play_pause", "Play/Pause"),
+                        &TogglePlay,
+                        cx,
+                    )
+                })
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.toggle_play(&TogglePlay, window, cx);
+                })),
             )
             .child(
-                IconButton::new("audio-stop", IconName::Stop)
-                    .icon_size(IconSize::Small)
-                    .tooltip(move |_window, cx| {
-                        Tooltip::for_action(tr(cx, "audio_viewer.stop", "Stop"), &Stop, cx)
-                    })
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.stop(&Stop, window, cx);
-                    })),
+                with_aria_label(
+                    IconButton::new("audio-stop", IconName::Stop),
+                    tr(cx, "audio_viewer.stop", "Stop"),
+                )
+                .icon_size(IconSize::Small)
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action(tr(cx, "audio_viewer.stop", "Stop"), &Stop, cx)
+                })
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.stop(&Stop, window, cx);
+                })),
             )
             .child(
                 Label::new(time_label)
                     .size(LabelSize::Small)
                     .color(Color::Muted),
             )
-            .child(self.render_seek_track(playhead_ratio, view.clone(), cx))
+            .child(render_scrubber(
+                "audio-seek-track",
+                ScrubKind::Seek,
+                playhead_ratio,
+                view.clone(),
+                ScrubberStyle {
+                    fill: cx.theme().status().info,
+                    track: cx.theme().colors().elevated_surface_background,
+                    height: px(8.),
+                },
+                tr(cx, "audio_viewer.seek", "Playback position").into(),
+                self.can_seek(),
+                cx,
+            ))
             .child(
-                IconButton::new("audio-mute", mute_icon)
-                    .icon_size(IconSize::Small)
-                    .tooltip(move |_window, cx| {
-                        Tooltip::for_action(tr(cx, "audio_viewer.mute", "Mute"), &ToggleMute, cx)
-                    })
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.toggle_mute(&ToggleMute, window, cx);
-                    })),
+                with_aria_label(
+                    IconButton::new("audio-mute", mute_icon),
+                    tr(cx, "audio_viewer.mute", "Mute"),
+                )
+                .icon_size(IconSize::Small)
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action(tr(cx, "audio_viewer.mute", "Mute"), &ToggleMute, cx)
+                })
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.toggle_mute(&ToggleMute, window, cx);
+                })),
             )
-            .child(self.render_volume_track(volume, view, cx))
+            .child(render_scrubber(
+                "audio-volume-track",
+                ScrubKind::Volume,
+                volume,
+                view,
+                ScrubberStyle {
+                    fill: cx.theme().status().info,
+                    track: cx.theme().colors().elevated_surface_background,
+                    height: px(8.),
+                },
+                tr(cx, "audio_viewer.volume", "Volume").into(),
+                true,
+                cx,
+            ))
             .child(
                 DropdownMenu::new("audio-speed", speed_label, speed_menu)
                     .style(DropdownStyle::Subtle)
@@ -382,128 +416,35 @@ impl AudioView {
                     ))),
             )
             .child(
-                IconButton::new("audio-repeat", IconName::RotateCw)
-                    .icon_size(IconSize::Small)
-                    .toggle_state(repeating)
-                    .tooltip(Tooltip::text(tr(cx, "audio_viewer.repeat", "Repeat")))
-                    .on_click(cx.listener(|view, _, _window, cx| {
-                        view.toggle_repeat(cx);
-                    })),
+                with_aria_label(
+                    IconButton::new("audio-repeat", IconName::RotateCw),
+                    tr(cx, "audio_viewer.repeat", "Repeat"),
+                )
+                .icon_size(IconSize::Small)
+                .toggle_state(repeating)
+                .tooltip(Tooltip::text(tr(cx, "audio_viewer.repeat", "Repeat")))
+                .on_click(cx.listener(|view, _, _window, cx| {
+                    view.toggle_repeat(cx);
+                })),
             )
             .when(has_lyrics, |this| {
                 this.child(
-                    IconButton::new("audio-lyrics-toggle", IconName::TextSnippet)
-                        .icon_size(IconSize::Small)
-                        .toggle_state(showing_lyrics)
-                        .tooltip(Tooltip::text(tr(
-                            cx,
-                            "audio_viewer.lyrics.toggle",
-                            "Lyrics",
-                        )))
-                        .on_click(cx.listener(|view, _, _window, cx| {
-                            view.toggle_lyrics(cx);
-                        })),
+                    with_aria_label(
+                        IconButton::new("audio-lyrics-toggle", IconName::TextSnippet),
+                        tr(cx, "audio_viewer.lyrics.toggle", "Lyrics"),
+                    )
+                    .icon_size(IconSize::Small)
+                    .toggle_state(showing_lyrics)
+                    .tooltip(Tooltip::text(tr(
+                        cx,
+                        "audio_viewer.lyrics.toggle",
+                        "Lyrics",
+                    )))
+                    .on_click(cx.listener(|view, _, _window, cx| {
+                        view.toggle_lyrics(cx);
+                    })),
                 )
             })
-    }
-
-    fn render_seek_track(
-        &self,
-        ratio: f32,
-        view: WeakEntity<AudioView>,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let fill = cx.theme().status().info;
-        let track = cx.theme().colors().elevated_surface_background;
-        let can_seek = self.can_seek();
-
-        div()
-            .id("audio-seek-track")
-            .flex_1()
-            .min_w_0()
-            .h_2()
-            .rounded_full()
-            .cursor(if can_seek {
-                CursorStyle::PointingHand
-            } else {
-                CursorStyle::OperationNotAllowed
-            })
-            .bg(track)
-            .relative()
-            .child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .top_0()
-                    .h_full()
-                    .rounded_full()
-                    .bg(fill)
-                    .w(relative(ratio.clamp(0.0, 1.0))),
-            )
-            .child(bounds_capture(view, |view, bounds| {
-                view.seek_track_bounds = Some(bounds);
-            }))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|view, event: &MouseDownEvent, _window, cx| {
-                    if let Some(bounds) = view.seek_track_bounds {
-                        view.begin_scrub(ScrubKind::Seek, bounds, event.position, cx);
-                    }
-                }),
-            )
-            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
-    }
-
-    fn render_volume_track(
-        &self,
-        volume: f32,
-        view: WeakEntity<AudioView>,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let fill = cx.theme().status().info;
-        let track = cx.theme().colors().elevated_surface_background;
-
-        div()
-            .id("audio-volume-track")
-            .w(px(72.))
-            .h_2()
-            .rounded_full()
-            .cursor(CursorStyle::PointingHand)
-            .bg(track)
-            .relative()
-            .child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .top_0()
-                    .h_full()
-                    .rounded_full()
-                    .bg(fill)
-                    .w(relative(volume.clamp(0.0, 1.0))),
-            )
-            .child(bounds_capture(view, |view, bounds| {
-                view.volume_track_bounds = Some(bounds);
-            }))
-            .tooltip(move |_window, cx| {
-                Tooltip::simple(
-                    format!(
-                        "{}: {}%",
-                        tr(cx, "audio_viewer.volume", "Volume"),
-                        (volume.clamp(0.0, 1.0) * 100.0).round() as i32
-                    ),
-                    cx,
-                )
-            })
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|view, event: &MouseDownEvent, _window, cx| {
-                    if let Some(bounds) = view.volume_track_bounds {
-                        view.begin_scrub(ScrubKind::Volume, bounds, event.position, cx);
-                    }
-                }),
-            )
-            .on_scroll_wheel(cx.listener(Self::scroll_volume))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
     }
 
     fn on_waveform_mouse_down(
@@ -531,21 +472,16 @@ impl AudioView {
     }
 }
 
-fn bounds_capture(
-    view: WeakEntity<AudioView>,
-    assign: impl Fn(&mut AudioView, Bounds<Pixels>) + 'static,
-) -> impl IntoElement {
-    canvas(
-        move |bounds, _window, cx| {
-            let Some(view) = view.upgrade() else {
-                return;
-            };
-            view.update(cx, |view, _cx| assign(view, bounds));
-        },
-        |_, _, _, _| {},
-    )
-    .absolute()
-    .size_full()
+fn with_aria_label(button: IconButton, label: impl Into<SharedString>) -> IconButton {
+    #[cfg(feature = "accessibility")]
+    {
+        button.aria_label(label)
+    }
+    #[cfg(not(feature = "accessibility"))]
+    {
+        let _accessibility_label = label.into();
+        button
+    }
 }
 
 fn centered(child: impl IntoElement) -> AnyElement {
@@ -622,20 +558,23 @@ impl Render for AudioToolbarControls {
         h_flex()
             .gap_1()
             .child(
-                IconButton::new("audio-toolbar-play", play_icon)
-                    .icon_size(IconSize::Small)
-                    .tooltip(move |_window, cx| {
-                        Tooltip::for_action(
-                            tr(cx, "audio_viewer.play_pause", "Play/Pause"),
-                            &TogglePlay,
-                            cx,
-                        )
-                    })
-                    .on_click(move |_, window, cx| {
-                        if let Some(view) = weak.upgrade() {
-                            view.update(cx, |view, cx| view.toggle_play(&TogglePlay, window, cx));
-                        }
-                    }),
+                with_aria_label(
+                    IconButton::new("audio-toolbar-play", play_icon),
+                    tr(cx, "audio_viewer.play_pause", "Play/Pause"),
+                )
+                .icon_size(IconSize::Small)
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action(
+                        tr(cx, "audio_viewer.play_pause", "Play/Pause"),
+                        &TogglePlay,
+                        cx,
+                    )
+                })
+                .on_click(move |_, window, cx| {
+                    if let Some(view) = weak.upgrade() {
+                        view.update(cx, |view, cx| view.toggle_play(&TogglePlay, window, cx));
+                    }
+                }),
             )
             .child(Label::new(time_label).size(LabelSize::Small))
             .into_any_element()

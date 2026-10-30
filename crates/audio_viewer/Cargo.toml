@@ -14,6 +14,7 @@ doctest = false
 
 [features]
 test-support = ["gpui/test-support", "editor/test-support", "db/test-support"]
+accessibility = ["gpui/accessibility", "ui/accessibility"]
 
 [dependencies]
 anyhow.workspace = true
