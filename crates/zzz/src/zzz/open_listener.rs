@@ -17,7 +17,6 @@ use git_ui::{file_diff_view::FileDiffView, multi_diff_view::MultiDiffView};
 use gpui::{App, AsyncApp, Global, WindowHandle};
 use onboarding::FIRST_OPEN;
 use onboarding::show_onboarding_view;
-use project::ProjectHost;
 use recent_projects::{RemoteSettings, navigate_to_positions, open_remote_project};
 use remote::{RemoteConnectionOptions, WslConnectionOptions};
 use settings::Settings;
@@ -1014,6 +1013,10 @@ fn looks_like_parenthesized_position_suffix(path: &Path) -> bool {
     }
 }
 
+// These tests drive real workspaces through `init_test`, which registers the
+// bundled tree-sitter grammars; Miri cannot execute that C code. Each test is
+// `#[cfg_attr(miri, ignore)]` so `cargo miri test` reports it as ignored rather
+// than aborting on the first foreign call.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1023,6 +1026,7 @@ mod tests {
     use futures::poll;
     use gpui::{AppContext as _, TestAppContext};
     use language::LineEnding;
+    use project::ProjectHost;
     use remote::SshConnectionOptions;
     use rope::Rope;
     use serde_json::json;
@@ -1081,6 +1085,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_ssh_urls(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
         let cases = [
@@ -1165,6 +1170,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_derive_paths_with_position_preserves_parenthesized_directory_names(
         cx: &mut TestAppContext,
     ) {
@@ -1212,6 +1218,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_derive_paths_with_position_keeps_parenthesized_file_positions(
         cx: &mut TestAppContext,
     ) {
@@ -1238,6 +1245,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_derive_paths_with_position_keeps_colon_file_positions(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -1262,6 +1270,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_ssh_url_preserves_open_behavior(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1281,6 +1290,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_reject_ssh_urls(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1304,6 +1314,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_open_options_for_behavior_always_new(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
         let options = cx.update(|cx| {
@@ -1322,6 +1333,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_open_options_for_request_respects_default_open_behavior(cx: &mut TestAppContext) {
         use gpui::UpdateGlobal as _;
 
@@ -1364,6 +1376,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_agent_url(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1395,6 +1408,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_agent_url_with_prompt(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
         let prompt = "Write me a script\nThanks";
@@ -1426,6 +1440,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_agent_url_with_trailing_slash(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1456,6 +1471,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_focus_app_url(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1483,6 +1499,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_agent_url_with_empty_prompt(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1508,6 +1525,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_git_commit_url(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1588,6 +1606,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_workspace_with_directory(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -1654,6 +1673,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_wait_with_directory_waits_for_window_close(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -1710,6 +1730,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_workspace_with_nonexistent_files(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -1818,6 +1839,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_reuse_flag_functionality(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -1895,7 +1917,6 @@ mod tests {
             &ProjectHost::Local,
             &mut cx.to_async(),
         )
-        .await
         .unwrap()
         .window;
 
@@ -1926,6 +1947,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_git_clone_url(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1951,6 +1973,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_git_clone_url_without_slash(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1976,6 +1999,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_git_clone_url_with_encoding(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -2002,6 +2026,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_add_flag_prefers_focused_window(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -2166,6 +2191,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_dev_container_flag_opens_modal(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(|cx| recent_projects::init(cx));
@@ -2224,6 +2250,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_dev_container_flag_cleared_without_config(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(|cx| recent_projects::init(cx));
@@ -2375,6 +2402,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_no_flags_no_windows(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -2400,6 +2428,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_default_opens_new_window(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -2439,6 +2468,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_existing_window_setting_adds_to_sidebar(cx: &mut TestAppContext) {
         use gpui::UpdateGlobal as _;
 
@@ -2488,6 +2518,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_explicit_existing_flag(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -2515,6 +2546,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_explicit_new_flag(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -2553,6 +2585,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_explicit_new_flag_with_file_url_opens_new_window(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -2580,6 +2613,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_e2e_paths_in_existing_workspace(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 

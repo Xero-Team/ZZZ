@@ -2600,6 +2600,11 @@ pub(crate) fn eager_load_active_theme_and_icon_theme(fs: Arc<dyn Fs>, cx: &mut A
     }
 }
 
+// These tests build a `TestAppContext`, which registers the bundled languages
+// and loads the keymap; both go through tree-sitter's C scanners, which Miri
+// cannot execute. `#[cfg_attr(miri, ignore)]` keeps them compiled while letting
+// `cargo miri test` report them as ignored instead of aborting on the first
+// foreign call.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2671,6 +2676,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_non_existing_file(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -2708,6 +2714,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths_action(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -2838,6 +2845,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_add_new(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -2910,6 +2918,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_file_in_many_spaces(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -2993,6 +3002,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_window_edit_state_restoring_disabled(cx: &mut TestAppContext) {
         let executor = cx.executor();
         let app_state = init_test(cx);
@@ -3165,6 +3175,7 @@ mod tests {
 
     #[ignore = "This test has timing issues across platforms."]
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_window_edit_state_restoring_enabled(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -3284,6 +3295,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_new_empty_workspace(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(|cx| {
@@ -3344,6 +3356,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_new_window_initial_items(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         for on_new_window in [
@@ -3391,6 +3404,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths_readme_selection(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -3506,6 +3520,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths_readme_after_restoration(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         for restore_item in [false, true] {
@@ -3552,6 +3567,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_add_folder_does_not_open_readme(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         set_on_new_window(Some(settings::OnNewWindow::Readme), cx);
@@ -3603,6 +3619,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths_readme_case_insensitive_fs(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         set_on_new_window(Some(settings::OnNewWindow::Readme), cx);
@@ -3621,6 +3638,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_entry(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -3770,6 +3788,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -4053,6 +4072,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_opening_excluded_paths(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(|cx| {
@@ -4190,6 +4210,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_save_conflicting_item(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -4266,6 +4287,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_and_save_new_file(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -4432,6 +4454,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_setting_language_when_saving_as_single_file_worktree(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state.fs.create_dir(Path::new("/root")).await.unwrap();
@@ -4504,6 +4527,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_pane_actions(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -4596,6 +4620,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_editor_zoom_with_scroll_wheel(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -4749,6 +4774,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_navigation(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -5111,6 +5137,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_reopening_closed_items(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         app_state
@@ -5340,6 +5367,7 @@ mod tests {
     /// ends of a buffer let `ctrl-n` and `ctrl-p` fall through to the default bindings and open a
     /// new file / the file finder.
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_emacs_cursor_keys_do_not_fall_back_to_default_bindings(cx: &mut TestAppContext) {
         init_keymap_test(cx);
 
@@ -5367,6 +5395,7 @@ mod tests {
     /// The unbind above only targets `workspace::NewFile` / `file_finder::Toggle`, so the narrower
     /// `ctrl-n` and `ctrl-p` bindings still win where they apply.
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_emacs_cursor_keys_keep_narrower_bindings(cx: &mut TestAppContext) {
         init_keymap_test(cx);
 
@@ -5392,6 +5421,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_base_keymap(cx: &mut gpui::TestAppContext) {
         let executor = cx.executor();
         let app_state = init_keymap_test(cx);
@@ -5501,6 +5531,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_disabled_keymap_binding(cx: &mut gpui::TestAppContext) {
         let executor = cx.executor();
         let app_state = init_keymap_test(cx);
@@ -5604,6 +5635,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_generate_keymap_json_schema_for_registered_actions(
         cx: &mut gpui::TestAppContext,
     ) {
@@ -5617,6 +5649,7 @@ mod tests {
     /// Checks that action namespaces are the expected set. The purpose of this is to prevent typos
     /// and let you know when introducing a new namespace.
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_action_namespaces(cx: &mut gpui::TestAppContext) {
         use itertools::Itertools;
 
@@ -5704,7 +5737,6 @@ mod tests {
                 "outline",
                 "outline_panel",
                 "pane",
-                "panel",
                 "pdf_viewer",
                 "picker",
                 "project_panel",
@@ -5756,6 +5788,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_bundled_settings_and_themes(cx: &mut App) {
         cx.text_system()
             .add_fonts(vec![
@@ -5785,6 +5818,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_bundled_files_editor(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(init);
@@ -5824,6 +5858,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_bundled_files_reuse_existing_editor(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(init);
@@ -5872,6 +5907,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_bundled_languages(cx: &mut TestAppContext) {
         let fs = fs::FakeFs::new(cx.background_executor.clone());
         env_logger::builder().is_test(true).try_init().ok();
@@ -6000,6 +6036,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_opening_project_settings_when_excluded(cx: &mut gpui::TestAppContext) {
         // Use the proper initialization for runtime state
         let app_state = init_keymap_test(cx);
@@ -6099,6 +6136,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_disable_ai_crash(cx: &mut gpui::TestAppContext) {
         let app_state = init_test(cx);
         cx.update(init);
@@ -6121,6 +6159,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_disable_ai_filters_keybindings(cx: &mut gpui::TestAppContext) {
         let _app_state = init_keymap_test(cx);
 
@@ -6178,6 +6217,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_prefer_focused_window(cx: &mut gpui::TestAppContext) {
         let app_state = init_test(cx);
         let paths = [PathBuf::from(path!("/dir/document.txt"))];
@@ -6246,6 +6286,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths_switches_to_best_workspace(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -6446,6 +6487,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_open_paths_in_gitignored_dir_opens_new_workspace(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
@@ -6535,6 +6577,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_quit_checks_all_workspaces_for_dirty_items(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
         cx.update(init);
@@ -6819,6 +6862,7 @@ mod tests {
 
     #[allow(clippy::await_holding_lock)]
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_multi_workspace_session_restore(cx: &mut TestAppContext) {
         let _guard = session_restore_test_guard();
         use collections::HashMap;
@@ -7054,6 +7098,7 @@ mod tests {
 
     #[allow(clippy::await_holding_lock)]
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_restored_project_groups_survive_workspace_key_change(cx: &mut TestAppContext) {
         let _guard = session_restore_test_guard();
         use session::Session;
@@ -7213,6 +7258,7 @@ mod tests {
 
     #[allow(clippy::await_holding_lock)]
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_quit_preserves_focused_workspace_for_restore(cx: &mut TestAppContext) {
         let _guard = session_restore_test_guard();
         use session::Session;
@@ -7344,6 +7390,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_close_project_removes_project_group(cx: &mut TestAppContext) {
         use util::path_list::PathList;
         use workspace::{OpenMode, ProjectGroupKey};
@@ -7395,6 +7442,7 @@ mod tests {
     }
 
     #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_close_project_switches_to_neighbor_in_multi_project(cx: &mut TestAppContext) {
         use workspace::OpenMode;
 
