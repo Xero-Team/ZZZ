@@ -295,6 +295,7 @@ impl AudioView {
                     }
                 }),
             )
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
     }
 
     fn render_volume_track(
@@ -335,6 +336,7 @@ impl AudioView {
                     }
                 }),
             )
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
     }
 
     fn on_waveform_mouse_down(
@@ -407,6 +409,7 @@ impl Render for AudioView {
             .on_action(cx.listener(Self::reveal_in_file_manager))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .size_full()
             .flex()
             .bg(cx.theme().colors().editor_background)

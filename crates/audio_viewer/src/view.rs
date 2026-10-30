@@ -143,6 +143,7 @@ impl AudioView {
     }
 
     fn reload(&mut self, cx: &mut Context<Self>) {
+        self.scrub = None;
         self.stop_playback(cx);
         self._load_task = Self::start_load(cx);
     }
@@ -472,6 +473,7 @@ impl AudioView {
         if let Some(handle) = self.handle.take() {
             handle.stop();
         }
+        self.scrub = None;
         self.playback = PlaybackStatus::Stopped;
         self.position = Duration::ZERO;
         self._position_task = None;
