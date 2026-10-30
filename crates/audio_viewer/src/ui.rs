@@ -142,13 +142,18 @@ impl AudioView {
             .unwrap_or(1.0);
         let unplayed = cx.theme().colors().text.opacity(0.28);
         let played = cx.theme().status().info;
+        let can_seek = self.can_seek();
         let view = cx.entity().downgrade();
 
         let waveform = div()
             .id("audio-waveform")
             .w_full()
             .h(px(96.))
-            .cursor(CursorStyle::PointingHand)
+            .cursor(if can_seek {
+                CursorStyle::PointingHand
+            } else {
+                CursorStyle::OperationNotAllowed
+            })
             .child(
                 canvas(
                     move |bounds, _window, cx| {
@@ -278,6 +283,7 @@ impl AudioView {
     ) -> impl IntoElement {
         let fill = cx.theme().status().info;
         let track = cx.theme().colors().elevated_surface_background;
+        let can_seek = self.can_seek();
 
         div()
             .id("audio-seek-track")
@@ -285,7 +291,11 @@ impl AudioView {
             .min_w_0()
             .h_2()
             .rounded_full()
-            .cursor(CursorStyle::PointingHand)
+            .cursor(if can_seek {
+                CursorStyle::PointingHand
+            } else {
+                CursorStyle::OperationNotAllowed
+            })
             .bg(track)
             .relative()
             .child(

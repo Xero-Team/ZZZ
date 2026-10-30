@@ -400,6 +400,10 @@ impl AudioView {
         self.loaded().and_then(|loaded| loaded.metadata.duration)
     }
 
+    pub(crate) fn can_seek(&self) -> bool {
+        seek_is_available(self.duration())
+    }
+
     pub(crate) fn cover(&self) -> Option<Arc<Image>> {
         self.loaded().and_then(|loaded| loaded.cover.clone())
     }
@@ -480,6 +484,13 @@ impl AudioView {
         if let Some(parts) = self.metadata_parts(cx) {
             lines.push(parts.join(" • "));
         }
+        if let Some(loaded) = self.loaded() {
+            lines.extend(metadata_detail_lines(&loaded.metadata, cx));
+        }
+        let output_format = tr(cx, "audio_viewer.output_format", "Output: {} kHz, {}")
+            .replacen("{}", &format_sample_rate_value(audio::SAMPLE_RATE.get()), 1)
+            .replacen("{}", &format_channels(audio::CHANNEL_COUNT.get(), cx), 1);
+        lines.push(output_format);
         lines.join("\n")
     }
 
@@ -785,6 +796,9 @@ impl AudioView {
         position: gpui::Point<Pixels>,
         cx: &mut Context<Self>,
     ) {
+        if kind == ScrubKind::Seek && !self.can_seek() {
+            return;
+        }
         let mut scrub = Scrub::new(kind, bounds);
         self.update_scrub_state(&mut scrub, position, kind);
         self.scrub = Some(scrub);
@@ -888,6 +902,57 @@ fn playback_start_position(position: Duration, duration: Option<Duration>) -> Du
     }
 }
 
+fn seek_is_available(duration: Option<Duration>) -> bool {
+    duration.is_some_and(|duration| !duration.is_zero())
+}
+
+fn metadata_detail_lines(metadata: &AudioMetadata, cx: &App) -> Vec<String> {
+    let mut lines = Vec::new();
+    let year_genre = [
+        metadata.year.map(|year| year.to_string()),
+        metadata.genre.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+    if !year_genre.is_empty() {
+        lines.push(year_genre.join(" • "));
+    }
+    if let Some((track, total)) = metadata.track {
+        lines.push(format_numbered_metadata(
+            "audio_viewer.metadata.track",
+            "Track {}",
+            track,
+            total,
+            cx,
+        ));
+    }
+    if let Some((disc, total)) = metadata.disc {
+        lines.push(format_numbered_metadata(
+            "audio_viewer.metadata.disc",
+            "Disc {}",
+            disc,
+            total,
+            cx,
+        ));
+    }
+    lines
+}
+
+fn format_numbered_metadata(
+    key: &str,
+    fallback: &str,
+    number: u32,
+    total: Option<u32>,
+    cx: &App,
+) -> String {
+    let number = match total {
+        Some(total) => format!("{number}/{total}"),
+        None => number.to_string(),
+    };
+    tr(cx, key, fallback).replacen("{}", &number, 1)
+}
+
 pub(crate) fn format_timestamp(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
     let hours = total_seconds / 3600;
@@ -913,10 +978,14 @@ fn format_bit_depth(bit_depth: u8) -> String {
 }
 
 fn format_sample_rate(sample_rate: u32) -> String {
+    format!("{} kHz", format_sample_rate_value(sample_rate))
+}
+
+fn format_sample_rate_value(sample_rate: u32) -> String {
     if sample_rate.is_multiple_of(1000) {
-        format!("{} kHz", sample_rate / 1000)
+        (sample_rate / 1000).to_string()
     } else {
-        format!("{:.1} kHz", sample_rate as f64 / 1000.0)
+        format!("{:.1}", sample_rate as f64 / 1000.0)
     }
 }
 
@@ -935,8 +1004,9 @@ fn format_channels(channels: u16, cx: &App) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        advance_load_generation, format_bit_depth, format_bitrate, format_timestamp,
-        gain_for_fader, load_result_is_current, playback_start_position, position_visible_change,
+        advance_load_generation, format_bit_depth, format_bitrate, format_sample_rate,
+        format_timestamp, gain_for_fader, load_result_is_current, playback_start_position,
+        position_visible_change, seek_is_available,
     };
     use std::time::Duration;
 
@@ -945,6 +1015,19 @@ mod tests {
         assert_eq!(format_bitrate(320), "320 kbps");
         assert_eq!(format_bit_depth(16), "16-bit");
         assert_eq!(format_bit_depth(24), "24-bit");
+    }
+
+    #[test]
+    fn sample_rate_formatting_separates_value_and_unit() {
+        assert_eq!(format_sample_rate(48_000), "48 kHz");
+        assert_eq!(format_sample_rate(44_100), "44.1 kHz");
+    }
+
+    #[test]
+    fn seek_is_only_available_for_positive_known_durations() {
+        assert!(!seek_is_available(None));
+        assert!(!seek_is_available(Some(Duration::ZERO)));
+        assert!(seek_is_available(Some(Duration::from_millis(1))));
     }
 
     #[test]
