@@ -121,7 +121,7 @@ impl Connection {
     }
 
     pub fn sql_has_syntax_error(&self, sql: &str) -> Option<(String, usize)> {
-        let sql = CString::new(sql).expect("value should be present");
+        let sql = CString::new(sql).ok()?;
         let mut remaining_sql = sql.as_c_str();
         let sql_start = remaining_sql.as_ptr();
 

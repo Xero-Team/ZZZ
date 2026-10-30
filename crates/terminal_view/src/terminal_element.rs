@@ -432,8 +432,9 @@ impl TerminalElement {
                                 }
                             } else {
                                 // Flush current batch and start new one
-                                let old_batch =
-                                    current_batch.take().expect("entry should be present");
+                                let old_batch = current_batch
+                                    .take()
+                                    .expect("invariant: a batch is open when flushing");
                                 batched_runs.push(old_batch);
                                 let mut new_batch = BatchedTextRun::new_from_char(
                                     cell_point,

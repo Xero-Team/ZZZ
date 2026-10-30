@@ -515,19 +515,15 @@ impl PickerDelegate for TasksModalDelegate {
                 .indicator_border_color(Some(cx.theme().colors().border_transparent))
         });
         let history_run_icon = if Some(ix) <= self.divider_index {
-            Some(
-                Icon::new(IconName::HistoryRerun)
-                    .color(Color::Muted)
-                    .size(IconSize::Small)
-                    .into_any_element(),
-            )
+            Icon::new(IconName::HistoryRerun)
+                .color(Color::Muted)
+                .size(IconSize::Small)
+                .into_any_element()
         } else {
-            Some(
-                v_flex()
-                    .flex_none()
-                    .size(IconSize::Small.rems())
-                    .into_any_element(),
-            )
+            v_flex()
+                .flex_none()
+                .size(IconSize::Small.rems())
+                .into_any_element()
         };
 
         Some(
@@ -547,7 +543,7 @@ impl PickerDelegate for TasksModalDelegate {
                             MAX_TAGS_LINE_LEN,
                         )))
                         .flex_none()
-                        .child(history_run_icon.expect("value should be present"))
+                        .child(history_run_icon)
                         .into_any_element(),
                 )
                 .spacing(ListItemSpacing::Sparse)

@@ -30,9 +30,7 @@ impl<'a, 'b, T: 'static> DivRegistrar<'a, 'b, T> {
         }
     }
     pub fn into_div(self) -> Div {
-        // This option is always Some; it's an option in the first place because we want to call methods
-        // on div that require ownership.
-        self.div.expect("div should be present")
+        self.div.unwrap_or_else(div)
     }
 }
 
@@ -70,7 +68,7 @@ impl PaneDivRegistrar {
     }
 
     pub fn into_div(self) -> Div {
-        self.div.expect("div should be present")
+        self.div.unwrap_or_else(div)
     }
 }
 

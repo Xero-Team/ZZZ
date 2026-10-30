@@ -107,14 +107,16 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
             &tree_sitter_json::LANGUAGE.into(),
             "(pair key: (string) @key value: (_) @value)",
         )
-        .expect("Failed to create PAIR_QUERY")
+        .expect("invariant: PAIR_QUERY is a valid tree-sitter query")
     });
 
     let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&tree_sitter_json::LANGUAGE.into())
-        .expect("value should be present");
-    let syntax_tree = parser.parse(text, None).expect("parse should be present");
+        .expect("invariant: tree-sitter JSON language is compatible");
+    let syntax_tree = parser
+        .parse(text, None)
+        .expect("invariant: tree-sitter parse cannot fail without a time limit");
 
     let mut cursor = tree_sitter::QueryCursor::new();
 
@@ -243,7 +245,7 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
         if let Some(first_key_start) = first_key_start {
             // We have key paths, construct the sub objects
             let new_key = serde_json::to_string(key_path[depth].as_ref())
-                .expect("serializing to JSON cannot fail");
+                .expect("invariant: serializing to JSON cannot fail");
             // We don't have the key, construct the nested objects
             let new_value = construct_json_value(&key_path[(depth + 1)..], new_value);
 
@@ -268,8 +270,8 @@ pub fn replace_value_in_json_text<T: AsRef<str>>(
                 let content = format!("{new_key}: {new_val},\n{space:width$}", width = column);
                 (first_key_start..first_key_start, content)
             } else {
-                let new_val =
-                    serde_json::to_string(&new_value).expect("serializing to JSON cannot fail");
+                let new_val = serde_json::to_string(&new_value)
+                    .expect("invariant: serializing to JSON cannot fail");
                 let mut content = format!("{new_key}: {new_val},");
                 content.push(' ');
                 (first_key_start..first_key_start, content)
@@ -313,7 +315,7 @@ fn construct_json_value(
     new_value: Option<&serde_json::Value>,
 ) -> serde_json::Value {
     let mut new_value = serde_json::to_value(new_value.unwrap_or(&serde_json::Value::Null))
-        .expect("converting to a JSON value cannot fail");
+        .expect("invariant: converting to a JSON value cannot fail");
     for key in key_path.iter().rev() {
         if parse_index_key(key.as_ref()).is_some() {
             new_value = serde_json::json!([new_value]);
@@ -410,9 +412,11 @@ pub fn replace_top_level_array_value_in_json_text(
     let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&tree_sitter_json::LANGUAGE.into())
-        .expect("value should be present");
+        .expect("invariant: tree-sitter JSON language is compatible");
 
-    let syntax_tree = parser.parse(text, None).expect("parse should be present");
+    let syntax_tree = parser
+        .parse(text, None)
+        .expect("invariant: tree-sitter parse cannot fail without a time limit");
 
     let mut cursor = syntax_tree.walk();
 
@@ -528,8 +532,10 @@ pub fn append_top_level_array_value_in_json_text(
     let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&tree_sitter_json::LANGUAGE.into())
-        .expect("value should be present");
-    let syntax_tree = parser.parse(text, None).expect("parse should be present");
+        .expect("invariant: tree-sitter JSON language is compatible");
+    let syntax_tree = parser
+        .parse(text, None)
+        .expect("invariant: tree-sitter parse cannot fail without a time limit");
 
     let mut cursor = syntax_tree.walk();
 
@@ -650,7 +656,7 @@ pub fn infer_json_indent_size(text: &str) -> usize {
     let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&tree_sitter_json::LANGUAGE.into())
-        .expect("value should be present");
+        .expect("invariant: tree-sitter JSON language is compatible");
 
     let Some(syntax_tree) = parser.parse(text, None) else {
         return 4;
@@ -750,8 +756,8 @@ pub fn to_pretty_json(
 
     value
         .serialize(&mut ser)
-        .expect("serialize should be present");
-    let text = String::from_utf8(output).expect("from_utf8 should be present");
+        .expect("invariant: serializing a JSON value cannot fail");
+    let text = String::from_utf8(output).expect("invariant: serde_json output is valid UTF-8");
 
     let mut adjusted_text = String::new();
     for (i, line) in text.split('\n').enumerate() {
@@ -2617,7 +2623,7 @@ mod tests {
         let key = "say \"hi\"";
         let input = format!(
             "{{{}: \"V\", \"theme\": \"One Dark\"}}",
-            serde_json::to_string(key).expect("serializing to JSON cannot fail")
+            serde_json::to_string(key).expect("invariant: serializing to JSON cannot fail")
         );
 
         let mut removed = input.clone();

@@ -735,7 +735,9 @@ pub(crate) async fn matches_to_multibuffer(
         if !still_current(cx) {
             return PopulateProjectSearch::SupersededByNewSearch;
         }
-        let (buffer, ranges) = by_buffer.remove(&buffer_id).expect("ranges inserted");
+        let Some((buffer, ranges)) = by_buffer.remove(&buffer_id) else {
+            continue;
+        };
         excerpts_added += ranges.len();
         let new_ranges = excerpts
             .update(cx, |excerpts, cx| {

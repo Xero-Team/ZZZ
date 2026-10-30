@@ -235,7 +235,7 @@ where
 
         let (mut drifting_element, mut rest_elements) =
             if sticky_anchor.drifting && !elements.is_empty() {
-                let last = elements.pop().expect("collection should not be empty");
+                let last = elements.pop().expect("invariant: elements is non-empty");
                 (Some(last), elements)
             } else {
                 (None, elements)

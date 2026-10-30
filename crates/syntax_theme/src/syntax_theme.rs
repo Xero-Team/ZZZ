@@ -223,7 +223,8 @@ mod bundled_themes {
     }
 
     fn load_theme(json: &str, theme_name: &str) -> Arc<SyntaxTheme> {
-        let theme_file: ThemeFile = serde_json::from_str(json).expect("failed to parse theme JSON");
+        let theme_file: ThemeFile =
+            serde_json::from_str(json).expect("invariant: bundled theme JSON parses");
         let theme_entry = theme_file
             .themes
             .iter()

@@ -476,7 +476,6 @@ impl RenderOnce for ThreadItem {
                                     Color::Custom(cx.theme().colors().icon_muted.opacity(0.5)),
                                 ),
                             )
-                            // .child(dot_separator())
                         })
                         .when(
                             has_project_name || has_project_paths || has_worktree,

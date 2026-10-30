@@ -486,7 +486,7 @@ pub(crate) fn gray() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn mauve() -> ColorScaleSet {
@@ -550,7 +550,7 @@ pub(crate) fn mauve() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn slate() -> ColorScaleSet {
@@ -614,7 +614,7 @@ pub(crate) fn slate() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn sage() -> ColorScaleSet {
@@ -678,7 +678,7 @@ pub(crate) fn sage() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn olive() -> ColorScaleSet {
@@ -742,7 +742,7 @@ pub(crate) fn olive() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn sand() -> ColorScaleSet {
@@ -806,7 +806,7 @@ pub(crate) fn sand() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn gold() -> ColorScaleSet {
@@ -870,7 +870,7 @@ pub(crate) fn gold() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn bronze() -> ColorScaleSet {
@@ -934,7 +934,7 @@ pub(crate) fn bronze() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn brown() -> ColorScaleSet {
@@ -998,7 +998,7 @@ pub(crate) fn brown() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn yellow() -> ColorScaleSet {
@@ -1062,7 +1062,7 @@ pub(crate) fn yellow() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn amber() -> ColorScaleSet {
@@ -1126,7 +1126,7 @@ pub(crate) fn amber() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn orange() -> ColorScaleSet {
@@ -1190,7 +1190,7 @@ pub(crate) fn orange() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn tomato() -> ColorScaleSet {
@@ -1254,7 +1254,7 @@ pub(crate) fn tomato() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn red() -> ColorScaleSet {
@@ -1318,7 +1318,7 @@ pub(crate) fn red() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn ruby() -> ColorScaleSet {
@@ -1382,7 +1382,7 @@ pub(crate) fn ruby() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn crimson() -> ColorScaleSet {
@@ -1446,7 +1446,7 @@ pub(crate) fn crimson() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn pink() -> ColorScaleSet {
@@ -1510,7 +1510,7 @@ pub(crate) fn pink() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn plum() -> ColorScaleSet {
@@ -1574,7 +1574,7 @@ pub(crate) fn plum() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn purple() -> ColorScaleSet {
@@ -1638,7 +1638,7 @@ pub(crate) fn purple() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn violet() -> ColorScaleSet {
@@ -1702,7 +1702,7 @@ pub(crate) fn violet() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn iris() -> ColorScaleSet {
@@ -1766,7 +1766,7 @@ pub(crate) fn iris() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn indigo() -> ColorScaleSet {
@@ -1830,7 +1830,7 @@ pub(crate) fn indigo() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn blue() -> ColorScaleSet {
@@ -1894,7 +1894,7 @@ pub(crate) fn blue() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn cyan() -> ColorScaleSet {
@@ -1958,7 +1958,7 @@ pub(crate) fn cyan() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn teal() -> ColorScaleSet {
@@ -2022,7 +2022,7 @@ pub(crate) fn teal() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn jade() -> ColorScaleSet {
@@ -2086,7 +2086,7 @@ pub(crate) fn jade() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn green() -> ColorScaleSet {
@@ -2150,7 +2150,7 @@ pub(crate) fn green() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn grass() -> ColorScaleSet {
@@ -2214,7 +2214,7 @@ pub(crate) fn grass() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn lime() -> ColorScaleSet {
@@ -2278,7 +2278,7 @@ pub(crate) fn lime() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn mint() -> ColorScaleSet {
@@ -2342,7 +2342,7 @@ pub(crate) fn mint() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn sky() -> ColorScaleSet {
@@ -2406,7 +2406,7 @@ pub(crate) fn sky() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn black() -> ColorScaleSet {
@@ -2470,7 +2470,7 @@ pub(crate) fn black() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }
 
 pub(crate) fn white() -> ColorScaleSet {
@@ -2534,5 +2534,5 @@ pub(crate) fn white() -> ColorScaleSet {
         ],
     }
     .try_into()
-    .expect("default color scales use valid color literals")
+    .expect("invariant: default color scales use valid color literals")
 }

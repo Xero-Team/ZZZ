@@ -19,9 +19,9 @@ use util::paths::{PathStyle, UrlExt};
 
 const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zzz://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
 
-const WIDE_CHAR_SPACERS: Flags =
-    Flags::from_bits(Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits())
-        .expect("value should be present");
+const WIDE_CHAR_SPACERS: Flags = Flags::from_bits_truncate(
+    Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits(),
+);
 
 pub(super) struct RegexSearches {
     url_regex: RegexSearch,
@@ -43,7 +43,7 @@ impl RegexSearches {
         path_hyperlink_timeout: Duration,
     ) -> Self {
         Self {
-            url_regex: RegexSearch::new(URL_REGEX).expect("value should be present"),
+            url_regex: RegexSearch::new(URL_REGEX).expect("invariant: URL_REGEX is a valid regex"),
             path_hyperlink_regexes: path_hyperlink_regexes
                 .into_iter()
                 .filter_map(|regex| {

@@ -146,7 +146,7 @@ where
                             .0
                             .items()
                             .first()
-                            .expect("collection should not be empty"),
+                            .expect("invariant: collection should not be empty"),
                     )
                 } else {
                     None
@@ -190,7 +190,7 @@ where
                             .0
                             .items()
                             .last()
-                            .expect("collection should not be empty"),
+                            .expect("invariant: collection should not be empty"),
                     )
                 } else {
                     None
@@ -264,7 +264,7 @@ where
             let entry = self
                 .stack
                 .last_mut()
-                .expect("collection should not be empty");
+                .expect("invariant: collection should not be empty");
             if !descending {
                 if entry.index() == 0 {
                     self.stack.pop();
@@ -332,7 +332,7 @@ where
                 let entry = self
                     .stack
                     .last_mut()
-                    .expect("collection should not be empty");
+                    .expect("invariant: collection should not be empty");
                 match entry.tree.0.as_ref() {
                     Node::Internal {
                         child_trees,
@@ -401,7 +401,7 @@ where
                 || self
                     .stack
                     .last()
-                    .expect("collection should not be empty")
+                    .expect("invariant: collection should not be empty")
                     .tree
                     .0
                     .is_leaf()
@@ -590,7 +590,7 @@ where
                 || self
                     .stack
                     .last()
-                    .expect("collection should not be empty")
+                    .expect("invariant: collection should not be empty")
                     .tree
                     .0
                     .is_leaf()

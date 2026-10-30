@@ -62,7 +62,7 @@ where
             .variants
             .iter()
             .position(|v| *v == self.current_value)
-            .expect("position should be present")];
+            .expect("invariant: current_value is one of variants")];
 
         let context_menu = window.use_keyed_state(current_value_label, cx, |window, cx| {
             ContextMenu::new(window, cx, move |mut menu, _, _| {

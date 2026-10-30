@@ -103,7 +103,7 @@ impl<K: Clone + Ord, V: Clone> TreeMap<K, V> {
             removed = Some(
                 cursor
                     .item()
-                    .expect("entry should be present")
+                    .expect("invariant: cursor item is present")
                     .value
                     .clone(),
             );
@@ -152,7 +152,10 @@ impl<K: Clone + Ord, V: Clone> TreeMap<K, V> {
         let mut new_tree = cursor.slice(&key, Bias::Left);
         let mut result = None;
         if key.cmp(&cursor.end(), ()) == Ordering::Equal {
-            let mut updated = cursor.item().expect("entry should be present").clone();
+            let mut updated = cursor
+                .item()
+                .expect("invariant: cursor item is present")
+                .clone();
             result = Some(f(&mut updated.value));
             new_tree.push(updated, ());
             cursor.next();

@@ -229,10 +229,8 @@ impl RenderOnce for IconButton {
 
         let icon_color = if is_disabled {
             Color::Disabled
-        } else if self.selected_style.is_some() && is_selected {
-            self.selected_style
-                .expect("selected_style should be present")
-                .into()
+        } else if let Some(selected_style) = self.selected_style.filter(|_| is_selected) {
+            selected_style.into()
         } else if is_selected {
             self.selected_icon_color.unwrap_or(Color::Selected)
         } else {

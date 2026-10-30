@@ -104,12 +104,11 @@ impl EditorconfigStore {
                                 .insert(rel_path.clone(), (content.to_owned(), None));
                             return Err(InvalidSettingsError::Editorconfig {
                                 message: e.to_string(),
-                                path: LocalSettingsPath::InWorktree(
-                                    rel_path.join(
-                                        RelPath::unix(EDITORCONFIG_NAME)
-                                            .expect("path should be a valid relative path"),
+                                path: LocalSettingsPath::InWorktree(rel_path.join(
+                                    RelPath::unix(EDITORCONFIG_NAME).expect(
+                                        "invariant: EDITORCONFIG_NAME is a valid relative path",
                                     ),
-                                ),
+                                )),
                             });
                         }
                     };

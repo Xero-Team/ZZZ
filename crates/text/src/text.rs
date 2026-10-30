@@ -47,8 +47,9 @@ use util::debug_panic;
 #[cfg(any(test, feature = "test-support"))]
 use util::RandomCharIter;
 
-static LINE_SEPARATORS_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\r\n|\r").expect("Failed to create LINE_SEPARATORS_REGEX"));
+static LINE_SEPARATORS_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\r\n|\r").expect("invariant: LINE_SEPARATORS_REGEX is a valid regex")
+});
 
 /// The maximum length of a single insertion operation.
 /// Fragments larger than this will be split into multiple smaller

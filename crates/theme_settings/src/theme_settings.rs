@@ -213,12 +213,15 @@ pub fn reload_icon_theme(cx: &mut App) {
 
 /// Loads the themes bundled with the ZZZ binary into the registry.
 pub fn load_bundled_themes(registry: &ThemeRegistry) {
-    let theme_paths = registry
-        .assets()
-        .list("themes/")
-        .expect("failed to list theme assets")
-        .into_iter()
-        .filter(|path| path.ends_with(".json"));
+    let theme_paths = match registry.assets().list("themes/") {
+        Ok(paths) => paths,
+        Err(error) => {
+            log::error!("failed to list theme assets: {error}");
+            return;
+        }
+    }
+    .into_iter()
+    .filter(|path| path.ends_with(".json"));
 
     for path in theme_paths {
         let Some(theme) = registry.assets().load(&path).log_err().flatten() else {

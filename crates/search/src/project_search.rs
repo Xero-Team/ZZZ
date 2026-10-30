@@ -2043,13 +2043,9 @@ impl ProjectSearchView {
 
     fn adjust_query_regex_language(&self, cx: &mut App) {
         let enable = self.search_options.contains(SearchOptions::REGEX);
-        let query_buffer = self
-            .query_editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .expect("query editor should be backed by a singleton buffer");
+        let Some(query_buffer) = self.query_editor.read(cx).buffer().read(cx).as_singleton() else {
+            return;
+        };
         if enable {
             if let Some(regex_language) = self.regex_language.clone() {
                 query_buffer.update(cx, |query_buffer, cx| {

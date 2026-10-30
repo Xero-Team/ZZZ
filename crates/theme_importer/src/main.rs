@@ -84,7 +84,7 @@ fn main() -> Result<()> {
         TerminalMode::Stderr,
         ColorChoice::Auto,
     )
-    .expect("could not initialize logger");
+    .context("could not initialize logger")?;
 
     let theme_file_path = args.theme_path;
 

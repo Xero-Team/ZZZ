@@ -67,11 +67,8 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
                                 feature_map.insert(key, u32::from(enable));
                             }
                             FeatureValue::Number(value) => {
-                                if value.is_u64() {
-                                    feature_map.insert(
-                                        key,
-                                        value.as_u64().expect("as_u64 should be present") as u32,
-                                    );
+                                if let Some(value) = value.as_u64() {
+                                    feature_map.insert(key, value as u32);
                                 } else {
                                     log::error!(
                                         "Incorrect font feature value {} for feature tag {}",

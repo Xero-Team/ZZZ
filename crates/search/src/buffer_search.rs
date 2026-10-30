@@ -535,9 +535,14 @@ impl Render for BufferSearchBar {
             .w_full()
             .gap_2()
             .when(find_in_results, |el| el.child(alignment_element()))
-            .when(!find_in_results && has_collapse_button, |el| {
-                el.pl_0p5().child(collapse_expand_button.expect("button"))
-            })
+            .when_some(
+                if find_in_results {
+                    None
+                } else {
+                    collapse_expand_button
+                },
+                |el, collapse_expand_button| el.pl_0p5().child(collapse_expand_button),
+            )
             .child(query_column)
             .child(mode_column);
 
@@ -925,16 +930,11 @@ impl BufferSearchBar {
 
         let search_options = SearchOptions::from_settings(&EditorSettings::get_global(cx).search);
         if let Some(languages) = languages {
-            let query_buffer = query_editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("query editor should be backed by a singleton buffer");
-
-            query_buffer
-                .read(cx)
-                .set_language_registry(languages.clone());
+            if let Some(query_buffer) = query_editor.read(cx).buffer().read(cx).as_singleton() {
+                query_buffer
+                    .read(cx)
+                    .set_language_registry(languages.clone());
+            }
 
             cx.spawn(async move |buffer_search_bar, cx| {
                 use anyhow::Context as _;
@@ -1157,8 +1157,9 @@ impl BufferSearchBar {
 
     fn toggle_fold_all_in_item(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(item) = &self.active_searchable_item {
-            if let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx) {
-                let editor = item.downcast::<Editor>().expect("Is an editor");
+            if let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx)
+                && let Ok(editor) = item.downcast::<Editor>()
+            {
                 editor.update(cx, |editor, cx| {
                     let is_collapsed = editor.has_any_buffer_folded(cx);
                     if is_collapsed {
@@ -1251,10 +1252,10 @@ impl BufferSearchBar {
     }
 
     pub fn set_replacement(&mut self, replacement: Option<&str>, cx: &mut Context<Self>) {
-        if replacement.is_none() {
+        let Some(replacement) = replacement else {
             self.replace_enabled = false;
             return;
-        }
+        };
         self.replace_enabled = true;
         self.replacement_editor
             .update(cx, |replacement_editor, cx| {
@@ -1263,10 +1264,7 @@ impl BufferSearchBar {
                     .update(cx, |replacement_buffer, cx| {
                         let len = replacement_buffer.len(cx);
                         replacement_buffer.edit(
-                            [(
-                                MultiBufferOffset(0)..len,
-                                replacement.expect("value should be present"),
-                            )],
+                            [(MultiBufferOffset(0)..len, replacement)],
                             None,
                             cx,
                         );
@@ -1655,7 +1653,9 @@ impl BufferSearchBar {
             self.query_error = None;
             if query.is_empty() {
                 self.clear_active_searchable_item_matches(window, cx);
-                let _ = done_tx.send(());
+                if done_tx.send(()).is_err() {
+                    // The receiver was already dropped, so there is nobody to notify.
+                }
                 cx.notify();
             } else {
                 let query: Arc<_> = if let Some(search) =
@@ -1732,11 +1732,11 @@ impl BufferSearchBar {
                                 this.search_history
                                     .add(&mut this.search_history_cursor, query_text);
                             }
-                            if !this.dismissed {
-                                let (matches, token) = this
+                            if !this.dismissed
+                                && let Some((matches, token)) = this
                                     .searchable_items_with_matches
                                     .get(&active_searchable_item.downgrade())
-                                    .expect("entry should be present");
+                            {
                                 if matches.is_empty() {
                                     active_searchable_item.clear_matches(window, cx);
                                 } else {
@@ -1749,7 +1749,9 @@ impl BufferSearchBar {
                                     );
                                 }
                             }
-                            let _ = done_tx.send(());
+                            if done_tx.send(()).is_err() {
+                                // The receiver was already dropped, so there is nobody to notify.
+                            }
                             cx.notify();
                         }
                     })
@@ -1973,13 +1975,9 @@ impl BufferSearchBar {
 
     fn adjust_query_regex_language(&self, cx: &mut App) {
         let enable = self.search_options.contains(SearchOptions::REGEX);
-        let query_buffer = self
-            .query_editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .expect("query editor should be backed by a singleton buffer");
+        let Some(query_buffer) = self.query_editor.read(cx).buffer().read(cx).as_singleton() else {
+            return;
+        };
 
         if enable {
             if let Some(regex_language) = self.regex_language.clone() {

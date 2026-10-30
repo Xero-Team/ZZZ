@@ -274,12 +274,10 @@ impl KeymapFile {
             let mut section_errors = String::new();
 
             if !unrecognized_fields.is_empty() {
-                write!(
-                    section_errors,
+                section_errors.push_str(&format!(
                     "\n\n - Unrecognized fields: {}",
                     MarkdownInlineCode(&format!("{:?}", unrecognized_fields.keys()))
-                )
-                .expect("value should be present");
+                ));
             }
 
             if let Some(unbind) = unbind {
@@ -297,21 +295,16 @@ impl KeymapFile {
                         }
                         Err(err) => {
                             let mut lines = err.lines();
-                            let mut indented_err = lines
-                                .next()
-                                .expect("iterator should yield an item")
-                                .to_owned();
+                            let mut indented_err = lines.next().unwrap_or_default().to_owned();
                             for line in lines {
                                 indented_err.push_str("  ");
                                 indented_err.push_str(line);
                                 indented_err.push_str("\n");
                             }
-                            write!(
-                                section_errors,
+                            section_errors.push_str(&format!(
                                 "\n\n- In unbind {}, {indented_err}",
                                 MarkdownInlineCode(&format!("\"{}\"", keystrokes))
-                            )
-                            .expect("value should be present");
+                            ));
                         }
                     }
                 }
@@ -332,21 +325,16 @@ impl KeymapFile {
                         }
                         Err(err) => {
                             let mut lines = err.lines();
-                            let mut indented_err = lines
-                                .next()
-                                .expect("iterator should yield an item")
-                                .to_owned();
+                            let mut indented_err = lines.next().unwrap_or_default().to_owned();
                             for line in lines {
                                 indented_err.push_str("  ");
                                 indented_err.push_str(line);
                                 indented_err.push_str("\n");
                             }
-                            write!(
-                                section_errors,
+                            section_errors.push_str(&format!(
                                 "\n\n- In binding {}, {indented_err}",
                                 MarkdownInlineCode(&format!("\"{}\"", keystrokes))
-                            )
-                            .expect("value should be present");
+                            ));
                         }
                     }
                 }

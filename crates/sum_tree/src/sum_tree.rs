@@ -290,7 +290,8 @@ impl<T: Item> SumTree<T> {
                     child_summaries,
                     child_trees,
                     ..
-                } = Arc::get_mut(&mut parent_node.0).expect("get_mut should be present")
+                } = Arc::get_mut(&mut parent_node.0)
+                    .expect("invariant: node is uniquely owned while building")
                 else {
                     unreachable!()
                 };
@@ -311,7 +312,9 @@ impl<T: Item> SumTree<T> {
             Self::new(cx)
         } else {
             debug_assert_eq!(nodes.len(), 1);
-            nodes.pop().expect("collection should not be empty")
+            nodes
+                .pop()
+                .expect("invariant: collection should not be empty")
         }
     }
 
@@ -373,7 +376,9 @@ impl<T: Item> SumTree<T> {
             Self::new(cx)
         } else {
             debug_assert_eq!(nodes.len(), 1);
-            nodes.pop().expect("collection should not be empty")
+            nodes
+                .pop()
+                .expect("invariant: collection should not be empty")
         }
     }
 
@@ -662,13 +667,13 @@ impl<T: Item> SumTree<T> {
             } => {
                 let last_summary = child_summaries
                     .last_mut()
-                    .expect("collection should not be empty");
+                    .expect("invariant: collection should not be empty");
                 let last_child = child_trees
                     .last_mut()
-                    .expect("collection should not be empty");
+                    .expect("invariant: collection should not be empty");
                 *last_summary = last_child
                     .update_last_recursive(f, cx)
-                    .expect("update_last_recursive should be present");
+                    .expect("invariant: children are present after push");
                 *summary = sum(child_summaries.iter(), cx);
                 Some(summary.clone())
             }
@@ -712,13 +717,13 @@ impl<T: Item> SumTree<T> {
             } => {
                 let first_summary = child_summaries
                     .first_mut()
-                    .expect("collection should not be empty");
+                    .expect("invariant: collection should not be empty");
                 let first_child = child_trees
                     .first_mut()
-                    .expect("collection should not be empty");
+                    .expect("invariant: collection should not be empty");
                 *first_summary = first_child
                     .update_first_recursive(f, cx)
-                    .expect("update_first_recursive should be present");
+                    .expect("invariant: children are present after push");
                 *summary = sum(child_summaries.iter(), cx);
                 Some(summary.clone())
             }
@@ -844,13 +849,13 @@ impl<T: Item> SumTree<T> {
                 } else {
                     let tree_to_append = child_trees
                         .last_mut()
-                        .expect("collection should not be empty")
+                        .expect("invariant: collection should not be empty")
                         .push_tree_recursive(other, cx);
                     *child_summaries
                         .last_mut()
-                        .expect("collection should not be empty") = child_trees
+                        .expect("invariant: collection should not be empty") = child_trees
                         .last()
-                        .expect("collection should not be empty")
+                        .expect("invariant: collection should not be empty")
                         .0
                         .summary()
                         .clone();
@@ -973,11 +978,11 @@ impl<T: Item> SumTree<T> {
 
             let first = child_trees
                 .first_mut()
-                .expect("collection should not be empty");
+                .expect("invariant: collection should not be empty");
             let res = Self::append_large(small, first, cx);
             *child_summaries
                 .first_mut()
-                .expect("collection should not be empty") = first.summary().clone();
+                .expect("invariant: collection should not be empty") = first.summary().clone();
             if let Some(tree) = res {
                 if child_trees.len() < 2 * TREE_BASE {
                     child_summaries
@@ -1157,7 +1162,7 @@ impl<T: Item> SumTree<T> {
                 ref child_trees, ..
             } => child_trees
                 .first()
-                .expect("collection should not be empty")
+                .expect("invariant: collection should not be empty")
                 .leftmost_leaf(),
         }
     }
@@ -1169,7 +1174,7 @@ impl<T: Item> SumTree<T> {
                 ref child_trees, ..
             } => child_trees
                 .last()
-                .expect("collection should not be empty")
+                .expect("invariant: collection should not be empty")
                 .rightmost_leaf(),
         }
     }

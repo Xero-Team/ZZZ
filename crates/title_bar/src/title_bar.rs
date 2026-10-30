@@ -397,7 +397,7 @@ impl TitleBar {
                 &workspace
                     .weak_handle()
                     .upgrade()
-                    .expect("entity should be alive"),
+                    .expect("invariant: workspace is alive while constructing its title bar"),
                 |_, _, cx| cx.notify(),
             ),
         );

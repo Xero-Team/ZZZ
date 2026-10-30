@@ -511,7 +511,7 @@ impl SettingsStore {
                 ..Default::default()
             })
             .expect("serializing to JSON cannot fail");
-            _ = this.set_user_settings(&new_text, cx);
+            this.set_user_settings(&new_text, cx).result().log_err();
         }
         trail(self, content, cx);
     }
@@ -577,7 +577,9 @@ impl SettingsStore {
                         Err(e) => Err(anyhow::anyhow!("{:?}", e)),
                     };
 
-                    _ = tx.send(new_res);
+                    if tx.send(new_res).is_err() {
+                        log::debug!("settings update completion receiver was dropped");
+                    }
                     res
                 }
                 .boxed_local()
@@ -592,7 +594,7 @@ impl SettingsStore {
         fs: Arc<dyn Fs>,
         update: impl 'static + Send + FnOnce(&mut SettingsContent, &App),
     ) {
-        _ = self.update_settings_file_with_completion(fs, update);
+        drop(self.update_settings_file_with_completion(fs, update));
     }
 
     pub fn update_settings_file_with_completion(
@@ -1067,7 +1069,10 @@ impl SettingsStore {
                 return Err(InvalidSettingsError::Tasks {
                     message: "Attempted to submit tasks into the settings store".to_owned(),
                     path: directory_path
-                        .join(RelPath::unix(task_file_name()).expect("value should be present"))
+                        .join(
+                            RelPath::unix(task_file_name())
+                                .expect("invariant: task file name is a valid relative path"),
+                        )
                         .as_std_path()
                         .to_path_buf(),
                 });
@@ -1077,7 +1082,10 @@ impl SettingsStore {
                     message: "Attempted to submit debugger config into the settings store"
                         .to_owned(),
                     path: directory_path
-                        .join(RelPath::unix(task_file_name()).expect("value should be present"))
+                        .join(
+                            RelPath::unix(task_file_name())
+                                .expect("invariant: task file name is a valid relative path"),
+                        )
                         .as_std_path()
                         .to_path_buf(),
                 });

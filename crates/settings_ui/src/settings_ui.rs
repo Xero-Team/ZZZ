@@ -332,7 +332,7 @@ impl SettingFieldRenderer {
                         .as_ref()
                         .as_any()
                         .downcast_ref::<SettingField<T>>()
-                        .expect("downcast should succeed");
+                        .expect("invariant: registered setting field has the requested type");
                     renderer(
                         settings_window,
                         item,
@@ -1164,7 +1164,7 @@ impl SettingsPageItem {
 
                 if rendered_ok {
                     let discriminant =
-                        discriminant.expect("This should be Some if rendered_ok is true");
+                        discriminant.expect("invariant: rendered_ok implies a discriminant");
                     let sub_fields = &fields[discriminant];
                     let sub_field_count = sub_fields.len();
 
@@ -3080,7 +3080,7 @@ impl SettingsWindow {
         } else {
             let entry_item_index = self.navbar_entries[navbar_entry_index]
                 .item_index
-                .expect("Non-root items should have an item index");
+                .expect("invariant: non-root navbar entries have an item index");
             self.scroll_to_content_item(entry_item_index, window, cx);
             if focus_content {
                 handle_to_focus = Some(self.focus_handle_for_content_element(entry_item_index, cx));

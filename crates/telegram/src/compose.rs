@@ -234,7 +234,9 @@ fn flush_album(album: &mut Vec<AlbumItem>, items: &mut Vec<OutgoingItem>) {
     match album.len() {
         0 => {}
         1 => {
-            let only = album.pop().expect("checked length");
+            let only = album
+                .pop()
+                .expect("invariant: album length was checked to be one");
             items.push(OutgoingItem::Media {
                 attachment: only.attachment,
                 caption: only.caption,

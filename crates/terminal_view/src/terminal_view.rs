@@ -671,7 +671,8 @@ impl TerminalView {
         {
             self.terminal.update(cx, |term, cx| {
                 term.try_keystroke(
-                    &Keystroke::parse("ctrl-cmd-space").expect("parse should be present"),
+                    &Keystroke::parse("ctrl-cmd-space")
+                        .expect("invariant: ctrl-cmd-space is a valid keystroke"),
                     TerminalSettings::get_global(cx).option_as_meta,
                 )
             });

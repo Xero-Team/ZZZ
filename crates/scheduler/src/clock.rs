@@ -20,7 +20,7 @@ impl TestClock {
     pub fn new() -> Self {
         const START_TIME: &str = "2025-07-01T23:59:58-00:00";
         let utc_now = DateTime::parse_from_rfc3339(START_TIME)
-            .expect("START_TIME is a valid RFC 3339 timestamp")
+            .expect("invariant: START_TIME is a valid RFC 3339 timestamp")
             .to_utc();
         Self(Mutex::new(TestClockState {
             now: Instant::now(),

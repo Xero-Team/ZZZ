@@ -69,7 +69,9 @@ impl ForegroundExecutor {
         self.scheduler
             .block(Some(self.session_id), future.as_mut(), None);
 
-        output.take().expect("block_on future did not complete")
+        output
+            .take()
+            .expect("invariant: scheduler block runs the future to completion")
     }
 
     /// Block until the future completes or timeout occurs.
@@ -304,9 +306,10 @@ impl<T> Future for Task<T> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         match unsafe { self.get_unchecked_mut() } {
-            Task(TaskState::Ready(val)) => {
-                Poll::Ready(val.take().expect("entry should be present"))
-            }
+            Task(TaskState::Ready(val)) => Poll::Ready(
+                val.take()
+                    .expect("invariant: a Ready task still holds its output"),
+            ),
             Task(TaskState::Spawned(task)) => Pin::new(task).poll(cx),
         }
     }

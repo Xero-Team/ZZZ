@@ -103,7 +103,7 @@ pub enum SearchSource<'a, 'b> {
 
 impl SearchOption {
     pub fn as_options(&self) -> SearchOptions {
-        SearchOptions::from_bits(1 << *self as u8).expect("from_bits should be present")
+        SearchOptions::from_bits_truncate(1 << *self as u8)
     }
 
     pub fn label(&self, cx: &App) -> SharedString {
