@@ -5375,6 +5375,39 @@ fn test_newline_below_multibuffer(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn test_set_text_on_multibuffer_is_a_noop(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+
+    let buffer_1 = cx.new(|cx| Buffer::local("aaa", cx));
+    let buffer_2 = cx.new(|cx| Buffer::local("bbb", cx));
+    let multibuffer = cx.new(|cx| {
+        let mut multibuffer = MultiBuffer::new(ReadWrite);
+        multibuffer.set_excerpts_for_path(
+            PathKey::sorted(0),
+            buffer_1,
+            [Point::new(0, 0)..Point::new(0, 3)],
+            0,
+            cx,
+        );
+        multibuffer.set_excerpts_for_path(
+            PathKey::sorted(1),
+            buffer_2,
+            [Point::new(0, 0)..Point::new(0, 3)],
+            0,
+            cx,
+        );
+        multibuffer
+    });
+
+    cx.add_window(|window, cx| {
+        let mut editor = build_editor(multibuffer, window, cx);
+        editor.set_text("replacement", window, cx);
+        assert_eq!(editor.text(cx), "aaa\nbbb");
+        editor
+    });
+}
+
+#[gpui::test]
 async fn test_newline_below_with_cursor_on_deleted_hunk(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
     let mut cx = EditorTestContext::new(cx).await;

@@ -78,8 +78,7 @@ use std::{
     borrow::Cow,
     cell::Cell,
     cmp::{self, Ordering},
-    fmt::{self, Write},
-    iter, mem,
+    fmt, iter, mem,
     ops::Range,
     path,
     rc::Rc,
@@ -1285,7 +1284,10 @@ impl EditorElement {
             let em_width = window
                 .text_system()
                 .em_width(font_id, font_size)
-                .expect("em_width should be present");
+                .unwrap_or_else(|error| {
+                    log::warn!("Failed to measure editor em width: {error}");
+                    font_size
+                });
 
             let scroll_margin_x = EditorSettings::get_global(cx).horizontal_scroll_margin;
 
@@ -3641,7 +3643,7 @@ impl EditorElement {
                 }
 
                 let number = relative_number.unwrap_or(&non_relative_number);
-                write!(&mut line_number, "{number}").expect("value should be present");
+                line_number.push_str(&number.to_string());
 
                 let spec = active_rows.get(&display_row);
                 let color = LineNumberStyle::new(
@@ -4072,7 +4074,7 @@ impl EditorElement {
                         ))
                     };
 
-                let anchor_x = x_position.expect("value should be present").0;
+                let anchor_x = x_position?.0;
 
                 let selected = selections
                     .binary_search_by(|selection| {
@@ -4957,9 +4959,11 @@ impl EditorElement {
                     } else {
                         height - height_above_menu
                     };
-                    let mut element = self
-                        .render_context_menu(line_height, menu_height, window, cx)
-                        .expect("Visible context menu should always render.");
+                    let Some(mut element) =
+                        self.render_context_menu(line_height, menu_height, window, cx)
+                    else {
+                        return Vec::new();
+                    };
                     let size = element.layout_as_root(AvailableSpace::min_size(), window, cx);
                     Some((CursorPopoverType::CodeContextMenu, element, size))
                 } else {
@@ -5102,9 +5106,10 @@ impl EditorElement {
             window,
             cx,
             move |height, _max_width_for_stable_x, _, window, cx| {
-                let mut element = self
-                    .render_context_menu(line_height, height, window, cx)
-                    .expect("Visible context menu should always render.");
+                let Some(mut element) = self.render_context_menu(line_height, height, window, cx)
+                else {
+                    return Vec::new();
+                };
                 let size = element.layout_as_root(AvailableSpace::min_size(), window, cx);
                 vec![(CursorPopoverType::CodeContextMenu, element, size)]
             },
@@ -6047,7 +6052,9 @@ impl EditorElement {
                                 && has_selection.selection == contains_non_empty_selection.selection
                         })
                     {
-                        active_rows.next().expect("iterator should yield an item");
+                        if active_rows.next().is_none() {
+                            break;
+                        }
                         end_row += 1;
                     }
 
@@ -6911,13 +6918,11 @@ impl EditorElement {
         }
 
         let text_bounds = layout.position_map.text_hitbox.bounds;
-        let border_top = text_bounds.top()
-            + sticky_headers
-                .lines
-                .last()
-                .expect("collection should not be empty")
-                .offset
-            + layout.position_map.line_height;
+        let last_header_offset = sticky_headers
+            .lines
+            .last()
+            .map_or(Pixels::ZERO, |line| line.offset);
+        let border_top = text_bounds.top() + last_header_offset + layout.position_map.line_height;
         let separator_height = px(1.);
         let border_bounds = window.pixel_snap_bounds(Bounds::from_corners(
             point(layout.gutter_hitbox.bounds.left(), border_top),
@@ -9892,11 +9897,17 @@ impl EditorElement {
         let em_width = window
             .text_system()
             .em_width(font_id, font_size)
-            .expect("em_width should be present");
+            .unwrap_or_else(|error| {
+                log::warn!("Failed to measure editor em width: {error}");
+                font_size
+            });
         let em_advance = window
             .text_system()
             .em_advance(font_id, font_size)
-            .expect("em_advance should be present");
+            .unwrap_or_else(|error| {
+                log::warn!("Failed to measure editor em advance: {error}");
+                font_size
+            });
         let em_layout_width = window.text_system().em_layout_width(font_id, font_size);
         let glyph_grid_cell = size(em_advance, line_height);
 
@@ -12937,8 +12948,12 @@ impl HighlightedRange {
             return;
         }
 
-        let first_line = lines.first().expect("collection should not be empty");
-        let last_line = lines.last().expect("collection should not be empty");
+        let Some(first_line) = lines.first() else {
+            return;
+        };
+        let Some(last_line) = lines.last() else {
+            return;
+        };
 
         let first_top_left = point(first_line.start_x, start_y);
         let first_top_right = point(first_line.end_x, start_y);
@@ -12974,7 +12989,7 @@ impl HighlightedRange {
                 match next_top_right
                     .x
                     .partial_cmp(&bottom_right.x)
-                    .expect("partial_cmp should be present")
+                    .unwrap_or(Ordering::Equal)
                 {
                     Ordering::Equal => {
                         builder.line_to(bottom_right);
@@ -13134,20 +13149,20 @@ fn compute_auto_height_layout(
         return Some(size(width, height));
     }
 
-    let style = editor
-        .style
-        .as_ref()
-        .expect("value should have the expected type");
+    let style = editor.style(cx).clone();
     let font_id = window.text_system().resolve_font(&style.text.font());
     let font_size = style.text.font_size.to_pixels(window.rem_size());
     let line_height = style.text.line_height_in_pixels(window.rem_size());
     let em_width = window
         .text_system()
         .em_width(font_id, font_size)
-        .expect("em_width should be present");
+        .unwrap_or_else(|error| {
+            log::warn!("Failed to measure editor em width: {error}");
+            font_size
+        });
 
     let mut snapshot = editor.snapshot(window, cx);
-    let gutter_dimensions = snapshot.gutter_dimensions(font_id, font_size, style, window, cx);
+    let gutter_dimensions = snapshot.gutter_dimensions(font_id, font_size, &style, window, cx);
 
     editor.gutter_dimensions = gutter_dimensions;
     let text_width = width - gutter_dimensions.width;

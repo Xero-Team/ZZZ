@@ -116,7 +116,13 @@ impl DevelopmentCredentialsProvider {
     }
 
     fn load_credentials(&self) -> Result<HashMap<String, (String, Vec<u8>)>> {
-        let json = std::fs::read(&self.path)?;
+        let json = match std::fs::read(&self.path) {
+            Ok(json) => json,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(HashMap::new());
+            }
+            Err(error) => return Err(error.into()),
+        };
         let credentials: HashMap<String, (String, Vec<u8>)> = serde_json::from_slice(&json)?;
 
         Ok(credentials)
@@ -129,15 +135,12 @@ impl DevelopmentCredentialsProvider {
         Ok(())
     }
 
-    fn read_stored_credential(&self, url: &str) -> Option<(String, Vec<u8>)> {
-        self.load_credentials()
-            .unwrap_or_default()
-            .get(url)
-            .cloned()
+    fn read_stored_credential(&self, url: &str) -> Result<Option<(String, Vec<u8>)>> {
+        Ok(self.load_credentials()?.get(url).cloned())
     }
 
     fn write_stored_credential(&self, url: &str, username: &str, password: &[u8]) -> Result<()> {
-        let mut credentials = self.load_credentials().unwrap_or_default();
+        let mut credentials = self.load_credentials()?;
         credentials.insert(url.to_owned(), (username.to_owned(), password.to_vec()));
 
         self.save_credentials(&credentials)
@@ -157,7 +160,7 @@ impl CredentialsProvider for DevelopmentCredentialsProvider {
         url: &'a str,
         _cx: &'a AsyncApp,
     ) -> Pin<Box<dyn Future<Output = Result<Option<(String, Vec<u8>)>>> + 'a>> {
-        async move { Ok(self.read_stored_credential(url)) }.boxed_local()
+        async move { self.read_stored_credential(url) }.boxed_local()
     }
 
     fn write_credentials<'a>(
@@ -215,19 +218,23 @@ mod tests {
     }
 
     #[test]
-    fn read_stored_credential_returns_none_for_missing_and_invalid_files() {
+    fn read_stored_credential_returns_none_for_missing_files_and_errors_for_invalid_files() {
         let (provider, _temp_dir) = provider_in_tempdir();
 
         assert_eq!(
-            provider.read_stored_credential("http://127.0.0.1:7331"),
+            provider
+                .read_stored_credential("http://127.0.0.1:7331")
+                .expect("missing credentials should not be an error"),
             None
         );
 
         std::fs::write(&provider.path, "{not json").unwrap();
 
-        assert_eq!(
-            provider.read_stored_credential("http://127.0.0.1:7331"),
-            None
+        assert!(
+            provider
+                .read_stored_credential("http://127.0.0.1:7331")
+                .is_err(),
+            "invalid credential files should be reported instead of treated as empty"
         );
     }
 
@@ -246,11 +253,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            provider.read_stored_credential("http://127.0.0.1:7331"),
+            provider
+                .read_stored_credential("http://127.0.0.1:7331")
+                .expect("stored credentials should load"),
             Some(("updated".to_string(), b"new-secret".to_vec()))
         );
         assert_eq!(
-            provider.read_stored_credential("https://example.com"),
+            provider
+                .read_stored_credential("https://example.com")
+                .expect("stored credentials should load"),
             Some(("other".to_string(), b"token".to_vec()))
         );
 
@@ -259,11 +270,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            provider.read_stored_credential("http://127.0.0.1:7331"),
+            provider
+                .read_stored_credential("http://127.0.0.1:7331")
+                .expect("stored credentials should load"),
             None
         );
         assert_eq!(
-            provider.read_stored_credential("https://example.com"),
+            provider
+                .read_stored_credential("https://example.com")
+                .expect("stored credentials should load"),
             Some(("other".to_string(), b"token".to_vec()))
         );
     }

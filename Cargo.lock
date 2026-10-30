@@ -308,6 +308,7 @@ dependencies = [
  "serde_json",
  "settings",
  "shell_command_parser",
+ "shlex 2.0.1",
  "sqlez",
  "task",
  "tempfile",
@@ -3378,7 +3379,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui",
- "serde",
 ]
 
 [[package]]
@@ -4930,6 +4930,7 @@ dependencies = [
 name = "eval_utils"
 version = "0.1.0"
 dependencies = [
+ "futures 0.3.34",
  "gpui_platform",
  "serde",
  "smol",
@@ -11670,6 +11671,7 @@ dependencies = [
  "vfs",
  "workspace",
  "zpdf",
+ "zpdf-writer",
 ]
 
 [[package]]
@@ -16998,6 +17000,7 @@ dependencies = [
  "futures 0.3.34",
  "gpui",
  "i18n",
+ "log",
  "paths",
  "project",
  "project_panel",

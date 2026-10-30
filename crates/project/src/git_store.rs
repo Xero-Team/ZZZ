@@ -4671,13 +4671,21 @@ impl RepositorySnapshot {
         Self::abs_path_to_repo_path_inner(&self.work_directory_abs_path, abs_path, self.path_style)
     }
 
-    pub fn repo_path_to_abs_path(&self, repo_path: &RepoPath) -> PathBuf {
+    pub fn repo_path_to_abs_path(&self, repo_path: &RepoPath) -> anyhow::Result<PathBuf> {
+        if self.path_style == PathStyle::local() {
+            let repo_path = repo_path.as_std_path();
+            if repo_path == Path::new(".") {
+                return Ok(self.work_directory_abs_path.as_ref().to_path_buf());
+            }
+            return Ok(self.work_directory_abs_path.join(repo_path));
+        }
+
         let repo_path = repo_path.display(self.path_style);
-        PathBuf::from(
-            self.path_style
-                .join(&self.work_directory_abs_path, repo_path.as_ref())
-                .expect("value should be present"),
-        )
+        let path = self
+            .path_style
+            .join(&self.work_directory_abs_path, repo_path.as_ref())
+            .context("repository work directory or path is not representable as Unicode")?;
+        Ok(PathBuf::from(path))
     }
 
     #[inline]
@@ -5302,7 +5310,7 @@ impl Repository {
     pub fn repo_path_to_project_path(&self, path: &RepoPath, cx: &App) -> Option<ProjectPath> {
         let git_store = self.git_store.upgrade()?;
         let worktree_store = git_store.read(cx).worktree_store.read(cx);
-        let abs_path = self.snapshot.repo_path_to_abs_path(path);
+        let abs_path = self.snapshot.repo_path_to_abs_path(path).ok()?;
         let abs_path = SanitizedPath::new(&abs_path);
         let (worktree, relative_path) = worktree_store.find_worktree(abs_path, cx)?;
         Some(ProjectPath {
@@ -7233,6 +7241,7 @@ impl Repository {
                         environment,
                         ..
                     }) => {
+                        let abs_path = abs_path?;
                         let executable = match fs.metadata(&abs_path).await {
                             Ok(Some(meta)) => meta.is_executable,
                             Ok(None) => false,
@@ -9791,6 +9800,31 @@ mod tests {
             path
         );
         assert!(repo_path_from_proto(None).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn git_local_repo_paths_keep_non_unicode_work_directories() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+
+        let work_directory = PathBuf::from(OsString::from_vec(b"/repo/worktree-\xff".to_vec()));
+        let snapshot = RepositorySnapshot::empty(
+            RepositoryId(1),
+            Arc::from(work_directory),
+            None,
+            None,
+            None,
+            PathStyle::local(),
+        );
+
+        let abs_path = snapshot
+            .repo_path_to_abs_path(&repo_path("src/main.rs"))
+            .expect("local repository paths should not require Unicode");
+        assert_eq!(
+            abs_path.as_os_str().as_bytes(),
+            b"/repo/worktree-\xff/src/main.rs"
+        );
     }
 
     #[cfg(unix)]

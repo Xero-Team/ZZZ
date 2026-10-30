@@ -501,12 +501,19 @@ impl LocalLspStore {
             {
                 return None;
             }
-            let adapter = self
+            let Some(adapter) = self
                 .languages
                 .lsp_adapters(language_name)
                 .into_iter()
                 .find(|adapter| adapter.name() == disposition.server_name)
-                .expect("To find LSP adapter");
+            else {
+                log::warn!(
+                    "no language server adapter named {} is registered for {}",
+                    disposition.server_name.0,
+                    language_name
+                );
+                return None;
+            };
             let new_language_server_id = self.start_language_server(
                 worktree_handle,
                 delegate,
@@ -2010,9 +2017,11 @@ impl LocalLspStore {
                 let prettier = lsp_store.read_with(cx, |lsp_store, _cx| {
                     lsp_store
                         .prettier_store()
-                        .expect("prettier_store should be present")
-                        .downgrade()
+                        .map(|prettier_store| prettier_store.downgrade())
                 })?;
+                let Some(prettier) = prettier else {
+                    anyhow::bail!("prettier store is unavailable");
+                };
                 let diff = prettier_store::format_with_prettier(
                     &prettier,
                     &buffer.handle,

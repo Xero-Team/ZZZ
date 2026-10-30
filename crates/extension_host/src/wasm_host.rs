@@ -1023,7 +1023,7 @@ mod tests {
             cx.set_global(store);
             release_channel::init(semver::Version::new(0, 0, 0), cx);
             extension::init(cx);
-            gpui_tokio::init(cx);
+            gpui_tokio::init(cx).expect("test environment should initialize Tokio");
         });
     }
 

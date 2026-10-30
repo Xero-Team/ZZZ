@@ -1,23 +1,25 @@
 use std::{
     io::{Error, ErrorKind, Result},
     path::Path,
-    sync::Once,
+    sync::OnceLock,
 };
 
 use windows::Win32::Networking::WinSock::{
     ADDRESS_FAMILY, AF_UNIX, SOCKADDR_UN, SOCKET_ERROR, WSAGetLastError, WSAStartup,
 };
 
-pub(crate) fn init() {
-    static ONCE: Once = Once::new();
+pub(crate) fn init() -> Result<()> {
+    static STARTUP_ERROR_CODE: OnceLock<i32> = OnceLock::new();
 
-    ONCE.call_once(|| unsafe {
+    let error_code = *STARTUP_ERROR_CODE.get_or_init(|| unsafe {
         let mut wsa_data = std::mem::zeroed();
-        let result = WSAStartup(0x202, &mut wsa_data);
-        if result != 0 {
-            panic!("WSAStartup failed: {}", result);
-        }
+        WSAStartup(0x202, &mut wsa_data)
     });
+    if error_code == 0 {
+        Ok(())
+    } else {
+        Err(Error::from_raw_os_error(error_code))
+    }
 }
 
 // https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/

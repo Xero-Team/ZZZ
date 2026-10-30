@@ -398,9 +398,10 @@ impl PickerDelegate for TemplatePickerDelegate {
         _window: &mut Window,
         _cx: &mut Context<picker::Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let Some(template_entry) = self.candidate_templates.get(self.matching_indices[ix]) else {
-            return None;
-        };
+        let template_entry = self
+            .matching_indices
+            .get(ix)
+            .and_then(|index| self.candidate_templates.get(*index))?;
         Some(
             ListItem::new("li-template-match")
                 .inset(true)
@@ -587,7 +588,11 @@ impl PickerDelegate for FeaturePickerDelegate {
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let feature_entry = self.candidate_features[self.matching_indices[ix]].clone();
+        let feature_entry = self
+            .matching_indices
+            .get(ix)
+            .and_then(|index| self.candidate_features.get(*index))?
+            .clone();
 
         Some(
             ListItem::new("li-what")
@@ -1652,7 +1657,7 @@ fn dispatch_apply_templates(
                         };
                         workspace.open_path((tree_id, path), None, true, window, cx)
                     })
-                    .ok()
+                    .log_err()
                 else {
                     return;
                 };

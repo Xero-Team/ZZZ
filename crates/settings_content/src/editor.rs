@@ -140,7 +140,7 @@ pub struct EditorSettingsContent {
 
     /// How many lines to expand the multibuffer excerpts by default
     ///
-    /// Default: 3
+    /// Default: 5
     pub expand_excerpt_lines: Option<u32>,
 
     /// How many lines of context to provide in multibuffer excerpts by default
@@ -966,7 +966,7 @@ pub enum SnippetSortOrder {
 
 /// How to display diffs in the editor.
 ///
-/// Default: unified
+/// Default: split
 #[derive(
     Copy,
     Clone,
@@ -1070,7 +1070,7 @@ pub enum ShowMinimap {
 
 /// Where to show the minimap in the editor.
 ///
-/// Default: all_editors
+/// Default: active_editor
 #[derive(
     Copy,
     Clone,

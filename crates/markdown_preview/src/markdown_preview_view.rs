@@ -1526,7 +1526,7 @@ impl Item for MarkdownPreviewView {
     // full path for files outside the project.
     fn suggested_filename(&self, cx: &App) -> SharedString {
         self.active_editor.as_ref().map_or_else(
-            || SharedString::from("Markdown Preview"),
+            || tr(cx, "markdown_preview.tab_title", "Markdown Preview").into(),
             |editor_state| editor_state.editor.read(cx).suggested_filename(cx),
         )
     }
@@ -3446,6 +3446,7 @@ mod tests {
 
     fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
         cx.update(|cx| {
+            cx.set_global(db::AppDatabase::test_new());
             let state = AppState::test(cx);
             i18n::init(cx);
             editor::init(cx);

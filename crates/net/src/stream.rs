@@ -25,7 +25,7 @@ impl UnixStream {
     }
 
     pub fn connect<P: AsRef<Path>>(path: P) -> Result<Self> {
-        init();
+        init()?;
         unsafe {
             let inner = UnixSocket::new()?;
             let (addr, len) = sockaddr_un(path)?;

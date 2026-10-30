@@ -79,6 +79,7 @@ pub struct LspInlayHintData {
     append_debounce: Option<Duration>,
     hint_refresh_tasks: HashMap<BufferId, Vec<Task<()>>>,
     hint_chunk_fetching: HashMap<BufferId, (Global, HashSet<Range<BufferRow>>)>,
+    registered_servers: HashMap<BufferId, HashSet<LanguageServerId>>,
     invalidate_hints_for_buffers: HashSet<BufferId>,
     pub added_hints: HashMap<InlayId, Option<InlayHintKind>>,
     hovered_command: Option<HoveredInlayHintCommand>,
@@ -93,6 +94,7 @@ impl LspInlayHintData {
             hint_refresh_tasks: HashMap::default(),
             added_hints: HashMap::default(),
             hint_chunk_fetching: HashMap::default(),
+            registered_servers: HashMap::default(),
             invalidate_hints_for_buffers: HashSet::default(),
             invalidate_debounce: debounce_value(settings.edit_debounce_ms),
             append_debounce: debounce_value(settings.scroll_debounce_ms),
@@ -259,6 +261,7 @@ impl LspInlayHintData {
         for buffer_id in removed_buffer_ids {
             self.hint_refresh_tasks.remove(buffer_id);
             self.hint_chunk_fetching.remove(buffer_id);
+            self.registered_servers.remove(buffer_id);
         }
     }
 
@@ -279,6 +282,52 @@ impl LspInlayHintData {
 
     fn should_show(&self) -> bool {
         self.enabled != self.modifiers_override
+    }
+
+    pub(crate) fn has_fetched_chunks(&self, buffer_id: BufferId) -> bool {
+        self.hint_chunk_fetching
+            .get(&buffer_id)
+            .is_some_and(|(_, chunks)| !chunks.is_empty())
+    }
+
+    /// Records a language server registration for a buffer and reports whether
+    /// this server is the first one to join an already-registered set of servers.
+    pub(crate) fn register_server(
+        &mut self,
+        buffer_id: BufferId,
+        server_id: LanguageServerId,
+    ) -> bool {
+        let servers = self.registered_servers.entry(buffer_id).or_default();
+        let joined_existing_server = !servers.is_empty();
+        servers.insert(server_id) && joined_existing_server
+    }
+
+    pub(crate) fn remove_server(&mut self, server_id: LanguageServerId) {
+        self.registered_servers.retain(|_, servers| {
+            servers.remove(&server_id);
+            !servers.is_empty()
+        });
+    }
+
+    pub(crate) fn clear_registered_servers(&mut self, buffer_id: BufferId) {
+        self.registered_servers.remove(&buffer_id);
+    }
+
+    pub(crate) fn refresh_reason_for_server_registration(
+        &mut self,
+        buffer_id: BufferId,
+        server_id: LanguageServerId,
+    ) -> InlayHintRefreshReason {
+        let has_fetched_chunks = self.has_fetched_chunks(buffer_id);
+        let joined_existing_server = self.register_server(buffer_id, server_id);
+        if has_fetched_chunks && joined_existing_server {
+            InlayHintRefreshReason::RefreshRequested {
+                server_id,
+                request_id: None,
+            }
+        } else {
+            InlayHintRefreshReason::NewLinesShown
+        }
     }
 }
 
@@ -380,9 +429,10 @@ impl Editor {
             | InlayHintRefreshReason::Toggle(_)
             | InlayHintRefreshReason::SettingsChange(_)
             | InlayHintRefreshReason::ServerRemoved => true,
-            InlayHintRefreshReason::NewLinesShown
-            | InlayHintRefreshReason::RefreshRequested { .. }
-            | InlayHintRefreshReason::BuffersRemoved(_) => false,
+            InlayHintRefreshReason::NewLinesShown | InlayHintRefreshReason::BuffersRemoved(_) => {
+                false
+            }
+            InlayHintRefreshReason::RefreshRequested { .. } => true,
             InlayHintRefreshReason::BufferEdited(buffer_id) => {
                 let Some(affected_language) = self
                     .buffer()
@@ -1210,10 +1260,11 @@ fn spawn_editor_hints_refresh(
 
 #[cfg(test)]
 pub mod tests {
-    use super::{HoveredInlayHintCommand, LspInlayHintData, normalize_hint_biases};
+    use super::{
+        HoveredInlayHintCommand, InlayHintRefreshReason, LspInlayHintData, normalize_hint_biases,
+    };
     use crate::editor_tests::update_test_language_settings;
     use crate::hover_links::InlayHighlight;
-    use crate::inlays::inlay_hints::InlayHintRefreshReason;
     use crate::scroll::Autoscroll;
     use crate::scroll::ScrollAmount;
     use crate::test::editor_lsp_test_context::EditorLspTestContext;
@@ -1228,7 +1279,7 @@ pub mod tests {
     use language::{Language, LanguageConfig, LanguageMatcher};
     use languages::rust_lang;
     use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT, FakeLanguageServer, LanguageServerId};
-    use multi_buffer::{MultiBuffer, MultiBufferOffset, PathKey};
+    use multi_buffer::{MultiBuffer, MultiBufferOffset, MultiBufferSnapshot, PathKey};
     use parking_lot::Mutex;
     use pretty_assertions::assert_eq;
     use project::{
@@ -1358,6 +1409,90 @@ pub mod tests {
             &snapshot,
         );
         assert!(inlay_hints.hovered_command.is_none());
+    }
+
+    #[test]
+    fn server_registration_refreshes_only_when_a_new_server_joins_fetched_chunks() {
+        let buffer_id = BufferId::new(1).expect("buffer id");
+        let server_a = LanguageServerId(1);
+        let server_b = LanguageServerId(2);
+        let mut inlay_hints = LspInlayHintData::new(InlayHintSettings {
+            enabled: true,
+            show_value_hints: true,
+            show_type_hints: true,
+            show_parameter_hints: true,
+            show_other_hints: true,
+            show_background: false,
+            edit_debounce_ms: 0,
+            scroll_debounce_ms: 0,
+            toggle_on_modifiers_press: None,
+        });
+
+        assert!(matches!(
+            inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a),
+            InlayHintRefreshReason::NewLinesShown
+        ));
+        assert!(matches!(
+            inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a),
+            InlayHintRefreshReason::NewLinesShown
+        ));
+
+        inlay_hints
+            .hint_chunk_fetching
+            .entry(buffer_id)
+            .or_default()
+            .1
+            .insert(0..50);
+
+        let refresh_reason =
+            inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
+        assert!(matches!(
+            refresh_reason,
+            InlayHintRefreshReason::RefreshRequested {
+                server_id,
+                request_id: None,
+            } if server_id == server_b
+        ));
+
+        inlay_hints.clear_for_buffers(
+            &HashSet::from_iter([buffer_id]),
+            Vec::new(),
+            &MultiBufferSnapshot::default(),
+        );
+        inlay_hints
+            .hint_chunk_fetching
+            .entry(buffer_id)
+            .or_default()
+            .1
+            .insert(0..50);
+        let refresh_reason =
+            inlay_hints.refresh_reason_for_server_registration(buffer_id, LanguageServerId(3));
+        assert!(matches!(
+            refresh_reason,
+            InlayHintRefreshReason::RefreshRequested {
+                server_id: LanguageServerId(3),
+                ..
+            }
+        ));
+
+        inlay_hints.remove_server(server_b);
+        let refresh_reason =
+            inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
+        assert!(matches!(
+            refresh_reason,
+            InlayHintRefreshReason::RefreshRequested {
+                server_id,
+                request_id: None,
+            } if server_id == server_b
+        ));
+
+        inlay_hints.clear_registered_servers(buffer_id);
+        let refresh_reason =
+            inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a);
+        assert!(matches!(
+            refresh_reason,
+            InlayHintRefreshReason::NewLinesShown
+        ));
     }
 
     #[gpui::test]

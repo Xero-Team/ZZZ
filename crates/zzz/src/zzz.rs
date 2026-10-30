@@ -5944,7 +5944,7 @@ mod tests {
             state.build_window_options = build_window_options;
             app_state.languages.add(markdown_lang());
 
-            gpui_tokio::init(cx);
+            gpui_tokio::init(cx).expect("test environment should initialize Tokio");
             AppState::set_global(app_state.clone(), cx);
             force_english_test_locale(cx);
             i18n::init(cx);

@@ -19,7 +19,7 @@ use util::test::TempTree;
 
 fn extension_benchmarks(c: &mut Criterion) {
     let cx = init();
-    cx.update(gpui_tokio::init);
+    cx.update(|cx| gpui_tokio::init(cx).expect("benchmark should initialize Tokio"));
 
     let mut group = c.benchmark_group("load");
 

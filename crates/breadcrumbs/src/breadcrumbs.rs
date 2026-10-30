@@ -91,6 +91,7 @@ impl ToolbarItemView for Breadcrumbs {
         self.active_item = None;
 
         let Some(item) = active_pane_item else {
+            self.subscription = None;
             return ToolbarItemLocation::Hidden;
         };
 

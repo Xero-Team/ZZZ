@@ -697,8 +697,15 @@ impl TreeViewState {
                         current_path.push('/');
                     }
                     current_path.push_str(component);
-                    let dir_path = RepoPath::new(&current_path)
-                        .expect("repo path from status entry component");
+                    let dir_path = match RepoPath::new(&current_path) {
+                        Ok(dir_path) => dir_path,
+                        Err(error) => {
+                            log::error!(
+                                "Failed to build git tree directory path {current_path:?}: {error}"
+                            );
+                            continue;
+                        }
+                    };
 
                     let component = SharedString::from(component.to_string());
 
@@ -3770,7 +3777,7 @@ impl GitPanel {
                 let git_commit_buffer_font_size =
                     ThemeSettings::get_global(cx).git_commit_buffer_font_size(cx) + delta;
 
-                let _ = settings.theme.git_commit_buffer_font_size.insert(
+                settings.theme.git_commit_buffer_font_size = Some(
                     f32::from(theme_settings::clamp_font_size(git_commit_buffer_font_size)).into(),
                 );
             });
@@ -6623,7 +6630,14 @@ impl GitPanel {
             .and_then(GitListEntry::repo_path)
             .zip(self.active_repository.as_ref())
         {
-            let path = repo.read(cx).repo_path_to_abs_path(repo_path);
+            let path = match repo.read(cx).repo_path_to_abs_path(repo_path) {
+                Ok(path) => path,
+                Err(error) => {
+                    log::error!("failed to resolve repository path for copying: {error:#}");
+                    cx.propagate();
+                    return;
+                }
+            };
             cx.write_to_clipboard(ClipboardItem::new_string(
                 path.to_string_lossy().into_owned(),
             ));

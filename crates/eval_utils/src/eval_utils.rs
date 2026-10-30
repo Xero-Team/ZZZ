@@ -1,9 +1,8 @@
 //! Utilities for evaluation and benchmarking.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, mpsc},
-};
+use std::{collections::HashMap, sync::Arc};
+
+use futures::StreamExt as _;
 
 fn report_progress(evaluated_count: usize, failed_count: usize, iterations: usize) {
     let passed_count = evaluated_count - failed_count;
@@ -83,32 +82,31 @@ pub fn eval<P>(
     let mut failed_count = 0;
     report_progress(evaluated_count, failed_count, iterations);
 
-    let (tx, rx) = mpsc::channel();
-
     let executor = gpui_platform::background_executor();
     let semaphore = Arc::new(smol::lock::Semaphore::new(32));
     let evalf = Arc::new(evalf);
-    // Warm the cache once
-    let first_output = evalf();
-    tx.send(first_output).ok();
+    let mut outputs = Vec::with_capacity(iterations);
+    // Warm the cache once before running the concurrent iterations.
+    outputs.push(evalf());
 
+    let mut tasks = futures::stream::FuturesUnordered::new();
     for _ in 1..iterations {
-        let tx = tx.clone();
         let semaphore = semaphore.clone();
         let evalf = evalf.clone();
-        executor
-            .spawn(async move {
-                let _guard = semaphore.acquire().await;
-                let output = evalf();
-                tx.send(output).ok();
-            })
-            .detach();
+        tasks.push(executor.spawn(async move {
+            let _guard = semaphore.acquire().await;
+            evalf()
+        }));
     }
-    drop(tx);
+    smol::block_on(async {
+        while let Some(output) = tasks.next().await {
+            outputs.push(output)
+        }
+    });
 
     let mut failed_evals = Vec::new();
     let mut errored_evals = HashMap::new();
-    while let Ok(output) = rx.recv() {
+    for output in outputs {
         processor.process(&output);
 
         match output.outcome {

@@ -632,10 +632,9 @@ impl SystemWindowTabController {
             return;
         };
 
-        let current_index = tabs
-            .iter()
-            .position(|tab| tab.id == id)
-            .expect("position should be present");
+        let Some(current_index) = tabs.iter().position(|tab| tab.id == id) else {
+            return;
+        };
         let next_index = (current_index + 1) % tabs.len();
 
         tabs[next_index]
@@ -653,10 +652,9 @@ impl SystemWindowTabController {
             return;
         };
 
-        let current_index = tabs
-            .iter()
-            .position(|tab| tab.id == id)
-            .expect("position should be present");
+        let Some(current_index) = tabs.iter().position(|tab| tab.id == id) else {
+            return;
+        };
         let previous_index = if current_index == 0 {
             tabs.len() - 1
         } else {

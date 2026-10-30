@@ -17,7 +17,7 @@ use futures::{
     select, select_biased,
 };
 use git::GitHostingProviderRegistry;
-use gpui::{App, AppContext as _, Context, UpdateGlobal as _};
+use gpui::{App, AppContext as _, UpdateGlobal as _};
 use gpui_tokio::Tokio;
 use http_client::{Url, read_proxy_from_env};
 use language::LanguageRegistry;
@@ -462,7 +462,11 @@ pub fn execute_run(
             app_commit_sha,
         );
         release_channel::init(app_version, cx);
-        gpui_tokio::init(cx);
+        if let Err(error) = gpui_tokio::init(cx) {
+            log::error!("{error:#}");
+            cx.quit();
+            return;
+        }
 
         HeadlessProject::init(cx);
 
@@ -486,27 +490,30 @@ pub fn execute_run(
 
         json_schema_store::init(cx);
 
-        let project = cx.new(|cx| {
+        let proxy_url = read_proxy_settings(cx);
+        let http_client = {
+            let _guard = Tokio::handle(cx).enter();
+            match ReqwestClient::proxy_and_user_agent(
+                proxy_url,
+                &format!(
+                    "ZZZ-Server/{} ({}; {})",
+                    env!("CARGO_PKG_VERSION"),
+                    std::env::consts::OS,
+                    std::env::consts::ARCH
+                ),
+            ) {
+                Ok(http_client) => Arc::new(http_client),
+                Err(error) => {
+                    log::error!("failed to initialize the HTTP client: {error:#}");
+                    cx.quit();
+                    return;
+                }
+            }
+        };
+
+        let project = cx.new(move |cx| {
             let fs = Arc::new(RealFs::new(None, cx.background_executor().clone()));
             let node_settings_rx = initialize_settings(session.clone(), fs.clone(), cx);
-
-            let proxy_url = read_proxy_settings(cx);
-
-            let http_client = {
-                let _guard = Tokio::handle(cx).enter();
-                Arc::new(
-                    ReqwestClient::proxy_and_user_agent(
-                        proxy_url,
-                        &format!(
-                            "ZZZ-Server/{} ({}; {})",
-                            env!("CARGO_PKG_VERSION"),
-                            std::env::consts::OS,
-                            std::env::consts::ARCH
-                        ),
-                    )
-                    .expect("Could not start HTTP client"),
-                )
-            };
 
             let node_runtime =
                 NodeRuntime::new(http_client.clone(), shell_env_loaded_rx, node_settings_rx);
@@ -831,7 +838,14 @@ fn kill_running_server(pid: u32, paths: &ServerPaths) -> Result<(), ExecuteProxy
         &paths.stderr_socket,
     ] {
         log::debug!("cleaning up file {:?} before starting new server", file);
-        std::fs::remove_file(file).ok();
+        if let Err(error) = std::fs::remove_file(file)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!(
+                "failed to remove stale server file {}: {error}",
+                file.display()
+            );
+        }
     }
 
     Ok(())
@@ -982,11 +996,23 @@ async fn check_server_running(pid: u32) -> std::io::Result<bool> {
 }
 
 fn check_pid_file(path: &Path) -> Result<Option<u32>, CheckPidError> {
-    let Some(pid) = std::fs::read_to_string(path)
-        .ok()
-        .and_then(|contents| contents.parse::<u32>().ok())
-    else {
-        return Ok(None);
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            log::warn!("failed to read PID file {}: {error}", path.display());
+            return Ok(None);
+        }
+    };
+    let pid = match contents.trim().parse::<u32>() {
+        Ok(pid) => pid,
+        Err(error) => {
+            log::warn!(
+                "PID file {} contains an invalid process ID: {error}",
+                path.display()
+            );
+            return Ok(None);
+        }
     };
 
     log::debug!("Checking if process with PID {} exists...", pid);
@@ -1115,10 +1141,12 @@ pub fn handle_settings_file_changes(
     cx: &mut App,
     settings_changed: impl Fn(Option<anyhow::Error>, &mut App) + 'static,
 ) {
-    let server_settings_content = cx
+    let Some(server_settings_content) = cx
         .foreground_executor()
         .block_on(server_settings_file.next())
-        .expect("value should be present");
+    else {
+        return;
+    };
     SettingsStore::update_global(cx, |store, cx| {
         store
             .set_server_settings(&server_settings_content, cx)
@@ -1140,7 +1168,7 @@ pub fn handle_settings_file_changes(
     .detach();
 }
 
-fn read_proxy_settings(cx: &mut Context<HeadlessProject>) -> Option<Url> {
+fn read_proxy_settings(cx: &App) -> Option<Url> {
     let proxy_str = ProxySettings::get_global(cx).proxy.clone();
 
     proxy_str
@@ -1215,6 +1243,30 @@ fn is_file_in_use(file_name: &OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn check_pid_file_treats_missing_files_and_invalid_contents_as_absent() {
+        let temp_dir = tempfile::tempdir().expect("create pid directory");
+        let pid_file = temp_dir.path().join("server.pid");
+
+        assert_eq!(
+            check_pid_file(&pid_file).expect("a missing PID file is not an error"),
+            None
+        );
+
+        std::fs::write(&pid_file, "not a pid").expect("write invalid PID file");
+        assert_eq!(
+            check_pid_file(&pid_file).expect("an invalid PID file should be treated as stale"),
+            None
+        );
+
+        let current_pid = std::process::id();
+        std::fs::write(&pid_file, format!(" {current_pid}\n")).expect("write padded PID file");
+        assert_eq!(
+            check_pid_file(&pid_file).expect("whitespace around a PID is accepted"),
+            Some(current_pid)
+        );
+    }
 
     #[cfg(unix)]
     mod unix {

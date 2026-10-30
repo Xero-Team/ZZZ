@@ -196,14 +196,6 @@ impl ReleaseChannel {
             ReleaseChannel::Stable => "dev.zzz.ZZZ",
         }
     }
-
-    /// Returns the query parameter for this [`ReleaseChannel`].
-    pub fn release_query_param(&self) -> Option<&'static str> {
-        match self {
-            Self::Dev => None,
-            Self::Stable => None,
-        }
-    }
 }
 
 /// Error indicating that release channel string does not match any known release channel names.

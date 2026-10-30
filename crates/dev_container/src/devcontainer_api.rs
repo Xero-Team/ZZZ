@@ -388,9 +388,10 @@ pub(crate) async fn apply_devcontainer_template(
     let downloaded_devcontainer_folder = &extract_dir.join(".devcontainer/");
     let mut project_files = Vec::new();
     for entry in WalkDir::new(downloaded_devcontainer_folder) {
-        let Ok(entry) = entry else {
-            continue;
-        };
+        let entry = entry.map_err(|error| {
+            log::error!("Unable to walk downloaded template files: {error}");
+            DevContainerError::FilesystemError
+        })?;
         if !entry.file_type().is_file() {
             continue;
         }

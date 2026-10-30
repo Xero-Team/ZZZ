@@ -1854,10 +1854,9 @@ impl Buffer {
         let mut syntax_snapshot = syntax_map.snapshot();
         drop(syntax_map);
 
-        self.parse_status
-            .0
-            .send(ParseStatus::Parsing)
-            .expect("channel receiver should be alive");
+        if let Err(error) = self.parse_status.0.send(ParseStatus::Parsing) {
+            log::debug!("no parse status observers for buffer: {error}");
+        }
         if may_block && let Some(sync_parse_timeout) = self.sync_parse_timeout {
             if matches!(
                 syntax_snapshot.reparse_with_timeout(
@@ -1920,10 +1919,9 @@ impl Buffer {
         self.syntax_map.lock().did_parse(syntax_snapshot);
         self.was_changed();
         self.request_autoindent(cx, block_budget);
-        self.parse_status
-            .0
-            .send(ParseStatus::Idle)
-            .expect("channel receiver should be alive");
+        if let Err(error) = self.parse_status.0.send(ParseStatus::Idle) {
+            log::debug!("no parse status observers for buffer: {error}");
+        }
         Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, &self.text.snapshot());
         cx.emit(BufferEvent::Reparsed);
         cx.notify();

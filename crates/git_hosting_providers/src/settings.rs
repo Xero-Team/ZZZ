@@ -38,7 +38,7 @@ fn update_git_hosting_providers_from_settings(cx: &mut App) {
         .into_iter()
         .chain(local_values)
         .filter_map(|provider| {
-            let url = Url::parse(&provider.base_url).log_err()?;
+            let url = parse_provider_base_url(&provider.base_url).log_err()?;
 
             Some(match provider.provider {
                 GitHostingProviderKind::Bitbucket => {
@@ -60,6 +60,20 @@ fn update_git_hosting_providers_from_settings(cx: &mut App) {
     provider_registry.set_setting_providers(iter);
 }
 
+fn parse_provider_base_url(base_url: &str) -> anyhow::Result<Url> {
+    let url = Url::parse(base_url)?;
+    anyhow::ensure!(
+        matches!(url.scheme(), "http" | "https"),
+        "Git hosting provider base URL must use http or https, got {}",
+        url.scheme()
+    );
+    anyhow::ensure!(
+        url.host_str().is_some_and(|host| !host.is_empty()),
+        "Git hosting provider base URL must include a host"
+    );
+    Ok(url)
+}
+
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct GitHostingProviderSettings {
     pub git_hosting_providers: Vec<GitHostingProviderConfig>,
@@ -72,8 +86,32 @@ impl Settings for GitHostingProviderSettings {
                 .project
                 .git_hosting_providers
                 .clone()
-                .expect("value should be present")
+                .expect("git_hosting_providers should be present")
                 .into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_provider_base_url;
+
+    #[test]
+    fn provider_base_url_accepts_hierarchical_http_urls() {
+        assert_eq!(
+            parse_provider_base_url("https://code.example.com/git")
+                .expect("valid base URL")
+                .as_str(),
+            "https://code.example.com/git"
+        );
+        assert!(parse_provider_base_url("http://localhost:3000").is_ok());
+    }
+
+    #[test]
+    fn provider_base_url_rejects_non_hierarchical_or_hostless_urls() {
+        assert!(parse_provider_base_url("mailto:dev@example.com").is_err());
+        assert!(parse_provider_base_url("file:///tmp/repo").is_err());
+        assert!(parse_provider_base_url("https://").is_err());
+        assert!(parse_provider_base_url("not a URL").is_err());
     }
 }

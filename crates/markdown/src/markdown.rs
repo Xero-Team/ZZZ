@@ -2613,7 +2613,10 @@ impl MarkdownElement {
                 let em_width = window
                     .text_system()
                     .em_width(font_id, font_size)
-                    .expect("em_width should be present");
+                    .unwrap_or_else(|error| {
+                        log::warn!("Failed to measure markdown em width: {error}");
+                        font_size
+                    });
                 window.request_autoscroll(Bounds::from_corners(
                     point(position.x - 3. * em_width, position.y - 3. * line_height),
                     point(position.x + 3. * em_width, position.y + 3. * line_height),

@@ -1801,10 +1801,11 @@ impl FakeFsState {
     fn flush_events(&mut self, mut count: usize) {
         count = count.min(self.buffered_events.len());
         let events = self.buffered_events.drain(0..count).collect::<Vec<_>>();
-        self.event_txs.retain(|(_, tx)| {
-            let _ = tx.try_send(events.clone());
-            !tx.is_closed()
-        });
+        self.event_txs
+            .retain(|(_, tx)| match tx.try_send(events.clone()) {
+                Ok(()) | Err(async_channel::TrySendError::Full(_)) => true,
+                Err(async_channel::TrySendError::Closed(_)) => false,
+            });
     }
 }
 

@@ -108,7 +108,7 @@ impl LspStore {
             && !version_queried_for.changed_since(updating_for)
         {
             let running = running_update.clone();
-            return cx.background_spawn(async move { running.await.ok().flatten() });
+            return cx.background_spawn(async move { running.await.log_err().flatten() });
         }
 
         let cancel_rx = super::supersede(&mut links_lsp_data.links_update_cancel);
@@ -203,7 +203,7 @@ impl LspStore {
 
         links_lsp_data.links_update = Some((version_queried_for, new_task.clone()));
 
-        cx.background_spawn(async move { new_task.await.ok().flatten() })
+        cx.background_spawn(async move { new_task.await.log_err().flatten() })
     }
 
     #[cfg(any(test, feature = "test-support"))]

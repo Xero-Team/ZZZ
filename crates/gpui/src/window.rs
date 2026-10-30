@@ -1475,9 +1475,7 @@ impl Window {
             platform_window.set_app_id(&app_id);
         }
 
-        platform_window
-            .map_window()
-            .expect("map_window should be present");
+        platform_window.map_window()?;
 
         Ok(Window {
             handle,

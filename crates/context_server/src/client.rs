@@ -490,7 +490,10 @@ impl Client {
                 anyhow::bail!(RequestCanceled)
             }
             _ = timeout_fut => {
-                log::error!("cancelled csp request task for {method:?} id {id} which took over {:?}", timeout.expect("value should be present"));
+                log::error!(
+                    "cancelled csp request task for {method:?} id {id} which took over {:?}",
+                    timeout
+                );
                 anyhow::bail!("Context server request timeout");
             }
         }

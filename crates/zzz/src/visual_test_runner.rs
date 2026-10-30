@@ -173,7 +173,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
 
     // Initialize all ZZZ subsystems
     cx.update(|cx| {
-        gpui_tokio::init(cx);
+        gpui_tokio::init(cx).expect("test environment should initialize Tokio");
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         client::init(&app_state.client, cx);
         audio::init(cx);

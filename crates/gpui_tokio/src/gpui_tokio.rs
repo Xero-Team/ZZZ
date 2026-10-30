@@ -1,5 +1,6 @@
 use std::future::Future;
 
+use anyhow::Context as _;
 use gpui::{App, AppContext, Global, ReadGlobal, Task};
 use util::defer;
 
@@ -9,19 +10,21 @@ pub use tokio::task::JoinError;
 ///
 /// If you need more threads (or access to the runtime outside of GPUI), you can create the runtime
 /// yourself and pass a Handle to `init_from_handle`.
-pub fn init(cx: &mut App) {
+pub fn init(cx: &mut App) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         // Since we now have two executors, let's try to keep our footprint small
         .worker_threads(2)
         .enable_all()
         .build()
-        .expect("failed to initialize the Tokio runtime");
+        .context("failed to initialize the Tokio runtime")?;
 
     let handle = runtime.handle().clone();
     cx.set_global(GlobalTokio {
         owned_runtime: Some(runtime),
         handle,
     });
+
+    Ok(())
 }
 
 /// Initializes the Tokio wrapper using a Tokio runtime handle.

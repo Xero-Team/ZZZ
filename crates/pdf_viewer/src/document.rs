@@ -532,33 +532,18 @@ mod tests {
     }
 
     fn encrypted_flag_pdf() -> Vec<u8> {
-        let mut buffer = Vec::from(&b"%PDF-1.7\n"[..]);
-        let objects = [
-            "<< /Type /Catalog /Pages 2 0 R >>",
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>",
-            "<< /Filter /Standard /V 1 /R 2 /O <0000000000000000000000000000000000000000000000000000000000000000> /U <0000000000000000000000000000000000000000000000000000000000000000> /P -4 >>",
-        ];
-        let mut offsets = Vec::with_capacity(objects.len());
-        for (index, body) in objects.iter().enumerate() {
-            offsets.push(buffer.len());
-            buffer.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
-        }
-        let xref_offset = buffer.len();
-        buffer.extend_from_slice(
-            format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
-        );
-        for offset in &offsets {
-            buffer.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
-        }
-        buffer.extend_from_slice(
-            format!(
-                "trailer\n<< /Size {} /Root 1 0 R /Encrypt 4 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n",
-                objects.len() + 1
-            )
-            .as_bytes(),
-        );
-        buffer
+        let mut builder = zpdf_writer::DocumentBuilder::new();
+        builder.add_page(200.0, 300.0);
+        let unencrypted = builder.build().expect("test PDF should build");
+        let file = zpdf::PdfFile::parse(unencrypted).expect("test PDF should parse");
+        zpdf_writer::rewrite_pdf(
+            &file,
+            &zpdf_writer::RewriteOptions {
+                encrypt: Some(zpdf_writer::EncryptionConfig::aes256("", "owner")),
+                ..Default::default()
+            },
+        )
+        .expect("test PDF should encrypt")
     }
 
     #[test]

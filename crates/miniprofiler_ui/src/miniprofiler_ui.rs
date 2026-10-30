@@ -91,11 +91,11 @@ impl Settings for PerformanceProfilerSettings {
         let instrumentation = content
             .instrumentation
             .as_ref()
-            .expect("value should have the expected type");
+            .expect("instrumentation should be present");
         let profiler = instrumentation
             .performance_profiler
             .as_ref()
-            .expect("value should have the expected type");
+            .expect("performance_profiler should be present");
         Self {
             enabled: profiler.enabled.expect("enabled should be present"),
         }

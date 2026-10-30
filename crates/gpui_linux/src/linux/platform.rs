@@ -356,7 +356,12 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
         let (done_tx, done_rx) = oneshot::channel();
 
         #[cfg(not(any(feature = "wayland", feature = "x11")))]
-        let _ = (done_tx.send(Ok(None)), options);
+        {
+            drop(options);
+            if done_tx.send(Ok(None)).is_err() {
+                log::debug!("file picker result receiver was dropped");
+            }
+        }
 
         #[cfg(any(feature = "wayland", feature = "x11"))]
         let identifier = self.inner.window_identifier();
@@ -386,7 +391,9 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
                             ashpd::Error::PortalNotFound(_) => anyhow!(FILE_PICKER_PORTAL_MISSING),
                             err => err.into(),
                         };
-                        let _ = done_tx.send(Err(result));
+                        if done_tx.send(Err(result)).is_err() {
+                            log::debug!("file picker result receiver was dropped");
+                        }
                         return;
                     }
                 };
@@ -403,7 +410,9 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
                     Err(ashpd::Error::Response(_)) => Ok(None),
                     Err(e) => Err(e.into()),
                 };
-                let _ = done_tx.send(result);
+                if done_tx.send(result).is_err() {
+                    log::debug!("file picker result receiver was dropped");
+                }
             })
             .detach();
         done_rx
@@ -417,7 +426,12 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
         let (done_tx, done_rx) = oneshot::channel();
 
         #[cfg(not(any(feature = "wayland", feature = "x11")))]
-        let _ = (done_tx.send(Ok(None)), directory, suggested_name);
+        {
+            let _ = (directory, suggested_name);
+            if done_tx.send(Ok(None)).is_err() {
+                log::debug!("save file picker result receiver was dropped");
+            }
+        }
 
         #[cfg(any(feature = "wayland", feature = "x11"))]
         let identifier = self.inner.window_identifier();
@@ -430,12 +444,20 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
 
                 async move {
                     let mut request_builder =
-                        ashpd::desktop::file_chooser::SaveFileRequest::default()
+                        match ashpd::desktop::file_chooser::SaveFileRequest::default()
                             .identifier(identifier.await)
                             .modal(true)
                             .title("Save File")
                             .current_folder(directory)
-                            .expect("pathbuf should not be nul terminated");
+                        {
+                            Ok(request_builder) => request_builder,
+                            Err(error) => {
+                                if done_tx.send(Err(error.into())).is_err() {
+                                    log::debug!("save file picker result receiver was dropped");
+                                }
+                                return;
+                            }
+                        };
 
                     if let Some(suggested_name) = suggested_name {
                         request_builder = request_builder.current_name(suggested_name.as_str());
@@ -450,7 +472,9 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
                                 }
                                 err => err.into(),
                             };
-                            let _ = done_tx.send(Err(result));
+                            if done_tx.send(Err(result)).is_err() {
+                                log::debug!("save file picker result receiver was dropped");
+                            }
                             return;
                         }
                     };
@@ -464,7 +488,9 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
                         Err(ashpd::Error::Response(_)) => Ok(None),
                         Err(e) => Err(e.into()),
                     };
-                    let _ = done_tx.send(result);
+                    if done_tx.send(result).is_err() {
+                        log::debug!("save file picker result receiver was dropped");
+                    }
                 }
             })
             .detach();

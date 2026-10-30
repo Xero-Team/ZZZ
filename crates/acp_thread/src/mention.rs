@@ -13,10 +13,7 @@ use text::LineEnding;
 use ui::{App, IconName, SharedString};
 use url::Url;
 use urlencoding::decode;
-use util::{
-    ResultExt,
-    paths::{PathStyle, PathWithPosition, is_absolute},
-};
+use util::paths::{PathStyle, PathWithPosition, is_absolute};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum MentionUri {
@@ -76,8 +73,17 @@ impl MentionUri {
             .and_then(|input| input.strip_suffix('`'))
             .unwrap_or(input);
 
-        let parse_column =
-            |input: Option<String>| -> Option<u32> { input?.parse::<u32>().ok()?.checked_sub(1) };
+        let parse_column = |input: Option<String>| -> Result<Option<u32>> {
+            let Some(input) = input else {
+                return Ok(None);
+            };
+            let column = input
+                .parse::<u32>()
+                .with_context(|| format!("Invalid column number: {input}"))?
+                .checked_sub(1)
+                .context("Column numbers should be 1-based")?;
+            Ok(Some(column))
+        };
         let validate_query_params = |url: &Url, allowed: &[&str]| -> Result<()> {
             for (key, _) in url.query_pairs() {
                 if !allowed.contains(&key.as_ref()) {
@@ -92,6 +98,8 @@ impl MentionUri {
                 .split_once('#')
                 .map_or((input, None), |(path, fragment)| (path, Some(fragment)));
 
+            // A bare path may legitimately contain '#', so only treat the suffix as a line
+            // range when it parses; otherwise parse the path before the fragment.
             if let Some(fragment) = fragment.and_then(|fragment| parse_line_range(fragment).ok()) {
                 return Ok(MentionUri::Selection {
                     abs_path: Some(path_input.into()),
@@ -145,8 +153,9 @@ impl MentionUri {
 
                 if let Some(fragment) = url.fragment() {
                     validate_query_params(&url, &["symbol", "column"])?;
-                    let line_range = parse_line_range(fragment).log_err().unwrap_or(1..=1);
-                    let column = parse_column(query_param(&url, "column"));
+                    let line_range = parse_line_range(fragment)
+                        .with_context(|| format!("Invalid line range fragment: {fragment}"))?;
+                    let column = parse_column(query_param(&url, "column"))?;
                     if let Some(name) = query_param(&url, "symbol") {
                         Ok(Self::Symbol {
                             name,
@@ -211,12 +220,10 @@ impl MentionUri {
                     Ok(Self::Selection {
                         abs_path: None,
                         line_range,
-                        column: parse_column(query_param(&url, "column")),
+                        column: parse_column(query_param(&url, "column"))?,
                     })
                 } else if let Some(name) = path.strip_prefix("/agent/symbol/") {
-                    let fragment = url
-                        .fragment()
-                        .context("Missing fragment for untitled buffer selection")?;
+                    let fragment = url.fragment().context("Missing fragment for symbol")?;
                     let line_range = parse_line_range(fragment)?;
                     let path =
                         single_query_param(&url, "path")?.context("Missing path for symbol")?;
@@ -241,7 +248,7 @@ impl MentionUri {
                     validate_query_params(&url, &["path", "column"])?;
                     let fragment = url.fragment().context("Missing fragment for selection")?;
                     let line_range = parse_line_range(fragment)?;
-                    let column = parse_column(query_param(&url, "column"));
+                    let column = parse_column(query_param(&url, "column"))?;
                     let path = query_param(&url, "path").context("Missing path for selection")?;
                     Ok(Self::Selection {
                         abs_path: Some(path.into()),
@@ -249,10 +256,12 @@ impl MentionUri {
                         column,
                     })
                 } else if path.starts_with("/agent/terminal-selection") {
-                    let line_count = single_query_param(&url, "lines")?
-                        .unwrap_or_else(|| "0".to_owned())
-                        .parse::<u32>()
-                        .unwrap_or(0);
+                    let line_count = match single_query_param(&url, "lines")? {
+                        Some(lines) => lines
+                            .parse::<u32>()
+                            .with_context(|| format!("Invalid terminal line count: {lines}"))?,
+                        None => 0,
+                    };
                     Ok(Self::TerminalSelection { line_count })
                 } else if path.starts_with("/agent/git-diff") {
                     let base_ref =
@@ -560,6 +569,8 @@ fn parse_hyperlink_path(
     let (path_input, fragment) = split_path_fragment(input);
     let path_input = normalize_path_mention(path_input, path_style, decode_escapes);
 
+    // Hyperlink targets may contain '#' as part of a filename. Fall back to the path
+    // before the fragment when the suffix is not a valid line range.
     if let Some(fragment) = fragment.and_then(|fragment| parse_line_range(fragment).ok()) {
         return Ok(MentionUri::Selection {
             abs_path: Some(path_input.as_ref().into()),
@@ -1258,6 +1269,36 @@ mod tests {
             }
             _ => panic!("Expected Selection variant"),
         }
+    }
+
+    #[test]
+    fn test_parse_mention_uri_rejects_malformed_position_data() {
+        for uri in [
+            "file:///path/to/file.rs#Lnot-a-line",
+            "file:///path/to/file.rs#L0",
+            "file:///path/to/file.rs#L10:not-a-line",
+            "file:///path/to/file.rs?column=not-a-column#L10",
+            "file:///path/to/file.rs?column=0#L10",
+            "zzz:///agent/untitled-buffer?column=not-a-column#L1:10",
+            "zzz:///agent/selection?path=/path/to/file.rs&column=0#L1:10",
+            "zzz:///agent/terminal-selection?lines=not-a-number",
+        ] {
+            assert!(
+                MentionUri::parse(uri, PathStyle::local()).is_err(),
+                "expected malformed mention URI to be rejected: {uri}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_bare_path_with_non_line_fragment_uses_path_before_fragment() {
+        let parsed = MentionUri::parse("/path/to/file#fragment", PathStyle::Posix).unwrap();
+        assert_eq!(
+            parsed,
+            MentionUri::File {
+                abs_path: PathBuf::from("/path/to/file")
+            }
+        );
     }
 
     #[test]

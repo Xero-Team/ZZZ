@@ -13,6 +13,7 @@ path = "src/eval_utils.rs"
 doctest = false
 
 [dependencies]
+futures.workspace = true
 gpui_platform.workspace = true
 serde.workspace = true
 smol.workspace = true

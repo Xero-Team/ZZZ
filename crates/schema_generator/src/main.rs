@@ -24,20 +24,12 @@ fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    match args.schema_type {
-        SchemaType::Theme => {
-            let schema = schema_for!(ThemeFamilyContent);
-            println!("{}", serde_json::to_string_pretty(&schema)?);
-        }
-        SchemaType::IconTheme => {
-            let schema = schema_for!(IconThemeFamilyContent);
-            println!("{}", serde_json::to_string_pretty(&schema)?);
-        }
-        SchemaType::Project => {
-            let schema = schema_for!(ProjectSettingsContent);
-            println!("{}", serde_json::to_string_pretty(&schema)?);
-        }
-    }
+    let schema = match args.schema_type {
+        SchemaType::Theme => schema_for!(ThemeFamilyContent),
+        SchemaType::IconTheme => schema_for!(IconThemeFamilyContent),
+        SchemaType::Project => schema_for!(ProjectSettingsContent),
+    };
+    println!("{}", serde_json::to_string_pretty(&schema)?);
 
     Ok(())
 }

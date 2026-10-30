@@ -1512,7 +1512,7 @@ impl settings::Settings for AllAgentServersSettings {
         let agent_settings = content
             .agent_servers
             .clone()
-            .expect("value should be present");
+            .expect("agent_servers should be present");
         Self(
             agent_settings
                 .0

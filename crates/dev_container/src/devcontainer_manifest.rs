@@ -1678,7 +1678,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                 self.root_image
                     .as_ref()
                     .and_then(|docker_image| docker_image.config.image_user.as_ref())
-                    .unwrap_or(&"root".to_owned())
+                    .map_or("root", String::as_str)
             ),
         ]);
 

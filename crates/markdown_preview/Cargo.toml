@@ -12,7 +12,7 @@ workspace = true
 path = "src/markdown_preview.rs"
 
 [features]
-test-support = []
+test-support = ["db/test-support"]
 
 [dependencies]
 anyhow.workspace = true
@@ -38,6 +38,7 @@ zzz_actions.workspace = true
 
 [dev-dependencies]
 buffer_diff.workspace = true
+db = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
 fs.workspace = true
 gpui = { workspace = true, features = ["test-support"] }

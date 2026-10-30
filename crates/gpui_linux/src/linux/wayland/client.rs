@@ -1698,7 +1698,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                         return;
                     }
                 };
-                let keymap = unsafe {
+                let Some(keymap) = (unsafe {
                     xkb::Keymap::new_from_fd(
                         &xkb_context,
                         fd,
@@ -1708,7 +1708,9 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                     )
                     .log_err()
                     .flatten()
-                    .expect("Failed to create keymap")
+                }) else {
+                    log::error!("Failed to compile the keymap received from Wayland");
+                    return;
                 };
                 state.keymap_state = Some(xkb::State::new(&keymap));
                 state.compose_state = get_xkb_compose_state(&xkb_context);
@@ -2567,7 +2569,14 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                     const ACTIONS: DndAction = DndAction::Copy;
                     data_offer.set_actions(ACTIONS, ACTIONS);
 
-                    let pipe = Pipe::new().expect("value should be present");
+                    let pipe = match Pipe::new() {
+                        Ok(pipe) => pipe,
+                        Err(error) => {
+                            log::error!("Failed to create drag and drop pipe: {error}");
+                            data_offer.destroy();
+                            return;
+                        }
+                    };
                     data_offer.receive(FILE_LIST_MIME_TYPE.to_owned(), unsafe {
                         BorrowedFd::borrow_raw(pipe.write.as_raw_fd())
                     });

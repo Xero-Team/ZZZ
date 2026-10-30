@@ -23,7 +23,7 @@ impl Session {
             .read_kvp(SESSION_WINDOW_STACK_KEY)
             .log_err()
             .flatten()
-            .and_then(|json| serde_json::from_str::<Vec<u64>>(&json).ok())
+            .and_then(|json| serde_json::from_str::<Vec<u64>>(&json).log_err())
             .map(|vec: Vec<u64>| {
                 vec.into_iter()
                     .map(WindowId::from)

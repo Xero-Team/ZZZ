@@ -51,7 +51,7 @@ pub fn init_visual_test(cx: &mut VisualTestAppContext) -> Arc<AppState> {
 
         let app_state = AppState::test(cx);
 
-        gpui_tokio::init(cx);
+        gpui_tokio::init(cx).expect("test environment should initialize Tokio");
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         audio::init(cx);
         workspace::init(app_state.clone(), cx);

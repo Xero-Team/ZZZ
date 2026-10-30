@@ -405,7 +405,7 @@ fn set_wm_hints_urgency(xcb: &XCBConnection, x_window: xproto::Window, urgent: b
     xcb_flush(xcb);
 }
 
-/// Convert X11 connection errors to `anyhow::Error` and panic for unrecoverable errors.
+/// Convert X11 connection errors into an error that callers can report.
 pub(crate) fn handle_connection_error(err: ConnectionError) -> anyhow::Error {
     match err {
         ConnectionError::UnknownError => anyhow!("X11 connection: Unknown error"),
@@ -414,12 +414,12 @@ pub(crate) fn handle_connection_error(err: ConnectionError) -> anyhow::Error {
             anyhow!("X11 connection: Maximum request length exceeded")
         }
         ConnectionError::FdPassingFailed => {
-            panic!("X11 connection: File descriptor passing failed")
+            anyhow!("X11 connection: File descriptor passing failed")
         }
         ConnectionError::ParseError(parse_error) => {
             anyhow!(parse_error).context("Parse error in X11 response")
         }
-        ConnectionError::InsufficientMemory => panic!("X11 connection: Insufficient memory"),
+        ConnectionError::InsufficientMemory => anyhow!("X11 connection: Insufficient memory"),
         ConnectionError::IoError(err) => anyhow!(err).context("X11 connection: IOError"),
         _ => anyhow!(err),
     }
@@ -2061,6 +2061,17 @@ fn x11_capabilities() -> gpui::PlatformCapabilities {
 #[cfg(test)]
 mod capability_tests {
     use super::*;
+
+    #[test]
+    fn unrecoverable_connection_errors_are_returned() {
+        for error in [
+            ConnectionError::FdPassingFailed,
+            ConnectionError::InsufficientMemory,
+        ] {
+            let message = handle_connection_error(error).to_string();
+            assert!(message.starts_with("X11 connection:"));
+        }
+    }
 
     #[test]
     fn capability_matrix_matches_x11_services() {

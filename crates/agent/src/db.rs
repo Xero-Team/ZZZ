@@ -1,7 +1,7 @@
 use acp_thread::UserMessageId;
 use agent_client_protocol::schema::v1 as acp;
 use agent_settings::AgentProfileId;
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Utc};
 use collections::HashMap;
 use futures::{FutureExt, future::Shared};
@@ -211,6 +211,31 @@ struct GlobalThreadsDatabase(Shared<Task<Result<Arc<ThreadsDatabase>, Arc<anyhow
 
 impl Global for GlobalThreadsDatabase {}
 
+/// Adds a column unless a previous migration already did so.
+///
+/// SQLite has no `ADD COLUMN IF NOT EXISTS`, so checking `table_info` first
+/// distinguishes an already-applied migration from a genuine failure.
+fn add_column_if_missing(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    data_type: &str,
+) -> Result<bool> {
+    let pragma = format!("PRAGMA table_info({table})");
+    let mut select_columns = connection.select::<(i32, String)>(&pragma)?;
+    let columns = select_columns()?;
+    if columns.iter().any(|(_, name)| name == column) {
+        return Ok(false);
+    }
+
+    let alter = format!("ALTER TABLE {table} ADD COLUMN {column} {data_type}");
+    connection
+        .exec(&alter)
+        .with_context(|| format!("Failed to prepare migration for {table}.{column}"))?()
+    .with_context(|| format!("Failed to add {column} to {table}"))?;
+    Ok(true)
+}
+
 impl ThreadsDatabase {
     pub fn connect(cx: &mut App) -> Shared<Task<Result<Arc<ThreadsDatabase>, Arc<anyhow::Error>>>> {
         if cx.has_global::<GlobalThreadsDatabase>() {
@@ -265,30 +290,13 @@ impl ThreadsDatabase {
         "})?()
         .map_err(|e| anyhow!("Failed to create threads table: {}", e))?;
 
-        if let Ok(mut s) = connection.exec(indoc! {"
-            ALTER TABLE threads ADD COLUMN parent_id TEXT
-        "})
-        {
-            s().ok();
-        }
-
-        if let Ok(mut s) = connection.exec(indoc! {"
-            ALTER TABLE threads ADD COLUMN folder_paths TEXT;
-            ALTER TABLE threads ADD COLUMN folder_paths_order TEXT;
-        "})
-        {
-            s().ok();
-        }
-
-        if let Ok(mut s) = connection.exec(indoc! {"
-            ALTER TABLE threads ADD COLUMN created_at TEXT;
-        "})
-        {
-            if s().is_ok() {
-                connection.exec(indoc! {"
-                    UPDATE threads SET created_at = updated_at WHERE created_at IS NULL
-                "})?()?;
-            }
+        add_column_if_missing(&connection, "threads", "parent_id", "TEXT")?;
+        add_column_if_missing(&connection, "threads", "folder_paths", "TEXT")?;
+        add_column_if_missing(&connection, "threads", "folder_paths_order", "TEXT")?;
+        if add_column_if_missing(&connection, "threads", "created_at", "TEXT")? {
+            connection.exec(indoc! {"
+                UPDATE threads SET created_at = updated_at WHERE created_at IS NULL
+            "})?()?;
         }
 
         // The columns added above are stored after the `data` blob, so reading
@@ -539,6 +547,36 @@ mod tests {
         assert_eq!(restored.title, original.title);
         assert_eq!(restored.version, original.version);
         assert_eq!(restored.updated_at, original.updated_at);
+    }
+
+    #[test]
+    fn test_add_column_if_missing_is_idempotent() {
+        let connection = Connection::open_memory(Some("ADD_COLUMN_TEST"));
+        connection
+            .exec("CREATE TABLE threads (id TEXT PRIMARY KEY)")
+            .expect("prepare table")()
+        .expect("create table");
+
+        assert!(
+            add_column_if_missing(&connection, "threads", "parent_id", "TEXT")
+                .expect("add missing column")
+        );
+        assert!(
+            !add_column_if_missing(&connection, "threads", "parent_id", "TEXT")
+                .expect("existing column should be skipped")
+        );
+
+        let mut select_columns = connection
+            .select::<(i32, String)>("PRAGMA table_info(threads)")
+            .expect("prepare table info");
+        let columns = select_columns().expect("read table info");
+        assert_eq!(
+            columns
+                .into_iter()
+                .map(|(_, name)| name)
+                .collect::<Vec<_>>(),
+            ["id", "parent_id"]
+        );
     }
 
     fn session_id(value: &str) -> acp::SessionId {

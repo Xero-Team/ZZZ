@@ -488,7 +488,7 @@ fn watch_ssh_configs(
                         panel.ssh_config_hosts = hosts;
                         cx.notify();
                     })
-                    .ok();
+                    .log_err();
             }
         });
         tasks.push(watcher);

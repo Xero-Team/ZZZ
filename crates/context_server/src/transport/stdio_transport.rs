@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::pin::Pin;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use futures::io::{BufReader, BufWriter};
 use futures::{
@@ -47,9 +47,18 @@ impl StdioTransport {
             std::process::Stdio::piped(),
         )?;
 
-        let stdin = server.stdin.take().expect("entry should be present");
-        let stdout = server.stdout.take().expect("entry should be present");
-        let stderr = server.stderr.take().expect("entry should be present");
+        let stdin = server
+            .stdin
+            .take()
+            .context("context server stdin was not piped")?;
+        let stdout = server
+            .stdout
+            .take()
+            .context("context server stdout was not piped")?;
+        let stderr = server
+            .stderr
+            .take()
+            .context("context server stderr was not piped")?;
 
         let (stdin_sender, stdin_receiver) = async_channel::unbounded::<String>();
         let (stdout_sender, stdout_receiver) = async_channel::unbounded::<String>();

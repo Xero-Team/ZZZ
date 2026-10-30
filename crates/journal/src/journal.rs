@@ -34,7 +34,7 @@ pub struct JournalSettings {
 
 impl Settings for JournalSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let journal = content.journal.clone().expect("value should be present");
+        let journal = content.journal.clone().expect("journal should be present");
 
         Self {
             path: journal.path.expect("path should be present"),

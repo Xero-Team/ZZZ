@@ -334,7 +334,7 @@ impl StatusItemView for CursorPosition {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, RegisterSetting)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, RegisterSetting)]
 pub enum LineIndicatorFormat {
     Short,
     Long,

@@ -14,6 +14,7 @@ use language::Buffer;
 use lsp::LanguageServerId;
 use settings::Settings as _;
 use text::Anchor;
+use util::ResultExt as _;
 
 use crate::lsp_command::{GetFoldingRanges, LspCommand as _};
 use crate::lsp_store::LspStore;
@@ -86,7 +87,8 @@ impl LspStore {
         if let Some((updating_for, running_update)) = &folding_lsp_data.ranges_update {
             if !version_queried_for.changed_since(updating_for) {
                 let running = running_update.clone();
-                return cx.background_spawn(async move { running.await.unwrap_or_default() });
+                return cx
+                    .background_spawn(async move { running.await.log_err().unwrap_or_default() });
             }
         }
 
@@ -162,7 +164,7 @@ impl LspStore {
 
         folding_lsp_data.ranges_update = Some((version_queried_for, new_task.clone()));
 
-        cx.background_spawn(async move { new_task.await.unwrap_or_default() })
+        cx.background_spawn(async move { new_task.await.log_err().unwrap_or_default() })
     }
 
     fn fetch_folding_ranges_for_buffer(

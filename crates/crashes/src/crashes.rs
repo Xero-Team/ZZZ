@@ -81,7 +81,7 @@ pub fn init<F: Future<Output = ()> + Send + Sync + 'static>(
 
     panic::set_hook(Box::new(panic_hook));
 
-    let handler = CrashHandler::attach(unsafe {
+    let handler = match CrashHandler::attach(unsafe {
         crash_handler::make_crash_event(move |crash_context: &crash_handler::CrashContext| {
             let Some(client) = CRASH_HANDLER.get() else {
                 return CrashEventResult::Handled(false);
@@ -109,8 +109,13 @@ pub fn init<F: Future<Output = ()> + Send + Sync + 'static>(
             };
             CrashEventResult::Handled(res)
         })
-    })
-    .expect("failed to attach signal handler");
+    }) {
+        Ok(handler) => handler,
+        Err(error) => {
+            log::error!("failed to attach crash signal handler: {error}");
+            return;
+        }
+    };
 
     info!("crash signal handlers installed");
 
@@ -130,18 +135,33 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     // never runs while the process is alive. The binding is only read on Linux,
     // so it is intentionally underscore-prefixed to stay alive without warning.
     let _handler = std::mem::ManuallyDrop::new(handler);
-    let exe = env::current_exe().expect("unable to find ourselves");
+    let exe = match env::current_exe() {
+        Ok(exe) => exe,
+        Err(error) => {
+            log::error!("unable to locate the crash handler executable: {error}");
+            return;
+        }
+    };
     let zzz_pid = process::id();
     let socket_name = paths::temp_dir().join(format!("zzz-crash-handler-{zzz_pid}"));
     #[cfg(not(target_os = "windows"))]
-    let _crash_handler = Command::new(exe)
+    let _crash_handler = match Command::new(exe)
         .arg("--crash-handler")
         .arg(&socket_name)
         .spawn()
-        .expect("unable to spawn server process");
+    {
+        Ok(child) => child,
+        Err(error) => {
+            log::error!("unable to spawn the crash handler process: {error}");
+            return;
+        }
+    };
 
     #[cfg(target_os = "windows")]
-    spawn_crash_handler_windows(&exe, &socket_name);
+    if let Err(error) = spawn_crash_handler_windows(&exe, &socket_name) {
+        log::error!("unable to spawn the crash handler process: {error}");
+        return;
+    }
 
     info!("spawning crash handler process");
     send_crash_server_message(CrashServerMessage::Init(crash_init));
@@ -476,7 +496,7 @@ mod tests {
 }
 
 #[cfg(target_os = "windows")]
-fn spawn_crash_handler_windows(exe: &Path, socket_name: &Path) {
+fn spawn_crash_handler_windows(exe: &Path, socket_name: &Path) -> windows::core::Result<()> {
     use std::ffi::OsStr;
     use std::iter::once;
     use std::os::windows::ffi::OsStrExt;
@@ -518,12 +538,17 @@ fn spawn_crash_handler_windows(exe: &Path, socket_name: &Path) {
             None,
             &startup_info,
             &mut process_info,
-        )
-        .expect("unable to spawn server process");
+        )?;
 
-        windows::Win32::Foundation::CloseHandle(process_info.hProcess).ok();
-        windows::Win32::Foundation::CloseHandle(process_info.hThread).ok();
+        if let Err(error) = windows::Win32::Foundation::CloseHandle(process_info.hProcess) {
+            log::warn!("failed to close the crash handler process handle: {error}");
+        }
+        if let Err(error) = windows::Win32::Foundation::CloseHandle(process_info.hThread) {
+            log::warn!("failed to close the crash handler thread handle: {error}");
+        }
     }
+
+    Ok(())
 }
 
 pub fn crash_server(socket: &Path) {

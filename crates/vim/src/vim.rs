@@ -2422,7 +2422,7 @@ impl From<settings::ModeContent> for Mode {
 
 impl Settings for VimSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        let vim = content.vim.clone().expect("value should be present");
+        let vim = content.vim.clone().expect("vim should be present");
         Self {
             default_mode: vim
                 .default_mode

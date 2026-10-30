@@ -408,7 +408,7 @@ pub async fn init_test(cx: &mut TestAppContext) -> Arc<FakeFs> {
     cx.update(|cx| {
         let settings_store = settings::SettingsStore::test(cx);
         cx.set_global(settings_store);
-        gpui_tokio::init(cx);
+        gpui_tokio::init(cx).expect("test environment should initialize Tokio");
         let http_client = reqwest_client::ReqwestClient::user_agent("agent tests").unwrap();
         cx.set_http_client(Arc::new(http_client));
         let client = client::Client::production(cx);

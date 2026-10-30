@@ -2568,9 +2568,6 @@
     // Maximum number of lines of output to display before scrolling.
     // Set to 0 to disable output height limits.
     "output_max_height_lines": 0,
-    // Maximum number of columns of output to display before scaling images.
-    // Set to 0 to disable output width limits.
-    "output_max_width_columns": 0,
   },
   // Vim settings
   "vim": {

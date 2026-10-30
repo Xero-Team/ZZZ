@@ -157,9 +157,7 @@ END
         }
     }
 
-    embed_resource::compile(&rc_path, embed_resource::NONE)
-        .manifest_optional()
-        .expect("failed to embed Windows resources");
+    embed_resource::compile(&rc_path, embed_resource::NONE).manifest_optional()?;
 
     Ok(())
 }

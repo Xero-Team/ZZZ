@@ -2541,25 +2541,13 @@ fn get_scale_factor(
 ) -> f32 {
     let env_dpi = std::env::var(GPUI_X11_SCALE_FACTOR_ENV)
         .ok()
-        .map_or(DpiMode::NotSet, |var| {
-            if var.to_lowercase() == "randr" {
-                DpiMode::Randr
-            } else if let Ok(scale) = var.parse::<f32>() {
-                if valid_scale_factor(scale) {
-                    DpiMode::Scale(scale)
-                } else {
-                    panic!(
-                        "`{}` must be a positive normal number or `randr`. Got `{}`",
-                        GPUI_X11_SCALE_FACTOR_ENV, var
-                    );
+        .map_or(DpiMode::NotSet, |value| {
+            match parse_scale_factor_override(&value) {
+                Ok(mode) => mode,
+                Err(error) => {
+                    log::warn!("Ignoring invalid {GPUI_X11_SCALE_FACTOR_ENV}: {error}");
+                    DpiMode::NotSet
                 }
-            } else if var.is_empty() {
-                DpiMode::NotSet
-            } else {
-                panic!(
-                    "`{}` must be a positive number or `randr`. Got `{}`",
-                    GPUI_X11_SCALE_FACTOR_ENV, var
-                );
             }
         });
 
@@ -2606,6 +2594,27 @@ fn get_scale_factor(
 
     log::info!("Using default scale factor: 1.0");
     1.0
+}
+
+fn parse_scale_factor_override(value: &str) -> anyhow::Result<DpiMode> {
+    if value.is_empty() {
+        return Ok(DpiMode::NotSet);
+    }
+    if value.eq_ignore_ascii_case("randr") {
+        return Ok(DpiMode::Randr);
+    }
+
+    let scale = value.parse::<f32>().map_err(|error| {
+        anyhow!(
+            "`{GPUI_X11_SCALE_FACTOR_ENV}` must be a positive normal number or `randr`; got `{value}` ({error})"
+        )
+    })?;
+    if !valid_scale_factor(scale) {
+        anyhow::bail!(
+            "`{GPUI_X11_SCALE_FACTOR_ENV}` must be a positive normal number or `randr`; got `{value}`"
+        );
+    }
+    Ok(DpiMode::Scale(scale))
 }
 
 fn get_randr_scale_factor(connection: &XCBConnection, screen_index: usize) -> Option<f32> {
@@ -2815,6 +2824,36 @@ fn xkb_state_for_key_event(xkb: &xkbc::State, event_state: xproto::KeyButMask) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_scale_factor_override_values() {
+        assert!(matches!(
+            parse_scale_factor_override(""),
+            Ok(DpiMode::NotSet)
+        ));
+        assert!(matches!(
+            parse_scale_factor_override("randr"),
+            Ok(DpiMode::Randr)
+        ));
+        assert!(matches!(
+            parse_scale_factor_override("RANDR"),
+            Ok(DpiMode::Randr)
+        ));
+        assert!(matches!(
+            parse_scale_factor_override("1.5"),
+            Ok(DpiMode::Scale(1.5))
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_scale_factor_override_values() {
+        for value in ["0", "-1", "NaN", "inf", "not-a-number"] {
+            assert!(
+                parse_scale_factor_override(value).is_err(),
+                "expected `{value}` to be rejected"
+            );
+        }
+    }
 
     fn test_keymap(layouts: &str) -> xkbc::Keymap {
         test_keymap_with_variant(layouts, "")

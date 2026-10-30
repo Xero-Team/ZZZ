@@ -44,32 +44,42 @@ pub struct SyntaxSnapshot {
 // To avoid blocking the main thread, we offload the drop operation to a background thread.
 impl Drop for SyntaxSnapshot {
     fn drop(&mut self) {
-        static DROP_TX: LazyLock<std::sync::mpsc::Sender<SumTree<SyntaxLayerEntry>>> =
+        static DROP_TX: LazyLock<Option<std::sync::mpsc::Sender<SumTree<SyntaxLayerEntry>>>> =
             LazyLock::new(|| {
                 let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::Builder::new()
+                match std::thread::Builder::new()
                     .name("SyntaxSnapshot::drop".into())
                     .spawn(move || while rx.recv().is_ok() {})
-                    .expect("failed to spawn drop thread");
-                tx
+                {
+                    Ok(_) => Some(tx),
+                    Err(error) => {
+                        log::error!("failed to spawn syntax snapshot drop thread: {error}");
+                        None
+                    }
+                }
             });
         // This does allocate a new Arc, but it's cheap and avoids blocking the main thread without needing to use an `Option` or `MaybeUninit`.
-        let _ = DROP_TX.send(std::mem::replace(
+        let layers = std::mem::replace(
             &mut self.layers,
             SumTree::from_summary(SyntaxLayerSummary {
                 min_depth: Default::default(),
                 max_depth: Default::default(),
                 // Deliberately bogus anchors, doesn't matter in this context
-                range: Anchor::min_min_range_for_buffer(
-                    BufferId::new(1).expect("value should be present"),
-                ),
-                last_layer_range: Anchor::min_min_range_for_buffer(
-                    BufferId::new(1).expect("value should be present"),
-                ),
+                range: Anchor::min_min_range_for_buffer(BufferId::from(std::num::NonZeroU64::MIN)),
+                last_layer_range: Anchor::min_min_range_for_buffer(BufferId::from(
+                    std::num::NonZeroU64::MIN,
+                )),
                 last_layer_language: Default::default(),
                 contains_unknown_injections: Default::default(),
             }),
-        ));
+        );
+        let Some(drop_tx) = DROP_TX.as_ref() else {
+            drop(layers);
+            return;
+        };
+        if let Err(error) = drop_tx.send(layers) {
+            log::error!("syntax snapshot drop thread is no longer running: {error}");
+        }
     }
 }
 

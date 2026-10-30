@@ -444,9 +444,9 @@ impl ActionLog {
                                 break;
                             }
 
-                            old_unreviewed_edits
-                                .next()
-                                .expect("iterator should yield an item");
+                            if old_unreviewed_edits.next().is_none() {
+                                break;
+                            }
                         }
                     }
 
@@ -1069,12 +1069,11 @@ fn apply_non_conflicting_edits(
     edits: Vec<Edit<u32>>,
     old_text: &mut Rope,
     new_text: &Rope,
-) -> bool {
+) {
     let mut old_edits = patch.edits().iter().cloned().peekable();
     let mut new_edits = edits.into_iter().peekable();
     let mut applied_delta = 0i32;
     let mut rebased_delta = 0i32;
-    let mut has_made_changes = false;
 
     while let Some(mut new_edit) = new_edits.next() {
         let mut conflict = false;
@@ -1088,17 +1087,20 @@ fn apply_non_conflicting_edits(
             } else if new_edit.old.start > old_edit.new.end
                 || (!old_edit.new.is_empty() && new_edit.old.start == old_edit.new.end)
             {
-                let old_edit = old_edits.next().expect("iterator should yield an item");
+                let Some(old_edit) = old_edits.next() else {
+                    return;
+                };
                 rebased_delta += old_edit.new_len() as i32 - old_edit.old_len() as i32;
             } else {
                 conflict = true;
-                if new_edits
-                    .peek()
-                    .is_some_and(|next_edit| next_edit.old.overlaps(&old_edit.new))
+                if let Some(next_edit) =
+                    new_edits.next_if(|next_edit| next_edit.old.overlaps(&old_edit.new))
                 {
-                    new_edit = new_edits.next().expect("iterator should yield an item");
+                    new_edit = next_edit;
                 } else {
-                    let old_edit = old_edits.next().expect("iterator should yield an item");
+                    let Some(old_edit) = old_edits.next() else {
+                        return;
+                    };
                     rebased_delta += old_edit.new_len() as i32 - old_edit.old_len() as i32;
                 }
             }
@@ -1124,10 +1126,8 @@ fn apply_non_conflicting_edits(
                 &new_text.chunks_in_range(new_bytes).collect::<String>(),
             );
             applied_delta += new_edit.new_len() as i32 - new_edit.old_len() as i32;
-            has_made_changes = true;
         }
     }
-    has_made_changes
 }
 
 fn diff_snapshots(

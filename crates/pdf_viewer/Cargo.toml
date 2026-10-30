@@ -40,3 +40,4 @@ zpdf = { version = "0.18.0", default-features = true }
 
 [dev-dependencies]
 editor = { workspace = true, features = ["test-support"] }
+zpdf-writer = { version = "0.18.0", default-features = false }

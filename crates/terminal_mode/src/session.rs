@@ -582,8 +582,12 @@ impl SessionStore {
             let Some(saved) = saved else {
                 return anyhow::Ok(());
             };
-            let Ok(serialized) = serde_json::from_str::<SerializedTerminalMode>(&saved) else {
-                return anyhow::Ok(());
+            let serialized = match serde_json::from_str::<SerializedTerminalMode>(&saved) {
+                Ok(serialized) => serialized,
+                Err(error) => {
+                    log::warn!("failed to restore terminal mode state: {error}");
+                    return anyhow::Ok(());
+                }
             };
 
             if serialized.terminal_mode_active {
@@ -1010,7 +1014,7 @@ impl SessionStore {
             }
             store
                 .update(cx, |store, _| store.monitor_running = false)
-                .ok();
+                .log_err();
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);

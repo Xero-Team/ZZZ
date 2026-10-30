@@ -2215,7 +2215,10 @@ impl Editor {
                             cx,
                         );
                     }
-                    project::Event::LanguageServerRemoved(_) => {
+                    project::Event::LanguageServerRemoved(server_id) => {
+                        if let Some(inlay_hints) = editor.inlay_hints.as_mut() {
+                            inlay_hints.remove_server(*server_id);
+                        }
                         editor.registered_buffers.clear();
                         editor.register_visible_buffers(cx);
                         editor.invalidate_semantic_tokens(None);
@@ -2245,13 +2248,25 @@ impl Editor {
                             }
                         }
                     }
-                    project::Event::LanguageServerBufferRegistered { buffer_id, .. } => {
+                    project::Event::LanguageServerBufferRegistered {
+                        server_id,
+                        buffer_id,
+                        ..
+                    } => {
                         let buffer_id = *buffer_id;
                         if editor.buffer().read(cx).buffer(buffer_id).is_some() {
                             editor.register_buffer(buffer_id, cx);
                             editor.refresh_runnables(Some(buffer_id), window, cx);
                             editor.update_lsp_data(Some(buffer_id), window, cx);
-                            editor.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
+                            let refresh_reason = editor.inlay_hints.as_mut().map_or(
+                                InlayHintRefreshReason::NewLinesShown,
+                                |inlay_hints| {
+                                    inlay_hints.refresh_reason_for_server_registration(
+                                        buffer_id, *server_id,
+                                    )
+                                },
+                            );
+                            editor.refresh_inlay_hints(refresh_reason, cx);
                             refresh_linked_ranges(editor, window, cx);
                             editor.refresh_code_actions_for_selection(window, cx);
                             editor.refresh_document_highlights(cx);
@@ -3718,11 +3733,10 @@ impl Editor {
                             let is_closing_quote = if bracket_pair.end == bracket_pair.start
                                 && bracket_pair.start.len() == 1
                             {
-                                let target = bracket_pair
-                                    .start
-                                    .chars()
-                                    .next()
-                                    .expect("iterator should yield an item");
+                                let Some(target) = bracket_pair.start.chars().next() else {
+                                    log::error!("bracket pair start is unexpectedly empty");
+                                    return;
+                                };
                                 let mut byte_offset = 0u32;
                                 let current_line_count = snapshot
                                     .reversed_chars_at(selection.start)
@@ -7037,8 +7051,7 @@ impl Editor {
         } else {
             self.style
                 .as_ref()
-                .expect("value should have the expected type")
-                .local_player
+                .map_or_else(|| cx.theme().players().local(), |style| style.local_player)
         }
     }
 
@@ -8512,12 +8525,11 @@ impl Editor {
             // Accumulate contiguous regions of rows that we want to delete.
             while let Some(next_selection) = selections.peek() {
                 let next_rows = next_selection.spanned_rows(false, &display_map);
-                if next_rows.start <= rows.end {
-                    rows.end = next_rows.end;
-                    selections.next().expect("iterator should yield an item");
-                } else {
+                if next_rows.start > rows.end {
                     break;
                 }
+                rows.end = next_rows.end;
+                selections.next();
             }
 
             let buffer = display_map.buffer_snapshot();
@@ -10213,7 +10225,7 @@ impl Editor {
                     let code_point = c as u32;
                     if (33..=126).contains(&code_point) {
                         return char::from_u32(33 + ((code_point + 14) % 94))
-                            .expect("value should be present");
+                            .unwrap_or(char::REPLACEMENT_CHARACTER);
                     }
                     c
                 })
@@ -10394,14 +10406,11 @@ impl Editor {
                 // Avoid duplicating the same lines twice.
                 while let Some(next_selection) = selections_iter.peek() {
                     let next_rows = next_selection.spanned_rows(false, &display_map);
-                    if next_rows.start < rows.end {
-                        rows.end = next_rows.end;
-                        selections_iter
-                            .next()
-                            .expect("iterator should yield an item");
-                    } else {
+                    if next_rows.start >= rows.end {
                         break;
                     }
+                    rows.end = next_rows.end;
+                    selections_iter.next();
                 }
 
                 // Copy the text from the selected row region and splice it either at the start
@@ -10464,15 +10473,12 @@ impl Editor {
 
                         while let Some(next_selection) = selections_iter.peek() {
                             let next_rows = next_selection.spanned_rows(false, &display_map);
-                            if next_rows.start < rows.end {
-                                rows.end = next_rows.end;
-                                group_selections.push(
-                                    selections_iter
-                                        .next()
-                                        .expect("iterator should yield an item"),
-                                );
-                            } else {
+                            if next_rows.start >= rows.end {
                                 break;
+                            }
+                            rows.end = next_rows.end;
+                            if let Some(next_selection) = selections_iter.next() {
+                                group_selections.push(next_selection);
                             }
                         }
 
@@ -13152,14 +13158,16 @@ impl Editor {
         if let Some(mut select_next_state) = self.select_next_state.take() {
             let query = &select_next_state.query;
             if !select_next_state.done {
-                let first_selection = selections
-                    .iter()
-                    .min_by_key(|s| s.id)
-                    .expect("min_by_key should be present");
-                let last_selection = selections
-                    .iter()
-                    .max_by_key(|s| s.id)
-                    .expect("max_by_key should be present");
+                let Some(first_selection) = selections.iter().min_by_key(|s| s.id) else {
+                    log::error!("cannot select the next match without a selection");
+                    self.select_next_state = Some(select_next_state);
+                    return Ok(());
+                };
+                let Some(last_selection) = selections.iter().max_by_key(|s| s.id) else {
+                    log::error!("cannot select the next match without a selection");
+                    self.select_next_state = Some(select_next_state);
+                    return Ok(());
+                };
                 let mut next_selected_range = None;
 
                 let bytes_after_last_selection =
@@ -13271,10 +13279,7 @@ impl Editor {
                     );
                 }
 
-                if selections.len() == 1 {
-                    let selection = selections
-                        .last()
-                        .expect("ensured that there's only one selection");
+                if let [selection] = selections.as_slice() {
                     let query = buffer
                         .text_for_range(selection.start..selection.end)
                         .collect::<String>();
@@ -13397,14 +13402,16 @@ impl Editor {
         if let Some(mut select_prev_state) = self.select_prev_state.take() {
             let query = &select_prev_state.query;
             if !select_prev_state.done {
-                let first_selection = selections
-                    .iter()
-                    .min_by_key(|s| s.id)
-                    .expect("min_by_key should be present");
-                let last_selection = selections
-                    .iter()
-                    .max_by_key(|s| s.id)
-                    .expect("max_by_key should be present");
+                let Some(first_selection) = selections.iter().min_by_key(|s| s.id) else {
+                    log::error!("cannot select the previous match without a selection");
+                    self.select_prev_state = Some(select_prev_state);
+                    return Ok(());
+                };
+                let Some(last_selection) = selections.iter().max_by_key(|s| s.id) else {
+                    log::error!("cannot select the previous match without a selection");
+                    self.select_prev_state = Some(select_prev_state);
+                    return Ok(());
+                };
                 let mut next_selected_range = None;
                 // When we're iterating matches backwards, the oldest match will actually be the furthest one in the buffer.
                 let bytes_before_last_selection =
@@ -13506,10 +13513,7 @@ impl Editor {
                         cx,
                     );
                 }
-                if selections.len() == 1 {
-                    let selection = selections
-                        .last()
-                        .expect("ensured that there's only one selection");
+                if let [selection] = selections.as_slice() {
                     let query = buffer
                         .text_for_range(selection.start..selection.end)
                         .collect::<String>();
@@ -13944,9 +13948,10 @@ impl Editor {
                 }
 
                 if !full_comment_prefixes.is_empty() {
-                    let first_prefix = full_comment_prefixes
-                        .first()
-                        .expect("prefixes is non-empty");
+                    let Some(first_prefix) = full_comment_prefixes.first() else {
+                        log::error!("cannot toggle comments without a comment prefix");
+                        return;
+                    };
                     let prefix_trimmed_lengths = full_comment_prefixes
                         .iter()
                         .map(|p| p.trim_end_matches(' ').len())
@@ -13962,7 +13967,7 @@ impl Editor {
                             continue;
                         }
 
-                        let prefix_range = full_comment_prefixes
+                        let Some(prefix_range) = full_comment_prefixes
                             .iter()
                             .zip(prefix_trimmed_lengths.iter().copied())
                             .map(|(prefix, trimmed_prefix_len)| {
@@ -13975,7 +13980,10 @@ impl Editor {
                                 )
                             })
                             .max_by_key(|range| range.end.column - range.start.column)
-                            .expect("prefixes is non-empty");
+                        else {
+                            log::error!("cannot toggle comments without a comment prefix");
+                            return;
+                        };
 
                         if !is_blank {
                             if prefix_range.is_empty() {
@@ -14245,14 +14253,15 @@ impl Editor {
         }
 
         // scroll based on transformation done to the last selection created by the user
-        let (last_old, last_new) = old_selections
-            .last()
-            .zip(new_selections.last().cloned())
-            .expect("old_selections isn't empty");
+        let Some((last_old, last_new)) = old_selections.last().zip(new_selections.last().cloned())
+        else {
+            log::error!("cannot expand the syntax selection without existing selections");
+            return;
+        };
 
-        let is_selection_reversed = if new_selections.len() == 1 {
+        let is_selection_reversed = if let [new_selection] = new_selections.as_mut_slice() {
             let should_be_reversed = last_old.start != last_new.start;
-            new_selections.last_mut().expect("checked above").reversed = should_be_reversed;
+            new_selection.reversed = should_be_reversed;
             should_be_reversed
         } else {
             last_new.reversed
@@ -15719,10 +15728,10 @@ impl Editor {
                     None => Ok(Navigated::No),
                 }
             } else {
-                let (target_buffer, target_ranges) = locations
-                    .into_iter()
-                    .next()
-                    .expect("iterator should yield an item");
+                let Some((target_buffer, target_ranges)) = locations.into_iter().next() else {
+                    log::error!("cannot navigate without a target location");
+                    return Ok(Navigated::No);
+                };
 
                 editor.update_in(cx, |editor, window, cx| {
                     let target_ranges = target_ranges
@@ -16241,14 +16250,14 @@ impl Editor {
             }
 
             if num_locations == 1 && !always_open_multibuffer {
-                let (target_buffer, target_ranges) = locations
-                    .into_iter()
-                    .next()
-                    .expect("iterator should yield an item");
-                let target_range = target_ranges
-                    .first()
-                    .expect("collection should not be empty")
-                    .clone();
+                let Some((target_buffer, target_ranges)) = locations.into_iter().next() else {
+                    log::error!("cannot navigate to a single location without a target");
+                    return Ok(Navigated::No);
+                };
+                let Some(target_range) = target_ranges.first().cloned() else {
+                    log::error!("cannot navigate to a single location without a range");
+                    return Ok(Navigated::No);
+                };
 
                 return editor.update_in(cx, |editor, window, cx| {
                     let range = target_range.to_point(target_buffer.read(cx));
@@ -16869,11 +16878,13 @@ impl Editor {
                         let buffer_id = buffer_snapshot.remote_id();
                         let start = buffer_snapshot.anchor_before(buffer_range.start);
                         let end = buffer_snapshot.anchor_after(buffer_range.end);
-                        buffers.insert(
-                            multi_buffer
-                                .buffer(buffer_id)
-                                .expect("buffer should be present"),
-                        );
+                        let Some(buffer) = multi_buffer.buffer(buffer_id) else {
+                            log::error!(
+                                "cannot format a range for a buffer that is not in the multi-buffer"
+                            );
+                            continue;
+                        };
+                        buffers.insert(buffer);
                         buffer_id_to_ranges
                             .entry(buffer_id)
                             .and_modify(|buffer_ranges| buffer_ranges.push(start..end))
@@ -17675,11 +17686,11 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         self.transact(window, cx, |this, _, cx| {
-            this.buffer
-                .read(cx)
-                .as_singleton()
-                .expect("you can only call set_text on editors for singleton buffers")
-                .update(cx, |buffer, cx| buffer.set_text(text, cx));
+            let Some(buffer) = this.buffer.read(cx).as_singleton() else {
+                log::error!("cannot call set_text on an editor backed by a multi-buffer");
+                return;
+            };
+            buffer.update(cx, |buffer, cx| buffer.set_text(text, cx));
         });
     }
 
@@ -19353,9 +19364,7 @@ impl Editor {
             }?;
 
             let buffer_range = range.to_point(buffer_snapshot);
-            let buffer = multi_buffer
-                .buffer(buffer_snapshot.remote_id())
-                .expect("value should be present");
+            let buffer = multi_buffer.buffer(buffer_snapshot.remote_id())?;
 
             let Some(buffer_diff) = multi_buffer.diff_for(buffer_snapshot.remote_id()) else {
                 return Some((buffer, buffer_range.start.row..buffer_range.end.row));
@@ -20535,6 +20544,9 @@ impl Editor {
             multi_buffer::Event::LanguageChanged(buffer_id, is_fresh_language) => {
                 if !is_fresh_language {
                     self.registered_buffers.remove(&buffer_id);
+                    if let Some(inlay_hints) = self.inlay_hints.as_mut() {
+                        inlay_hints.clear_registered_servers(*buffer_id);
+                    }
                 }
                 // No event exists for a buffer detaching from a language server: a switch
                 // to a language with no server emits neither LanguageServerRemoved nor
@@ -21115,10 +21127,10 @@ impl Editor {
         let selections = self
             .selections
             .all::<MultiBufferOffsetUtf16>(&self.display_snapshot(cx));
-        let newest_selection = selections
-            .iter()
-            .max_by_key(|selection| selection.id)
-            .expect("max_by_key should be present");
+        let Some(newest_selection) = selections.iter().max_by_key(|selection| selection.id) else {
+            log::error!("cannot replace IME ranges without a selection");
+            return Vec::new();
+        };
         let start_delta = range.start.0.0 as isize - newest_selection.start.0.0 as isize;
         let end_delta = range.end.0.0 as isize - newest_selection.end.0.0 as isize;
         let snapshot = self.buffer.read(cx).read(cx);
@@ -21200,22 +21212,10 @@ impl Editor {
                 }
 
                 if chunk_lines.peek().is_some() {
-                    if line.len() > 1
-                        && line
-                            .front()
-                            .expect("collection should not be empty")
-                            .text
-                            .is_empty()
-                    {
+                    if line.len() > 1 && line.front().is_some_and(|chunk| chunk.text.is_empty()) {
                         line.pop_front();
                     }
-                    if line.len() > 1
-                        && line
-                            .back()
-                            .expect("collection should not be empty")
-                            .text
-                            .is_empty()
-                    {
+                    if line.len() > 1 && line.back().is_some_and(|chunk| chunk.text.is_empty()) {
                         line.pop_back();
                     }
 
@@ -21641,11 +21641,17 @@ impl Editor {
         let em_width = window
             .text_system()
             .em_width(font_id, font_size)
-            .expect("em_width should be present");
+            .unwrap_or_else(|error| {
+                log::warn!("Failed to measure editor em width: {error}");
+                font_size
+            });
         let em_advance = window
             .text_system()
             .em_advance(font_id, font_size)
-            .expect("em_advance should be present");
+            .unwrap_or_else(|error| {
+                log::warn!("Failed to measure editor em advance: {error}");
+                font_size
+            });
 
         CharacterDimensions {
             em_width,
@@ -23219,11 +23225,7 @@ fn snippet_completions(
                         server_id: LanguageServerId(usize::MAX),
                         resolved: true,
                         lsp_completion: Box::new(lsp::CompletionItem {
-                            label: snippet
-                                .prefix
-                                .first()
-                                .expect("collection should not be empty")
-                                .clone(),
+                            label: matching_prefix.clone(),
                             kind: Some(CompletionItemKind::SNIPPET),
                             label_details: snippet.description.as_ref().map(|description| {
                                 lsp::CompletionItemLabelDetails {
@@ -23552,16 +23554,12 @@ fn consume_contiguous_rows(
     let mut end_row = ending_row(selection, display_map);
 
     while let Some(next_selection) = selections.peek() {
-        if next_selection.start.row <= end_row.0 {
-            end_row = ending_row(next_selection, display_map);
-            contiguous_row_selections.push(
-                selections
-                    .next()
-                    .expect("iterator should yield an item")
-                    .clone(),
-            );
-        } else {
+        if next_selection.start.row > end_row.0 {
             break;
+        }
+        end_row = ending_row(next_selection, display_map);
+        if let Some(next_selection) = selections.next() {
+            contiguous_row_selections.push(next_selection.clone());
         }
     }
     (start_row, end_row)
@@ -25056,16 +25054,12 @@ impl PromptEditor {
 
     fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(editor) = self.editor.upgrade() {
-            let message = self
-                .prompt
-                .read(cx)
-                .buffer
-                .read(cx)
-                .as_singleton()
-                .expect("A multi buffer in prompt isn't possible")
-                .read(cx)
-                .as_rope()
-                .to_string();
+            let prompt = self.prompt.read(cx);
+            let Some(buffer) = prompt.buffer.read(cx).as_singleton() else {
+                log::error!("cannot confirm a prompt without a singleton buffer");
+                return;
+            };
+            let message = buffer.read(cx).as_rope().to_string();
 
             editor.update(cx, |editor, cx| {
                 if let Some(confirm) = self.confirm_callback.take() {
@@ -25081,16 +25075,12 @@ impl PromptEditor {
     fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
         self.editor
             .update(cx, |editor, cx| {
-                let message = self
-                    .prompt
-                    .read(cx)
-                    .buffer
-                    .read(cx)
-                    .as_singleton()
-                    .expect("A multi buffer in prompt isn't possible")
-                    .read(cx)
-                    .as_rope()
-                    .to_string();
+                let prompt = self.prompt.read(cx);
+                let Some(buffer) = prompt.buffer.read(cx).as_singleton() else {
+                    log::error!("cannot cancel a prompt without a singleton buffer");
+                    return;
+                };
+                let message = buffer.read(cx).as_rope().to_string();
 
                 if let Some(cancel) = self.cancel_callback.take() {
                     cancel(message, editor, cx);

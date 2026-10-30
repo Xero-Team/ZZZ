@@ -2379,10 +2379,13 @@ impl Project {
             let (old_abs_path, new_abs_path) = {
                 let root_path = worktree.read_with(cx, |this, _| this.abs_path());
                 let new_abs_path = if is_root_entry {
-                    root_path
-                        .parent()
-                        .expect("path should have the expected component")
-                        .join(new_path.path.as_std_path())
+                    let Some(parent) = root_path.parent() else {
+                        return Err(anyhow!(
+                            "cannot rename root entry of worktree without a parent: {}",
+                            root_path.display()
+                        ));
+                    };
+                    parent.join(new_path.path.as_std_path())
                 } else {
                     root_path.join(&new_path.path.as_std_path())
                 };
@@ -4462,7 +4465,9 @@ impl Project {
         let release_subscription =
             cx.observe_release(&worktree, move |_project, _released_worktree, _cx| {
                 if let Some(released_tx) = released_tx.lock().take() {
-                    let _ = released_tx.send(());
+                    if released_tx.send(()).is_err() {
+                        log::debug!("worktree release waiter was dropped");
+                    }
                 }
             });
 
@@ -5117,9 +5122,12 @@ impl Project {
             let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
             if let Some(worktree) = project.worktree_for_id(worktree_id, cx) {
                 worktree.update(cx, |worktree, _| {
-                    let worktree = worktree
-                        .as_remote_mut()
-                        .expect("should be a remote instance");
+                    let Some(worktree) = worktree.as_remote_mut() else {
+                        log::error!(
+                            "received a remote worktree update for a local worktree: {worktree_id:?}"
+                        );
+                        return;
+                    };
                     worktree.update_from_remote(envelope.payload);
                 });
             }

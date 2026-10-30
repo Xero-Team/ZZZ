@@ -27,7 +27,6 @@ use std::path::PathBuf;
 use std::process::{ExitStatus, Stdio};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use std::{any::Any, cell::RefCell, collections::VecDeque};
 use task::{Shell, ShellBuilder, SpawnInTerminal};
 use thiserror::Error;
@@ -49,6 +48,7 @@ const PARAMETERIZED_MODEL_PICKER_META_KEY: &str = "parameterizedModelPicker";
 const MAX_DEBUG_BACKLOG_MESSAGES: usize = 2000;
 const ACP_RESPONSE_CHANNEL_CANCELLED: &str =
     "response channel cancelled — connection may have dropped";
+const ACP_INCOMING_TRANSPORT_CLOSED_REASON: &str = "incoming_transport_closed";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AcpDebugMessageDirection {
@@ -1063,13 +1063,19 @@ impl AcpConnection {
                     let response_channel_cancelled = error.code == ErrorCode::InternalError
                         && error.data.as_ref().and_then(|data| data.as_str())
                             == Some(ACP_RESPONSE_CHANNEL_CANCELLED);
-                    if !response_channel_cancelled {
+                    let incoming_transport_closed = error
+                        .data
+                        .as_ref()
+                        .and_then(|data| data.get("reason"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(ACP_INCOMING_TRANSPORT_CLOSED_REASON);
+                    if !response_channel_cancelled && !incoming_transport_closed {
                         return Err(error.into());
                     }
 
                     let timer = cx
                         .background_executor()
-                        .timer(Duration::from_millis(250))
+                        .timer(EXIT_DRAIN_TIMEOUT)
                         .boxed_local();
                     if let futures::future::Either::Left((status, _timer)) =
                         futures::future::select(status_fut, timer).await

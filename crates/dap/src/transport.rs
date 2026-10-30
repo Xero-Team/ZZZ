@@ -662,19 +662,21 @@ impl Transport for TcpTransport {
                             return Ok((Box::new(write) as _, Box::new(read) as _))
                         }
 
-                        let has_process = process.lock().is_some();
-                        if has_process {
-                            let status = process.lock().as_mut().expect("value should have the expected type").try_status();
-                            if let Ok(Some(_)) = status {
-                                let child = process.lock().take().expect("entry should be present");
-                                let output = child.output().await?;
-                                let output = if output.stderr.is_empty() {
-                                    String::from_utf8_lossy(&output.stdout).to_string()
-                                } else {
-                                    String::from_utf8_lossy(&output.stderr).to_string()
-                                };
-                                anyhow::bail!("{output}\nerror: process exited before debugger attached.");
-                            }
+                        let exited_child = {
+                            let mut process = process.lock();
+                            let has_exited = process
+                                .as_mut()
+                                .is_some_and(|child| matches!(child.try_status(), Ok(Some(_))));
+                            if has_exited { process.take() } else { None }
+                        };
+                        if let Some(child) = exited_child {
+                            let output = child.output().await?;
+                            let output = if output.stderr.is_empty() {
+                                String::from_utf8_lossy(&output.stdout).to_string()
+                            } else {
+                                String::from_utf8_lossy(&output.stderr).to_string()
+                            };
+                            anyhow::bail!("{output}\nerror: process exited before debugger attached.");
                         }
 
                         executor.timer(Duration::from_millis(100)).await;

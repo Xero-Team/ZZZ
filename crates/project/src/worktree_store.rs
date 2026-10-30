@@ -694,7 +694,7 @@ impl WorktreeStore {
                             } else {
                                 // First refresh the parent directory (in case it was newly created)
                                 if let Some(parent) = new_project_path.path.parent() {
-                                    let _ = local.refresh_entries_for_paths(vec![parent.into()]);
+                                    drop(local.refresh_entries_for_paths(vec![parent.into()]));
                                 }
                                 // Then refresh the new path
                                 local.refresh_entry(

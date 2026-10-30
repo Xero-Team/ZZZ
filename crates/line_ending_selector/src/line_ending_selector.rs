@@ -43,7 +43,7 @@ impl LineEndingSelector {
             .update(cx, |editor, cx| {
                 Some((editor.workspace()?, editor.active_buffer(cx)?))
             })
-            .ok()
+            .log_err()
             .flatten()
         else {
             return;
@@ -102,15 +102,24 @@ impl LineEndingSelectorDelegate {
         project: Entity<Project>,
         line_ending: LineEnding,
     ) -> Self {
+        let matches = vec![LineEnding::Unix, LineEnding::Windows];
+        let selected_index = line_ending_match_index(&matches, line_ending);
         Self {
             line_ending_selector,
             buffer,
             project,
             line_ending,
-            matches: vec![LineEnding::Unix, LineEnding::Windows],
-            selected_index: 0,
+            matches,
+            selected_index,
         }
     }
+}
+
+fn line_ending_match_index(matches: &[LineEnding], line_ending: LineEnding) -> usize {
+    matches
+        .iter()
+        .position(|candidate| candidate == &line_ending)
+        .unwrap_or(0)
 }
 
 impl PickerDelegate for LineEndingSelectorDelegate {
@@ -194,5 +203,18 @@ impl PickerDelegate for LineEndingSelectorDelegate {
         }
 
         Some(list_item)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LineEnding, line_ending_match_index};
+
+    #[test]
+    fn line_ending_match_index_selects_the_current_line_ending() {
+        let matches = [LineEnding::Unix, LineEnding::Windows];
+
+        assert_eq!(line_ending_match_index(&matches, LineEnding::Unix), 0);
+        assert_eq!(line_ending_match_index(&matches, LineEnding::Windows), 1);
     }
 }

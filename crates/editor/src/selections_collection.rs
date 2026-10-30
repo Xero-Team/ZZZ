@@ -846,6 +846,11 @@ impl MutableSelectionsCollection<'_, '_> {
     where
         T: ToOffset + std::marker::Copy + std::fmt::Debug,
     {
+        if selections.is_empty() {
+            log::error!("ignoring selection replacement with no selections");
+            return;
+        }
+
         let mut selections = selections
             .into_iter()
             .map(|selection| selection.map(|it| it.to_offset(self.snapshot)))
@@ -1520,6 +1525,26 @@ mod tests {
         );
         assert_eq!(result[0].start, Point::new(1, 1));
         assert_eq!(result[0].end, Point::new(3, 2));
+    }
+
+    #[gpui::test]
+    fn replacing_selections_with_an_empty_collection_preserves_existing_selections(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let snapshot = row_range_snapshot(cx, "aaaa\nbbbb\ncccc");
+        let mut collection = row_range_collection([2..4], snapshot.buffer_snapshot());
+
+        let (changed, ()) = collection.change_with(&snapshot, |selections| {
+            selections.select(Vec::<Selection<MultiBufferOffset>>::new());
+        });
+
+        assert!(!changed);
+        assert_eq!(collection.count(), 1);
+        assert_eq!(
+            collection.newest::<Point>(&snapshot).start,
+            Point::new(0, 2)
+        );
+        assert_eq!(collection.newest::<Point>(&snapshot).end, Point::new(0, 4));
     }
 
     #[gpui::test(iterations = 20)]

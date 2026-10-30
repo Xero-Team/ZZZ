@@ -32,31 +32,31 @@ pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock
         terminal_deny: vec![
             // Recursive deletion of root - "rm -rf /", "rm -rfv /", "rm -rf /*", "rm / -rf"
             CompiledRegex::new(
-                &format!(r"\brm\s+{FLAGS}(--\s+)?/\*?{TRAILING_FLAGS}$"),
+                &format!(r"^rm\s+{FLAGS}(--\s+)?/\*?{TRAILING_FLAGS}$"),
                 false,
             )
             .expect("hardcoded regex should compile"),
             // Recursive deletion of home - "rm -rf ~" or "rm -rf ~/" or "rm -rf ~/*" or "rm ~ -rf" (but not ~/subdir)
             CompiledRegex::new(
-                &format!(r"\brm\s+{FLAGS}(--\s+)?~/?\*?{TRAILING_FLAGS}$"),
+                &format!(r"^rm\s+{FLAGS}(--\s+)?~/?\*?{TRAILING_FLAGS}$"),
                 false,
             )
             .expect("hardcoded regex should compile"),
             // Recursive deletion of home via $HOME - "rm -rf $HOME" or "rm -rf ${HOME}" or "rm $HOME -rf" or with /*
             CompiledRegex::new(
-                &format!(r"\brm\s+{FLAGS}(--\s+)?(\$HOME|\$\{{HOME\}})/?(\*)?{TRAILING_FLAGS}$"),
+                &format!(r"^rm\s+{FLAGS}(--\s+)?(\$HOME|\$\{{HOME\}})/?(\*)?{TRAILING_FLAGS}$"),
                 false,
             )
             .expect("hardcoded regex should compile"),
             // Recursive deletion of current directory - "rm -rf ." or "rm -rf ./" or "rm -rf ./*" or "rm . -rf"
             CompiledRegex::new(
-                &format!(r"\brm\s+{FLAGS}(--\s+)?\./?\*?{TRAILING_FLAGS}$"),
+                &format!(r"^rm\s+{FLAGS}(--\s+)?\./?\*?{TRAILING_FLAGS}$"),
                 false,
             )
             .expect("hardcoded regex should compile"),
             // Recursive deletion of parent directory - "rm -rf .." or "rm -rf ../" or "rm -rf ../*" or "rm .. -rf"
             CompiledRegex::new(
-                &format!(r"\brm\s+{FLAGS}(--\s+)?\.\./?\*?{TRAILING_FLAGS}$"),
+                &format!(r"^rm\s+{FLAGS}(--\s+)?\.\./?\*?{TRAILING_FLAGS}$"),
                 false,
             )
             .expect("hardcoded regex should compile"),
@@ -108,6 +108,83 @@ fn check_hardcoded_security_rules(
 /// path arguments normalized (to catch traversal bypasses like `rm -rf /tmp/../../`
 /// and multi-path bypasses like `rm -rf /tmp /`).
 fn matches_hardcoded_patterns(command: &str, patterns: &[CompiledRegex]) -> bool {
+    let mut pending_commands = vec![command.to_owned()];
+    let mut inspected_commands = 0;
+
+    while let Some(command) = pending_commands.pop() {
+        if matches_direct_hardcoded_patterns(&command, patterns) {
+            return true;
+        }
+
+        inspected_commands += 1;
+        if inspected_commands > 16 {
+            // Deeply nested shell invocations cannot be reviewed reliably. Treat
+            // them as unsafe rather than letting the limit become a bypass.
+            return true;
+        }
+        pending_commands.extend(nested_shell_payloads(&command));
+        pending_commands.extend(split_string_payloads(&command));
+    }
+
+    false
+}
+
+/// `env -S` (and `env --split-string`) tokenizes its argument before executing
+/// it, so the wrapped command never appears as a distinct token in the outer
+/// command. Expand that payload before checking the hardcoded rules.
+fn split_string_payloads(command: &str) -> Vec<String> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let Some(env_index) = find_env_after_command_prefix(&parts) else {
+        return vec![];
+    };
+
+    let mut index = env_index + 1;
+    while let Some(part) = parts.get(index) {
+        if *part == "--" {
+            return vec![];
+        }
+        if *part == "-" || !part.starts_with('-') {
+            return vec![];
+        }
+
+        if let Some(payload) = part.strip_prefix("--split-string=").or_else(|| {
+            part.strip_prefix("-S")
+                .filter(|payload| !payload.is_empty())
+        }) {
+            return normalize_split_string_payload(payload, &parts[index + 1..]);
+        }
+
+        if *part == "-S" || *part == "--split-string" {
+            let Some(payload) = parts.get(index + 1) else {
+                return vec![];
+            };
+            return normalize_split_string_payload(payload, &parts[index + 2..]);
+        }
+
+        index += if matches!(
+            part.split_once('=').map_or(*part, |(name, _)| name),
+            "-u" | "--unset" | "-C" | "--chdir"
+        ) && !part.contains('=')
+        {
+            2
+        } else {
+            1
+        };
+    }
+
+    vec![]
+}
+
+fn normalize_split_string_payload(payload: &str, trailing_parts: &[&str]) -> Vec<String> {
+    let mut input = payload.to_owned();
+    if !trailing_parts.is_empty() {
+        input.push(' ');
+        input.push_str(&trailing_parts.join(" "));
+    }
+    vec![shlex::split(&input).map_or(input, |tokens| tokens.join(" "))]
+}
+
+fn matches_direct_hardcoded_patterns(command: &str, patterns: &[CompiledRegex]) -> bool {
     for pattern in patterns {
         if pattern.is_match(command) {
             return true;
@@ -125,23 +202,125 @@ fn matches_hardcoded_patterns(command: &str, patterns: &[CompiledRegex]) -> bool
     false
 }
 
+fn nested_shell_payloads(command: &str) -> Vec<String> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    let Some(shell_index) = find_shell_after_command_prefix(&parts) else {
+        return vec![];
+    };
+
+    let mut index = shell_index + 1;
+    while let Some(part) = parts.get(index) {
+        if *part == "--" {
+            index += 1;
+            continue;
+        }
+        if *part == "-" || !part.starts_with('-') {
+            break;
+        }
+
+        let lower = part.to_ascii_lowercase();
+        if lower == "-c" || lower == "--command" || lower == "/c" {
+            return parts
+                .get(index + 1)
+                .map(|_| shell_payloads(parts[index + 1..].join(" ")))
+                .unwrap_or_default();
+        }
+        if lower.starts_with('-') && !lower.starts_with("--") && lower[1..].contains('c') {
+            return parts
+                .get(index + 1)
+                .map(|_| shell_payloads(parts[index + 1..].join(" ")))
+                .unwrap_or_default();
+        }
+        if let Some(payload) = lower
+            .strip_prefix("--command=")
+            .or_else(|| lower.strip_prefix("-c"))
+            .filter(|payload| !payload.is_empty())
+        {
+            let mut payload_parts = vec![payload.to_owned()];
+            payload_parts.extend(parts.iter().skip(index + 1).map(|part| (*part).to_owned()));
+            return shell_payloads(payload_parts.join(" "));
+        }
+
+        index += if lower == "-o" || lower == "+o" { 2 } else { 1 };
+    }
+
+    vec![]
+}
+
+fn shell_payloads(payload: String) -> Vec<String> {
+    let mut payloads = vec![payload.clone()];
+    if let Some(commands) = extract_commands(&payload) {
+        payloads.extend(commands);
+    }
+    payloads
+}
+
+fn find_shell_after_command_prefix(parts: &[&str]) -> Option<usize> {
+    let mut index = 0;
+    while parts.get(index).is_some_and(|part| is_assignment(part)) {
+        index += 1;
+    }
+
+    loop {
+        if is_shell_executable(parts.get(index)?) {
+            return Some(index);
+        }
+        index += wrapper_arguments(parts, index)?;
+    }
+}
+
+fn find_env_after_command_prefix(parts: &[&str]) -> Option<usize> {
+    let mut index = 0;
+    while parts.get(index).is_some_and(|part| is_assignment(part)) {
+        index += 1;
+    }
+
+    loop {
+        if executable_matches(parts.get(index)?, "env") {
+            return Some(index);
+        }
+        index += wrapper_arguments(parts, index)?;
+    }
+}
+
+fn is_shell_executable(word: &str) -> bool {
+    [
+        "ash",
+        "bash",
+        "csh",
+        "dash",
+        "elvish",
+        "fish",
+        "ksh",
+        "mksh",
+        "nu",
+        "pwsh",
+        "powershell",
+        "rc",
+        "sh",
+        "tcsh",
+        "xonsh",
+        "zsh",
+    ]
+    .iter()
+    .any(|shell| executable_matches(word, shell))
+}
+
 /// For rm commands, expands multi-path arguments into individual single-path
 /// commands with normalized paths. This catches both traversal bypasses like
 /// `rm -rf /tmp/../../` and multi-path bypasses like `rm -rf /tmp /`.
 fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
     let trimmed = command.trim();
 
-    let first_token = trimmed.split_whitespace().next();
-    if first_token.is_none_or(|t| !t.eq_ignore_ascii_case("rm")) {
-        return vec![];
-    }
-
     let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    let Some(rm_index) = find_rm_after_command_prefix(&parts) else {
+        return vec![];
+    };
     let mut flags = Vec::new();
     let mut paths = Vec::new();
     let mut past_double_dash = false;
 
-    for part in parts.iter().skip(1) {
+    for part in parts.iter().skip(rm_index + 1) {
         if !past_double_dash && *part == "--" {
             past_double_dash = true;
             flags.push(*part);
@@ -201,6 +380,133 @@ fn expand_rm_to_single_path_commands(command: &str) -> Vec<String> {
     }
 
     results
+}
+
+fn find_rm_after_command_prefix(parts: &[&str]) -> Option<usize> {
+    let mut index = 0;
+    while parts.get(index).is_some_and(|part| is_assignment(part)) {
+        index += 1;
+    }
+
+    loop {
+        if executable_matches(parts.get(index)?, "rm") {
+            return Some(index);
+        }
+        index += wrapper_arguments(parts, index)?;
+    }
+}
+
+fn is_assignment(word: &str) -> bool {
+    let Some((name, _)) = word.split_once('=') else {
+        return false;
+    };
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|character| character == '_' || character.is_ascii_alphabetic())
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn executable_matches(word: &str, expected: &str) -> bool {
+    let file_name = word.rsplit(['/', '\\']).next().unwrap_or(word);
+    let executable = file_name
+        .strip_suffix(".exe")
+        .or_else(|| file_name.strip_suffix(".EXE"))
+        .unwrap_or(file_name);
+    executable.eq_ignore_ascii_case(expected)
+}
+
+fn wrapper_arguments(parts: &[&str], index: usize) -> Option<usize> {
+    let word = parts.get(index)?;
+    let name = word
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(word)
+        .strip_suffix(".exe")
+        .or_else(|| word.rsplit(['/', '\\']).next()?.strip_suffix(".EXE"))
+        .unwrap_or_else(|| word.rsplit(['/', '\\']).next().unwrap_or(word))
+        .to_ascii_lowercase();
+    let next_index = match name.as_str() {
+        "sudo" => skip_options(
+            parts,
+            index + 1,
+            &["-C", "-g", "-h", "-p", "-r", "-t", "-u", "-U"],
+        )?,
+        "doas" => skip_options(parts, index + 1, &["-a", "-C", "-u"])?,
+        "pkexec" => skip_options(parts, index + 1, &["--user"])?,
+        "env" => {
+            let next_index = skip_options(parts, index + 1, &["-C", "-u", "--chdir", "--unset"])?;
+            if parts[index + 1..next_index].iter().any(|part| {
+                matches!(*part, "-S" | "--split-string") || part.starts_with("--split-string=")
+            }) {
+                // The split-string payload is a single logical argument. A
+                // whitespace split cannot distinguish its words from the
+                // wrapper's command, so stop here and let
+                // `split_string_payloads` expand the payload precisely.
+                return Some(parts.len() - index);
+            }
+            let mut next_index = next_index;
+            while parts
+                .get(next_index)
+                .is_some_and(|part| is_assignment(part))
+            {
+                next_index += 1;
+            }
+            next_index
+        }
+        "nice" => skip_options(parts, index + 1, &["-n", "--adjustment"])?,
+        "ionice" => skip_options(
+            parts,
+            index + 1,
+            &["-c", "-n", "-p", "--class", "--classdata", "--pid"],
+        )?,
+        "stdbuf" => skip_options(
+            parts,
+            index + 1,
+            &["-e", "-i", "-o", "--error", "--input", "--output"],
+        )?,
+        "timeout" => {
+            let next_index =
+                skip_options(parts, index + 1, &["-k", "-s", "--kill-after", "--signal"])?;
+            parts.get(next_index)?;
+            next_index + 1
+        }
+        "watch" => skip_options(
+            parts,
+            index + 1,
+            &["-d", "--differences", "-n", "--interval"],
+        )?,
+        "chroot" => {
+            let next_index = skip_options(parts, index + 1, &["--groups", "--userspec"])?;
+            parts.get(next_index)?;
+            next_index + 1
+        }
+        "busybox" | "toybox" => index + 1,
+        "builtin" | "command" | "exec" | "nohup" | "setsid" | "time" => {
+            skip_options(parts, index + 1, &[])?
+        }
+        _ => return None,
+    };
+    Some(next_index - index)
+}
+
+fn skip_options(parts: &[&str], mut index: usize, options_with_values: &[&str]) -> Option<usize> {
+    loop {
+        let part = parts.get(index)?;
+        if *part == "--" {
+            return Some(index + 1);
+        }
+        if *part == "-" || !part.starts_with('-') {
+            return Some(index);
+        }
+
+        let option_name = part.split_once('=').map_or(*part, |(name, _)| name);
+        index += if options_with_values.contains(&option_name) && !part.contains('=') {
+            2
+        } else {
+            1
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2021,6 +2327,57 @@ mod tests {
             .mode(ToolPermissionMode::Allow)
             .is_allow();
         t("rm -rf /var/log/app /tmp/cache")
+            .mode(ToolPermissionMode::Allow)
+            .is_allow();
+    }
+
+    #[test]
+    fn hardcoded_blocks_rm_behind_command_wrappers() {
+        t("sudo rm -rf /tmp /").is_deny();
+        t("sudo -u root rm -rf /tmp /").is_deny();
+        t("env FOO=bar rm -rf /tmp /").is_deny();
+        t("env -u FOO rm -rf /tmp /").is_deny();
+        t("nice -n 10 rm -rf /tmp /").is_deny();
+        t("timeout 5 rm -rf /tmp /").is_deny();
+        t("command -- rm -rf /tmp /").is_deny();
+        t("builtin rm -rf /tmp /").is_deny();
+        t("busybox rm -rf /tmp /").is_deny();
+        t("/bin/rm -rf /tmp /").is_deny();
+        t(r"C:\Windows\System32\rm.exe -rf /tmp /").is_deny();
+        t("rm.exe -rf /tmp /").is_deny();
+        t("FOO=bar rm -rf /tmp /").is_deny();
+        t("sudo rm -rf $HOME/subdir /tmp/../../").is_deny();
+    }
+
+    #[test]
+    fn hardcoded_does_not_block_rm_as_echo_arguments() {
+        t("echo rm -rf /")
+            .mode(ToolPermissionMode::Allow)
+            .is_allow();
+        t("printf '%s' rm -rf /")
+            .mode(ToolPermissionMode::Allow)
+            .is_allow();
+        t("sh -c 'echo rm -rf /'")
+            .mode(ToolPermissionMode::Allow)
+            .is_allow();
+    }
+
+    #[test]
+    fn hardcoded_blocks_nested_shell_rm() {
+        t("sh -c 'rm -rf /'").is_deny();
+        t("bash -c 'rm -rf /tmp /'").is_deny();
+        t("bash --command='rm -rf ~'").is_deny();
+        t("sudo bash -c 'rm -rf $HOME'").is_deny();
+        t("bash -lc 'rm -rf /tmp/../../'").is_deny();
+        t("bash -c 'bash -c \"rm -rf /\"'").is_deny();
+    }
+
+    #[test]
+    fn hardcoded_blocks_env_split_string_rm() {
+        t("env -S 'rm -rf /'").is_deny();
+        t("env --split-string='rm -rf /'").is_deny();
+        t("sudo env -S 'bash -c \"rm -rf /\"'").is_deny();
+        t("env -S 'echo rm -rf /'")
             .mode(ToolPermissionMode::Allow)
             .is_allow();
     }

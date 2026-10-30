@@ -16,7 +16,7 @@ pub struct UnixListener(UnixSocket);
 
 impl UnixListener {
     pub fn bind<P: AsRef<Path>>(path: P) -> Result<Self> {
-        init();
+        init()?;
         let socket = UnixSocket::new()?;
         let (addr, len) = sockaddr_un(path)?;
         unsafe {

@@ -117,8 +117,16 @@ impl Settings for RemoteSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let remote = &content.remote;
         Self {
-            ssh_connections: remote.ssh_connections.clone().unwrap_or_default().into(),
-            wsl_connections: remote.wsl_connections.clone().unwrap_or_default().into(),
+            ssh_connections: remote
+                .ssh_connections
+                .clone()
+                .expect("ssh_connections should be present")
+                .into(),
+            wsl_connections: remote
+                .wsl_connections
+                .clone()
+                .expect("wsl_connections should be present")
+                .into(),
             read_ssh_config: remote
                 .read_ssh_config
                 .expect("read_ssh_config should be present"),

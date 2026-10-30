@@ -94,7 +94,35 @@ pub struct HeadlessProject {
         reason = "kept alive for RPC handlers; public for struct-literal construction"
     )]
     pub _toolchain_store: Entity<ToolchainStore>,
-    pub kernels: HashMap<String, Child>,
+    pub kernels: HashMap<String, KernelProcess>,
+}
+
+pub struct KernelProcess {
+    child: Child,
+    _connection_file: TempConnectionFile,
+}
+
+struct TempConnectionFile {
+    path: PathBuf,
+}
+
+impl TempConnectionFile {
+    fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl Drop for TempConnectionFile {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_file(&self.path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!(
+                "failed to remove kernel connection file {}: {error}",
+                self.path.display()
+            );
+        }
+    }
 }
 
 pub struct HeadlessAppState {
@@ -617,7 +645,7 @@ impl HeadlessProject {
                 buffer_id: buffer.read(cx).remote_id().to_proto(),
                 operations: vec![serialize_operation(operation)],
             }))
-            .detach()
+            .detach_and_log_err(cx)
         }
     }
 
@@ -711,7 +739,13 @@ impl HeadlessProject {
                     });
                 let show_document_request = show_document_request.clone();
                 cx.background_spawn(async move {
-                    show_document_request.respond(request.await.is_ok());
+                    let response = request.await;
+                    if let Err(error) = &response {
+                        log::error!(
+                            "failed to request showing a language server document: {error:#}"
+                        );
+                    }
+                    show_document_request.respond(response.is_ok());
                 })
                 .detach();
             }
@@ -735,7 +769,7 @@ impl HeadlessProject {
                     }
                     anyhow::Ok(())
                 })
-                .detach();
+                .detach_and_log_err(cx);
             }
             _ => {}
         }
@@ -835,7 +869,7 @@ impl HeadlessProject {
                 this.worktree_store.update(cx, |worktree_store, cx| {
                     worktree_store.add(&worktree, cx);
                 });
-            });
+            })
         })
         .detach();
 
@@ -1093,6 +1127,7 @@ impl HeadlessProject {
         let kernel_id = uuid::Uuid::new_v4().to_string();
 
         let connection_file_path = std::env::temp_dir().join(format!("kernel-{}.json", kernel_id));
+        let connection_file = TempConnectionFile::new(connection_file_path.clone());
         fs.save(
             &connection_file_path,
             &connection_file_content.as_str().into(),
@@ -1110,6 +1145,7 @@ impl HeadlessProject {
         // Spawn kernel
         let spawn_kernel = |binary: &std::ffi::OsStr, args: &[String]| {
             let mut command = smol::process::Command::new(binary);
+            command.kill_on_drop(true);
 
             if args.is_empty() {
                 command
@@ -1169,7 +1205,13 @@ impl HeadlessProject {
         };
 
         this.update(&mut cx, |this, _cx| {
-            this.kernels.insert(kernel_id.clone(), child);
+            this.kernels.insert(
+                kernel_id.clone(),
+                KernelProcess {
+                    child,
+                    _connection_file: connection_file,
+                },
+            );
         });
 
         // The kernel inherited the ports in its connection file; release them so
@@ -1188,9 +1230,9 @@ impl HeadlessProject {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let kernel_id = envelope.payload.kernel_id;
-        let child = this.update(&mut cx, |this, _| this.kernels.remove(&kernel_id));
-        if let Some(mut child) = child {
-            child.kill().log_err();
+        let kernel = this.update(&mut cx, |this, _| this.kernels.remove(&kernel_id));
+        if let Some(mut kernel) = kernel {
+            kernel.child.kill().log_err();
         }
         Ok(proto::Ack {})
     }
@@ -1582,6 +1624,27 @@ mod tests {
                 .expect("create parent directory");
             std::fs::write(&path, "").expect("create file");
         }
+    }
+
+    #[test]
+    fn temp_connection_file_is_removed_when_dropped() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let connection_file_path = temp_dir.path().join("kernel-test.json");
+        std::fs::write(&connection_file_path, "{}").expect("create connection file");
+
+        drop(TempConnectionFile::new(connection_file_path.clone()));
+
+        assert!(!connection_file_path.exists());
+    }
+
+    #[test]
+    fn temp_connection_file_ignores_files_that_were_never_created() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let connection_file_path = temp_dir.path().join("kernel-test.json");
+
+        drop(TempConnectionFile::new(connection_file_path.clone()));
+
+        assert!(!connection_file_path.exists());
     }
 
     #[test]

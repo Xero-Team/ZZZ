@@ -523,7 +523,14 @@ impl ExtensionBuilder {
 
         let actual_sha256 = hex::encode(hasher.finalize());
         if actual_sha256 != expected_sha256 {
-            let _ = fs::remove_file(&tar_gz_path);
+            if let Err(error) = fs::remove_file(&tar_gz_path)
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                log::warn!(
+                    "failed to remove temporary WASI SDK archive {:?}: {error}",
+                    tar_gz_path
+                );
+            }
             bail!("wasi-sdk checksum mismatch: expected {expected_sha256}, got {actual_sha256}");
         }
 

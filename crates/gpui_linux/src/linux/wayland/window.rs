@@ -67,14 +67,14 @@ unsafe impl Sync for RawWindow {}
 
 impl rwh::HasWindowHandle for RawWindow {
     fn window_handle(&self) -> Result<rwh::WindowHandle<'_>, rwh::HandleError> {
-        let window = NonNull::new(self.window).expect("value should be present");
+        let window = NonNull::new(self.window).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandWindowHandle::new(window);
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
 impl rwh::HasDisplayHandle for RawWindow {
     fn display_handle(&self) -> Result<rwh::DisplayHandle<'_>, rwh::HandleError> {
-        let display = NonNull::new(self.display).expect("value should be present");
+        let display = NonNull::new(self.display).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandDisplayHandle::new(display);
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
@@ -333,14 +333,14 @@ impl WaylandWindowState {
         parent: Option<WaylandWindowStatePtr>,
     ) -> anyhow::Result<Self> {
         let renderer = {
+            let display = surface
+                .backend()
+                .upgrade()
+                .map(|backend| backend.display_ptr().cast::<c_void>())
+                .ok_or_else(|| anyhow::anyhow!("Wayland display backend is no longer available"))?;
             let raw_window = RawWindow {
                 window: surface.id().as_ptr().cast::<c_void>(),
-                display: surface
-                    .backend()
-                    .upgrade()
-                    .expect("entity should be alive")
-                    .display_ptr()
-                    .cast::<c_void>(),
+                display,
             };
             let config = WgpuSurfaceConfig {
                 size: Size {
@@ -1509,15 +1509,18 @@ impl gpui::PlatformRenderTarget for WaylandWindow {
         let mut state = self.borrow_mut();
 
         if state.renderer.device_lost() {
+            let Some(display) = state
+                .surface
+                .backend()
+                .upgrade()
+                .map(|backend| backend.display_ptr().cast::<std::ffi::c_void>())
+            else {
+                log::warn!("Cannot recover GPU device: Wayland display backend is unavailable");
+                return false;
+            };
             let raw_window = RawWindow {
                 window: state.surface.id().as_ptr().cast::<std::ffi::c_void>(),
-                display: state
-                    .surface
-                    .backend()
-                    .upgrade()
-                    .expect("entity should be alive")
-                    .display_ptr()
-                    .cast::<std::ffi::c_void>(),
+                display,
             };
             match state.renderer.recover(&raw_window) {
                 Ok(()) => {}
@@ -1794,11 +1797,9 @@ fn update_window(mut state: RefMut<WaylandWindowState>) {
                 let blur = blur_manager.create(&state.surface, &state.globals.qh, ());
                 state.blur = Some(blur);
             }
-            state
-                .blur
-                .as_ref()
-                .expect("value should have the expected type")
-                .commit();
+            if let Some(blur) = state.blur.as_ref() {
+                blur.commit();
+            }
         } else {
             // It probably doesn't hurt to clear the blur for opaque windows
             blur_manager.unset(&state.surface);

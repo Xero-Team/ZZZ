@@ -147,7 +147,7 @@ impl DebugRequest {
                     proto::DebugAttachRequest {
                         process_id: attach_request
                             .process_id
-                            .expect("The process ID to be already filled out."),
+                            .context("debug attach request is missing a process ID")?,
                     },
                 )),
             },
@@ -425,7 +425,7 @@ impl DebugTaskFile {
 
 #[cfg(test)]
 mod tests {
-    use super::{DebugRequest, LaunchRequest};
+    use super::{AttachRequest, DebugRequest, LaunchRequest};
     use crate::DebugScenario;
     use collections::FxHashMap;
     use serde_json::json;
@@ -465,6 +465,23 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn debug_attach_request_proto_requires_process_id() {
+        let request = DebugRequest::Attach(AttachRequest { process_id: None });
+        assert!(request.to_proto().is_err());
+
+        let request = DebugRequest::Attach(AttachRequest {
+            process_id: Some(1234),
+        });
+        let proto = request
+            .to_proto()
+            .expect("attach request with a process ID should serialize");
+        let Some(proto::debug_request::Request::DebugAttachRequest(attach)) = proto.request else {
+            panic!("attach request should retain its variant");
+        };
+        assert_eq!(attach.process_id, 1234);
     }
 
     #[test]

@@ -1116,7 +1116,7 @@ pub struct OutlinePanelSettingsContent {
     pub button: Option<bool>,
     /// Customize default width (in pixels) taken by outline panel
     ///
-    /// Default: 240
+    /// Default: 300
     #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
     pub default_width: Option<f32>,
     /// The position of outline panel
@@ -1399,7 +1399,7 @@ pub struct WhichKeySettingsContent {
     pub enabled: Option<bool>,
     /// Delay in milliseconds before showing the which-key popup.
     ///
-    /// Default: 700
+    /// Default: 1000
     pub delay_ms: Option<u64>,
 }
 

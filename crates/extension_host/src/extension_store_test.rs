@@ -1043,6 +1043,6 @@ fn init_test(cx: &mut TestAppContext) {
         release_channel::init(semver::Version::new(0, 0, 0), cx);
         extension::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        gpui_tokio::init(cx);
+        gpui_tokio::init(cx).expect("test environment should initialize Tokio");
     });
 }

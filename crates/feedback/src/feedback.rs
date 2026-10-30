@@ -159,8 +159,12 @@ mod tests {
         assert!(url.starts_with("https://github.com/Xero-Team/ZZZ/issues/new?"));
         assert!(url.contains("body=Bug%20report"));
 
-        let encoded_environment = url.split("Environment%3A%20").nth(1).unwrap();
-        let decoded_environment = urlencoding::decode(encoded_environment).unwrap();
+        let encoded_environment = url
+            .split("Environment%3A%20")
+            .nth(1)
+            .expect("bug report URL should contain an encoded environment field");
+        let decoded_environment = urlencoding::decode(encoded_environment)
+            .expect("environment field should be url-encoded");
         let rendered_specs = specs.to_string();
 
         assert_eq!(decoded_environment, rendered_specs);

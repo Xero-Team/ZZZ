@@ -8,7 +8,8 @@ use editor::{
 };
 use futures::AsyncWriteExt as _;
 use gpui::{
-    Action, App, AppContext as _, Context, Global, Keystroke, Task, WeakEntity, Window, actions,
+    Action, App, AppContext as _, Context, Entity, Global, Keystroke, Task, WeakEntity, Window,
+    actions,
 };
 use i18n::tr;
 use itertools::Itertools;
@@ -462,10 +463,20 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                     });
                 };
 
-                editor.project().expect("project should be present").update(cx, |project, cx| {
-                    let worktree = project.visible_worktrees(cx).next().expect("iterator should yield an item");
+                let worktree = match filename_save_target(editor, cx) {
+                    Ok(worktree) => worktree,
+                    Err(error) => {
+                        Task::ready(Err::<(), _>(error)).detach_and_prompt_err(
+                        &tr(cx, "vim.command.failed_write_command", "Failed to :w"),
+                        window,
+                        cx,
+                        |_, _, _| None,
+                    );
+                        return;
+                    }
+                };
 
-                    worktree.update(cx, |worktree, cx| {
+                worktree.update(cx, |worktree, cx| {
                         let path_style = worktree.path_style();
                         let Some(path) = RelPath::new(Path::new(&filename), path_style).ok() else {
                             return;
@@ -523,7 +534,6 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                             worktree_update_result.log_err();
                         })
                         .detach();
-                    });
                 });
             });
             return;
@@ -634,6 +644,17 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
             }
         });
     });
+}
+
+fn filename_save_target(editor: &Editor, cx: &App) -> Result<Entity<project::Worktree>> {
+    let project = editor
+        .project()
+        .ok_or_else(|| anyhow!("Cannot save a file without a project"))?;
+    project
+        .read(cx)
+        .visible_worktrees(cx)
+        .next()
+        .ok_or_else(|| anyhow!("Cannot save a file without a visible worktree"))
 }
 
 fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
@@ -2763,9 +2784,11 @@ mod test {
         state::Mode,
         test::{NeovimBackedTestContext, VimTestContext},
     };
-    use editor::{Editor, EditorSettings};
-    use gpui::{Context, TestAppContext};
+    use editor::{Editor, EditorMode, EditorSettings};
+    use gpui::{Context, Entity, TestAppContext};
     use indoc::indoc;
+    use multi_buffer::MultiBuffer;
+    use project::Project;
     use settings::Settings;
     use util::path;
     use workspace::{OpenOptions, Workspace};
@@ -3162,6 +3185,42 @@ mod test {
         cx.workspace(|workspace, _, cx| {
             assert_active_item(workspace, path!("/root/other.rs"), "", cx);
         });
+    }
+
+    fn editor_with_project(
+        cx: &mut TestAppContext,
+        project: Option<Entity<Project>>,
+    ) -> Entity<Editor> {
+        let buffer = cx.update(|cx| MultiBuffer::build_simple("text", cx));
+        let (editor, _) = cx.add_window_view(|window, cx| {
+            Editor::new(EditorMode::full(), buffer, project, window, cx)
+        });
+        editor
+    }
+
+    #[gpui::test]
+    async fn test_filename_save_target_requires_project(cx: &mut TestAppContext) {
+        VimTestContext::init(cx);
+        let editor = editor_with_project(cx, None);
+        let error = cx.read(|cx| {
+            let editor = editor.read(cx);
+            super::filename_save_target(editor, cx).expect_err("save target must require a project")
+        });
+        assert!(error.to_string().contains("without a project"));
+    }
+
+    #[gpui::test]
+    async fn test_filename_save_target_requires_visible_worktree(cx: &mut TestAppContext) {
+        VimTestContext::init(cx);
+        let fs = project::FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let editor = editor_with_project(cx, Some(project));
+        let error = cx.read(|cx| {
+            let editor = editor.read(cx);
+            super::filename_save_target(editor, cx)
+                .expect_err("save target must require a visible worktree")
+        });
+        assert!(error.to_string().contains("without a visible worktree"));
     }
 
     #[gpui::test]

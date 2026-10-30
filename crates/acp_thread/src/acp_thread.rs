@@ -2877,8 +2877,6 @@ impl AcpThread {
         let path_style = self.project.read(cx).path_style(cx);
         let id = update.tool_call_id.clone();
 
-        if let ToolCallStatus::Completed | ToolCallStatus::Failed = status {}
-
         if let Some(ix) = self.index_for_tool_call(&id) {
             let AgentThreadEntry::ToolCall(call) = &mut self.entries[ix] else {
                 unreachable!()

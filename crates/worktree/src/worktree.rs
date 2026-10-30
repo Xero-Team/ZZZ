@@ -827,7 +827,9 @@ impl Worktree {
                                     .snapshot_subscriptions
                                     .pop_front()
                                     .expect("collection should not be empty");
-                                let _ = tx.send(());
+                                if tx.send(()).is_err() {
+                                    log::debug!("worktree snapshot waiter was dropped");
+                                }
                             } else {
                                 break;
                             }
@@ -1888,7 +1890,9 @@ impl LocalWorktree {
                     .snapshot_subscriptions
                     .pop_front()
                     .expect("collection should not be empty");
-                tx.send(()).ok();
+                if tx.send(()).is_err() {
+                    log::debug!("worktree snapshot waiter was dropped");
+                }
             } else {
                 break;
             }
@@ -2577,11 +2581,7 @@ impl LocalWorktree {
         entry_id: ProjectEntryId,
         cx: &Context<Worktree>,
     ) -> Option<Task<Result<()>>> {
-        let path = self
-            .entry_for_id(entry_id)
-            .expect("entry_for_id should be present")
-            .path
-            .clone();
+        let path = self.entry_for_id(entry_id)?.path.clone();
         let mut rx = self.add_path_prefix_to_scan(path);
         Some(cx.background_spawn(async move {
             rx.next().await;
@@ -2826,7 +2826,9 @@ impl RemoteWorktree {
     ) -> impl Future<Output = Result<()>> + use<> {
         let (tx, rx) = oneshot::channel();
         if self.observed_snapshot(scan_id) {
-            let _ = tx.send(());
+            if tx.send(()).is_err() {
+                log::debug!("snapshot waiter was dropped before observing snapshot");
+            }
         } else if self.disconnected {
             drop(tx);
         } else {

@@ -855,8 +855,11 @@ impl LanguageRegistry {
         // If the language is already loaded, resolve with it immediately.
         for loaded_language in &state.languages {
             if loaded_language.id == language.id {
-                tx.send(Ok(loaded_language.clone()))
-                    .expect("channel receiver should be alive");
+                if tx.send(Ok(loaded_language.clone())).is_err() {
+                    log::debug!(
+                        "language load receiver dropped before loaded language was delivered"
+                    );
+                }
                 return rx;
             }
         }

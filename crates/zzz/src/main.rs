@@ -460,7 +460,11 @@ fn main() {
         zzz_actions::init();
 
         release_channel::init(app_version, cx);
-        gpui_tokio::init(cx);
+        if let Err(error) = gpui_tokio::init(cx) {
+            log::error!("{error:#}");
+            cx.quit();
+            return;
+        }
         if let Some(app_commit_sha) = app_commit_sha {
             AppCommitSha::set_global(app_commit_sha, cx);
         }
