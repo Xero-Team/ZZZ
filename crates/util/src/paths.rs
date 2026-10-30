@@ -598,6 +598,51 @@ impl PathStyle {
         }
     }
 
+    /// Returns the parent of `path`, honoring this style's separators.
+    ///
+    /// Returns `None` for a root, a drive root, or a single top-level
+    /// component, mirroring [`std::path::Path::parent`] for the host style.
+    pub fn parent<'a>(&self, path: &'a Path) -> Option<&'a Path> {
+        let bytes = path.as_os_str().as_encoded_bytes();
+        let is_separator = |byte: u8| match self {
+            PathStyle::Posix => byte == b'/',
+            PathStyle::Windows => byte == b'/' || byte == b'\\',
+        };
+
+        let mut end = bytes.len();
+        while end > 0 && is_separator(bytes[end - 1]) {
+            end -= 1;
+        }
+        if end == 0 {
+            return None;
+        }
+        let separator = bytes[..end].iter().rposition(|byte| is_separator(*byte))?;
+
+        let mut parent_end = separator;
+        while parent_end > 0 && is_separator(bytes[parent_end - 1]) {
+            parent_end -= 1;
+        }
+        if self.is_windows()
+            && parent_end == 2
+            && bytes[1] == b':'
+            && bytes[0].is_ascii_alphabetic()
+        {
+            // `C:\dir` has only the drive root above it, which is not a path component.
+            return None;
+        }
+        if parent_end == 0 {
+            // An absolute path whose only parent is the root: keep one separator.
+            parent_end = 1;
+        }
+
+        let parent = &bytes[..parent_end];
+        // SAFETY: `parent` is a prefix of a valid `OsStr` cut immediately after or before an
+        // ASCII separator, so it stays valid UTF-8-ish `OsStr` content.
+        Some(Path::new(unsafe {
+            OsStr::from_encoded_bytes_unchecked(parent)
+        }))
+    }
+
     /// Returns the final component of `path` without its extension.
     pub fn file_stem<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
         self.file_name(path)
@@ -1969,6 +2014,40 @@ mod tests {
             windows_path.to_string_lossy(),
             "C:\\Users\\user\\dev\\worktrees"
         );
+    }
+
+    #[test]
+    fn test_parent_uses_path_style_separators() {
+        for (style, cases) in [
+            (
+                PathStyle::Posix,
+                [
+                    ("/worktrees/zed/plum-warbler", Some("/worktrees/zed")),
+                    ("/worktrees/zed/", Some("/worktrees")),
+                    ("/worktrees", Some("/")),
+                    ("/", None),
+                    ("worktrees", None),
+                ],
+            ),
+            (
+                PathStyle::Windows,
+                [
+                    (r"C:\worktrees\zed\plum-warbler", Some(r"C:\worktrees\zed")),
+                    (r"C:\worktrees\zed\", Some(r"C:\worktrees")),
+                    ("C:/worktrees/zed", Some("C:/worktrees")),
+                    (r"C:\worktrees", None),
+                    (r"C:\", None),
+                ],
+            ),
+        ] {
+            for (path, expected) in cases {
+                assert_eq!(
+                    style.parent(Path::new(path)),
+                    expected.map(Path::new),
+                    "parent of {path:?} with {style:?}",
+                );
+            }
+        }
     }
 
     #[test]

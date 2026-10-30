@@ -505,8 +505,12 @@ impl InteractionOwner {
                         key_down.keystroke.key_char.is_some() && window.accepts_text_input(cx)
                     });
 
-            currently_pending.needs_timeout |=
-                match_result.pending_has_binding || text_input_requires_timeout;
+            currently_pending.needs_timeout |= match_result.pending_has_binding
+                || text_input_requires_timeout
+                || matches!(
+                    currently_pending.keystrokes.as_slice(),
+                    [keystroke] if keystroke.is_modifier_key()
+                );
 
             if currently_pending.needs_timeout {
                 currently_pending.timer = Some(window.spawn(cx, async move |cx| {

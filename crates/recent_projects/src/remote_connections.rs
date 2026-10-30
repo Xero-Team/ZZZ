@@ -980,6 +980,7 @@ mod tests {
             window
                 .read_with(cx, |multi_workspace, _| {
                     assert_ne!(multi_workspace.workspace(), &remote_workspace);
+                    assert!(multi_workspace.workspaces().any(|w| *w == local_workspace));
                 })
                 .unwrap();
         }

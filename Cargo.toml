@@ -582,6 +582,7 @@ human_bytes = "0.4.3"
 html5ever = { package = "spider-html5ever", version = "0.40.0" }
 http = "1.5"
 http-body = "1.1"
+icu_segmenter = { version = "2.3.0", default-features = false, features = ["compiled_data"] }
 ignore = "0.4.34"
 # image's default features minus "avif", which only adds an encoder (rav1e);
 # decoding AVIF would additionally need the non-default "avif-native" feature.

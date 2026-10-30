@@ -85,6 +85,7 @@ pub struct WindowsWindowState {
     hwnd: HWND,
     #[cfg(feature = "accessibility")]
     pub(crate) accessibility: RefCell<Option<AccessibilityState>>,
+    pub mouse_position: Cell<Point<Pixels>>,
 }
 
 pub(crate) struct WindowsWindowInner {
@@ -183,6 +184,7 @@ impl WindowsWindowState {
             direct_manipulation,
             #[cfg(feature = "accessibility")]
             accessibility: RefCell::new(None),
+            mouse_position: Cell::new(Point::default()),
         })
     }
 
