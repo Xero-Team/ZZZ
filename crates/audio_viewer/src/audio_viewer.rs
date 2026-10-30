@@ -1,4 +1,5 @@
 mod item;
+mod lyrics;
 mod persistence;
 mod player;
 mod scrubber;

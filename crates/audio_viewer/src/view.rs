@@ -13,6 +13,7 @@ use util::rel_path::RelPath;
 
 use crate::{
     AudioItem, SeekBackward, SeekForward, SeekToEnd, SeekToStart, Stop, ToggleMute, TogglePlay,
+    lyrics::{Lyrics, lyrics_path_for_audio, read_lyrics},
     player::{self, AudioMetadata},
     scrubber::{Scrub, ScrubKind},
     waveform::{self, WAVEFORM_ANALYSIS_LIMIT, WAVEFORM_BUCKETS},
@@ -71,6 +72,8 @@ pub struct AudioView {
     pub(crate) volume: f32,
     pub(crate) speed: f32,
     pub(crate) repeat: bool,
+    pub(crate) lyrics: Option<Arc<Lyrics>>,
+    pub(crate) lyrics_visible: bool,
     pub(crate) muted: bool,
     pub(crate) volume_before_mute: f32,
     pub(crate) handle: Option<PlaybackHandle>,
@@ -129,6 +132,8 @@ impl AudioView {
             volume,
             speed: 1.0,
             repeat: false,
+            lyrics: None,
+            lyrics_visible: false,
             muted: false,
             volume_before_mute: volume.max(0.01),
             handle: None,
@@ -201,6 +206,13 @@ impl AudioView {
                 }
             };
 
+            let lyrics_path = local_path
+                .as_deref()
+                .map(lyrics_path_for_audio);
+            let lyrics_task = lyrics_path.map(|path| {
+                cx.background_spawn(async move { read_lyrics(&path) })
+            });
+
             let Some(format_hint) = format_hint else {
                 let message = cx.update(|cx| {
                     tr(
@@ -234,13 +246,16 @@ impl AudioView {
                 }
             };
 
-            let info = cx
-                .background_spawn({
-                    let path = path.clone();
-                    let format_hint = format_hint.clone();
-                    async move { player::read_audio(&path, &format_hint) }
-                })
-                .await;
+            let info_task = cx.background_spawn({
+                let path = path.clone();
+                let format_hint = format_hint.clone();
+                async move { player::read_audio(&path, &format_hint) }
+            });
+            let lyrics_result = match lyrics_task {
+                Some(task) => task.await,
+                None => None,
+            };
+            let info = info_task.await;
 
             match info {
                 Ok(info) => {
@@ -255,6 +270,7 @@ impl AudioView {
                             );
                             return;
                         }
+                        view.lyrics = lyrics_result;
                         view.load_state = LoadState::Loaded(Box::new(LoadedAudio {
                             generation,
                             path,
@@ -284,6 +300,7 @@ impl AudioView {
                             );
                             return;
                         }
+                        view.lyrics = None;
                         if matches!(view.load_state, LoadState::Loaded(_)) {
                             log::error!("reloading audio preview: {error:#}");
                         } else {
@@ -314,6 +331,7 @@ impl AudioView {
                 );
                 return;
             }
+            view.lyrics = None;
             view.load_state = LoadState::Error(message);
             cx.notify();
         });
@@ -655,7 +673,7 @@ impl AudioView {
         }
     }
 
-    fn seek_to(&mut self, position: Duration, cx: &mut Context<Self>) {
+    pub(crate) fn seek_to(&mut self, position: Duration, cx: &mut Context<Self>) {
         let position = self.clamp_position(position);
         self.position = position;
         self.last_notified_position = position;
@@ -752,6 +770,11 @@ impl AudioView {
 
     pub(crate) fn toggle_repeat(&mut self, cx: &mut Context<Self>) {
         self.repeat = !self.repeat;
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_lyrics(&mut self, cx: &mut Context<Self>) {
+        self.lyrics_visible = !self.lyrics_visible;
         cx.notify();
     }
 

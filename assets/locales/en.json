@@ -3276,6 +3276,7 @@
     "audio_viewer.speed": "Playback speed",
     "audio_viewer.speed.value": "{}×",
     "audio_viewer.repeat": "Repeat",
+    "audio_viewer.lyrics.toggle": "Lyrics",
     "audio_viewer.file_name.fallback": "Audio",
     "audio_viewer.error.missing_extension": "Audio file has no extension",
     "audio_viewer.error.not_local": "Audio file is not available locally",

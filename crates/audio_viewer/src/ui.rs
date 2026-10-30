@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, Bounds, Context, CursorStyle, EventEmitter, Focusable, InteractiveElement,
-    IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit,
-    ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, img, px, relative,
+    AnyElement, App, Bounds, Context, CursorStyle, EventEmitter, Focusable, FontWeight,
+    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ObjectFit, ParentElement, Pixels, Render, Styled, WeakEntity, Window, canvas, div, img, px,
+    relative,
 };
 use i18n::tr;
 use ui::{ContextMenu, DropdownMenu, DropdownStyle, IconPosition, Tooltip, prelude::*};
@@ -14,6 +15,7 @@ use workspace::{
 
 use crate::{
     Stop, ToggleMute, TogglePlay,
+    lyrics::current_line_index,
     scrubber::ScrubKind,
     view::{AudioView, AudioViewEvent, LoadState, SPEED_OPTIONS},
     waveform::{self, paint_waveform},
@@ -45,6 +47,7 @@ impl AudioView {
                 this.child(identity)
             })
             .child(self.render_waveform(cx))
+            .when_some(self.render_lyrics(cx), |this, lyrics| this.child(lyrics))
             .child(self.render_transport(window, cx))
             .when_some(self.playback_error.clone(), |this, message| {
                 this.child(
@@ -211,6 +214,64 @@ impl AudioView {
         }
     }
 
+    fn render_lyrics(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let lyrics = self.lyrics.as_ref()?;
+        if !self.lyrics_visible || lyrics.lines.is_empty() {
+            return None;
+        }
+
+        let current = current_line_index(self.position, &lyrics.lines);
+        let start = current.map_or(0, |index| index.saturating_sub(1));
+        let end = (start + 3).min(lyrics.lines.len());
+        let hover_background = cx.theme().colors().element_hover;
+
+        Some(
+            v_flex()
+                .id("audio-lyrics")
+                .w_full()
+                .min_w_0()
+                .p_2()
+                .rounded_md()
+                .bg(cx.theme().colors().elevated_surface_background)
+                .children((start..end).map(|index| {
+                    let line = &lyrics.lines[index];
+                    let is_current = current == Some(index);
+                    let color = if is_current {
+                        Color::Accent
+                    } else {
+                        Color::Muted
+                    };
+                    let weight = if is_current {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::NORMAL
+                    };
+                    let time = line.time;
+
+                    div()
+                        .id(("audio-lyric-line", index))
+                        .w_full()
+                        .min_w_0()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .cursor(CursorStyle::PointingHand)
+                        .hover(move |style| style.bg(hover_background))
+                        .on_click(cx.listener(move |view, _, _window, cx| {
+                            view.seek_to(time, cx);
+                        }))
+                        .child(
+                            Label::new(line.text.clone())
+                                .weight(weight)
+                                .color(color)
+                                .single_line()
+                                .truncate(),
+                        )
+                }))
+                .into_any_element(),
+        )
+    }
+
     fn render_transport(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let playing = self.is_playing();
         let play_icon = if playing {
@@ -228,6 +289,11 @@ impl AudioView {
         let volume = self.effective_volume();
         let speed_label = self.speed_label(cx);
         let repeating = self.repeat;
+        let showing_lyrics = self.lyrics_visible;
+        let has_lyrics = self
+            .lyrics
+            .as_ref()
+            .is_some_and(|lyrics| !lyrics.lines.is_empty());
         let view = cx.entity().downgrade();
         let speed_view = view.clone();
         let speed_menu = ContextMenu::build(window, cx, {
@@ -324,6 +390,21 @@ impl AudioView {
                         view.toggle_repeat(cx);
                     })),
             )
+            .when(has_lyrics, |this| {
+                this.child(
+                    IconButton::new("audio-lyrics-toggle", IconName::TextSnippet)
+                        .icon_size(IconSize::Small)
+                        .toggle_state(showing_lyrics)
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "audio_viewer.lyrics.toggle",
+                            "Lyrics",
+                        )))
+                        .on_click(cx.listener(|view, _, _window, cx| {
+                            view.toggle_lyrics(cx);
+                        })),
+                )
+            })
     }
 
     fn render_seek_track(

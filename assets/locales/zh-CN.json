@@ -3276,6 +3276,7 @@
     "audio_viewer.speed": "播放速度",
     "audio_viewer.speed.value": "{}×",
     "audio_viewer.repeat": "单曲循环",
+    "audio_viewer.lyrics.toggle": "歌词",
     "audio_viewer.file_name.fallback": "音频",
     "audio_viewer.error.missing_extension": "音频文件没有扩展名",
     "audio_viewer.error.not_local": "音频文件在本地不可用",
