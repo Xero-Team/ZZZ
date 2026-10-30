@@ -35,6 +35,12 @@ pub(crate) enum PlaybackStatus {
     Paused,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlaybackEndAction {
+    Restart,
+    StopAt(Option<Duration>),
+}
+
 pub(crate) enum LoadState {
     Loading,
     Loaded(Box<LoadedAudio>),
@@ -64,6 +70,7 @@ pub struct AudioView {
     last_notified_position: Duration,
     pub(crate) volume: f32,
     pub(crate) speed: f32,
+    pub(crate) repeat: bool,
     pub(crate) muted: bool,
     pub(crate) volume_before_mute: f32,
     pub(crate) handle: Option<PlaybackHandle>,
@@ -121,6 +128,7 @@ impl AudioView {
             last_notified_position: Duration::ZERO,
             volume,
             speed: 1.0,
+            repeat: false,
             muted: false,
             volume_before_mute: volume.max(0.01),
             handle: None,
@@ -564,39 +572,55 @@ impl AudioView {
         self._position_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(POSITION_TICK).await;
-                if this
-                    .update(cx, |view, cx| {
-                        if view.sync_playback_position() {
-                            cx.notify();
-                        }
-                    })
-                    .is_err()
-                {
+                let Ok(keep_ticking) = this.update(cx, |view, cx| {
+                    if view.sync_playback_position(cx) {
+                        cx.notify();
+                    }
+                    view.playback == PlaybackStatus::Playing
+                }) else {
+                    break;
+                };
+                if !keep_ticking {
                     break;
                 }
             }
         }));
     }
 
-    fn sync_playback_position(&mut self) -> bool {
-        let Some(handle) = &self.handle else {
-            return false;
-        };
+    fn sync_playback_position(&mut self, cx: &mut Context<Self>) -> bool {
         let previous_playback = self.playback;
-        let finished = handle.is_finished();
-        if self.scrub.is_none() {
-            self.position = handle.position();
-        }
-        if finished {
-            self.handle = None;
+        let Some(handle) = &self.handle else {
             self.playback = PlaybackStatus::Stopped;
-            if self.scrub.is_none()
-                && let Some(duration) = self.duration()
-            {
-                self.position = duration;
-            }
-            self._position_task = None;
+            return previous_playback != self.playback;
+        };
+        let finished = handle.is_finished();
+        let current_position = handle.position();
+        if !finished && self.scrub.is_none() {
+            self.position = current_position;
         }
+
+        if finished {
+            if let Some(handle) = self.handle.take() {
+                handle.stop();
+            }
+            match playback_end_action(self.repeat, self.duration()) {
+                PlaybackEndAction::Restart => {
+                    self.playback = PlaybackStatus::Stopped;
+                    self.position = Duration::ZERO;
+                    self.last_notified_position = Duration::ZERO;
+                    self.play_loaded_from(Duration::ZERO, cx);
+                }
+                PlaybackEndAction::StopAt(position) => {
+                    self.playback = PlaybackStatus::Stopped;
+                    if self.scrub.is_none()
+                        && let Some(position) = position
+                    {
+                        self.position = position;
+                    }
+                }
+            }
+        }
+
         let playback_changed = self.playback != previous_playback;
         let position_changed = self.scrub.is_none()
             && position_visible_change(self.last_notified_position, self.position);
@@ -643,17 +667,12 @@ impl AudioView {
         cx.notify();
     }
 
-    fn start_playback(&mut self, cx: &mut Context<Self>) {
+    fn play_loaded_from(&mut self, start: Duration, cx: &mut Context<Self>) -> bool {
         let Some(loaded) = self.loaded() else {
-            return;
+            return false;
         };
         let path = loaded.path.clone();
         let format_hint = loaded.format_hint.clone();
-        let start = playback_start_position(self.position, loaded.metadata.duration);
-        if start != self.position {
-            self.position = start;
-            self.last_notified_position = start;
-        }
         let volume = self.output_volume();
 
         match player::play_path(&path, &format_hint, start, volume, cx) {
@@ -662,7 +681,7 @@ impl AudioView {
                 self.handle = Some(handle);
                 self.playback = PlaybackStatus::Playing;
                 self.playback_error = None;
-                self.start_position_tick(cx);
+                true
             }
             Err(error) => {
                 log::error!("playing audio preview: {error:#}");
@@ -675,7 +694,22 @@ impl AudioView {
                     )
                     .into(),
                 );
+                false
             }
+        }
+    }
+
+    fn start_playback(&mut self, cx: &mut Context<Self>) {
+        let Some(loaded) = self.loaded() else {
+            return;
+        };
+        let start = playback_start_position(self.position, loaded.metadata.duration);
+        if start != self.position {
+            self.position = start;
+            self.last_notified_position = start;
+        }
+        if self.play_loaded_from(start, cx) {
+            self.start_position_tick(cx);
         }
         cx.notify();
     }
@@ -714,6 +748,11 @@ impl AudioView {
 
     pub(crate) fn stop(&mut self, _: &Stop, _window: &mut Window, cx: &mut Context<Self>) {
         self.stop_playback(cx);
+    }
+
+    pub(crate) fn toggle_repeat(&mut self, cx: &mut Context<Self>) {
+        self.repeat = !self.repeat;
+        cx.notify();
     }
 
     pub(crate) fn retry_playback(
@@ -934,6 +973,14 @@ fn playback_start_position(position: Duration, duration: Option<Duration>) -> Du
     }
 }
 
+fn playback_end_action(repeat: bool, duration: Option<Duration>) -> PlaybackEndAction {
+    if repeat {
+        PlaybackEndAction::Restart
+    } else {
+        PlaybackEndAction::StopAt(duration)
+    }
+}
+
 fn seek_is_available(duration: Option<Duration>) -> bool {
     duration.is_some_and(|duration| !duration.is_zero())
 }
@@ -1036,9 +1083,10 @@ fn format_channels(channels: u16, cx: &App) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        advance_load_generation, format_bit_depth, format_bitrate, format_sample_rate,
-        format_speed_value, format_timestamp, gain_for_fader, load_result_is_current,
-        playback_start_position, position_visible_change, seek_is_available,
+        PlaybackEndAction, advance_load_generation, format_bit_depth, format_bitrate,
+        format_sample_rate, format_speed_value, format_timestamp, gain_for_fader,
+        load_result_is_current, playback_end_action, playback_start_position,
+        position_visible_change, seek_is_available,
     };
     use std::time::Duration;
 
@@ -1113,6 +1161,23 @@ mod tests {
         assert_eq!(gain_for_fader(1.0), 1.0);
         assert_eq!(gain_for_fader(-0.5), 0.0);
         assert_eq!(gain_for_fader(1.5), 1.0);
+    }
+
+    #[test]
+    fn repeat_restarts_and_non_repeat_stops_at_the_end() {
+        let duration = Some(Duration::from_secs(3));
+        assert_eq!(
+            playback_end_action(true, duration),
+            PlaybackEndAction::Restart
+        );
+        assert_eq!(
+            playback_end_action(false, duration),
+            PlaybackEndAction::StopAt(duration)
+        );
+        assert_eq!(
+            playback_end_action(false, None),
+            PlaybackEndAction::StopAt(None)
+        );
     }
 
     #[test]

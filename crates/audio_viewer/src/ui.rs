@@ -227,6 +227,7 @@ impl AudioView {
         let playhead_ratio = self.playhead_ratio();
         let volume = self.effective_volume();
         let speed_label = self.speed_label(cx);
+        let repeating = self.repeat;
         let view = cx.entity().downgrade();
         let speed_view = view.clone();
         let speed_menu = ContextMenu::build(window, cx, {
@@ -313,6 +314,15 @@ impl AudioView {
                         "audio_viewer.speed",
                         "Playback speed",
                     ))),
+            )
+            .child(
+                IconButton::new("audio-repeat", IconName::RotateCw)
+                    .icon_size(IconSize::Small)
+                    .toggle_state(repeating)
+                    .tooltip(Tooltip::text(tr(cx, "audio_viewer.repeat", "Repeat")))
+                    .on_click(cx.listener(|view, _, _window, cx| {
+                        view.toggle_repeat(cx);
+                    })),
             )
     }
 
