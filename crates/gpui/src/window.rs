@@ -6697,8 +6697,14 @@ mod tests {
     fn frame_throttle_tracks_display_refreshes() {
         let start = super::Instant::now();
         for (elapsed, interval) in [
-            (std::time::Duration::from_micros(16_666), std::time::Duration::from_micros(16_667)),
-            (std::time::Duration::from_micros(33_332), std::time::Duration::from_micros(33_333)),
+            (
+                std::time::Duration::from_micros(16_666),
+                std::time::Duration::from_micros(16_667),
+            ),
+            (
+                std::time::Duration::from_micros(33_332),
+                std::time::Duration::from_micros(33_333),
+            ),
         ] {
             let mut pacer = super::FramePacer::default();
             assert!(!pacer.should_defer(start, Some(interval)));
