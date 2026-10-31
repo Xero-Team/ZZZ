@@ -552,7 +552,9 @@ fn render_rust_build_script(package_directory: &Path, package: &GrammarPackage) 
     output.push_str("fn main() -> Result<(), Box<dyn std::error::Error>> {\n");
     output.push_str("    let opt_level = grammar_c_opt_level();\n\n");
     output.push_str("    let mut c_compiler = cc::Build::new();\n");
-    output.push_str("    c_compiler\n        .std(\"c11\")\n        .opt_level(opt_level)\n        .flag_if_supported(\"-Wno-unused-parameter\")\n        .flag_if_supported(\"-Wno-unused-but-set-variable\")\n        .flag_if_supported(\"-Wno-trigraphs\")\n        .flag_if_supported(\"-Wno-macro-redefined\");\n");
+    output.push_str("    c_compiler\n        .std(\"c11\")\n        .opt_level(opt_level)\n        .flag_if_supported(\"-Wno-unused-parameter\")\n        .flag_if_supported(\"-Wno-unused-but-set-variable\")\n        .flag_if_supported(\"-Wno-unused-value\")\n        .flag_if_supported(\"-Wno-implicit-fallthrough\")\n        .flag_if_supported(\"-Wno-sign-compare\")\n        .flag_if_supported(\"-Wno-trigraphs\");\n");
+    output.push_str("    // The vendored scanners trip `-Wall -Wextra`, which cc-rs enables by\n    // default, and none of it is actionable here. `-Wno-macro-redefined` is\n    // Clang-only: GCC mentions unknown `-Wno-*` options only while diagnosing\n    // something else, which fools `flag_if_supported` into adding a bogus\n    // \"unrecognized command-line option\" note to every other C warning.\n");
+    output.push_str("    if c_compiler.try_get_compiler()?.is_like_clang() {\n        c_compiler.flag(\"-Wno-macro-redefined\");\n    }\n");
     output.push_str("    if opt_level == 0 {\n        // GCC 15+ stops emitting jump tables at `-O0`, and the generated lexer\n        // is one giant switch, so keep them even in unoptimized builds.\n        c_compiler.flag_if_supported(\"-fjump-tables\");\n    }\n");
     output.push_str("    #[cfg(target_env = \"msvc\")]\n    c_compiler.flag(\"-utf-8\");\n\n");
 
@@ -579,7 +581,7 @@ fn render_rust_build_script(package_directory: &Path, package: &GrammarPackage) 
     ));
 
     if !cpp_sources.is_empty() {
-        output.push_str("\n    let mut cpp_compiler = cc::Build::new();\n    cpp_compiler\n        .cpp(true)\n        .opt_level(opt_level)\n        .flag_if_supported(\"-Wno-unused-parameter\")\n        .flag_if_supported(\"-Wno-unused-but-set-variable\");\n");
+        output.push_str("\n    let mut cpp_compiler = cc::Build::new();\n    cpp_compiler\n        .cpp(true)\n        .opt_level(opt_level)\n        .flag_if_supported(\"-Wno-unused-parameter\")\n        .flag_if_supported(\"-Wno-unused-but-set-variable\")\n        .flag_if_supported(\"-Wno-unused-value\")\n        .flag_if_supported(\"-Wno-implicit-fallthrough\")\n        .flag_if_supported(\"-Wno-sign-compare\");\n");
         for include_directory in &include_directories {
             output.push_str(&format!(
                 "    cpp_compiler.include({});\n",

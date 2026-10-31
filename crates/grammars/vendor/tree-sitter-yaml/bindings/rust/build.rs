@@ -9,8 +9,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .opt_level(opt_level)
         .flag_if_supported("-Wno-unused-parameter")
         .flag_if_supported("-Wno-unused-but-set-variable")
-        .flag_if_supported("-Wno-trigraphs")
-        .flag_if_supported("-Wno-macro-redefined");
+        .flag_if_supported("-Wno-unused-value")
+        .flag_if_supported("-Wno-implicit-fallthrough")
+        .flag_if_supported("-Wno-sign-compare")
+        .flag_if_supported("-Wno-trigraphs");
+    // The vendored scanners trip `-Wall -Wextra`, which cc-rs enables by
+    // default, and none of it is actionable here. `-Wno-macro-redefined` is
+    // Clang-only: GCC mentions unknown `-Wno-*` options only while diagnosing
+    // something else, which fools `flag_if_supported` into adding a bogus
+    // "unrecognized command-line option" note to every other C warning.
+    if c_compiler.try_get_compiler()?.is_like_clang() {
+        c_compiler.flag("-Wno-macro-redefined");
+    }
     if opt_level == 0 {
         // GCC 15+ stops emitting jump tables at `-O0`, and the generated lexer
         // is one giant switch, so keep them even in unoptimized builds.
