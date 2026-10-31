@@ -7977,4 +7977,100 @@ mod tests {
             .unwrap();
         assert_eq!(b_focus_count.get(), 1);
     }
+
+    #[gpui::test]
+    fn cached_view_follows_inherited_opacity(cx: &mut TestAppContext) {
+        struct Child {
+            renders: usize,
+        }
+
+        impl Render for Child {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                self.renders += 1;
+                div().size_full().bg(crate::rgb(0xff0000))
+            }
+        }
+
+        struct Root {
+            opacity: f32,
+            width: Pixels,
+            child: crate::Entity<Child>,
+        }
+
+        impl Render for Root {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div()
+                    .id("opacity-root")
+                    .w(self.width)
+                    .h(px(200.))
+                    .opacity(self.opacity)
+                    .hover(|style| style.opacity(1.))
+                    .child(
+                        crate::AnyView::from(self.child.clone())
+                            .cached(crate::StyleRefinement::default().size(px(100.))),
+                    )
+            }
+        }
+
+        /// Updates the root, draws a few frames, and returns the child's final painted
+        /// alpha and how many times it has rendered.
+        fn update_and_draw(
+            window: crate::WindowHandle<Root>,
+            child: &crate::Entity<Child>,
+            cx: &mut TestAppContext,
+            update: impl FnOnce(&mut Root, &mut Window, &mut Context<Root>),
+        ) -> (f32, usize) {
+            window
+                .update(cx, |root, window, cx| {
+                    update(root, window, cx);
+                    cx.notify();
+                })
+                .expect("update root");
+            let mut result = (0., 0);
+            // Cached output replayed under a different opacity only redraws on the next
+            // frame, so draw enough frames for the view to settle.
+            for _ in 0..3 {
+                result = cx
+                    .update_window(window.into(), |_, window, cx| {
+                        window.draw(cx).clear();
+                        let quads = &window.interaction.rendered_frame.scene.quads;
+                        assert_eq!(quads.len(), 1);
+                        let alpha = quads.first().expect("child quad").background.solid.a;
+                        (alpha, child.read(cx).renders)
+                    })
+                    .expect("draw window");
+            }
+            result
+        }
+
+        let child = cx.new(|_| Child { renders: 0 });
+        let window = cx.add_window(|_, _| Root {
+            opacity: 1.,
+            width: px(200.),
+            child: child.clone(),
+        });
+        let outside = crate::point(px(500.), px(500.));
+        let inside = crate::point(px(50.), px(50.));
+        let beside = crate::point(px(250.), px(50.));
+
+        // Changing the wrapper's opacity redraws the child; unchanged opacity reuses it.
+        let move_outside = |_: &mut Root, window: &mut Window, cx: &mut Context<Root>| {
+            window.simulate_mouse_move(outside, cx)
+        };
+        assert_eq!(update_and_draw(window, &child, cx, move_outside), (1., 1));
+        assert_eq!(update_and_draw(window, &child, cx, |_, _, _| {}), (1., 1));
+        let fade = |root: &mut Root, _: &mut Window, _: &mut Context<Root>| root.opacity = 0.5;
+        assert_eq!(update_and_draw(window, &child, cx, fade), (0.5, 2));
+        assert_eq!(update_and_draw(window, &child, cx, |_, _, _| {}), (0.5, 2));
+
+        // Hover opacity applies when the mouse enters and leaves.
+        let move_inside = |_: &mut Root, window: &mut Window, cx: &mut Context<Root>| {
+            window.simulate_mouse_move(inside, cx)
+        };
+        assert_eq!(update_and_draw(window, &child, cx, move_inside).0, 1.);
+        let move_beside = |_: &mut Root, window: &mut Window, cx: &mut Context<Root>| {
+            window.simulate_mouse_move(beside, cx)
+        };
+        assert_eq!(update_and_draw(window, &child, cx, move_beside).0, 0.5);
+    }
 }
