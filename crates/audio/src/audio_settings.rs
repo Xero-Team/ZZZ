@@ -5,8 +5,13 @@ use std::{
 
 use cpal::DeviceId;
 use gpui::App;
+use parking_lot::Mutex;
 use settings::{RegisterSetting, Settings, SettingsStore};
 use util::ResultExt;
+
+use crate::Audio;
+
+static LAST_OUTPUT_DEVICE: Mutex<Option<DeviceId>> = Mutex::new(None);
 
 #[derive(Clone, Debug, RegisterSetting)]
 pub struct AudioSettings {
@@ -22,6 +27,8 @@ pub struct AudioSettings {
     pub output_audio_device: Option<DeviceId>,
     /// Select specific input audio device.
     pub input_audio_device: Option<DeviceId>,
+    /// Volume fader for the audio preview, before applying the perceptual gain curve.
+    pub preview_volume: f32,
 }
 
 /// Configuration of audio in ZZZ
@@ -38,6 +45,10 @@ impl Settings for AudioSettings {
             input_audio_device: audio
                 .and_then(|audio| audio.input_audio_device.as_ref())
                 .and_then(|device| parse_device_id(device.0.as_deref())),
+            preview_volume: audio
+                .and_then(|audio| audio.preview_volume)
+                .unwrap_or(1.0)
+                .clamp(0.0, 1.0),
         }
     }
 }
@@ -58,7 +69,19 @@ pub struct LiveSettings {
 
 impl LiveSettings {
     pub(crate) fn initialize(&self, cx: &mut App) {
+        let initial_output_device = AudioSettings::get_global(cx).output_audio_device.clone();
+        *LAST_OUTPUT_DEVICE.lock() = initial_output_device;
+
         cx.observe_global::<SettingsStore>(move |cx| {
+            let current_output_device = AudioSettings::get_global(cx).output_audio_device.clone();
+            let previous_output_device = {
+                let mut last_output_device = LAST_OUTPUT_DEVICE.lock();
+                std::mem::replace(&mut *last_output_device, current_output_device.clone())
+            };
+            if previous_output_device != current_output_device {
+                Audio::invalidate_output(cx);
+            }
+
             LIVE_SETTINGS.auto_microphone_volume.store(
                 AudioSettings::get_global(cx).auto_microphone_volume,
                 Ordering::Relaxed,
@@ -84,6 +107,7 @@ pub static LIVE_SETTINGS: LiveSettings = LiveSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use settings::{AudioSettingsContent, SettingsContent};
 
     #[test]
     fn unparsable_device_ids_fall_back_to_no_device() {
@@ -100,6 +124,40 @@ mod tests {
         assert_eq!(
             parse_device_id(Some(device_id.to_string().as_str())),
             Some(device_id)
+        );
+    }
+
+    fn settings_with_preview_volume(preview_volume: Option<f32>) -> SettingsContent {
+        SettingsContent {
+            audio: Some(AudioSettingsContent {
+                preview_volume,
+                ..AudioSettingsContent::default()
+            }),
+            ..SettingsContent::default()
+        }
+    }
+
+    #[test]
+    fn preview_volume_defaults_to_full_volume() {
+        assert_eq!(
+            AudioSettings::from_settings(&SettingsContent::default()).preview_volume,
+            1.0
+        );
+    }
+
+    #[test]
+    fn preview_volume_is_read_and_clamped() {
+        assert_eq!(
+            AudioSettings::from_settings(&settings_with_preview_volume(Some(0.35))).preview_volume,
+            0.35
+        );
+        assert_eq!(
+            AudioSettings::from_settings(&settings_with_preview_volume(Some(-0.5))).preview_volume,
+            0.0
+        );
+        assert_eq!(
+            AudioSettings::from_settings(&settings_with_preview_volume(Some(1.5))).preview_volume,
+            1.0
         );
     }
 }

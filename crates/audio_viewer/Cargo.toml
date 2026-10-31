@@ -14,9 +14,11 @@ doctest = false
 
 [features]
 test-support = ["gpui/test-support", "editor/test-support", "db/test-support"]
+accessibility = ["gpui/accessibility", "ui/accessibility"]
 
 [dependencies]
 anyhow.workspace = true
+async-lock.workspace = true
 audio.workspace = true
 db.workspace = true
 editor.workspace = true
@@ -26,6 +28,7 @@ i18n.workspace = true
 image.workspace = true
 lofty.workspace = true
 log.workspace = true
+paths.workspace = true
 project.workspace = true
 rodio.workspace = true
 settings.workspace = true

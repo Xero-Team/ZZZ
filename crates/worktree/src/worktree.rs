@@ -1,4 +1,6 @@
 mod ignore;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 mod worktree_settings;
 
 use ::ignore::gitignore::{Gitignore, GitignoreBuilder};
@@ -60,6 +62,7 @@ use std::{
     fmt,
     future::Future,
     hash::{Hash as _, Hasher as _},
+    io::{BufWriter, Write as _},
     mem::{self},
     ops::{Deref, DerefMut, Range},
     path::{Path, PathBuf},
@@ -90,6 +93,7 @@ use crate::ignore::IgnoreKind;
 pub const FS_WATCH_LATENCY: Duration = Duration::from_millis(100);
 const REMOTE_VFS_RECONNECT_DELAY: Duration = Duration::from_millis(100);
 const MAX_FILE_LOAD_BYTES: u64 = 6 * 1024 * 1024 * 1024;
+const SPOOL_CHUNK_SIZE: usize = 256 * 1024;
 
 /// How often the background scanner verifies that the worktree root still
 /// exists at its recorded path. Native watchers report the root itself being
@@ -1231,6 +1235,39 @@ impl Worktree {
         }
     }
 
+    /// Copies a binary file to a temporary file for decoders that require a
+    /// native path. Remote files are streamed in bounded chunks.
+    pub fn stage_binary_file(
+        &self,
+        path: &RelPath,
+        cx: &Context<Worktree>,
+    ) -> Task<Result<(PathBuf, tempfile::TempPath)>> {
+        match self {
+            Worktree::Local(this) => this.stage_binary_file(path, cx),
+            Worktree::Remote(remote_worktree) => {
+                let Some(provider_task) = self.remote_vfs_provider(cx) else {
+                    return Task::ready(Err(anyhow!("remote VFS provider is unavailable")));
+                };
+                let Some(entry) = remote_worktree.entry_for_path(path) else {
+                    return Task::ready(Err(anyhow!("no worktree entry for {path:?}")));
+                };
+                let Some(provider_path) = entry
+                    .vfs_path
+                    .as_ref()
+                    .map(|path| path.provider_path().clone())
+                else {
+                    return Task::ready(Err(anyhow!(
+                        "worktree entry has no exact VFS path for {path:?}"
+                    )));
+                };
+                cx.background_spawn(async move {
+                    let provider = provider_task.await.map_err(anyhow::Error::new)?;
+                    stage_remote_binary_file(provider.as_ref(), &provider_path).await
+                })
+            }
+        }
+    }
+
     pub fn path_is_file(&self, path: &RelPath, cx: &Context<Worktree>) -> Task<Result<bool>> {
         match self {
             Worktree::Local(local_worktree) => {
@@ -2110,6 +2147,31 @@ impl LocalWorktree {
             };
 
             Ok(LoadedBinaryFile { file, content })
+        })
+    }
+
+    fn stage_binary_file(
+        &self,
+        path: &RelPath,
+        cx: &Context<Worktree>,
+    ) -> Task<Result<(PathBuf, tempfile::TempPath)>> {
+        let abs_path = self.absolutize(path);
+        let fs = self.fs.clone();
+        cx.background_spawn(async move {
+            let temporary = tempfile::NamedTempFile::new().context("creating temporary file")?;
+            fs.copy_file(
+                &abs_path,
+                temporary.path(),
+                fs::CopyOptions {
+                    overwrite: true,
+                    ignore_if_exists: false,
+                },
+            )
+            .await
+            .with_context(|| format!("copying {abs_path:?} to temporary file"))?;
+            let temporary_path = temporary.into_temp_path();
+            let path = temporary_path.to_path_buf();
+            Ok((path, temporary_path))
         })
     }
 
@@ -7862,6 +7924,101 @@ fn parse_gitfile(content: &str) -> anyhow::Result<&Path> {
         .strip_prefix("gitdir:")
         .with_context(|| format!("parsing gitfile content {content:?}"))?;
     Ok(Path::new(path.trim()))
+}
+
+async fn stage_remote_binary_file(
+    provider: &dyn VfsProvider,
+    provider_path: &ProviderPath,
+) -> Result<(PathBuf, tempfile::TempPath)> {
+    match spool_remote_file(provider, provider_path).await {
+        Ok(staged) => Ok(staged),
+        Err(error)
+            if error
+                .downcast_ref::<VfsError>()
+                .is_some_and(|error| error.code() == VfsErrorCode::Unsupported) =>
+        {
+            log::warn!(
+                "VFS provider does not support positioned reads for {}; loading the file into memory",
+                provider_path.display()
+            );
+            let loaded =
+                vfs::load_provider_bytes(provider, provider_path, vfs::OperationContext::default())
+                    .await?;
+            stage_bytes(&loaded.bytes)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn spool_remote_file(
+    provider: &dyn VfsProvider,
+    provider_path: &ProviderPath,
+) -> Result<(PathBuf, tempfile::TempPath)> {
+    let file = provider
+        .open(provider_path, vfs::OpenOptions::default())
+        .await
+        .with_context(|| format!("opening remote file {}", provider_path.display()))?;
+    let length = file
+        .len(vfs::OperationContext::default())
+        .await
+        .with_context(|| format!("reading remote file length for {}", provider_path.display()))?;
+    stage_vfs_file_to_temp(file.as_ref(), length).await
+}
+
+async fn stage_vfs_file_to_temp(
+    file: &dyn vfs::VfsFile,
+    length: u64,
+) -> Result<(PathBuf, tempfile::TempPath)> {
+    let temporary = tempfile::NamedTempFile::new().context("creating temporary file")?;
+    let mut writer = BufWriter::new(temporary.as_file());
+    let mut buffer = vec![0; SPOOL_CHUNK_SIZE];
+    let mut offset = 0_u64;
+
+    while offset < length {
+        let remaining = length - offset;
+        let chunk_length = usize::try_from(remaining.min(SPOOL_CHUNK_SIZE as u64))
+            .context("remote file chunk length exceeds usize")?;
+        let read = file
+            .read_at(
+                offset,
+                &mut buffer[..chunk_length],
+                vfs::OperationContext::default(),
+            )
+            .await
+            .with_context(|| format!("reading remote file chunk at offset {offset}"))?;
+        anyhow::ensure!(read > 0, "remote file ended before its reported length");
+        anyhow::ensure!(
+            read <= chunk_length,
+            "remote file returned more bytes than requested"
+        );
+        writer
+            .write_all(&buffer[..read])
+            .context("writing remote file chunk to temporary file")?;
+        offset = offset
+            .checked_add(u64::try_from(read).context("remote file chunk length exceeds u64")?)
+            .context("remote file offset overflow")?;
+    }
+
+    anyhow::ensure!(
+        offset == length,
+        "remote file length changed while it was being copied"
+    );
+    writer.flush().context("flushing temporary file")?;
+    drop(writer);
+    let temporary_path = temporary.into_temp_path();
+    let path = temporary_path.to_path_buf();
+    Ok((path, temporary_path))
+}
+
+fn stage_bytes(bytes: &[u8]) -> Result<(PathBuf, tempfile::TempPath)> {
+    let mut temporary = tempfile::NamedTempFile::new().context("creating temporary file")?;
+    temporary
+        .write_all(bytes)
+        .context("writing file bytes to temporary file")?;
+    temporary.flush().context("flushing temporary file")?;
+    let temporary_path = temporary.into_temp_path();
+    let path = temporary_path.to_path_buf();
+    Ok((path, temporary_path))
 }
 
 fn legacy_metadata_from_vfs(metadata: &VfsEntryMetadata) -> Metadata {

@@ -18,7 +18,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use util::ResultExt;
 
@@ -32,30 +32,64 @@ use crate::Sound;
 
 use super::{CHANNEL_COUNT, SAMPLE_RATE};
 
+const DEVICE_ENUMERATION_INTERVAL: Duration = Duration::from_secs(10);
+static LAST_ENUMERATION: Mutex<Option<Instant>> = Mutex::new(None);
+
 pub fn init(cx: &mut App) {
     LIVE_SETTINGS.initialize(cx);
 }
 
-// TODO(jk): this is currently cached only once - we should observe and react instead
 pub fn ensure_devices_initialized(cx: &mut App) {
-    if cx.has_global::<AvailableAudioDevices>() {
+    let initialized = cx.has_global::<AvailableAudioDevices>();
+    if !initialized {
+        cx.default_global::<AvailableAudioDevices>();
+    }
+
+    let now = Instant::now();
+    let should_enumerate = {
+        let mut last_enumeration = LAST_ENUMERATION.lock();
+        let due = device_enumeration_due(*last_enumeration, now);
+        if !initialized || due {
+            *last_enumeration = Some(now);
+        }
+        !initialized || due
+    };
+    if !should_enumerate {
         return;
     }
-    cx.default_global::<AvailableAudioDevices>();
-    let task = cx
+
+    let enumeration_task = cx
         .background_executor()
         .spawn(async move { get_available_audio_devices() });
     cx.spawn(async move |cx: &mut AsyncApp| {
-        let devices = task.await;
+        let devices = enumeration_task.await;
         cx.update(|cx| cx.set_global(AvailableAudioDevices(devices)));
         cx.refresh();
     })
     .detach();
 }
 
+fn device_enumeration_due(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|last| now.saturating_duration_since(last) >= DEVICE_ENUMERATION_INTERVAL)
+}
+
+struct OutputSink {
+    _handle: MixerDeviceSink,
+    mixer: Mixer,
+    failed: Arc<AtomicBool>,
+}
+
+fn output_needs_rebuild(output: Option<&OutputSink>) -> bool {
+    output_failure_needs_rebuild(output.map(|output| output.failed.as_ref()))
+}
+
+fn output_failure_needs_rebuild(failed: Option<&AtomicBool>) -> bool {
+    failed.is_none_or(|failed| failed.load(Ordering::Acquire))
+}
+
 #[derive(Default)]
 pub struct Audio {
-    output: Option<(MixerDeviceSink, Mixer)>,
+    output: Option<OutputSink>,
     source_cache: HashMap<Sound, Buffered<Decoder<Cursor<Vec<u8>>>>>,
     preview: Option<PlaybackHandle>,
     player: Option<Arc<Player>>,
@@ -70,15 +104,19 @@ impl Audio {
             "Audio does not sound correct without optimizations. Use a release build to debug audio issues"
         );
 
-        if self.output.is_none() {
-            let (output_handle, output_mixer) = open_output_stream(output_audio_device)?;
-            self.output = Some((output_handle, output_mixer));
+        if output_needs_rebuild(self.output.as_ref()) {
+            self.output.take();
+            self.stop_playback();
+
+            let output =
+                open_output_stream(output_audio_device).context("Could not open output stream")?;
+            self.output = Some(output);
         }
 
-        let Some((_, mixer)) = self.output.as_ref() else {
+        let Some(output) = self.output.as_ref() else {
             anyhow::bail!("output stream was not retained after opening")
         };
-        Ok(mixer)
+        Ok(&output.mixer)
     }
 
     pub fn play_sound(sound: Sound, cx: &mut App) {
@@ -96,15 +134,11 @@ impl Audio {
     }
 
     pub fn end_call(cx: &mut App) {
-        cx.update_default_global(|this: &mut Self, _cx| {
-            if let Some(preview) = this.preview.take() {
-                preview.stop();
-            }
-            if let Some(player) = this.player.take() {
-                player.stop();
-            }
-            this.output.take();
-        });
+        cx.update_default_global(|this: &mut Self, _cx| this.invalidate_output_state());
+    }
+
+    pub(crate) fn invalidate_output(cx: &mut App) {
+        cx.update_default_global(|this: &mut Self, _cx| this.invalidate_output_state());
     }
 
     pub fn play_source<S>(source: S, cx: &mut App) -> Result<PlaybackHandle>
@@ -145,14 +179,21 @@ impl Audio {
     }
 
     pub fn stop_preview(cx: &mut App) {
-        cx.update_default_global(|this: &mut Self, _cx| {
-            if let Some(preview) = this.preview.take() {
-                preview.stop();
-            }
-            if let Some(player) = this.player.take() {
-                player.stop();
-            }
-        });
+        cx.update_default_global(|this: &mut Self, _cx| this.stop_playback());
+    }
+
+    fn stop_playback(&mut self) {
+        if let Some(preview) = self.preview.take() {
+            preview.stop();
+        }
+        if let Some(player) = self.player.take() {
+            player.stop();
+        }
+    }
+
+    fn invalidate_output_state(&mut self) {
+        self.stop_playback();
+        self.output.take();
     }
 
     fn start_preview<S>(
@@ -204,6 +245,7 @@ struct PlaybackControl {
     stopped: AtomicBool,
     finished: AtomicBool,
     volume: AtomicU32,
+    speed: AtomicU32,
     sample_position: AtomicU64,
     seek_to_nanos: Mutex<Option<u64>>,
 }
@@ -215,6 +257,7 @@ impl PlaybackControl {
             stopped: AtomicBool::new(false),
             finished: AtomicBool::new(false),
             volume: AtomicU32::new(1.0f32.to_bits()),
+            speed: AtomicU32::new(1.0f32.to_bits()),
             sample_position: AtomicU64::new(0),
             seek_to_nanos: Mutex::new(None),
         }
@@ -222,6 +265,10 @@ impl PlaybackControl {
 
     fn volume_factor(&self) -> f32 {
         f32::from_bits(self.volume.load(Ordering::Relaxed))
+    }
+
+    fn speed_factor(&self) -> f32 {
+        f32::from_bits(self.speed.load(Ordering::Relaxed))
     }
 }
 
@@ -257,6 +304,16 @@ impl PlaybackHandle {
         self.control
             .volume
             .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+
+    /// Changes playback speed without pitch preservation.
+    pub fn set_speed(&self, speed: f32) {
+        let speed = if speed.is_finite() {
+            speed.clamp(0.25, 4.0)
+        } else {
+            1.0
+        };
+        self.control.speed.store(speed.to_bits(), Ordering::Relaxed);
     }
 
     pub fn try_seek(&self, position: Duration) -> Result<()> {
@@ -307,9 +364,15 @@ impl<S: Source> Iterator for SampleCountingSource<S> {
     }
 }
 
+const SPEED_CHANGE_DETECTION_SAMPLES: usize = 512;
+
 impl<S: Source> Source for SampleCountingSource<S> {
     fn current_span_len(&self) -> Option<usize> {
-        self.inner.current_span_len()
+        // The mixer adds another UniformSourceIterator above this chain, and
+        // only checks for sample-rate changes at span boundaries. The Uniform
+        // source inside this wrapper hides decoder spans, so expose short
+        // synthetic spans to make dynamic speed changes take effect promptly.
+        Some(SPEED_CHANGE_DETECTION_SAMPLES)
     }
 
     fn channels(&self) -> rodio::ChannelCount {
@@ -347,6 +410,7 @@ where
         control: control.clone(),
     };
     counted
+        .speed(control.speed_factor())
         .amplify(control.volume_factor())
         .pausable(control.paused.load(Ordering::Relaxed))
         .stoppable()
@@ -357,7 +421,9 @@ where
 
 fn apply_playback_control<S: Source>(
     stoppable: &mut rodio::source::Stoppable<
-        rodio::source::Pausable<rodio::source::Amplify<SampleCountingSource<S>>>,
+        rodio::source::Pausable<
+            rodio::source::Amplify<rodio::source::Speed<SampleCountingSource<S>>>,
+        >,
     >,
     control: &PlaybackControl,
 ) {
@@ -366,16 +432,22 @@ fn apply_playback_control<S: Source>(
         return;
     }
 
+    let speed = control.speed_factor();
     {
         let pausable = stoppable.inner_mut();
         pausable.set_paused(control.paused.load(Ordering::Relaxed));
-        pausable.inner_mut().set_factor(control.volume_factor());
+        let amplify = pausable.inner_mut();
+        amplify.set_factor(control.volume_factor());
+        amplify.inner_mut().set_factor(speed);
     }
 
     let Some(seek_nanos) = control.seek_to_nanos.lock().take() else {
         return;
     };
     let position = Duration::from_nanos(seek_nanos);
+    // Speed::try_seek multiplies its position by the speed factor because it
+    // interprets seeks in output time. Convert media time back before seeking.
+    let position = position.div_f32(speed);
     if let Err(error) = stoppable.try_seek(position) {
         log::warn!("audio preview seek failed: {error}");
     }
@@ -384,7 +456,7 @@ fn apply_playback_control<S: Source>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rodio::{nz, static_buffer::StaticSamplesBuffer};
+    use rodio::{buffer::SamplesBuffer, nz, static_buffer::StaticSamplesBuffer};
 
     #[test]
     fn sample_counting_source_counts_and_marks_finished() {
@@ -402,6 +474,108 @@ mod tests {
             SAMPLES.len() as u64
         );
         assert!(control.finished.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn set_speed_clamps_to_supported_range() {
+        let handle = PlaybackHandle::new();
+
+        handle.set_speed(0.1);
+        assert_eq!(handle.control.speed_factor(), 0.25);
+
+        handle.set_speed(5.0);
+        assert_eq!(handle.control.speed_factor(), 4.0);
+
+        handle.set_speed(1.5);
+        assert_eq!(handle.control.speed_factor(), 1.5);
+
+        handle.set_speed(f32::NAN);
+        assert_eq!(handle.control.speed_factor(), 1.0);
+    }
+
+    #[test]
+    fn seek_at_double_speed_preserves_media_position() {
+        let sample_rate = nz!(48_000);
+        let channels = nz!(2);
+        let mut samples = vec![0.0; sample_rate.get() as usize * channels.get() as usize * 2];
+        let seek_sample = sample_rate.get() as usize * channels.get() as usize;
+        samples[seek_sample] = 1.0;
+        let source = SamplesBuffer::new(channels, sample_rate, samples);
+        let control = Arc::new(PlaybackControl::new());
+        control.speed.store(2.0f32.to_bits(), Ordering::Relaxed);
+
+        let counted = SampleCountingSource {
+            inner: rodio::source::UniformSourceIterator::new(source, CHANNEL_COUNT, SAMPLE_RATE),
+            control: control.clone(),
+        };
+        let mut chain = counted
+            .speed(control.speed_factor())
+            .amplify(1.0)
+            .pausable(false)
+            .stoppable();
+        *control.seek_to_nanos.lock() = Some(Duration::from_secs(1).as_nanos() as u64);
+
+        apply_playback_control(&mut chain, &control);
+
+        let expected_samples = SAMPLE_RATE.get() as u64 * CHANNEL_COUNT.get() as u64;
+        assert_eq!(
+            control.sample_position.load(Ordering::Relaxed),
+            expected_samples
+        );
+        assert_eq!(chain.next(), Some(1.0));
+    }
+
+    #[test]
+    fn dynamic_speed_change_affects_outer_mixer_resampling() {
+        let sample_rate = nz!(48_000);
+        let channels = nz!(2);
+        let media_samples = sample_rate.get() as usize * channels.get() as usize * 2;
+        let source = SamplesBuffer::new(channels, sample_rate, vec![0.0; media_samples]);
+        let control = Arc::new(PlaybackControl::new());
+        let preview = wrap_preview_source(source, control.clone());
+        let mut output =
+            rodio::source::UniformSourceIterator::new(preview, CHANNEL_COUNT, SAMPLE_RATE);
+
+        let initial_output_samples = output.by_ref().take(10_000).count();
+        assert_eq!(initial_output_samples, 10_000);
+
+        control.speed.store(2.0f32.to_bits(), Ordering::Relaxed);
+        let remaining_output_samples = output.count();
+        let total_output_samples = initial_output_samples + remaining_output_samples;
+
+        assert_eq!(
+            control.sample_position.load(Ordering::Relaxed),
+            media_samples as u64
+        );
+        assert!(
+            (95_000..=110_000).contains(&total_output_samples),
+            "2x playback emitted {total_output_samples} samples for 192000 media samples"
+        );
+    }
+
+    #[test]
+    fn output_rebuild_state_covers_missing_healthy_and_failed() {
+        assert!(output_failure_needs_rebuild(None));
+
+        let failed = AtomicBool::new(false);
+        assert!(!output_failure_needs_rebuild(Some(&failed)));
+
+        failed.store(true, Ordering::Release);
+        assert!(output_failure_needs_rebuild(Some(&failed)));
+    }
+
+    #[test]
+    fn device_enumeration_is_throttled_for_ten_seconds() {
+        let now = Instant::now();
+        assert!(device_enumeration_due(None, now));
+        assert!(!device_enumeration_due(
+            Some(now),
+            now + Duration::from_millis(9_999)
+        ));
+        assert!(device_enumeration_due(
+            Some(now),
+            now + DEVICE_ENUMERATION_INTERVAL
+        ));
     }
 }
 
@@ -471,9 +645,26 @@ pub fn open_test_output(device_id: Option<DeviceId>) -> anyhow::Result<MixerDevi
         .context("Could not open output stream")
 }
 
-pub fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<(MixerDeviceSink, Mixer)> {
+fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<OutputSink> {
     let device = resolve_device(device_id.as_ref(), AudioDeviceKind::Output)?;
-    let builder = DeviceSinkBuilder::from_device(device)?;
+    let failed = Arc::new(AtomicBool::new(false));
+    let callback_failed = failed.clone();
+    let builder = DeviceSinkBuilder::from_device(device)?.with_error_callback(move |error| {
+        match error.kind() {
+            cpal::ErrorKind::DeviceNotAvailable
+            | cpal::ErrorKind::BackendError
+            | cpal::ErrorKind::DeviceBusy => {
+                callback_failed.store(true, Ordering::Release);
+                log::warn!("Audio output stream failed and will be rebuilt: {error}");
+            }
+            cpal::ErrorKind::DeviceChanged => {
+                log::info!("Audio output stream was rerouted to a new device: {error}");
+            }
+            _ => {
+                log::warn!("Audio output stream error: {error}");
+            }
+        }
+    });
     let mut output_handle = builder
         .open_sink_or_fallback()
         .context("Could not open output stream")?;
@@ -484,7 +675,11 @@ pub fn open_output_stream(device_id: Option<DeviceId>) -> anyhow::Result<(MixerD
     output_mixer.add(rodio::source::Zero::new(CHANNEL_COUNT, SAMPLE_RATE));
     output_handle.mixer().add(source);
 
-    Ok((output_handle, output_mixer))
+    Ok(OutputSink {
+        _handle: output_handle,
+        mixer: output_mixer,
+        failed,
+    })
 }
 
 #[derive(Clone, Debug)]

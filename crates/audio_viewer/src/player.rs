@@ -10,8 +10,10 @@ use lofty::{
 };
 use rodio::{Decoder, Source};
 
-pub(crate) const SUPPORTED_EXTENSIONS: &[&str] =
-    &["mp3", "wav", "flac", "ogg", "oga", "m4a", "aac"];
+pub(crate) const SUPPORTED_EXTENSIONS: &[&str] = &[
+    "mp3", "wav", "flac", "ogg", "oga", "m4a", "m4b", "aac", "opus",
+];
+const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
 
 pub(crate) fn is_supported_audio_extension(extension: &str) -> bool {
     SUPPORTED_EXTENSIONS
@@ -26,7 +28,9 @@ pub(crate) fn format_label(extension: &str) -> &'static str {
         "flac" => "FLAC",
         "ogg" | "oga" => "OGG",
         "m4a" => "M4A",
+        "m4b" => "M4B",
         "aac" => "AAC",
+        "opus" => "OPUS",
         _ => "Audio",
     }
 }
@@ -42,6 +46,10 @@ pub(crate) struct AudioMetadata {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub track: Option<(u32, Option<u32>)>,
+    pub disc: Option<(u32, Option<u32>)>,
+    pub year: Option<u32>,
+    pub genre: Option<String>,
 }
 
 pub(crate) struct LoadedAudioInfo {
@@ -100,6 +108,10 @@ fn read_with_lofty(
         title: None,
         artist: None,
         album: None,
+        track: None,
+        disc: None,
+        year: None,
+        genre: None,
     };
 
     if let Some(tag) = tagged_file
@@ -109,6 +121,10 @@ fn read_with_lofty(
         metadata.title = nonempty_tag(tag.title());
         metadata.artist = nonempty_tag(tag.artist());
         metadata.album = nonempty_tag(tag.album());
+        metadata.track = numbered_tag(tag.track(), tag.track_total());
+        metadata.disc = numbered_tag(tag.disk(), tag.disk_total());
+        metadata.year = tag.date().map(|date| u32::from(date.year));
+        metadata.genre = nonempty_tag(tag.genre());
     }
 
     if metadata.sample_rate == 0 || metadata.channels == 0 {
@@ -148,9 +164,19 @@ fn read_with_decoder(
             title: None,
             artist: None,
             album: None,
+            track: None,
+            disc: None,
+            year: None,
+            genre: None,
         },
         cover: None,
     })
+}
+
+fn numbered_tag(number: Option<u32>, total: Option<u32>) -> Option<(u32, Option<u32>)> {
+    number
+        .filter(|number| *number > 0)
+        .map(|number| (number, total.filter(|total| *total > 0)))
 }
 
 fn nonempty_tag(value: Option<std::borrow::Cow<'_, str>>) -> Option<String> {
@@ -179,6 +205,14 @@ fn extract_cover<'a>(tags: impl IntoIterator<Item = &'a lofty::tag::Tag>) -> Opt
 fn cover_from_picture(picture: &Picture) -> Option<Arc<Image>> {
     let data = picture.data();
     if data.is_empty() {
+        return None;
+    }
+    if data.len() > MAX_COVER_BYTES {
+        log::warn!(
+            "skipping audio cover: {} bytes exceeds {} byte limit",
+            data.len(),
+            MAX_COVER_BYTES
+        );
         return None;
     }
     let format = picture
@@ -240,7 +274,8 @@ pub(crate) fn play_path(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_cover, is_supported_audio_extension, nonempty_tag, read_audio, read_with_lofty,
+        MAX_COVER_BYTES, cover_from_picture, extract_cover, format_label,
+        is_supported_audio_extension, nonempty_tag, numbered_tag, read_audio, read_with_lofty,
     };
     use lofty::{
         config::WriteOptions,
@@ -264,17 +299,35 @@ mod tests {
     }
 
     #[test]
-    fn flac_ogg_m4a_aac_are_supported() {
+    fn flac_ogg_m4a_m4b_aac_opus_are_supported() {
         assert!(is_supported_audio_extension("flac"));
         assert!(is_supported_audio_extension("ogg"));
         assert!(is_supported_audio_extension("oga"));
         assert!(is_supported_audio_extension("m4a"));
+        assert!(is_supported_audio_extension("m4b"));
         assert!(is_supported_audio_extension("aac"));
+        assert!(is_supported_audio_extension("opus"));
     }
 
     #[test]
-    fn opus_wma_wv_mka_are_not_supported() {
-        assert!(!is_supported_audio_extension("opus"));
+    fn opus_and_m4b_extensions_are_case_insensitive() {
+        assert!(is_supported_audio_extension("OPUS"));
+        assert!(is_supported_audio_extension("Opus"));
+        assert!(is_supported_audio_extension("M4B"));
+        assert!(is_supported_audio_extension("M4b"));
+    }
+
+    #[test]
+    fn format_labels_include_opus_and_m4b() {
+        assert_eq!(format_label("opus"), "OPUS");
+        assert_eq!(format_label("OPUS"), "OPUS");
+        assert_eq!(format_label("m4b"), "M4B");
+        assert_eq!(format_label("M4B"), "M4B");
+        assert_eq!(format_label("unknown"), "Audio");
+    }
+
+    #[test]
+    fn wma_wv_mka_are_not_supported() {
         assert!(!is_supported_audio_extension("wma"));
         assert!(!is_supported_audio_extension("wv"));
         assert!(!is_supported_audio_extension("mka"));
@@ -288,6 +341,15 @@ mod tests {
         );
         assert_eq!(nonempty_tag(Some(Cow::Borrowed("   "))), None);
         assert_eq!(nonempty_tag(None), None);
+    }
+
+    #[test]
+    fn numbered_tag_requires_a_positive_number_and_drops_invalid_totals() {
+        assert_eq!(numbered_tag(Some(3), Some(12)), Some((3, Some(12))));
+        assert_eq!(numbered_tag(Some(3), None), Some((3, None)));
+        assert_eq!(numbered_tag(Some(3), Some(0)), Some((3, None)));
+        assert_eq!(numbered_tag(None, Some(12)), None);
+        assert_eq!(numbered_tag(Some(0), Some(12)), None);
     }
 
     #[test]
@@ -324,6 +386,28 @@ mod tests {
         );
         let cover = extract_cover([&tag]);
         assert!(cover.is_some());
+    }
+
+    #[test]
+    fn oversized_covers_are_skipped() {
+        let picture = Picture::unchecked(vec![0; MAX_COVER_BYTES + 1])
+            .pic_type(PictureType::CoverFront)
+            .mime_type(MimeType::Png)
+            .build();
+        assert!(cover_from_picture(&picture).is_none());
+    }
+
+    #[test]
+    fn read_with_lofty_extracts_extended_metadata_from_flac() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("track.flac");
+        write_tagged_flac(&path);
+
+        let info = read_with_lofty(&path, "flac", fs::metadata(&path).unwrap().len()).unwrap();
+        assert_eq!(info.metadata.track, Some((3, Some(12))));
+        assert_eq!(info.metadata.disc, Some((1, Some(2))));
+        assert_eq!(info.metadata.year, Some(2024));
+        assert_eq!(info.metadata.genre.as_deref(), Some("Electronic"));
     }
 
     #[test]
@@ -371,6 +455,47 @@ mod tests {
         tag.set_album(album.to_string());
         tagged.insert_tag(tag);
         tagged.save_to_path(path, WriteOptions::default()).unwrap();
+    }
+
+    fn write_tagged_flac(path: &Path) {
+        let mut bytes = b"fLaC".to_vec();
+        bytes.extend_from_slice(&[0, 0, 0, 34]);
+
+        let min_block_size = 4096u16;
+        bytes.extend_from_slice(&min_block_size.to_be_bytes());
+        bytes.extend_from_slice(&min_block_size.to_be_bytes());
+        bytes.extend_from_slice(&[0; 6]);
+
+        let stream_info = (44_100u64 << 44) | (1 << 40) | (15 << 36);
+        bytes.extend_from_slice(&stream_info.to_be_bytes());
+        bytes.extend_from_slice(&[0; 16]);
+
+        let comments = [
+            "TITLE=Preview",
+            "ARTIST=Artist",
+            "ALBUM=Album",
+            "TRACKNUMBER=3",
+            "TRACKTOTAL=12",
+            "DISCNUMBER=1",
+            "DISCTOTAL=2",
+            "DATE=2024",
+            "GENRE=Electronic",
+        ];
+        let vendor = b"audio_viewer tests";
+        let mut vorbis = Vec::new();
+        vorbis.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+        vorbis.extend_from_slice(vendor);
+        vorbis.extend_from_slice(&(comments.len() as u32).to_le_bytes());
+        for comment in comments {
+            vorbis.extend_from_slice(&(comment.len() as u32).to_le_bytes());
+            vorbis.extend_from_slice(comment.as_bytes());
+        }
+
+        let block_len = u32::try_from(vorbis.len()).unwrap();
+        bytes.extend_from_slice(&[0x84]);
+        bytes.extend_from_slice(&block_len.to_be_bytes()[1..]);
+        bytes.extend_from_slice(&vorbis);
+        fs::write(path, bytes).unwrap();
     }
 
     const TINY_PNG: &[u8] = &[

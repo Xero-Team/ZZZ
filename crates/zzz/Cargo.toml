@@ -121,7 +121,7 @@ rayon.workspace = true
 
 http_client.workspace = true
 image_viewer.workspace = true
-audio_viewer.workspace = true
+audio_viewer = { workspace = true, features = ["accessibility"] }
 video_viewer.workspace = true
 i18n.workspace = true
 input_latency_ui.workspace = true

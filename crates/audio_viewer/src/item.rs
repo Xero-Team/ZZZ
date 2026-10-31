@@ -27,6 +27,7 @@ impl Item for AudioView {
                 f(ItemEvent::UpdateTab);
                 f(ItemEvent::UpdateBreadcrumbs);
             }
+            AudioViewEvent::MetadataChanged => {}
         }
     }
 
