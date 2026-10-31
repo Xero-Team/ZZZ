@@ -1,6 +1,7 @@
 use std::{
     alloc::{self, handle_alloc_error},
     cell::Cell,
+    mem::align_of,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     ptr::{self, NonNull},
@@ -25,12 +26,21 @@ struct Chunk {
     offset: *mut u8,
 }
 
+/// Alignment requested for every chunk allocation.
+///
+/// Chunks hold values of arbitrary types, so they are aligned like the widest primitive
+/// instead of relying on the allocator to hand back a suitably aligned block. Without
+/// this, the first allocation in a chunk can spend up to a full alignment's worth of
+/// space on padding and push a value that would otherwise fit into a new chunk.
+const CHUNK_ALIGNMENT: usize = align_of::<u128>();
+
 impl Drop for Chunk {
     fn drop(&mut self) {
         // SAFETY: Both pointers were derived from the same allocation in `Chunk::new`.
         let chunk_size = unsafe { self.end.offset_from_unsigned(self.start) };
-        // SAFETY: This succeeded during allocation.
-        let layout = unsafe { alloc::Layout::from_size_align_unchecked(chunk_size, 1) };
+        // SAFETY: `Chunk::new` allocated this chunk with the same size and alignment.
+        let layout =
+            unsafe { alloc::Layout::from_size_align_unchecked(chunk_size, CHUNK_ALIGNMENT) };
         // SAFETY: `self.start` was allocated with `layout`.
         unsafe { alloc::dealloc(self.start, layout) };
     }
@@ -39,8 +49,8 @@ impl Drop for Chunk {
 impl Chunk {
     fn new(chunk_size: NonZeroUsize) -> Self {
         // this only fails if chunk_size is unreasonably huge
-        let layout =
-            alloc::Layout::from_size_align(chunk_size.get(), 1).expect("entry should be present");
+        let layout = alloc::Layout::from_size_align(chunk_size.get(), CHUNK_ALIGNMENT)
+            .expect("entry should be present");
         let start = unsafe { alloc::alloc(layout) };
         if start.is_null() {
             handle_alloc_error(layout);
@@ -54,15 +64,23 @@ impl Chunk {
     }
 
     fn allocate(&mut self, layout: alloc::Layout) -> Option<NonNull<u8>> {
-        let aligned = unsafe { self.offset.add(self.offset.align_offset(layout.align())) };
-        let next = unsafe { aligned.add(layout.size()) };
-
-        if next <= self.end {
-            self.offset = next;
-            NonNull::new(aligned)
-        } else {
-            None
+        let alignment_offset = self.offset.align_offset(layout.align());
+        // SAFETY: `self.offset` always points within the chunk allocation and `self.end`
+        // points one past its end, so the distance between them is well-defined.
+        let remaining = unsafe { self.end.offset_from_unsigned(self.offset) };
+        // `align_offset` returns `usize::MAX` when it cannot align the pointer, which this
+        // comparison rejects together with every alignment that does not fit.
+        if alignment_offset > remaining || layout.size() > remaining - alignment_offset {
+            return None;
         }
+
+        // SAFETY: `alignment_offset` was checked against `remaining`, so the pointer stays
+        // within the chunk allocation.
+        let aligned = unsafe { self.offset.add(alignment_offset) };
+        // SAFETY: `layout.size()` bytes remain after `aligned`, as checked above.
+        let next = unsafe { aligned.add(layout.size()) };
+        self.offset = next;
+        NonNull::new(aligned)
     }
 
     fn reset(&mut self) {
@@ -257,6 +275,21 @@ mod tests {
         arena.alloc(|| 4u32);
 
         assert_eq!(arena.capacity(), 24);
+    }
+
+    #[test]
+    fn test_arena_grows_when_alignment_padding_does_not_fit() {
+        let mut arena = Arena::new(16);
+        // Occupies fifteen of the chunk's sixteen bytes, leaving a single byte behind.
+        let bytes = arena.alloc(|| [0u8; 15]);
+        assert_eq!(bytes.len(), 15);
+
+        // A `u64` needs several bytes of alignment padding on top of its own eight bytes,
+        // so it cannot fit in the remaining byte. The chunk has to be skipped without
+        // computing a pointer past the end of its allocation.
+        let number = arena.alloc(|| 7u64);
+        assert_eq!(*number, 7);
+        assert_eq!(arena.capacity(), 32);
     }
 
     #[test]
