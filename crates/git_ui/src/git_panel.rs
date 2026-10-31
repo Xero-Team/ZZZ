@@ -1050,7 +1050,7 @@ impl GitPanel {
             cx.on_focus(&focus_handle, window, Self::focus_in).detach();
 
             cx.subscribe(&workspace_entity, |this, _, event, cx| {
-                if let workspace::Event::ActiveItemChanged = event {
+                if matches!(event, workspace::Event::ActiveItemChanged) {
                     this.update_active_history_sha(cx);
                 }
             })
