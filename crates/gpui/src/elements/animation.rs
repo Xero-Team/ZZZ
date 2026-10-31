@@ -161,7 +161,7 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
             global_id.expect("value should be present"),
             |state, window| {
                 let mut state = state.unwrap_or_else(|| AnimationState {
-                    start: Instant::now(),
+                    start: cx.background_executor().now(),
                     animation_ix: 0,
                 });
                 if self.animations.is_empty() {
@@ -179,7 +179,7 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                     let elapsed = cx.background_executor().now() - cx.synced_animation_epoch;
                     Duration::from_nanos((elapsed.as_nanos() % duration.as_nanos()) as u64)
                 } else {
-                    state.start.elapsed()
+                    cx.background_executor().now() - state.start
                 };
                 let mut delta = if duration.is_zero() {
                     2.0
@@ -193,7 +193,7 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                         if animation_ix >= self.animations.len() - 1 {
                             done = true;
                         } else {
-                            state.start = Instant::now();
+                            state.start = cx.background_executor().now();
                             state.animation_ix += 1;
                         }
                         delta = 1.0;
