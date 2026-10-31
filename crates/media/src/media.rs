@@ -146,6 +146,15 @@ pub mod core_media {
                 )
             };
             anyhow::ensure!(result == 0, "error getting parameter set, code: {result}");
+            if len == 0 {
+                return Ok(&[]);
+            }
+            anyhow::ensure!(
+                !bytes.is_null(),
+                "CoreMedia returned a null parameter set at index {index}"
+            );
+            // SAFETY: `CMVideoFormatDescriptionGetH264ParameterSetAtIndex` filled `bytes`
+            // with a buffer of `len` readable bytes.
             Ok(unsafe { std::slice::from_raw_parts(bytes, len) })
         }
     }
@@ -185,6 +194,15 @@ pub mod core_media {
                 )
             };
             assert!(result == 0, "could not get block buffer data");
+            if len == 0 {
+                return &[];
+            }
+            assert!(
+                !bytes.is_null(),
+                "CoreMedia returned a null block buffer with a non-zero length"
+            );
+            // SAFETY: `CMBlockBufferGetDataPointer` filled `bytes` with a buffer of `len`
+            // readable bytes.
             unsafe { std::slice::from_raw_parts(bytes, len) }
         }
     }
