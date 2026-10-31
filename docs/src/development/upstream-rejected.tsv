@@ -560,6 +560,7 @@ be8c6f9f	C	unisolatable	Large cross-platform renderer resource rewrite cannot be
 bf65fd4d	C	untriaged	Legal ToS/Privacy absolute URLs.	upstream-sync-2026-08-18.md
 bf89346c1b	C	upstream-infra	Community PR routing metadata.	upstream-sync-2026-09-24.md
 bf9a3601	C	untriaged	GitHub Actions / xtask Linux runner size for migration checks.	upstream-sync-2026-09-18.md
+bfd1dd484b	C	untriaged	Re-aligns the author avatar cell in the git graph list. ZZZ's `crates/git_graph/src/git_graph.rs` renders the author column as a plain label and has no table row model to align; avatars only appear in the git panel details pane.	upstream-sync-2026-10-31.md
 c05e3463	C	philosophy	ChatGPT subscription compaction.	upstream-sync-2026-08-18.md
 c07b87624c	C	diverged	Applies the subagents RFD to cancellation. ZZZ's `AcpThread` has a diverged request lifecycle with no subagent association or `can_cancel` grant.	upstream-sync-2026-10-27.md
 c0979ee0	C	untriaged	OpenAI subscribed default model.	upstream-sync-2026-08-18.md
