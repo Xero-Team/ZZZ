@@ -236,6 +236,14 @@ impl CommitView {
             .detach();
     }
 
+    pub(crate) fn commit_sha(&self) -> &SharedString {
+        &self.commit.sha
+    }
+
+    pub(crate) fn repository(&self) -> &Entity<Repository> {
+        &self.repository
+    }
+
     fn new(
         commit: CommitDetails,
         commit_diff: CommitDiff,
