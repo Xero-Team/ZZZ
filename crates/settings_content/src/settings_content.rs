@@ -526,7 +526,7 @@ impl From<Option<String>> for AudioOutputDeviceName {
 }
 
 #[with_fallible_options]
-#[derive(Default, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Clone, MergeFrom)]
+#[derive(Default, Debug, PartialEq, Serialize, Deserialize, JsonSchema, Clone, MergeFrom)]
 pub struct DebuggerSettingsContent {
     /// Determines the stepping granularity.
     ///
@@ -556,6 +556,16 @@ pub struct DebuggerSettingsContent {
     ///
     /// Default: Bottom
     pub dock: Option<DockPosition>,
+    /// Default width of the debug panel in pixels when docked to the left or right.
+    ///
+    /// Default: 300
+    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
+    pub default_width: Option<f32>,
+    /// Default height of the debug panel in pixels when docked to the bottom.
+    ///
+    /// Default: 300
+    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
+    pub default_height: Option<f32>,
 }
 
 /// The granularity of one 'step' in the stepping requests `next`, `stepIn`, `stepOut`, and `stepBack`.
