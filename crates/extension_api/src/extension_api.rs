@@ -375,18 +375,25 @@ impl Drop for ExtensionRef {
 }
 
 fn extension() -> ExtensionRef {
+    // SAFETY: the extension is only claimed by a single guard at a time.
+    let in_use = unsafe { EXTENSION_IN_USE };
+    assert!(
+        !in_use,
+        "invariant: the extension is not re-entered while a host call is running"
+    );
+
     #[expect(static_mut_refs)]
-    unsafe {
-        assert!(
-            !EXTENSION_IN_USE,
-            "invariant: the extension is not re-entered while a host call is running"
-        );
-        let extension = EXTENSION
+    // SAFETY: `register_extension` runs before any host call and never replaces
+    // the extension afterwards.
+    let extension = unsafe {
+        EXTENSION
             .as_deref_mut()
-            .expect("invariant: `register_extension` runs before any host call");
-        EXTENSION_IN_USE = true;
-        ExtensionRef { extension }
-    }
+            .expect("invariant: `register_extension` runs before any host call")
+    };
+
+    // SAFETY: the previous guard has been dropped, so no other reference exists.
+    unsafe { EXTENSION_IN_USE = true };
+    ExtensionRef { extension }
 }
 
 static mut EXTENSION: Option<Box<dyn Extension>> = None;
