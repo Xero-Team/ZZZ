@@ -334,34 +334,6 @@ fn main() {
     let installation_id = app
         .background_executor()
         .spawn(installation_id(KeyValueStore::from_app_db(&app_db)));
-    let session_id = Uuid::new_v4().to_string();
-    let session = app.background_executor().spawn(Session::new(
-        session_id.clone(),
-        KeyValueStore::from_app_db(&app_db),
-    ));
-    let background_executor = app.background_executor();
-    crashes::init(
-        InitCrashHandler {
-            session_id,
-            // Strip the build and channel information from the version string;
-            // they are sent separately.
-            zzz_version: semver::Version::new(
-                app_version.major,
-                app_version.minor,
-                app_version.patch,
-            )
-            .to_string(),
-            binary: "zzz".to_string(),
-            release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
-            commit_sha: app_commit_sha
-                .as_ref()
-                .map_or_else(|| "no sha".to_owned(), |sha| sha.full()),
-        },
-        |task| {
-            app.background_executor().spawn(task).detach();
-        },
-        move |duration| background_executor.timer(duration),
-    );
     let (open_listener, mut open_rx) = OpenListener::new();
 
     let failed_single_instance_check = if *zzz_env_vars::ZZZ_STATELESS
@@ -390,6 +362,34 @@ fn main() {
         return;
     }
 
+    let session_id = Uuid::new_v4().to_string();
+    let session = app.background_executor().spawn(Session::new(
+        session_id.clone(),
+        KeyValueStore::from_app_db(&app_db),
+    ));
+    let background_executor = app.background_executor();
+    crashes::init(
+        InitCrashHandler {
+            session_id,
+            // Strip the build and channel information from the version string;
+            // they are sent separately.
+            zzz_version: semver::Version::new(
+                app_version.major,
+                app_version.minor,
+                app_version.patch,
+            )
+            .to_string(),
+            binary: "zzz".to_string(),
+            release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
+            commit_sha: app_commit_sha
+                .as_ref()
+                .map_or_else(|| "no sha".to_owned(), |sha| sha.full()),
+        },
+        |task| {
+            app.background_executor().spawn(task).detach();
+        },
+        move |duration| background_executor.timer(duration),
+    );
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let git_binary_path =
         if cfg!(target_os = "macos") && option_env!("ZZZ_BUNDLE").as_deref() == Some("true") {
