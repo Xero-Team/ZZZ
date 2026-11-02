@@ -2886,6 +2886,7 @@
     "git_ui.git_panel.discard_changes_to_file_prompt": "确定要丢弃 {} 的更改吗？",
     "git_ui.git_panel.discard_changes_to_these_files": "要丢弃这些文件的更改吗？",
     "git_ui.git_panel.discard_tracked_changes": "丢弃已跟踪更改",
+    "git_ui.git_panel.dragged_entry_count": "{} 项",
     "git_ui.git_panel.expand_commit_editor": "展开提交编辑器",
     "git_ui.git_panel.hide_commit_editor": "隐藏提交编辑器",
     "git_ui.git_panel.failed_to_load_commits": "加载提交失败",
