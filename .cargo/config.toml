@@ -14,9 +14,13 @@ rustflags = [
     "windows_slim_errors",        # This cfg will reduce the size of `windows::core::Error` from 16 bytes to 4 bytes
     "-C",
     "target-feature=+crt-static",
-    "-C",
-    "target-cpu=x86-64",
 ]
+
+# `x86-64` is the baseline for the 64-bit MSVC target. `cc` forwards it to the C
+# compiler as `-march`, and an `aarch64` target rejects that, so it stays out of
+# the table above.
+[target.'cfg(all(target_os = "windows", target_arch = "x86_64"))']
+rustflags = ["-C", "target-cpu=x86-64"]
 
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]

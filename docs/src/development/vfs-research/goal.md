@@ -30,7 +30,7 @@ description: Copyable Goal command for executing the complete ZZZ VFS refactor.
 
 严格实现报告中的 provider + snapshot 架构、无损 binary path wire format、ResourceId/VfsPath、positioned I/O、LocalProvider、RemoteProviderProxy、watch sequence/overflow/rescan、断线恢复、expected-version 写入、consumer 迁移、LspPathMapper、native execution boundary 和 data-local ArchiveProvider。不得把 std::PathBuf、URI string、to_string_lossy、OpenDAL、rust-vfs 或 Wasmer virtual-fs 变成核心身份或公开 VFS；第三方库只能按报告规定用于 provider 内部。
 
-遵守 Rust/GPUI/i18n 规范：不新增 unwrap，不用 let _ = 丢弃错误，不创建 mod.rs，使用完整变量名；Entity update 使用内部 cx，所有 spawn Task 必须 await、detach 或存储；用户可见文本同步 en.json 与 zh-CN.json。每阶段运行 targeted check/test 和 ./script/clippy -p ...，阶段结束审查 code smells；最终运行 cargo fmt --all -- --check、cargo test --workspace、./script/clippy、./script/check-philosophy、proto 检查、mdBook build 和 docs Prettier。当前主机不能执行的平台验证必须写可执行 runbook 并标记 NOT RUN，不能冒充 PASS。
+遵守 Rust/GPUI/i18n 规范：不新增 unwrap，不用 let _ = 丢弃错误，不创建 mod.rs，使用完整变量名；Entity update 使用内部 cx，所有 spawn Task 必须 await、detach 或存储；用户可见文本同步 en.json 与 zh-CN.json。每阶段运行 targeted check/test 和 cargo xtask clippy -p ...，阶段结束审查 code smells；最终运行 cargo fmt --all -- --check、cargo test --workspace、cargo xtask clippy、cargo xtask check philosophy、proto 检查、mdBook build 和 docs Prettier。当前主机不能执行的平台验证必须写可执行 runbook 并标记 NOT RUN，不能冒充 PASS。
 
 安全范围内自主推进，不因工作量大或阶段完成而暂停。只有缺少会改变产品语义、协议兼容或外部 authority 的用户决定时才询问。实验失败时按计划记录并拒绝可选设计，然后继续其余必做阶段。只有全部完成定义、实验账本、清理、文档和最终验证完成后，才把 Goal 标记 complete。
 ```

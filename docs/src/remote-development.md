@@ -226,12 +226,26 @@ matches the current version of ZZZ that you're using.
 
 If it is not there or the version mismatches, a non-debug ZZZ build uploads an
 embedded `remote_server` archive over SSH for the remote OS and architecture.
-`script/bundle-mac` embeds the host macOS archive plus Linux x86_64 and
-aarch64 musl archives (`zig` and `cargo-zigbuild` are required).
-`script/bundle-linux` embeds the host Linux archive and, when Zig and
-`cargo-zigbuild` are available, Linux aarch64 plus macOS x86_64 and aarch64
-archives. Cross-compiling macOS `remote_server` from Linux downloads a macOS
-SDK into a temporary directory.
+`cargo xtask build` builds the whole matrix once through
+`cargo xtask remote-server build` and hands the cached archives to every bundle,
+so a release does not compile a separate remote server per artifact. The matrix
+covers Linux x86_64/aarch64 (static musl), macOS x86_64/aarch64, and Windows
+x86_64/aarch64. Cross-compiling macOS `remote_server` from Linux downloads a
+macOS SDK into the cache; the Linux musl and aarch64 targets need `zig` and
+`cargo-zigbuild`, and the Windows targets need the `msvc-wine` layer, which the
+toolchain image adds when a plan asks for a Windows target. Targets whose cross
+toolchain is missing are skipped unless you pass `--require-all`; if the x86_64
+musl build itself fails on Linux, the builder falls back to the host glibc
+build.
+
+The cache is keyed by the checkout and by the toolchains that built it, lives in
+`target/remote-server/<fingerprint>/`, and keeps the newest three matrices. The
+checkout half covers the commit, the tracked diff, and the contents of files git
+does not track yet, so a matrix built by older tooling is never reused while the
+work is still uncommitted. A matrix that skipped a target records the skip, so
+adding the missing toolchain produces a new key instead of reusing an incomplete
+matrix. Run `cargo xtask remote-server status` to see the current path, or
+`cargo xtask remote-server build --print-cache` to print it for a script.
 
 If no matching archive is embedded, ZZZ errors unless the binary is already on
 the remote, or a debug `cargo run` compiles `remote_server` from source

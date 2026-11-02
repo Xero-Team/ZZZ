@@ -70,8 +70,8 @@ baseline 后继续。不得 reset、clean、checkout 覆盖或丢弃现有修改
 14. remote 到 remote 直传已实施，或带有 `CONV-EXP-017` 证据的 REJECTED 结论。
 15. 至少落地一个新 provider（Tar），其余新 provider 有实验与拒绝结论。
 16. code analysis 与搜索消费 `SnapshotDelta`，不再依赖全量重扫维持新鲜度。
-17. 没有新增 `unwrap()`、`let _ =`、`mod.rs`、无 owner 后台任务。`./script/clippy`、
-    `cargo test --workspace`、`./script/check-philosophy`、`./script/check-todos`、
+17. 没有新增 `unwrap()`、`let _ =`、`mod.rs`、无 owner 后台任务。`cargo xtask clippy`、
+    `cargo test --workspace`、`cargo xtask check philosophy`、`cargo xtask check todos`、
     `cargo fmt --all -- --check`、docs Prettier 与 mdBook build 通过，或只剩记录在案
     并从 clean baseline 复现的既有失败。
 18. 执行账本记录每阶段的 baseline、决策、改动、实验、验证命令与 exit status、提交
@@ -234,7 +234,7 @@ git worktree add ../ZZZ-vfs-convergence -b vfs-convergence main
 ```sh
 cargo check --locked -p vfs -p fs -p worktree -p project -p rpc
 cargo test --locked -p vfs -p fs -p worktree -p project -p rpc
-./script/clippy -p vfs -p fs -p worktree -p project -p rpc
+cargo xtask clippy -p vfs -p fs -p worktree -p project -p rpc
 ```
 
 7. 运行 `CONV-EXP-001`，把垂直链 baseline 写入账本：初始扫描、展开、打开文本、打开
@@ -275,7 +275,7 @@ cargo test --locked -p vfs -p fs -p worktree -p project -p rpc
 
 ### 退出条件 {#phase-1-exit}
 
-`CONV-EXP-002` 能在同一台机器上复现两次并给出相同量级结果；`./script/clippy -p vfs`
+`CONV-EXP-002` 能在同一台机器上复现两次并给出相同量级结果；`cargo xtask clippy -p vfs`
 通过；没有为埋点引入新依赖。
 
 ## 8. 阶段 2：核心退化修复 {#phase-2}
@@ -881,8 +881,8 @@ conformance 中有覆盖。
 ```sh
 cargo fmt --all -- --check
 cargo test --workspace
-./script/clippy
-./script/check-philosophy
+cargo xtask clippy
+cargo xtask check philosophy
 ./script/check-todos
 cd docs && npx prettier --check src/
 mdbook build docs

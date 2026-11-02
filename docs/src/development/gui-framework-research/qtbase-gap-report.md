@@ -201,7 +201,7 @@ Android/iOS、framebuffer、QNX、VNC、打印、SQL、XML、DBus 和网络客�
 3. **Native runtime runbook**：macOS VoiceOver、Windows Narrator 或 NVDA、Linux
    Orca/AT-SPI 分别记录 OS、backend、feature、步骤、期望、实际、日志和版本。
 
-每个阶段完成前至少运行受影响 crate 的 `cargo check`、targeted test、`./script/clippy`
+每个阶段完成前至少运行受影响 crate 的 `cargo check`、targeted test、`cargo xtask clippy`
 和格式检查。最终阶段还要运行 workspace test、philosophy check、文档 Prettier，
 并更新 progress ledger。完整命令和退出条件以执行计划为准。
 

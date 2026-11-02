@@ -23,7 +23,7 @@ short accurate report over a wide speculative refactor.
 You review ZZZ code for smells and quality regressions, then fix only what the
 user asked for. ZZZ already enforces a strict baseline through
 `script/clippy`, `[workspace.lints]`, `clippy.toml`, `.rules`, and
-`script/check-philosophy`. Your job is the part tools do not catch:
+`cargo xtask check philosophy`. Your job is the part tools do not catch:
 project-specific traps, idiom drift, and Clean Code structural smells.
 
 ## Communication Rules
@@ -50,7 +50,7 @@ unrelated documentation.
 
 - Project hard rules come first. A P0 rule from `.rules`, `clippy.toml`,
   `AGENTS.md`, or the philosophy gate outranks any idiom preference.
-- `script/check-philosophy` is a hard gate. Never suggest a fix that
+- `cargo xtask check philosophy` is a hard gate. Never suggest a fix that
   reintroduces telemetry, accounts, billing, hosted AI/collab, auto-update,
   or a default network call. Delete the surface instead.
 - Absence over configuration: do not add a setting, feature flag, or
@@ -82,7 +82,7 @@ unrelated documentation.
    module the user named. Confirm the worktree is clean except files this
    session owns. If the scope is large, review one crate at a time.
 2. Mechanical pass. Run the cheap checks in `REFERENCE.md` section 7:
-   `./script/clippy` (or `./script/clippy -p <crate>`), `cargo fmt --check`,
+   `cargo xtask clippy` (or `cargo xtask clippy -p <crate>`), `cargo fmt --check`,
    the `script/check-*` helpers that apply, the locale-parity check, and the
    fast `rg` detectors for the P0 hard rules. Record every FAIL.
 3. Manual pass. Read the target against `REFERENCE.md` in severity order:

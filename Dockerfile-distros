@@ -10,8 +10,17 @@ ARG TZ=Etc/UTC \
 ENV CARGO_TERM_COLOR=always
 
 COPY script/linux script/
+# `script/linux` pins the tree-sitter CLI from this manifest, so it has to be
+# present before the dependency install runs. `lsb-release` is not in a slim
+# base, and `script/install-cmake` needs it to add the Kitware repository.
+COPY crates/grammars/vendor/manifest.toml crates/grammars/vendor/manifest.toml
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends lsb-release \
+    && rm -rf /var/lib/apt/lists/*
 RUN ./script/linux
 COPY script/install-cmake script/
+# `install-cmake` sources `lib/github-release.sh`.
+COPY script/lib script/lib
 RUN ./script/install-cmake "3.30.4"
 
 COPY . .

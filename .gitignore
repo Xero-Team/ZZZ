@@ -12,12 +12,19 @@
 .blob_store
 .build
 .deps/
+# Container build caches (`cargo xtask build`): the download cache and the
+# target directory the container uses so it never shares fingerprints with a
+# host build.
+/.cache/
+# `cargo xtask dist` writes the manifest and a copy of every artifact here.
+/dist/
 .claude/settings.local.json
 .envrc
 .flatpak-builder
 .idea
 .netrc
 *.pyc
+__pycache__/
 *.cdx.json
 .pytest_cache
 .swiftpm
@@ -30,7 +37,6 @@
 /assets/*licenses.*
 /crates/theme/schemas/theme.json
 /crates/zzz/resources/flatpak/flatpak-cargo-sources.json
-/crates/project_panel/benches/linux_repo_snapshot.txt
 /dev.zzz.ZZZ*.json
 /node_modules/
 /.opencode/
@@ -63,6 +69,13 @@ crates/telegram/credentials.toml
 
 # Local research checkouts, benchmarks, logs, and scratch build output.
 /.tmp/
+
+# `zig cc --version`, which cc-rs runs to identify the cross compiler, drops an
+# empty `a.o` in the build script's directory. Grammars and the vendored `psm`
+# build with cc-rs, so a macOS or Windows cross build leaves one per crate.
+# `psm` also ships a checked-in `wasm32.o`, which stays tracked.
+/crates/grammars/vendor/**/*.o
+/vendor/stacker/psm/a.o
 
 # Local documentation audit files
 /december-2025-releases.md

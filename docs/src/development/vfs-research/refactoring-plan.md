@@ -49,8 +49,8 @@ protocol 访问本地、远程和虚拟资源。ZIP 作为第一个 composable p
 12. `VFS-EXP-001` 至 `VFS-EXP-014` 的必做实验全部 `PASS`；只有计划明确标记为
     条件项的设计可以 `REJECTED`；当前主机无法执行的平台 QA 可以保留有 runbook
     的 `NOT RUN`。任何未解决的 `FAIL` 都不满足完成定义。
-13. 受影响的 targeted tests、`./script/clippy`、`cargo test --workspace`、
-    `./script/check-philosophy`、proto lint/format、mdBook build 和 docs Prettier
+13. 受影响的 targeted tests、`cargo xtask clippy`、`cargo test --workspace`、
+    `cargo xtask check philosophy`、proto lint/format、mdBook build 和 docs Prettier
     在本机或明确的 CI 运行中通过，或只剩记录并从 clean baseline 复现的既有失败。
 14. 执行账本记录每阶段 baseline、改动、实验、验证、提交 SHA、剩余风险和下一步。
 15. 没有未说明的 TODO、临时 feature、双实现、死 compatibility path、无 owner
@@ -196,7 +196,7 @@ protocol 访问本地、远程和虚拟资源。ZIP 作为第一个 composable p
 cargo check --locked -p fs -p worktree -p project -p workspace -p editor
 cargo test --locked -p fs -p worktree -p project
 cargo test --locked -p workspace -p editor
-./script/clippy -p fs -p worktree -p project -p workspace -p editor
+cargo xtask clippy -p fs -p worktree -p project -p workspace -p editor
 ```
 
 4. 建立 ADR，至少覆盖：
@@ -476,8 +476,8 @@ cargo test --locked -p workspace -p editor
 ```sh
 cargo fmt --all -- --check
 cargo test --workspace
-./script/clippy
-./script/check-philosophy
+cargo xtask clippy
+cargo xtask check philosophy
 cargo check --locked -p docs_preprocessor
 ./script/generate-action-metadata
 (cd docs && npx prettier --write src/)
@@ -503,7 +503,7 @@ mdbook build docs
 ```sh
 cargo check --locked -p fs -p worktree -p project -p workspace
 cargo test --locked -p fs -p worktree -p project -p workspace
-./script/clippy -p fs -p worktree -p project -p workspace
+cargo xtask clippy -p fs -p worktree -p project -p workspace
 ```
 
 触及 Editor、LSP、Git、媒体、remote 或 proto 时追加对应 package。Proto 变化必须运行

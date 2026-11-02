@@ -17,7 +17,7 @@ contact: https://github.com/Xero-Team/ZZZ/issues
 parts:
   zzz:
     plugin: dump
-    # The archive is produced locally by script/bundle-linux. Keeping the
+    # The archive is produced locally by `cargo xtask bundle`. Keeping the
     # source local makes Snap packaging independent of hosted release URLs.
     source: "$SNAP_ARCHIVE"
 

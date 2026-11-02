@@ -10,6 +10,7 @@
   "finish-args": [
     "--talk-name=org.freedesktop.Flatpak",
     "--device=dri",
+    "--env=ZZZ_BUNDLE_TYPE=flatpak",
     "--share=ipc",
     "--share=network",
     "--socket=wayland",
@@ -48,7 +49,8 @@
       "sources": [
         {
           "type": "archive",
-          "path": "./target/release/$ARCHIVE"
+          "path": "./target/release/$ARCHIVE",
+          "strip-components": 1
         },
         {
           "type": "dir",

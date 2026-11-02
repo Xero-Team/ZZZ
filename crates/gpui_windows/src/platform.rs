@@ -983,7 +983,7 @@ impl WindowsPlatformInner {
             .position(|handle| handle.as_raw() == target_window)
         else {
             log::error!(
-                "failed to close window: no tracked handle matched HWND {}",
+                "failed to close window: no tracked handle matched HWND {:?}",
                 target_window.0
             );
             return false;

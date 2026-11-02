@@ -57,7 +57,11 @@ impl MacDisplay {
             );
 
             if result == 0 {
-                displays.set_len(display_count as usize);
+                // `CGGetActiveDisplayList` reports how many displays it wrote and
+                // should never exceed the capacity we passed, but clamp anyway:
+                // `set_len` beyond the allocation would be undefined behavior.
+                let display_count = (display_count as usize).min(displays.capacity());
+                displays.set_len(display_count);
             } else {
                 // Reporting no displays keeps the app running; the caller treats an
                 // empty list the same way it treats a machine with no screens.

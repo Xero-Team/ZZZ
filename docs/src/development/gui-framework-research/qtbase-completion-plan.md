@@ -114,8 +114,8 @@ editor and product crates
 - 先写会在旧实现失败的 regression test，再修改生产代码；无法这样做时说明原因。
 - 每次修改至少跑最窄 `cargo check`、targeted test 和格式检查；不要把失败隐藏在
   未运行的全 workspace 测试之后。
-- 完成一个阶段时运行该阶段完整 matrix、`./script/clippy` 的相关 crate、
-  `script/check-philosophy`、`git diff --check` 和文档 Prettier。
+- 完成一个阶段时运行该阶段完整 matrix、`cargo xtask clippy` 的相关 crate、
+  `cargo xtask check philosophy`、`git diff --check` 和文档 Prettier。
 - 真正的 baseline failure 必须记录命令、退出码、相关测试名和首次观察修订；不把它
   归因给新改动，也不说成通过。
 
@@ -348,8 +348,8 @@ editor and product crates
 ```sh
 cargo fmt --all -- --check
 cargo test --workspace
-./script/clippy
-script/check-philosophy
+cargo xtask clippy
+cargo xtask check philosophy
 cd docs && npx prettier --check src/
 ```
 

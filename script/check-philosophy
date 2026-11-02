@@ -38,7 +38,10 @@ check_no_telemetry_endpoint() {
 
 check_sentry_opt_in() {
     local file
-    for file in "$root/script/bundle-linux" "$root/script/bundle-mac" "$root/script/bundle-windows.ps1"; do
+    for file in \
+        "$root/tooling/xtask/src/tasks/bundle/linux.rs" \
+        "$root/tooling/xtask/src/tasks/bundle/macos.rs" \
+        "$root/tooling/xtask/src/tasks/bundle/windows.rs"; do
         rg -q 'ZZZ_ENABLE_SENTRY_UPLOAD' "$file" || return 1
         rg -q 'SENTRY_AUTH_TOKEN' "$file" || return 1
     done

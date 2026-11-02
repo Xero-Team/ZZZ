@@ -60,54 +60,58 @@ To reinstall an existing bundle without rebuilding it, pass `--skip-build`:
 ```
 
 To create distribution packages from the same build, install the packaging
-tools first and pass one or both options to the bundle script:
+tools first and ask the bundler for them:
 
 ```sh
 cargo install cargo-deb --version 3.8.0 --locked
 cargo install cargo-generate-rpm --version 0.21.0 --locked
-script/bundle-linux --deb --rpm
+cargo xtask bundle --target x86_64-unknown-linux-gnu --formats deb,rpm
 ```
 
-The generated packages are written to `target/release/` (or the selected
-profile directory). `--deb` uses `cargo-deb` and `--rpm` uses
-`cargo-generate-rpm`. The bundle script builds the Rust binaries once and
-passes `--no-build` to the packagers. To package an existing bundle without
-running the build workflow again, use:
+The generated packages are written next to the tarball in `target/release/`
+(or the selected profile directory). The bundle builds the Rust binaries once
+and passes `--no-build` to the packagers. To package an existing bundle without
+compiling again:
 
 ```sh
-script/package-linux --deb --rpm
-# Equivalent convenience form:
-script/bundle-linux --deb --rpm --skip-build
+cargo xtask bundle --target x86_64-unknown-linux-gnu --formats deb,rpm --skip-build
 ```
 
-Set `ZZZ_BUILD_JOBS` to override the number of parallel Cargo jobs, or
-`ZZZ_CROSS_BUILD_JOBS` to limit each optional cross-target build.
+`--jobs N` bounds the whole build, and `--offline` refuses network access.
 
-To build every Linux format through one preflighted entrypoint, use:
+To build every Linux format through one preflighted entrypoint, ask for them
+together (the bundler verifies the vendored Tree-sitter grammars first):
 
 ```sh
 cargo install --locked --version 0.27.1 tree-sitter-cli
-script/bundle-all-linux
+cargo xtask bundle --target x86_64-unknown-linux-gnu \
+  --formats tar.gz,deb,rpm,appimage,flatpak,snap
 ```
 
-The wrapper checks all required packagers before starting the build and prints
-the exact missing-tool command if the environment is incomplete. Use
-`--skip-build` to reuse existing artifacts without rebuilding, or
-`--skip-flatpak`, `--skip-snap`, or `--skip-appimage` when only selected
-formats are needed.
+The bundler verifies `cargo-deb` and `cargo-generate-rpm` before it compiles,
+and each host-only step checks its own tool when it runs, so a missing packager
+names the command that installs it. Add `--skip-build` to reuse artifacts that
+already exist. AppImage, Flatpak, and Snap are host-only steps on top of the
+tarball; `cargo xtask dist --all` packages the default format for every target
+this host can produce.
 
-The release bundle downloads the newest LGPL FFmpeg 9.0 development package into
-`.deps/ffmpeg/<target-triple>` and includes its runtime libraries. Set
-`FFMPEG_DIR` to use another development package, or `ZZZ_FFMPEG_ROOT` to move
-the download and cache folder. Direct Cargo builds continue to use
-`FFMPEG_DIR` when set and otherwise discover a system FFmpeg through
-`pkg-config`.
+`cargo xtask build --target x86_64-unknown-linux-gnu` is the planning entry
+point: it builds the remote-server matrix, checks the grammars, runs the pinned
+toolchain container, applies PGO when a profile exists, and then calls the same
+bundler. `cargo xtask bundle` packages what is already there. See
+[Build and Optimization Pipeline](./build-pipeline.md) for the options and the
+container policy.
 
-`script/ffmpeg` resolves the build through the GitHub API and verifies it
-against the published checksum, so no version is pinned by hand. An installed
-package is reused without network access for a week; after that the script
-checks for a newer build. Pass `--refresh` to check immediately or `--force` to
-reinstall, and set `ZZZ_FFMPEG_REFRESH_DAYS` to change the interval.
+The release bundle resolves the newest LGPL FFmpeg 9.0 development package
+through the GitHub API, verifies its published checksum, and caches it under
+`.deps/ffmpeg/<target-triple>`. Set `FFMPEG_DIR` to use another development
+package, or `ZZZ_FFMPEG_ROOT` to move the download and cache folder. Direct
+Cargo builds continue to use `FFMPEG_DIR` when set and otherwise discover a
+system FFmpeg through `pkg-config`.
+
+An installed FFmpeg package is reused without network access for a week; after
+that the bundler checks for a newer build. Set `ZZZ_FFMPEG_REFRESH_DAYS` to
+change the interval.
 
 ## Cross-compiling Windows executables
 
@@ -129,8 +133,8 @@ ZZZ has two main binaries:
 - You will need to build `crates/cli` and make its binary available in `$PATH` with the name `zzz`.
 - You will need to build `~/.local/lib/zzz/zzz-editor` and put it at `~/.local/lib/zzz/zzz-editor`. For example, if you are going to put the CLI at `~/.local/lib/zzz/zzz-editor`, put `zzz` at `~/.local/lib/zzz/zzz-editor`. As some Linux distributions (notably Arch) discourage the use of `libexec`, you can also put this binary at `~/.local/lib/zzz/zzz-editor` instead.
 - If you are going to provide a `.desktop` file you can find a template in `crates/zzz/resources/zzz.desktop.in`, and use `envsubst` to populate it with the values required. This file should also be renamed to `$APP_ID.desktop` so that the file follows the FreeDesktop standards. You should also make this desktop file executable (`chmod 755`).
-- You will need to ensure that the necessary libraries are installed. You can get the current list by inspecting the built binary; see [`script/bundle-linux`](../../../script/bundle-linux). The only libraries the editor resolves from the host are glibc and the compiler runtime; everything else ships inside the bundle, because a missing or incompatible copy aborts startup before the window opens. [`script/check-runtime-deps`](../../../script/check-runtime-deps) verifies that contract for a staged bundle, and with `--robustness` it also checks that the editor still starts when the host copies of the bundled libraries are unusable.
-- For an example of a complete build script, see [`script/bundle-linux`](../../../script/bundle-linux).
+- You will need to ensure that the necessary libraries are installed. Inspecting the built binary is the authoritative list; the Linux bundler in `tooling/xtask/src/tasks/bundle/linux.rs` is the reference for which libraries ship. Everything the editor needs ships inside the bundle, because a missing or incompatible copy aborts startup before the window opens. The exceptions are glibc, the compiler runtime, and the GLib family: GLib cannot be bundled, because libraries it loads are built against the system copy. Every bundle runs the same runtime-dependency check, and `cargo xtask bundle --robustness` also checks that the editor still starts when the host copies of the bundled libraries are unusable.
+- For a complete implementation, see `tooling/xtask/src/tasks/bundle/linux.rs`.
 - You can disable ZZZ's auto updates and provide instructions for users who try to update ZZZ manually by building (or running) ZZZ with the environment variable `ZZZ_UPDATE_EXPLANATION`. For example: ZZZ_UPDATE_EXPLANATION.
 - Make sure to update the contents of the `crates/zzz/RELEASE_CHANNEL` file to `stable` or `dev`, with no newline. Packaged builds that should use the system credentials manager should use `stable`.
 
@@ -152,8 +156,8 @@ ZZZ moves quickly, and distribution maintainers often have different constraints
 To build & install the Flatpak package locally follow the steps below:
 
 1. Install Flatpak for your distribution as outlined [here](https://flathub.org/setup).
-2. Run the `script/flatpak/deps` script to install the required dependencies.
-3. Run `ZZZ_SKIP_BUNDLE=1 script/flatpak/bundle-flatpak` after `script/bundle-linux` if you want to reuse the existing tarball.
+2. Install `flatpak` and `flatpak-builder`; the bundler checks for both before it starts.
+3. Run `cargo xtask bundle --target x86_64-unknown-linux-gnu --formats flatpak` (add `--skip-build` to reuse an existing tarball).
 4. Now the package has been installed and has a bundle available at `target/release/{app-id}.flatpak`.
 
 ## Snap
@@ -162,13 +166,13 @@ Snap packaging also consumes the local Linux tarball; it does not download a
 hosted release during `snapcraft`:
 
 ```sh
-script/bundle-linux
-script/snap-build "$(script/get-crate-version zzz)"
+cargo xtask bundle --target x86_64-unknown-linux-gnu --formats snap
 ```
 
-The resulting `.snap` is produced by Snapcraft in the repository root. Set
-`ZZZ_SNAP_ARCHIVE=/absolute/path/to/zzz-linux-x86_64.tar.gz` to reuse an
-existing bundle. Snapcraft must be installed separately, and the current snap
+The bundler writes `snap/snapcraft.yaml` and `snap/gui/` (both gitignored), runs
+`snapcraft clean` followed by `snapcraft`, and moves the resulting
+`zzz_<version>_<arch>.snap` next to the tarball. Add `--skip-build` to reuse an
+existing tarball. Snapcraft must be installed separately, and the current snap
 uses classic confinement.
 
 ## Memory profiling

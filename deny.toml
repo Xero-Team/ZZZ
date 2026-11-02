@@ -63,7 +63,7 @@ exceptions = []
 unused-allowed-license = "allow"
 
 # Workspace crates are all `publish = false`, so they are not checked here;
-# `script/check-licenses` is responsible for their per-crate license files.
+# `cargo xtask check licenses` is responsible for their per-crate license files.
 [licenses.private]
 ignore = true
 registries = []

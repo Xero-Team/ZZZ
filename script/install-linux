@@ -25,7 +25,6 @@ usage() {
 }
 
 host_build_profile=release
-bundle_args=()
 skip_build=false
 
 while [[ $# -gt 0 ]]; do
@@ -36,7 +35,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     -i|--native)
       host_build_profile=linux-native
-      bundle_args+=(--native)
       shift
       ;;
     --skip-build)
@@ -52,8 +50,9 @@ done
 
 export ZZZ_CHANNEL=$(<crates/zzz/RELEASE_CHANNEL)
 export ZZZ_UPDATE_EXPLANATION="You need to fetch and rebuild zzz in $(pwd)"
+host_target="$(rustc -vV | sed -n 's/^host: //p')"
 if [[ "$skip_build" == false ]]; then
-  script/bundle-linux "${bundle_args[@]}"
+  cargo xtask bundle --target "$host_target" --profile "$host_build_profile"
 fi
 
 arch="$(uname -m)"

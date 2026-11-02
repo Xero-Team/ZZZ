@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Use a docker BASE_IMAGE to test building ZZZ.
-# e.g: ./script/bundle-docker ubuntu:20.04
+# e.g: ./script/build-docker ubuntu:20.04
 #
 # Increasing resources available to podman may speed this up:
 # podman machine stop

@@ -255,7 +255,7 @@ provider implementations third, and clean settings last.
 - Update user docs: `ai/inline-assistant.md`, `ai/llm-providers.md`,
   `ai/edit-prediction.md`, `completions.md`, `reference/all-settings.md`, and
   `SUMMARY.md`.
-- Shrink `script/philosophy-allowlist` and tighten `script/check-philosophy`
+- Shrink `script/philosophy-allowlist` and tighten `cargo xtask check philosophy`
   checks that reference provider crates.
 
 ## Removal order {#removal-order}
@@ -275,9 +275,9 @@ provider implementations third, and clean settings last.
 | ----------------------- | -------------------------------------- |
 | No dangling references  | `rg -n "<crate>" crates Cargo.toml`    |
 | Type/borrow correctness | `cargo check --workspace`              |
-| Lint                    | `./script/clippy`                      |
+| Lint                    | `cargo xtask clippy`                   |
 | Tests (final only)      | `cargo test --workspace`               |
-| No new hosts introduced | `./script/check-philosophy`            |
+| No new hosts introduced | `cargo xtask check philosophy`         |
 | Docs formatting         | `cd docs && npx prettier --check src/` |
 
 Tests are excluded until the end because the removal is expected to break

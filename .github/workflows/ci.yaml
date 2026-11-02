@@ -71,17 +71,8 @@ jobs:
       - name: Check generated Tree-sitter files
         run: cargo xtask grammars check
 
-      - name: Check licenses
-        run: ./script/check-licenses
-
-      - name: Check philosophy boundary
-        run: ./script/check-philosophy
-
-      - name: Check upstream rejection ledger
-        run: ./script/check-upstream-ledger
-
-      - name: Check for todo! and FIXME markers
-        run: ./script/check-todos
+      - name: Check repository gates
+        run: cargo xtask check
 
   clippy:
     name: Clippy
@@ -104,7 +95,7 @@ jobs:
         run: cargo fetch --locked
 
       - name: Run clippy gate
-        run: CARGO_NET_OFFLINE=true ./script/clippy
+        run: CARGO_NET_OFFLINE=true cargo xtask clippy
 
   gpui-platform-checks:
     name: GPUI platform checks
@@ -185,6 +176,9 @@ jobs:
       id-token: write # Obtain the short-lived Sigstore signing certificate.
     env:
       REMOTE_SERVER_TARGET: x86_64-unknown-linux-musl
+      # Opt-in until a PGO release has been validated on a runner. Set the
+      # repository variable ZZZ_PGO to 1 to build the tarball with a profile.
+      ZZZ_PGO: ${{ vars.ZZZ_PGO }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -208,7 +202,42 @@ jobs:
           tool: cargo-about@0.9.3,cargo-auditable@0.7.7,cargo-cyclonedx@0.5.9
 
       - name: Prefetch pinned non-Cargo dependencies
-        run: script/ffmpeg ensure --target x86_64-unknown-linux-gnu
+        run: cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu
+
+      - name: Install PGO training dependencies
+        if: vars.ZZZ_PGO == '1'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            xvfb xdotool libegl1 libgl1-mesa-dri mesa-vulkan-drivers
+          # The toolchain profile is "minimal" and ships no llvm-profdata;
+          # `cargo xtask pgo` refuses a merger from a different LLVM major
+          # version.
+          rustup component add llvm-tools-preview
+
+      # This runs outside the network namespace below: the instrumented build is
+      # never shipped, and the training session needs the X server.
+      # `pgo train` starts the instrumented build under Xvfb itself and writes
+      # the merged profile into `target/pgo/<fingerprint>/`, so the shipping
+      # build below finds it without a hand-written path.
+      - name: Generate PGO profile
+        if: vars.ZZZ_PGO == '1'
+        shell: bash
+        env:
+          CARGO_NET_OFFLINE: "true"
+          # Make Mesa fall back to the software rasterizer if the Vulkan loader
+          # finds no adapter under the virtual display.
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: >-
+          cargo xtask pgo train --target x86_64-unknown-linux-gnu
+          --container never --offline
+
+      # The profiled build shares no compiler work with the instrumented one:
+      # RUSTFLAGS differ, so every crate recompiles. Drop the instrumented
+      # artifacts to keep the runner under its disk quota.
+      - name: Drop instrumented artifacts
+        if: vars.ZZZ_PGO == '1'
+        run: rm -rf target/release target/x86_64-unknown-linux-gnu
 
       - name: Bundle Linux tarball
         shell: bash
@@ -219,6 +248,13 @@ jobs:
           mkdir -p "$cargo_wrapper_dir"
           printf '#!/usr/bin/env bash\nexec "$REAL_CARGO" auditable "$@"\n' > "$cargo_wrapper_dir/cargo"
           chmod +x "$cargo_wrapper_dir/cargo"
+          # The runner is already Ubuntu 22.04, so the container adds nothing
+          # here and cannot be pulled inside the network namespace. A channel
+          # build without a profile must say so explicitly rather than fail.
+          pgo_mode="off"
+          if [[ "${ZZZ_PGO:-}" == "1" ]]; then
+            pgo_mode="auto"
+          fi
           /usr/bin/unshare --user --map-root-user --net -- \
             /usr/bin/env \
               HOME="$HOME" \
@@ -228,8 +264,11 @@ jobs:
               RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}" \
               CARGO_NET_OFFLINE=true \
               REMOTE_SERVER_TARGET="$REMOTE_SERVER_TARGET" \
+              ZZZ_PGO_MODE="$pgo_mode" \
               GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
-              bash -c 'cd "$GITHUB_WORKSPACE" && ./script/bundle-linux'
+              bash -c 'cd "$GITHUB_WORKSPACE" && cargo xtask build
+                --target x86_64-unknown-linux-gnu --formats tar.gz
+                --pgo "$ZZZ_PGO_MODE" --offline --container never'
 
       - name: Generate CycloneDX SBOMs
         shell: bash
@@ -260,8 +299,9 @@ jobs:
           arch="$(uname -m)"
           tarball="zzz-linux-${arch}.tar.gz"
           remote_server="zzz-remote-server-linux-${arch}.gz"
+          remote_server_dir="$(cargo xtask remote-server build --print-cache --quiet)"
           mv "target/release/${tarball}" "./zzz-linux-${arch}${version}.tar.gz"
-          mv "target/${remote_server}" "./zzz-remote-server-linux-${arch}${version}.gz"
+          mv "${remote_server_dir}/${remote_server}" "./zzz-remote-server-linux-${arch}${version}.gz"
           checksums="zzz-linux-${arch}${version}.sha256"
           sha256sum \
             "zzz-linux-${arch}${version}.tar.gz" \

@@ -10,7 +10,9 @@
 - Run app: `cargo run`
 - Fast dev profile: `cargo run --profile release-fast`
 - Full workspace tests: `cargo test --workspace`
-- Lint: `./script/clippy` (not `cargo clippy`)
+- Lint: `cargo xtask clippy` (not `cargo clippy`)
+- Repository gates without a compiler: `cargo xtask check`
+- Release artifacts: `cargo xtask build` (containerized by default) and `cargo xtask dist --all`; check a host with `cargo xtask doctor`
 - Linux install/build quirk: `REMOTE_SERVER_TARGET=x86_64-unknown-linux-gnu script/install-linux`
 - Docs preprocessor: `cargo run -p docs_preprocessor --` and `cargo run -p docs_preprocessor -- postprocess`
 - Docs formatting: `cd docs && npx prettier --write src/`; verify with `cd docs && npx prettier --check src/`

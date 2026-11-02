@@ -155,7 +155,7 @@
 - `crates/zed_actions/src/lib.rs`
 - `crates/ztracing/src/lib.rs`
 - `crates/ztracing_macro/src/lib.rs`
-- `script/update_top_ranking_issues/main.py`
+- `script/update-top-ranking-issues/main.py`
 - `tooling/compliance/src/lib.rs`
 - `tooling/corgi/patches/scratch/src/lib.rs`
 - `tooling/lints/src/lib.rs`

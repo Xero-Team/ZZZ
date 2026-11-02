@@ -40,7 +40,7 @@ As of 2026-08-18:
 
 - Local `main`: `14646e7843f37ad399edfcbf1344642f10b76f99`
 - Last audit:
-  [Upstream Sync 2026-08-07](./upstream-sync-2026-08-07.md)
+  [Upstream Sync 2026-08-07](./upstream/upstream-sync-2026-08-07.md)
 - Last reviewed upstream: `027cf0def75e5c027504f402a6a6c0dcac11f178`
 - Live upstream `main` at prompt time:
   `aa3718614b3ade75524be6f8b2e101bd1166e02c`
@@ -67,7 +67,7 @@ out. See `README.md` and the skill `REFERENCE.md`.
 ## Reports
 
 Each run appends or creates
-`docs/src/development/upstream-sync-YYYY-MM-DD.md`.
+`docs/src/development/upstream/upstream-sync-YYYY-MM-DD.md`.
 
 ## Rejection Ledger
 
@@ -82,7 +82,7 @@ The file is generated from the decision tables in the sync reports:
 ./script/backfill-upstream-ledger
 ```
 
-`script/check-upstream-ledger` fails when the ledger is stale, is
+`cargo xtask check upstream-ledger` fails when the ledger is stale, is
 malformed, has duplicate SHA prefixes, or lists a commit that was
 actually absorbed. It runs in CI next to `check-philosophy`.
 

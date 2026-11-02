@@ -355,7 +355,7 @@ From `AGENTS.md`, `.rules`, and `clippy.toml`:
 - **Processes:** no `std::process::Command`; use `smol::process::Command`.
 - **Files/naming:** no `mod.rs`; full-word variable names; prefer extending
   existing files over creating many small files.
-- **Build/lint:** run `./script/clippy` (not `cargo clippy`).
+- **Build/lint:** run `cargo xtask clippy` (not `cargo clippy`).
 - **Commits (only if asked):** `git commit -s` (DCO).
 
 ---
@@ -396,7 +396,7 @@ report status, and stop.
 | **P2 Single-connection end to end** | Left panel list + connect; center session terminal (home cwd); parameterize `ProjectPanel::new`; right panel tree + preview Pane; `ToggleTerminalMode` + close bottom dock; active tracking; clean up `default_working_directory` and `terminal_path_like_target` bindings. |
 | **P3 Multi-session concurrency** | N sessions / multiple tabs; right panel follows active session; disconnect/reconnect; TerminalPanel spawn paths left untouched for non-terminal use. |
 | **P4 Cross-host copy** | Self-built `VfsManager` + snapshot registration with assigned ids; `copy_path` relay; "Copy to session…" action + progress toast. |
-| **P5 Persistence and polish** | KVP session save/restore; empty/error states; full i18n (both catalogs, identical keys, fallback == en); `./script/clippy` clean; `cargo test -p terminal_mode` green. |
+| **P5 Persistence and polish** | KVP session save/restore; empty/error states; full i18n (both catalogs, identical keys, fallback == en); `cargo xtask clippy` clean; `cargo test -p terminal_mode` green. |
 
 Estimated total: ~6 weeks (1 engineer).
 
@@ -408,7 +408,7 @@ Estimated total: ~6 weeks (1 engineer).
 cargo check -p terminal_mode
 cargo check -p zzz
 cargo test -p terminal_mode
-./script/clippy
+cargo xtask clippy
 # docs only if docs change:
 # cd docs && npx prettier --check src/
 ```
@@ -422,4 +422,4 @@ Acceptance (end of P5):
 - Entering terminal mode closes the bottom dock; exiting restores it.
 - A file can be copied from host A to host B with one action (local relay).
 - Sessions restore after restart (auto-connect per setting).
-- `./script/clippy` and `cargo test -p terminal_mode` pass.
+- `cargo xtask clippy` and `cargo test -p terminal_mode` pass.

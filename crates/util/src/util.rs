@@ -283,17 +283,20 @@ fn load_shell_from_passwd() -> Result<()> {
             &raw mut result,
         )
     };
-    anyhow::ensure!(!result.is_null(), "passwd entry for uid {} not found", uid);
-
-    // SAFETY: If `getpwuid_r` doesn't error, we have the entry here.
-    let entry = unsafe { pwd.assume_init() };
-
+    // Check the error code before touching `pwd`: only a successful call is
+    // required to have initialized the `passwd` fields.
     anyhow::ensure!(
         status == 0,
         "call to getpwuid_r failed. uid: {}, status: {}",
         uid,
         status
     );
+    anyhow::ensure!(!result.is_null(), "passwd entry for uid {} not found", uid);
+
+    // SAFETY: `getpwuid_r` succeeded and returned a non-null `result`, so it
+    // initialized `pwd`.
+    let entry = unsafe { pwd.assume_init() };
+
     anyhow::ensure!(
         entry.pw_uid == uid,
         "passwd entry has different uid ({}) than getuid ({}) returned",

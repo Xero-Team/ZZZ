@@ -10,18 +10,13 @@ $outputFile = if ($args.Count -gt 0 -and $args[0]) {
 }
 $templateFile="script/licenses/template.md.hbs"
 
-# Name the FFmpeg build that `script/ffmpeg.py` installed, if it is present.
-$ffmpegSeries = "9.0"
-$ffmpegArchive = "unknown build"
-$ffmpegTag = "latest"
-$ffmpegMarker = Get-ChildItem -Path ".deps/ffmpeg" -Filter ".zzz-ffmpeg.json" -Recurse -Depth 2 -File -Force -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-if ($ffmpegMarker) {
-    $ffmpegInfo = Get-Content -Path $ffmpegMarker.FullName -Raw | ConvertFrom-Json
-    if ($ffmpegInfo.ffmpeg_series) { $ffmpegSeries = $ffmpegInfo.ffmpeg_series }
-    if ($ffmpegInfo.archive) { $ffmpegArchive = $ffmpegInfo.archive }
-    if ($ffmpegInfo.release_tag) { $ffmpegTag = $ffmpegInfo.release_tag }
-}
+# Name the FFmpeg build that `cargo xtask ffmpeg ensure` installed. The command
+# prints `<series>|<archive>|<release tag>` and falls back to the defaults when
+# no package is installed.
+$ffmpegInfo = (cargo xtask ffmpeg info) -split '\|'
+$ffmpegSeries = $ffmpegInfo[0]
+$ffmpegArchive = $ffmpegInfo[1]
+$ffmpegTag = $ffmpegInfo[2]
 
 New-Item -Path "$outputFile" -ItemType File -Value "" -Force
 

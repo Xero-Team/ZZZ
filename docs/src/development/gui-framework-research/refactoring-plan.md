@@ -39,7 +39,7 @@ frame、interaction、text input、accessibility、render 和 platform 所有权
 6. 必要的性能、allocation、pixel、semantic、input、IME 和并发验证达到本文阈值；
    未能在当前主机运行的 macOS/Windows/native screen-reader 检查有可执行 runbook，
    并明确标记为 `NOT RUN`。
-7. `cargo test --workspace`、`./script/clippy`、`./script/check-philosophy` 和文档格式
+7. `cargo test --workspace`、`cargo xtask clippy`、`cargo xtask check philosophy` 和文档格式
    检查通过，或只剩经过复现并记录的既有 baseline failure。
 8. 进度账本记录所有阶段、实验、决策、提交和剩余平台 QA；没有未说明的 TODO、
    临时 feature、双实现或死 compatibility path。
@@ -360,8 +360,8 @@ action routing 和原生 adapter 应分别审查和移植。
 ```sh
 cargo fmt --all -- --check
 cargo test --workspace
-./script/clippy
-./script/check-philosophy
+cargo xtask clippy
+cargo xtask check philosophy
 cd docs && npx prettier --check src/
 ```
 

@@ -1,0 +1,82 @@
+diff --git a/psm/build.rs b/psm/build.rs
+index 28d0d47b8285a92908a053415434f32018c5686c..0e08b65cf48d7d587fd06fe2d64094f4b6b42741 100644
+--- a/psm/build.rs
++++ b/psm/build.rs
+@@ -56,6 +56,26 @@
+     }
+ }
+ 
++/// Stages a GAS source in `OUT_DIR` under its `.S` spelling.
++///
++/// The `.S` extension is the only portable way to ask a driver for the C
++/// preprocessor: `clang-cl` has no `-x` option and refuses to preprocess a
++/// `.s` file, while the sources this crate ships select their syntax with
++/// `#ifdef` and expand `#include`. A copy is staged because the crate source
++/// directory has to stay untouched.
++fn stage_gnu_assembly(asm: &str) -> String {
++    use std::path::Path;
++
++    let source = Path::new(asm);
++    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR environment variable not set");
++    let name = source
++        .file_name()
++        .expect("assembly source file name missing");
++    let staged = Path::new(&out_dir).join(name).with_extension("S");
++    std::fs::copy(source, &staged).expect("Failed to stage assembly source");
++    staged.to_string_lossy().into_owned()
++}
++
+ fn main() {
+     use std::env::var;
+ 
+@@ -98,8 +118,30 @@
+         return;
+     };
+ 
++    // Neither MSVC's assembler nor `clang-cl`'s usual mode can build the GAS
++    // sources when the host is not Windows, so they are preprocessed and
++    // assembled as `.S` files instead. That requires the same target defines
++    // the non-MSVC path passes, which the sources use to pick their syntax.
++    let staged_asm = if msvc && !masm && asm.ends_with(".s") {
++        Some(stage_gnu_assembly(asm))
++    } else {
++        None
++    };
++
++    if staged_asm.is_some() {
++        // `#include "psm.h"` is looked up next to the staged copy first. The
++        // path is absolute because the compile below runs from `OUT_DIR`.
++        cfg.include(
++            std::path::Path::new(
++                &std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"),
++            )
++            .join("src/arch"),
++        );
++    }
+     if !msvc {
+         cfg.flag("-xassembler-with-cpp");
++    }
++    if !msvc || staged_asm.is_some() {
+         cfg.define(&*format!("CFG_TARGET_OS_{}", os), None);
+         cfg.define(&*format!("CFG_TARGET_ARCH_{}", arch), None);
+         cfg.define(&*format!("CFG_TARGET_ENV_{}", env), None);
+@@ -184,7 +226,18 @@
+         println!("cargo:rustc-link-search=native={}", out_dir);
+         println!("cargo:rustc-link-lib=static=psm_s");
+     } else {
+-        cfg.file(asm);
++        let staged = staged_asm.is_some();
++        cfg.file(staged_asm.unwrap_or_else(|| asm.to_owned()));
++        if staged {
++            // `clang-cl` runs the preprocessor as its own step for a `.S`
++            // source and writes the result to a `<stem>.asm` file in the
++            // current directory; `clang` would use the system temporary
++            // directory instead. Entering `OUT_DIR` keeps that intermediate
++            // out of the crate source tree, where it would otherwise trip
++            // `script/check-vendor` after every cross build.
++            let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR environment variable not set");
++            std::env::set_current_dir(out_dir).expect("Failed to enter OUT_DIR");
++        }
+         cfg.compile("libpsm_s.a");
+     }
+ }

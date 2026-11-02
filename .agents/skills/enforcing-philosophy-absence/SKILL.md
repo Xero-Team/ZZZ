@@ -20,7 +20,7 @@ billing, telemetry, or hosted-Zed machinery to keep the trees matching.
 
 # Enforcing Philosophy Absence
 
-You finish the local-first absence pass. `script/check-philosophy` already
+You finish the local-first absence pass. `cargo xtask check philosophy` already
 passes. Remaining work is product copy, legal, install scripts, live
 upsell/account/data-collection UX, and defaults that still describe Zed
 cloud. Things that should not be configurable must be absent.
@@ -68,11 +68,11 @@ ordinary editor features.
 ## Procedure
 
 1. Read `README.md`, `AGENTS.md`, `docs/AGENTS.md`, `.rules`,
-   `script/check-philosophy`, and this skill's `REFERENCE.md`.
+   `cargo xtask check philosophy`, and this skill's `REFERENCE.md`.
 2. Confirm a clean worktree except files this session owns.
 3. Apply `REFERENCE.md` in order: docs, legal, install scripts, live
    code, defaults/locales, hosted links, dead telemetry APIs,
-   `script/check-philosophy`.
+   `cargo xtask check philosophy`.
 4. After each group, run the narrowest verification in `REFERENCE.md`.
    If `cargo check` fails, revert that group and narrow the deletion.
    Do not add unused types so a later deletion compiles.

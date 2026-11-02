@@ -239,6 +239,7 @@ exclude = [
     "vendor/nvim-rs",
     "vendor/reqwest",
     "vendor/scap",
+    "vendor/stacker",
     "vendor/trash",
     "vendor/wgpu",
     "vendor/windows-capture",
@@ -906,7 +907,7 @@ console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
 # Vendored from https://github.com/gfx-rs/wgpu v29 @ e99f5305ded96ff7006f0714d043a7f735bd45c2
 wgpu = { path = "vendor/wgpu/wgpu" }
-windows-core = "0.100"
+windows-core = "0.62"
 yaml-rust2 = "0.13"
 zeroize = "1.9"
 zstd = "0.14"
@@ -990,6 +991,12 @@ reqwest = { path = "vendor/reqwest" }
 # Vendored from https://github.com/notify-rs/notify @ 7f6995de25f07bf28ab513c64375d94b4ccd08a1
 notify = { path = "vendor/notify/notify" }
 notify-types = { path = "vendor/notify/notify-types" }
+# Vendored from https://github.com/rust-lang/stacker @ cdf19cf36cd0343a97c174ee6f7f8241f88b35f0
+# `psm` (which `stacker` needs) selects GAS assembly for MSVC targets built off
+# a Windows host, but `clang-cl` cannot preprocess a `.s` file, so the Windows
+# cross build fails in its `build.rs`. Stage the source as `.S` so the driver
+# runs the C preprocessor and pass the target defines the source expects.
+psm = { path = "vendor/stacker/psm" }
 # Vendored from https://github.com/NiiightmareXD/windows-capture @ c7d106448eb9d9b251345c39047711e1cd408ae2
 windows-capture = { path = "vendor/windows-capture" }
 
@@ -1072,9 +1079,15 @@ debug = false
 lto = "fat"
 codegen-units = 1
 panic = "abort"
+# Release is the shipping profile, so it strips by default: every packaging
+# script strips the artifacts it copies anyway. Tools that consume symbols
+# (BOLT, sentry-cli) opt out for the host build only with
+# CARGO_PROFILE_RELEASE_STRIP=none; see docs/src/development/build-pipeline.md.
 strip = true
 
 [profile.release.package]
+# Fat LTO re-optimizes every crate from LLVM IR, so extra pre-LTO codegen units
+# in the largest crate cost little runtime and save most of its build wall clock.
 zzz = { codegen-units = 16 }
 
 [profile.linux-native]
@@ -1090,6 +1103,10 @@ inherits = "release"
 debug = "full"
 lto = false
 codegen-units = 16
+# Profiling profile: the inherited `strip = true` used to throw away the DWARF
+# this profile asks for, so samply/perf reported raw addresses. Keep it, and keep
+# `panic = "abort"` so the profiled binary matches the shipped one.
+strip = "none"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "allow" }
@@ -1099,7 +1116,7 @@ unexpected_cfgs = { level = "allow" }
 float_literal_f32_fallback = { level = "allow" }
 # Opt-in or group-gated rustc lints that are already clean across the whole
 # workspace. Denying them here makes the requirement explicit and independent of
-# the `--deny warnings` passed by `script/clippy`, so a bare `cargo clippy` run
+# the `--deny warnings` passed by `cargo xtask clippy`, so a bare `cargo clippy` run
 # enforces the same bar.
 explicit_outlives_requirements = "deny"
 macro_use_extern_crate = "deny"
@@ -1328,7 +1345,7 @@ collapsible_else_if = "deny"
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #
-# Running ./script/clippy can take several minutes, and so it's
+# Running cargo xtask clippy can take several minutes, and so it's
 # common to skip that step and let CI do it. Any unexpected failures
 # (which also take minutes to discover) thus require switching back
 # to an old branch, manual fixing, and re-pushing.

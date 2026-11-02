@@ -133,3 +133,9 @@ Download the importer
 ```rust
 let _timer = zlog::time!("my_function_name").warn_if_gt(std::time::Duration::from_millis(100));
 ```
+
+# Build profiles
+
+Profiling only tells you the truth if the binary matches what ships. See
+[Build and Optimization Pipeline](./development/build-pipeline.md) for the
+profile matrix, the allocator, and the PGO and BOLT runbooks.

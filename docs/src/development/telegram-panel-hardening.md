@@ -229,7 +229,7 @@ raise toasts and count toward the badge (`telegram_panel.rs:254-296`,
 `ctrl-shift-t` is bound twice in the `Workspace` context; the Telegram
 binding silently overrides `pane::ReopenClosedItem` on Linux and Windows
 (`default-linux.json:671,689`). Move the Telegram binding to a
-non-conflicting chord. Consider extending `script/check-keymaps` to
+non-conflicting chord. Consider extending `cargo xtask check keys` to
 detect duplicate bindings, since it cannot today.
 
 ### WS10: Settings and docs integration (P1) {#ws10}
@@ -279,9 +279,9 @@ detect duplicate bindings, since it cannot today.
 ## Verification {#verification}
 
 - `cargo check --workspace` and `cargo test --workspace`.
-- `./script/clippy` (not `cargo clippy`).
-- `script/check-keymaps`, `script/check-philosophy`,
-  `script/check-licenses`.
+- `cargo xtask clippy` (not `cargo clippy`).
+- `cargo xtask check keys`, `cargo xtask check philosophy`,
+  `cargo xtask check licenses`.
 - `cd docs && npx prettier --check src/`.
 
 Real sign-in and delivery require a Telegram account. The automated
@@ -300,7 +300,7 @@ hardening plan. Work through WS1-WS12 in priority order.
 Constraints:
 - Follow AGENTS.md: no unwrap on fallible ops, use i18n::tr with
   fallbacks identical to en.json, add keys to both en.json and
-  zh-CN.json, do not add comments, run ./script/clippy (not
+  zh-CN.json, do not add comments, run cargo xtask clippy (not
   cargo clippy), use GPUI timers (not smol::Timer::after) and
   smol::process (not std::process::Command).
 - Honor the locked decisions in the plan: media is a system-cleanable

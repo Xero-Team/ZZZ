@@ -4,7 +4,7 @@ description:
   "Absorbs Zed upstream commits into ZZZ with A/B/C cherry-pick
   classification. Use when cherry-picking, syncing upstream, absorbing
   Zed main, porting an upstream SHA, classifying commits as A/B/C, or
-  writing docs/src/development/upstream-sync-*.md."
+  writing docs/src/development/upstream/upstream-sync-*.md."
 license: CC-BY-4.0
 compatibility: opencode
 metadata:
@@ -33,7 +33,7 @@ a fast-forward. ZZZ keeps fork-only absences.
 
 - The user asks to cherry-pick, absorb, or sync upstream Zed commits.
 - The user names an upstream SHA and wants it landed in ZZZ.
-- The user wants a new or continued `docs/src/development/upstream-sync-*.md`.
+- The user wants a new or continued `docs/src/development/upstream/upstream-sync-*.md`.
 
 Do not use this skill for ordinary ZZZ feature work, or for Zed
 release-channel cherry-picks via `script/cherry-pick`.
@@ -52,7 +52,7 @@ release-channel cherry-picks via `script/cherry-pick`.
 ## Procedure
 
 1. Read `README.md`, `AGENTS.md`, the latest
-   `docs/src/development/upstream-sync-*.md`, and this skill's
+   `docs/src/development/upstream/upstream-sync-*.md`, and this skill's
    `REFERENCE.md`.
 2. Resolve session inputs from the user, else use the defaults in
    `REFERENCE.md`.
@@ -68,7 +68,7 @@ release-channel cherry-picks via `script/cherry-pick`.
 8. Append the run to `REPORT` and format only that file with Prettier.
 9. Regenerate the rejection ledger with
    `./script/backfill-upstream-ledger` and verify it with
-   `./script/check-upstream-ledger`.
+   `cargo xtask check upstream-ledger`.
 
 ## Final Response
 

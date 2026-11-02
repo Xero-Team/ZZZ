@@ -307,8 +307,8 @@ pub struct RasterizedGlyph {
 cargo check --locked -p gpui
 cargo test --locked -p gpui
 cargo test --locked -p gpui_wgpu --test headless_renderer
-./script/clippy -p gpui
-./script/clippy -p gpui_wgpu
+cargo xtask clippy -p gpui
+cargo xtask clippy -p gpui_wgpu
 ```
 
 ### 退出条件 {#phase-0-exit}
@@ -566,8 +566,8 @@ remove image in another window → both windows refresh independently
 ```sh
 cargo fmt --all -- --check
 cargo test --workspace
-./script/clippy
-./script/check-philosophy
+cargo xtask clippy
+cargo xtask check philosophy
 cd docs && npx prettier --check src/
 ```
 

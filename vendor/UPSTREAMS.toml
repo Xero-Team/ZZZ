@@ -17,6 +17,14 @@ include = ["Cargo.toml", "LICENSE", "README.md", "src"]
 patches = ["vendor/patches/async-pipe/0001-zzz-local.patch"]
 
 [[package]]
+name = "block"
+repository = "https://github.com/SSheldon/rust-block.git"
+source_ref = "refs/tags/0.1.6"
+revision = "47178790cfc9d4a8b092051d8b413b78bd31254a"
+include = ["Cargo.toml", "src"]
+patches = ["vendor/patches/block/0001-zzz-local.patch"]
+
+[[package]]
 name = "dap-types"
 repository = "https://github.com/jDomantas/dap-types.git"
 source_ref = "refs/heads/master"
@@ -101,6 +109,21 @@ include = [
     "tests",
 ]
 patches = ["vendor/patches/nvim-rs/0001-rustfmt.patch"]
+
+[[package]]
+name = "stacker"
+repository = "https://github.com/rust-lang/stacker.git"
+source_ref = "refs/heads/master"
+revision = "cdf19cf36cd0343a97c174ee6f7f8241f88b35f0"
+include = [
+    "psm/Cargo.toml",
+    "psm/LICENSE-APACHE",
+    "psm/LICENSE-MIT",
+    "psm/README.mkd",
+    "psm/build.rs",
+    "psm/src",
+]
+patches = ["vendor/patches/stacker/0001-cross-compile-gnu-assembly.patch"]
 
 [[package]]
 name = "reqwest"

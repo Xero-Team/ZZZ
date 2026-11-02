@@ -54,20 +54,20 @@ These come from `.rules`, `AGENTS.md`, `clippy.toml`, and
 | Z-MODRS | No `mod.rs` | `git ls-files '**/mod.rs'` | move to `src/<module>.rs` and update the parent `mod` declaration |
 | Z-TASK | Dropped `cx.spawn` / `cx.background_spawn` is cancelled | `rg -n 'cx\.(spawn|background_spawn)' <path>` | await, `detach()`, or store the `Task` in a field |
 | Z-CX | In `Entity::update` use the inner `cx`; never re-enter the same entity | read each `update` closure | use the closure's `cx`; restructure to avoid nested self-update |
-| Z-PROC | Use `smol::process::Command`, not `std::process::Command` | `./script/clippy` (disallowed-methods) or `rg -n 'std::process::Command'` | `smol::process::Command` |
+| Z-PROC | Use `smol::process::Command`, not `std::process::Command` | `cargo xtask clippy` (disallowed-methods) or `rg -n 'std::process::Command'` | `smol::process::Command` |
 | Z-TIMER | GPUI tests use executor timers | `rg -n 'smol::Timer::after' <path>` | `cx.background_executor().timer(dur).await` |
 | Z-SERDE-IO | Parse from slice, not reader | `rg -n 'serde_json(_lenient)?::from_reader' <path>` | read into `Vec`/`String`, then `from_slice` |
 | Z-I18N-MISS | User-facing text is localized | `rg -n 'Label::new\("|\.child\("[A-Z]|SharedString::from\("[A-Z]' <path>` (leads) | `i18n::tr(cx, "key", "fallback")` |
 | Z-I18N-KEYS | Key sets match in both catalogs | see section 7 locale parity | add the missing key to `en.json` and `zh-CN.json` |
 | Z-I18N-FB | In-code `fallback` equals `en.json` value | `rg -n 'tr\(cx, "[^"]+", "[^"]*"' <path>` | make fallback identical to the `en.json` entry |
-| Z-PHIL | No rejected commercial/network surface returns | `./script/clippy` runs `script/check-philosophy`; `./script/check-philosophy` | delete the surface; never gate it behind a setting |
+| Z-PHIL | No rejected commercial/network surface returns | `cargo xtask clippy` runs `cargo xtask check philosophy`; `cargo xtask check philosophy` | delete the surface; never gate it behind a setting |
 | Z-COMMENT | Comments explain why only | `rg -n '^\s*//' <path>` | delete restating/organizational comments |
 | Z-NAMES | Full-word variable names | naming pass | rename abbreviations |
 | Z-FILES | Prefer existing files; no speculative new files | `git diff --stat` | fold into the existing logical component |
 
 ### Philosophy gate detail
 
-`script/check-philosophy` asserts that removed surfaces stay removed: product
+`cargo xtask check philosophy` asserts that removed surfaces stay removed: product
 defaults, source tree, locale catalogs, legal, and docs. If a change
 reintroduces telemetry, accounts, billing, trials, hosted AI/collab,
 auto-update, or a default remote endpoint, it is P0. The fix is deletion, not
@@ -238,15 +238,15 @@ Run from the repository root.
 
 ```sh
 # hard gate + workspace lints + philosophy (scoped form: -p <crate>)
-./script/clippy
-./script/clippy -p <crate>
+cargo xtask clippy
+cargo xtask clippy -p <crate>
 
 cargo fmt --all -- --check
 
-script/check-todos
-script/check-keymaps
-script/check-licenses
-script/check-links
+cargo xtask check todos
+cargo xtask check keys
+cargo xtask check licenses
+cargo xtask check links
 ```
 
 Locale parity (jq is a lead; use the Python fallback if jq is absent):
@@ -336,7 +336,7 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
   `docs/src/development/bloat.md`,
   `docs/src/development/ownership-and-data-flow.md`, `docs/src/mission.md`,
   `clippy.toml`, `Cargo.toml` `[workspace.lints]`, `script/clippy`,
-  `script/check-philosophy`.
+  `cargo xtask check philosophy`.
 - `clean-code-skills` (Robert C. Martin, *Clean Code*, ch. 17 smell
   taxonomy) — https://github.com/hatlesswizard/clean-code-skills.
 - `rust-skills` (265 Rust rules) — https://github.com/leonardomso/rust-skills.

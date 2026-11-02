@@ -133,7 +133,9 @@ Other entities can then register a callback to handle these events by doing `cx.
 
 ## Build guidelines
 
-- Use `./script/clippy` instead of `cargo clippy`
+- Lint with `cargo xtask clippy` instead of `cargo clippy`: the gate runs the philosophy preflight and three lint passes (workspace, manifest, `future_not_send`), then the optional local checks. `cargo xtask clippy` is a forwarding shim
+- Run the repository gates with `cargo xtask check`; `check keys`, `check shellcheck`, and `check vendor` are available on their own
+- Produce release artifacts with `cargo xtask build` or `cargo xtask dist --all`, not by calling `cargo xtask bundle` directly: the planning entry point adds the pinned toolchain container, the PGO gate, and the artifact manifest
 
 # Pull request hygiene
 

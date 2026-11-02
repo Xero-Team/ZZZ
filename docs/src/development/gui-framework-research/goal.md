@@ -50,8 +50,8 @@ multi-cursor IME 行为兼容。每个提交只做一个可回退的逻辑改动
 不得留下不编译的中间提交、未说明 TODO、双实现或无删除条件的兼容层。
 
 每次改动运行最窄相关 check/test；每阶段运行计划中的实验和验证。最终必须运行并
-记录 cargo fmt --all -- --check、cargo test --workspace、./script/clippy、
-./script/check-philosophy、docs Prettier check，以及所有当前主机可执行的 Linux/
+记录 cargo fmt --all -- --check、cargo test --workspace、cargo xtask clippy、
+cargo xtask check philosophy、docs Prettier check，以及所有当前主机可执行的 Linux/
 headless/manual smoke。macOS、Windows 和 native screen-reader runtime 无法在当前
 主机执行时，写出精确 runbook 并标记 NOT RUN，不得声称通过。
 

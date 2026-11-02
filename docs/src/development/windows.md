@@ -100,7 +100,7 @@ Once you have the dependencies installed, you can build ZZZ using [Cargo](https:
 In PowerShell, prepare FFmpeg before a direct Cargo build:
 
 ```powershell
-$env:FFMPEG_DIR = py -3 .\script\ffmpeg.py ensure
+$env:FFMPEG_DIR = cargo xtask ffmpeg ensure
 ```
 
 For a debug build:
@@ -118,10 +118,12 @@ cargo run --release
 To package an MSI installer from an existing Windows release build without rebuilding Rust artifacts:
 
 ```powershell
-.\script\bundle-windows-msi.ps1 -Architecture x86_64 -ReleaseDir .\target\release
+cargo xtask bundle --target x86_64-pc-windows-msvc --formats msi --skip-build
 ```
 
-This path requires the `wix` .NET global tool (`dotnet tool install --global wix`). It stages the current release outputs, adds the same Windows helper files that the Inno Setup flow collects, and writes an MSI into `target\`.
+This path requires the `wix` .NET global tool (`dotnet tool install --global wix`). The bundler stages the existing release outputs, adds the same Windows helper files that the Inno Setup flow collects, and writes an MSI into `target\`.
+
+The same command produces the Inno Setup installer with `--formats inno`, or both with `--formats msi,inno`. Drop `--skip-build` to compile and package in one step.
 
 The generated MSI includes the standard WiX install UI with an install-directory page, so you can change the destination folder during interactive installation.
 
@@ -135,25 +137,35 @@ cargo test --workspace
 
 ## Cross-compiling from Linux {#cross-compiling-from-linux}
 
-Native Windows builds above are unchanged. To produce `zzz.exe` on
-Linux without an MSI, install
-[msvc-wine](https://github.com/mstorsjo/msvc-wine) (default root
-`/opt/msvc`) and the `x86_64-pc-windows-msvc` rustup target, then:
+Native Windows builds above are unchanged. To produce `zzz.exe` on Linux
+without an MSI, build inside the toolchain container. The planner adds the
+image's msvc-wine layer on the first Windows build, so there is no extra flag to
+remember and nothing to install on the host:
 
 ```sh
-./script/build-windows-cross
+cargo xtask build --target x86_64-pc-windows-msvc --formats exe
 ```
 
-Debug:
+That first build downloads Microsoft's MSVC toolset and Windows SDK into a
+`-msvc` image variant, which accepts Microsoft's license. To use a host
+msvc-wine install (default root `/opt/msvc`) instead, tell the planner not to
+containerize:
 
 ```sh
-./script/build-windows-cross --debug
+cargo xtask build --target x86_64-pc-windows-msvc --formats exe --container never
 ```
 
-Binaries land in `target/x86_64-pc-windows-msvc/release/` (or
-`debug/`). This path does not run Inno Setup or WiX.
+For a debug build, call the bundler directly; the planner only produces release
+artifacts:
 
-On the first build, the script downloads the newest LGPL FFmpeg 9.0 development
+```sh
+cargo xtask bundle --target x86_64-pc-windows-msvc --profile dev --formats exe
+```
+
+Binaries land in `target/x86_64-pc-windows-msvc/<profile>/`. The cross path does
+not run Inno Setup or WiX; both need a Windows host.
+
+On the first build, the bundler downloads the newest LGPL FFmpeg 9.0 development
 package into `.deps/ffmpeg/x86_64-pc-windows-msvc`. It links against that
 package and copies the required FFmpeg DLLs next to the generated executables.
 Set `FFMPEG_DIR` to use another package, or `ZZZ_FFMPEG_ROOT` to move the
@@ -161,14 +173,15 @@ download and cache folder. The build is resolved through the GitHub API and
 verified against the published checksum, then reused until
 `ZZZ_FFMPEG_REFRESH_DAYS` (default 7) has passed.
 
-msvc-wine supplies headers, libs, and `fxc.exe`. The script compiles with
-`clang-cl` / `lld-link` / `llvm-rc` (do not set `RC` to the msvc-wine
-`rc` wrapper; `embed-resource` rejects it). Override the sysroot with
-`MSVC_ROOT`. Release builds need `fxc.exe`; the script sets
-`GPUI_FXC_PATH` when it finds it.
+msvc-wine supplies headers, libs, and `fxc.exe`. The build compiles with
+`clang-cl` / `lld-link` / `llvm-rc` (do not set `RC` to the msvc-wine `rc`
+wrapper; `embed-resource` rejects it). Override the sysroot with `MSVC_ROOT`.
+Release builds need `fxc.exe`; the bundler sets `GPUI_FXC_PATH` when it finds it.
 
-The script embeds `remote_server` archives for Linux x86_64 and the
-Windows target, including `--debug`. Pass `--no-embed` to skip that.
+Both cross and native bundles embed `remote_server` archives from the cached
+matrix. `cargo xtask build` builds that matrix once for every target before it
+starts bundling, so a release does not compile a separate copy of the remote
+server per artifact.
 
 ## Installing from msys2
 

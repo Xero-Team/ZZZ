@@ -1,5 +1,9 @@
+pub mod build;
+pub mod bundle;
+pub mod check;
 pub mod clippy;
 pub mod compliance;
+pub mod ffmpeg;
 pub mod grammars;
 pub mod licenses;
 pub mod package_conformity;

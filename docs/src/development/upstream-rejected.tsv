@@ -546,7 +546,7 @@ b8c75f17	C	untriaged	Extension provider icon/dependency path has no independent 
 b9256fa8	C	upstream-infra	Upstream npm build infrastructure.	upstream-sync-2026-08-07.md
 b9301f5c	C	philosophy	Native agent thread workflow.	upstream-sync-2026-08-07.md
 ba0e2a94	C	untriaged	OpenAI subscribed compaction logs.	upstream-sync-2026-08-18.md
-ba2b48461d	C	upstream-infra	Security-version churn is confined to the `update_top_ranking_issues` automation lockfile and changes no shipped ZZZ behavior.	upstream-sync-2026-10-05.md
+ba2b48461d	C	upstream-infra	Security-version churn is confined to the `update-top-ranking-issues` automation lockfile and changes no shipped ZZZ behavior.	upstream-sync-2026-10-05.md
 ba6b83f8	C	philosophy	Window-title template rewrite spans collab indicators, MultiWorkspace-divergent workspace.rs, and lockfile churn.	upstream-sync-2026-09-06.md
 ba8159b4d3	C	upstream-infra	Wezel binary-size measurements are upstream release/benchmark infrastructure.	upstream-sync-2026-10-09.md
 baacd359	C	untriaged	Call diagnostics.	upstream-sync-2026-08-07.md

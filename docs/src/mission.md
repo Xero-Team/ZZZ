@@ -69,7 +69,7 @@ yourself, explicitly.
 
 A written promise is not enough, so the boundary is checked mechanically:
 
-- `script/check-philosophy` asserts that removed surfaces stay removed. It
+- `cargo xtask check philosophy` asserts that removed surfaces stay removed. It
   runs against the product defaults, the source tree, the localization
   catalogs, the legal documents, and these docs.
 - Upstream changes are absorbed selectively. A commit that carries a

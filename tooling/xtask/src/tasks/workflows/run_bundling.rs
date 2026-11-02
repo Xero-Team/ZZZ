@@ -111,7 +111,9 @@ pub(crate) fn bundle_mac(
     deps: &[&NamedJob],
 ) -> NamedJob {
     pub fn bundle_mac(arch: Arch) -> Step<Run> {
-        named::bash(&format!("./script/bundle-mac {arch}-apple-darwin"))
+        named::bash(&format!(
+            "cargo xtask bundle --target {arch}-apple-darwin --formats app,dmg"
+        ))
     }
     let platform = Platform::Mac;
     let artifact_name = match arch {
@@ -138,7 +140,7 @@ pub(crate) fn bundle_mac(
                 "target/{arch}-apple-darwin/release/{artifact_name}"
             )))
             .add_step(upload_artifact(&format!(
-                "target/{remote_server_artifact_name}"
+                "target/remote-server/*/{remote_server_artifact_name}"
             ))),
     }
 }
@@ -187,10 +189,12 @@ pub(crate) fn bundle_linux(
                 job.add_step(set_release_channel(platform, release_channel))
             })
             .map(steps::install_linux_dependencies)
-            .add_step(steps::script("./script/bundle-linux"))
+            .add_step(named::bash(&format!(
+                "cargo xtask bundle --target {arch}-unknown-linux-gnu --formats tar.gz"
+            )))
             .add_step(upload_artifact(&format!("target/release/{artifact_name}")))
             .add_step(upload_artifact(&format!(
-                "target/{remote_server_artifact_name}"
+                "target/remote-server/*/{remote_server_artifact_name}"
             ))),
     }
 }
@@ -202,11 +206,9 @@ pub(crate) fn bundle_windows(
 ) -> NamedJob {
     let platform = Platform::Windows;
     pub fn bundle_windows(arch: Arch) -> Step<Run> {
-        let step = match arch {
-            Arch::X86_64 => named::pwsh("script/bundle-windows.ps1 -Architecture x86_64"),
-            Arch::AARCH64 => named::pwsh("script/bundle-windows.ps1 -Architecture aarch64"),
-        };
-        step
+        named::pwsh(&format!(
+            "cargo xtask bundle --target {arch}-pc-windows-msvc --formats exe,inno"
+        ))
     }
     let artifact_name = match arch {
         Arch::X86_64 => assets::WINDOWS_X86_64,
@@ -229,7 +231,7 @@ pub(crate) fn bundle_windows(
             .add_step(bundle_windows(arch))
             .add_step(upload_artifact(&format!("target/{artifact_name}")))
             .add_step(upload_artifact(&format!(
-                "target/{remote_server_artifact_name}"
+                "target/remote-server/*/{remote_server_artifact_name}"
             ))),
     }
 }

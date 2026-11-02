@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DIR = ROOT / "docs" / "src" / "development"
+REPORTS = DIR / "upstream"
 LEDGER = DIR / "upstream-rejected.tsv"
 
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
@@ -133,7 +134,7 @@ def main():
     else:
         output = LEDGER
     reports = []
-    for path in sorted(DIR.glob("upstream-sync-*.md")):
+    for path in sorted(REPORTS.glob("upstream-sync-*.md")):
         if path.name.startswith("upstream-sync-audit-"):
             continue
         reports.append(path)

@@ -2,10 +2,8 @@
 
 set -euo pipefail
 
-source script/lib/ffmpeg-info.sh
-
 CARGO_ABOUT_VERSION="0.9.3"
-IFS='|' read -r ffmpeg_series _ _ <<< "$(ffmpeg_dependency_info)"
+IFS='|' read -r ffmpeg_series _ _ <<< "$(cargo xtask ffmpeg info)"
 OUTPUT_FILE="${1:-$(pwd)/assets/licenses.csv}"
 TEMPLATE_FILE="script/licenses/template.csv.hbs"
 

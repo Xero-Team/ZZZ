@@ -4,7 +4,10 @@ pub mod http_client;
 pub mod process;
 pub mod settings;
 
-use core::fmt;
+use core::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 use wit::*;
 
@@ -340,16 +343,54 @@ pub fn register_extension(build_extension: fn() -> Box<dyn Extension>) {
     unsafe { EXTENSION = Some((build_extension)()) }
 }
 
-fn extension() -> &'static mut dyn Extension {
+/// A guard that lends out the registered extension for a single host call.
+///
+/// The guest is single-threaded and the host calls exports one at a time, but
+/// handing out a fresh `&'static mut` on every call would be undefined behavior
+/// if two of them were ever live at once. The guard makes such re-entrancy fail
+/// a runtime check instead of aliasing.
+struct ExtensionRef {
+    extension: &'static mut dyn Extension,
+}
+
+impl Deref for ExtensionRef {
+    type Target = dyn Extension;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.extension
+    }
+}
+
+impl DerefMut for ExtensionRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.extension
+    }
+}
+
+impl Drop for ExtensionRef {
+    fn drop(&mut self) {
+        // SAFETY: `extension()` is the only writer, and only one guard exists at a time.
+        unsafe { EXTENSION_IN_USE = false };
+    }
+}
+
+fn extension() -> ExtensionRef {
     #[expect(static_mut_refs)]
     unsafe {
-        EXTENSION
+        assert!(
+            !EXTENSION_IN_USE,
+            "invariant: the extension is not re-entered while a host call is running"
+        );
+        let extension = EXTENSION
             .as_deref_mut()
-            .expect("invariant: `register_extension` runs before any host call")
+            .expect("invariant: `register_extension` runs before any host call");
+        EXTENSION_IN_USE = true;
+        ExtensionRef { extension }
     }
 }
 
 static mut EXTENSION: Option<Box<dyn Extension>> = None;
+static mut EXTENSION_IN_USE: bool = false;
 
 #[cfg(target_arch = "wasm32")]
 #[unsafe(link_section = "zzz:api-version")]

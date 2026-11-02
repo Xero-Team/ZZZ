@@ -26,7 +26,7 @@ index 5dffc034a4f91121417e6808d2e49483ebdc3cf9..97308820234b04b81d08c0884420745d
  </details>
 -
 diff --git a/Cargo.toml b/Cargo.toml
-index bc4dec019e3af9d76b46ada6e009abe6346921d2..5149bd8cf66b0896065ad91dd41a053ed64ff03e 100644
+index bc4dec019e3af9d76b46ada6e009abe6346921d2..868ec677fe18b0384e9e617b7059a6d9686873be 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -28,6 +28,7 @@ once_cell = "1.18.0"
@@ -45,6 +45,16 @@ index bc4dec019e3af9d76b46ada6e009abe6346921d2..5149bd8cf66b0896065ad91dd41a053e
      "NSString",
      "NSURL",
  ] }
+@@ -66,6 +68,9 @@ windows = { version = "0.62", features = [
+     "Win32_System_SystemServices",
+     "Win32_UI_Shell_PropertiesSystem",
+ ] }
++# `#[implement]` expands to `::windows_core::` paths, so the crate that uses it
++# has to name the crate directly. The `windows` crate only re-exports it.
++windows-core = "0.62"
+ scopeguard = "1.2.0"
+ 
+ # workaround for https://github.com/cross-rs/cross/issues/1345
 diff --git a/src/freedesktop.rs b/src/freedesktop.rs
 index 84a031237665a1073e2c9e554981b4482f034fdb..ae3c5cea0abc619538ce4a92944c46a582f3bd43 100644
 --- a/src/freedesktop.rs
@@ -2354,7 +2364,7 @@ index 41ad08ab4bf9c1c5423920c99711be942238d1ee..c52814f28ceddb5e7ea92e53c1958982
      }
  }
 diff --git a/src/windows.rs b/src/windows.rs
-index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0fc57e2b0 100644
+index 898d76d494d7cb2db67e1950134ce8dead9b3e57..efa64ebb6634ee8e04f46cc0e24885af504040f1 100644
 --- a/src/windows.rs
 +++ b/src/windows.rs
 @@ -1,29 +1,45 @@
@@ -2377,7 +2387,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
  use windows::{
 -    core::{Interface, PCWSTR, PWSTR},
      Win32::System::Com::StructuredStorage::PropVariantToBSTR,
-+    core::{Interface, PCWSTR, PWSTR, implement},
++    core::{Interface, PCWSTR, PWSTR, Ref, implement},
  };
  
 -const SCID_ORIGINAL_LOCATION: PROPERTYKEY = PROPERTYKEY { fmtid: PSGUID_DISPLACED, pid: PID_DISPLACED_FROM };
@@ -2570,7 +2580,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
          }
          if !items.is_empty() {
              pfo.PerformOperations()?;
-@@ -314,11 +394,195 @@ unsafe fn get_date_deleted_unix(item: &IShellItem2) -> Result<i64, Error> {
+@@ -314,11 +394,196 @@ unsafe fn get_date_deleted_unix(item: &IShellItem2) -> Result<i64, Error> {
      Ok(seconds_since_unix_epoch as i64)
  }
  
@@ -2595,7 +2605,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    }
 +}
 +
-+impl IFileOperationProgressSink_Impl for TrashProgressSink {
++impl IFileOperationProgressSink_Impl for TrashProgressSink_Impl {
 +    fn StartOperations(&self) -> windows::core::Result<()> {
 +        Ok(())
 +    }
@@ -2607,7 +2617,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PreRenameItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
@@ -2616,10 +2626,10 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PostRenameItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +        _hrrename: windows::core::HRESULT,
-+        _psinewlycreated: Option<&IShellItem>,
++        _psinewlycreated: Ref<'_, IShellItem>,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
 +    }
@@ -2627,8 +2637,8 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PreMoveItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
-+        _psidestinationfolder: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
++        _psidestinationfolder: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
@@ -2637,11 +2647,11 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PostMoveItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
-+        _psidestinationfolder: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
++        _psidestinationfolder: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +        _hrmove: windows::core::HRESULT,
-+        _psinewlycreated: Option<&IShellItem>,
++        _psinewlycreated: Ref<'_, IShellItem>,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
 +    }
@@ -2649,8 +2659,8 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PreCopyItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
-+        _psidestinationfolder: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
++        _psidestinationfolder: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
@@ -2659,11 +2669,11 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PostCopyItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
-+        _psidestinationfolder: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
++        _psidestinationfolder: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +        _hrcopy: windows::core::HRESULT,
-+        _psinewlycreated: Option<&IShellItem>,
++        _psinewlycreated: Ref<'_, IShellItem>,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
 +    }
@@ -2671,7 +2681,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PreDeleteItem(
 +        &self,
 +        _dwflags: u32,
-+        _psiitem: Option<&IShellItem>,
++        _psiitem: Ref<'_, IShellItem>,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
 +    }
@@ -2679,15 +2689,15 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PostDeleteItem(
 +        &self,
 +        _dwflags: u32,
-+        psiitem: Option<&IShellItem>,
++        psiitem: Ref<'_, IShellItem>,
 +        hrdelete: windows::core::HRESULT,
-+        psinewlycreated: Option<&IShellItem>,
++        psinewlycreated: Ref<'_, IShellItem>,
 +    ) -> windows::core::Result<()> {
 +        // HRESULT success codes have the high bit clear (SUCCEEDED macro check)
 +        // hrdelete.is_ok() only checks for S_OK (0), but other success codes exist
 +        let succeeded = hrdelete.0 >= 0;
 +        if succeeded {
-+            if let Some(trash_item) = psinewlycreated {
++            if let Some(trash_item) = psinewlycreated.as_ref() {
 +                unsafe {
 +                    if let Ok(id) = get_display_name(trash_item, SIGDN_DESKTOPABSOLUTEPARSING) {
 +                        // Items are only ever deleted by their canonicalized
@@ -2695,6 +2705,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +                        // unexpected, and the resulting `TrashItem` would have
 +                        // an empty name and original parent.
 +                        let source_path = psiitem
++                            .as_ref()
 +                            .and_then(|s| get_display_name(s, SIGDN_FILESYSPATH).ok())
 +                            .map(PathBuf::from)
 +                            .unwrap_or_else(|| {
@@ -2719,7 +2730,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PreNewItem(
 +        &self,
 +        _dwflags: u32,
-+        _psidestinationfolder: Option<&IShellItem>,
++        _psidestinationfolder: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
@@ -2728,12 +2739,12 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
 +    fn PostNewItem(
 +        &self,
 +        _dwflags: u32,
-+        _psidestinationfolder: Option<&IShellItem>,
++        _psidestinationfolder: Ref<'_, IShellItem>,
 +        _psznewname: &PCWSTR,
 +        _psztemplatename: &PCWSTR,
 +        _dwfileattributes: u32,
 +        _hrnew: windows::core::HRESULT,
-+        _psinewitem: Option<&IShellItem>,
++        _psinewitem: Ref<'_, IShellItem>,
 +    ) -> windows::core::Result<()> {
 +        Ok(())
 +    }
@@ -2767,7 +2778,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
          {
              0 = "THIS IS AN ERROR ON PURPOSE. Either the `coinit_multithreaded` or the `coinit_apartmentthreaded` feature must be specified";
          }
-@@ -341,7 +605,10 @@ impl CoInitializer {
+@@ -341,7 +606,10 @@ impl CoInitializer {
          }
          let hr = unsafe { CoInitializeEx(None, init_mode) };
          if hr.is_err() {
@@ -2779,7 +2790,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
          }
          CoInitializer {}
      }
-@@ -382,13 +649,19 @@ mod tests {
+@@ -382,13 +650,19 @@ mod tests {
          // What `canonicalize` returns for a mapped drive or a UNC path.
          // Before the fix this came out as `UNC\host\share\dir\file.txt`,
          // which the shell reads as a relative path (issue #55).
@@ -2801,7 +2812,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
          assert_eq!(convert(r"dir\file.txt"), r"dir\file.txt");
      }
  
-@@ -427,7 +700,10 @@ mod tests {
+@@ -427,7 +701,10 @@ mod tests {
              convert(r"\\?\UNC\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"),
              r"\\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"
          );
@@ -2813,7 +2824,7 @@ index 898d76d494d7cb2db67e1950134ce8dead9b3e57..8b781d233d8d4947eec6152009ae1ec0
      }
  
      #[test]
-@@ -435,12 +711,18 @@ mod tests {
+@@ -435,12 +712,18 @@ mod tests {
          // `components()` normalizes these; the shell accepts either form.
          assert_eq!(convert(r"\\?\C:\dir\"), r"C:\dir");
          assert_eq!(convert(r"\\?\C:\dir\\file.txt"), r"C:\dir\file.txt");

@@ -169,7 +169,7 @@
 - `crates/zzz_actions/src/lib.rs`
 - `script/syncflow/syncflow/__main__.py`
 - `script/syncflow/syncflow/cli.py`
-- `script/update_top_ranking_issues/main.py`
+- `script/update-top-ranking-issues/main.py`
 - `tooling/compliance/src/lib.rs`
 - `tooling/perf/src/lib.rs`
 - `tooling/perf/src/main.rs`

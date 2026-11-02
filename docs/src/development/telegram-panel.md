@@ -182,7 +182,7 @@ The distinction between `&&` and `>` matters here:
 The panel-level context binds `escape` to back, `ctrl-enter` to send,
 `alt-up`/`alt-down` to chat navigation, and `ctrl-r` to refresh. Panel
 keybindings avoid `cmd-`, `super-`, `win-`, and `fn-`, which
-`script/check-keymaps` rejects.
+`cargo xtask check keys` rejects.
 
 There is no composer hint label; the placeholder is `Message`.
 
@@ -236,8 +236,8 @@ User-facing strings are localized through `i18n::tr` under the
 ## Verification {#verification}
 
 - `cargo check --workspace` and `cargo test --workspace`.
-- `./script/clippy`.
-- `script/check-keymaps`, `script/check-philosophy`, `script/check-licenses`.
+- `cargo xtask clippy`.
+- `cargo xtask check keys`, `cargo xtask check philosophy`, `cargo xtask check licenses`.
 - `cd docs && npx prettier --check src/`.
 
 Real sign-in and message delivery need a real Telegram account; the automated

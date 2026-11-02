@@ -73,12 +73,12 @@ output、trace 和临时 fixture 保存在 `.tmp/text-rendering-refactor/`。
 | `cargo test --locked -p gpui`                                                                      | `PASS`             | 232 unit + 1 integration，0 failed                                                 |
 | `cargo test --locked -p gpui_wgpu --test headless_renderer`                                        | `COVERAGE MISSING` | 测试目标编译通过，但未启用 `test-support`，0 tests                                 |
 | `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer -- --nocapture` | `PASS`             | RADV hardware 与 llvmpipe fallback，2 tests                                        |
-| `./script/clippy -p gpui`                                                                          | `PASS`             | all-target/all-feature release clippy + philosophy                                 |
-| `./script/clippy -p gpui_wgpu`                                                                     | `PASS`             | all-target/all-feature release clippy + philosophy                                 |
+| `cargo xtask clippy -p gpui`                                                                       | `PASS`             | all-target/all-feature release clippy + philosophy                                 |
+| `cargo xtask clippy -p gpui_wgpu`                                                                  | `PASS`             | all-target/all-feature release clippy + philosophy                                 |
 | `cargo test --locked -p gpui platform::atlas_tests`                                                | `PASS`             | 2 snapshot/cache/removal tests                                                     |
 | `cargo test --locked -p gpui_wgpu wgpu_atlas::tests`                                               | `PASS`             | 5 tests，含 residency/pending/upload snapshot                                      |
 | `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                | `PASS`             | 2 runtime tests；TEXT-001 runner 明确 ignored                                      |
-| `./script/clippy -p gpui -p gpui_wgpu`                                                             | `PASS`             | all-target/all-feature release clippy + philosophy                                 |
+| `cargo xtask clippy -p gpui -p gpui_wgpu`                                                          | `PASS`             | all-target/all-feature release clippy + philosophy                                 |
 | `cargo check --locked -p gpui_macos --target x86_64-apple-darwin`                                  | `PASS`             | Metal atlas cross-target compile                                                   |
 | `cargo check --locked -p gpui_windows --target x86_64-pc-windows-gnu --no-default-features`        | `FAIL (baseline)`  | `async-tar 0.6.1` 依赖未启用 `async-std/unstable`；错误发生在 DirectX atlas 编译前 |
 | `cd docs && npx prettier --check src/development/text-rendering-refactor-progress.md`              | `PASS`             | progress ledger formatting                                                         |
@@ -147,7 +147,7 @@ TEXT-002：`PASS`
 | `cargo test --locked -p gpui`                                                                                                                                                                | `PASS` | 234 unit + 1 integration，0 failed                      |
 | `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer`                                                                                                          | `PASS` | 3 passed，TEXT-001 runner 1 ignored                     |
 | `cargo check --locked -p gpui --target x86_64-apple-darwin`                                                                                                                                  | `PASS` | generic Window quantization cross-target compile        |
-| `./script/clippy -p gpui -p gpui_wgpu`                                                                                                                                                       | `PASS` | all-target/all-feature release clippy + philosophy gate |
+| `cargo xtask clippy -p gpui -p gpui_wgpu`                                                                                                                                                    | `PASS` | all-target/all-feature release clippy + philosophy gate |
 | `cargo fmt --all -- --check`                                                                                                                                                                 | `PASS` | workspace Rust formatting                               |
 
 原始 pixel artifact：
@@ -186,7 +186,7 @@ re-export，再集中 page allocator 和 lock 外 builder。
 | `cargo check --locked -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`           | `PASS` | root re-export consumers compile      |
 | `cargo test --locked -p gpui`                                                       | `PASS` | 234 unit + 1 integration，0 failed    |
 | `cargo test --locked -p gpui_wgpu --features test-support --test headless_renderer` | `PASS` | 3 passed，1 explicit baseline ignored |
-| `./script/clippy -p gpui`                                                           | `PASS` | all-target/all-feature + philosophy   |
+| `cargo xtask clippy -p gpui`                                                        | `PASS` | all-target/all-feature + philosophy   |
 | `cargo fmt --all -- --check`                                                        | `PASS` | workspace Rust formatting             |
 
 2A 提交：`ed5f4d49cb5569e7885c7ad315006a72caa8d3dc`（signed）。
@@ -218,7 +218,7 @@ re-export，再集中 page allocator 和 lock 外 builder。
 | `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                        | `PASS`            | Metal atlas 与 tests cross-compile；仅既有 vendor warnings                   |
 | isolated `cargo check --target x86_64-pc-windows-gnu --tests --offline` for `directx_atlas.rs`   | `PASS`            | `.tmp/text-rendering-refactor/windows-crosscheck/`                           |
 | full `cargo check --locked -p gpui_windows --target x86_64-pc-windows-gnu --no-default-features` | `FAIL (baseline)` | 首先缺少 `async-std/unstable`；启用后暴露既有 `windows-core 0.62/0.100` 冲突 |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                             | `PASS`            | all-target/all-feature release clippy + philosophy                           |
+| `cargo xtask clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                          | `PASS`            | all-target/all-feature release clippy + philosophy                           |
 | `cargo fmt --all -- --check`                                                                     | `PASS`            | workspace Rust formatting                                                    |
 | backend allocator-policy search                                                                  | `PASS`            | backend 中无 etagere、free-list 或 live-key policy                           |
 
@@ -279,7 +279,7 @@ TEXT-003：`PASS`
 | `GPUI_HEADLESS_OUTPUT_DIR=... cargo test ... retired_tiles_never_sample_replacement_content`   | `PASS` | RADV + llvmpipe；suballocation 与 full-page ABA pixel matrix   |
 | `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                      | `PASS` | Metal lifecycle/tests cross-compile；仅既有 vendor warnings    |
 | isolated `cargo check --target x86_64-pc-windows-gnu --tests --offline` for `directx_atlas.rs` | `PASS` | DirectX lifecycle/tests cross-compile                          |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                           | `PASS` | all-target/all-feature release clippy + philosophy             |
+| `cargo xtask clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                        | `PASS` | all-target/all-feature release clippy + philosophy             |
 | `cargo fmt --all -- --check`                                                                   | `PASS` | workspace Rust formatting                                      |
 
 TEXT-003 artifacts 位于 `.tmp/text-rendering-refactor/phase-3/`，hardware/fallback
@@ -358,7 +358,7 @@ TEXT-006：`PASS`
 | `text_atlas_baseline_runner -- --ignored --nocapture`                                          | `PASS` | phase-0 workload remains 9 pages/34,603,008 bytes/9,502 uploads |
 | `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                      | `PASS` | Metal policy contract cross-compile；仅既有 vendor warnings     |
 | isolated `cargo check --target x86_64-pc-windows-gnu --tests --offline` for `directx_atlas.rs` | `PASS` | DirectX policy contract cross-compile                           |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                           | `PASS` | all-target/all-feature release clippy + philosophy              |
+| `cargo xtask clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                        | `PASS` | all-target/all-feature release clippy + philosophy              |
 | `cargo fmt --all -- --check`                                                                   | `PASS` | workspace Rust formatting                                       |
 
 原始 artifact：
@@ -424,15 +424,15 @@ TEXT-007：WGPU `PASS`；macOS/Windows native `NOT RUN`，精确 runbook 已固�
 | ------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
 | `cargo test --locked -p gpui_wgpu --features test-support cosmic_text_system::tests`              | `PASS` | 14 tests；含 format authority、alpha/BGRA 与 SVG viewport                                  |
 | `GPUI_TEXT_ATLAS_OUTPUT_DIR=... cargo test ... text_glyph_format_runner -- --ignored --nocapture` | `PASS` | tracked fixtures；RADV + llvmpipe；COLRv1、SVG、bitmap color、monochrome                   |
-| `./script/clippy -p gpui_wgpu`                                                                    | `PASS` | all-target/all-feature release clippy + philosophy                                         |
+| `cargo xtask clippy -p gpui_wgpu`                                                                 | `PASS` | all-target/all-feature release clippy + philosophy                                         |
 | `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                         | `PASS` | CoreText capability test cross-compile；native NOT RUN                                     |
-| `./script/clippy -p gpui_windows`                                                                 | `PASS` | host graph + philosophy；Windows cfg 不在本机执行                                          |
+| `cargo xtask clippy -p gpui_windows`                                                              | `PASS` | host graph + philosophy；Windows cfg 不在本机执行                                          |
 | isolated Windows `IDWriteBitmapRenderTarget3` API crosscheck                                      | `PASS` | `x86_64-pc-windows-gnu` 类型检查                                                           |
 | full `gpui_windows` cross-target check                                                            | `FAIL` | baseline：`async-tar` 缺 `async-std/unstable`；启用后为既有 `windows-core 0.62/0.100` 冲突 |
 | `cargo test --locked -p gpui --features frame-diagnostics`                                        | `PASS` | 256 unit + 1 integration，0 failed                                                         |
 | `cargo test --locked -p gpui_wgpu --features test-support`                                        | `PASS` | 21 unit passed、1 ignored；5 headless passed、4 runners ignored                            |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                              | `PASS` | all-target/all-feature release clippy + philosophy                                         |
-| `script/check-licenses`                                                                           | `PASS` | tracked fixture licenses accepted                                                          |
+| `cargo xtask clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                           | `PASS` | all-target/all-feature release clippy + philosophy                                         |
+| `cargo xtask check licenses`                                                                      | `PASS` | tracked fixture licenses accepted                                                          |
 | `cargo fmt --all -- --check`                                                                      | `PASS` | workspace Rust formatting                                                                  |
 
 TEXT-007 artifact：
@@ -500,7 +500,7 @@ BGRA8，premultiplied conversion 只发生一次。macOS/Windows native 结果�
 | `cargo test --locked -p gpui_wgpu --features test-support`                                                 | `PASS` | 21 unit passed、1 ignored；5 headless passed                |
 | `GPUI_TEXT_ATLAS_OUTPUT_DIR=... cargo test ... text_atlas_sampling_gutter_runner -- --ignored --nocapture` | `PASS` | RADV + llvmpipe；integer/fractional/scale/rotation matrix   |
 | `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin`                                  | `PASS` | Metal upload path cross-compile                             |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                                       | `PASS` | all-target/all-feature + philosophy                         |
+| `cargo xtask clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`                                    | `PASS` | all-target/all-feature + philosophy                         |
 
 TEXT-008：`PASS`
 
@@ -581,7 +581,7 @@ TEXT-009 release artifact：
 | release `text_raster_info_cache_runner`                                   | `PASS` | p95 improves 1.87% vs flat-map baseline      |
 | TEXT-007 / TEXT-008 regression rerun                                      | `PASS` | hardware + llvmpipe                          |
 | `cargo check --locked -p gpui_macos --tests --target x86_64-apple-darwin` | `PASS` | cross-target metadata/reraster compile       |
-| `./script/clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`      | `PASS` | all-target/all-feature + philosophy          |
+| `cargo xtask clippy -p gpui -p gpui_wgpu -p gpui_macos -p gpui_windows`   | `PASS` | all-target/all-feature + philosophy          |
 
 阶段 7 结论：cache 的 count/estimated bytes 始终不超过注入限制，同 strike warm lookup
 不重复查询 platform font state，eviction 后 metadata 与 cold raster 一致，且没有第二份
@@ -651,12 +651,12 @@ TEXT-011：`PASS`
 | 命令或检查                                                                                          | 结果               | 说明                                                                                   |
 | --------------------------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------- |
 | `cargo fmt --all -- --check`                                                                        | `PASS`             | workspace Rust formatting                                                              |
-| `./script/clippy`                                                                                   | `PASS`             | philosophy、workspace release/all-target/all-feature、`future_not_send`                |
-| `./script/check-philosophy`                                                                         | `PASS`             | 无 commercial/account/telemetry/default-network surface                                |
-| `script/check-licenses`                                                                             | `PASS`             | tracked color fixtures 和依赖 license                                                  |
-| `script/check-todos`                                                                                | `PASS`             | 无未说明 TODO                                                                          |
-| `script/check-keymaps`                                                                              | `PASS`             | keymap gate                                                                            |
-| `script/check-links local`                                                                          | `PASS`             | 0 errors                                                                               |
+| `cargo xtask clippy`                                                                                | `PASS`             | philosophy、workspace release/all-target/all-feature、`future_not_send`                |
+| `cargo xtask check philosophy`                                                                      | `PASS`             | 无 commercial/account/telemetry/default-network surface                                |
+| `cargo xtask check licenses`                                                                        | `PASS`             | tracked color fixtures 和依赖 license                                                  |
+| `cargo xtask check todos`                                                                           | `PASS`             | 无未说明 TODO                                                                          |
+| `cargo xtask check keys`                                                                            | `PASS`             | keymap gate                                                                            |
+| `cargo xtask check links local`                                                                     | `PASS`             | 0 errors                                                                               |
 | `cd docs && npx prettier --check src/`                                                              | `PASS`             | 全 docs tree                                                                           |
 | `cargo test --locked -p gpui`                                                                       | `PASS`             | 258 unit + 1 integration                                                               |
 | `cargo test --locked -p gpui --features frame-diagnostics`                                          | `PASS`             | 265 unit + 1 integration                                                               |

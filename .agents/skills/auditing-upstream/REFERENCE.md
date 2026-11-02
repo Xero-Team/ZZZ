@@ -11,7 +11,7 @@ AUDIT_DATE=YYYY-MM-DD (today)
 LOCAL_BASE_BRANCH=main
 LEDGER=docs/src/development/upstream-rejected.tsv
 ALLOWLIST=script/upstream-ledger-allowlist
-AUDIT_REPORT=docs/src/development/upstream-sync-audit-YYYY-MM-DD.md
+AUDIT_REPORT=docs/src/development/upstream/upstream-sync-audit-YYYY-MM-DD.md
 CREATE_REMOTE=no
 CREATE_PR=no
 PUSH=no
@@ -86,7 +86,7 @@ Create or update `AUDIT_REPORT`:
 - Add a dated correction note to the report scope. Do not rewrite the
   per-commit failure narrative; append a "Superseded" line instead.
 - Run `./script/backfill-upstream-ledger` and
-  `./script/check-upstream-ledger`.
+  `cargo xtask check upstream-ledger`.
 - Delete any `ALLOWLIST` entry the correction makes unnecessary. The
   checker fails on a stale entry.
 - Format only the touched reports and the audit report with Prettier.
@@ -96,7 +96,7 @@ Create or update `AUDIT_REPORT`:
 Stop and leave the tree clean if:
 
 - the worktree is dirty for reasons other than owned report edits
-- `./script/check-upstream-ledger` fails before the audit starts
+- `cargo xtask check upstream-ledger` fails before the audit starts
 - a port needs a rejected or absent API
 - a reclassification lacks a local commit or a concrete reason
 

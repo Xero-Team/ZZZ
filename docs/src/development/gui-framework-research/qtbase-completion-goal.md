@@ -55,9 +55,9 @@ explicitly unsupported。
 对每项变更先写会在旧行为失败的最窄 regression test，再写生产代码。提交保持小而可
 回退，使用 git commit -s；不留下无删除条件的 compatibility shim、双实现、dead code
 或未说明 TODO。每次修改运行最窄 check/test；每个阶段运行计划定义的全部验证、相关
-./script/clippy、script/check-philosophy、git diff --check 和 docs Prettier。最终运行
-cargo fmt --all -- --check、cargo test --workspace、./script/clippy、
-script/check-philosophy、docs Prettier check，以及当前主机能执行的 headless/Linux/
+cargo xtask clippy、cargo xtask check philosophy、git diff --check 和 docs Prettier。最终运行
+cargo fmt --all -- --check、cargo test --workspace、cargo xtask clippy、
+cargo xtask check philosophy、docs Prettier check，以及当前主机能执行的 headless/Linux/
 native runtime fixture。macOS/Windows 无法执行时给出可直接运行的 runbook，并诚实
 标记 NOT RUN。
 

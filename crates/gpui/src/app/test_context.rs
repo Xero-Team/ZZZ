@@ -986,14 +986,17 @@ impl VisualTestContext {
     /// This method internally retains the VisualTestContext until the end of the test.
     pub fn into_mut(self) -> &'static mut Self {
         let ptr = Box::into_raw(Box::new(self));
-        // safety: on_quit will be called after the test has finished.
-        // the executor will ensure that all tasks related to the test have stopped.
-        // so there is no way for cx to be accessed after on_quit is called.
-        // todo: This is unsound under stacked borrows (also tree borrows probably?)
-        // the mutable reference invalidates `ptr` which is later used in the closure
+
+        // SAFETY: `ptr` owns a live allocation until the `on_quit` closure
+        // reclaims it. Reborrowing through `ptr` does not invalidate the raw
+        // pointer; it only means the caller must stop using `cx` before
+        // `on_quit` runs, which the test harness guarantees.
         let cx = unsafe { &mut *ptr };
-        cx.on_quit(move || unsafe {
-            drop(Box::from_raw(ptr));
+        cx.on_quit(move || {
+            // SAFETY: this runs after the test body has finished, so the
+            // reference returned above is no longer used. `ptr` still owns the
+            // allocation, and this closure is its only reclamation.
+            unsafe { drop(Box::from_raw(ptr)) }
         });
         cx
     }

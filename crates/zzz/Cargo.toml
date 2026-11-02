@@ -12,6 +12,10 @@ default-run = "zzz"
 workspace = true
 
 [features]
+# The editor is allocation heavy and every hot path shares one allocator, so
+# mimalloc is on by default. Drop it with `--no-default-features` when isolating
+# allocator behaviour.
+default = ["mimalloc"]
 tracy = ["ztracing/tracy"]
 # LEAK_BACKTRACE=1 cargo run --features zzz/track-project-leak --profile release-fast
 track-project-leak = ["gpui/leak-detection"]

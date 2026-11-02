@@ -14,7 +14,7 @@ use windows::Win32::{
 };
 use windows::{
     Win32::System::Com::StructuredStorage::PropVariantToBSTR,
-    core::{Interface, PCWSTR, PWSTR, implement},
+    core::{Interface, PCWSTR, PWSTR, Ref, implement},
 };
 
 const SCID_ORIGINAL_LOCATION: PROPERTYKEY = PROPERTYKEY {
@@ -415,7 +415,7 @@ impl TrashProgressSink {
     }
 }
 
-impl IFileOperationProgressSink_Impl for TrashProgressSink {
+impl IFileOperationProgressSink_Impl for TrashProgressSink_Impl {
     fn StartOperations(&self) -> windows::core::Result<()> {
         Ok(())
     }
@@ -427,7 +427,7 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PreRenameItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
     ) -> windows::core::Result<()> {
         Ok(())
@@ -436,10 +436,10 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PostRenameItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
         _hrrename: windows::core::HRESULT,
-        _psinewlycreated: Option<&IShellItem>,
+        _psinewlycreated: Ref<'_, IShellItem>,
     ) -> windows::core::Result<()> {
         Ok(())
     }
@@ -447,8 +447,8 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PreMoveItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
-        _psidestinationfolder: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
+        _psidestinationfolder: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
     ) -> windows::core::Result<()> {
         Ok(())
@@ -457,11 +457,11 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PostMoveItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
-        _psidestinationfolder: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
+        _psidestinationfolder: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
         _hrmove: windows::core::HRESULT,
-        _psinewlycreated: Option<&IShellItem>,
+        _psinewlycreated: Ref<'_, IShellItem>,
     ) -> windows::core::Result<()> {
         Ok(())
     }
@@ -469,8 +469,8 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PreCopyItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
-        _psidestinationfolder: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
+        _psidestinationfolder: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
     ) -> windows::core::Result<()> {
         Ok(())
@@ -479,11 +479,11 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PostCopyItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
-        _psidestinationfolder: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
+        _psidestinationfolder: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
         _hrcopy: windows::core::HRESULT,
-        _psinewlycreated: Option<&IShellItem>,
+        _psinewlycreated: Ref<'_, IShellItem>,
     ) -> windows::core::Result<()> {
         Ok(())
     }
@@ -491,7 +491,7 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PreDeleteItem(
         &self,
         _dwflags: u32,
-        _psiitem: Option<&IShellItem>,
+        _psiitem: Ref<'_, IShellItem>,
     ) -> windows::core::Result<()> {
         Ok(())
     }
@@ -499,15 +499,15 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PostDeleteItem(
         &self,
         _dwflags: u32,
-        psiitem: Option<&IShellItem>,
+        psiitem: Ref<'_, IShellItem>,
         hrdelete: windows::core::HRESULT,
-        psinewlycreated: Option<&IShellItem>,
+        psinewlycreated: Ref<'_, IShellItem>,
     ) -> windows::core::Result<()> {
         // HRESULT success codes have the high bit clear (SUCCEEDED macro check)
         // hrdelete.is_ok() only checks for S_OK (0), but other success codes exist
         let succeeded = hrdelete.0 >= 0;
         if succeeded {
-            if let Some(trash_item) = psinewlycreated {
+            if let Some(trash_item) = psinewlycreated.as_ref() {
                 unsafe {
                     if let Ok(id) = get_display_name(trash_item, SIGDN_DESKTOPABSOLUTEPARSING) {
                         // Items are only ever deleted by their canonicalized
@@ -515,6 +515,7 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
                         // unexpected, and the resulting `TrashItem` would have
                         // an empty name and original parent.
                         let source_path = psiitem
+                            .as_ref()
                             .and_then(|s| get_display_name(s, SIGDN_FILESYSPATH).ok())
                             .map(PathBuf::from)
                             .unwrap_or_else(|| {
@@ -539,7 +540,7 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PreNewItem(
         &self,
         _dwflags: u32,
-        _psidestinationfolder: Option<&IShellItem>,
+        _psidestinationfolder: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
     ) -> windows::core::Result<()> {
         Ok(())
@@ -548,12 +549,12 @@ impl IFileOperationProgressSink_Impl for TrashProgressSink {
     fn PostNewItem(
         &self,
         _dwflags: u32,
-        _psidestinationfolder: Option<&IShellItem>,
+        _psidestinationfolder: Ref<'_, IShellItem>,
         _psznewname: &PCWSTR,
         _psztemplatename: &PCWSTR,
         _dwfileattributes: u32,
         _hrnew: windows::core::HRESULT,
-        _psinewitem: Option<&IShellItem>,
+        _psinewitem: Ref<'_, IShellItem>,
     ) -> windows::core::Result<()> {
         Ok(())
     }

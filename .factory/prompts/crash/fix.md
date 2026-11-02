@@ -59,7 +59,7 @@ If any tests fail, determine whether the fix introduced a regression. Fix regres
 ### Step 5: Run Clippy
 
 ```
-./script/clippy
+cargo xtask clippy
 ```
 
 Address any new warnings introduced by your change.

@@ -1,0 +1,262 @@
+# syntax=docker/dockerfile:1
+#
+# Toolchain image for `cargo xtask build`.
+#
+# The host's C library is recorded in every Linux artifact at link time, so a
+# release built on a rolling distribution only starts there. Building inside a
+# pinned image turns "which machine built this" into a recorded input: the tag
+# is hashed from this file, `script/linux`, `script/install-cmake` (and the
+# helper it sources), and `rust-toolchain.toml`, so editing any of them produces
+# a new tag instead of silently reusing a stale image.
+#
+# The image covers the Linux release build, the macOS cross build (zig,
+# cargo-zigbuild, Zed's cargo-bundle, hfsprogs, libdmg-hfsplus, and the macOS
+# SDK), and PGO (llvm-profdata, Xvfb, a software rasterizer). A plan that asks
+# for a Windows target also builds the msvc-wine layer (`WITH_MSVC=1`); the
+# planner requests it on its own and the `-msvc` image tag records it:
+#
+#   podman build --build-arg WITH_MSVC=1 -f Dockerfile-toolchain -t <tag>-msvc .
+#
+# That layer downloads Microsoft's MSVC toolset and Windows SDK, so building it
+# accepts Microsoft's license. That is a decision for whoever builds the image.
+# The toolset and SDK are pinned below because `vsdownload.py` would otherwise
+# resolve the newest ones, and the tag would stop describing the image content.
+#
+# `cargo xtask doctor` prints the tag and the exact command for this checkout.
+#
+# The base is pinned by digest so a rebuild does not silently pick up a newer
+# Ubuntu point release. Bump the digest deliberately, then rebuild the image.
+
+ARG BASE_IMAGE=ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
+FROM ${BASE_IMAGE}
+
+ARG TZ=Etc/UTC \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive
+
+# The toolchain lives outside $HOME so it can be shared by every container run,
+# and so the mounted download caches do not shadow it.
+ENV CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_TERM_COLOR=always \
+    RUSTUP_MAX_RETRIES=10 \
+    PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN mkdir -p /usr/local/cargo /usr/local/rustup \
+    && ln -s /usr/local/cargo /root/.cargo \
+    && ln -s /usr/local/rustup /root/.rustup
+
+WORKDIR /src
+
+# `script/linux` is the same dependency list the host path uses, so a container
+# build fails for exactly the reasons a host build would. It also installs
+# rustup and the Tree-sitter CLI pinned by the vendored grammar manifest;
+# `lsb-release` is what `script/install-cmake` reads to pick the Kitware repo.
+# The toolchain file is in place first, as it is for a developer running the
+# script from the checkout root, so rustup installs the pinned channel and its
+# targets instead of a second, unrelated stable toolchain.
+COPY rust-toolchain.toml rust-toolchain.toml
+COPY script/linux script/install-cmake script/
+# `install-cmake` sources `lib/github-release.sh`.
+COPY script/lib script/lib
+COPY crates/grammars/vendor/manifest.toml crates/grammars/vendor/manifest.toml
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends lsb-release \
+    && rm -rf /var/lib/apt/lists/* \
+    && ./script/linux \
+    && ./script/install-cmake "3.30.4"
+
+# Rust's own test/training dependencies: Xvfb and a software rasterizer for the
+# PGO session, plus the packaging helpers the bundling scripts expect.
+# `hfsprogs` supplies `mkfs.hfsplus`, which creates the filesystem image the
+# macOS bundle is wrapped in.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        file \
+        hfsprogs \
+        libegl1 \
+        libgl1-mesa-dri \
+        mesa-vulkan-drivers \
+        unzip \
+        xdotool \
+        xvfb \
+        zip \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# `llvm-tools-preview` is not in the repository's component list, but PGO needs
+# its `llvm-profdata`. The cross targets are installed here too: the cross
+# scripts call `rustup target add`, which would need network in a build that is
+# otherwise offline.
+RUN cargo --version \
+    && rustup component add llvm-tools-preview \
+    && rustup target add \
+        aarch64-apple-darwin \
+        aarch64-pc-windows-msvc \
+        x86_64-apple-darwin \
+        x86_64-pc-windows-msvc
+
+ARG CARGO_ABOUT_VERSION=0.9.3 \
+    CARGO_DEB_VERSION=3.8.0 \
+    CARGO_GENERATE_RPM_VERSION=0.21.1 \
+    CARGO_ZIGBUILD_VERSION=0.24.0 \
+    SCCACHE_VERSION=0.19.0
+RUN cargo install --locked --version "${SCCACHE_VERSION}" sccache \
+    && cargo install --locked --version "${CARGO_ZIGBUILD_VERSION}" cargo-zigbuild \
+    && cargo install --locked --version "${CARGO_DEB_VERSION}" cargo-deb \
+    && cargo install --locked --version "${CARGO_GENERATE_RPM_VERSION}" cargo-generate-rpm \
+    && cargo install --locked --version "${CARGO_ABOUT_VERSION}" --features cli cargo-about
+
+# zig links the macOS and aarch64 cross builds. The checksum is the one
+# ziglang.org publishes for this release.
+ARG ZIG_VERSION=0.16.0 \
+    ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+RUN curl --fail --silent --show-error --location \
+        "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
+        --output /tmp/zig.tar.xz \
+    && echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict - \
+    && mkdir -p /opt/zig \
+    && tar --extract --xz --file /tmp/zig.tar.xz --directory /opt/zig --strip-components=1 \
+    && ln -s /opt/zig/zig /usr/local/bin/zig \
+    && rm /tmp/zig.tar.xz
+
+# The macOS cross path assembles the `.app` with `cargo-bundle` (Zed's fork)
+# and wraps it in a DMG with libdmg-hfsplus. `mkfs.hfsplus` is installed above.
+#
+# libdmg-hfsplus predates OpenSSL 1.1: it stores an `HMAC_CTX` by value and
+# resets it with `HMAC_CTX_init`, neither of which OpenSSL 3 (what Ubuntu 22.04
+# ships) provides. Only reading encrypted FileVault images needs crypto, and
+# creating a DMG does not, so the project's crypto branch is switched off
+# before configuring. Its `INCLUDE(FindOpenSSL)` bypasses
+# `CMAKE_DISABLE_FIND_PACKAGE_OpenSSL`, hence the edit rather than a flag.
+#
+# The policy minimum is for the image's CMake 4.x, which refuses
+# `cmake_minimum_required(VERSION 2.6)`.
+ARG LIBDMG_HFSPLUS_COMMIT=7ac55ec64c96f7800d9818ce64c79670e7f02b67
+RUN git clone https://github.com/planetbeing/libdmg-hfsplus /tmp/libdmg-hfsplus \
+    && cd /tmp/libdmg-hfsplus \
+    && git checkout "${LIBDMG_HFSPLUS_COMMIT}" \
+    && sed -i 's/^IF(OPENSSL_FOUND)$/IF(FALSE)/' dmg/CMakeLists.txt \
+    && cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        . \
+    && cmake --build build --parallel \
+    && cmake --install build --prefix /usr/local \
+    && cd / \
+    && rm -rf /tmp/libdmg-hfsplus
+
+# `cargo xtask bundle` refuses any other cargo-bundle, because the upstream
+# release cannot produce a deployable bundle.
+ARG CARGO_BUNDLE_REV=2be2669972dff3ddd4daf89a2cb29d2d06cad7c7
+RUN cargo install --locked \
+        --git https://github.com/zed-industries/cargo-bundle \
+        --rev "${CARGO_BUNDLE_REV}" \
+        cargo-bundle
+
+# The SDK is part of the cross toolchain, so it is pinned and verified here
+# instead of being downloaded into the container's disposable /tmp on every
+# run. The version and checksum match `script/ensure-macos-sdk`.
+ARG MACOS_SDK_VERSION=14.5 \
+    MACOS_SDK_SHA256=6e146275d19f027faa2e8354da5e0267513abf013b8f16ad65a231653a2b1c5d
+RUN curl --fail --silent --show-error --location \
+        "https://github.com/joseluisq/macosx-sdks/releases/download/${MACOS_SDK_VERSION}/MacOSX${MACOS_SDK_VERSION}.sdk.tar.xz" \
+        --output /tmp/macos-sdk.tar.xz \
+    && echo "${MACOS_SDK_SHA256}  /tmp/macos-sdk.tar.xz" | sha256sum --check --strict - \
+    && mkdir -p /opt/zzz-macos-sdk \
+    && tar --extract --xz --file /tmp/macos-sdk.tar.xz --directory /opt/zzz-macos-sdk \
+    && rm /tmp/macos-sdk.tar.xz
+ENV SDKROOT=/opt/zzz-macos-sdk/MacOSX14.5.sdk
+
+# Windows cross builds need msvc-wine: Microsoft's headers, libraries, and
+# `fxc.exe`, which only run under wine. The planner turns this on whenever a
+# plan contains a Windows target, so it is not something an operator has to
+# remember. Building the layer accepts Microsoft's license, which is why it is a
+# build argument rather than an unconditional step.
+ARG WITH_MSVC=0 \
+    MSVC_WINE_COMMIT=514f8ea34842cd6d831804d0e9658d3a32870ae1 \
+    MSVC_VERSION=18.0 \
+    SDK_VERSION=10.0.26100
+RUN if [ "${WITH_MSVC}" = "1" ]; then \
+        apt-get update \
+        && apt-get install --yes --no-install-recommends \
+            cabextract \
+            msitools \
+            python3 \
+            wine64 \
+        && rm -rf /var/lib/apt/lists/* \
+        && git clone https://github.com/mstorsjo/msvc-wine /tmp/msvc-wine \
+        && cd /tmp/msvc-wine \
+        && git checkout "${MSVC_WINE_COMMIT}" \
+        && ./vsdownload.py --accept-license --major 18 \
+            --msvc-version "${MSVC_VERSION}" \
+            --sdk-version "${SDK_VERSION}" \
+            --dest /opt/msvc \
+        && ./install.sh /opt/msvc \
+        && rm -rf /tmp/msvc-wine; \
+    fi
+
+# A name that the Windows cross build needs and Ubuntu's packages do not
+# install: msvc-wine resolves `wine64` from PATH every time a wrapper runs, but
+# the `wine64` package only ships `/usr/bin/wine64-stable` and
+# `/usr/lib/wine/wine64`. Without the name it looks for, `cl`/`link` fail with
+# an empty command and the shader compiler (`fxc.exe`, which `gpui_windows`
+# runs under Wine) never starts.
+#
+# The Wine prefix is created on first use, which costs a second per container.
+#
+# This is its own step on purpose: it does not change what the layer above
+# contains, and folding it in would re-download Microsoft's toolset.
+RUN if [ "${WITH_MSVC}" = "1" ]; then \
+        ln --symbolic /usr/lib/wine/wine64 /usr/local/bin/wine64; \
+    fi
+
+# `clang-cl` is the MSVC-compatible driver, and `cc` asks for it by that name
+# for an MSVC target. clang picks the mode from the name it is invoked as, so
+# the symlink is the whole configuration.
+#
+# The distro's llvm-14 is too old for the toolset above. MSVC's STL refuses a
+# Clang older than 19 in C++ mode (STL1000), and `libmimalloc-sys` compiles as
+# C++ because mimalloc wants the C++ atomics path there. `lld-link` 14 cannot
+# read the function-ID records in the toolset's runtime libraries either, so
+# every link warns that a PDB item index is "not a valid function ID record".
+# LLVM's own archive carries both tools. The archiver and resource compiler stay
+# on Ubuntu's llvm-14: they only read and write COFF objects, so nothing is
+# gained by moving them. Bumping `MSVC_VERSION` can raise the floor too; check
+# `yvals_core.h` in the installed toolset when it moves.
+ARG LLVM_VERSION=19
+RUN if [ "${WITH_MSVC}" = "1" ]; then \
+        apt-get update \
+        && apt-get install --yes --no-install-recommends ca-certificates curl gnupg \
+        && curl --fail --silent --show-error --location \
+            https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | gpg --dearmor --output /usr/share/keyrings/llvm.gpg \
+        && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION} main" \
+            > /etc/apt/sources.list.d/llvm.list \
+        && apt-get update \
+        && apt-get install --yes --no-install-recommends \
+            "clang-${LLVM_VERSION}" \
+            "lld-${LLVM_VERSION}" \
+        && rm -rf /var/lib/apt/lists/* \
+        && ln --symbolic --force "/usr/bin/clang-${LLVM_VERSION}" /usr/local/bin/clang-cl \
+        && ln --symbolic --force "/usr/bin/lld-link-${LLVM_VERSION}" /usr/local/bin/lld-link; \
+    fi
+
+# The `cmake` crate asks for a Visual Studio generator on an MSVC target and
+# panics when it cannot find one. A generator named after Ninja is the branch it
+# takes instead, and CMake accepts it for a cross build. This is its own layer,
+# after the Microsoft download, so adding it does not invalidate that download.
+RUN if [ "${WITH_MSVC}" = "1" ]; then \
+        apt-get update \
+        && apt-get install --yes --no-install-recommends ninja-build \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+ENV MSVC_ROOT=/opt/msvc
+
+# The build container is disposable: it must not accumulate a home directory or
+# a target directory of its own, because both are mounted from the host.
+RUN mkdir -p /src/target/container /usr/local/cargo/registry /usr/local/cargo/git
+
+CMD ["bash"]

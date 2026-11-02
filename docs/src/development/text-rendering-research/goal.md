@@ -101,8 +101,8 @@ gutter 和 device recovery tests。严格执行 experiments.tsv 的阈值；不�
 最终必须运行并记录：
 - cargo fmt --all -- --check
 - cargo test --workspace
-- ./script/clippy
-- ./script/check-philosophy
+- cargo xtask clippy
+- cargo xtask check philosophy
 - cd docs && npx prettier --check src/
 - cargo test --locked -p gpui
 - cargo test --locked -p gpui_wgpu

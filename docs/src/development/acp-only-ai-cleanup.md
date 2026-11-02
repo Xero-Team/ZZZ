@@ -210,9 +210,9 @@ callers.
 | -------------------------------------- | -------------------------------------- |
 | No dangling references                 | `rg -n "<crate>" crates Cargo.toml`    |
 | Type/borrow correctness                | `cargo check --workspace`              |
-| Lint                                   | `./script/clippy`                      |
+| Lint                                   | `cargo xtask clippy`                   |
 | Tests                                  | `cargo test --workspace`               |
-| No new hosts introduced                | `./script/check-philosophy`            |
+| No new hosts introduced                | `cargo xtask check philosophy`         |
 | Docs formatting (if this file changes) | `cd docs && npx prettier --check src/` |
 
 `cargo test --workspace` and cross-platform checks are the known weak spot in

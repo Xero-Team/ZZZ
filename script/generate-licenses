@@ -2,12 +2,10 @@
 
 set -euo pipefail
 
-source script/lib/ffmpeg-info.sh
-
 # cargo-about 0.9.3 is the current release; keep it pinned so regenerated
 # license files stay stable.
 CARGO_ABOUT_VERSION="0.9.3"
-IFS='|' read -r ffmpeg_series ffmpeg_archive ffmpeg_tag <<< "$(ffmpeg_dependency_info)"
+IFS='|' read -r ffmpeg_series ffmpeg_archive ffmpeg_tag <<< "$(cargo xtask ffmpeg info)"
 OUTPUT_FILE="${1:-$(pwd)/assets/licenses.md}"
 TEMPLATE_FILE="script/licenses/template.md.hbs"
 
@@ -34,7 +32,9 @@ echo -n "" >"$OUTPUT_FILE"
 
 if ! cargo about --version | grep "cargo-about $CARGO_ABOUT_VERSION" &>/dev/null; then
     echo "Installing cargo-about@$CARGO_ABOUT_VERSION..."
-    cargo install "cargo-about@$CARGO_ABOUT_VERSION"
+    # cargo-about 0.9 gates its binary behind the `cli` feature, so a plain
+    # `cargo install` reports success and leaves no `cargo about` behind.
+    cargo install "cargo-about@$CARGO_ABOUT_VERSION" --features cli
 else
     echo "cargo-about@$CARGO_ABOUT_VERSION is already installed."
 fi

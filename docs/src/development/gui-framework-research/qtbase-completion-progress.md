@@ -161,7 +161,7 @@ capability inventory；随后以一个可失败的文档/测试同步 gate 防�
   cargo test --locked -p gpui --lib
   cargo test --locked -p gpui --lib --features accessibility
   cargo test --locked -p ui --features accessibility --test accessibility
-  ./script/clippy -p gpui --features accessibility
+  cargo xtask clippy -p gpui --features accessibility
   cargo fmt --all -- --check
   git diff --check
   ```
@@ -285,9 +285,9 @@ lifecycle 覆盖的可复现错误先加 regression，再考虑任何结构性 A
   cargo check --locked -p workspace
   cargo check --locked -p agent_ui
   cargo test --locked -p gpui --lib --features accessibility
-  ./script/clippy -p gpui --features accessibility
+  cargo xtask clippy -p gpui --features accessibility
   cargo clippy -p ui --features accessibility --release --all-targets --all-features -- --deny warnings
-  script/check-philosophy
+  cargo xtask check philosophy
   cargo fmt --all -- --check
   git diff --check
   ```
@@ -417,7 +417,7 @@ action 与 IME marked range 都必须来自同一 editor snapshot。InputField �
   cargo test --locked -p ui_input
   cargo test --locked -p ui_input --features accessibility
   cargo clippy -p ui_input --features accessibility --release --all-targets --all-features -- --deny warnings
-  script/check-philosophy
+  cargo xtask check philosophy
   cargo fmt --all -- --check
   git diff --check
   ```
@@ -442,7 +442,7 @@ ReplaceSelectedText/SetTextSelection。
   GPUI homepage。
 - GPUI README 以 in-tree `contexts` doc 和 `hello_world` example 作为学习入口，移除
   upstream `gpui.rs`、Zed Discord 和 Zed blog 链接；issues 指向本仓库。
-- `script/check-philosophy` 现在检查 GPUI README/manifest 不再回归到 upstream hosted
+- `cargo xtask check philosophy` 现在检查 GPUI README/manifest 不再回归到 upstream hosted
   support 或 upstream repository metadata。
 - `cargo check --locked -p gpui --examples` 通过，且已加入 `GPUI platform checks` CI job，
   使 README 的 local example 入口持续可编译。

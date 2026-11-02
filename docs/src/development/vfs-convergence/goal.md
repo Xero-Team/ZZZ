@@ -36,7 +36,7 @@ OpenAI 官方
 
 保留用户已有修改，不得 reset、clean、checkout 覆盖或丢弃。不 push、不开 PR。全部完成定义满足后，先请用户确认，再把 vfs-convergence 合并回 main（默认 --no-ff 保留阶段边界）。
 
-验证：每个阶段跑受影响的 cargo check / cargo test 与 ./script/clippy -p 目标 crate；阶段 16 运行 cargo fmt --all -- --check、cargo test --workspace、./script/clippy、./script/check-philosophy、./script/check-todos、cd docs && npx prettier --check src/ 和 mdbook build docs。本机无法执行的平台或工具验证必须写可执行 runbook 并标记 NOT RUN，不得冒充 PASS。
+验证：每个阶段跑受影响的 cargo check / cargo test 与 cargo xtask clippy -p 目标 crate；阶段 16 运行 cargo fmt --all -- --check、cargo test --workspace、cargo xtask clippy、cargo xtask check philosophy、./script/check-todos、cd docs && npx prettier --check src/ 和 mdbook build docs。本机无法执行的平台或工具验证必须写可执行 runbook 并标记 NOT RUN，不得冒充 PASS。
 
 安全范围内自主推进，不因工作量大或阶段完成而暂停。只有缺少会改变产品语义、协议兼容或外部 authority 的决定时才询问用户；其余自行决策并把理由写进 progress.md。
 ```

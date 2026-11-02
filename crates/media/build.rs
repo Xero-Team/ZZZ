@@ -26,6 +26,14 @@ fn main() {
     if let Ok(target) = env::var("TARGET") {
         builder = builder.clang_arg(format!("--target={target}"));
     }
+    // The SDK's `TargetConditionals.h` only infers `TARGET_OS_OSX` through
+    // clang's `define_target_os_macros` extension, which libclang builds older
+    // than clang 16 do not have. They leave it at 0, so Foundation skips
+    // `objc/NSObjCRuntime.h` and `NSInteger`/`NSUInteger` go undeclared.
+    // Apple's clang always defines it, so only assert it off macOS.
+    if !cfg!(target_os = "macos") {
+        builder = builder.clang_arg("-DTARGET_OS_OSX=1");
+    }
 
     let bindings = builder
         .allowlist_type("CMItemIndex")

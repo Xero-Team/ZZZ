@@ -14,16 +14,16 @@ UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
 BATCH=first 20 commits
-REPORT=docs/src/development/upstream-sync-YYYY-MM-DD.md
+REPORT=docs/src/development/upstream/upstream-sync-YYYY-MM-DD.md
 CREATE_REMOTE=no
 CREATE_PR=no
 PUSH=no
 ```
 
 As of 2026-10-27, local `main` is `4d3b091b22`. The last completed
-sync is `docs/src/development/upstream-sync-2026-10-27.md` through
+sync is `docs/src/development/upstream/upstream-sync-2026-10-27.md` through
 `37faef81` on `sync/upstream-2026-10-27`, and its full re-audit is
-`docs/src/development/upstream-sync-audit-2026-10-27.md`. Query again at
+`docs/src/development/upstream/upstream-sync-audit-2026-10-27.md`. Query again at
 run start. The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy
@@ -202,7 +202,7 @@ cargo check --locked -p <touched_crate>
 cargo test --locked -p <crate> <test_filter>
 ```
 
-Do not run `cargo test --workspace` unless asked. Use `./script/clippy`
+Do not run `cargo test --workspace` unless asked. Use `cargo xtask clippy`
 if you lint, never `cargo clippy`.
 
 This host is Linux. Inspect macOS and Windows hunks, but record those
@@ -244,7 +244,7 @@ run:
 
 ```sh
 ./script/backfill-upstream-ledger
-./script/check-upstream-ledger
+cargo xtask check upstream-ledger
 ```
 
 The backfill derives the ledger from the report decision tables. Do not

@@ -26,7 +26,7 @@ Leave these alone unless the user names them:
 - Deleting the `collab`, `copilot`, `cloud_api_*`, or
   `language_models_cloud` crates
 - `Cargo.toml` git dependencies on `github.com/zed-industries/*`
-- `docs/src/development/upstream-sync-*.md` historical audits
+- `docs/src/development/upstream/upstream-sync-*.md` historical audits
 - `assets/licenses.md` third-party copyright notices
 - Theme `$schema` URLs at `https://zed.dev/schema/...` (upstream schema)
 - Extension Gallery traffic to `https://api.zed.dev`
@@ -65,7 +65,7 @@ Rust:
   entity updates.
 - Dropped `cx.spawn` / `cx.background_spawn` tasks are cancelled.
 - GPUI tests use executor timers, not `smol::Timer::after`.
-- Lint with `./script/clippy`, never `cargo clippy`.
+- Lint with `cargo xtask clippy`, never `cargo clippy`.
 - Do not run `cargo test --workspace` unless asked.
 - Do not fix unrelated baseline failures or formatting drift.
 
@@ -335,7 +335,7 @@ Do not weaken existing checks.
 After each group, run the narrowest commands that cover touched files.
 
 ```sh
-./script/check-philosophy
+cargo xtask check philosophy
 git diff --check
 ```
 

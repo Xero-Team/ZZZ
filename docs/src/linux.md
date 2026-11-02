@@ -73,7 +73,7 @@ Build, packaging and instructions for each version are available in the README o
 
 ### Installing a local archive
 
-If you already have a local `.tar.gz` from `./script/bundle-linux` or
+If you already have a local `.tar.gz` from `cargo xtask bundle` or
 `./script/install-linux`, you can unpack it yourself:
 
 ```sh

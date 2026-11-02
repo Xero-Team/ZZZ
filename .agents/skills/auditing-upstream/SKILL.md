@@ -37,7 +37,7 @@ recovers commits that were rejected too quickly.
   decisions.
 - The user wants the rejection ledger verified, backfilled, or repaired.
 - The user wants a new or continued
-  `docs/src/development/upstream-sync-audit-*.md`.
+  `docs/src/development/upstream/upstream-sync-audit-*.md`.
 
 Do not use this skill for forward batches. Use `absorbing-upstream` for
 those.
@@ -61,9 +61,9 @@ those.
 
 1. Read `README.md`, `AGENTS.md`, `.agents/skills/absorbing-upstream/`
    `SKILL.md` and `REFERENCE.md`, every
-   `docs/src/development/upstream-sync-*.md`, the latest audit report, and
+   `docs/src/development/upstream/upstream-sync-*.md`, the latest audit report, and
    this skill's `REFERENCE.md`.
-2. Preflight: clean worktree, then run `./script/check-upstream-ledger`.
+2. Preflight: clean worktree, then run `cargo xtask check upstream-ledger`.
 3. Cross-reference every recorded `C` against later local `sync:` commits
    and the current ZZZ call chain, then re-run the isolation test in
    `REFERENCE.md`.
@@ -72,8 +72,8 @@ those.
 5. Correct the report tables, narratives, and counts, and update the
    baseline in the `absorbing-upstream` `REFERENCE.md`.
 6. Run `./script/backfill-upstream-ledger` and
-   `./script/check-upstream-ledger`. Remove stale allowlist entries.
-7. Write `docs/src/development/upstream-sync-audit-YYYY-MM-DD.md` and
+   `cargo xtask check upstream-ledger`. Remove stale allowlist entries.
+7. Write `docs/src/development/upstream/upstream-sync-audit-YYYY-MM-DD.md` and
    format only that file with Prettier.
 
 ## Final Response
