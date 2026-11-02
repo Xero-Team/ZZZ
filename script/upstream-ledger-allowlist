@@ -7,3 +7,5 @@
 # the line.
 #
 # Format: <sha-prefix>  <reason>
+
+66b6bbb6c8  The rejection still covers upstream's `crates/zed` release tooling; the 1.28.0 bump adopted only the app version number.
