@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+source "$(dirname "$0")/lib/github-release.sh"
+
 usage() {
   cat <<'EOF'
 Usage: script/build-darwin-cross [options] [-- cargo-args...]
@@ -26,7 +28,7 @@ Options:
 
 Environment:
   SDKROOT             macOS SDK path (default: script/ensure-macos-sdk)
-  ZZZ_MACOS_SDK_VERSION  SDK version to download when SDKROOT is unset (default: 14.5)
+  ZZZ_MACOS_SDK_VERSION  SDK version to download when SDKROOT is unset (default: newest release)
   ZZZ_APPLE_TARGET    Override the Rust target triple (default: <arch>-apple-darwin)
   ZIG_GLOBAL_CACHE_DIR / ZIG_LOCAL_CACHE_DIR   zig cache locations
 EOF
@@ -156,9 +158,14 @@ if [[ "$cargo_bundle_version" != "cargo-bundle v0.6.1-zed" ]]; then
 fi
 
 # The full GUI app references CoreAudio process-tap APIs that older SDKs do
-# not declare; ensure-macos-sdk defaults to 14.5.
+# not declare; `script/ensure-macos-sdk` downloads the newest SDK unless
+# ZZZ_MACOS_SDK_VERSION selects a specific release.
 if [[ -z "${SDKROOT:-}" ]]; then
-  SDKROOT="$(script/ensure-macos-sdk "${ZZZ_MACOS_SDK_VERSION:-14.5}")"
+  if [[ -n "${ZZZ_MACOS_SDK_VERSION:-}" ]]; then
+    SDKROOT="$(script/ensure-macos-sdk "${ZZZ_MACOS_SDK_VERSION}")"
+  else
+    SDKROOT="$(script/ensure-macos-sdk)"
+  fi
 fi
 export SDKROOT
 
@@ -306,29 +313,29 @@ fi
 cp -f "target/${triple}/${artifact_profile}/zzz" "${app_path}/Contents/MacOS/zzz"
 cp -f "target/${triple}/${artifact_profile}/cli" "${app_path}/Contents/MacOS/cli"
 
-GIT_VERSION="v2.43.3"
-GIT_VERSION_SHA="fa29823"
-GIT_ARM64_SHA256="f014b290f36d121bbc47b29b556044c4f6a2f6494cf78ed2eacfa501b77363b6"
-GIT_X64_SHA256="02fb29a47a07e9a7f841888661f32ebc80a56930864dd19b674d80ffc429c96d"
-
 download_git() {
   local git_arch="$1"
   local target_binary="$2"
-  local url sha256
+  local resolved tag archive sha256 url suffix
   case "$git_arch" in
     aarch64-apple-darwin)
-      url="https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-arm64.tar.gz"
-      sha256="$GIT_ARM64_SHA256"
+      suffix="macOS-arm64"
       ;;
     x86_64-apple-darwin)
-      url="https://github.com/desktop/dugite-native/releases/download/${GIT_VERSION}/dugite-native-${GIT_VERSION}-${GIT_VERSION_SHA}-macOS-x64.tar.gz"
-      sha256="$GIT_X64_SHA256"
+      suffix="macOS-x64"
       ;;
     *)
       echo "Unsupported git architecture: ${git_arch}" >&2
       exit 1
       ;;
   esac
+
+  if ! resolved="$(github_latest_asset desktop/dugite-native "dugite-native-*-${suffix}.tar.gz")"; then
+    echo "Unable to resolve the newest dugite-native release for ${suffix}." >&2
+    exit 1
+  fi
+  IFS='|' read -r tag archive sha256 url <<< "$resolved"
+  echo "Bundling ${archive} (${tag})"
 
   local temp_dir
   temp_dir="$(mktemp -d)"

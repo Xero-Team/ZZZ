@@ -2,7 +2,12 @@
 
 set -euo pipefail
 
+source script/lib/ffmpeg-info.sh
+
+# cargo-about 0.9.3 is the current release; keep it pinned so regenerated
+# license files stay stable.
 CARGO_ABOUT_VERSION="0.9.3"
+IFS='|' read -r ffmpeg_series ffmpeg_archive ffmpeg_tag <<< "$(ffmpeg_dependency_info)"
 OUTPUT_FILE="${1:-$(pwd)/assets/licenses.md}"
 TEMPLATE_FILE="script/licenses/template.md.hbs"
 
@@ -59,8 +64,8 @@ rm -rf "${OUTPUT_FILE}.bak"
     echo
     echo "##### Used by:"
     echo
-    echo "* [FFmpeg 9.0.2-22-g46d8f462ee](https://github.com/FFmpeg/FFmpeg/commit/46d8f462ee)"
-    echo "* Prebuilt by [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-10-01-13-06)"
+    echo "* FFmpeg ${ffmpeg_series} (${ffmpeg_archive})"
+    echo "* Prebuilt by [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases/tag/${ffmpeg_tag})"
     echo
     cat script/licenses/ffmpeg-LICENSE.txt
 } >>"$OUTPUT_FILE"

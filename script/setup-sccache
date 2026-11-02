@@ -2,53 +2,57 @@
 
 set -euo pipefail
 
-SCCACHE_VERSION="v0.18.0"
+source "$(dirname "$0")/lib/github-release.sh"
+
 # Use absolute path to avoid issues with working directory changes between steps
 SCCACHE_DIR="$(pwd)/target/sccache"
 
 install_sccache() {
     mkdir -p "$SCCACHE_DIR"
 
-    if [[ -x "${SCCACHE_DIR}/sccache" ]] && "${SCCACHE_DIR}/sccache" --version &>/dev/null; then
-        echo "sccache already cached: $("${SCCACHE_DIR}/sccache" --version)"
+    local os arch target resolved tag archive digest url version basename
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "${os}-${arch}" in
+        Darwin-arm64)
+            target="aarch64-apple-darwin"
+            ;;
+        Darwin-x86_64)
+            target="x86_64-apple-darwin"
+            ;;
+        Linux-x86_64)
+            target="x86_64-unknown-linux-musl"
+            ;;
+        Linux-aarch64)
+            target="aarch64-unknown-linux-musl"
+            ;;
+        *)
+            echo "Unsupported platform: ${os}-${arch}"
+            exit 1
+            ;;
+    esac
+
+    if ! resolved="$(github_latest_asset mozilla/sccache "sccache-v*-${target}.tar.gz")"; then
+        echo "Unable to resolve the newest sccache release for ${target}." >&2
+        exit 1
+    fi
+    IFS='|' read -r tag archive digest url <<< "$resolved"
+    version="${tag#v}"
+
+    if [[ -x "${SCCACHE_DIR}/sccache" ]] &&
+        "${SCCACHE_DIR}/sccache" --version 2>/dev/null | grep -qx "sccache ${version}"; then
+        echo "sccache ${version} already cached"
     else
-        echo "Installing sccache ${SCCACHE_VERSION} from GitHub releases..."
-
-        local os arch archive basename
-        os="$(uname -s)"
-        arch="$(uname -m)"
-
-        case "${os}-${arch}" in
-            Darwin-arm64)
-                archive="sccache-${SCCACHE_VERSION}-aarch64-apple-darwin.tar.gz"
-                ;;
-            Darwin-x86_64)
-                archive="sccache-${SCCACHE_VERSION}-x86_64-apple-darwin.tar.gz"
-                ;;
-            Linux-x86_64)
-                archive="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-                ;;
-            Linux-aarch64)
-                archive="sccache-${SCCACHE_VERSION}-aarch64-unknown-linux-musl.tar.gz"
-                ;;
-            *)
-                echo "Unsupported platform: ${os}-${arch}"
-                exit 1
-                ;;
-        esac
+        echo "Installing sccache ${version} from ${url}"
 
         basename="${archive%.tar.gz}"
         archive_path="${SCCACHE_DIR}/${archive}"
-        checksum_path="${archive_path}.sha256"
-        curl --fail --location --retry 3 --retry-all-errors -o "${archive_path}" \
-            "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}"
-        curl --fail --location --retry 3 --retry-all-errors -o "${checksum_path}" \
-            "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}.sha256"
-        (cd "${SCCACHE_DIR}" && sha256sum -c "${archive}.sha256")
+        download_verified "$url" "${archive_path}" "$digest" "$archive"
         tar -xzf "${archive_path}" -C "${SCCACHE_DIR}"
-        mv "${basename}/sccache" "${SCCACHE_DIR}/"
-        rm -rf "${basename}"
-        rm -f "${archive_path}" "${checksum_path}"
+        mv "${SCCACHE_DIR}/${basename}/sccache" "${SCCACHE_DIR}/"
+        rm -rf "${SCCACHE_DIR:?}/${basename}"
+        rm -f "${archive_path}"
         echo "Installed sccache: $("${SCCACHE_DIR}/sccache" --version)"
     fi
 

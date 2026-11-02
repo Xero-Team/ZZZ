@@ -86,7 +86,7 @@ Set `ZZZ_BUILD_JOBS` to override the number of parallel Cargo jobs, or
 To build every Linux format through one preflighted entrypoint, use:
 
 ```sh
-cargo install --locked --version 0.27.0 tree-sitter-cli
+cargo install --locked --version 0.27.1 tree-sitter-cli
 script/bundle-all-linux
 ```
 
@@ -96,12 +96,18 @@ the exact missing-tool command if the environment is incomplete. Use
 `--skip-flatpak`, `--skip-snap`, or `--skip-appimage` when only selected
 formats are needed.
 
-The release bundle downloads a pinned LGPL FFmpeg package into
+The release bundle downloads the newest LGPL FFmpeg 9.0 development package into
 `.deps/ffmpeg/<target-triple>` and includes its runtime libraries. Set
 `FFMPEG_DIR` to use another development package, or `ZZZ_FFMPEG_ROOT` to move
 the download and cache folder. Direct Cargo builds continue to use
 `FFMPEG_DIR` when set and otherwise discover a system FFmpeg through
 `pkg-config`.
+
+`script/ffmpeg` resolves the build through the GitHub API and verifies it
+against the published checksum, so no version is pinned by hand. An installed
+package is reused without network access for a week; after that the script
+checks for a newer build. Pass `--refresh` to check immediately or `--force` to
+reinstall, and set `ZZZ_FFMPEG_REFRESH_DAYS` to change the interval.
 
 ## Cross-compiling Windows executables
 

@@ -6,20 +6,30 @@
 
 set -e
 
+source "$(dirname "$0")/lib/github-release.sh"
+
 if [ -z "$GITHUB_BASE_REF" ]; then
   echo 'Not a pull request, skipping squawk modified migrations linting'
   exit
 fi
 
-SQUAWK_VERSION=0.26.0
-SQUAWK_BIN="./target/squawk-$SQUAWK_VERSION"
 SQUAWK_ARGS="--assume-in-transaction --config script/lib/squawk.toml"
 
 pkgutil --pkg-info com.apple.pkg.RosettaUpdateAuto || /usr/sbin/softwareupdate --install-rosetta --agree-to-license
 # When bootstrapping a brand new CI machine, the `target` directory may not exist yet.
 mkdir -p "./target"
-curl -L -o "$SQUAWK_BIN" "https://github.com/sbdchd/squawk/releases/download/v$SQUAWK_VERSION/squawk-darwin-x86_64"
-chmod +x "$SQUAWK_BIN"
+
+if ! resolved="$(github_latest_asset sbdchd/squawk "squawk-darwin-x64")"; then
+    echo "Unable to resolve the newest squawk release." >&2
+    exit 1
+fi
+IFS='|' read -r squawk_tag squawk_archive squawk_sha256 squawk_url <<< "$resolved"
+
+SQUAWK_BIN="./target/${squawk_archive}-${squawk_tag}"
+if [ ! -x "$SQUAWK_BIN" ]; then
+    download_verified "$squawk_url" "$SQUAWK_BIN" "$squawk_sha256" "$squawk_archive"
+    chmod +x "$SQUAWK_BIN"
+fi
 
 if [ -n "$SQUAWK_GITHUB_TOKEN" ]; then
     export SQUAWK_GITHUB_REPO_OWNER=$(echo $GITHUB_REPOSITORY | awk -F/ '{print $1}')

@@ -8,6 +8,7 @@ Param(
 )
 
 . "$PSScriptRoot/lib/workspace.ps1"
+. "$PSScriptRoot/lib/github-release.ps1"
 
 # https://stackoverflow.com/questions/57949031/powershell-script-stops-if-program-fails-like-bash-set-o-errexit
 $ErrorActionPreference = 'Stop'
@@ -164,7 +165,7 @@ function PrepareFFmpeg {
             }
         }
         if (-not $pythonCommand) {
-            throw 'Python 3 is required to download the pinned FFmpeg package.'
+            throw 'Python 3 is required to download the FFmpeg package.'
         }
 
         $pythonArguments += @(
@@ -453,7 +454,7 @@ function SignZZZAndItsFriends {
 }
 
 function DownloadAMDGpuServices {
-    # If you update the AGS SDK version, please also update the version in `crates/gpui/src/platform/windows/directx_renderer.rs`
+    # If you update the AGS SDK version, please also update the version in `crates/gpui_windows/src/directx_renderer.rs`
     $url = "https://codeload.github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/zip/refs/tags/v6.3.0"
     $zipPath = ".\AGS_SDK_v6.3.0.zip"
     $partialPath = "$zipPath.part"
@@ -470,18 +471,10 @@ function DownloadAMDGpuServices {
 }
 
 function DownloadConpty {
-    # TODO: Switch back to the stable channel once Microsoft finally decides to publish v1.26
-    $url = "https://github.com/microsoft/terminal/releases/download/v1.25.1912.0/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg"
-    $zipPath = ".\Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg"
-    $partialPath = "$zipPath.part"
-    Invoke-WebRequest -Uri $url -OutFile $partialPath
-    $expectedHash = '05fe9b571ea4fb198f5012405cb39a132cf23eee50feaa496524c149b2502692'
-    $actualHash = (Get-FileHash -Path $partialPath -Algorithm SHA256).Hash
-    if ($actualHash -ne $expectedHash.ToUpperInvariant()) {
-        Remove-Item -Path $partialPath -Force -ErrorAction SilentlyContinue
-        throw "ConPTY checksum mismatch: expected $expectedHash, got $actualHash"
-    }
-    Move-Item -Path $partialPath -Destination $zipPath -Force
+    $asset = Get-LatestReleaseAsset -Repository 'microsoft/terminal' -Pattern 'Microsoft.Windows.Console.ConPTY.*.nupkg'
+    $zipPath = ".\$($asset.Name)"
+    Write-Output "Bundling $($asset.Name) ($($asset.Tag))"
+    Save-VerifiedDownload -Url $asset.Url -Path $zipPath -Sha256 $asset.Sha256 -Label $asset.Name
     Expand-Archive -Path $zipPath -DestinationPath ".\conpty" -Force
 }
 

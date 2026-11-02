@@ -18,7 +18,7 @@ libc.workspace = true
 log.workspace = true
 
 # FFmpeg provides the Linux/Windows decoder backend. Release and cross-build
-# scripts point `FFMPEG_DIR` at the pinned package downloaded by
+# scripts point `FFMPEG_DIR` at the downloaded package from
 # `script/ffmpeg`; direct Cargo builds can set the same variable or use the
 # platform's FFmpeg package discovery.
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]

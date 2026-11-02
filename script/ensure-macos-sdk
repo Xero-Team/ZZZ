@@ -2,10 +2,11 @@
 
 set -euo pipefail
 
-# Prints the path to a usable macOS SDK, downloading one on non-Darwin hosts.
-# An optional version argument selects the SDK (default: 14.5). 14.5 is used
-# everywhere because the full GUI app references CoreAudio process-tap APIs
-# that older SDKs do not declare.
+source "$(dirname "$0")/lib/github-release.sh"
+
+# Prints the path to a usable macOS SDK, downloading the newest one on
+# non-Darwin hosts. Pass a release tag (for example `14.5`) to select a
+# specific SDK instead.
 
 sdk_ok() {
   [[ -n "${1:-}" && -f "$1/System/Library/Frameworks/CoreServices.framework/Headers/CoreServices.h" ]]
@@ -24,18 +25,30 @@ if [[ "$(uname -s)" == Darwin ]]; then
   fi
 fi
 
-version="${1:-14.5}"
-case "$version" in
-  14.5)
-    sdk_name="MacOSX14.5.sdk"
-    sdk_url="https://github.com/joseluisq/macosx-sdks/releases/download/14.5/MacOSX14.5.sdk.tar.xz"
-    sdk_sha256="6e146275d19f027faa2e8354da5e0267513abf013b8f16ad65a231653a2b1c5d"
-    ;;
-  *)
-    echo "Unsupported macOS SDK version: $version (supported: 14.5)" >&2
+version="${1:-}"
+if [[ -n "$version" ]]; then
+  if ! resolved="$(github_asset joseluisq/macosx-sdks "MacOSX${version}.sdk.tar.xz" "$version")"; then
+    echo "Unsupported macOS SDK version: $version" >&2
     exit 1
-    ;;
-esac
+  fi
+else
+  if ! resolved="$(github_latest_asset joseluisq/macosx-sdks "MacOSX*.sdk.tar.xz")"; then
+    echo "Error: unable to resolve the newest macOS SDK release." >&2
+    exit 1
+  fi
+fi
+IFS='|' read -r sdk_version sdk_archive sdk_sha256 sdk_url <<< "$resolved"
+sdk_name="${sdk_archive%.tar.xz}"
+
+# Older releases predate the checksum GitHub reports for each asset; those
+# releases ship a `sha256sum.txt` next to the SDK tarball instead.
+if [[ -z "$sdk_sha256" ]]; then
+  sdk_sha256="$(
+    curl --silent --show-error --fail --location --retry 3 --retry-all-errors \
+      "https://github.com/joseluisq/macosx-sdks/releases/download/${sdk_version}/sha256sum.txt" |
+      awk -v name="$sdk_archive" '$2 == name { print $1; exit }'
+  )"
+fi
 
 tmp="${TMPDIR:-/tmp}"
 sdk_root="$tmp/zzz-macos-sdk"
@@ -46,19 +59,12 @@ if sdk_ok "$sdk_path"; then
 fi
 
 mkdir -p "$sdk_root"
-tarball="$tmp/zzz-$sdk_name.tar.xz.$$"
-curl -fL --retry 3 -o "$tarball" "$sdk_url"
-if command -v shasum >/dev/null 2>&1; then
-  actual_sha256="$(shasum -a 256 "$tarball" | cut -d ' ' -f 1)"
-else
-  actual_sha256="$(sha256sum "$tarball" | cut -d ' ' -f 1)"
-fi
-if [[ "$actual_sha256" != "$sdk_sha256" ]]; then
-  echo "$sdk_name checksum mismatch: expected $sdk_sha256, got $actual_sha256" >&2
-  rm -f "$tarball"
-  exit 1
-fi
+tarball="$tmp/zzz-${sdk_archive}.$$"
+download_verified "$sdk_url" "$tarball" "$sdk_sha256" "$sdk_archive"
 tar -xJf "$tarball" -C "$sdk_root"
 rm -f "$tarball"
-sdk_ok "$sdk_path"
+if ! sdk_ok "$sdk_path"; then
+  echo "Error: ${sdk_archive} did not extract to ${sdk_path}." >&2
+  exit 1
+fi
 printf '%s\n' "$sdk_path"

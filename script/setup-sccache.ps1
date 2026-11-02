@@ -1,41 +1,35 @@
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
-$SCCACHE_VERSION = "v0.18.0"
+. "$PSScriptRoot/lib/github-release.ps1"
+
 $SCCACHE_DIR = "./target/sccache"
 
 function Install-Sccache {
     New-Item -ItemType Directory -Path $SCCACHE_DIR -Force | Out-Null
 
     $sccachePath = Join-Path $SCCACHE_DIR "sccache.exe"
+    $arch = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
+    $target = "${arch}-pc-windows-msvc"
 
-    if (Test-Path $sccachePath) {
+    $asset = Get-LatestReleaseAsset -Repository 'mozilla/sccache' -Pattern "sccache-v*-${target}.zip"
+    $version = $asset.Tag -replace '^v', ''
+
+    if ((Test-Path $sccachePath) -and ((& $sccachePath --version) -eq "sccache $version")) {
         Write-Host "sccache already cached: $(& $sccachePath --version)"
     }
     else {
-        Write-Host "Installing sccache ${SCCACHE_VERSION} from GitHub releases..."
-
-        $arch = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
-        $archive = "sccache-${SCCACHE_VERSION}-${arch}-pc-windows-msvc.zip"
-        $basename = "sccache-${SCCACHE_VERSION}-${arch}-pc-windows-msvc"
-        $url = "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${archive}"
+        Write-Host "Installing sccache ${version} from $($asset.Url)"
 
         $tempDir = Join-Path $env:TEMP "sccache-install"
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
         try {
-            $archivePath = Join-Path $tempDir $archive
-            $checksumPath = "$archivePath.sha256"
-            Invoke-WebRequest -Uri $url -OutFile $archivePath
-            Invoke-WebRequest -Uri "$url.sha256" -OutFile $checksumPath
-            $expectedHash = (Get-Content $checksumPath -Raw) -replace '^\s*([0-9a-fA-F]{64}).*$', '$1'
-            $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash
-            if ($actualHash -ne $expectedHash.ToUpperInvariant()) {
-                throw "sccache checksum mismatch: expected $expectedHash, got $actualHash"
-            }
+            $archivePath = Join-Path $tempDir $asset.Name
+            Save-VerifiedDownload -Url $asset.Url -Path $archivePath -Sha256 $asset.Sha256 -Label $asset.Name
             Expand-Archive -Path $archivePath -DestinationPath $tempDir
 
-            $extractedPath = Join-Path $tempDir $basename "sccache.exe"
+            $extractedPath = Join-Path $tempDir ($asset.Name -replace '\.zip$', '') "sccache.exe"
             Move-Item -Path $extractedPath -Destination $sccachePath -Force
 
             Write-Host "Installed sccache: $(& $sccachePath --version)"

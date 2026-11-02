@@ -2,11 +2,14 @@
 
 set -euo pipefail
 
-CARGO_ABOUT_VERSION="0.9.0"
+source script/lib/ffmpeg-info.sh
+
+CARGO_ABOUT_VERSION="0.9.3"
+IFS='|' read -r ffmpeg_series _ _ <<< "$(ffmpeg_dependency_info)"
 OUTPUT_FILE="${1:-$(pwd)/assets/licenses.csv}"
 TEMPLATE_FILE="script/licenses/template.csv.hbs"
 
-if ! cargo about --version | grep "cargo-about $CARGO_ABOUT_VERSION" 2>&1 > /dev/null; then
+if ! cargo about --version | grep -q "cargo-about $CARGO_ABOUT_VERSION"; then
   echo "Installing cargo-about@$CARGO_ABOUT_VERSION..."
   cargo install "cargo-about@$CARGO_ABOUT_VERSION"
 else
@@ -23,7 +26,7 @@ cargo about generate \
     > "$OUTPUT_FILE"
 set +x
 
-echo 'FFmpeg,9.0.2-22-g46d8f462ee,LGPL-3.0-or-later,https://github.com/FFmpeg/FFmpeg/commit/46d8f462ee' \
+echo "FFmpeg,${ffmpeg_series},LGPL-3.0-or-later,https://github.com/FFmpeg/FFmpeg/tree/release/${ffmpeg_series}" \
   >> "$OUTPUT_FILE"
 
 echo "generate-licenses-csv completed. See $OUTPUT_FILE"

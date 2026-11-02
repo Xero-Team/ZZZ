@@ -10,6 +10,19 @@ $outputFile = if ($args.Count -gt 0 -and $args[0]) {
 }
 $templateFile="script/licenses/template.md.hbs"
 
+# Name the FFmpeg build that `script/ffmpeg.py` installed, if it is present.
+$ffmpegSeries = "9.0"
+$ffmpegArchive = "unknown build"
+$ffmpegTag = "latest"
+$ffmpegMarker = Get-ChildItem -Path ".deps/ffmpeg" -Filter ".zzz-ffmpeg.json" -Recurse -Depth 2 -File -Force -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($ffmpegMarker) {
+    $ffmpegInfo = Get-Content -Path $ffmpegMarker.FullName -Raw | ConvertFrom-Json
+    if ($ffmpegInfo.ffmpeg_series) { $ffmpegSeries = $ffmpegInfo.ffmpeg_series }
+    if ($ffmpegInfo.archive) { $ffmpegArchive = $ffmpegInfo.archive }
+    if ($ffmpegInfo.release_tag) { $ffmpegTag = $ffmpegInfo.release_tag }
+}
+
 New-Item -Path "$outputFile" -ItemType File -Value "" -Force
 
 @(
@@ -68,8 +81,8 @@ $content | Set-Content $outputFile
     ""
     "##### Used by:"
     ""
-    "* [FFmpeg 9.0.2-22-g46d8f462ee](https://github.com/FFmpeg/FFmpeg/commit/46d8f462ee)"
-    "* Prebuilt by [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-10-01-13-06)"
+    "* FFmpeg $ffmpegSeries ($ffmpegArchive)"
+    "* Prebuilt by [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases/tag/$ffmpegTag)"
     ""
     Get-Content script/licenses/ffmpeg-LICENSE.txt
 ) | Add-Content -Path $outputFile

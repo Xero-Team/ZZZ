@@ -153,11 +153,13 @@ Debug:
 Binaries land in `target/x86_64-pc-windows-msvc/release/` (or
 `debug/`). This path does not run Inno Setup or WiX.
 
-On the first build, the script downloads the pinned LGPL FFmpeg development
+On the first build, the script downloads the newest LGPL FFmpeg 9.0 development
 package into `.deps/ffmpeg/x86_64-pc-windows-msvc`. It links against that
 package and copies the required FFmpeg DLLs next to the generated executables.
 Set `FFMPEG_DIR` to use another package, or `ZZZ_FFMPEG_ROOT` to move the
-download and cache folder.
+download and cache folder. The build is resolved through the GitHub API and
+verified against the published checksum, then reused until
+`ZZZ_FFMPEG_REFRESH_DAYS` (default 7) has passed.
 
 msvc-wine supplies headers, libs, and `fxc.exe`. The script compiles with
 `clang-cl` / `lld-link` / `llvm-rc` (do not set `RC` to the msvc-wine

@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 python="${PYTHON:-python3}"
 
 if ! command -v "$python" >/dev/null 2>&1; then
-  echo "Python 3 is required to download the pinned FFmpeg package." >&2
+  echo "Python 3 is required to download the FFmpeg package." >&2
   exit 1
 fi
 

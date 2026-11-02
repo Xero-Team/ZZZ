@@ -17,6 +17,8 @@
 
 set -euo pipefail
 
+source "$(dirname "$0")/lib/github-release.sh"
+
 
 if [[ "$(uname -s)" == "darwin" ]]; then
   brew --version >/dev/null \
@@ -27,11 +29,18 @@ if [[ "$(uname -s)" == "darwin" ]]; then
 elif [ "$(uname -s)" != "Linux" ]; then
   echo "Error: This script is intended for MacOS/Linux systems only."
   exit 1
-elif [ -z "${1:-}" ]; then
-  echo "Usage: $0 [3.30.4]"
-  exit 1
 fi
-CMAKE_VERSION="${CMAKE_VERSION:-${1:-4.4.4}}"
+
+# `CMAKE_VERSION` or the first argument pins a release; otherwise the newest
+# KitWare release is installed.
+CMAKE_VERSION="${CMAKE_VERSION:-${1:-}}"
+if [ -z "$CMAKE_VERSION" ]; then
+  if ! cmake_tag="$(github_latest_tag Kitware/CMake)"; then
+    echo "Error: unable to resolve the newest CMake release." >&2
+    exit 1
+  fi
+  CMAKE_VERSION="${cmake_tag#v}"
+fi
 
 if [ "$(whoami)" = root ]; then SUDO=; else SUDO="$(command -v sudo || command -v doas || true)"; fi
 
@@ -54,24 +63,23 @@ elif [ -e /etc/lsb-release ] && grep -qP 'DISTRIB_ID=Ubuntu' /etc/lsb-release; t
   $SUDO apt-get install -y kitware-archive-keyring cmake
 else
   arch="$(uname -m)"
-  if [ "$arch" != "x86_64" ] && [ "$arch" != "aarch64" ]; then
-    echo "Error. Only x86_64 and aarch64 are supported."
+  case "$arch" in
+    x86_64 | aarch64) ;;
+    *)
+      echo "Error. Only x86_64 and aarch64 are supported."
+      exit 1
+      ;;
+  esac
+  if ! resolved="$(github_asset Kitware/CMake "cmake-${CMAKE_VERSION}-linux-${arch}.sh")"; then
+    echo "Error: no CMake ${CMAKE_VERSION} installer for linux-${arch}." >&2
     exit 1
   fi
+  IFS='|' read -r cmake_tag CMAKE_INSTALLER cmake_sha256 cmake_url <<< "$resolved"
   tempdir=$(mktemp -d)
   pushd "$tempdir"
-    CMAKE_REPO="https://github.com/Kitware/CMake"
-    CMAKE_INSTALLER="cmake-$CMAKE_VERSION-linux-$arch.sh"
-    curl -fsSL --output cmake-$CMAKE_VERSION-SHA-256.txt \
-      "$CMAKE_REPO/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-SHA-256.txt"
-    curl -fsSL --output $CMAKE_INSTALLER \
-      "$CMAKE_REPO/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-linux-$arch.sh"
-    # workaround for old versions of sha256sum not having --ignore-missing
-    grep -F "cmake-$CMAKE_VERSION-linux-$arch.sh" "cmake-$CMAKE_VERSION-SHA-256.txt" \
-      | sha256sum -c \
-      | grep -qP "^${CMAKE_INSTALLER}: OK"
-    chmod +x cmake-$CMAKE_VERSION-linux-$arch.sh
-    $SUDO ./cmake-$CMAKE_VERSION-linux-$arch.sh --prefix=/usr/local --skip-license
+    download_verified "$cmake_url" "$CMAKE_INSTALLER" "$cmake_sha256" "$CMAKE_INSTALLER"
+    chmod +x "$CMAKE_INSTALLER"
+    $SUDO "./$CMAKE_INSTALLER" --prefix=/usr/local --skip-license
   popd
   rm -rf "$tempdir"
 fi

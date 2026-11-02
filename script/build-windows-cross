@@ -20,7 +20,7 @@ Environment:
   MSVC_ROOT           msvc-wine install root (default: /opt/msvc)
   MSVC_DIR            msvc wrapper scripts (default: ~/.local/share/msvc)
   GPUI_FXC_PATH       Override fxc.exe path
-  FFMPEG_DIR          Override the pinned FFmpeg development package
+  FFMPEG_DIR          Override the downloaded FFmpeg development package
   ZZZ_FFMPEG_ROOT     FFmpeg download/cache root (default: .deps/ffmpeg)
 EOF
 }
