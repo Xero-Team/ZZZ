@@ -6316,7 +6316,6 @@ impl ThreadView {
         style.container_style.text.line_height = Some(rems_from_px(17.).into());
         style.height_is_multiple_of_line_height = true;
 
-        let header_bg = self.tool_card_header_bg(cx);
         let run_command_label = if is_preview {
             Some(
                 h_flex().h_6().child(
@@ -6351,7 +6350,6 @@ impl ThreadView {
             .group(group)
             .relative()
             .p_1p5()
-            .bg(header_bg)
             .when(is_preview, |this| this.pt_1().children(run_command_label))
             .child(markdown_element)
             .child(div().absolute().top_1().right_1().child(copy_button))
@@ -6607,6 +6605,8 @@ impl ThreadView {
             .entry(entry_ix)
             .and_then(|entry| entry.terminal(terminal));
 
+        let has_content_below = (is_expanded && terminal_view.is_some()) || needs_confirmation;
+
         v_flex()
             .when(!is_subagent, |this| {
                 this.my_1p5()
@@ -6622,6 +6622,10 @@ impl ThreadView {
                     .group(&header_group)
                     .bg(header_bg)
                     .text_xs()
+                    .when(!is_subagent, |this| {
+                        this.rounded_t_md()
+                            .when(!has_content_below, |this| this.rounded_b_md())
+                    })
                     .child(header)
                     .child(command_element),
             )
@@ -7023,13 +7027,16 @@ impl ThreadView {
             })
             .map(|this| {
                 if is_terminal_tool {
-                    this.child(self.render_collapsible_command(
-                        card_header_id.clone(),
-                        true,
-                        tool_call.label.clone(),
-                        window,
-                        cx,
-                    ))
+                    this.child(
+                        self.render_collapsible_command(
+                            card_header_id.clone(),
+                            true,
+                            tool_call.label.clone(),
+                            window,
+                            cx,
+                        )
+                        .bg(self.tool_card_header_bg(cx)),
+                    )
                 } else {
                     this.child(
                         h_flex()
