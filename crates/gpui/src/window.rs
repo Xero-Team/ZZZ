@@ -23,7 +23,7 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
-use collections::FxHashMap;
+use collections::{FxHashMap, FxHashSet};
 #[cfg(target_os = "macos")]
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
@@ -2672,8 +2672,7 @@ impl Window {
     }
 
     fn record_entities_accessed(&mut self, cx: &mut App) {
-        let mut entities_ref = cx.entities.accessed_entities.get_mut();
-        let mut entities = mem::take(entities_ref);
+        let entities = cx.entities.take_accessed();
         let handle = self.handle;
         cx.record_entities_accessed(
             handle,
@@ -2681,8 +2680,7 @@ impl Window {
             self.invalidator.clone(),
             &entities,
         );
-        let mut entities_ref = cx.entities.accessed_entities.get_mut();
-        mem::swap(&mut entities, entities_ref);
+        cx.entities.restore_accessed(entities);
     }
 
     fn invalidate_entities(&mut self) {
@@ -3042,16 +3040,26 @@ impl Window {
 
                 let prepaint_start = self.prepaint_index();
                 if let Some(mut element) = element {
-                    self.with_rendered_view(current_view, |window| {
-                        window.with_rem_size(Some(rem_size), |window| {
-                            window.with_absolute_element_offset(absolute_offset, |window| {
-                                element.prepaint(window, cx);
+                    let ((), accessed_entities) = cx.detect_accessed_entities(|cx| {
+                        self.with_rendered_view(current_view, |window| {
+                            window.with_rem_size(Some(rem_size), |window| {
+                                window.with_absolute_element_offset(absolute_offset, |window| {
+                                    element.prepaint(window, cx);
+                                });
                             });
                         });
                     });
+                    self.interaction.next_frame.deferred_draws[deferred_draw_ix]
+                        .accessed_entities = accessed_entities;
                     self.interaction.next_frame.deferred_draws[deferred_draw_ix].element =
                         Some(element);
                 } else {
+                    cx.entities.extend_accessed(
+                        self.interaction.next_frame.deferred_draws[deferred_draw_ix]
+                            .accessed_entities
+                            .iter()
+                            .copied(),
+                    );
                     self.reuse_prepaint(prepaint_range);
                 }
                 let prepaint_end = self.prepaint_index();
@@ -3088,13 +3096,16 @@ impl Window {
             let paint_start = self.paint_index();
             let content_mask = deferred_draw.content_mask;
             if let Some(element) = deferred_draw.element.as_mut() {
-                self.with_rendered_view(deferred_draw.current_view, |window| {
-                    window.with_content_mask(content_mask, |window| {
-                        window.with_rem_size(Some(deferred_draw.rem_size), |window| {
-                            element.paint(window, cx);
-                        });
+                let ((), accessed_entities) = cx.detect_accessed_entities(|cx| {
+                    self.with_rendered_view(deferred_draw.current_view, |window| {
+                        window.with_content_mask(content_mask, |window| {
+                            window.with_rem_size(Some(deferred_draw.rem_size), |window| {
+                                element.paint(window, cx);
+                            });
+                        })
                     })
-                })
+                });
+                deferred_draw.accessed_entities.extend(accessed_entities);
             } else {
                 self.reuse_paint(deferred_draw.paint_range.clone());
             }
@@ -3179,6 +3190,7 @@ impl Window {
                     absolute_offset: deferred_draw.absolute_offset,
                     prepaint_range: deferred_draw.prepaint_range.clone(),
                     paint_range: deferred_draw.paint_range.clone(),
+                    accessed_entities: deferred_draw.accessed_entities.clone(),
                 }),
         );
         #[cfg(feature = "frame-diagnostics")]
@@ -3699,6 +3711,7 @@ impl Window {
                 absolute_offset,
                 prepaint_range: PrepaintStateIndex::default()..PrepaintStateIndex::default(),
                 paint_range: PaintIndex::default()..PaintIndex::default(),
+                accessed_entities: FxHashSet::default(),
             });
     }
 
