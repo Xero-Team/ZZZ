@@ -1,4 +1,5 @@
 use dap_types::SteppingGranularity;
+use gpui::px;
 use settings::{RegisterSetting, Settings, SettingsContent};
 
 #[derive(Debug, RegisterSetting)]
@@ -31,6 +32,14 @@ pub struct DebuggerSettings {
     ///
     /// Default: Bottom
     pub dock: settings::DockPosition,
+    /// Default width of the debug panel in pixels when docked to the left or right.
+    ///
+    /// Default: 300
+    pub default_width: gpui::Pixels,
+    /// Default height of the debug panel in pixels when docked to the bottom.
+    ///
+    /// Default: 300
+    pub default_height: gpui::Pixels,
 }
 
 impl Settings for DebuggerSettings {
@@ -63,6 +72,12 @@ impl Settings for DebuggerSettings {
             dock: content
                 .dock
                 .expect("invariant: settings defaults provide dock"),
+            default_width: px(content
+                .default_width
+                .expect("invariant: settings defaults provide default_width")),
+            default_height: px(content
+                .default_height
+                .expect("invariant: settings defaults provide default_height")),
         }
     }
 }

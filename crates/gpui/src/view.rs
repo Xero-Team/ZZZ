@@ -169,7 +169,7 @@ impl Element for AnyView {
                         let prepaint_start = window.prepaint_index();
                         window.reuse_prepaint(element_state.prepaint_range.clone());
                         cx.entities
-                            .extend_accessed(&element_state.accessed_entities);
+                            .extend_accessed(element_state.accessed_entities.iter().copied());
                         let prepaint_end = window.prepaint_index();
                         element_state.prepaint_range = prepaint_start..prepaint_end;
 
@@ -238,7 +238,9 @@ impl Element for AnyView {
                         // redrawn on the next frame.
                         if let Some(element) = element {
                             let refreshing = window.replace_refreshing(true);
-                            element.paint(window, cx);
+                            let ((), accessed_entities) =
+                                cx.detect_accessed_entities(|cx| element.paint(window, cx));
+                            element_state.accessed_entities.extend(accessed_entities);
                             window.replace_refreshing(refreshing);
                             element_state.cache_key.opacity = opacity;
                         } else {

@@ -657,6 +657,9 @@ pub(crate) struct DeferredDraw {
     pub(crate) absolute_offset: Point<Pixels>,
     pub(crate) prepaint_range: Range<PrepaintStateIndex>,
     pub(crate) paint_range: Range<PaintIndex>,
+    /// The entities the deferred element accessed while it was last drawn, in
+    /// any phase, restored when its prepaint is reused.
+    pub(crate) accessed_entities: FxHashSet<EntityId>,
 }
 
 pub(crate) struct Frame {

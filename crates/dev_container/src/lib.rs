@@ -1,11 +1,11 @@
 use std::path::Path;
 
+use anyhow::anyhow;
 use fs::Fs;
 use gpui::AppContext;
 use gpui::Entity;
 use gpui::Task;
 use gpui::WeakEntity;
-use http_client::anyhow;
 use i18n::tr;
 use picker::Picker;
 use picker::PickerDelegate;
@@ -1758,7 +1758,8 @@ fn first_manifest_layer_digest<'a>(
 
 #[cfg(test)]
 mod tests {
-    use http_client::{FakeHttpClient, anyhow};
+    use anyhow::anyhow;
+    use http_client::FakeHttpClient;
 
     use crate::{
         DevContainerFeature, DevContainerTemplatesResponse, devcontainer_features_repository,

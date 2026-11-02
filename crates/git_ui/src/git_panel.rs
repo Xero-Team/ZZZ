@@ -80,7 +80,7 @@ use util::paths::PathStyle;
 use util::{ResultExt, TryFutureExt, markdown::MarkdownInlineCode, maybe};
 use workspace::SERIALIZATION_THROTTLE_TIME;
 use workspace::{
-    ModalView, Workspace,
+    DraggedSelection, ModalView, SelectedEntry, Workspace,
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{DetachAndPromptErr, NotificationId, NotifyTaskExt},
 };
@@ -225,6 +225,44 @@ impl Render for StashMessageModal {
                     ),
             )
             .child(div().px_3().pb_3().w_full().child(self.editor.clone()))
+    }
+}
+
+struct DraggedGitEntryView {
+    icon: Option<SharedString>,
+    filename: SharedString,
+    entry_count: usize,
+    click_offset: Point<Pixels>,
+}
+
+impl Render for DraggedGitEntryView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let ui_font = ThemeSettings::get_global(cx).ui_font.clone();
+        h_flex()
+            .font(ui_font)
+            .pl(self.click_offset.x + px(12.))
+            .pt(self.click_offset.y + px(12.))
+            .child(
+                h_flex()
+                    .gap_1()
+                    .py_1()
+                    .px_2()
+                    .rounded_lg()
+                    .bg(cx.theme().colors().background)
+                    .map(|this| {
+                        if self.entry_count > 1 {
+                            this.child(Label::new(
+                                tr(cx, "git_ui.git_panel.dragged_entry_count", "{} entries")
+                                    .replace("{}", &self.entry_count.to_string()),
+                            ))
+                        } else {
+                            this.when_some(self.icon.clone(), |this, icon| {
+                                this.child(Icon::from_path(icon))
+                            })
+                            .child(Label::new(self.filename.clone()))
+                        }
+                    }),
+            )
     }
 }
 
@@ -6775,6 +6813,42 @@ impl GitPanel {
         cx.notify();
     }
 
+    /// Builds the drag payload for the status entry at `index`, reusing the
+    /// project panel's so terminals and panes accept it. A marked row drags
+    /// every marked row. Deleted files have no project entry and are skipped.
+    fn dragged_selection(
+        &self,
+        index: usize,
+        entry: &GitStatusEntry,
+        repo: &Repository,
+        cx: &App,
+    ) -> Option<DraggedSelection> {
+        let project = self.project.read(cx);
+        let selected_entry_for = |repo_path: &RepoPath| {
+            let project_path = repo.repo_path_to_project_path(repo_path, cx)?;
+            let entry_id = project.entry_for_path(&project_path, cx)?.id;
+            Some(SelectedEntry {
+                worktree_id: project_path.worktree_id,
+                entry_id,
+            })
+        };
+        let marked_selections = if self.marked_entries.contains(&index) {
+            self.marked_entries
+                .iter()
+                .filter_map(|index| self.entries.get(*index)?.status_entry())
+                .map(|entry| &entry.repo_path)
+                .unique()
+                .filter_map(selected_entry_for)
+                .collect()
+        } else {
+            Arc::default()
+        };
+        Some(DraggedSelection::new(
+            selected_entry_for(&entry.repo_path)?,
+            marked_selections,
+        ))
+    }
+
     fn render_status_entry(
         &self,
         ix: usize,
@@ -6800,6 +6874,10 @@ impl GitPanel {
         } else {
             None
         };
+
+        let dragged_selection = self.dragged_selection(ix, entry, repo, cx);
+        let dragged_icon = file_icon.clone();
+        let dragged_filename: SharedString = display_name.clone().into();
 
         let has_conflict = status.is_conflicted();
         let is_modified = status.is_modified();
@@ -6873,6 +6951,7 @@ impl GitPanel {
         };
 
         let name_row = h_flex()
+            .id(ElementId::Name(format!("entry_name_row_{ix}").into()))
             .min_w_0()
             .flex_1()
             .gap_1()
@@ -6911,6 +6990,16 @@ impl GitPanel {
                         status.is_deleted(),
                     ))
                 }
+            })
+            .when_some(dragged_selection, |this, dragged_selection| {
+                this.on_drag(dragged_selection, move |selection, click_offset, _, cx| {
+                    cx.new(|_| DraggedGitEntryView {
+                        icon: dragged_icon.clone(),
+                        filename: dragged_filename.clone(),
+                        entry_count: selection.items().count(),
+                        click_offset,
+                    })
+                })
             });
 
         let id_for_diff_stat = id.clone();
@@ -8663,6 +8752,57 @@ mod tests {
         cx.run_until_parked();
 
         assert_editor_opened_with_path(&workspace, Path::new("src/a/foo.rs"), &mut cx);
+    }
+
+    #[gpui::test]
+    async fn test_dragged_selection_carries_marked_rows(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let (_project, _workspace, panel, mut cx) = setup_git_panel_with_changes(
+            cx,
+            json!({
+                ".git": {},
+                "a.txt": "a\n",
+                "b.txt": "b\n",
+                "c.txt": "c\n",
+            }),
+            &[
+                ("a.txt", StatusCode::Modified),
+                ("b.txt", StatusCode::Modified),
+                ("c.txt", StatusCode::Modified),
+            ],
+        )
+        .await;
+
+        fn dragged_paths(panel: &GitPanel, path: &str, cx: &App) -> HashSet<RepoPath> {
+            let index = entry_index_for_repo_path(panel, &repo_path(path)).unwrap();
+            let entry = panel.entries[index].status_entry().unwrap();
+            let repo = panel.active_repository.as_ref().unwrap().read(cx);
+            let selection = panel.dragged_selection(index, entry, repo, cx).unwrap();
+            let project = panel.project.read(cx);
+            selection
+                .items()
+                .map(|item| project.path_for_entry(item.entry_id, cx).unwrap())
+                .map(|project_path| repo.project_path_to_repo_path(&project_path, cx).unwrap())
+                .collect()
+        }
+
+        panel.update_in(&mut cx, |panel, _window, cx| {
+            let first = entry_index_for_repo_path(panel, &repo_path("a.txt")).unwrap();
+            let second = entry_index_for_repo_path(panel, &repo_path("b.txt")).unwrap();
+            panel.marked_entries = vec![first, second];
+
+            assert_eq!(
+                dragged_paths(panel, "a.txt", cx),
+                HashSet::from_iter([repo_path("a.txt"), repo_path("b.txt")]),
+                "dragging a marked row should carry every marked row",
+            );
+            assert_eq!(
+                dragged_paths(panel, "c.txt", cx),
+                HashSet::from_iter([repo_path("c.txt")]),
+                "dragging an unmarked row should carry only that row",
+            );
+        });
     }
 
     #[gpui::test]

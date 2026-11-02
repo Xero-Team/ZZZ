@@ -98,6 +98,7 @@ thiserror.workspace = true
 toml.workspace = true
 url.workspace = true
 percent-encoding.workspace = true
+usvg.workspace = true
 util.workspace = true
 vfs.workspace = true
 watch.workspace = true

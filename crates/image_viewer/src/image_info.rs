@@ -1,6 +1,6 @@
 use gpui::{App, Context, Entity, IntoElement, ParentElement, Render, Subscription, div};
 use i18n::tr;
-use project::image_store::{ImageFormat, ImageMetadata};
+use project::image_store::{ImageFormat, ImageMetadata, RasterImageFormat};
 use settings::Settings;
 use ui::prelude::*;
 use util::size::format_file_size;
@@ -72,15 +72,18 @@ impl Render for ImageInfo {
         }
 
         components.push(match metadata.format {
-            ImageFormat::Png => "PNG".to_owned(),
-            ImageFormat::Jpeg => "JPEG".to_owned(),
-            ImageFormat::Gif => "GIF".to_owned(),
-            ImageFormat::WebP => "WebP".to_owned(),
-            ImageFormat::Tiff => "TIFF".to_owned(),
-            ImageFormat::Bmp => "BMP".to_owned(),
-            ImageFormat::Ico => "ICO".to_owned(),
-            ImageFormat::Avif => "Avif".to_owned(),
-            _ => tr(cx, "image_viewer.image_info.unknown_format", "Unknown"),
+            ImageFormat::Svg => "SVG".to_owned(),
+            ImageFormat::Raster(format) => match format {
+                RasterImageFormat::Png => "PNG".to_owned(),
+                RasterImageFormat::Jpeg => "JPEG".to_owned(),
+                RasterImageFormat::Gif => "GIF".to_owned(),
+                RasterImageFormat::WebP => "WebP".to_owned(),
+                RasterImageFormat::Tiff => "TIFF".to_owned(),
+                RasterImageFormat::Bmp => "BMP".to_owned(),
+                RasterImageFormat::Ico => "ICO".to_owned(),
+                RasterImageFormat::Avif => "Avif".to_owned(),
+                _ => tr(cx, "image_viewer.image_info.unknown_format", "Unknown"),
+            },
         });
 
         div().child(Label::new(components.join(" • ")).size(LabelSize::Small))

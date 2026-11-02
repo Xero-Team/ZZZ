@@ -13,6 +13,13 @@ The rejection ledger lives at
 [`../upstream-rejected.tsv`](../upstream-rejected.tsv). Regenerate it with
 `./script/backfill-upstream-ledger` after editing a report.
 
+## 2026-11
+
+| Date       | Report                                            |
+| ---------- | ------------------------------------------------- |
+| 2026-11-02 | [Sync](./upstream-sync-2026-11-02.md)             |
+| 2026-11-02 | [Sync (batch B)](./upstream-sync-2026-11-02-b.md) |
+
 ## 2026-10
 
 | Date       | Report                                                                   |

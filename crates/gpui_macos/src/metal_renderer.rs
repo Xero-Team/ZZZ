@@ -661,19 +661,9 @@ impl MetalRenderer {
             (viewport_size.width.ceil() as i32).into(),
             (viewport_size.height.ceil() as i32).into(),
         );
-        let drawable = layer
-            .next_drawable()
-            .ok_or_else(|| anyhow::anyhow!("Failed to get drawable for render_to_image"))?;
-
-        let command_buffer = self.encode_scene(scene, |renderer, instance_buffer| {
-            renderer.draw_primitives(scene, instance_buffer, drawable, viewport_size)
-        })?;
-
-        // Commit and wait for completion without presenting
-        command_buffer.commit();
-        command_buffer.wait_until_completed();
-
-        read_texture_as_rgba(drawable.texture())
+        // The display link owns the layer's drawables, so render into a
+        // texture we own instead of taking one from the layer.
+        self.render_scene_to_image(scene, viewport_size)
     }
 
     /// Renders a scene to an image without requiring a window or CAMetalLayer.
