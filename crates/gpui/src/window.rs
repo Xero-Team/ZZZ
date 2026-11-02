@@ -8062,11 +8062,20 @@ mod tests {
         let move_outside = |_: &mut Root, window: &mut Window, cx: &mut Context<Root>| {
             window.simulate_mouse_move(outside, cx)
         };
-        assert_eq!(update_and_draw(window, &child, cx, move_outside), (1., 1));
-        assert_eq!(update_and_draw(window, &child, cx, |_, _, _| {}), (1., 1));
+        // Caching is disabled when the `accessibility` feature is enabled, so the
+        // child is re-rendered on every frame in that configuration. The opacity
+        // assertions still apply to both configurations.
+        fn assert_draw_state(actual: (f32, usize), expected_alpha: f32, expected_renders: usize) {
+            assert_eq!(actual.0, expected_alpha);
+            if !cfg!(feature = "accessibility") {
+                assert_eq!(actual.1, expected_renders);
+            }
+        }
+        assert_draw_state(update_and_draw(window, &child, cx, move_outside), 1., 1);
+        assert_draw_state(update_and_draw(window, &child, cx, |_, _, _| {}), 1., 1);
         let fade = |root: &mut Root, _: &mut Window, _: &mut Context<Root>| root.opacity = 0.5;
-        assert_eq!(update_and_draw(window, &child, cx, fade), (0.5, 2));
-        assert_eq!(update_and_draw(window, &child, cx, |_, _, _| {}), (0.5, 2));
+        assert_draw_state(update_and_draw(window, &child, cx, fade), 0.5, 2);
+        assert_draw_state(update_and_draw(window, &child, cx, |_, _, _| {}), 0.5, 2);
 
         // Hover opacity applies when the mouse enters and leaves.
         let move_inside = |_: &mut Root, window: &mut Window, cx: &mut Context<Root>| {
