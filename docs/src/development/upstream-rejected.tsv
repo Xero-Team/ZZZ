@@ -124,6 +124,7 @@ sha	class	reason_code	note	source
 25185402	C	philosophy	Native Agent Panel terminal-thread renaming.	upstream-sync-2026-09-18.md
 2551721a	C	absent-api	Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.	upstream-sync-2026-09-02.md
 26363aabdb	C	absent-api	Relicenses `extension_suggest`; that crate is absent in ZZZ.	upstream-sync-2026-10-13.md
+26abd1c959	C	upstream-infra	Extends the `gpui_platform` benchmarks and adds `script/gpui-bench-compare`, plus benchmark-only `Window::rendered_scene` and `BenchWindowContext::simulate_resize`. ZZZ has no bench targets, no `randomized_element_tree` fixture, and no caller for those APIs.	upstream-sync-2026-11-02.md
 26b6a267	C	untriaged	Upstream GitHub Actions / xtask Miri pin.	upstream-sync-2026-09-18.md
 279da638	C	diverged	Broad persistence shutdown rewrite conflicts with local lifecycle APIs.	upstream-sync-2026-08-27.md
 27ea42bf01	C	upstream-infra	Lockfile-only security refresh with no independent ZZZ behavior.	upstream-sync-2026-10-24-b.md
@@ -230,6 +231,7 @@ sha	class	reason_code	note	source
 4ca90055	C	upstream-infra	Broad tree-sitter/Wasmtime and lockfile/toolchain update.	upstream-sync-2026-08-27.md
 4e76d6ef82	C	philosophy	Authenticated ChatGPT subscription catalog loading belongs to the absent commercial `openai_subscribed` provider.	upstream-sync-2026-10-05.md
 4e8057d7	C	philosophy	CI assignee workflow.	upstream-sync-2026-08-18.md
+4ec98df500	C	absent-api	Moves `agent-client-protocol` from 3.6.0 to 5.0.0 and rewrites the v1/v2 clients for the new schema layout. ZZZ pins `=3.5.0` and lacks the unabsorbed v1/v2 compatibility layer the patch builds on; the cherry-pick conflicted across 37 files and also touches native-agent tool files ZZZ deleted.	upstream-sync-2026-11-02.md
 4f047acc	C	absent-api	V4 cursor-marker route is absent from ZZZ's edit_prediction API.	upstream-sync-2026-08-07.md
 4f6d97b9de	C	philosophy	Frame and hang telemetry measured against per-window refresh rates; needs the absent `hang_telemetry` crate and emits telemetry.	upstream-sync-2026-10-10.md
 4f70271800	C	absent-api	Adds v2 session resume and replay (901 lines in `acp/v2.rs`); absent ACP v2.	upstream-sync-2026-10-16.md
@@ -465,6 +467,7 @@ sha	class	reason_code	note	source
 9decdcc1	C	diverged	GPUI web IME mirror-focus rewrite depends on the divergent touch/IME architecture.	upstream-sync-2026-09-02.md
 9df33dea42	C	unisolatable	The v2 shared-session migration has no negotiated v2 ACP handler and entangles local v1 title state with native UI.	upstream-sync-2026-10-09.md
 9e236090	C	untriaged	Unused per-window histogram APIs.	upstream-sync-2026-08-18.md
+9e23c1f43e	C	philosophy	Loads the c15t consent bundle from a hosted Inth CDN and drops the vendored copy. ZZZ removed the analytics script, the consent banner, and the c15t bundle, so there is no surface to update and the change would reintroduce a telemetry-adjacent path.	upstream-sync-2026-11-02.md
 9e65fc7682	C	absent-api	Rewrites `acp_thread` diff materialization around `DiffPatch` and v2 types. ZZZ carries the simplified 455-line `diff.rs` and deleted `agent/src/tools`.	upstream-sync-2026-10-24.md
 9e6e1416	C	untriaged	Dynamic font APIs plus gpui_web; depends on Canvas fallback.	upstream-sync-2026-09-18.md
 9e84b066b5	C	absent-api	Rewrites fs watcher registrations and depends on the absent `fs_watcher/diagnostics.rs`; outside ZZZ's watcher architecture.	upstream-sync-2026-10-24-b.md
