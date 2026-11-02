@@ -12965,6 +12965,7 @@ dependencies = [
  "tracing",
  "unindent",
  "url",
+ "usvg 0.49.0",
  "util",
  "vfs",
  "watch",
