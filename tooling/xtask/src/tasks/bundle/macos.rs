@@ -227,7 +227,10 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
 
     let mut command = Command::new("cargo");
     command
-        .current_dir(&context.workspace)
+        // cargo-bundle reads the bundle metadata from the root package, so it
+        // runs from `crates/zzz`; from the workspace root it fails with "No
+        // root package found" because the root is a virtual manifest.
+        .current_dir(context.workspace.join("crates/zzz"))
         .arg("bundle")
         .args(context.profile_flag())
         .args(["--target", context.target.triple()])
