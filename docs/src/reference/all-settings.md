@@ -5576,14 +5576,15 @@ See the [debugger page](../debugger.md) for more information about debugging sup
 {
   "telegram_panel": {
     "button": true,
-    "dock": "bottom",
+    "dock": "left",
     "default_width": 360,
     "default_height": 320,
     "flexible": false,
     "starts_open": false,
     "show_unread_badge": true,
     "limit_content_width": true,
-    "max_content_width": 760
+    "max_content_width": 760,
+    "composer_min_lines": 4
   },
   "telegram": {
     "proxy": null
@@ -5599,9 +5600,10 @@ See the [debugger page](../debugger.md) for more information about debugging sup
 - `default_height`: Default height of the Telegram panel, used by the bottom dock
 - `flexible`: Whether the Telegram panel can stretch to fill its dock
 - `starts_open`: Whether the Telegram panel should open on startup
-- `show_unread_badge`: Whether to show a badge with the number of unread chats on the Telegram panel icon. Muted chats do not count
+- `show_unread_badge`: Whether to show a badge with the number of unread messages on the Telegram panel icon. Muted chats do not count
 - `limit_content_width`: Whether to limit the width of messages, the chat header, and the composer. Content is centered when the panel is wider than `max_content_width`
 - `max_content_width`: Maximum content width in pixels
+- `composer_min_lines`: Minimum number of lines the composer shows before it grows
 
 ### `telegram`
 

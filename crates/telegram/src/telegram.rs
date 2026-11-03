@@ -23,6 +23,8 @@ pub use credentials::TelegramCredentials;
 pub use engine::{Command, EngineConfig, EngineHandle};
 pub use error::EngineError;
 pub use model::{
-    AuthState, ChatSnapshot, ConnectionState, DownloadState, MediaKind, MediaSnapshot,
-    MessageSnapshot, SearchHit, SendState, ViewModel, WebPageSnapshot,
+    AuthState, ChatFolderSnapshot, ChatKind, ChatSnapshot, ConnectionState, ContactSnapshot,
+    DownloadState, FolderSelection, GeoSnapshot, MediaKind, MediaSnapshot, MessageAction,
+    MessageSnapshot, PollOptionSnapshot, PollSnapshot, Presence, ReactionSnapshot, ReplySnapshot,
+    SearchFilter, SearchHit, SendState, TypingSnapshot, ViewModel, WebPageSnapshot,
 };

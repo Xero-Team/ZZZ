@@ -157,6 +157,15 @@ struct PendingScroll {
     message_id: i32,
 }
 
+/// The message currently being edited and the composer text to restore if the
+/// edit is cancelled.
+#[derive(Clone, Debug)]
+struct EditingMessage {
+    chat_id: i64,
+    message_id: i32,
+    original_text: String,
+}
+
 /// A code reference staged in the composer. Its [`target`](Self::target) is a
 /// remote permalink when the file belongs to a repository with a remote, or a
 /// worktree-relative path otherwise.
@@ -209,6 +218,7 @@ pub struct TelegramPanel {
     _composer_subscription: Subscription,
     _search_subscription: Subscription,
     _notification_release: Subscription,
+    _activation_subscription: Option<Subscription>,
     _search_task: Option<Task<()>>,
     _snapshot_task: Task<()>,
     voice_playback: Option<audio::PlaybackHandle>,
@@ -229,6 +239,20 @@ pub struct TelegramPanel {
     /// A message to reveal once its chat history has loaded.
     pending_scroll: Option<PendingScroll>,
     notification_windows: NotificationWindowManager,
+    /// The message the next send replies to.
+    reply_to: Option<MessageSnapshot>,
+    /// The message being edited, together with the text it had when editing
+    /// started so cancelling can restore the composer.
+    editing: Option<EditingMessage>,
+    /// Selected messages while multi-select is active. An empty set means
+    /// multi-select is off.
+    selection: HashSet<i32>,
+    /// The id of the oldest unread incoming message when the chat was opened,
+    /// used to draw the unread divider until it is marked read.
+    unread_divider: Option<(i64, i32)>,
+    /// The last visibility tuple reported to the engine, to avoid re-sending it
+    /// on every render.
+    reported_viewing: Option<(Option<i64>, bool, bool)>,
 }
 
 impl TelegramPanel {
@@ -310,6 +334,10 @@ impl TelegramPanel {
                             chat_id,
                             text: draft,
                         });
+                        this.engine.send(Command::SetTyping {
+                            chat_id,
+                            typing: !text.trim().is_empty(),
+                        });
                     }
                     cx.notify();
                 }
@@ -376,6 +404,7 @@ impl TelegramPanel {
             _composer_subscription,
             _search_subscription,
             _notification_release,
+            _activation_subscription: None,
             _search_task: None,
             _snapshot_task,
             voice_playback: None,
@@ -389,19 +418,27 @@ impl TelegramPanel {
             selected_chat: None,
             pending_scroll: None,
             notification_windows: NotificationWindowManager::default(),
+            reply_to: None,
+            editing: None,
+            selection: HashSet::new(),
+            unread_divider: None,
+            reported_viewing: None,
         };
         let panel = cx.entity().downgrade();
         this.history_list_state
-            .set_scroll_handler(move |event, _window, cx| {
-                if event.visible_range.start > HISTORY_AUTOLOAD_THRESHOLD {
-                    return;
+            .set_scroll_handler(move |event, window, cx| {
+                let should_load_older = event.visible_range.start <= HISTORY_AUTOLOAD_THRESHOLD;
+                if should_load_older {
+                    let panel = panel.clone();
+                    cx.defer(move |cx| {
+                        panel
+                            .update(cx, |panel, cx| panel.maybe_load_older(cx))
+                            .log_err();
+                    });
                 }
-                let panel = panel.clone();
-                cx.defer(move |cx| {
-                    panel
-                        .update(cx, |panel, cx| panel.maybe_load_older(cx))
-                        .log_err();
-                });
+                panel
+                    .update(cx, |panel, cx| panel.report_viewing(window, cx))
+                    .log_err();
             });
         // Adopt the state the engine already has. A panel is created after the
         // engine has connected in every window after the first, and the engine
@@ -413,6 +450,14 @@ impl TelegramPanel {
         this.sync_draft(window, cx);
         this.sync_flood_wait(cx);
         this.last_unread_total = this.view_model.unread_total;
+        if this.view_model.selected_chat.is_some() {
+            this.mode = ViewMode::Conversation;
+        }
+        this._activation_subscription =
+            Some(cx.observe_window_activation(window, |this, window, cx| {
+                this.report_viewing(window, cx);
+            }));
+        this.report_viewing(window, cx);
         this
     }
 
@@ -433,7 +478,46 @@ impl TelegramPanel {
         self.reveal_pending_message();
         self.maybe_autoplay_voice(cx);
         self.sync_flood_wait(cx);
+        // Mark the divider consumed once the chat is no longer unread.
+        if self.unread_divider.is_some_and(|(chat_id, _)| {
+            self.view_model
+                .chats
+                .iter()
+                .find(|chat| chat.id == chat_id)
+                .is_none_or(|chat| chat.unread_count == 0)
+        }) {
+            self.unread_divider = None;
+        }
+        self.report_viewing(window, cx);
         cx.notify();
+    }
+
+    /// Reports focus and scroll position to the engine. The engine only marks a
+    /// chat read while the panel is focused on it and following the newest
+    /// message, so background messages keep their unread badge.
+    fn report_viewing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let search_visible =
+            self.search_open && !self.search_editor.read(cx).text(cx).trim().is_empty();
+        let chat_id = if self.mode == ViewMode::Conversation
+            && !search_visible
+            && self.view_model.auth.is_signed_in()
+        {
+            self.view_model.selected_chat
+        } else {
+            None
+        };
+        let focused = window.is_window_active() && self.focus_handle.contains_focused(window, cx);
+        let at_bottom = self.history_list_state.is_following_tail();
+        let state = (chat_id, focused, at_bottom);
+        if self.reported_viewing == Some(state) {
+            return;
+        }
+        self.reported_viewing = Some(state);
+        self.engine.send(Command::SetViewing {
+            chat_id,
+            focused,
+            at_bottom,
+        });
     }
 
     /// Loads the stored draft into the composer when the chat changes, so text
@@ -444,6 +528,12 @@ impl TelegramPanel {
             return;
         }
         self.selected_chat = selected;
+        self.reply_to = None;
+        self.editing = None;
+        self.selection.clear();
+        self.unread_divider = self.view_model.selected_chat_snapshot().and_then(|chat| {
+            (chat.unread_count > 0).then_some((chat.id, chat.read_inbox_message_id))
+        });
         self.clear_composer_items(cx);
         let draft = self.view_model.draft.clone();
         if self.composer.read(cx).text(cx) != draft {
@@ -587,6 +677,7 @@ impl TelegramPanel {
             .collect();
         let previous = std::mem::replace(&mut self.history_ids, new_ids.clone());
         if previous == new_ids {
+            self.history_list_state.remeasure_items(0..new_ids.len());
             self.history_layout = Arc::new(build_history_layout(&self.view_model.history));
             return;
         }
@@ -669,22 +760,34 @@ impl TelegramPanel {
     fn forward_message(
         &mut self,
         chat_id: i64,
-        message_id: i32,
+        message_ids: Vec<i32>,
+        drop_author: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if message_id == 0 {
+        let message_ids: Vec<i32> = message_ids
+            .into_iter()
+            .filter(|message_id| *message_id != 0)
+            .collect();
+        if message_ids.is_empty() {
             return;
         }
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
         workspace.update(cx, |workspace, cx| {
-            crate::telegram_forward_picker::open(workspace, chat_id, vec![message_id], window, cx);
+            crate::telegram_forward_picker::open(
+                workspace,
+                chat_id,
+                message_ids,
+                drop_author,
+                window,
+                cx,
+            );
         });
     }
 
-    fn open_chat(&mut self, chat_id: i64, cx: &mut Context<Self>) {
+    fn open_chat(&mut self, chat_id: i64, window: &mut Window, cx: &mut Context<Self>) {
         if self
             .pending_scroll
             .is_some_and(|pending| pending.conversation_chat_id != chat_id)
@@ -693,14 +796,29 @@ impl TelegramPanel {
         }
         self.start_engine();
         self.mode = ViewMode::Conversation;
+        if self.search_open {
+            self.search_open = false;
+            self.engine.send(Command::ClearSearch);
+        }
+        self.reply_to = None;
+        self.editing = None;
+        self.selection.clear();
+        window.focus(&self.focus_handle, cx);
         self.engine.send(Command::SelectChat { chat_id });
         self.history_list_state.set_follow_mode(FollowMode::Tail);
+        self.history_list_state.scroll_to_end();
         cx.notify();
     }
 
     /// Opens a chat from a search hit and reveals the matched message once its
     /// history is loaded.
-    fn open_chat_at(&mut self, chat_id: i64, message: MessageSnapshot, cx: &mut Context<Self>) {
+    fn open_chat_at(
+        &mut self,
+        chat_id: i64,
+        message: MessageSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.search_open = false;
         self.engine.send(Command::ClearSearch);
         self.pending_scroll = Some(PendingScroll {
@@ -710,6 +828,10 @@ impl TelegramPanel {
         });
         self.start_engine();
         self.mode = ViewMode::Conversation;
+        self.reply_to = None;
+        self.editing = None;
+        self.selection.clear();
+        window.focus(&self.focus_handle, cx);
         self.engine.send(Command::SelectChatAt { chat_id, message });
         self.history_list_state.set_follow_mode(FollowMode::Tail);
         cx.notify();
@@ -730,6 +852,10 @@ impl TelegramPanel {
     fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.mode == ViewMode::Conversation {
             self.mode = ViewMode::ChatList;
+            self.reply_to = None;
+            self.editing = None;
+            self.selection.clear();
+            self.report_viewing(window, cx);
             cx.notify();
         } else if let Some(workspace) = self.workspace.upgrade() {
             workspace.update(cx, |workspace, cx| {
@@ -738,11 +864,206 @@ impl TelegramPanel {
         }
     }
 
+    /// Starts editing one of the account's own text messages.
+    fn start_edit(
+        &mut self,
+        message: &MessageSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !message.outgoing || message.id == 0 {
+            return;
+        }
+        if self.composer.read(cx).text(cx).trim().is_empty() {
+            let text = message
+                .markdown
+                .clone()
+                .unwrap_or_else(|| message.text.clone());
+            self.composer
+                .update(cx, |editor, cx| editor.set_text(text.clone(), window, cx));
+            self.editing = Some(EditingMessage {
+                chat_id: message.chat_id,
+                message_id: message.id,
+                original_text: String::new(),
+            });
+        } else {
+            // Do not silently replace an unsent draft.
+            self.editing = Some(EditingMessage {
+                chat_id: message.chat_id,
+                message_id: message.id,
+                original_text: self.composer.read(cx).text(cx),
+            });
+            let text = message
+                .markdown
+                .clone()
+                .unwrap_or_else(|| message.text.clone());
+            self.composer
+                .update(cx, |editor, cx| editor.set_text(text, window, cx));
+        }
+        self.reply_to = None;
+        window.focus(&self.composer.focus_handle(cx), cx);
+        cx.notify();
+    }
+
+    fn cancel_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editing) = self.editing.take() else {
+            return;
+        };
+        self.composer.update(cx, |editor, cx| {
+            editor.set_text(editing.original_text, window, cx)
+        });
+        cx.notify();
+    }
+
+    /// Sets the message the next send replies to.
+    fn start_reply(
+        &mut self,
+        message: &MessageSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if message.id == 0 {
+            return;
+        }
+        self.editing = None;
+        self.reply_to = Some(message.clone());
+        window.focus(&self.composer.focus_handle(cx), cx);
+        cx.notify();
+    }
+
+    fn clear_reply(&mut self, cx: &mut Context<Self>) {
+        self.reply_to = None;
+        cx.notify();
+    }
+
+    /// Scrolls to a message in the loaded history, e.g. from a reply preview.
+    fn scroll_to_message(&mut self, message_chat_id: i64, message_id: i32, cx: &mut Context<Self>) {
+        if let Some(index) = self
+            .view_model
+            .history
+            .iter()
+            .position(|message| message.chat_id == message_chat_id && message.id == message_id)
+        {
+            self.history_list_state.scroll_to_reveal_item(index);
+            cx.notify();
+        }
+    }
+
+    fn enter_selection(&mut self, message_id: i32, cx: &mut Context<Self>) {
+        if message_id == 0 {
+            return;
+        }
+        self.selection.clear();
+        self.selection.insert(message_id);
+        self.reply_to = None;
+        self.editing = None;
+        cx.notify();
+    }
+
+    fn toggle_selection(&mut self, message_id: i32, cx: &mut Context<Self>) {
+        if message_id == 0 {
+            return;
+        }
+        if !self.selection.remove(&message_id) {
+            self.selection.insert(message_id);
+        }
+        cx.notify();
+    }
+
+    fn exit_selection(&mut self, cx: &mut Context<Self>) {
+        if self.selection.is_empty() {
+            return;
+        }
+        self.selection.clear();
+        cx.notify();
+    }
+
+    fn selected_message_ids(&self) -> Vec<i32> {
+        let mut ids: Vec<i32> = self
+            .view_model
+            .history
+            .iter()
+            .filter(|message| self.selection.contains(&message.id))
+            .map(|message| message.id)
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    fn delete_selection(&mut self, revoke: bool, cx: &mut Context<Self>) {
+        let Some(chat_id) = self.view_model.selected_chat else {
+            return;
+        };
+        let message_ids = self.selected_message_ids();
+        if message_ids.is_empty() {
+            return;
+        }
+        self.dispatch(
+            Command::DeleteMessages {
+                chat_id,
+                message_ids,
+                revoke,
+            },
+            cx,
+        );
+        self.selection.clear();
+        cx.notify();
+    }
+
+    fn forward_selection(
+        &mut self,
+        drop_author: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(chat_id) = self.view_model.selected_chat else {
+            return;
+        };
+        let message_ids = self.selected_message_ids();
+        if message_ids.is_empty() {
+            return;
+        }
+        self.forward_message(chat_id, message_ids, drop_author, window, cx);
+        self.selection.clear();
+        cx.notify();
+    }
+
     fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(chat_id) = self.view_model.selected_chat else {
             return;
         };
+        if self.view_model.connection != ConnectionState::Connected {
+            self.start_engine();
+            return;
+        }
+        if self
+            .view_model
+            .selected_chat_snapshot()
+            .is_some_and(|chat| !chat.can_send)
+        {
+            return;
+        }
         let text = self.composer.read(cx).text(cx);
+        self.start_engine();
+
+        if let Some(editing) = self.editing.clone() {
+            if text.trim().is_empty() {
+                self.cancel_edit(window, cx);
+                return;
+            }
+            self.engine.send(Command::EditMessage {
+                chat_id: editing.chat_id,
+                message_id: editing.message_id,
+                text,
+            });
+            self.editing = None;
+            self.clear_composer_items(cx);
+            self.composer
+                .update(cx, |editor, cx| editor.set_text("", window, cx));
+            cx.notify();
+            return;
+        }
+
         if text.trim().is_empty() && self.composer_items.is_empty() {
             return;
         }
@@ -751,11 +1072,17 @@ impl TelegramPanel {
         if items.is_empty() {
             return;
         }
-        self.start_engine();
-        self.engine.send(Command::SendOutgoing { chat_id, items });
+        let reply_to = self.reply_to.as_ref().map(|message| message.id);
+        self.engine.send(Command::SendOutgoing {
+            chat_id,
+            items,
+            reply_to,
+        });
+        self.reply_to = None;
         self.clear_composer_items(cx);
         self.composer
             .update(cx, |editor, cx| editor.set_text("", window, cx));
+        self.unread_divider = None;
         self.history_list_state.set_follow_mode(FollowMode::Tail);
         self.history_list_state.scroll_to_end();
         cx.notify();
@@ -1257,9 +1584,11 @@ impl TelegramPanel {
             cx.background_executor().timer(SEARCH_DEBOUNCE).await;
             this.update_in(cx, |this, _window, cx| {
                 let query = this.search_editor.read(cx).text(cx);
+                let filter = this.view_model.search_filter;
                 this.engine.send(Command::Search {
                     query,
                     chat_id: None,
+                    filter,
                 });
                 cx.notify();
             })
@@ -1273,7 +1602,7 @@ impl TelegramPanel {
         cx.notify();
     }
 
-    fn select_relative_chat(&mut self, delta: i64, cx: &mut Context<Self>) {
+    fn select_relative_chat(&mut self, delta: i64, window: &mut Window, cx: &mut Context<Self>) {
         let chats = &self.view_model.chats;
         if chats.is_empty() {
             return;
@@ -1288,7 +1617,7 @@ impl TelegramPanel {
             None => chats.len() - 1,
         };
         let chat_id = chats[next].id;
-        self.open_chat(chat_id, cx);
+        self.open_chat(chat_id, window, cx);
     }
 
     /// Requests the thumbnail for an image-like attachment the first time its
@@ -1551,9 +1880,11 @@ impl TelegramPanel {
                             window.focus(&this.search_editor.focus_handle(cx), cx);
                             let query = this.search_editor.read(cx).text(cx);
                             if !query.trim().is_empty() {
+                                let filter = this.view_model.search_filter;
                                 this.engine.send(Command::Search {
                                     query,
                                     chat_id: None,
+                                    filter,
                                 });
                             }
                         } else {
@@ -1619,6 +1950,24 @@ impl TelegramPanel {
                 .when(self.view_model.searching, |this| {
                     this.child(Icon::new(IconName::LoadCircle).size(IconSize::XSmall))
                 })
+                .child(
+                    Button::new(
+                        "telegram-search-filter",
+                        search_filter_label(self.view_model.search_filter, cx),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let filter = next_search_filter(this.view_model.search_filter);
+                        let query = this.search_editor.read(cx).text(cx);
+                        this.dispatch(
+                            Command::Search {
+                                query,
+                                chat_id: None,
+                                filter,
+                            },
+                            cx,
+                        );
+                    })),
+                )
                 .child(
                     IconButton::new("telegram-search-close", IconName::Close)
                         .icon_size(IconSize::XSmall)
@@ -1692,19 +2041,24 @@ impl TelegramPanel {
     }
 
     fn render_chat_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let folder_tabs = self.render_folder_tabs(cx);
         if self.view_model.chats.is_empty() {
-            return self.render_message_state(if self.view_model.loading_chats {
-                tr(cx, "telegram_panel.states.loading_chats", "Loading chats…")
-            } else {
-                tr(cx, "telegram_panel.states.no_chats", "No chats yet")
-            });
+            return v_flex()
+                .size_full()
+                .child(folder_tabs)
+                .child(self.render_message_state(if self.view_model.loading_chats {
+                    tr(cx, "telegram_panel.states.loading_chats", "Loading chats…")
+                } else {
+                    tr(cx, "telegram_panel.states.no_chats", "No chats yet")
+                }))
+                .into_any_element();
         }
 
         let chats = Arc::new(self.view_model.chats.clone());
         let selected = self.view_model.selected_chat;
         let panel = cx.entity().downgrade();
 
-        list(self.chat_list_state.clone(), move |index, _window, cx| {
+        let list_element = list(self.chat_list_state.clone(), move |index, _window, cx| {
             let Some(chat) = chats.get(index).cloned() else {
                 return div().into_any_element();
             };
@@ -1751,12 +2105,13 @@ impl TelegramPanel {
                 );
             }
 
-            ListItem::new(ElementId::Name(format!("telegram-chat-{chat_id}").into()))
+            let panel_for_menu = panel.clone();
+            let row = ListItem::new(ElementId::Name(format!("telegram-chat-{chat_id}").into()))
                 .spacing(ListItemSpacing::Sparse)
                 .toggle_state(is_selected)
-                .on_click(move |_, _, cx| {
+                .on_click(move |_, window, cx| {
                     panel
-                        .update(cx, |panel, cx| panel.open_chat(chat_id, cx))
+                        .update(cx, |panel, cx| panel.open_chat(chat_id, window, cx))
                         .log_err();
                 })
                 .start_slot(avatar)
@@ -1786,11 +2141,85 @@ impl TelegramPanel {
                                 })
                                 .truncate(),
                         ),
-                )
-                .into_any_element()
+                );
+            let chat_for_menu = chat;
+            right_click_menu(ElementId::Name(
+                format!("telegram-chat-menu-{chat_id}").into(),
+            ))
+            .trigger(move |_, _, _| row.into_any_element())
+            .menu(move |window, cx| {
+                chat_context_menu(chat_for_menu.clone(), panel_for_menu.clone(), window, cx)
+            })
+            .into_any_element()
         })
         .size_full()
-        .into_any_element()
+        .into_any_element();
+
+        v_flex()
+            .size_full()
+            .child(folder_tabs)
+            .child(list_element)
+            .into_any_element()
+    }
+
+    /// The folder selector above the chat list: all chats, custom folders, and
+    /// the archive.
+    fn render_folder_tabs(&self, cx: &mut Context<Self>) -> AnyElement {
+        let selected = self.view_model.selected_folder;
+        let mut entries: Vec<(telegram::FolderSelection, String)> = vec![(
+            telegram::FolderSelection::All,
+            tr(cx, "telegram_panel.folder.all", "All"),
+        )];
+        entries.extend(self.view_model.folders.iter().map(|folder| {
+            (
+                telegram::FolderSelection::Folder(folder.id),
+                folder.title.clone(),
+            )
+        }));
+        entries.push((
+            telegram::FolderSelection::Archive,
+            tr(cx, "telegram_panel.folder.archive", "Archive"),
+        ));
+
+        let mut row = h_flex()
+            .w_full()
+            .flex_none()
+            .px_2()
+            .py_1()
+            .gap_1()
+            .border_b_1()
+            .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().panel_background);
+        for (index, (selection, title)) in entries.into_iter().enumerate() {
+            let is_selected = selection == selected;
+            row = row.child(
+                div()
+                    .id(ElementId::Name(
+                        format!("telegram-folder-tab-{index}").into(),
+                    ))
+                    .px_2()
+                    .py_0p5()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .when(is_selected, |this| {
+                        this.bg(cx.theme().colors().element_selected)
+                    })
+                    .hover(|this| this.bg(cx.theme().colors().element_hover))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.dispatch(Command::SelectFolder { folder: selection }, cx)
+                    }))
+                    .child(
+                        Label::new(title)
+                            .size(LabelSize::XSmall)
+                            .color(if is_selected {
+                                Color::Default
+                            } else {
+                                Color::Muted
+                            }),
+                    ),
+            );
+        }
+        row.into_any_element()
     }
 
     fn render_conversation(
@@ -1816,36 +2245,227 @@ impl TelegramPanel {
             incoming: cx.theme().colors().editor_background,
         };
         let max_content_width = TelegramPanelSettings::get_global(cx).max_content_width;
+        let selection_mode = !self.selection.is_empty();
+        let selection = Arc::new(self.selection.clone());
+        let unread_divider = self
+            .unread_divider
+            .filter(|(chat_id, _)| *chat_id == chat.id)
+            .map(|(_, after_message_id)| after_message_id);
 
         let transcript = list(self.history_list_state.clone(), move |index, window, cx| {
             let Some(message) = history.get(index).cloned() else {
                 return div().into_any_element();
             };
             let message_layout = layout.get(index).cloned().unwrap_or_default();
-            let message = render_message(
+            let selected = selection.contains(&message.id);
+            let mut row = v_flex();
+            if unread_divider.is_some_and(|after| {
+                message.id > after && (index == 0 || history[index - 1].id <= after)
+            }) {
+                row = row.child(
+                    h_flex().w_full().justify_center().py_1().child(
+                        Label::new(tr(
+                            cx,
+                            "telegram_panel.message.unread_divider",
+                            "Unread messages",
+                        ))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Accent),
+                    ),
+                );
+            }
+            let message_element = render_message(
                 &message,
                 &message_layout,
                 &markdown,
                 &panel,
                 colors,
+                selection_mode,
+                selected,
                 window,
                 cx,
             );
-            h_flex()
-                .w_full()
-                .justify_center()
-                .child(
+            let message_element = if selection_mode {
+                let panel = panel.clone();
+                let message_id = message.id;
+                div()
+                    .id(ElementId::Name(
+                        format!("telegram-message-select-{}", message.id).into(),
+                    ))
+                    .w_full()
+                    .cursor_pointer()
+                    .on_click(move |_, _, cx| {
+                        panel
+                            .update(cx, |panel, cx| panel.toggle_selection(message_id, cx))
+                            .log_err();
+                    })
+                    .child(message_element)
+                    .into_any_element()
+            } else {
+                message_element
+            };
+            row.child(
+                h_flex().w_full().justify_center().child(
                     div()
                         .when_some(max_content_width, |this, max| this.max_w(max))
                         .w_full()
                         .min_w_0()
-                        .child(message),
-                )
-                .into_any_element()
+                        .child(message_element),
+                ),
+            )
+            .into_any_element()
         })
         .size_full();
 
         let composer = self.render_composer(window, cx);
+
+        let subtitle = chat_subtitle(&chat, cx);
+
+        let header = if selection_mode {
+            h_flex()
+                .w_full()
+                .px_2()
+                .gap_1p5()
+                .items_center()
+                .child(
+                    Label::new(
+                        tr(cx, "telegram_panel.selection.count", "{count} selected")
+                            .replace("{count}", &self.selection.len().to_string()),
+                    )
+                    .size(LabelSize::Small)
+                    .weight(gpui::FontWeight::MEDIUM),
+                )
+                .child(div().flex_1())
+                .child(
+                    IconButton::new("telegram-selection-forward", IconName::ArrowRight)
+                        .icon_size(IconSize::XSmall)
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "telegram_panel.menu.forward",
+                            "Forward",
+                        )))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.forward_selection(false, window, cx)
+                        })),
+                )
+                .child(
+                    IconButton::new("telegram-selection-delete", IconName::Trash)
+                        .icon_size(IconSize::XSmall)
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "telegram_panel.menu.delete_for_me",
+                            "Delete for Me",
+                        )))
+                        .on_click(cx.listener(|this, _, _, cx| this.delete_selection(false, cx))),
+                )
+                .child(
+                    IconButton::new("telegram-selection-cancel", IconName::Close)
+                        .icon_size(IconSize::XSmall)
+                        .tooltip(Tooltip::text(tr(
+                            cx,
+                            "telegram_panel.selection.cancel",
+                            "Cancel selection",
+                        )))
+                        .on_click(cx.listener(|this, _, _, cx| this.exit_selection(cx))),
+                )
+        } else {
+            h_flex()
+                .w_full()
+                .px_2()
+                .gap_1p5()
+                .items_center()
+                .when(narrow, |this| {
+                    this.child(
+                        IconButton::new("telegram-back", IconName::ChevronLeft)
+                            .icon_size(IconSize::Small)
+                            .tooltip(move |_window, cx| {
+                                Tooltip::for_action(
+                                    tr(cx, "telegram_panel.back", "Back"),
+                                    &Back,
+                                    cx,
+                                )
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| this.back(window, cx))),
+                    )
+                })
+                .child(
+                    v_flex()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(
+                            Label::new(chat.title.clone())
+                                .size(LabelSize::Small)
+                                .weight(gpui::FontWeight::MEDIUM)
+                                .truncate(),
+                        )
+                        .when_some(subtitle, |this, subtitle| {
+                            this.child(
+                                Label::new(subtitle)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            )
+                        }),
+                )
+                .child(div().flex_1())
+                .when(self.view_model.has_more_history, |this| {
+                    this.child(
+                        IconButton::new("telegram-load-older", IconName::ChevronUp)
+                            .icon_size(IconSize::XSmall)
+                            .tooltip(Tooltip::text(tr(
+                                cx,
+                                "telegram_panel.load_older",
+                                "Load older messages",
+                            )))
+                            .on_click(cx.listener(|this, _, _, cx| this.maybe_load_older(cx))),
+                    )
+                })
+                .when(self.view_model.loading_history, |this| {
+                    this.child(Icon::new(IconName::LoadCircle).size(IconSize::XSmall))
+                })
+        };
+
+        let pinned = chat.pinned_message.as_ref().map(|pinned| {
+            let panel = cx.entity().downgrade();
+            let chat_id = chat.id;
+            let message_chat_id = pinned.chat_id;
+            let message_id = pinned.id;
+            let preview = pinned.preview_text();
+            h_flex()
+                .id("telegram-pinned-message-bar")
+                .w_full()
+                .px_2()
+                .py_1()
+                .gap_1()
+                .items_center()
+                .border_b_1()
+                .border_color(cx.theme().colors().border)
+                .bg(cx.theme().colors().panel_background)
+                .cursor_pointer()
+                .on_click(move |_, window, cx| {
+                    panel
+                        .update(cx, |panel, cx| {
+                            if panel.view_model.selected_chat != Some(chat_id) {
+                                panel.open_chat(chat_id, window, cx);
+                            }
+                            panel.scroll_to_message(message_chat_id, message_id, cx);
+                        })
+                        .log_err();
+                })
+                .child(Icon::new(IconName::Pin).size(IconSize::XSmall))
+                .child(
+                    Label::new(if preview.is_empty() {
+                        tr(cx, "telegram_panel.message.pinned", "Pinned message")
+                    } else {
+                        preview
+                    })
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+                )
+        });
+
+        let show_jump_to_bottom = !self.history_list_state.is_following_tail();
 
         let conversation = v_flex()
             .size_full()
@@ -1857,59 +2477,9 @@ impl TelegramPanel {
                     .h(Tab::container_height(cx))
                     .border_b_1()
                     .border_color(cx.theme().colors().border)
-                    .child(
-                        self.render_centered(
-                            h_flex()
-                                .w_full()
-                                .px_2()
-                                .gap_1p5()
-                                .items_center()
-                                .when(narrow, |this| {
-                                    this.child(
-                                        IconButton::new("telegram-back", IconName::ChevronLeft)
-                                            .icon_size(IconSize::Small)
-                                            .tooltip(move |_window, cx| {
-                                                Tooltip::for_action(
-                                                    tr(cx, "telegram_panel.back", "Back"),
-                                                    &Back,
-                                                    cx,
-                                                )
-                                            })
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.back(window, cx)
-                                            })),
-                                    )
-                                })
-                                .child(
-                                    Label::new(chat.title)
-                                        .size(LabelSize::Small)
-                                        .weight(gpui::FontWeight::MEDIUM)
-                                        .truncate(),
-                                )
-                                .child(div().flex_1())
-                                .when(self.view_model.has_more_history, |this| {
-                                    this.child(
-                                        IconButton::new("telegram-load-older", IconName::ChevronUp)
-                                            .icon_size(IconSize::XSmall)
-                                            .tooltip(Tooltip::text(tr(
-                                                cx,
-                                                "telegram_panel.load_older",
-                                                "Load older messages",
-                                            )))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.maybe_load_older(cx)
-                                            })),
-                                    )
-                                })
-                                .when(self.view_model.loading_history, |this| {
-                                    this.child(
-                                        Icon::new(IconName::LoadCircle).size(IconSize::XSmall),
-                                    )
-                                }),
-                            cx,
-                        ),
-                    ),
+                    .child(self.render_centered(header, cx)),
             )
+            .when_some(pinned, |this, pinned| this.child(pinned))
             .child(div().flex_1().min_h_0().child(transcript))
             .child(composer)
             .into_any_element();
@@ -1918,19 +2488,190 @@ impl TelegramPanel {
             .relative()
             .size_full()
             .child(conversation)
+            .when(show_jump_to_bottom, |this| {
+                this.child(
+                    div().absolute().bottom(px(96.)).right_4().child(
+                        IconButton::new("telegram-jump-to-bottom", IconName::ChevronDown)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text(tr(
+                                cx,
+                                "telegram_panel.jump_to_latest",
+                                "Jump to latest",
+                            )))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.history_list_state.set_follow_mode(FollowMode::Tail);
+                                this.history_list_state.scroll_to_end();
+                                if let Some(chat_id) = this.view_model.selected_chat {
+                                    this.engine.send(Command::SelectChat { chat_id });
+                                }
+                                cx.notify();
+                            })),
+                    ),
+                )
+            })
             .child(self.render_drop_target(cx))
             .into_any_element()
+    }
+
+    /// The bar above the editor that shows the message being replied to or
+    /// edited. Returns `None` when neither is active.
+    fn render_composer_banner(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let mut banner = v_flex()
+            .w_full()
+            .flex_none()
+            .border_b_1()
+            .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().panel_background);
+        let mut has_content = false;
+
+        if let Some(chat) = self.view_model.selected_chat_snapshot()
+            && !chat.can_send
+        {
+            has_content = true;
+            banner = banner.child(
+                h_flex()
+                    .w_full()
+                    .px_2()
+                    .py_1()
+                    .gap_1()
+                    .items_center()
+                    .child(Icon::new(IconName::FileLock).size(IconSize::XSmall))
+                    .child(
+                        Label::new(tr(
+                            cx,
+                            "telegram_panel.composer.read_only",
+                            "You cannot send messages in this chat",
+                        ))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                    ),
+            );
+        }
+
+        if let Some(editing) = &self.editing {
+            has_content = true;
+            let target_chat_id = editing.chat_id;
+            let target_message_id = editing.message_id;
+            let preview = self
+                .view_model
+                .history
+                .iter()
+                .find(|message| {
+                    message.chat_id == target_chat_id && message.id == target_message_id
+                })
+                .map(|message| message.preview_text())
+                .unwrap_or_default();
+            banner = banner.child(
+                h_flex()
+                    .w_full()
+                    .px_2()
+                    .py_1()
+                    .gap_1()
+                    .items_center()
+                    .child(Icon::new(IconName::Pencil).size(IconSize::XSmall))
+                    .child(
+                        v_flex()
+                            .min_w_0()
+                            .flex_1()
+                            .gap_0p5()
+                            .child(
+                                Label::new(tr(
+                                    cx,
+                                    "telegram_panel.composer.editing",
+                                    "Editing message",
+                                ))
+                                .size(LabelSize::XSmall)
+                                .weight(gpui::FontWeight::MEDIUM),
+                            )
+                            .child(
+                                Label::new(preview)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            ),
+                    )
+                    .child(
+                        IconButton::new("telegram-composer-cancel-edit", IconName::Close)
+                            .icon_size(IconSize::XSmall)
+                            .tooltip(Tooltip::text(tr(
+                                cx,
+                                "telegram_panel.composer.cancel_edit",
+                                "Cancel edit",
+                            )))
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.cancel_edit(window, cx)),
+                            ),
+                    ),
+            );
+        } else if let Some(reply) = &self.reply_to {
+            has_content = true;
+            let preview = reply.preview_text();
+            let sender = reply.sender_name.clone();
+            let label = if preview.is_empty() {
+                tr(
+                    cx,
+                    "telegram_panel.composer.replying_to",
+                    "Replying to {sender}",
+                )
+                .replace("{sender}", &sender)
+            } else {
+                format!("{sender}: {preview}")
+            };
+            banner = banner.child(
+                h_flex()
+                    .w_full()
+                    .px_2()
+                    .py_1()
+                    .gap_1()
+                    .items_center()
+                    .child(Icon::new(IconName::Chat).size(IconSize::XSmall))
+                    .child(
+                        v_flex()
+                            .min_w_0()
+                            .flex_1()
+                            .gap_0p5()
+                            .child(
+                                Label::new(tr(cx, "telegram_panel.composer.reply", "Reply"))
+                                    .size(LabelSize::XSmall)
+                                    .weight(gpui::FontWeight::MEDIUM),
+                            )
+                            .child(
+                                Label::new(label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            ),
+                    )
+                    .child(
+                        IconButton::new("telegram-composer-cancel-reply", IconName::Close)
+                            .icon_size(IconSize::XSmall)
+                            .tooltip(Tooltip::text(tr(
+                                cx,
+                                "telegram_panel.composer.cancel_reply",
+                                "Cancel reply",
+                            )))
+                            .on_click(cx.listener(|this, _, _, cx| this.clear_reply(cx))),
+                    ),
+            );
+        }
+
+        has_content.then(|| banner.into_any_element())
     }
 
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let expanded = self.composer_expanded;
         let text = self.composer.read(cx).text(cx);
-        let composer_empty = text.trim().is_empty() && self.composer_items.is_empty();
+        let can_send = self
+            .view_model
+            .selected_chat_snapshot()
+            .is_none_or(|chat| chat.can_send);
+        let composer_empty = text.trim().is_empty() && self.composer_items.is_empty() || !can_send;
         let message_count = if composer_empty {
             0
         } else {
             outgoing_message_count(&plan_outgoing(composer_blocks(&text, &self.composer_items)))
         };
+        let reply_banner = self.render_composer_banner(cx);
         let focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
         let (expand_icon, expand_tooltip) = if expanded {
             (
@@ -1998,6 +2739,7 @@ impl TelegramPanel {
             .when(expanded, |this| this.h(vh(0.6, window)))
             .border_t_1()
             .border_color(border)
+            .when_some(reply_banner, |this, banner| this.child(banner))
             .child(
                 h_flex()
                     .w_full()
@@ -2234,13 +2976,38 @@ impl TelegramPanel {
                     .size(LabelSize::Small)
                     .color(Color::Muted),
                 );
-                column = column.child(div().child(self.code_editor.clone())).child(
-                    Button::new(
-                        "telegram-submit-code",
-                        tr(cx, "telegram_panel.auth.submit_code", "Submit code"),
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| this.submit_code(window, cx))),
-                );
+                column =
+                    column.child(div().child(self.code_editor.clone())).child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new(
+                                    "telegram-submit-code",
+                                    tr(cx, "telegram_panel.auth.submit_code", "Submit code"),
+                                )
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.submit_code(window, cx)),
+                                ),
+                            )
+                            .child(
+                                Button::new(
+                                    "telegram-resend-code",
+                                    tr(cx, "telegram_panel.auth.resend_code", "Resend code"),
+                                )
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| this.dispatch(Command::ResendCode, cx),
+                                )),
+                            )
+                            .child(
+                                Button::new(
+                                    "telegram-cancel-code",
+                                    tr(cx, "telegram_panel.auth.cancel", "Cancel"),
+                                )
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| this.dispatch(Command::CancelLogin, cx),
+                                )),
+                            ),
+                    );
             }
             AuthState::AwaitingPassword { hint } => {
                 let hint = hint.unwrap_or_else(|| {
@@ -2254,11 +3021,28 @@ impl TelegramPanel {
                 column = column
                     .child(div().child(self.password_editor.clone()))
                     .child(
-                        Button::new(
-                            "telegram-submit-password",
-                            tr(cx, "telegram_panel.auth.submit_password", "Submit password"),
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| this.submit_password(cx))),
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new(
+                                    "telegram-submit-password",
+                                    tr(
+                                        cx,
+                                        "telegram_panel.auth.submit_password",
+                                        "Submit password",
+                                    ),
+                                )
+                                .on_click(cx.listener(|this, _, _, cx| this.submit_password(cx))),
+                            )
+                            .child(
+                                Button::new(
+                                    "telegram-cancel-password",
+                                    tr(cx, "telegram_panel.auth.cancel", "Cancel"),
+                                )
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| this.dispatch(Command::CancelLogin, cx),
+                                )),
+                            ),
                     );
             }
             AuthState::SignedIn { .. } => {}
@@ -2366,10 +3150,12 @@ impl TelegramPanel {
                         format!("telegram-search-hit-{index}").into(),
                     ))
                     .spacing(ListItemSpacing::Sparse)
-                    .on_click(move |_, _, cx| match matched_message.clone() {
+                    .on_click(move |_, window, cx| match matched_message.clone() {
                         Some(message) => {
                             click_panel
-                                .update(cx, |panel, cx| panel.open_chat_at(chat_id, message, cx))
+                                .update(cx, |panel, cx| {
+                                    panel.open_chat_at(chat_id, message, window, cx)
+                                })
                                 .log_err();
                         }
                         None => {
@@ -2377,7 +3163,7 @@ impl TelegramPanel {
                                 .update(cx, |panel, cx| {
                                     panel.search_open = false;
                                     panel.engine.send(Command::ClearSearch);
-                                    panel.open_chat(chat_id, cx);
+                                    panel.open_chat(chat_id, window, cx);
                                 })
                                 .log_err();
                         }
@@ -2397,8 +3183,21 @@ impl TelegramPanel {
                     )
                     .into_any_element()
                 })
-                .size_full(),
+                .flex_1(),
             );
+            if self.view_model.has_more_search && !searching {
+                column = column.child(
+                    h_flex().flex_none().w_full().justify_center().p_2().child(
+                        Button::new(
+                            "telegram-search-more",
+                            tr(cx, "telegram_panel.search.load_more", "Load more"),
+                        )
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.dispatch(Command::SearchMore, cx)),
+                        ),
+                    ),
+                );
+            }
         }
 
         column.into_any_element()
@@ -2502,6 +3301,8 @@ fn render_message(
     markdown: &HashMap<MessageKey, Entity<Markdown>>,
     panel: &WeakEntity<TelegramPanel>,
     colors: MessageBubbleColors,
+    selection_mode: bool,
+    selected: bool,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -2515,6 +3316,18 @@ fn render_message(
                     .color(Color::Muted),
             ),
         );
+    }
+
+    if message.is_service() {
+        return column
+            .child(
+                h_flex().w_full().justify_center().py_1().child(
+                    Label::new(service_message_text(message, cx))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                ),
+            )
+            .into_any_element();
     }
 
     let background = if message.outgoing {
@@ -2532,7 +3345,25 @@ fn render_message(
         .border_1()
         .border_color(cx.theme().colors().border)
         .overflow_hidden()
-        .bg(background);
+        .bg(background)
+        .when(selected, |this| {
+            this.border_color(cx.theme().colors().border_focused)
+        });
+
+    if let Some(forwarded_from) = &message.forwarded_from {
+        bubble = bubble.child(
+            Label::new(
+                tr(
+                    cx,
+                    "telegram_panel.message.forwarded_from",
+                    "Forwarded from {sender}",
+                )
+                .replace("{sender}", forwarded_from),
+            )
+            .size(LabelSize::XSmall)
+            .color(Color::Muted),
+        );
+    }
 
     if layout.show_sender && !message.outgoing && !message.sender_name.is_empty() {
         bubble = bubble.child(
@@ -2542,6 +3373,10 @@ fn render_message(
         );
     }
 
+    if let Some(reply) = &message.reply_to {
+        bubble = bubble.child(render_reply_preview(message, reply, panel, cx));
+    }
+
     if let Some(media) = &message.media {
         bubble = bubble.child(render_media(message, media, panel, cx));
     }
@@ -2549,10 +3384,21 @@ fn render_message(
     let body = render_body_text(message, markdown, panel, window, cx);
     bubble = bubble.child(body);
 
+    if !message.reactions.is_empty() {
+        bubble = bubble.child(render_reactions(message, panel, cx));
+    }
+
     bubble = bubble.child(
         h_flex()
             .justify_end()
             .gap_1()
+            .when_some(message.views, |this, views| {
+                this.child(
+                    Label::new(format!("👁 {views}"))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+            })
             .child(
                 Label::new(clock_time(message.timestamp_unix))
                     .size(LabelSize::XSmall)
@@ -2594,7 +3440,23 @@ fn render_message(
     );
 
     let bubble = wrap_in_context_menu(message, bubble.into_any_element(), panel);
-    let item = div().min_w_0().child(bubble).into_any_element();
+    let mut item = h_flex().min_w_0().gap_1().items_end();
+    if selection_mode {
+        item = item.child(
+            Icon::new(if selected {
+                IconName::Check
+            } else {
+                IconName::Circle
+            })
+            .size(IconSize::XSmall)
+            .color(if selected {
+                Color::Accent
+            } else {
+                Color::Muted
+            }),
+        );
+    }
+    let item = item.child(bubble).into_any_element();
     if message.outgoing {
         column = column.items_end().child(item);
     } else {
@@ -2602,6 +3464,181 @@ fn render_message(
     }
 
     column.into_any_element()
+}
+
+/// The localized one-line description of a service message.
+fn service_message_text(message: &MessageSnapshot, cx: &mut App) -> SharedString {
+    let sender = message.sender_name.clone();
+    let action = match &message.action {
+        Some(telegram::MessageAction::MemberJoined { .. }) => tr(
+            cx,
+            "telegram_panel.service.member_joined",
+            "{actor} joined the group",
+        ),
+        Some(telegram::MessageAction::MemberAdded { .. }) => tr(
+            cx,
+            "telegram_panel.service.member_added",
+            "{actor} added a member",
+        ),
+        Some(telegram::MessageAction::MemberLeft { .. }) => tr(
+            cx,
+            "telegram_panel.service.member_left",
+            "{actor} left the group",
+        ),
+        Some(telegram::MessageAction::TitleChanged { .. }) => tr(
+            cx,
+            "telegram_panel.service.title_changed",
+            "{actor} changed the group name",
+        ),
+        Some(telegram::MessageAction::PhotoChanged { .. }) => tr(
+            cx,
+            "telegram_panel.service.photo_changed",
+            "{actor} changed the group photo",
+        ),
+        Some(telegram::MessageAction::PinnedMessage { .. }) => tr(
+            cx,
+            "telegram_panel.service.pinned_message",
+            "{actor} pinned a message",
+        ),
+        Some(telegram::MessageAction::GroupCreated { .. }) => tr(
+            cx,
+            "telegram_panel.service.group_created",
+            "{actor} created the group",
+        ),
+        Some(telegram::MessageAction::ChannelCreated { .. }) => tr(
+            cx,
+            "telegram_panel.service.channel_created",
+            "Channel created",
+        ),
+        Some(telegram::MessageAction::Call { missed, .. }) => {
+            if *missed {
+                tr(cx, "telegram_panel.service.missed_call", "Missed call")
+            } else {
+                tr(cx, "telegram_panel.service.call", "Call")
+            }
+        }
+        Some(telegram::MessageAction::Other) | None => {
+            tr(cx, "telegram_panel.service.other", "Service message")
+        }
+    };
+    let actor = if sender.is_empty() {
+        match &message.action {
+            Some(
+                telegram::MessageAction::MemberJoined { actor }
+                | telegram::MessageAction::MemberAdded { actor, .. }
+                | telegram::MessageAction::MemberLeft { actor }
+                | telegram::MessageAction::TitleChanged { actor, .. }
+                | telegram::MessageAction::PhotoChanged { actor }
+                | telegram::MessageAction::PinnedMessage { actor }
+                | telegram::MessageAction::GroupCreated { actor, .. },
+            ) => actor.clone(),
+            _ => String::new(),
+        }
+    } else {
+        sender
+    };
+    SharedString::from(action.replace("{actor}", &actor))
+}
+
+fn render_reply_preview(
+    message: &MessageSnapshot,
+    reply: &telegram::ReplySnapshot,
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
+    let panel = panel.clone();
+    let chat_id = message.chat_id;
+    let message_id = reply.message_id;
+    let text = if reply.text.is_empty() {
+        tr(
+            cx,
+            "telegram_panel.message.reply_to_message",
+            "Message #{id}",
+        )
+        .replace("{id}", &reply.message_id.to_string())
+    } else if reply.sender_name.is_empty() {
+        reply.text.clone()
+    } else {
+        format!("{}: {}", reply.sender_name, reply.text)
+    };
+    h_flex()
+        .id(ElementId::Name(
+            format!("telegram-reply-preview-{chat_id}-{message_id}").into(),
+        ))
+        .w_full()
+        .min_w_0()
+        .gap_1()
+        .px_1()
+        .py_0p5()
+        .border_l_2()
+        .border_color(cx.theme().colors().border_focused)
+        .cursor_pointer()
+        .on_click(move |_, _, cx| {
+            panel
+                .update(cx, |panel, cx| {
+                    panel.scroll_to_message(chat_id, message_id, cx)
+                })
+                .log_err();
+        })
+        .child(
+            Label::new(text)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .into_any_element()
+}
+
+fn render_reactions(
+    message: &MessageSnapshot,
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
+    let mut row = h_flex().flex_wrap().gap_1();
+    let chat_id = message.chat_id;
+    let message_id = message.id;
+    for (index, reaction) in message.reactions.iter().enumerate() {
+        let panel = panel.clone();
+        let emoji = reaction.emoji.clone();
+        let chosen = reaction.chosen;
+        let label = format!("{} {}", reaction.emoji, reaction.count);
+        row = row.child(
+            div()
+                .id(ElementId::Name(
+                    format!("telegram-reaction-{chat_id}-{message_id}-{index}").into(),
+                ))
+                .cursor_pointer()
+                .px_1()
+                .rounded_full()
+                .border_1()
+                .border_color(if chosen {
+                    cx.theme().colors().border_focused
+                } else {
+                    cx.theme().colors().border
+                })
+                .on_click(move |_, _, cx| {
+                    let emoji = (!chosen).then(|| emoji.clone());
+                    panel
+                        .update(cx, |panel, cx| {
+                            panel.dispatch(
+                                Command::SetReaction {
+                                    chat_id,
+                                    message_id,
+                                    emoji,
+                                },
+                                cx,
+                            )
+                        })
+                        .log_err();
+                })
+                .child(Label::new(label).size(LabelSize::XSmall).color(if chosen {
+                    Color::Accent
+                } else {
+                    Color::Muted
+                })),
+        );
+    }
+    row.into_any_element()
 }
 
 /// Wraps a message bubble in a right-click menu with message actions.
@@ -2613,7 +3650,16 @@ fn wrap_in_context_menu(
     let chat_id = message.chat_id;
     let message_id = message.id;
     let text = message.text.clone();
-    let is_sendable = message_id != 0;
+    let outgoing = message.outgoing;
+    let is_service = message.is_service();
+    let is_sendable = message_id != 0 && !is_service;
+    let chosen_reactions: Vec<String> = message
+        .reactions
+        .iter()
+        .filter(|reaction| reaction.chosen)
+        .map(|reaction| reaction.emoji.clone())
+        .collect();
+    let message_for_actions = message.clone();
     let panel = panel.clone();
     right_click_menu(ElementId::Name(
         format!("telegram-message-menu-{chat_id}-{message_id}").into(),
@@ -2622,35 +3668,95 @@ fn wrap_in_context_menu(
     .menu(move |window, cx| {
         let panel = panel.clone();
         let text = text.clone();
+        let message_for_actions = message_for_actions.clone();
+        let chosen_reactions = chosen_reactions.clone();
         ContextMenu::build(window, cx, move |menu, _, cx| {
-            let is_pinned = panel.upgrade().is_some_and(|panel| {
+            let chat = panel.upgrade().and_then(|panel| {
                 panel.read_with(cx, |panel, _| {
-                    panel
-                        .view_model
-                        .selected_chat_snapshot()
-                        .is_some_and(|chat| chat.pinned)
+                    panel.view_model.selected_chat_snapshot().cloned()
                 })
             });
-            let copy_text = text.clone();
-            let copy = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.copy", "Copy")).handler(
-                move |_, cx| {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_text.clone()));
-                },
-            );
+            let chat_kind = chat.as_ref().map(|chat| chat.kind);
+            let can_revoke = outgoing || chat_kind == Some(telegram::ChatKind::Group);
+            let pinned_message_id = chat
+                .as_ref()
+                .and_then(|chat| chat.pinned_message.as_ref())
+                .map(|pinned| pinned.id);
+            let chat_pinned = chat.as_ref().is_some_and(|chat| chat.pinned);
 
-            let mark_read =
-                ContextMenuEntry::new(tr(cx, "telegram_panel.menu.mark_read", "Mark as Read"))
-                    .disabled(message_id == 0)
-                    .handler({
-                        let panel = panel.clone();
-                        move |_, cx| {
-                            panel
-                                .update(cx, |panel, cx| {
-                                    panel.dispatch(Command::MarkRead { chat_id }, cx)
-                                })
-                                .log_err();
-                        }
-                    });
+            let copy = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.copy", "Copy"))
+                .disabled(text.is_empty())
+                .handler({
+                    let text = text.clone();
+                    move |_, cx| {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.clone()));
+                    }
+                });
+
+            let reply = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.reply", "Reply"))
+                .disabled(!is_sendable)
+                .handler({
+                    let panel = panel.clone();
+                    let message = message_for_actions.clone();
+                    move |window, cx| {
+                        panel
+                            .update(cx, |panel, cx| panel.start_reply(&message, window, cx))
+                            .log_err();
+                    }
+                });
+
+            let edit = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.edit", "Edit"))
+                .disabled(!outgoing || !is_sendable || is_service)
+                .handler({
+                    let panel = panel.clone();
+                    let message = message_for_actions.clone();
+                    move |window, cx| {
+                        panel
+                            .update(cx, |panel, cx| panel.start_edit(&message, window, cx))
+                            .log_err();
+                    }
+                });
+
+            let select = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.select", "Select"))
+                .disabled(!is_sendable)
+                .handler({
+                    let panel = panel.clone();
+                    move |_, cx| {
+                        panel
+                            .update(cx, |panel, cx| {
+                                panel.enter_selection(message_id, cx);
+                            })
+                            .log_err();
+                    }
+                });
+
+            let pin_message = ContextMenuEntry::new(if pinned_message_id == Some(message_id) {
+                tr(cx, "telegram_panel.menu.unpin_message", "Unpin Message")
+            } else {
+                tr(cx, "telegram_panel.menu.pin_message", "Pin Message")
+            })
+            .disabled(!is_sendable)
+            .handler({
+                let panel = panel.clone();
+                move |_, cx| {
+                    panel
+                        .update(cx, |panel, cx| {
+                            let message_id = if pinned_message_id == Some(message_id) {
+                                None
+                            } else {
+                                Some(message_id)
+                            };
+                            panel.dispatch(
+                                Command::SetPinnedMessage {
+                                    chat_id,
+                                    message_id,
+                                },
+                                cx,
+                            );
+                        })
+                        .log_err();
+                }
+            });
 
             let forward = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.forward", "Forward"))
                 .disabled(!is_sendable)
@@ -2659,32 +3765,75 @@ fn wrap_in_context_menu(
                     move |window, cx| {
                         panel
                             .update(cx, |panel, cx| {
-                                panel.forward_message(chat_id, message_id, window, cx)
+                                panel.forward_message(chat_id, vec![message_id], false, window, cx)
                             })
                             .log_err();
                     }
                 });
 
-            let delete = ContextMenuEntry::new(tr(cx, "telegram_panel.menu.delete", "Delete"))
-                .disabled(!is_sendable)
-                .handler({
-                    let panel = panel.clone();
-                    move |_, cx| {
-                        panel
-                            .update(cx, |panel, cx| {
-                                panel.dispatch(
-                                    Command::DeleteMessage {
-                                        chat_id,
-                                        message_id,
-                                    },
-                                    cx,
-                                )
-                            })
-                            .log_err();
-                    }
-                });
+            let forward_without_author = ContextMenuEntry::new(tr(
+                cx,
+                "telegram_panel.menu.forward_without_author",
+                "Forward Without Author",
+            ))
+            .disabled(!is_sendable)
+            .handler({
+                let panel = panel.clone();
+                move |window, cx| {
+                    panel
+                        .update(cx, |panel, cx| {
+                            panel.forward_message(chat_id, vec![message_id], true, window, cx)
+                        })
+                        .log_err();
+                }
+            });
 
-            let pin = ContextMenuEntry::new(if is_pinned {
+            let delete_for_me =
+                ContextMenuEntry::new(tr(cx, "telegram_panel.menu.delete_for_me", "Delete for Me"))
+                    .disabled(!is_sendable)
+                    .handler({
+                        let panel = panel.clone();
+                        move |_, cx| {
+                            panel
+                                .update(cx, |panel, cx| {
+                                    panel.dispatch(
+                                        Command::DeleteMessages {
+                                            chat_id,
+                                            message_ids: vec![message_id],
+                                            revoke: false,
+                                        },
+                                        cx,
+                                    )
+                                })
+                                .log_err();
+                        }
+                    });
+
+            let delete_for_everyone = ContextMenuEntry::new(tr(
+                cx,
+                "telegram_panel.menu.delete_for_everyone",
+                "Delete for Everyone",
+            ))
+            .disabled(!is_sendable || !can_revoke)
+            .handler({
+                let panel = panel.clone();
+                move |_, cx| {
+                    panel
+                        .update(cx, |panel, cx| {
+                            panel.dispatch(
+                                Command::DeleteMessages {
+                                    chat_id,
+                                    message_ids: vec![message_id],
+                                    revoke: true,
+                                },
+                                cx,
+                            )
+                        })
+                        .log_err();
+                }
+            });
+
+            let pin_chat = ContextMenuEntry::new(if chat_pinned {
                 tr(cx, "telegram_panel.menu.unpin_chat", "Unpin Chat")
             } else {
                 tr(cx, "telegram_panel.menu.pin_chat", "Pin Chat")
@@ -2697,7 +3846,7 @@ fn wrap_in_context_menu(
                             panel.dispatch(
                                 Command::SetPinned {
                                     chat_id,
-                                    pinned: !is_pinned,
+                                    pinned: !chat_pinned,
                                 },
                                 cx,
                             )
@@ -2706,16 +3855,241 @@ fn wrap_in_context_menu(
                 }
             });
 
-            menu.item(copy)
-                .item(mark_read)
-                .separator()
+            let mark_unread =
+                ContextMenuEntry::new(tr(cx, "telegram_panel.menu.mark_unread", "Mark as Unread"))
+                    .handler({
+                        let panel = panel.clone();
+                        move |_, cx| {
+                            panel
+                                .update(cx, |panel, cx| {
+                                    panel.dispatch(Command::MarkUnread { chat_id }, cx)
+                                })
+                                .log_err();
+                        }
+                    });
+
+            let mut menu = menu
+                .item(reply)
+                .item(edit)
+                .item(copy)
+                .item(select)
+                .item(pin_message);
+            let chosen_reactions = chosen_reactions.clone();
+            let react_panel = panel.clone();
+            let react_label = tr(cx, "telegram_panel.menu.react", "React");
+            let remove_reaction_label =
+                tr(cx, "telegram_panel.menu.remove_reaction", "Remove Reaction");
+            menu = menu.submenu(react_label, move |menu, _, _| {
+                let mut menu = menu;
+                for emoji in ["👍", "❤️", "😂", "🔥", "🎉", "😮"] {
+                    let panel = react_panel.clone();
+                    let emoji = emoji.to_owned();
+                    menu = menu.item(ContextMenuEntry::new(emoji.clone()).handler(move |_, cx| {
+                        panel
+                            .update(cx, |panel, cx| {
+                                panel.dispatch(
+                                    Command::SetReaction {
+                                        chat_id,
+                                        message_id,
+                                        emoji: Some(emoji.clone()),
+                                    },
+                                    cx,
+                                )
+                            })
+                            .log_err();
+                    }));
+                }
+                if !chosen_reactions.is_empty() {
+                    let panel = react_panel.clone();
+                    let label = remove_reaction_label.clone();
+                    menu = menu.item(ContextMenuEntry::new(label).handler(move |_, cx| {
+                        panel
+                            .update(cx, |panel, cx| {
+                                panel.dispatch(
+                                    Command::SetReaction {
+                                        chat_id,
+                                        message_id,
+                                        emoji: None,
+                                    },
+                                    cx,
+                                )
+                            })
+                            .log_err();
+                    }));
+                }
+                menu
+            });
+            menu.separator()
                 .item(forward)
-                .item(delete)
+                .item(forward_without_author)
                 .separator()
-                .item(pin)
+                .item(delete_for_me)
+                .item(delete_for_everyone)
+                .separator()
+                .item(pin_chat)
+                .item(mark_unread)
         })
     })
     .into_any_element()
+}
+
+/// Runs `command` after the user confirms a destructive action.
+fn confirm_destructive(
+    panel: WeakEntity<TelegramPanel>,
+    message: String,
+    command: Command,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let confirm = tr(cx, "telegram_panel.confirm.ok", "Confirm");
+    let cancel = tr(cx, "telegram_panel.confirm.cancel", "Cancel");
+    let receiver = window.prompt(
+        gpui::PromptLevel::Warning,
+        &message,
+        None,
+        &[confirm.as_str(), cancel.as_str()],
+        cx,
+    );
+    cx.spawn(async move |cx| {
+        if receiver.await == Ok(0) {
+            panel
+                .update(cx, |panel, cx| panel.dispatch(command, cx))
+                .log_err();
+        }
+    })
+    .detach();
+}
+
+/// The menu shown when a chat row is right-clicked.
+fn chat_context_menu(
+    chat: ChatSnapshot,
+    panel: WeakEntity<TelegramPanel>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<ContextMenu> {
+    let chat_id = chat.id;
+    ContextMenu::build(window, cx, move |menu, _, cx| {
+        let panel_for_pin = panel.clone();
+        let panel_for_mute = panel.clone();
+        let panel_for_archive = panel.clone();
+        let panel_for_unread = panel.clone();
+        let panel_for_clear = panel.clone();
+        let panel_for_leave = panel.clone();
+        let muted = chat.muted;
+        let archived = chat.archived;
+        let pinned = chat.pinned;
+        let title_for_clear = chat.title.clone();
+        let title_for_leave = chat.title;
+
+        menu.item(
+            ContextMenuEntry::new(if pinned {
+                tr(cx, "telegram_panel.menu.unpin_chat", "Unpin Chat")
+            } else {
+                tr(cx, "telegram_panel.menu.pin_chat", "Pin Chat")
+            })
+            .handler(move |_, cx| {
+                panel_for_pin
+                    .update(cx, |panel, cx| {
+                        panel.dispatch(
+                            Command::SetPinned {
+                                chat_id,
+                                pinned: !pinned,
+                            },
+                            cx,
+                        )
+                    })
+                    .log_err();
+            }),
+        )
+        .item(
+            ContextMenuEntry::new(if muted {
+                tr(cx, "telegram_panel.menu.unmute", "Unmute")
+            } else {
+                tr(cx, "telegram_panel.menu.mute", "Mute")
+            })
+            .handler(move |_, cx| {
+                panel_for_mute
+                    .update(cx, |panel, cx| {
+                        panel.dispatch(
+                            Command::SetMuted {
+                                chat_id,
+                                muted: !muted,
+                            },
+                            cx,
+                        )
+                    })
+                    .log_err();
+            }),
+        )
+        .item(
+            ContextMenuEntry::new(if archived {
+                tr(cx, "telegram_panel.menu.unarchive", "Unarchive")
+            } else {
+                tr(cx, "telegram_panel.menu.archive", "Archive")
+            })
+            .handler(move |_, cx| {
+                panel_for_archive
+                    .update(cx, |panel, cx| {
+                        panel.dispatch(
+                            Command::SetArchived {
+                                chat_id,
+                                archived: !archived,
+                            },
+                            cx,
+                        )
+                    })
+                    .log_err();
+            }),
+        )
+        .item(
+            ContextMenuEntry::new(tr(cx, "telegram_panel.menu.mark_unread", "Mark as Unread"))
+                .handler(move |_, cx| {
+                    panel_for_unread
+                        .update(cx, |panel, cx| {
+                            panel.dispatch(Command::MarkUnread { chat_id }, cx)
+                        })
+                        .log_err();
+                }),
+        )
+        .separator()
+        .item(
+            ContextMenuEntry::new(tr(cx, "telegram_panel.menu.clear_history", "Clear History"))
+                .handler(move |window, cx| {
+                    let message = tr(
+                        cx,
+                        "telegram_panel.confirm.clear_history",
+                        "Clear the history of “{title}”? This cannot be undone.",
+                    )
+                    .replace("{title}", &title_for_clear);
+                    confirm_destructive(
+                        panel_for_clear.clone(),
+                        message,
+                        Command::ClearHistory { chat_id },
+                        window,
+                        cx,
+                    );
+                }),
+        )
+        .item(
+            ContextMenuEntry::new(tr(cx, "telegram_panel.menu.leave", "Leave Chat")).handler(
+                move |window, cx| {
+                    let message = tr(
+                        cx,
+                        "telegram_panel.confirm.leave",
+                        "Leave “{title}”? This cannot be undone.",
+                    )
+                    .replace("{title}", &title_for_leave);
+                    confirm_destructive(
+                        panel_for_leave.clone(),
+                        message,
+                        Command::LeaveChat { chat_id },
+                        window,
+                        cx,
+                    );
+                },
+            ),
+        )
+    })
 }
 
 /// Toggles whether a media card is expanded. Shared by the card header and the
@@ -2759,11 +4133,17 @@ fn render_media(
     if media.kind == MediaKind::WebPage {
         return render_webpage(media, chat_id, message_id, cx);
     }
+    match media.kind {
+        MediaKind::Poll => return render_poll(media, cx),
+        MediaKind::Contact => return render_contact(media, cx),
+        MediaKind::Geo => return render_geo(media, cx),
+        _ => {}
+    }
 
     let icon = match media.kind {
-        MediaKind::Photo => IconName::Image,
-        MediaKind::Video => IconName::PlayFilled,
-        MediaKind::Voice => IconName::Mic,
+        MediaKind::Photo | MediaKind::Animation => IconName::Image,
+        MediaKind::Video | MediaKind::VideoNote => IconName::PlayFilled,
+        MediaKind::Voice | MediaKind::Audio => IconName::Mic,
         MediaKind::Sticker => IconName::Sparkle,
         _ => IconName::FileGeneric,
     };
@@ -3255,6 +4635,144 @@ fn media_display_size(media: &MediaSnapshot) -> Option<(Pixels, Pixels)> {
         display_height = max_height;
     }
     Some((px(display_width), px(display_height)))
+}
+
+fn render_poll(media: &MediaSnapshot, cx: &mut App) -> AnyElement {
+    let Some(poll) = &media.poll else {
+        return div().into_any_element();
+    };
+    let mut card = v_flex()
+        .w_full()
+        .min_w_0()
+        .gap_1()
+        .p_2()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(
+            Label::new(poll.question.clone())
+                .size(LabelSize::Small)
+                .weight(gpui::FontWeight::MEDIUM),
+        );
+    for option in &poll.options {
+        card = card.child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .child(
+                    Label::new(option.text.clone())
+                        .size(LabelSize::XSmall)
+                        .flex_1()
+                        .truncate(),
+                )
+                .child(
+                    Label::new(option.voters.to_string())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                ),
+        );
+    }
+    let mut footer = h_flex().gap_2();
+    if poll.closed {
+        footer = footer.child(
+            Label::new(tr(cx, "telegram_panel.poll.closed", "Closed"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        );
+    }
+    if poll.multiple_choice {
+        footer = footer.child(
+            Label::new(tr(
+                cx,
+                "telegram_panel.poll.multiple_choice",
+                "Multiple choice",
+            ))
+            .size(LabelSize::XSmall)
+            .color(Color::Muted),
+        );
+    }
+    card.child(footer).into_any_element()
+}
+
+fn render_contact(media: &MediaSnapshot, cx: &mut App) -> AnyElement {
+    let Some(contact) = &media.contact else {
+        return div().into_any_element();
+    };
+    let name = format!("{} {}", contact.first_name, contact.last_name);
+    v_flex()
+        .w_full()
+        .min_w_0()
+        .gap_1()
+        .p_2()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(Icon::new(IconName::Person).size(IconSize::Small))
+                .child(
+                    Label::new(name.trim().to_owned())
+                        .size(LabelSize::Small)
+                        .weight(gpui::FontWeight::MEDIUM),
+                ),
+        )
+        .child(
+            Label::new(contact.phone.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        )
+        .into_any_element()
+}
+
+fn render_geo(media: &MediaSnapshot, cx: &mut App) -> AnyElement {
+    let Some(geo) = &media.geo else {
+        return div().into_any_element();
+    };
+    let coordinates = format!("{:.5}, {:.5}", geo.latitude, geo.longitude);
+    let mut card = v_flex()
+        .w_full()
+        .min_w_0()
+        .gap_1()
+        .p_2()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(Icon::new(IconName::Pin).size(IconSize::Small))
+                .child(
+                    Label::new(
+                        geo.title
+                            .clone()
+                            .unwrap_or_else(|| tr(cx, "telegram_panel.media.geo", "Location")),
+                    )
+                    .size(LabelSize::Small)
+                    .weight(gpui::FontWeight::MEDIUM),
+                ),
+        );
+    if let Some(address) = &geo.address
+        && !address.is_empty()
+    {
+        card = card.child(
+            Label::new(address.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        );
+    }
+    card.child(
+        Label::new(coordinates)
+            .size(LabelSize::XSmall)
+            .color(Color::Muted),
+    )
+    .into_any_element()
 }
 
 fn render_webpage(
@@ -3973,12 +5491,78 @@ fn day_label(unix: i64) -> String {
 /// The chat-list preview text. Media-only messages fall back to a localized
 /// name for the attachment kind instead of an empty line.
 fn chat_preview_text(chat: &ChatSnapshot, cx: &App) -> String {
+    if let Some(typing) = &chat.typing {
+        return tr(cx, "telegram_panel.typing", "{name} is typing…")
+            .replace("{name}", &typing.user_name);
+    }
     if !chat.preview.is_empty() {
         return chat.preview.clone();
     }
     chat.preview_media
         .map(|kind| media_kind_label(kind, cx))
         .unwrap_or_default()
+}
+
+/// Cycles the search filter in the order shown in the search bar.
+fn next_search_filter(filter: telegram::SearchFilter) -> telegram::SearchFilter {
+    match filter {
+        telegram::SearchFilter::All => telegram::SearchFilter::Text,
+        telegram::SearchFilter::Text => telegram::SearchFilter::Media,
+        telegram::SearchFilter::Media => telegram::SearchFilter::Links,
+        telegram::SearchFilter::Links => telegram::SearchFilter::Files,
+        telegram::SearchFilter::Files => telegram::SearchFilter::All,
+    }
+}
+
+/// The localized label of the active search filter.
+fn search_filter_label(filter: telegram::SearchFilter, cx: &App) -> String {
+    let (key, fallback) = match filter {
+        telegram::SearchFilter::All => ("telegram_panel.search.filter.all", "All"),
+        telegram::SearchFilter::Text => ("telegram_panel.search.filter.text", "Text"),
+        telegram::SearchFilter::Media => ("telegram_panel.search.filter.media", "Media"),
+        telegram::SearchFilter::Links => ("telegram_panel.search.filter.links", "Links"),
+        telegram::SearchFilter::Files => ("telegram_panel.search.filter.files", "Files"),
+    };
+    tr(cx, key, fallback)
+}
+
+/// The muted second line of the conversation header: typing state, presence,
+/// slow mode, or the public username.
+fn chat_subtitle(chat: &ChatSnapshot, cx: &App) -> Option<String> {
+    if let Some(typing) = &chat.typing {
+        return Some(
+            tr(cx, "telegram_panel.typing", "{name} is typing…")
+                .replace("{name}", &typing.user_name),
+        );
+    }
+    match &chat.presence {
+        telegram::Presence::Online => {
+            return Some(tr(cx, "telegram_panel.presence.online", "online"));
+        }
+        telegram::Presence::Recently => {
+            return Some(tr(
+                cx,
+                "telegram_panel.presence.recently",
+                "recently online",
+            ));
+        }
+        telegram::Presence::LastSeen(unix) if *unix > 0 => {
+            return Some(
+                tr(cx, "telegram_panel.presence.last_seen", "last seen {time}")
+                    .replace("{time}", &relative_time(*unix)),
+            );
+        }
+        _ => {}
+    }
+    if chat.slow_mode_seconds > 0 {
+        return Some(
+            tr(cx, "telegram_panel.slow_mode", "slow mode: {seconds}s")
+                .replace("{seconds}", &chat.slow_mode_seconds.to_string()),
+        );
+    }
+    chat.username
+        .as_ref()
+        .map(|username| format!("@{username}"))
 }
 
 fn media_display_name(media: &MediaSnapshot, cx: &App) -> String {
@@ -3992,6 +5576,8 @@ fn media_kind_label(kind: MediaKind, cx: &App) -> String {
     let (key, fallback) = match kind {
         MediaKind::Photo => ("telegram_panel.media.photo", "Photo"),
         MediaKind::Video => ("telegram_panel.media.video", "Video"),
+        MediaKind::VideoNote => ("telegram_panel.media.video_note", "Video message"),
+        MediaKind::Animation => ("telegram_panel.media.animation", "Animation"),
         MediaKind::Voice => ("telegram_panel.media.voice", "Voice message"),
         MediaKind::Audio => ("telegram_panel.media.audio", "Audio"),
         MediaKind::Sticker => ("telegram_panel.media.sticker", "Sticker"),
@@ -4096,6 +5682,51 @@ fn error_text(error: &EngineError, flood_wait_seconds: Option<u64>, cx: &App) ->
             "telegram_panel.error.pin_failed",
             "Failed to update the chat pin.",
         ),
+        EngineError::ReadOnlyChat => tr(
+            cx,
+            "telegram_panel.error.read_only_chat",
+            "You cannot send messages in this chat.",
+        ),
+        EngineError::EditFailed => tr(
+            cx,
+            "telegram_panel.error.edit_failed",
+            "Failed to edit the message.",
+        ),
+        EngineError::PinMessageFailed => tr(
+            cx,
+            "telegram_panel.error.pin_message_failed",
+            "Failed to update the pinned message.",
+        ),
+        EngineError::ReactionFailed => tr(
+            cx,
+            "telegram_panel.error.reaction_failed",
+            "Failed to update the reaction.",
+        ),
+        EngineError::MuteFailed => tr(
+            cx,
+            "telegram_panel.error.mute_failed",
+            "Failed to update the notification settings.",
+        ),
+        EngineError::ArchiveFailed => tr(
+            cx,
+            "telegram_panel.error.archive_failed",
+            "Failed to archive the chat.",
+        ),
+        EngineError::MarkUnreadFailed => tr(
+            cx,
+            "telegram_panel.error.mark_unread_failed",
+            "Failed to mark the chat as unread.",
+        ),
+        EngineError::ClearHistoryFailed => tr(
+            cx,
+            "telegram_panel.error.clear_history_failed",
+            "Failed to clear the chat history.",
+        ),
+        EngineError::LeaveFailed => tr(
+            cx,
+            "telegram_panel.error.leave_failed",
+            "Failed to leave the chat.",
+        ),
         EngineError::SearchFailed => tr(cx, "telegram_panel.error.search_failed", "Search failed."),
         EngineError::FloodWait { .. } => {
             let seconds = flood_wait_seconds.unwrap_or(0);
@@ -4135,10 +5766,12 @@ impl Render for TelegramPanel {
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(|this, _: &Back, window, cx| this.back(window, cx)))
             .on_action(cx.listener(|this, _: &Send, window, cx| this.send(window, cx)))
-            .on_action(cx.listener(|this, _: &NextChat, _, cx| this.select_relative_chat(1, cx)))
-            .on_action(
-                cx.listener(|this, _: &PreviousChat, _, cx| this.select_relative_chat(-1, cx)),
-            )
+            .on_action(cx.listener(|this, _: &NextChat, window, cx| {
+                this.select_relative_chat(1, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &PreviousChat, window, cx| {
+                this.select_relative_chat(-1, window, cx)
+            }))
             .child(self.render_header(cx))
             .when_some(self.render_search_bar(cx), |this, search| {
                 this.child(search)
@@ -4271,13 +5904,13 @@ pub fn register(workspace: &mut Workspace, _cx: &mut Context<Workspace>) {
         });
     });
     workspace.register_action(|workspace, _: &NextChat, window, cx| {
-        with_panel(workspace, window, cx, |panel, _window, cx| {
-            panel.select_relative_chat(1, cx)
+        with_panel(workspace, window, cx, |panel, window, cx| {
+            panel.select_relative_chat(1, window, cx)
         });
     });
     workspace.register_action(|workspace, _: &PreviousChat, window, cx| {
-        with_panel(workspace, window, cx, |panel, _window, cx| {
-            panel.select_relative_chat(-1, cx)
+        with_panel(workspace, window, cx, |panel, window, cx| {
+            panel.select_relative_chat(-1, window, cx)
         });
     });
     workspace.register_action(|workspace, _: &Back, window, cx| {
@@ -4306,12 +5939,16 @@ fn with_panel(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_history_layout, duration_label, error_text, media_display_size, media_kind_label,
+        build_history_layout, chat_subtitle, duration_label, error_text, media_display_size,
+        media_kind_label, next_search_filter, search_filter_label, service_message_text,
         voice_waveform_samples,
     };
     use gpui::{TestAppContext, px};
     use settings::SettingsStore;
-    use telegram::{EngineError, MediaKind, MediaSnapshot, MessageSnapshot, SendState};
+    use telegram::{
+        ChatSnapshot, EngineError, MediaKind, MediaSnapshot, MessageAction, MessageSnapshot,
+        Presence, SendState, TypingSnapshot,
+    };
 
     fn message(id: i32, sender: &str, timestamp_unix: i64) -> MessageSnapshot {
         MessageSnapshot {
@@ -4319,10 +5956,17 @@ mod tests {
             chat_id: 1,
             outgoing: false,
             sender_name: sender.to_owned(),
+            sender_id: None,
             timestamp_unix,
             text: String::new(),
             markdown: None,
             media: None,
+            reply_to: None,
+            forwarded_from: None,
+            grouped_id: None,
+            views: None,
+            action: None,
+            reactions: Vec::new(),
             send_state: SendState::Sent,
             local_id: None,
             edited: false,
@@ -4459,6 +6103,98 @@ mod tests {
                 media_kind_label(MediaKind::Geo, cx),
                 i18n::tr(cx, "telegram_panel.media.geo", "Location")
             );
+            assert_eq!(
+                media_kind_label(MediaKind::Animation, cx),
+                i18n::tr(cx, "telegram_panel.media.animation", "Animation")
+            );
+            assert_eq!(
+                media_kind_label(MediaKind::VideoNote, cx),
+                i18n::tr(cx, "telegram_panel.media.video_note", "Video message")
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn chat_subtitle_prefers_typing_then_presence(cx: &mut TestAppContext) {
+        init_i18n(cx);
+        cx.update(|cx| {
+            let mut chat = ChatSnapshot {
+                presence: Presence::Online,
+                ..Default::default()
+            };
+            assert_eq!(
+                chat_subtitle(&chat, cx),
+                Some(i18n::tr(cx, "telegram_panel.presence.online", "online"))
+            );
+
+            chat.typing = Some(TypingSnapshot {
+                user_name: "Ada".to_owned(),
+                until_unix: 0,
+            });
+            assert_eq!(
+                chat_subtitle(&chat, cx),
+                Some(
+                    i18n::tr(cx, "telegram_panel.typing", "{name} is typing…")
+                        .replace("{name}", "Ada")
+                )
+            );
+
+            chat.typing = None;
+            chat.presence = Presence::Unknown;
+            chat.slow_mode_seconds = 30;
+            assert_eq!(
+                chat_subtitle(&chat, cx),
+                Some(
+                    i18n::tr(cx, "telegram_panel.slow_mode", "slow mode: {seconds}s")
+                        .replace("{seconds}", "30")
+                )
+            );
+
+            chat.slow_mode_seconds = 0;
+            chat.username = Some("ada".to_owned());
+            assert_eq!(chat_subtitle(&chat, cx), Some("@ada".to_owned()));
+        });
+    }
+
+    #[gpui::test]
+    fn service_message_text_fills_the_actor(cx: &mut TestAppContext) {
+        init_i18n(cx);
+        cx.update(|cx| {
+            let mut service = message(10, "Ada", 0);
+            service.action = Some(MessageAction::MemberJoined {
+                actor: "Ada".to_owned(),
+            });
+            assert_eq!(
+                service_message_text(&service, cx).as_ref(),
+                i18n::tr(
+                    cx,
+                    "telegram_panel.service.member_joined",
+                    "{actor} joined the group"
+                )
+                .replace("{actor}", "Ada")
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn search_filter_cycles_through_every_value(cx: &mut TestAppContext) {
+        init_i18n(cx);
+        let start = telegram::SearchFilter::All;
+        let mut filter = start;
+        for _ in 0..5 {
+            filter = next_search_filter(filter);
+        }
+        assert_eq!(filter, start);
+        cx.update(|cx| {
+            for filter in [
+                telegram::SearchFilter::All,
+                telegram::SearchFilter::Text,
+                telegram::SearchFilter::Media,
+                telegram::SearchFilter::Links,
+                telegram::SearchFilter::Files,
+            ] {
+                assert!(!search_filter_label(filter, cx).is_empty());
+            }
         });
     }
 

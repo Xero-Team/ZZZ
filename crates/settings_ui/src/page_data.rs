@@ -7767,8 +7767,8 @@ fn panels_page() -> SettingsPage {
                     "Telegram Panel Unread Badge",
                 ),
                 description: lt(
-                    "settings_ui.page_data.description.show.a.badge.with.the.number.of.unread.chats",
-                    "Show a badge with the number of unread chats on the Telegram panel icon.",
+                    "settings_ui.page_data.description.show.a.badge.with.the.number.of.unread.messages.muted.chats.do.not.count",
+                    "Show a badge with the number of unread messages on the Telegram panel icon. Muted chats do not count.",
                 ),
                 field: Box::new(SettingField {
                     json_path: Some("telegram_panel.show_unread_badge"),

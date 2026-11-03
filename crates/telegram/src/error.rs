@@ -4,9 +4,10 @@
 //! [`EngineError`] variant and lets the panel render localized text.
 
 use grammers_client::InvocationError;
+use serde::{Deserialize, Serialize};
 
 /// A failure the engine can report to the panel.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EngineError {
     NotConnected,
     NoCredentials,
@@ -21,13 +22,23 @@ pub enum EngineError {
     NoPendingPassword,
     ChatUnavailable,
     ChatUnavailableOffline,
+    /// The chat exists but the account may not post in it.
+    ReadOnlyChat,
     SendFailed,
+    EditFailed,
     LoadChatsFailed,
     LoadMessagesFailed,
     DeleteFailed,
     ForwardFailed,
     PinFailed,
+    PinMessageFailed,
     SearchFailed,
+    ReactionFailed,
+    MuteFailed,
+    ArchiveFailed,
+    MarkUnreadFailed,
+    ClearHistoryFailed,
+    LeaveFailed,
     /// Telegram asked the client to wait before retrying.
     FloodWait {
         seconds: u64,

@@ -766,7 +766,8 @@ pub struct TelegramPanelSettingsContent {
     ///
     /// Default: false
     pub starts_open: Option<bool>,
-    /// Whether to show a badge on the Telegram panel icon with the number of unread chats.
+    /// Whether to show a badge on the Telegram panel icon with the number of
+    /// unread messages. Muted chats do not count.
     ///
     /// Default: true
     pub show_unread_badge: Option<bool>,

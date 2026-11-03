@@ -5,7 +5,7 @@ description: How the opt-in Telegram panel is structured, synchronizes, and rend
 
 # Telegram Panel
 
-ZZZ has an opt-in Telegram panel that lives in the bottom dock, next to the
+ZZZ has an opt-in Telegram panel that docks left, bottom, or right, next to the
 Agent and Git panels. It is split across two crates: a GUI-independent engine
 and a GPUI panel, mirroring the `git` plus `git_ui` split.
 
@@ -78,15 +78,71 @@ holes.
 New messages update the chat preview and unread count immediately. If a
 message arrives for a chat that is not in the loaded list, the engine schedules
 a single chat-list reload after 500 ms instead of refetching on every message.
-A dropped connection schedules a reconnection with exponential backoff, capped
-at 30 seconds.
+A dropped connection clears the client and session, then schedules a
+reconnection with exponential backoff, capped at 30 seconds. A first connection
+failure schedules a retry too, even before sign-in has completed.
 
 ### Read state {#read}
 
-Opening a chat marks it read. Read updates from other devices arrive as raw
-`updateReadHistoryInbox` and `updateReadChannelInbox` updates; the engine maps
-their peer to the chat id and syncs `unread_count`, ignoring peers that are not
-in the loaded list. Outbox read receipts are not surfaced.
+The panel reports whether the selected chat is focused and scrolled to the
+bottom with `Command::SetViewing`. A chat is marked read only while all three
+hold: the chat is selected, the panel has window focus, and the history follows
+the tail. Opening a chat therefore does not mark it read while you are reading
+older messages. `Command::MarkUnread` sets the unread flag explicitly, and
+messages that arrive while the panel is unfocused keep their badge.
+
+Read updates from other devices arrive as raw `updateReadHistoryInbox`,
+`updateReadChannelInbox`, `updateReadHistoryOutbox`, and
+`updateReadChannelOutbox` updates. The engine maps their peer to the chat id and
+syncs `unread_count` and `read_outbox_message_id`, ignoring peers that are not
+in the loaded list. The conversation header shows the outbox read position for
+the account's own messages.
+
+### Conversations {#conversations}
+
+The panel supports the common message actions without leaving the keyboard:
+
+- **Replies.** The context menu's Reply action shows a banner above the
+  composer. Sending attaches the reply to the first message of a multi-message
+  send. Reply previews jump to the referenced message when it is loaded.
+- **Editing.** Editing one of the account's own text messages loads it into the
+  composer, shows an editing banner, and sends `Command::EditMessage` on submit.
+  Cancelling restores the text that was in the composer before editing started.
+- **Selection.** Entering selection mode adds checkboxes to bubbles. The toolbar
+  can forward or delete the selected messages in one request.
+- **Reactions.** The context menu offers a small emoji palette and removes an
+  existing reaction. Reactions render under the bubble and update from
+  `updateMessageReactions`.
+- **Forwarding.** Messages forward to any loaded chat. Forward Without Author
+  uses the raw `messages.forwardMessages` request with `drop_author` set.
+- **Deletion.** Delete for Me and Delete for Everyone map to the `revoke`
+  parameter. Channels have no per-user deletion, so Delete for Me removes the
+  message locally.
+- **Pinning.** A pinned message bar under the conversation header scrolls to the
+  pinned message. Pinning a chat moves it to the top of its folder.
+- **Service messages.** Joins, leaves, title and photo changes, pinned-message
+  notices, and calls render as centered one-line notices.
+
+### Folders and the archive {#folders}
+
+The chat list keeps the full dialog set and derives the visible list from the
+selected `FolderSelection`. Custom folders come from `messages.getDialogFilters`;
+their membership comes from each dialog's `folder_id`. Telegram exposes a single
+`folder_id` per dialog, so a chat appears in the folder the server reports.
+Archive is the reserved folder with id `1` and is fetched separately with
+`messages.getDialogs`, because the high-level dialog iterator only walks the
+default folder. Switching folders never refetches, and the unread badge spans
+every folder.
+
+### Typing and presence {#typing}
+
+Incoming `updateUserTyping`, `updateChatUserTyping`, and
+`updateChannelUserTyping` updates update a per-chat typing snapshot, which
+expires after six seconds without a refresh. The chat row and conversation
+header show "is typing" and then fall back to presence: online, recently online,
+or last seen. Outgoing typing actions are sent at most once every four seconds
+while the composer is non-empty. Sender names for typing updates come from
+messages already loaded in the conversation.
 
 ## Content width {#width}
 
@@ -118,6 +174,13 @@ card is expanded.
   player. Clicking a video poster does the same as its button: it starts the
   download, then opens the file. Contacts, polls, geolocations, and link
   previews have no file content and do not offer a Download.
+- Polls render their question, options, voter counts, and closed or
+  multiple-choice state. Contacts show the name and phone number. Locations and
+  venues show a title, address, coordinates, and live-location state.
+  Animations and round video messages get their own media kinds.
+- Albums are sent as one `messages.sendMedia` batch when the composer contains
+  several consecutive attachments. Received albums keep their `grouped_id`, but
+  each message still renders as its own card.
 - Link previews render as a compact card that opens the URL.
 - Media-only messages show a localized attachment name in the chat list
   preview instead of a blank line.
@@ -155,7 +218,9 @@ recorded here because the cache is disposable; the session is not.
 ## Composer and keymap contexts {#composer}
 
 The composer is an `editor::Editor` in auto-height mode, the same control the
-Git panel uses. The panel keymap binds send and newline with a descendant
+Git panel uses. Its initial height comes from
+`telegram_panel.composer_min_lines` (default `4`), and it grows from there before
+scrolling. The panel keymap binds send and newline with a descendant
 context:
 
 ```json [keymap]
@@ -184,7 +249,18 @@ The panel-level context binds `escape` to back, `ctrl-enter` to send,
 keybindings avoid `cmd-`, `super-`, `win-`, and `fn-`, which
 `cargo xtask check keys` rejects.
 
-There is no composer hint label; the placeholder is `Message`.
+There is no composer hint label; the placeholder is `Message`, localized through
+`telegram_panel.composer.placeholder`.
+
+### Search {#search}
+
+The header search opens a server-side message search after a short debounce.
+Queries shorter than two characters only filter loaded chat titles. The filter
+chooser selects all messages, text, media, links, or files, mapped to
+`messages.Filter` variants. Results are grouped by chat and paginate with
+`Command::SearchMore`; clicking a hit opens the chat and loads the page that
+contains the message before scrolling to it. Clearing the query leaves search
+mode without discarding the loaded history.
 
 ### Paste behavior {#composer-paste}
 
@@ -213,9 +289,10 @@ engine logs a warning and connects directly. There is no HTTP-to-SOCKS bridge.
 ## Settings {#settings}
 
 The panel registers `telegram_panel` (button, dock, default width and height,
-flexible, starts open, unread badge, and the content-width options) and
-`telegram` (SOCKS5 proxy). Panel size, position, and visibility are otherwise
-managed by the workspace dock.
+flexible sizing, starts open, unread badge, content-width options, and composer
+minimum lines) and `telegram` (SOCKS5 proxy). Panel size, position, and
+visibility are otherwise managed by the workspace dock. The unread badge counts
+unread messages across every folder and excludes muted chats.
 
 User-facing strings are localized through `i18n::tr` under the
 `telegram_panel.*` and `workspace.dock.panel.telegram` keys, present in both
@@ -223,13 +300,18 @@ User-facing strings are localized through `i18n::tr` under the
 
 ## Not implemented {#not-implemented}
 
-- Cross-device read sync covers inbox counts only. Outgoing read receipts and
-  per-message read state are not shown.
+- Received albums keep their `grouped_id` but are not visually merged into a
+  grid; each message renders as its own media card.
+- Chat avatars use initials. Profile photos are not downloaded.
+- Bot inline keyboards, callback buttons, and inline bots are not rendered.
+- Forum topics and message threads are not modeled.
 - There is no in-panel video playback. Videos are cards that open in the system
   player.
 - Outgoing voice notes are not implemented.
-- Replies, albums, multi-account, and per-message read receipts are out of
-  scope.
+- Multi-account, calls, and per-message read receipts are out of scope.
+- Received TGS sticker animation and message effects are not rendered.
+- Offline chat history and drafts are not persisted across restarts. Only the
+  encrypted session survives; message history is refetched after reconnecting.
 - Muted chats do not raise notifications and do not count toward the unread
   badge. They still count toward the per-chat unread count.
 

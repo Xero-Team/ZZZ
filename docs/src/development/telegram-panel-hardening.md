@@ -15,6 +15,25 @@ The existing feature overview lives in
 [Telegram Panel](./telegram-panel.md). The privacy contract lives in
 [Privacy and Network Boundary](./privacy-boundary.md).
 
+## Implementation status {#status}
+
+WS1 through WS11 are implemented. WS12 has engine unit tests for the model,
+compose planning, markdown entities, and cache paths; panel-level GPUI tests
+still cover only the pure helpers (layout, media labels, error mapping), not the
+network-facing flows. Remaining known gaps are listed in the feature overview's
+[Not implemented](./telegram-panel.md#not-implemented) section:
+
+- Received albums are not visually merged.
+- Offline history and drafts are not persisted; only the session survives a
+  restart.
+- Profile avatars, bot inline keyboards, forum topics, TGS sticker animation,
+  in-panel video playback, outgoing voice notes, calls, multi-account, and
+  per-message read receipts are still out of scope.
+
+The locked decisions below remain in force. Media is still a disposable cache,
+the session is still persistent state, and the engine still reports structured
+errors for the panel to localize.
+
 ## Locked decisions {#decisions}
 
 These are settled. Do not relitigate them while implementing.
@@ -268,9 +287,9 @@ detect duplicate bindings, since it cannot today.
 
 ## Out of scope {#out-of-scope}
 
-- Replies, albums, in-panel video playback, outgoing voice notes,
-  multi-account, and per-message read receipts. Keep them listed as
-  limitations.
+- In-panel video playback, outgoing voice notes, multi-account, calls, inline
+  bots, TGS sticker animation, and per-message read receipts. Keep them listed
+  as limitations.
 - The rodio codec expansion (`symphonia-libopus` and the native
   `opusic-sys` build dependency) and the grammers DNS/root-certificate
   additions. These belong in a separate dependency review, not this fix.

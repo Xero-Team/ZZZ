@@ -19,6 +19,7 @@ pub fn open(
     workspace: &mut Workspace,
     source_chat_id: i64,
     message_ids: Vec<i32>,
+    drop_author: bool,
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
@@ -27,7 +28,7 @@ pub fn open(
     };
     let chats = panel.read(cx).chats().to_vec();
     workspace.toggle_modal(window, cx, move |window, cx| {
-        let delegate = ForwardPickerDelegate::new(source_chat_id, message_ids, chats);
+        let delegate = ForwardPickerDelegate::new(source_chat_id, message_ids, drop_author, chats);
         Picker::uniform_list(delegate, window, cx)
     });
 }
@@ -36,13 +37,19 @@ pub fn open(
 pub struct ForwardPickerDelegate {
     source_chat_id: i64,
     message_ids: Vec<i32>,
+    drop_author: bool,
     chats: Vec<ChatSnapshot>,
     matches: Vec<StringMatch>,
     selected_index: usize,
 }
 
 impl ForwardPickerDelegate {
-    fn new(source_chat_id: i64, message_ids: Vec<i32>, chats: Vec<ChatSnapshot>) -> Self {
+    fn new(
+        source_chat_id: i64,
+        message_ids: Vec<i32>,
+        drop_author: bool,
+        chats: Vec<ChatSnapshot>,
+    ) -> Self {
         let matches = chats
             .iter()
             .enumerate()
@@ -56,6 +63,7 @@ impl ForwardPickerDelegate {
         Self {
             source_chat_id,
             message_ids,
+            drop_author,
             chats,
             matches,
             selected_index: 0,
@@ -136,6 +144,7 @@ impl PickerDelegate for ForwardPickerDelegate {
             source_chat_id: self.source_chat_id,
             message_ids: self.message_ids.clone(),
             target_chat_id: target.id,
+            drop_author: self.drop_author,
         });
         cx.emit(DismissEvent);
     }

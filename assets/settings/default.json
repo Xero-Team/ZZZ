@@ -1114,7 +1114,8 @@
     "flexible": false,
     // Whether the Telegram panel should open on startup.
     "starts_open": false,
-    // Whether to show a badge on the Telegram panel icon with the number of unread chats.
+    // Whether to show a badge on the Telegram panel icon with the number of
+    // unread messages. Muted chats do not count.
     "show_unread_badge": true,
     // Whether to limit content width. When enabled, messages, the conversation
     // header, and the composer are constrained to `max_content_width` and
