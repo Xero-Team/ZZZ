@@ -194,13 +194,18 @@ impl ContainerSpec {
             self.image.clone(),
         ];
         // The build recipes download toolchains and crates, so the image build
-        // needs the same proxy the runtime does. These are predefined build
-        // arguments, which the engines accept without an `ARG` declaration.
+        // needs the same proxy the runtime does. Only the engines' predefined
+        // arguments are forwarded, and those need no `ARG` declaration; an
+        // `all_proxy` build argument is not predefined and only earns an
+        // "argument was not consumed" warning.
         let proxies = proxy_environment(self.engine);
         if !proxies.is_empty() && self.engine == Engine::Podman {
             arguments.push("--http-proxy=false".to_owned());
         }
         for (key, value) in proxies {
+            if !BUILD_ARG_PROXY_VARIABLES.contains(&key.as_str()) {
+                continue;
+            }
             arguments.push("--build-arg".to_owned());
             arguments.push(format!("{key}={value}"));
         }
@@ -356,6 +361,16 @@ const PROXY_VARIABLES: [&str; 8] = [
     "HTTP_PROXY",
     "HTTPS_PROXY",
     "ALL_PROXY",
+    "NO_PROXY",
+];
+
+/// The subset the engines treat as predefined build arguments.
+const BUILD_ARG_PROXY_VARIABLES: [&str; 6] = [
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
     "NO_PROXY",
 ];
 
