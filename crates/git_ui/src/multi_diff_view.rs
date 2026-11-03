@@ -4,8 +4,8 @@ use editor::{
     Editor, EditorEvent, EditorSettings, MultiBuffer, SplittableEditor, multibuffer_context_lines,
 };
 use gpui::{
-    AnyElement, App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle,
-    Focusable, Font, IntoElement, Render, SharedString, Subscription, Task, Window,
+    App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle, Focusable, Font,
+    IntoElement, Render, SharedString, Subscription, Task, Window,
 };
 use i18n::tr;
 use language::{Buffer, Capability, HighlightedText, OffsetRangeExt};
@@ -17,12 +17,12 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use ui::{Color, Icon, IconName, Label, LabelCommon as _};
+use ui::{Color, Icon, IconName};
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
 use workspace::{
     Item, ItemHandle as _, ItemNavHistory, ToolbarItemLocation, Workspace,
-    item::{ItemEvent, SaveOptions, TabContentParams},
+    item::{ItemEvent, SaveOptions},
     searchable::SearchableItemHandle,
 };
 
@@ -304,16 +304,6 @@ impl Item for MultiDiffView {
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<Icon> {
         Some(Icon::new(IconName::Diff).color(Color::Muted))
-    }
-
-    fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
-        Label::new(self.title(cx))
-            .color(if params.selected {
-                Color::Default
-            } else {
-                Color::Muted
-            })
-            .into_any_element()
     }
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<ui::SharedString> {

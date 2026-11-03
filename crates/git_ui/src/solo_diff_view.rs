@@ -11,8 +11,8 @@ use git::{
     repository::RepoPath, status::StageStatus,
 };
 use gpui::{
-    Action, AnyElement, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle,
-    Focusable, IntoElement, Render, Subscription, Task, WeakEntity, Window,
+    Action, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    IntoElement, Render, Subscription, Task, WeakEntity, Window,
 };
 use i18n::tr;
 use language::{Anchor, Buffer, HighlightedText, OffsetRangeExt as _, Point};
@@ -28,14 +28,14 @@ use std::{
     sync::Arc,
 };
 use ui::{
-    Color, DiffStat, Divider, Icon, IconButton, IconButtonShape, IconName, Label, LabelCommon as _,
-    SharedString, Tooltip, prelude::*, vertical_divider,
+    Color, DiffStat, Divider, Icon, IconButton, IconButtonShape, IconName, SharedString, Tooltip,
+    prelude::*, vertical_divider,
 };
 use util::paths::{PathExt as _, PathStyle};
 use workspace::{
     Item, ItemHandle, ItemNavHistory, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
     Workspace,
-    item::{ItemEvent, SaveOptions, TabContentParams},
+    item::{ItemEvent, SaveOptions},
     notifications::NotifyTaskExt,
     searchable::SearchableItemHandle,
 };
@@ -365,16 +365,6 @@ impl Item for SoloDiffView {
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<Icon> {
         Some(Icon::new(IconName::Diff).color(Color::Muted))
-    }
-
-    fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
-        Label::new(self.tab_content_text(params.detail.unwrap_or_default(), cx))
-            .color(if params.selected {
-                Color::Default
-            } else {
-                Color::Muted
-            })
-            .into_any_element()
     }
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
