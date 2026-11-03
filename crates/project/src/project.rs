@@ -4635,6 +4635,54 @@ impl Project {
         )
     }
 
+    /// Returns the lowercased extension of a project path.
+    ///
+    /// A single-file worktree stores its only file at the worktree root, so the
+    /// project path is empty and carries no extension; fall back to the worktree
+    /// path in that case.
+    pub fn extension_for_path(&self, path: &ProjectPath, cx: &App) -> Option<String> {
+        if let Some(extension) = path.path.extension() {
+            return Some(extension.to_ascii_lowercase());
+        }
+        if !path.path.is_empty() {
+            return None;
+        }
+        let worktree = self.worktree_for_id(path.worktree_id, cx)?;
+        let abs_path = worktree.read(cx).abs_path();
+        let extension = abs_path.extension()?.to_str()?;
+        Some(extension.to_ascii_lowercase())
+    }
+
+    /// Returns the file name of a project path.
+    ///
+    /// Single-file worktrees store their only file at the worktree root, so the
+    /// root name is the file name there.
+    pub fn file_name_for_path(&self, path: &ProjectPath, cx: &App) -> Option<String> {
+        if let Some(file_name) = path.path.file_name() {
+            return Some(file_name.to_owned());
+        }
+        let worktree = self.worktree_for_id(path.worktree_id, cx)?;
+        Some(worktree.read(cx).root_name().as_unix_str().to_owned())
+    }
+
+    /// Returns the path to display in breadcrumbs, tooltips and file icons.
+    ///
+    /// Single-file worktrees store their only file at the worktree root, so their
+    /// project path is empty; the worktree path is the file path there.
+    pub fn display_path_for(&self, path: &ProjectPath, cx: &App) -> Option<String> {
+        let worktree = self.worktree_for_id(path.worktree_id, cx)?;
+        let worktree = worktree.read(cx);
+        if !path.path.is_empty() {
+            return Some(path.path.display(self.path_style(cx)).into_owned());
+        }
+        Some(
+            worktree
+                .full_path(&path.path)
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
+
     /// Attempts to find a `ProjectPath` corresponding to the given path. If the path
     /// is a *full path*, meaning it starts with the root name of a worktree, we'll locate
     /// it in that worktree. Otherwise, we'll attempt to find it as a relative path in

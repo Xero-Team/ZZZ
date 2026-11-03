@@ -695,10 +695,11 @@ impl PdfView {
     }
 
     pub(crate) fn file_name(&self, cx: &App) -> String {
-        self.pdf_item.read(cx).path.file_name().map_or_else(
-            || tr(cx, "pdf_viewer.file_name.fallback", "PDF"),
-            |name| name.to_owned(),
-        )
+        let path = self.project_path(cx);
+        self.project
+            .read(cx)
+            .file_name_for_path(&path, cx)
+            .unwrap_or_else(|| tr(cx, "pdf_viewer.file_name.fallback", "PDF"))
     }
 
     /// The PDF's absolute path in the project's native path style. Used to
@@ -715,11 +716,19 @@ impl PdfView {
         self.pdf_item.read(cx).path.clone()
     }
 
+    /// The path shown in breadcrumbs, tooltips and the tab icon.
+    pub(crate) fn display_path(&self, cx: &App) -> String {
+        let path_style = self.project.read(cx).path_style(cx);
+        self.project
+            .read(cx)
+            .display_path_for(&self.project_path(cx), cx)
+            .unwrap_or_else(|| self.relative_path(cx).display(path_style).into_owned())
+    }
+
     /// A multi-line description of the document used for the tab tooltip:
     /// path, optional title/author, PDF version and page count.
     pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
-        let path_style = self.project.read(cx).path_style(cx);
-        let mut lines = vec![self.relative_path(cx).display(path_style).into_owned()];
+        let mut lines = vec![self.display_path(cx)];
         if let Some(summary) = self.loaded().map(|state| &state.summary) {
             if let Some(title) = &summary.title {
                 lines.push(

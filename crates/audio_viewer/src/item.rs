@@ -65,10 +65,10 @@ impl Item for AudioView {
     }
 
     fn tab_icon(&self, _window: &Window, cx: &App) -> Option<Icon> {
-        let path = self.relative_path(cx);
+        let path = self.display_path(cx);
         ItemSettings::get_global(cx)
             .file_icons
-            .then(|| FileIcons::get_icon(path.as_std_path(), cx))
+            .then(|| FileIcons::get_icon(Path::new(&path), cx))
             .flatten()
             .map(Icon::from_path)
             .or_else(|| Some(Icon::new(IconName::File)))
@@ -95,8 +95,7 @@ impl Item for AudioView {
     }
 
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        let path_style = self.project.read(cx).path_style(cx);
-        let text = self.relative_path(cx).display(path_style).into_owned();
+        let text = self.display_path(cx);
         let font = ThemeSettings::get_global(cx).buffer_font.clone();
         Some((
             vec![HighlightedText {

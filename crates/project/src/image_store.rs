@@ -227,20 +227,10 @@ impl ImageItem {
 }
 
 pub fn is_image_file(project: &Entity<Project>, path: &ProjectPath, cx: &App) -> bool {
-    let ext = util::maybe!({
-        let worktree_abs_path = project
-            .read(cx)
-            .worktree_for_id(path.worktree_id, cx)?
-            .read(cx)
-            .abs_path();
-        path.path
-            .extension()
-            .or_else(|| worktree_abs_path.extension()?.to_str())
-            .map(str::to_lowercase)
-    });
-
-    match ext {
-        Some(ext) => Img::extensions().contains(&ext.as_str()) && !ext.contains("svg"),
+    match project.read(cx).extension_for_path(path, cx) {
+        Some(extension) => {
+            Img::extensions().contains(&extension.as_str()) && !extension.contains("svg")
+        }
         None => false,
     }
 }

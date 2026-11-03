@@ -64,8 +64,8 @@ impl project::ProjectItem for AudioItem {
         path: &ProjectPath,
         cx: &mut App,
     ) -> Option<Task<anyhow::Result<Entity<Self>>>> {
-        let extension = path.path.extension()?;
-        if !is_supported_audio_extension(extension) {
+        let extension = project.read(cx).extension_for_path(path, cx)?;
+        if !is_supported_audio_extension(&extension) {
             return None;
         }
 

@@ -1766,14 +1766,8 @@ impl project::ProjectItem for NotebookItem {
         let project = project.clone();
         let languages = project.read(cx).languages().clone();
 
-        // For single-file worktrees the relative path is empty, so fall back
-        // to the absolute path to detect notebooks opened directly.
-        let abs_path = project.read(cx).absolute_path(&path, cx);
-        let is_notebook = path.path.extension().unwrap_or_default() == NOTEBOOK_EXTENSION
-            || abs_path
-                .as_ref()
-                .and_then(|abs_path| abs_path.extension())
-                .is_some_and(|extension| extension == NOTEBOOK_EXTENSION);
+        let is_notebook =
+            project.read(cx).extension_for_path(&path, cx).as_deref() == Some(NOTEBOOK_EXTENSION);
 
         if is_notebook {
             Some(cx.spawn(async move |cx| {

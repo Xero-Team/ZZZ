@@ -93,8 +93,8 @@ impl project::ProjectItem for PdfItem {
         path: &ProjectPath,
         cx: &mut App,
     ) -> Option<Task<anyhow::Result<Entity<Self>>>> {
-        let extension = path.path.extension()?;
-        if !extension.eq_ignore_ascii_case("pdf") {
+        let extension = project.read(cx).extension_for_path(path, cx)?;
+        if extension != "pdf" {
             return None;
         }
 

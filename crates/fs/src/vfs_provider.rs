@@ -155,7 +155,16 @@ impl FsProviderCore {
                     .with_path(path.clone())
                     .with_detail(error.to_string())
             })?;
-        Ok(self.root.join(relative))
+        // `Path::join("")` appends a trailing separator, and a trailing separator
+        // after a regular file makes the OS report `NotADirectory` instead of
+        // returning the file's metadata. Single-file worktrees mount the file
+        // itself as the provider root, so the empty relative path must resolve to
+        // the root unchanged.
+        if relative.as_os_str().is_empty() {
+            Ok(self.root.as_ref().to_path_buf())
+        } else {
+            Ok(self.root.join(relative))
+        }
     }
 
     fn provider_path(

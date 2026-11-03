@@ -1958,6 +1958,7 @@ impl Pane {
 
     pub(super) fn file_names_for_prompt(
         items: &mut dyn Iterator<Item = &Box<dyn ItemHandle>>,
+        project: &Entity<Project>,
         cx: &App,
     ) -> String {
         let mut file_names = BTreeSet::default();
@@ -1968,7 +1969,7 @@ impl Pane {
                 }
                 let filename = project_item
                     .project_path(cx)
-                    .and_then(|path| path.path.file_name().map(ToOwned::to_owned));
+                    .and_then(|path| project.read(cx).file_name_for_path(&path, cx));
                 file_names.insert(filename.unwrap_or(tr(
                     cx,
                     "workspace.pane.untitled",
@@ -2029,7 +2030,7 @@ impl Pane {
 
             if save_intent == SaveIntent::Close && dirty_items.len() > 1 {
                 let answer = pane.update_in(cx, |_, window, cx| {
-                    let detail = Self::file_names_for_prompt(&mut dirty_items.iter(), cx);
+                    let detail = Self::file_names_for_prompt(&mut dirty_items.iter(), &project, cx);
                     let title = tr(
                         cx,
                         "workspace.pane.save_changes_multiple",
@@ -2087,6 +2088,7 @@ impl Pane {
                             let answer = pane.update_in(cx, |_, window, cx| {
                                 let detail = Self::file_names_for_prompt(
                                     &mut [&item_to_close].into_iter(),
+                                    &project,
                                     cx,
                                 );
                                 let title = tr(
@@ -5408,6 +5410,40 @@ mod tests {
             dirty.3,
             dirty.4
         );
+    }
+
+    #[gpui::test]
+    async fn test_file_names_for_prompt_uses_worktree_file_name(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree("/root", serde_json::json!({ "notes.txt": "hello" }))
+            .await;
+        let project = Project::test(fs, [], cx).await;
+
+        // A single-file worktree stores its file at the empty relative path, so
+        // the prompt has to fall back to the worktree's file name.
+        let (worktree, relative_path) = project
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree("/root/notes.txt", false, cx)
+            })
+            .await
+            .expect("failed to create single-file worktree");
+        assert!(relative_path.is_empty());
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+
+        let item = cx.new(|cx| {
+            TestItem::new(cx).with_project_items(&[TestProjectItem::new_dirty_in_worktree(
+                1,
+                "",
+                worktree_id,
+                cx,
+            )])
+        });
+        let item = Box::new(item) as Box<dyn ItemHandle>;
+        let items = [item];
+
+        let detail = cx.update(|cx| Pane::file_names_for_prompt(&mut items.iter(), &project, cx));
+        assert_eq!(detail, "notes.txt");
     }
 
     #[gpui::test]

@@ -189,7 +189,10 @@ impl AudioView {
         self._load_task = cx.spawn(async move |this, cx| {
             let prepared = this.update(cx, |view, cx| {
                 let item = view.audio_item.read(cx);
-                let format_hint = item.path.extension().map(ToOwned::to_owned);
+                let format_hint = view
+                    .project
+                    .read(cx)
+                    .extension_for_path(&item.project_path(), cx);
                 (
                     format_hint,
                     item.project_path(),
@@ -475,10 +478,11 @@ impl AudioView {
     }
 
     pub(crate) fn file_name(&self, cx: &App) -> String {
-        self.audio_item.read(cx).path.file_name().map_or_else(
-            || tr(cx, "audio_viewer.file_name.fallback", "Audio"),
-            |name| name.to_owned(),
-        )
+        let path = self.project_path(cx);
+        self.project
+            .read(cx)
+            .file_name_for_path(&path, cx)
+            .unwrap_or_else(|| tr(cx, "audio_viewer.file_name.fallback", "Audio"))
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
@@ -488,7 +492,7 @@ impl AudioView {
             .read(cx)
             .worktree_for_id(item.worktree_id, cx)?;
         let local = worktree.read(cx).as_local()?;
-        Some(local.abs_path().join(item.path.as_std_path()))
+        Some(local.absolutize(&item.path))
     }
 
     pub(crate) fn project_path(&self, cx: &App) -> ProjectPath {
@@ -499,9 +503,17 @@ impl AudioView {
         self.audio_item.read(cx).path.clone()
     }
 
-    pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
+    /// The path shown in breadcrumbs, tooltips and the tab icon.
+    pub(crate) fn display_path(&self, cx: &App) -> String {
         let path_style = self.project.read(cx).path_style(cx);
-        let mut lines = vec![self.relative_path(cx).display(path_style).into_owned()];
+        self.project
+            .read(cx)
+            .display_path_for(&self.project_path(cx), cx)
+            .unwrap_or_else(|| self.relative_path(cx).display(path_style).into_owned())
+    }
+
+    pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
+        let mut lines = vec![self.display_path(cx)];
         if let Some(title) = self.tag_title() {
             lines.push(title.to_string());
         }

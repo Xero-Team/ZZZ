@@ -7711,6 +7711,49 @@ async fn test_save_in_single_file_worktree(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+async fn test_save_in_single_file_worktree_on_real_fs(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    cx.executor().allow_parking();
+
+    // The real filesystem is what makes a single-file worktree interesting: the
+    // provider root is the file itself, so the empty worktree-relative path must
+    // not turn into a `file/` path with a trailing separator.
+    let dir = TempTree::new(json!({
+        "settings.json": "{ \"a\": 1 }\n",
+    }));
+    let file_path = dir.path().join("settings.json");
+
+    let project = Project::test(
+        Arc::new(RealFs::new(None, cx.executor())),
+        [file_path.as_path()],
+        cx,
+    )
+    .await;
+    let buffer = project
+        .update(cx, |p, cx| p.open_local_buffer(&file_path, cx))
+        .await
+        .unwrap();
+    assert_eq!(
+        buffer.read_with(cx, |buffer, _| buffer.text()),
+        "{ \"a\": 1 }\n"
+    );
+
+    buffer.update(cx, |buffer, cx| {
+        buffer.edit([(0..0, "// edited\n".to_string())], None, cx);
+    });
+
+    project
+        .update(cx, |project, cx| project.save_buffer(buffer.clone(), cx))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(&file_path).expect("file should exist"),
+        "// edited\n{ \"a\": 1 }\n"
+    );
+}
+
+#[gpui::test]
 async fn test_save_as(cx: &mut gpui::TestAppContext) {
     init_test(cx);
 
@@ -16799,4 +16842,91 @@ mod disable_ai_settings_tests {
             );
         });
     }
+}
+
+#[gpui::test]
+async fn test_path_queries_for_single_file_worktrees(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/root"),
+        json!({
+            "Downloads": {
+                "report.PDF": "",
+            },
+            "project.pdf": {
+                "README": "",
+            },
+        }),
+    )
+    .await;
+
+    let project = Project::test(fs.clone(), [], cx).await;
+
+    // A single-file worktree puts its file at the empty relative path, so the
+    // extension and file name have to come from the worktree instead.
+    let (worktree, relative_path) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/root/Downloads/report.PDF"), false, cx)
+        })
+        .await
+        .expect("failed to create single-file worktree");
+    assert!(relative_path.is_empty());
+    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+    let file_path = ProjectPath {
+        worktree_id,
+        path: relative_path,
+    };
+
+    assert_eq!(
+        project
+            .read_with(cx, |project, cx| project.extension_for_path(&file_path, cx))
+            .as_deref(),
+        Some("pdf")
+    );
+    assert_eq!(
+        project
+            .read_with(cx, |project, cx| project.file_name_for_path(&file_path, cx))
+            .as_deref(),
+        Some("report.PDF")
+    );
+    assert_eq!(
+        project.read_with(cx, |project, cx| project.absolute_path(&file_path, cx)),
+        Some(PathBuf::from(path!("/root/Downloads/report.PDF")))
+    );
+    assert_eq!(
+        project
+            .read_with(cx, |project, cx| project.display_path_for(&file_path, cx))
+            .as_deref(),
+        Some(path!("/root/Downloads/report.PDF"))
+    );
+
+    // An extension-less file in a directory worktree must not inherit the
+    // worktree directory's extension.
+    let (directory_worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/root/project.pdf"), true, cx)
+        })
+        .await
+        .expect("failed to create directory worktree");
+    let directory_worktree_id = directory_worktree.read_with(cx, |worktree, _| worktree.id());
+    let readme_path = ProjectPath {
+        worktree_id: directory_worktree_id,
+        path: RelPath::unix("README")
+            .expect("valid relative path")
+            .into_arc(),
+    };
+
+    assert_eq!(
+        project.read_with(cx, |project, cx| project
+            .extension_for_path(&readme_path, cx)),
+        None
+    );
+    // Inside a directory worktree the breadcrumb keeps the relative path.
+    assert_eq!(
+        project
+            .read_with(cx, |project, cx| project.display_path_for(&readme_path, cx))
+            .as_deref(),
+        Some("README")
+    );
 }

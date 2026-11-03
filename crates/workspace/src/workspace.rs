@@ -3673,10 +3673,11 @@ impl Workspace {
                 }
 
                 if remaining_dirty_items.len() > 1 {
-                    let answer = workspace.update_in(cx, |_, window, cx| {
+                    let answer = workspace.update_in(cx, |workspace, window, cx| {
                         cx.emit(Event::Activate);
                         let detail = Pane::file_names_for_prompt(
                             &mut remaining_dirty_items.iter().map(|(_, handle)| handle),
+                            workspace.project(),
                             cx,
                         );
                         window.prompt(

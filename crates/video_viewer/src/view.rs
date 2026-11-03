@@ -290,7 +290,10 @@ impl VideoView {
         cx.spawn(async move |this, cx| {
             let prepared = this.update(cx, |view, cx| {
                 let item = view.video_item.read(cx);
-                let extension = item.path.extension().map(ToOwned::to_owned);
+                let extension = view
+                    .project
+                    .read(cx)
+                    .extension_for_path(&item.project_path(), cx);
                 (
                     extension,
                     item.project_path(),
@@ -434,10 +437,11 @@ impl VideoView {
     }
 
     pub(crate) fn file_name(&self, cx: &App) -> String {
-        self.video_item.read(cx).path.file_name().map_or_else(
-            || tr(cx, "video_viewer.file_name.fallback", "Video"),
-            |name| name.to_owned(),
-        )
+        let path = self.project_path(cx);
+        self.project
+            .read(cx)
+            .file_name_for_path(&path, cx)
+            .unwrap_or_else(|| tr(cx, "video_viewer.file_name.fallback", "Video"))
     }
 
     pub(crate) fn abs_path(&self, cx: &App) -> Option<PathBuf> {
@@ -447,7 +451,7 @@ impl VideoView {
             .read(cx)
             .worktree_for_id(item.worktree_id, cx)?;
         let local = worktree.read(cx).as_local()?;
-        Some(local.abs_path().join(item.path.as_std_path()))
+        Some(local.absolutize(&item.path))
     }
 
     pub(crate) fn project_path(&self, cx: &App) -> ProjectPath {
@@ -458,9 +462,17 @@ impl VideoView {
         self.video_item.read(cx).path.clone()
     }
 
-    pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
+    /// The path shown in breadcrumbs, tooltips and the tab icon.
+    pub(crate) fn display_path(&self, cx: &App) -> String {
         let path_style = self.project.read(cx).path_style(cx);
-        let mut lines = vec![self.relative_path(cx).display(path_style).into_owned()];
+        self.project
+            .read(cx)
+            .display_path_for(&self.project_path(cx), cx)
+            .unwrap_or_else(|| self.relative_path(cx).display(path_style).into_owned())
+    }
+
+    pub(crate) fn metadata_tooltip(&self, cx: &App) -> String {
+        let mut lines = vec![self.display_path(cx)];
         if let Some(parts) = self.metadata_parts(cx) {
             lines.push(parts.join(" • "));
         }

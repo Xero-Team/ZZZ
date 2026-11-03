@@ -92,8 +92,8 @@ if [[ -z "${workspace_dir}" ]]; then
     workspace_dir="$(mktemp -d "${TMPDIR:-/tmp}/zzz-pgo-train.XXXXXX")"
     created_workspace=true
 fi
-# Open the folder, not the file: a workspace opened on a single file shows an
-# empty buffer, and typing then has nowhere to land.
+# Open the folder rather than the file so the workload covers a scanned
+# worktree and the file finder.
 mkdir -p "${workspace_dir}"
 workspace_dir="$(cd "${workspace_dir}" && pwd)"
 project_dir="${workspace_dir}/project"

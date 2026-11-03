@@ -2116,3 +2116,60 @@ async fn test_realfs_watch_stress_reports_missed_paths(
         missed_paths.len()
     );
 }
+
+/// Single-file worktrees mount the file itself as the provider root, so the empty
+/// provider path must resolve to that file. Joining an empty relative path appends
+/// a trailing separator, and the OS answers `NotADirectory` for `file/`, which the
+/// VFS layer reports as `NotFound`; the buffer store then silently opens an empty
+/// buffer instead of the file's contents.
+#[gpui::test]
+async fn test_local_provider_stat_at_single_file_root(
+    executor: BackgroundExecutor,
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let temporary_directory = TempDir::new().unwrap();
+    let file_path = temporary_directory.path().join("settings.json");
+    std::fs::write(&file_path, b"{\"a\": 1}\n").unwrap();
+
+    let filesystem: Arc<dyn Fs> = Arc::new(RealFs::new(None, executor));
+    let provider = LocalProvider::new(
+        "single-file",
+        Arc::<Path>::from(file_path.clone()),
+        filesystem,
+    )
+    .await
+    .unwrap();
+
+    let root_path = ProviderPath::from_byte_components(
+        provider.descriptor().path_encoding,
+        std::iter::empty::<&[u8]>(),
+    )
+    .unwrap();
+
+    let metadata = provider
+        .stat(&root_path, StatOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(metadata.kind, VfsEntryKind::File);
+    assert_eq!(metadata.size, 9);
+
+    // Saving a single-file workspace also goes through the provider root.
+    let file = provider
+        .open(
+            &root_path,
+            OpenOptions {
+                access: FileAccess::ReadWrite,
+                create: CreateDisposition::OpenExisting,
+                expected_version: None,
+                context: OperationContext::default(),
+            },
+        )
+        .await
+        .unwrap();
+    file.write_at(0, b"{\"b\": 3}\n", WriteAtOptions::default())
+        .await
+        .unwrap();
+    file.sync(OperationContext::default()).await.unwrap();
+    assert_eq!(std::fs::read(&file_path).unwrap(), b"{\"b\": 3}\n");
+}

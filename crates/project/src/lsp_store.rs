@@ -15978,17 +15978,20 @@ async fn populate_labels_for_symbols(
 
     let mut unknown_paths = BTreeSet::<Arc<str>>::new();
     for symbol in symbols {
-        let Some(file_name) = symbol.path.file_name() else {
-            continue;
+        // Symbols from a single-file worktree have an empty project path, so there
+        // is no file name to detect a language from. Keep them with plain labels
+        // instead of dropping them from the results.
+        let language = match symbol.path.file_name() {
+            Some(file_name) => language_registry
+                .load_language_for_file_path(Path::new(file_name))
+                .await
+                .ok()
+                .or_else(|| {
+                    unknown_paths.insert(file_name.into());
+                    None
+                }),
+            None => None,
         };
-        let language = language_registry
-            .load_language_for_file_path(Path::new(file_name))
-            .await
-            .ok()
-            .or_else(|| {
-                unknown_paths.insert(file_name.into());
-                None
-            });
         symbols_by_language
             .entry(language)
             .or_default()
@@ -16294,6 +16297,64 @@ mod tests {
             let hint = hints.first().expect("hint in inserted text");
             assert_eq!(hint.position.to_offset(buffer), 1);
         });
+    }
+
+    #[gpui::test]
+    async fn test_workspace_symbols_keep_single_file_worktree_symbols(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+        });
+        let fs = fs::FakeFs::new(cx.executor());
+        fs.insert_tree(
+            util::path!("/the-root"),
+            serde_json::json!({ "main.rs": "fn main() {}" }),
+        )
+        .await;
+        let project = crate::Project::test(fs, [util::path!("/the-root").as_ref()], cx).await;
+        let worktree_id = project.read_with(cx, |project, cx| {
+            project.worktrees(cx).next().unwrap().read(cx).id()
+        });
+
+        // A single-file worktree has an empty project path, so the symbol has no
+        // file name to detect a language from. It must still show up in the
+        // results instead of being dropped.
+        let symbol = CoreSymbol {
+            language_server_name: LanguageServerName("Rust".into()),
+            source_worktree_id: worktree_id,
+            source_language_server_id: LanguageServerId::from_proto(1),
+            path: SymbolLocation::InProject {
+                project_path: ProjectPath {
+                    worktree_id,
+                    path: RelPath::empty_arc(),
+                },
+                vfs_path: vfs::VfsPath::new(
+                    vfs::MountId::new(1),
+                    vfs::ProviderPath::from_byte_components(
+                        vfs::PathEncoding::UnixBytes,
+                        std::iter::empty::<&[u8]>(),
+                    )
+                    .expect("valid provider path"),
+                ),
+            },
+            name: "main".to_string(),
+            kind: lsp::SymbolKind::FUNCTION,
+            range: Range {
+                start: Unclipped(PointUtf16 { row: 0, column: 0 }),
+                end: Unclipped(PointUtf16 { row: 0, column: 2 }),
+            },
+            container_name: None,
+        };
+
+        let mut output = Vec::new();
+        let languages = project.read_with(cx, |project, _| project.languages().clone());
+        populate_labels_for_symbols(vec![symbol], &languages, None, &mut output).await;
+
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0].name, "main");
     }
 
     #[test]

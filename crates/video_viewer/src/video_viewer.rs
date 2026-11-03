@@ -74,8 +74,8 @@ impl project::ProjectItem for VideoItem {
         path: &ProjectPath,
         cx: &mut App,
     ) -> Option<Task<anyhow::Result<Entity<Self>>>> {
-        let extension = path.path.extension()?;
-        if !is_supported_video_extension(extension) {
+        let extension = project.read(cx).extension_for_path(path, cx)?;
+        if !is_supported_video_extension(&extension) {
             return None;
         }
 
