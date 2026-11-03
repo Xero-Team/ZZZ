@@ -6,6 +6,7 @@ use ui::{Tooltip, prelude::*, utils::replace_control_characters};
 
 use crate::{
     CsvPreviewView,
+    renderer::table_cell::with_copy_on_right_click,
     table_data_engine::sorting_by_column::{AppliedSorting, SortDirection},
     types::AnyColumn,
 };
@@ -24,10 +25,28 @@ impl CsvPreviewView {
             .items_center()
             .w_full()
             .font_buffer(cx)
-            .child(div().child(match replace_control_characters(&header_text) {
-                Cow::Borrowed(_) => header_text.clone(),
-                Cow::Owned(replaced) => SharedString::from(replaced),
-            }))
+            .child({
+                let header_text = match replace_control_characters(&header_text) {
+                    Cow::Borrowed(_) => header_text.clone(),
+                    Cow::Owned(replaced) => SharedString::from(replaced),
+                };
+                let header_text_cell = div()
+                    .id(ElementId::NamedInteger(
+                        "csv-col-header-text".into(),
+                        col_idx.get() as u64,
+                    ))
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .whitespace_nowrap();
+                with_copy_on_right_click(
+                    header_text_cell,
+                    header_text.clone(),
+                    "csv_preview.copy_column_hint",
+                    "Right click to copy column name",
+                )
+                .child(header_text)
+            })
             .child(h_flex().gap_1().child(self.create_sort_button(cx, col_idx)))
             .into_any_element()
     }

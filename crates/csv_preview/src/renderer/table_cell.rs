@@ -1,9 +1,41 @@
 //! Table Cell Rendering
 
-use gpui::{AnyElement, App, ElementId, Stateful};
-use ui::{SharedString, Tooltip, div, prelude::*, v_flex};
+use gpui::{
+    AnyElement, App, ClipboardItem, ElementId, MouseButton, Stateful, StatefulInteractiveElement,
+};
+use i18n::tr;
+use ui::{Color, Divider, Label, LabelSize, SharedString, Tooltip, div, prelude::*, v_flex};
 
 use crate::{settings::VerticalAlignment, types::DisplayCellId};
+
+/// Adds a right-click-to-copy handler and a tooltip showing `text` plus a localized hint.
+pub(super) fn with_copy_on_right_click<E: StatefulInteractiveElement>(
+    element: E,
+    text: SharedString,
+    hint_key: &'static str,
+    hint_fallback: &'static str,
+) -> E {
+    element
+        .on_mouse_down(MouseButton::Right, {
+            let text_to_copy = text.clone();
+            move |_event, _window, cx| {
+                cx.stop_propagation();
+                cx.write_to_clipboard(ClipboardItem::new_string(text_to_copy.to_string()));
+            }
+        })
+        .tooltip(Tooltip::element(move |_window, cx| {
+            v_flex()
+                .gap_1()
+                .child(div().font_buffer(cx).child(text.clone()))
+                .child(Divider::horizontal())
+                .child(
+                    Label::new(tr(cx, hint_key, hint_fallback))
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                )
+                .into_any_element()
+        }))
+}
 
 /// Create styled table cell div element.
 pub(super) fn create_table_cell(
@@ -15,7 +47,7 @@ pub(super) fn create_table_cell(
 ) -> Stateful<Div> {
     let cell_body = render_cell_content(cell_content.clone(), multiline_cells_enabled);
 
-    div()
+    let cell = div()
         .id(ElementId::Name(
             format!(
                 "csv-display-cell-{}-{}",
@@ -23,7 +55,6 @@ pub(super) fn create_table_cell(
             )
             .into(),
         ))
-        .cursor_pointer()
         .flex()
         .w_full()
         .min_w_0()
@@ -35,9 +66,14 @@ pub(super) fn create_table_cell(
             VerticalAlignment::Center => div.items_center().content_center(),
         })
         .text_ui(cx)
-        .font_buffer(cx)
-        .tooltip(Tooltip::text(cell_content))
-        .child(cell_body)
+        .font_buffer(cx);
+    with_copy_on_right_click(
+        cell,
+        cell_content,
+        "csv_preview.copy_cell_hint",
+        "Right click to copy content",
+    )
+    .child(cell_body)
 }
 
 fn render_cell_content(cell_content: SharedString, multiline_cells_enabled: bool) -> AnyElement {

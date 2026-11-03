@@ -2075,6 +2075,8 @@
     "csv_preview.row_identifiers.rows": "行",
     "csv_preview.row_identifiers.toggle_tooltip": "在源文件行号和预览顺序行号之间切换",
     "csv_preview.no_content_to_display": "没有可显示的分隔文本内容",
+    "csv_preview.copy_cell_hint": "右键复制内容",
+    "csv_preview.copy_column_hint": "右键复制列名",
     "csv_preview.preview_title": "预览 {}",
     "csv_preview.settings.alignment.center": "居中",
     "csv_preview.settings.alignment.top": "顶部",

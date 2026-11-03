@@ -2075,6 +2075,8 @@
     "csv_preview.row_identifiers.rows": "Rows",
     "csv_preview.row_identifiers.toggle_tooltip": "Toggle between source row numbers and sequential preview row numbers",
     "csv_preview.no_content_to_display": "No delimited text content to display",
+    "csv_preview.copy_cell_hint": "Right click to copy content",
+    "csv_preview.copy_column_hint": "Right click to copy column name",
     "csv_preview.preview_title": "Preview {}",
     "csv_preview.settings.alignment.center": "Center",
     "csv_preview.settings.alignment.top": "Top",
