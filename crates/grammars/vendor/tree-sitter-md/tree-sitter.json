@@ -3,32 +3,52 @@
   "grammars": [
     {
       "name": "markdown",
-      "camelcase": "Markdown",
       "scope": "text.markdown",
       "path": "tree-sitter-markdown",
-      "file-types": ["md", "markdown"],
-      "highlights": ["tree-sitter-markdown/queries/highlights.scm"],
-      "injections": ["tree-sitter-markdown/queries/injections.scm"]
+      "external-files": [
+        "common/common.js"
+      ],
+      "file-types": [
+        "md"
+      ],
+      "highlights": "tree-sitter-markdown/queries/highlights.scm",
+      "injections": "tree-sitter-markdown/queries/injections.scm",
+      "injection-regex": "^(markdown|md)$"
     },
     {
       "name": "markdown_inline",
       "camelcase": "MarkdownInline",
-      "scope": "text.markdown.inline",
+      "scope": "text.markdown_inline",
       "path": "tree-sitter-markdown-inline",
-      "highlights": ["tree-sitter-markdown-inline/queries/highlights.scm"],
-      "injections": ["tree-sitter-markdown-inline/queries/injections.scm"]
+      "external-files": [
+        "common/common.js"
+      ],
+      "file-types": null,
+      "highlights": "tree-sitter-markdown-inline/queries/highlights.scm",
+      "injections": "tree-sitter-markdown-inline/queries/injections.scm"
     }
   ],
   "metadata": {
-    "version": "0.3.2",
+    "version": "0.5.4",
     "license": "MIT",
-    "description": "Markdown grammars for tree-sitter",
+    "description": "Markdown grammar for tree-sitter",
+    "authors": [
+      {
+        "name": "MDeiml"
+      }
+    ],
     "links": {
       "repository": "https://github.com/tree-sitter-grammars/tree-sitter-markdown"
     }
   },
   "bindings": {
     "c": true,
-    "rust": true
+    "go": false,
+    "java": false,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true,
+    "zig": false
   }
 }
