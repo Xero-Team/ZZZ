@@ -749,11 +749,17 @@ fn create_native_dmg(context: &Context, source: &Path, dmg: &Path) -> Result<()>
 }
 
 fn create_cross_dmg(source: &Path, dmg: &Path) -> Result<()> {
+    // The hfsprogs tools predate the long-option convention: `mkfs.hfsplus`
+    // rejects `--version` and exits nonzero even with no arguments, and
+    // `hfsplus`/`dmg` print usage without one. Only their presence matters,
+    // which `which` checks without running them.
     for tool in ["mkfs.hfsplus", "hfsplus", "dmg"] {
-        util::require_tool(
-            tool,
-            "Install hfsprogs and build libdmg-hfsplus (https://github.com/planetbeing/libdmg-hfsplus).",
-        )?;
+        if util::which(tool).is_none() {
+            bail!(
+                "{tool} is required but was not found on PATH.\nInstall hfsprogs and build \
+                 libdmg-hfsplus (https://github.com/planetbeing/libdmg-hfsplus)."
+            );
+        }
     }
 
     let megabytes = directory_size_mb(source)? + directory_size_mb(source)? / 5 + 16;
