@@ -9,6 +9,7 @@ use picker::{Picker, PickerDelegate};
 use telegram::{ChatSnapshot, Command};
 use ui::prelude::*;
 use ui::{ListItem, ListItemSpacing};
+use util::ResultExt as _;
 use workspace::Workspace;
 
 use crate::telegram_panel::{GlobalTelegramEngine, TelegramPanel};
@@ -89,7 +90,7 @@ impl PickerDelegate for ForwardPickerDelegate {
     fn update_matches(
         &mut self,
         query: String,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
         let candidates: Vec<StringMatchCandidate> = self
@@ -99,19 +100,28 @@ impl PickerDelegate for ForwardPickerDelegate {
             .map(|(index, chat)| StringMatchCandidate::new(index, &chat.title))
             .collect();
         let executor = cx.background_executor().clone();
-        let cancel_flag = AtomicBool::new(false);
-        let matches = match_strings(
-            &candidates,
-            &query,
-            false,
-            true,
-            100,
-            &cancel_flag,
-            executor,
-        );
-        self.matches = futures::executor::block_on(matches);
-        self.selected_index = 0;
-        Task::ready(())
+        // Match off the UI thread. Dropping the returned task (a newer query or a
+        // dismissed picker) cancels this match, so stale results never land.
+        cx.spawn_in(window, async move |picker, cx| {
+            let cancel_flag = AtomicBool::new(false);
+            let matches = match_strings(
+                &candidates,
+                &query,
+                false,
+                true,
+                100,
+                &cancel_flag,
+                executor,
+            )
+            .await;
+            picker
+                .update_in(cx, |picker, _window, cx| {
+                    picker.delegate.matches = matches;
+                    picker.delegate.selected_index = 0;
+                    cx.notify();
+                })
+                .log_err();
+        })
     }
 
     fn confirm(&mut self, _secondary: bool, _window: &mut Window, cx: &mut Context<Picker<Self>>) {

@@ -3658,6 +3658,7 @@
     "telegram_panel.error.pin_failed": "更新会话置顶失败。",
     "telegram_panel.error.search_failed": "搜索失败。",
     "telegram_panel.error.flood_wait": "请求过于频繁，请在 {} 秒后重试。",
+    "telegram_panel.error.slow_mode": "此会话处于慢速模式，请在 {} 秒后重试。",
     "telegram_panel.error.other": "出现问题。",
     "menu.view.telegram_panel": "Telegram 面板",
     "telegram_panel.forward.placeholder": "转发到会话…",

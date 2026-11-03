@@ -607,7 +607,9 @@ impl EngineState {
     fn set_error(&mut self, error: EngineError) {
         log::warn!("Telegram engine error: {error:?}");
         self.view.flood_wait_seconds = match &error {
-            EngineError::FloodWait { seconds } => Some(*seconds),
+            EngineError::FloodWait { seconds } | EngineError::SlowMode { seconds } => {
+                Some(*seconds)
+            }
             _ => None,
         };
         self.view.error = Some(error);
@@ -717,6 +719,10 @@ impl EngineState {
 
     async fn ensure_connected(&mut self) {
         if self.client.is_some() {
+            // A second panel (or a reopened one) subscribes after the last
+            // snapshot, so answer `Start` with the current state even when the
+            // connection already exists.
+            self.publish();
             return;
         }
         let Some(credentials) = self.config.credentials.clone() else {
@@ -1222,27 +1228,33 @@ impl EngineState {
         self.view.draft = self.drafts.get(&chat_id).cloned().unwrap_or_default();
         self.view.search_results.clear();
         self.view.searching = false;
-        let request = match self.histories.get(&chat_id) {
-            Some(cached) if cached.loaded => {
-                self.view.history = cached.messages.clone();
-                self.view.has_more_history = cached.next_page.is_some();
-                match cached.next_page {
-                    Some(cursor) if cursor.is_initial_for(chat_id) => HistoryRequest::Page(cursor),
-                    _ => HistoryRequest::RefreshTail {
-                        source_chat_id: chat_id,
-                    },
-                }
+        let loaded_history = self.histories.get_mut(&chat_id).and_then(|cached| {
+            if !cached.loaded {
+                return None;
             }
-            _ => {
-                self.view.history.clear();
-                self.view.has_more_history = true;
-                let cursor = HistoryCursor {
+            // The operating system may have deleted the cache since this history
+            // was stored; do not render a stale path as a cached file.
+            forget_missing_cached_media(&mut cached.messages);
+            Some((cached.messages.clone(), cached.next_page))
+        });
+        let request = if let Some((messages, next_page)) = loaded_history {
+            self.view.history = messages;
+            self.view.has_more_history = next_page.is_some();
+            match next_page {
+                Some(cursor) if cursor.is_initial_for(chat_id) => HistoryRequest::Page(cursor),
+                _ => HistoryRequest::RefreshTail {
                     source_chat_id: chat_id,
-                    before_message_id: None,
-                };
-                self.histories.entry(chat_id).or_default().next_page = Some(cursor);
-                HistoryRequest::Page(cursor)
+                },
             }
+        } else {
+            self.view.history.clear();
+            self.view.has_more_history = true;
+            let cursor = HistoryCursor {
+                source_chat_id: chat_id,
+                before_message_id: None,
+            };
+            self.histories.entry(chat_id).or_default().next_page = Some(cursor);
+            HistoryRequest::Page(cursor)
         };
         self.publish();
 
@@ -1554,7 +1566,11 @@ impl EngineState {
 
         match client.send_message(peer_ref, markdown_message(&text)).await {
             Ok(message) => self.finish_send(chat_id, local_id, &message),
-            Err(error) => self.fail_send(local_id, error),
+            Err(error) => {
+                let engine_error =
+                    EngineError::from_invocation_with(&error, EngineError::SendFailed);
+                self.fail_send_with(local_id, error, engine_error);
+            }
         }
     }
 
@@ -1588,7 +1604,8 @@ impl EngineState {
         let uploaded = match client.upload_file(&attachment.path).await {
             Ok(uploaded) => uploaded,
             Err(error) => {
-                self.fail_send(local_id, error);
+                let engine_error = upload_failure(&error);
+                self.fail_send_with(local_id, error, engine_error);
                 return;
             }
         };
@@ -1604,7 +1621,11 @@ impl EngineState {
 
         match client.send_message(peer_ref, message).await {
             Ok(message) => self.finish_send(chat_id, local_id, &message),
-            Err(error) => self.fail_send(local_id, error),
+            Err(error) => {
+                let engine_error =
+                    EngineError::from_invocation_with(&error, EngineError::SendFailed);
+                self.fail_send_with(local_id, error, engine_error);
+            }
         }
     }
 
@@ -1638,7 +1659,8 @@ impl EngineState {
             let uploaded = match client.upload_file(&item.attachment.path).await {
                 Ok(uploaded) => uploaded,
                 Err(error) => {
-                    self.fail_send(local_id, error);
+                    let engine_error = upload_failure(&error);
+                    self.fail_send_with(local_id, error, engine_error);
                     return;
                 }
             };
@@ -1655,7 +1677,11 @@ impl EngineState {
 
         match client.send_album(peer_ref, medias).await {
             Ok(messages) => self.finish_album_send(chat_id, local_id, messages),
-            Err(error) => self.fail_send(local_id, error),
+            Err(error) => {
+                let engine_error =
+                    EngineError::from_invocation_with(&error, EngineError::SendFailed);
+                self.fail_send_with(local_id, error, engine_error);
+            }
         }
     }
 
@@ -1719,13 +1745,18 @@ impl EngineState {
         self.publish();
     }
 
-    fn fail_send(&mut self, local_id: u64, error: impl std::fmt::Display) {
+    fn fail_send_with(
+        &mut self,
+        local_id: u64,
+        error: impl std::fmt::Display,
+        engine_error: EngineError,
+    ) {
         if let Some(index) = self.message_index(local_id) {
             self.view.history[index].send_state = SendState::Failed;
         }
         self.cache_selected_history();
         log::warn!("failed to send the message: {error}");
-        self.set_error(EngineError::SendFailed);
+        self.set_error(engine_error);
     }
 
     async fn retry_send(&mut self, chat_id: i64, local_id: u64) {
@@ -2595,7 +2626,8 @@ enum DownloadTarget {
 
 impl DownloadTarget {
     /// Whether `media` can be downloaded for this target. A thumbnail that is
-    /// already cached or in flight is skipped.
+    /// already cached or in flight is skipped, but a cached path whose file the
+    /// OS deleted is fetched again.
     fn is_eligible(self, media: &MediaSnapshot) -> bool {
         match self {
             Self::Original => media.is_downloadable(),
@@ -2603,8 +2635,11 @@ impl DownloadTarget {
                 matches!(
                     media.kind,
                     MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
-                ) && media.thumbnail_path.is_none()
-                    && media.thumbnail_state != DownloadState::Downloading
+                ) && media.thumbnail_state != DownloadState::Downloading
+                    && media
+                        .thumbnail_path
+                        .as_deref()
+                        .is_none_or(|path| !path.is_file())
             }
         }
     }
@@ -2621,6 +2656,28 @@ fn set_download_path(media: &mut MediaSnapshot, target: DownloadTarget, path: Pa
     match target {
         DownloadTarget::Original => media.downloaded_path = Some(path),
         DownloadTarget::Thumbnail => media.thumbnail_path = Some(path),
+    }
+}
+
+/// Upload failures are reported as [`std::io::Error`] with the RPC error as the
+/// source, so recover a flood wait instead of always reporting a generic
+/// failure.
+fn upload_failure(error: &std::io::Error) -> EngineError {
+    error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<InvocationError>())
+        .map_or(EngineError::SendFailed, |invocation| {
+            EngineError::from_invocation_with(invocation, EngineError::SendFailed)
+        })
+}
+
+/// Clears cached media paths whose files disappeared, for example after the
+/// operating system cleaned the cache.
+fn forget_missing_cached_media(messages: &mut [MessageSnapshot]) {
+    for message in messages {
+        if let Some(media) = message.media.as_mut() {
+            media.forget_missing_cache_files();
+        }
     }
 }
 
@@ -3070,27 +3127,41 @@ fn thumbnail_file_path(root: &Path, chat_id: i64, message_id: i32) -> PathBuf {
 }
 
 fn file_extension(name: &str) -> Option<String> {
-    let extension = Path::new(name).extension()?.to_str()?;
-    let sanitized: String = extension
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .collect();
-    (!sanitized.is_empty()).then(|| sanitized.to_ascii_lowercase())
+    sanitize_extension(Path::new(name).extension()?.to_str()?)
 }
 
 fn mime_extension(mime: &str, kind: MediaKind) -> Option<String> {
-    let subtype = mime.split('/').nth(1)?.split(';').next()?.trim();
+    // Only the subtype between the first two slashes is used, so parameters and
+    // a trailing slash cannot introduce more path segments.
+    let subtype = mime.split(';').next()?.split('/').nth(1)?.trim();
     let mapped = match subtype {
         "jpeg" => "jpg",
         "svg+xml" => "svg",
         "quicktime" => "mov",
         "x-matroska" => "mkv",
+        "x-7z-compressed" => "7z",
+        "x-rar-compressed" => "rar",
+        "x-tar" => "tar",
+        "x-gzip" => "gz",
         "mpeg" if kind == MediaKind::Video => "mpg",
         "mpeg" => "mp3",
         "plain" => "txt",
         other => other,
     };
-    (!mapped.is_empty()).then(|| mapped.to_owned())
+    sanitize_extension(mapped)
+}
+
+/// Reduces an extension to ASCII alphanumerics, so a peer-controlled file name
+/// or MIME type can never introduce a path separator, a `..` segment, or a
+/// second extension. Overlong values are rejected and fall back to the kind.
+fn sanitize_extension(raw: &str) -> Option<String> {
+    const MAX_EXTENSION_LENGTH: usize = 8;
+    let sanitized: String = raw
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect();
+    (!sanitized.is_empty() && sanitized.len() <= MAX_EXTENSION_LENGTH)
+        .then(|| sanitized.to_ascii_lowercase())
 }
 
 /// Removes cache files older than [`MEDIA_CACHE_MAX_AGE`], then the oldest
@@ -3235,8 +3306,11 @@ mod tests {
         MediaKind, MediaSnapshot, MessageSnapshot, SendState, ViewModel, avatar_initials,
         current_unix_timestamp, evict_cache_with, media_extension, media_file_path, merge_history,
         next_history_page, normalize_loaded_dialogs, normalize_phone, thumbnail_extension,
-        thumbnail_file_path,
+        thumbnail_file_path, upload_failure,
     };
+    use crate::error::EngineError;
+    use grammers_client::InvocationError;
+    use grammers_client::sender::RpcError;
     use grammers_client::session::types::PeerId;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
@@ -3499,6 +3573,33 @@ mod tests {
     }
 
     #[test]
+    fn extension_never_escapes_the_cache_directory() {
+        let media = |mime: &str| MediaSnapshot {
+            kind: MediaKind::Document,
+            mime_type: Some(mime.to_owned()),
+            ..Default::default()
+        };
+
+        assert_eq!(media_extension(&media("application/pdf")), "pdf");
+        assert_eq!(media_extension(&media("image/png; charset=utf-8")), "png");
+        assert_eq!(media_extension(&media("application/..")), "bin");
+
+        for mime in [
+            "application/../../../../tmp/evil",
+            "application/..%2F..%2Fevil",
+            "application/..\\..\\evil",
+            "application/a/b/c",
+        ] {
+            let path = media_file_path(Path::new("/cache/media"), 1, 2, &media(mime));
+            assert_eq!(
+                path.parent(),
+                Some(Path::new("/cache/media/1")),
+                "{mime} escaped the cache: {path:?}"
+            );
+        }
+    }
+
+    #[test]
     fn thumbnail_extension_is_jpeg() {
         assert_eq!(thumbnail_extension(), "jpg");
     }
@@ -3606,5 +3707,28 @@ mod tests {
         evict_cache_with(Some(&root), u64::MAX, Duration::ZERO);
         assert!(!file.is_file());
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn upload_flood_wait_is_recovered_from_the_io_error() {
+        // `upload_file` reports an `io::Error` with the invocation error as its
+        // source, so a rate limit during upload must still start the countdown
+        // instead of degrading to a generic send failure.
+        let invocation = InvocationError::Rpc(RpcError {
+            code: 420,
+            name: "FLOOD_WAIT".to_owned(),
+            value: Some(9),
+            caused_by: None,
+        });
+        assert_eq!(
+            upload_failure(&std::io::Error::other(invocation)),
+            EngineError::FloodWait { seconds: 9 }
+        );
+    }
+
+    #[test]
+    fn upload_failure_without_an_rpc_error_is_a_send_failure() {
+        let plain = std::io::Error::other("disk full");
+        assert_eq!(upload_failure(&plain), EngineError::SendFailed);
     }
 }

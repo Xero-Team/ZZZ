@@ -5,6 +5,7 @@
 //! back to plain text instead of rendering the message wrong.
 
 use grammers_tl_types as tl;
+use std::collections::HashSet;
 
 struct Marker {
     start_byte: usize,
@@ -33,6 +34,8 @@ enum EntityKind {
 /// code block's newline after measuring the entity. Mentions, URLs, emails,
 /// phone numbers, hashtags, bot commands, cashtags, and underlines are treated
 /// as plain text because CommonMark has no equivalent. Nested spans are kept.
+/// Literal ASCII punctuation outside code spans is backslash-escaped, so the
+/// returned markdown parses back to the same text.
 pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -> Option<String> {
     if entities.is_empty() {
         return None;
@@ -40,6 +43,7 @@ pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -
 
     let mut ranges = Vec::new();
     let mut markers = Vec::new();
+    let mut verbatim_ranges = Vec::new();
     for entity in entities {
         let (offset, length, kind) = match entity {
             tl::enums::MessageEntity::Bold(entity) => (
@@ -105,9 +109,16 @@ pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -
         let content = text.get(start_byte..end_byte)?;
         let (open, close) = match kind {
             EntityKind::Markers(open, close) => (open.to_owned(), close.to_owned()),
-            EntityKind::Link(url) => ("[".to_owned(), format!("]({url})")),
-            EntityKind::Code => code_markers(content),
+            EntityKind::Link(url) => (
+                "[".to_owned(),
+                format!("]({})", escape_link_destination(&url)),
+            ),
+            EntityKind::Code => {
+                verbatim_ranges.push((start_byte, end_byte));
+                code_markers(content)
+            }
             EntityKind::Pre(language) => {
+                verbatim_ranges.push((start_byte, end_byte));
                 let (open, close) = pre_markers(content, language.as_deref());
                 // A code block is a block, so its closing fence must be followed
                 // by a newline. Otherwise text after the block is glued to the
@@ -127,7 +138,134 @@ pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -
         return None;
     }
 
-    Some(render_markers(text, markers))
+    Some(render_markers(text, markers, &verbatim_ranges))
+}
+
+/// Byte positions that need a backslash in the markdown source: every ASCII
+/// punctuation character outside a code span. This keeps literal text literal,
+/// so `*`, `_`, `[`, a leading `#`, or an escaped backslash survive a parse of
+/// the returned markdown. Positions inside a code span are skipped because
+/// backslashes are literal there.
+fn markdown_escapes(text: &str, verbatim: &[(usize, usize)]) -> HashSet<usize> {
+    let mut escapes = HashSet::new();
+    for (position, character) in text.char_indices() {
+        if character.is_ascii_punctuation()
+            && !verbatim
+                .iter()
+                .any(|&(start, end)| position >= start && position < end)
+        {
+            escapes.insert(position);
+        }
+    }
+    escapes
+}
+
+/// Escapes literal text so that parsing it yields the same text and no
+/// formatting. Used when a message has no representable entities, where
+/// returning markdown would change the author's literal text.
+pub(crate) fn escape_markdown_text(text: &str) -> String {
+    let escapes = markdown_escapes(text, &[]);
+    let mut output = String::with_capacity(text.len() + escapes.len());
+    push_text_segment(&mut output, text, 0, text.len(), &escapes);
+    output
+}
+
+/// Formats a URL for a link destination. URLs containing characters that would
+/// terminate a bare destination use the pointy-bracket form instead.
+fn escape_link_destination(url: &str) -> String {
+    let needs_brackets = url.chars().any(|character| {
+        character.is_whitespace() || matches!(character, '(' | ')' | '<' | '>' | '\\')
+    });
+    if !needs_brackets {
+        return url.to_owned();
+    }
+
+    let mut escaped = String::with_capacity(url.len() + 2);
+    escaped.push('<');
+    for character in url.chars() {
+        match character {
+            '<' => escaped.push_str("%3C"),
+            '>' => escaped.push_str("%3E"),
+            ' ' => escaped.push_str("%20"),
+            '\n' => escaped.push_str("%0A"),
+            '\r' => escaped.push_str("%0D"),
+            other => escaped.push(other),
+        }
+    }
+    escaped.push('>');
+    escaped
+}
+
+/// Collects the entities that have a CommonMark representation inside a UTF-16
+/// range, clipping spans that cross the range boundary. Entities without a
+/// CommonMark form are dropped; callers pass entities produced by the markdown
+/// parser, where dropping one is equivalent to the existing plain-text fallback.
+pub(crate) fn entities_in_range(
+    entities: &[tl::enums::MessageEntity],
+    offset: i32,
+    length: i32,
+) -> Vec<tl::enums::MessageEntity> {
+    let Some(range_end) = offset.checked_add(length) else {
+        return Vec::new();
+    };
+    entities
+        .iter()
+        .filter_map(|entity| clip_entity(entity, offset, range_end))
+        .collect()
+}
+
+fn clip_entity(
+    entity: &tl::enums::MessageEntity,
+    range_start: i32,
+    range_end: i32,
+) -> Option<tl::enums::MessageEntity> {
+    fn clip(start: i32, length: i32, range_start: i32, range_end: i32) -> Option<(i32, i32)> {
+        let end = start.checked_add(length)?;
+        let clipped_start = start.max(range_start);
+        let clipped_end = end.min(range_end);
+        (clipped_start < clipped_end)
+            .then_some((clipped_start - range_start, clipped_end - clipped_start))
+    }
+
+    match entity {
+        tl::enums::MessageEntity::Bold(entity) => {
+            clip(entity.offset, entity.length, range_start, range_end)
+                .map(|(offset, length)| tl::types::MessageEntityBold { offset, length }.into())
+        }
+        tl::enums::MessageEntity::Italic(entity) => {
+            clip(entity.offset, entity.length, range_start, range_end)
+                .map(|(offset, length)| tl::types::MessageEntityItalic { offset, length }.into())
+        }
+        tl::enums::MessageEntity::Strike(entity) => {
+            clip(entity.offset, entity.length, range_start, range_end)
+                .map(|(offset, length)| tl::types::MessageEntityStrike { offset, length }.into())
+        }
+        tl::enums::MessageEntity::Code(entity) => {
+            clip(entity.offset, entity.length, range_start, range_end)
+                .map(|(offset, length)| tl::types::MessageEntityCode { offset, length }.into())
+        }
+        tl::enums::MessageEntity::Pre(entity) => {
+            clip(entity.offset, entity.length, range_start, range_end).map(|(offset, length)| {
+                tl::types::MessageEntityPre {
+                    offset,
+                    length,
+                    language: entity.language.clone(),
+                }
+                .into()
+            })
+        }
+        tl::enums::MessageEntity::TextUrl(entity) => {
+            clip(entity.offset, entity.length, range_start, range_end).map(|(offset, length)| {
+                tl::types::MessageEntityTextUrl {
+                    offset,
+                    length,
+                    url: entity.url.clone(),
+                }
+                .into()
+            })
+        }
+        _ => None,
+    }
 }
 
 /// Chooses an inline-code fence that survives any backtick run in `content`.
@@ -204,7 +342,8 @@ struct MarkerEvent {
     text: String,
 }
 
-fn render_markers(text: &str, markers: Vec<Marker>) -> String {
+fn render_markers(text: &str, markers: Vec<Marker>, verbatim_ranges: &[(usize, usize)]) -> String {
+    let escapes = markdown_escapes(text, verbatim_ranges);
     let mut events = Vec::with_capacity(markers.len() * 2);
     for marker in markers {
         events.push(MarkerEvent {
@@ -248,7 +387,7 @@ fn render_markers(text: &str, markers: Vec<Marker>) -> String {
     while event_index < events.len() {
         let position = events[event_index].position.min(text.len());
         if position > cursor {
-            output.push_str(&text[cursor..position]);
+            push_text_segment(&mut output, text, cursor, position, &escapes);
             cursor = position;
         }
         while event_index < events.len() && events[event_index].position == position {
@@ -257,9 +396,30 @@ fn render_markers(text: &str, markers: Vec<Marker>) -> String {
         }
     }
     if cursor < text.len() {
-        output.push_str(&text[cursor..]);
+        push_text_segment(&mut output, text, cursor, text.len(), &escapes);
     }
     output
+}
+
+/// Copies `text[from..to]`, inserting a backslash before every byte position in
+/// `escapes`.
+fn push_text_segment(
+    output: &mut String,
+    text: &str,
+    from: usize,
+    to: usize,
+    escapes: &HashSet<usize>,
+) {
+    let mut cursor = from;
+    for (offset, _) in text[from..to].char_indices() {
+        let position = from + offset;
+        if escapes.contains(&position) {
+            output.push_str(&text[cursor..position]);
+            output.push('\\');
+            cursor = position;
+        }
+    }
+    output.push_str(&text[cursor..to]);
 }
 
 #[cfg(test)]
@@ -338,7 +498,7 @@ mod tests {
     #[test]
     fn mention_is_plain_text() {
         let result = entities_to_markdown("@someone", &[mention(0, 8)]);
-        assert_eq!(result, Some("@someone".to_owned()));
+        assert_eq!(result, Some("\\@someone".to_owned()));
     }
 
     #[test]
@@ -407,9 +567,73 @@ mod tests {
         assert_eq!(
             result.as_deref(),
             Some(
-                "[schema.py:21-30](https://example.com/schema.py#L21-L30)\n\n```python\nasync def apply() -> None:\n    pass\n```\n"
+                "[schema\\.py\\:21\\-30](https://example.com/schema.py#L21-L30)\n\n```python\nasync def apply() -> None:\n    pass\n```\n"
             )
         );
+    }
+
+    #[test]
+    fn punctuation_inside_formatting_round_trips() {
+        let result = entities_to_markdown("a*b", &[bold(0, 3)]).expect("bold");
+        assert_eq!(result, "**a\\*b**");
+
+        let (text, entities) = grammers_client::parsers::parse_markdown_message(&result);
+        assert_eq!(text, "a*b");
+        assert!(entities.iter().any(|entity| matches!(
+            entity,
+            tl::enums::MessageEntity::Bold(bold) if bold.offset == 0 && bold.length == 3
+        )));
+    }
+
+    #[test]
+    fn literal_punctuation_round_trips_without_entities() {
+        let text = "a*b_c[d]e\\f ~g~ # h";
+        let escaped = super::escape_markdown_text(text);
+        let (parsed, entities) = grammers_client::parsers::parse_markdown_message(&escaped);
+        assert_eq!(parsed, text);
+        assert!(entities.is_empty(), "literal text gained formatting");
+    }
+
+    #[test]
+    fn link_label_brackets_are_escaped() {
+        let result =
+            entities_to_markdown("a]b[c\\d", &[text_url(0, 7, "https://x")]).expect("link");
+        assert_eq!(result, r"[a\]b\[c\\d](https://x)");
+
+        let (text, entities) = grammers_client::parsers::parse_markdown_message(&result);
+        assert_eq!(text, "a]b[c\\d");
+        assert!(entities.iter().any(|entity| matches!(
+            entity,
+            tl::enums::MessageEntity::TextUrl(url) if url.url == "https://x"
+        )));
+    }
+
+    #[test]
+    fn link_label_code_is_not_escaped() {
+        let result = entities_to_markdown("a[b", &[text_url(0, 3, "https://x"), code(1, 2)])
+            .expect("link with code");
+        assert_eq!(result, "[a`[b`](https://x)");
+
+        let (text, entities) = grammers_client::parsers::parse_markdown_message(&result);
+        assert_eq!(text, "a[b");
+        assert!(entities.iter().any(|entity| matches!(
+            entity,
+            tl::enums::MessageEntity::Code(code) if code.offset == 1 && code.length == 2
+        )));
+    }
+
+    #[test]
+    fn link_destination_with_parentheses_uses_brackets() {
+        let result =
+            entities_to_markdown("docs", &[text_url(0, 4, "https://x/(a)")]).expect("link");
+        assert_eq!(result, "[docs](<https://x/(a)>)");
+
+        let (text, entities) = grammers_client::parsers::parse_markdown_message(&result);
+        assert_eq!(text, "docs");
+        assert!(entities.iter().any(|entity| matches!(
+            entity,
+            tl::enums::MessageEntity::TextUrl(url) if url.url == "https://x/(a)"
+        )));
     }
 
     #[test]

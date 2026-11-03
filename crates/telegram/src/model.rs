@@ -107,6 +107,32 @@ impl MediaSnapshot {
                 | MediaKind::Sticker
         )
     }
+
+    /// Clears cached paths whose files no longer exist. The operating system may
+    /// delete the cache at any time, so a stale path must not become a broken
+    /// preview or an Open button for a missing file.
+    pub fn forget_missing_cache_files(&mut self) -> bool {
+        let mut changed = false;
+        if self
+            .downloaded_path
+            .as_deref()
+            .is_some_and(|path| !path.is_file())
+        {
+            self.downloaded_path = None;
+            self.download_state = DownloadState::NotDownloaded;
+            changed = true;
+        }
+        if self
+            .thumbnail_path
+            .as_deref()
+            .is_some_and(|path| !path.is_file())
+        {
+            self.thumbnail_path = None;
+            self.thumbnail_state = DownloadState::NotDownloaded;
+            changed = true;
+        }
+        changed
+    }
 }
 
 /// Delivery state of an outgoing message.
@@ -214,7 +240,9 @@ pub fn avatar_initials(title: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthState, MediaKind, MediaSnapshot, avatar_initials};
+    use std::path::PathBuf;
+
+    use super::{AuthState, DownloadState, MediaKind, MediaSnapshot, avatar_initials};
 
     #[test]
     fn initials_from_words() {
@@ -268,5 +296,43 @@ mod tests {
                 "{kind:?} should not be downloadable"
             );
         }
+    }
+
+    #[test]
+    fn missing_cache_files_are_forgotten() {
+        let mut media = MediaSnapshot {
+            downloaded_path: Some(PathBuf::from("/nonexistent/zzz/media/1.png")),
+            download_state: DownloadState::Downloaded,
+            thumbnail_path: Some(PathBuf::from("/nonexistent/zzz/thumbnails/1.jpg")),
+            thumbnail_state: DownloadState::Downloaded,
+            ..Default::default()
+        };
+
+        assert!(media.forget_missing_cache_files());
+        assert_eq!(media.downloaded_path, None);
+        assert_eq!(media.download_state, DownloadState::NotDownloaded);
+        assert_eq!(media.thumbnail_path, None);
+        assert_eq!(media.thumbnail_state, DownloadState::NotDownloaded);
+        assert!(!media.forget_missing_cache_files());
+    }
+
+    #[test]
+    fn existing_cache_files_are_kept() {
+        let path = std::env::temp_dir().join(format!(
+            "zzz-telegram-cached-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::write(&path, b"cached").expect("write cache file");
+
+        let mut media = MediaSnapshot {
+            downloaded_path: Some(path.clone()),
+            download_state: DownloadState::Downloaded,
+            ..Default::default()
+        };
+        assert!(!media.forget_missing_cache_files());
+        assert_eq!(media.downloaded_path, Some(path.clone()));
+
+        std::fs::remove_file(&path).expect("remove cache file");
     }
 }

@@ -7,11 +7,14 @@
 //! messages, and each attachment becomes a media message whose caption is the
 //! text that immediately follows it.
 
+use std::ops::Range;
 use std::path::Path;
 
 use grammers_client::media::InputMedia;
 use grammers_client::message::InputMessage;
 use grammers_client::tl;
+
+use crate::markdown::{entities_in_range, entities_to_markdown, escape_markdown_text};
 
 /// Telegram's upper bound for a text message, in UTF-16 code units.
 pub const MESSAGE_TEXT_LIMIT: usize = 4096;
@@ -257,15 +260,106 @@ fn flush_album(album: &mut Vec<AlbumItem>, items: &mut Vec<OutgoingItem>) {
 fn push_text(items: &mut Vec<OutgoingItem>, pending: &mut String) {
     let text = pending.trim();
     if !text.is_empty() {
-        for part in split_text(text, MESSAGE_TEXT_LIMIT) {
-            items.push(OutgoingItem::Text(part));
-        }
+        items.extend(
+            split_markdown(text, MESSAGE_TEXT_LIMIT)
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .map(OutgoingItem::Text),
+        );
     }
     pending.clear();
 }
 
-/// Splits `text` into chunks of at most `limit` UTF-16 code units, never
-/// splitting a scalar value in half.
+/// Splits CommonMark into chunks of at most `limit` UTF-16 code units of
+/// rendered text. Spans with a CommonMark representation that cross a chunk
+/// boundary are clipped and re-emitted, so a long message never breaks its own
+/// formatting. Short input is returned unchanged, which keeps the common path
+/// free of a full parse.
+fn split_markdown(source: &str, limit: usize) -> Vec<String> {
+    if utf16_len(source) <= limit {
+        return vec![source.to_owned()];
+    }
+
+    let (text, entities) = parse_markdown_with_clamped_code_blocks(source);
+    if text.is_empty() {
+        // Pathological input that parses to nothing must not silently vanish.
+        return split_text(source, limit)
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect();
+    }
+
+    let mut chunks = Vec::new();
+    let mut chunk_start = 0i32;
+    for range in split_text_ranges(&text, limit) {
+        let chunk = &text[range];
+        let chunk_units = utf16_len(chunk) as i32;
+        let chunk_entities = entities_in_range(&entities, chunk_start, chunk_units);
+        chunks.push(
+            entities_to_markdown(chunk, &chunk_entities)
+                .unwrap_or_else(|| escape_markdown_text(chunk)),
+        );
+        chunk_start += chunk_units;
+    }
+    chunks
+}
+
+/// Byte ranges that split `text` into pieces of at most `limit` UTF-16 code
+/// units, preferring a line break or space near the limit.
+fn split_text_ranges(text: &str, limit: usize) -> Vec<Range<usize>> {
+    let mut boundaries = Vec::with_capacity(text.chars().count() + 1);
+    let mut breaks = Vec::new();
+    let mut units = 0usize;
+    for (index, (byte, character)) in text.char_indices().enumerate() {
+        boundaries.push((byte, units));
+        units += character.len_utf16();
+        if matches!(character, '\n' | ' ' | '\t') {
+            breaks.push(index + 1);
+        }
+    }
+    boundaries.push((text.len(), units));
+
+    let mut ranges = Vec::new();
+    let mut start = 0usize;
+    while start + 1 < boundaries.len() {
+        let max_units = boundaries[start].1 + limit;
+        let mut end = start + 1;
+        while end + 1 < boundaries.len() && boundaries[end + 1].1 <= max_units {
+            end += 1;
+        }
+
+        // Only back up when the hard limit would split a word. Backing up
+        // unconditionally would turn a short tail into its own message.
+        if splits_word(text, boundaries[end].0) {
+            let earliest = end.saturating_sub(64).max(start + 1);
+            let insertion = breaks.partition_point(|&index| index <= end);
+            if insertion > 0 {
+                let candidate = breaks[insertion - 1];
+                if candidate >= earliest {
+                    end = candidate;
+                }
+            }
+        }
+
+        ranges.push(boundaries[start].0..boundaries[end].0);
+        start = end;
+    }
+    ranges
+}
+
+/// Whether splitting `text` at `byte` would cut a word in half.
+fn splits_word(text: &str, byte: usize) -> bool {
+    let before = text[..byte].chars().next_back();
+    let after = text[byte..].chars().next();
+    matches!(
+        (before, after),
+        (Some(before), Some(after)) if !before.is_whitespace() && !after.is_whitespace()
+    )
+}
+
+/// Splits raw text into chunks of at most `limit` UTF-16 code units, never
+/// splitting a scalar value in half. Used for input the markdown parser cannot
+/// represent, where entity-aware splitting would lose content.
 fn split_text(text: &str, limit: usize) -> Vec<String> {
     if utf16_len(text) <= limit {
         return vec![text.to_owned()];
@@ -288,25 +382,15 @@ fn split_text(text: &str, limit: usize) -> Vec<String> {
     parts
 }
 
-/// Truncates a caption to [`CAPTION_LIMIT`], returning the overflow to send as
-/// a follow-up text message.
+/// Splits a caption at [`CAPTION_LIMIT`], returning the overflow to send as a
+/// follow-up text message.
 fn split_caption(caption: String) -> (String, Option<String>) {
-    if utf16_len(&caption) <= CAPTION_LIMIT {
+    let mut chunks = split_markdown(&caption, CAPTION_LIMIT).into_iter();
+    let Some(first) = chunks.next() else {
         return (caption, None);
-    }
-    let mut kept = String::new();
-    let mut overflow = String::new();
-    let mut units = 0;
-    for character in caption.chars() {
-        if overflow.is_empty() && units + character.len_utf16() <= CAPTION_LIMIT {
-            kept.push(character);
-            units += character.len_utf16();
-        } else {
-            overflow.push(character);
-        }
-    }
-    let overflow = overflow.trim();
-    (kept, (!overflow.is_empty()).then(|| overflow.to_owned()))
+    };
+    let remainder = chunks.collect::<Vec<_>>().join("\n\n");
+    (first, (!remainder.is_empty()).then_some(remainder))
 }
 
 /// Counts UTF-16 code units, which is how Telegram measures message length.
@@ -583,6 +667,131 @@ mod tests {
     }
 
     #[test]
+    fn long_formatted_text_keeps_markers_in_every_chunk() {
+        let source = format!("**{}**", "a".repeat(5000));
+        let chunks = super::split_markdown(&source, super::MESSAGE_TEXT_LIMIT);
+        assert_eq!(chunks.len(), 2);
+        for chunk in &chunks {
+            assert!(chunk.starts_with("**") && chunk.ends_with("**"), "{chunk}");
+            let (text, entities) = parse_markdown_with_clamped_code_blocks(chunk);
+            assert!(super::utf16_len(&text) <= super::MESSAGE_TEXT_LIMIT);
+            assert!(
+                entities
+                    .iter()
+                    .any(|entity| matches!(entity, tl::enums::MessageEntity::Bold(_))),
+                "bold lost in {chunk}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_formatted_caption_keeps_markers() {
+        let caption = format!("**{}**", "b".repeat(CAPTION_LIMIT + 10));
+        let items = plan_outgoing(vec![
+            ComposerBlock::Attachment(attachment("a.png")),
+            ComposerBlock::Text(caption),
+        ]);
+
+        match &items[0] {
+            OutgoingItem::Media {
+                caption: Some(caption),
+                ..
+            } => {
+                assert!(caption.starts_with("**") && caption.ends_with("**"));
+                let (text, _) = parse_markdown_with_clamped_code_blocks(caption);
+                assert!(super::utf16_len(&text) <= CAPTION_LIMIT);
+            }
+            other => panic!("expected a captioned media, got {other:?}"),
+        }
+        match &items[1] {
+            OutgoingItem::Text(text) => {
+                assert!(text.starts_with("**") && text.ends_with("**"));
+                let (plain, _) = parse_markdown_with_clamped_code_blocks(text);
+                assert_eq!(plain.chars().count(), 10);
+            }
+            other => panic!("expected overflow text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_long_code_block_is_split_into_valid_fences() {
+        let body = "x".repeat(9000);
+        let source = format_code_fence(Some("rust"), &body);
+        let chunks = super::split_markdown(&source, super::MESSAGE_TEXT_LIMIT);
+        assert_eq!(chunks.len(), 3);
+
+        let mut total = 0;
+        for chunk in &chunks {
+            let (text, entities) = parse_markdown_with_clamped_code_blocks(chunk);
+            assert!(!text.contains("```"), "fence leaked into the text: {text}");
+            let pre = entities
+                .iter()
+                .find_map(|entity| match entity {
+                    tl::enums::MessageEntity::Pre(pre) => Some(pre),
+                    _ => None,
+                })
+                .expect("every chunk should be a code block");
+            assert_eq!(pre.language, "rust");
+            total += text.chars().count();
+        }
+        assert_eq!(total, 9000);
+    }
+
+    #[test]
+    fn a_long_link_keeps_its_target_in_every_chunk() {
+        let label = "a".repeat(5000);
+        let source = format!("[{label}](https://example.com/path)");
+        let chunks = super::split_markdown(&source, super::MESSAGE_TEXT_LIMIT);
+        assert_eq!(chunks.len(), 2);
+        for chunk in &chunks {
+            let (text, entities) = parse_markdown_with_clamped_code_blocks(chunk);
+            assert!(!text.contains("](https"), "link syntax leaked: {text}");
+            assert!(
+                entities.iter().any(|entity| matches!(
+                    entity,
+                    tl::enums::MessageEntity::TextUrl(url)
+                        if url.url == "https://example.com/path"
+                )),
+                "link lost in {chunk}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_text_prefers_a_word_boundary() {
+        let text = "word ".repeat(1000);
+        let chunks = super::split_markdown(&text, super::MESSAGE_TEXT_LIMIT);
+        assert_eq!(chunks.len(), 2);
+        assert!(chunks[0].ends_with(' '), "{:?}", chunks[0]);
+        assert!(chunks[1].starts_with("word "), "{:?}", chunks[1]);
+    }
+
+    #[test]
+    fn long_escaped_markdown_stays_literal() {
+        let source = "\\*literal\\* ".repeat(600);
+        let chunks = super::split_markdown(&source, super::MESSAGE_TEXT_LIMIT);
+        let mut asterisks = 0;
+        for chunk in &chunks {
+            let (text, entities) = parse_markdown_with_clamped_code_blocks(chunk);
+            assert!(
+                entities.is_empty(),
+                "literal asterisks gained formatting in {chunk}"
+            );
+            asterisks += text.matches('*').count();
+        }
+        assert_eq!(asterisks, 1200);
+    }
+
+    #[test]
+    fn an_unbroken_word_is_split_at_the_limit() {
+        let text = "a".repeat(5000);
+        let chunks = super::split_markdown(&text, super::MESSAGE_TEXT_LIMIT);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].chars().count(), super::MESSAGE_TEXT_LIMIT);
+        assert_eq!(chunks[0].chars().count() + chunks[1].chars().count(), 5000);
+    }
+
+    #[test]
     fn fence_extends_past_backticks() {
         let fenced = format_code_fence(Some("rust"), "let x = ```y```;");
         assert!(fenced.starts_with("````rust\n"));
@@ -681,7 +890,7 @@ mod tests {
             "code fence lost on round trip: {converted}"
         );
         assert!(
-            converted.contains("[schema.py:21-30](https://example.com/schema.py#L21-L30)"),
+            converted.contains("[schema\\.py\\:21\\-30](https://example.com/schema.py#L21-L30)"),
             "link lost on round trip: {converted}"
         );
     }

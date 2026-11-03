@@ -3658,6 +3658,7 @@
     "telegram_panel.error.pin_failed": "Failed to update the chat pin.",
     "telegram_panel.error.search_failed": "Search failed.",
     "telegram_panel.error.flood_wait": "Too many requests. Try again in {} seconds.",
+    "telegram_panel.error.slow_mode": "This chat is in slow mode. Try again in {} seconds.",
     "telegram_panel.error.other": "Something went wrong.",
     "menu.view.telegram_panel": "Telegram Panel",
     "telegram_panel.forward.placeholder": "Forward to chat…",

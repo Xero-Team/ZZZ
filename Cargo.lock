@@ -16852,7 +16852,6 @@ dependencies = [
  "client",
  "editor",
  "fs",
- "futures 0.3.34",
  "fuzzy",
  "git",
  "gpui",

@@ -32,12 +32,17 @@ pub enum EngineError {
     FloodWait {
         seconds: u64,
     },
+    /// A chat's slow mode rejected the message for the given number of seconds.
+    SlowMode {
+        seconds: u64,
+    },
     Other,
 }
 
 impl EngineError {
-    /// Maps a grammers invocation failure, preserving `FLOOD_WAIT` seconds and
-    /// the recognizable account errors.
+    /// Maps a grammers invocation failure, preserving the `FLOOD_WAIT`,
+    /// `FLOOD_PREMIUM_WAIT`, and `SLOWMODE_WAIT` seconds and the recognizable
+    /// account errors.
     pub fn from_invocation(error: &InvocationError) -> Self {
         Self::from_invocation_with(error, Self::Other)
     }
@@ -45,6 +50,9 @@ impl EngineError {
     /// Maps a grammers invocation failure, falling back to `fallback` for RPC
     /// errors that have no dedicated variant.
     pub fn from_invocation_with(error: &InvocationError, fallback: Self) -> Self {
+        if let Some(seconds) = rpc_wait_seconds(error, "SLOWMODE_WAIT") {
+            return Self::SlowMode { seconds };
+        }
         if let Some(seconds) = flood_wait_seconds(error) {
             return Self::FloodWait { seconds };
         }
@@ -63,8 +71,15 @@ impl EngineError {
 }
 
 fn flood_wait_seconds(error: &InvocationError) -> Option<u64> {
+    rpc_wait_seconds(error, "FLOOD_WAIT")
+        // Premium accounts get a separate flood bucket. Both are account-wide
+        // rate limits, so the panel can show the same countdown for either.
+        .or_else(|| rpc_wait_seconds(error, "FLOOD_PREMIUM_WAIT"))
+}
+
+fn rpc_wait_seconds(error: &InvocationError, name: &str) -> Option<u64> {
     match error {
-        InvocationError::Rpc(rpc) if rpc.is("FLOOD_WAIT") => Some(rpc.value.map_or(0, u64::from)),
+        InvocationError::Rpc(rpc) if rpc.is(name) => Some(rpc.value.map_or(0, u64::from)),
         _ => None,
     }
 }
@@ -90,6 +105,22 @@ mod tests {
         assert_eq!(
             EngineError::from_invocation(&rpc("FLOOD_WAIT", Some(31))),
             EngineError::FloodWait { seconds: 31 }
+        );
+    }
+
+    #[test]
+    fn premium_flood_wait_uses_the_same_countdown() {
+        assert_eq!(
+            EngineError::from_invocation(&rpc("FLOOD_PREMIUM_WAIT", Some(12))),
+            EngineError::FloodWait { seconds: 12 }
+        );
+    }
+
+    #[test]
+    fn slow_mode_keeps_its_own_variant() {
+        assert_eq!(
+            EngineError::from_invocation(&rpc("SLOWMODE_WAIT", Some(7))),
+            EngineError::SlowMode { seconds: 7 }
         );
     }
 

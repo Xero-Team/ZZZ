@@ -259,7 +259,10 @@ impl TelegramPanel {
         cx: &mut Context<Self>,
     ) -> Self {
         let engine = engine(cx);
+        // Subscribe before reading the current value: a publish that lands in
+        // between would otherwise be seen by the receiver as already handled.
         let mut snapshot_rx = engine.subscribe();
+        let snapshot = engine.snapshot();
 
         let composer_min_lines = TelegramPanelSettings::get_global(cx)
             .composer_min_lines
@@ -344,12 +347,12 @@ impl TelegramPanel {
             }
         });
 
-        let this = Self {
+        let mut this = Self {
             focus_handle: cx.focus_handle(),
             workspace,
             fs,
             engine,
-            view_model: Arc::new(ViewModel::default()),
+            view_model: snapshot,
             mode: ViewMode::ChatList,
             chat_list_state: ListState::new(0, ListAlignment::Top, px(100.)),
             history_list_state: ListState::new(0, ListAlignment::Bottom, px(2048.)),
@@ -400,6 +403,16 @@ impl TelegramPanel {
                         .log_err();
                 });
             });
+        // Adopt the state the engine already has. A panel is created after the
+        // engine has connected in every window after the first, and the engine
+        // only publishes on changes, so waiting for the next snapshot would
+        // leave this panel looking unconfigured.
+        this.sync_chat_list();
+        this.sync_history();
+        this.rebuild_markdown(cx);
+        this.sync_draft(window, cx);
+        this.sync_flood_wait(cx);
+        this.last_unread_total = this.view_model.unread_total;
         this
     }
 
@@ -1293,7 +1306,10 @@ impl TelegramPanel {
                     media.kind,
                     MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
                 ) && media.downloaded_path.is_none()
-                    && media.thumbnail_path.is_none()
+                    && media
+                        .thumbnail_path
+                        .as_deref()
+                        .is_none_or(|path| !path.is_file())
                     && media.thumbnail_state != DownloadState::Downloading
             });
         if needs_preview {
@@ -1443,7 +1459,10 @@ impl TelegramPanel {
     }
 
     fn sync_flood_wait(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.view_model.error, Some(EngineError::FloodWait { .. })) {
+        if !matches!(
+            self.view_model.error,
+            Some(EngineError::FloodWait { .. } | EngineError::SlowMode { .. })
+        ) {
             self.flood_wait_deadline = None;
             return;
         }
@@ -2251,7 +2270,7 @@ impl TelegramPanel {
     fn render_error_banner(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let error = self.view_model.error.as_ref()?;
         let flood_wait_seconds = match error {
-            EngineError::FloodWait { seconds } => {
+            EngineError::FloodWait { seconds } | EngineError::SlowMode { seconds } => {
                 Some(self.flood_wait_deadline.map_or(*seconds, |deadline| {
                     deadline
                         .saturating_duration_since(std::time::Instant::now())
@@ -2851,12 +2870,16 @@ fn render_media_content(
     panel: &WeakEntity<TelegramPanel>,
     cx: &mut App,
 ) -> AnyElement {
+    // The operating system may have deleted the cached files since the snapshot
+    // was taken, so render from a copy that reflects what is still on disk.
+    let mut media = media.clone();
+    media.forget_missing_cache_files();
     match media.kind {
         MediaKind::Photo | MediaKind::Sticker | MediaKind::Video => {
-            render_media_preview(media, chat_id, message_id, display_size, panel, cx)
+            render_media_preview(&media, chat_id, message_id, display_size, panel, cx)
         }
-        MediaKind::Voice => render_voice_action(media, chat_id, message_id, panel, cx),
-        _ if media.is_downloadable() => render_media_action(media, chat_id, message_id, panel, cx),
+        MediaKind::Voice => render_voice_action(&media, chat_id, message_id, panel, cx),
+        _ if media.is_downloadable() => render_media_action(&media, chat_id, message_id, panel, cx),
         _ => div().into_any_element(),
     }
 }
@@ -2904,7 +2927,7 @@ fn render_media_preview(
                 .child(image)
                 .child(video_play_overlay(media.duration_seconds))
                 .on_click(move |_, _, cx| {
-                    if let Some(path) = open_path.clone() {
+                    if let Some(path) = open_path.clone().filter(|path| path.is_file()) {
                         cx.open_with_system(&path);
                     } else {
                         panel
@@ -2989,25 +3012,45 @@ fn render_media_action(
     cx: &mut App,
 ) -> AnyElement {
     let downloading = media.download_state == DownloadState::Downloading;
-    let path = media.downloaded_path.clone();
-    let panel = panel.clone();
-    Button::new(
+    // `render_media_content` already cleared missing cache files, so the path
+    // exists; the click handler re-checks it in case the file is deleted later.
+    let cached_path = media.downloaded_path.clone();
+    let label = if downloading {
+        tr(cx, "telegram_panel.media.downloading", "Downloading…")
+    } else if cached_path.is_some() {
+        tr(cx, "telegram_panel.media.open", "Open")
+    } else {
+        tr(cx, "telegram_panel.media.download", "Download")
+    };
+    let button = Button::new(
         ElementId::Name(format!("telegram-media-action-{chat_id}-{message_id}").into()),
-        if downloading {
-            tr(cx, "telegram_panel.media.downloading", "Downloading…")
-        } else if media.downloaded_path.is_some() {
-            tr(cx, "telegram_panel.media.open", "Open")
-        } else {
-            tr(cx, "telegram_panel.media.download", "Download")
-        },
+        label,
     )
     .label_size(LabelSize::XSmall)
-    .disabled(downloading)
-    .when_some(path, |this, path| {
-        this.on_click(move |_, _, cx| cx.open_with_system(&path))
-    })
-    .when(media.downloaded_path.is_none(), |this| {
-        this.on_click(move |_, _, cx| {
+    .disabled(downloading);
+
+    if let Some(path) = cached_path {
+        let panel = panel.clone();
+        button.on_click(move |_, _, cx| {
+            if path.is_file() {
+                cx.open_with_system(&path);
+            } else {
+                panel
+                    .update(cx, |panel, cx| {
+                        panel.dispatch(
+                            Command::DownloadMedia {
+                                chat_id,
+                                message_id,
+                            },
+                            cx,
+                        )
+                    })
+                    .log_err();
+            }
+        })
+    } else {
+        let panel = panel.clone();
+        button.on_click(move |_, _, cx| {
             panel
                 .update(cx, |panel, cx| {
                     panel.dispatch(
@@ -3020,7 +3063,7 @@ fn render_media_action(
                 })
                 .log_err();
         })
-    })
+    }
     .into_any_element()
 }
 
@@ -4063,6 +4106,15 @@ fn error_text(error: &EngineError, flood_wait_seconds: Option<u64>, cx: &App) ->
             )
             .replacen("{}", &seconds.to_string(), 1)
         }
+        EngineError::SlowMode { .. } => {
+            let seconds = flood_wait_seconds.unwrap_or(0);
+            tr(
+                cx,
+                "telegram_panel.error.slow_mode",
+                "This chat is in slow mode. Try again in {} seconds.",
+            )
+            .replacen("{}", &seconds.to_string(), 1)
+        }
         EngineError::Other => tr(cx, "telegram_panel.error.other", "Something went wrong."),
     }
 }
@@ -4380,6 +4432,15 @@ mod tests {
                     cx,
                     "telegram_panel.error.flood_wait",
                     "Too many requests. Try again in {} seconds.",
+                )
+                .replacen("{}", "5", 1)
+            );
+            assert_eq!(
+                error_text(&EngineError::SlowMode { seconds: 5 }, Some(5), cx),
+                i18n::tr(
+                    cx,
+                    "telegram_panel.error.slow_mode",
+                    "This chat is in slow mode. Try again in {} seconds.",
                 )
                 .replacen("{}", "5", 1)
             );
