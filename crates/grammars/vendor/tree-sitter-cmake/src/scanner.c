@@ -1,7 +1,8 @@
 #include <string.h>
-#include <tree_sitter/alloc.h>
-#include <tree_sitter/parser.h>
 #include <wctype.h>
+
+#include "tree_sitter/alloc.h"
+#include "tree_sitter/parser.h"
 
 enum TokenType {
   BRACKET_ARGUMENT_OPEN,
@@ -20,13 +21,10 @@ struct TreeSitterCMakeState {
 
 #define STATE_SIZE sizeof(struct TreeSitterCMakeState)
 
+static bool eof(TSLexer const *lexer) { return lexer->eof(lexer); }
 static void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 static void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
 static void mark_end(TSLexer *lexer) { lexer->mark_end(lexer); }
-static void advance_mark(TSLexer *lexer) {
-  advance(lexer);
-  mark_end(lexer);
-}
 
 static void skip_wspace(TSLexer *lexer) {
   while (iswspace(lexer->lookahead)) {
@@ -52,7 +50,8 @@ static bool is_open_brackets(struct TreeSitterCMakeState *state,
     return false;
   }
 
-  advance_mark(lexer);
+  advance(lexer);
+  mark_end(lexer);
 
   state->level = level;
   return true;
@@ -60,11 +59,11 @@ static bool is_open_brackets(struct TreeSitterCMakeState *state,
 
 static void parse_bracketed_content(struct TreeSitterCMakeState *state,
                                     TSLexer *lexer) {
-  while (lexer->lookahead) {
+  while (!eof(lexer)) {
     if (lexer->lookahead == ']') {
-      mark_end(lexer);
-
       unsigned level = 0;
+
+      mark_end(lexer);
       advance(lexer);
       while (lexer->lookahead == '=') {
         ++level;
@@ -74,9 +73,12 @@ static void parse_bracketed_content(struct TreeSitterCMakeState *state,
       if (level == state->level && lexer->lookahead == ']') {
         break;
       }
+
+      continue;
     }
 
-    advance_mark(lexer);
+    advance(lexer);
+    mark_end(lexer);
   }
 }
 
@@ -97,14 +99,15 @@ static bool is_close_brackets(struct TreeSitterCMakeState *state,
     return false;
   }
 
-  advance_mark(lexer);
+  advance(lexer);
+  mark_end(lexer);
 
   state->level = 0;
   return true;
 }
 
 void *tree_sitter_cmake_external_scanner_create() {
-  return ts_malloc(sizeof(struct TreeSitterCMakeState));
+  return ts_calloc(1, STATE_SIZE);
 }
 
 void tree_sitter_cmake_external_scanner_destroy(void *payload) {

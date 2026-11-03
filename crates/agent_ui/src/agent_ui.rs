@@ -34,7 +34,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use ::ui::{IconName, KeyBinding, rems_from_px};
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use agent_settings::{AgentProfileId, AgentSettings};
 use command_palette_hooks::CommandPaletteFilter;
 use editor::{Editor, SelectionEffects, scroll::Autoscroll};

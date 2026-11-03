@@ -1,5 +1,5 @@
 use acp_thread::UserMessageId;
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use agent_settings::AgentProfileId;
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Utc};

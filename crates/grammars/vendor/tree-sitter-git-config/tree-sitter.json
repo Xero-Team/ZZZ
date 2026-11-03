@@ -1,5 +1,4 @@
 {
-  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
       "name": "git-config",
@@ -11,7 +10,7 @@
     }
   ],
   "metadata": {
-    "version": "0.0.1",
+    "version": "0.0.0",
     "license": "MIT",
     "description": "A tree-sitter grammar for git's configuration language",
     "authors": [

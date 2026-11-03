@@ -11,7 +11,8 @@ use acp_thread::{
 use acp_thread::{AgentConnection, Plan};
 use action_log::{ActionLog, DiffStats};
 use agent::ThreadStore;
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::Error as AcpError;
+use agent_client_protocol::v1::schema as acp;
 #[cfg(test)]
 use agent_servers::AgentServerDelegate;
 use agent_servers::{AgentServer, GEMINI_TERMINAL_AUTH_METHOD_ID};
@@ -158,7 +159,7 @@ impl From<anyhow::Error> for ThreadError {
     fn from(error: anyhow::Error) -> Self {
         if error.is::<MaxOutputTokensError>() {
             Self::MaxOutputTokens
-        } else if let Some(acp_error) = error.downcast_ref::<acp::Error>()
+        } else if let Some(acp_error) = error.downcast_ref::<AcpError>()
             && acp_error.code == acp::ErrorCode::AuthRequired
         {
             Self::AuthenticationRequired(acp_error.message.clone().into())

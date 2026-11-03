@@ -98,7 +98,7 @@ async-channel.workspace = true
 stacksafe = { workspace = true, optional = true }
 strum.workspace = true
 sum_tree.workspace = true
-taffy = "=0.15.0"
+taffy = "=0.15.1"
 thiserror.workspace = true
 unicode-segmentation.workspace = true
 gpui_util.workspace = true

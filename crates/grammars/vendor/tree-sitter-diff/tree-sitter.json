@@ -3,23 +3,36 @@
   "grammars": [
     {
       "name": "diff",
-      "camelcase": "Diff",
       "scope": "source.diff",
-      "file-types": ["diff", "patch"],
-      "highlights": ["queries/highlights.scm"],
+      "path": ".",
+      "file-types": [
+        "diff"
+      ],
+      "highlights": "queries/highlights.scm",
       "injection-regex": "^diff$"
     }
   ],
   "metadata": {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "license": "MIT",
-    "description": "diff grammar for the tree-sitter parsing library",
+    "description": "A tree-sitter grammar for diffs",
+    "authors": [
+      {
+        "name": "the-mikedavis"
+      }
+    ],
     "links": {
-      "repository": "https://github.com/tree-sitter/tree-sitter-diff"
+      "repository": "https://github.com/tree-sitter-grammars/tree-sitter-diff"
     }
   },
   "bindings": {
     "c": true,
-    "rust": true
+    "go": true,
+    "java": false,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true,
+    "zig": false
   }
 }

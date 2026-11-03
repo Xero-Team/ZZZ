@@ -9,10 +9,10 @@
 
 use std::any::Any;
 use std::io::{self, Read};
-use std::sync::Arc;
 
 use http_client::{Url, read_no_proxy_from_env, read_proxy_from_env};
 use typst_kit::downloader::Downloader;
+use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
 /// User agent advertised when fetching packages from the Typst registry.
 const USER_AGENT: &str = "ZZZ Typst Preview";
@@ -33,21 +33,25 @@ impl PackageDownloader {
     /// Builds the downloader, or fails when the platform TLS verifier cannot be
     /// initialised.
     pub fn new() -> anyhow::Result<Self> {
-        let tls_config = Arc::new(http_client_tls::tls_config()?);
+        // ureq's rustls integration uses the process-wide crypto provider, so the
+        // application has to install its provider before any agent is built.
+        http_client_tls::install_crypto_provider()?;
 
-        let direct = ureq::AgentBuilder::new()
+        let direct = ureq::Agent::config_builder()
             .user_agent(USER_AGENT)
-            .tls_config(Arc::clone(&tls_config))
-            .build();
+            .tls_config(tls_config())
+            .build()
+            .new_agent();
 
         let proxied = read_proxy_from_env().and_then(|proxy_url| {
             match ureq::Proxy::new(proxy_url.as_str()) {
                 Ok(proxy) => Some(
-                    ureq::AgentBuilder::new()
+                    ureq::Agent::config_builder()
                         .user_agent(USER_AGENT)
-                        .tls_config(tls_config)
-                        .proxy(proxy)
-                        .build(),
+                        .tls_config(tls_config())
+                        .proxy(Some(proxy))
+                        .build()
+                        .new_agent(),
                 ),
                 Err(error) => {
                     log::warn!("ignoring unusable proxy {proxy_url}: {error}");
@@ -82,16 +86,27 @@ impl Downloader for PackageDownloader {
             .get(url)
             .call()
             .map_err(|error| match error {
-                ureq::Error::Status(404, _) => io::Error::new(io::ErrorKind::NotFound, error),
+                ureq::Error::StatusCode(404) => io::Error::new(io::ErrorKind::NotFound, error),
                 error => io::Error::other(error),
             })?;
 
         let content_length = response
-            .header("Content-Length")
+            .headers()
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<usize>().ok());
 
-        Ok((content_length, Box::new(response.into_reader())))
+        Ok((content_length, Box::new(response.into_body().into_reader())))
     }
+}
+
+/// The TLS settings used for every request: the same platform verifier the rest
+/// of the application relies on, resolved through the installed provider.
+fn tls_config() -> TlsConfig {
+    TlsConfig::builder()
+        .provider(TlsProvider::Rustls)
+        .root_certs(RootCerts::PlatformVerifier)
+        .build()
 }
 
 /// Whether `NO_PROXY` asks for `url` to bypass the proxy.

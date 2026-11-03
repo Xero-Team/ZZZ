@@ -3,12 +3,11 @@ use acp_thread::{
     AgentSessionListResponse, ElicitationStore,
 };
 use action_log::ActionLog;
-use agent_client_protocol::schema::{
-    ProtocolVersion,
-    v1::{self as acp, ErrorCode},
-};
+use agent_client_protocol::schema::ProtocolVersion;
+use agent_client_protocol::v1::ConnectionTo;
+use agent_client_protocol::v1::schema::{self as acp, ErrorCode};
 use agent_client_protocol::{
-    Agent, Client, ConnectionTo, JsonRpcResponse, Lines, Responder, SentRequest,
+    Agent, Client, Error as AcpError, JsonRpcResponse, Lines, Responder, SentRequest, V1,
 };
 use anyhow::anyhow;
 use async_channel;
@@ -66,7 +65,7 @@ pub enum AcpDebugMessageContent {
     },
     Response {
         id: acp::RequestId,
-        result: Result<Option<serde_json::Value>, acp::Error>,
+        result: Result<Option<serde_json::Value>, AcpError>,
     },
     Notification {
         method: Arc<str>,
@@ -129,9 +128,9 @@ impl AcpDebugMessage {
 
             if let Some(error) = object.get("error") {
                 let acp_error =
-                    serde_json::from_value::<acp::Error>(error.clone()).unwrap_or_else(|err| {
+                    serde_json::from_value::<AcpError>(error.clone()).unwrap_or_else(|err| {
                         log::warn!("Failed to deserialize ACP error: {err}");
-                        acp::Error::internal_error().data(error.to_string())
+                        AcpError::internal_error().data(error.to_string())
                     });
 
                 AcpDebugMessageContent::Response {
@@ -265,8 +264,8 @@ async fn exited_load_error_after_drain(
 /// send) so the extra ordering guarantee it imposes on the dispatch loop is
 /// negligible.
 fn into_foreground_future<T: JsonRpcResponse>(
-    sent: SentRequest<T>,
-) -> impl Future<Output = Result<T, acp::Error>> {
+    sent: SentRequest<T, V1>,
+) -> impl Future<Output = Result<T, AcpError>> {
     let (tx, rx) = futures::channel::oneshot::channel();
     let spawn_result = sent.on_receiving_result(async move |result| {
         tx.send(result).ok();
@@ -275,7 +274,7 @@ fn into_foreground_future<T: JsonRpcResponse>(
     async move {
         spawn_result?;
         rx.await
-            .map_err(|_| acp::Error::internal_error().data(ACP_RESPONSE_CHANNEL_CANCELLED))?
+            .map_err(|_| AcpError::internal_error().data(ACP_RESPONSE_CHANNEL_CANCELLED))?
     }
 }
 
@@ -285,17 +284,17 @@ pub struct UnsupportedVersion;
 
 /// Helper for flattening the nested `Result` shapes that come out of
 /// `entity.update(cx, |_, cx| fallible_op(cx))` into a single `Result<T,
-/// acp::Error>`.
+/// AcpError>`.
 ///
-/// `anyhow::Error` values get converted via `acp::Error::from`, which
-/// downcasts an `acp::Error` back out of `anyhow` when present, so typed
+/// `anyhow::Error` values get converted via `AcpError::from`, which
+/// downcasts an `AcpError` back out of `anyhow` when present, so typed
 /// errors like auth-required survive the trip.
 trait FlattenAcpResult<T> {
-    fn flatten_acp(self) -> Result<T, acp::Error>;
+    fn flatten_acp(self) -> Result<T, AcpError>;
 }
 
 impl<T> FlattenAcpResult<T> for Result<Result<T, anyhow::Error>, anyhow::Error> {
-    fn flatten_acp(self) -> Result<T, acp::Error> {
+    fn flatten_acp(self) -> Result<T, AcpError> {
         match self {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(err)) => Err(err.into()),
@@ -304,8 +303,8 @@ impl<T> FlattenAcpResult<T> for Result<Result<T, anyhow::Error>, anyhow::Error> 
     }
 }
 
-impl<T> FlattenAcpResult<T> for Result<Result<T, acp::Error>, anyhow::Error> {
-    fn flatten_acp(self) -> Result<T, acp::Error> {
+impl<T> FlattenAcpResult<T> for Result<Result<T, AcpError>, anyhow::Error> {
+    fn flatten_acp(self) -> Result<T, AcpError> {
         match self {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(err)) => Err(err),
@@ -323,8 +322,8 @@ struct ClientContext {
     request_elicitations: Entity<ElicitationStore>,
 }
 
-fn dispatch_queue_closed_error() -> acp::Error {
-    acp::Error::internal_error().data("ACP foreground dispatch queue closed")
+fn dispatch_queue_closed_error() -> AcpError {
+    AcpError::internal_error().data("ACP foreground dispatch queue closed")
 }
 
 /// Work items sent from `Send` handler closures to the `!Send` foreground thread.
@@ -386,7 +385,7 @@ impl ForegroundWorkItem for ElicitationDisconnectWork {
 
 async fn cancel_elicitations_after_disconnect(
     dispatch_tx: mpsc::UnboundedSender<ForegroundWork>,
-) -> Result<(), acp::Error> {
+) -> Result<(), AcpError> {
     let (acknowledgment, received) = futures::channel::oneshot::channel();
     let work: ForegroundWork = Box::new(ElicitationDisconnectWork { acknowledgment });
     if let Err(error) = dispatch_tx.unbounded_send(work) {
@@ -402,8 +401,8 @@ where
     Res: JsonRpcResponse + Send + 'static,
 {
     request: Req,
-    responder: Responder<Res>,
-    handler: fn(Req, Responder<Res>, &mut AsyncApp, &ClientContext),
+    responder: Responder<Res, V1>,
+    handler: fn(Req, Responder<Res, V1>, &mut AsyncApp, &ClientContext),
 }
 
 impl<Req, Res> ForegroundWorkItem for RequestForegroundWork<Req, Res>
@@ -458,8 +457,8 @@ where
 fn enqueue_request<Req, Res>(
     dispatch_tx: &mpsc::UnboundedSender<ForegroundWork>,
     request: Req,
-    responder: Responder<Res>,
-    handler: fn(Req, Responder<Res>, &mut AsyncApp, &ClientContext),
+    responder: Responder<Res, V1>,
+    handler: fn(Req, Responder<Res, V1>, &mut AsyncApp, &ClientContext),
 ) where
     Req: Send + 'static,
     Res: JsonRpcResponse + Send + 'static,
@@ -715,7 +714,7 @@ fn connect_client_future(
     transport: impl agent_client_protocol::ConnectTo<Client> + 'static,
     dispatch_tx: mpsc::UnboundedSender<ForegroundWork>,
     connection_tx: futures::channel::oneshot::Sender<ConnectionTo<Agent>>,
-) -> impl Future<Output = Result<(), acp::Error>> {
+) -> impl Future<Output = Result<(), AcpError>> {
     // Each handler forwards its inputs onto the foreground dispatch queue.
     // The SDK requires the closure to be `Send`, so we move a clone of
     // `dispatch_tx` into each one.
@@ -744,7 +743,7 @@ fn connect_client_future(
             .boxed()
             .shared();
         let result = Client
-            .builder()
+            .v1()
             .name(name)
             .on_receive_request(
                 on_request!(handle_request_permission),
@@ -801,7 +800,7 @@ fn connect_client_future(
                         log::error!("failed to send ACP connection handle — receiver was dropped");
                     }
                     // Keep the connection alive until the transport closes.
-                    futures::future::pending::<Result<(), acp::Error>>().await
+                    futures::future::pending::<Result<(), AcpError>>().await
                 },
             )
             .await;
@@ -1997,7 +1996,7 @@ impl AgentConnection for AcpConnection {
                 Ok(response) => Ok(response),
                 Err(err) => {
                     if err.code == acp::ErrorCode::AuthRequired {
-                        return Err(anyhow!(acp::Error::auth_required()));
+                        return Err(anyhow!(AcpError::auth_required()));
                     }
 
                     if err.code != ErrorCode::InternalError {
@@ -2095,7 +2094,7 @@ impl AgentConnection for AcpConnection {
     }
 }
 
-fn map_acp_error(err: acp::Error) -> anyhow::Error {
+fn map_acp_error(err: AcpError) -> anyhow::Error {
     if err.code == acp::ErrorCode::AuthRequired {
         let mut error = AuthRequired::new();
 
@@ -2423,7 +2422,7 @@ pub mod test_support {
             Rc::new(RefCell::new(None));
 
         let agent_future = Agent
-            .builder()
+            .v1()
             .name("fake-agent")
             .on_receive_request(
                 async move |req: acp::InitializeRequest, responder, _cx| {
@@ -2457,7 +2456,7 @@ pub mod test_support {
                     let fail_next_prompt = fail_next_prompt.clone();
                     async move |_req: acp::PromptRequest, responder, _cx| {
                         if fail_next_prompt.swap(false, Ordering::SeqCst) {
-                            responder.respond_with_error(acp::ErrorCode::InternalError.into())
+                            responder.respond_with_error(AcpError::internal_error())
                         } else {
                             responder.respond(acp::PromptResponse::new(acp::StopReason::EndTurn))
                         }
@@ -2958,7 +2957,7 @@ mod tests {
 
         cx.background_spawn(
             Agent
-                .builder()
+                .v1()
                 .name("list-test-agent")
                 .on_receive_request(
                     {
@@ -2974,11 +2973,11 @@ mod tests {
         .detach();
 
         let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
-        cx.background_spawn(Client.builder().name("list-test-client").connect_with(
+        cx.background_spawn(Client.v1().name("list-test-client").connect_with(
             client_transport,
             move |connection: ConnectionTo<Agent>| async move {
                 connection_tx.send(connection).ok();
-                futures::future::pending::<Result<(), acp::Error>>().await
+                futures::future::pending::<Result<(), AcpError>>().await
             },
         ))
         .detach();
@@ -3051,7 +3050,7 @@ mod tests {
 
         cx.background_spawn(
             Agent
-                .builder()
+                .v1()
                 .name("delete-test-agent")
                 .on_receive_request(
                     {
@@ -3071,11 +3070,11 @@ mod tests {
         .detach();
 
         let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
-        cx.background_spawn(Client.builder().name("delete-test-client").connect_with(
+        cx.background_spawn(Client.v1().name("delete-test-client").connect_with(
             client_transport,
             move |connection: ConnectionTo<Agent>| async move {
                 connection_tx.send(connection).ok();
-                futures::future::pending::<Result<(), acp::Error>>().await
+                futures::future::pending::<Result<(), AcpError>>().await
             },
         ))
         .detach();
@@ -3265,7 +3264,7 @@ mod tests {
         // Build the fake agent side. It handles the requests issued by
         // `AcpConnection` during the test and tracks load/close counts.
         let agent_future = Agent
-            .builder()
+            .v1()
             .name("fake-agent")
             .on_receive_request(
                 async move |req: acp::InitializeRequest, responder, _cx| {
@@ -3948,15 +3947,15 @@ impl acp_thread::AgentSessionConfigOptions for AcpSessionConfigOptions {
 fn session_thread(
     ctx: &ClientContext,
     session_id: &acp::SessionId,
-) -> Result<WeakEntity<AcpThread>, acp::Error> {
+) -> Result<WeakEntity<AcpThread>, AcpError> {
     let sessions = ctx.sessions.borrow();
     sessions
         .get(session_id)
         .map(|session| session.thread.clone())
-        .ok_or_else(|| acp::Error::internal_error().data(format!("unknown session: {session_id}")))
+        .ok_or_else(|| AcpError::internal_error().data(format!("unknown session: {session_id}")))
 }
 
-fn respond_err<T: JsonRpcResponse>(responder: Responder<T>, err: acp::Error) {
+fn respond_err<T: JsonRpcResponse>(responder: Responder<T, V1>, err: AcpError) {
     // Log the actual error we're returning — otherwise agents that hit an
     // error path (e.g. unknown session) would see only the generic internal
     // error returned over the wire with no trace of why on the client side.
@@ -3969,7 +3968,7 @@ fn respond_err<T: JsonRpcResponse>(responder: Responder<T>, err: acp::Error) {
 
 fn handle_request_permission(
     args: acp::RequestPermissionRequest,
-    responder: Responder<acp::RequestPermissionResponse>,
+    responder: Responder<acp::RequestPermissionResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4020,7 +4019,7 @@ fn handle_request_permission(
 
 fn handle_create_elicitation(
     args: acp::CreateElicitationRequest,
-    responder: Responder<acp::CreateElicitationResponse>,
+    responder: Responder<acp::CreateElicitationResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4043,7 +4042,7 @@ fn handle_create_elicitation(
 
             let cancellation = responder.cancellation();
             cx.spawn(async move |cx| {
-                let result: Result<_, acp::Error> = cancellation
+                let result: Result<_, AcpError> = cancellation
                     .run_until_cancelled(async { Ok(task.await) })
                     .await;
 
@@ -4076,7 +4075,7 @@ fn handle_create_elicitation(
 
             let cancellation = responder.cancellation();
             cx.spawn(async move |cx| {
-                let result: Result<_, acp::Error> = cancellation
+                let result: Result<_, AcpError> = cancellation
                     .run_until_cancelled(async { Ok(task.await) })
                     .await;
 
@@ -4101,7 +4100,7 @@ fn handle_create_elicitation(
         _ => {
             respond_err(
                 responder,
-                acp::Error::invalid_params().data("unknown elicitation scope"),
+                AcpError::invalid_params().data("unknown elicitation scope"),
             );
         }
     }
@@ -4135,7 +4134,7 @@ fn handle_complete_elicitation(
 
 fn handle_write_text_file(
     args: acp::WriteTextFileRequest,
-    responder: Responder<acp::WriteTextFileResponse>,
+    responder: Responder<acp::WriteTextFileResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4145,12 +4144,12 @@ fn handle_write_text_file(
     };
 
     cx.spawn(async move |cx| {
-        let result: Result<_, acp::Error> = async {
+        let result: Result<_, AcpError> = async {
             thread
                 .update(cx, |thread, cx| {
                     thread.write_text_file(args.path, args.content, cx)
                 })
-                .map_err(acp::Error::from)?
+                .map_err(AcpError::from)?
                 .await?;
             Ok(())
         }
@@ -4170,7 +4169,7 @@ fn handle_write_text_file(
 
 fn handle_read_text_file(
     args: acp::ReadTextFileRequest,
-    responder: Responder<acp::ReadTextFileResponse>,
+    responder: Responder<acp::ReadTextFileResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4180,12 +4179,12 @@ fn handle_read_text_file(
     };
 
     cx.spawn(async move |cx| {
-        let result: Result<_, acp::Error> = async {
+        let result: Result<_, AcpError> = async {
             thread
                 .update(cx, |thread, cx| {
                     thread.read_text_file(args.path, args.line, args.limit, false, cx)
                 })
-                .map_err(acp::Error::from)?
+                .map_err(AcpError::from)?
                 .await
         }
         .await;
@@ -4377,7 +4376,7 @@ fn handle_session_notification(
 
 fn handle_create_terminal(
     args: acp::CreateTerminalRequest,
-    responder: Responder<acp::CreateTerminalResponse>,
+    responder: Responder<acp::CreateTerminalResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4387,14 +4386,14 @@ fn handle_create_terminal(
     };
     let project = match thread
         .read_with(cx, |thread, _cx| thread.project().clone())
-        .map_err(acp::Error::from)
+        .map_err(AcpError::from)
     {
         Ok(p) => p,
         Err(e) => return respond_err(responder, e),
     };
 
     cx.spawn(async move |cx| {
-        let result: Result<_, acp::Error> = async {
+        let result: Result<_, AcpError> = async {
             let terminal_entity = acp_thread::create_terminal_entity(
                 args.command.clone(),
                 &args.args,
@@ -4437,7 +4436,7 @@ fn handle_create_terminal(
 
 fn handle_kill_terminal(
     args: acp::KillTerminalRequest,
-    responder: Responder<acp::KillTerminalResponse>,
+    responder: Responder<acp::KillTerminalResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4461,7 +4460,7 @@ fn handle_kill_terminal(
 
 fn handle_release_terminal(
     args: acp::ReleaseTerminalRequest,
-    responder: Responder<acp::ReleaseTerminalResponse>,
+    responder: Responder<acp::ReleaseTerminalResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4487,7 +4486,7 @@ fn handle_release_terminal(
 
 fn handle_terminal_output(
     args: acp::TerminalOutputRequest,
-    responder: Responder<acp::TerminalOutputResponse>,
+    responder: Responder<acp::TerminalOutputResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4515,7 +4514,7 @@ fn handle_terminal_output(
 
 fn handle_wait_for_terminal_exit(
     args: acp::WaitForTerminalExitRequest,
-    responder: Responder<acp::WaitForTerminalExitResponse>,
+    responder: Responder<acp::WaitForTerminalExitResponse, V1>,
     cx: &mut AsyncApp,
     ctx: &ClientContext,
 ) {
@@ -4525,7 +4524,7 @@ fn handle_wait_for_terminal_exit(
     };
 
     cx.spawn(async move |cx| {
-        let result: Result<_, acp::Error> = async {
+        let result: Result<_, AcpError> = async {
             let exit_status = thread
                 .update(cx, |thread, cx| {
                     anyhow::Ok(thread.terminal(args.terminal_id)?.read(cx).wait_for_exit())

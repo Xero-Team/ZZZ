@@ -114,7 +114,7 @@ patches = ["vendor/patches/nvim-rs/0001-rustfmt.patch"]
 name = "stacker"
 repository = "https://github.com/rust-lang/stacker.git"
 source_ref = "refs/heads/master"
-revision = "cdf19cf36cd0343a97c174ee6f7f8241f88b35f0"
+revision = "d3ac2df79a409c681329006e9b31c96ab9c5fcae"
 include = [
     "psm/Cargo.toml",
     "psm/LICENSE-APACHE",

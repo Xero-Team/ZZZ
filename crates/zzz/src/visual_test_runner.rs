@@ -92,7 +92,7 @@ fn main() {
 #[cfg(target_os = "macos")]
 use {
     acp_thread::{AgentConnection, StubAgentConnection},
-    agent_client_protocol::schema::v1 as acp,
+    agent_client_protocol::v1::schema as acp,
     agent_servers::{AgentServer, AgentServerDelegate},
     anyhow::{Context as _, Result, bail},
     assets::Assets,

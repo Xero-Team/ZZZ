@@ -3,7 +3,9 @@ mod diff;
 mod mention;
 mod terminal;
 use action_log::ActionLog;
-use agent_client_protocol::schema::{MaybeUndefined, v1 as acp};
+use agent_client_protocol::Error as AcpError;
+use agent_client_protocol::schema::MaybeUndefined;
+use agent_client_protocol::v1::schema as acp;
 use anyhow::{Context as _, Result, anyhow};
 use collections::HashSet;
 pub use connection::*;
@@ -384,19 +386,19 @@ impl ElicitationStore {
         &self.elicitations
     }
 
-    fn validate_request(request: &acp::CreateElicitationRequest) -> Result<(), acp::Error> {
+    fn validate_request(request: &acp::CreateElicitationRequest) -> Result<(), AcpError> {
         match &request.mode {
             acp::ElicitationMode::Form(_) => {}
             acp::ElicitationMode::Url(mode) => {
                 let url = url::Url::parse(&mode.url)
-                    .map_err(|_| acp::Error::invalid_params().data("invalid elicitation URL"))?;
+                    .map_err(|_| AcpError::invalid_params().data("invalid elicitation URL"))?;
                 if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
-                    return Err(acp::Error::invalid_params()
+                    return Err(AcpError::invalid_params()
                         .data("elicitation URL must use HTTP or HTTPS and include a host"));
                 }
             }
             _ => {
-                return Err(acp::Error::invalid_params().data("unsupported elicitation mode"));
+                return Err(AcpError::invalid_params().data("unsupported elicitation mode"));
             }
         }
 
@@ -523,7 +525,7 @@ impl ElicitationStore {
         &mut self,
         request: acp::CreateElicitationRequest,
         cx: &mut Context<Self>,
-    ) -> Result<Task<acp::CreateElicitationResponse>, acp::Error> {
+    ) -> Result<Task<acp::CreateElicitationResponse>, AcpError> {
         self.request_elicitation_with_id(request, cx)
             .map(|(_, task)| task)
     }
@@ -532,7 +534,7 @@ impl ElicitationStore {
         &mut self,
         request: acp::CreateElicitationRequest,
         cx: &mut Context<Self>,
-    ) -> Result<(ElicitationEntryId, Task<acp::CreateElicitationResponse>), acp::Error> {
+    ) -> Result<(ElicitationEntryId, Task<acp::CreateElicitationResponse>), AcpError> {
         Self::validate_request(&request)?;
         let (id, response_rx) = self.insert_pending_elicitation(request);
         cx.emit(ElicitationStoreEvent::ElicitationRequested(id.clone()));
@@ -2288,7 +2290,7 @@ impl AcpThread {
         &mut self,
         update: acp::SessionUpdate,
         cx: &mut Context<Self>,
-    ) -> Result<(), acp::Error> {
+    ) -> Result<(), AcpError> {
         match update {
             acp::SessionUpdate::UserMessageChunk(acp::ContentChunk {
                 content,
@@ -2861,7 +2863,7 @@ impl AcpThread {
         &mut self,
         tool_call: acp::ToolCall,
         cx: &mut Context<Self>,
-    ) -> Result<(), acp::Error> {
+    ) -> Result<(), AcpError> {
         let status = tool_call.status.into();
         self.upsert_tool_call_inner(tool_call.into(), status, cx)
     }
@@ -2872,7 +2874,7 @@ impl AcpThread {
         update: acp::ToolCallUpdate,
         status: ToolCallStatus,
         cx: &mut Context<Self>,
-    ) -> Result<(), acp::Error> {
+    ) -> Result<(), AcpError> {
         let language_registry = self.project.read(cx).languages().clone();
         let path_style = self.project.read(cx).path_style(cx);
         let id = update.tool_call_id.clone();
@@ -3230,7 +3232,7 @@ impl AcpThread {
         &mut self,
         request: acp::CreateElicitationRequest,
         cx: &mut Context<Self>,
-    ) -> Result<Task<acp::CreateElicitationResponse>, acp::Error> {
+    ) -> Result<Task<acp::CreateElicitationResponse>, AcpError> {
         self.request_elicitation_with_id(request, cx)
             .map(|(_, task)| task)
     }
@@ -3239,7 +3241,7 @@ impl AcpThread {
         &mut self,
         request: acp::CreateElicitationRequest,
         cx: &mut Context<Self>,
-    ) -> Result<(ElicitationEntryId, Task<acp::CreateElicitationResponse>), acp::Error> {
+    ) -> Result<(ElicitationEntryId, Task<acp::CreateElicitationResponse>), AcpError> {
         ElicitationStore::validate_request(&request)?;
 
         let (id, response_rx) = self.elicitations.insert_pending_elicitation(request);
@@ -3881,7 +3883,7 @@ impl AcpThread {
         limit: Option<u32>,
         reuse_shared_snapshot: bool,
         cx: &mut Context<Self>,
-    ) -> Task<Result<String, acp::Error>> {
+    ) -> Task<Result<String, AcpError>> {
         // Args are 1-based, move to 0-based
         let line = line.unwrap_or_default().saturating_sub(1);
         let limit = limit.unwrap_or(u32::MAX);
@@ -3893,9 +3895,11 @@ impl AcpThread {
                 let path = project
                     .project_path_for_absolute_path(&path, cx)
                     .ok_or_else(|| {
-                        acp::Error::resource_not_found(Some(path.display().to_string()))
+                        AcpError::from(acp::Error::resource_not_found(Some(
+                            path.display().to_string(),
+                        )))
                     })?;
-                Ok::<_, acp::Error>(project.open_buffer(path, cx))
+                Ok::<_, AcpError>(project.open_buffer(path, cx))
             })?;
 
             let buffer = load.await?;
@@ -3928,7 +3932,7 @@ impl AcpThread {
             let start_position = Point::new(line, 0);
 
             if start_position > max_point {
-                return Err(acp::Error::invalid_params().data(format!(
+                return Err(AcpError::invalid_params().data(format!(
                     "Attempting to read beyond the end of the file, line {}:{}",
                     max_point.row + 1,
                     max_point.column

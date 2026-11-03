@@ -2,7 +2,7 @@
 name = "tree-sitter-diff"
 authors = ["Michael Davis <mcarsondavis@gmail.com>"]
 description = "diff grammar for the tree-sitter parsing library"
-version = "0.1.0"
+version = "0.2.0"
 keywords = ["incremental", "parsing", "diff"]
 categories = ["parsing", "text-editors"]
 repository = "https://github.com/tree-sitter/tree-sitter-diff"
@@ -22,10 +22,10 @@ include = [
 path = "bindings/rust/lib.rs"
 
 [dependencies]
-tree-sitter-language = "0.1.0"
+tree-sitter-language = "0.1.9"
 
 [build-dependencies]
-cc = "1.0"
+cc = "1.11"
 
 [dev-dependencies]
 tree-sitter = { workspace = true }

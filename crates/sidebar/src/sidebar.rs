@@ -2,7 +2,7 @@ mod thread_switcher;
 
 use acp_thread::ThreadStatus;
 use action_log::DiffStats;
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use agent_settings::AgentSettings;
 use agent_ui::terminal_thread_metadata_store::{
     TerminalThreadMetadata, TerminalThreadMetadataStore,

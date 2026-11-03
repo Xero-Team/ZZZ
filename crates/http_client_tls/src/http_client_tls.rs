@@ -4,9 +4,18 @@ use rustls::{ClientConfig, crypto::CryptoProvider};
 use rustls_platform_verifier::ConfigVerifierExt;
 
 pub fn tls_config() -> anyhow::Result<ClientConfig> {
-    ensure_default_crypto_provider()?;
+    install_crypto_provider()?;
 
     ClientConfig::with_platform_verifier().context("building platform TLS verifier")
+}
+
+/// Installs the application's rustls crypto provider as the process-wide default.
+///
+/// Callers that build their own rustls configuration (rather than going through
+/// [`tls_config`]) use this to keep the crypto provider consistent with the rest
+/// of the application.
+pub fn install_crypto_provider() -> anyhow::Result<()> {
+    ensure_default_crypto_provider()
 }
 
 fn ensure_default_crypto_provider() -> anyhow::Result<()> {

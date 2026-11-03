@@ -1882,11 +1882,29 @@
       }
     },
     "command_parameter": {
-      "type": "TOKEN",
-      "content": {
-        "type": "PATTERN",
-        "value": "-+[a-zA-Z_?\\-`]+"
-      }
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "TOKEN",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "PATTERN",
+                "value": "-+[a-zA-Z_?\\-`][a-zA-Z0-9_?\\-`]*"
+              },
+              {
+                "type": "PATTERN",
+                "value": "--?[a-zA-Z_][a-zA-Z0-9_\\-]*=([^\\s\"'`;|&(){}]|\"[^\"\\r\\n]*\"|'[^'\\r\\n]*')*"
+              }
+            ]
+          }
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_bare_dashes"
+        }
+      ]
     },
     "_verbatim_command_argument_chars": {
       "type": "REPEAT1",
@@ -2178,19 +2196,6 @@
           },
           "named": false,
           "value": "end"
-        },
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "PREC",
-            "value": 1,
-            "content": {
-              "type": "PATTERN",
-              "value": "[cC][lL][eE][aA][nN]"
-            }
-          },
-          "named": false,
-          "value": "clean"
         }
       ]
     },
@@ -2296,10 +2301,6 @@
           },
           {
             "type": "SYMBOL",
-            "name": "using_statement"
-          },
-          {
-            "type": "SYMBOL",
             "name": "data_statement"
           },
           {
@@ -2328,6 +2329,19 @@
             ]
           },
           {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "pipeline"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "background_operator"
+              }
+            ]
+          },
+          {
             "type": "SYMBOL",
             "name": "empty_statement"
           }
@@ -2341,6 +2355,10 @@
         "type": "STRING",
         "value": ";"
       }
+    },
+    "background_operator": {
+      "type": "STRING",
+      "value": "&"
     },
     "if_statement": {
       "type": "PREC_LEFT",
@@ -3613,97 +3631,6 @@
         }
       ]
     },
-    "using_statement": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "PREC",
-            "value": 1,
-            "content": {
-              "type": "PATTERN",
-              "value": "[uU][sS][iI][nN][gG]"
-            }
-          },
-          "named": false,
-          "value": "using"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "using_kind"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "using_target"
-        }
-      ]
-    },
-    "using_kind": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "PREC",
-            "value": 1,
-            "content": {
-              "type": "PATTERN",
-              "value": "[nN][aA][mM][eE][sS][pP][aA][cC][eE]"
-            }
-          },
-          "named": false,
-          "value": "namespace"
-        },
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "PREC",
-            "value": 1,
-            "content": {
-              "type": "PATTERN",
-              "value": "[mM][oO][dD][uU][lL][eE]"
-            }
-          },
-          "named": false,
-          "value": "module"
-        },
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "PREC",
-            "value": 1,
-            "content": {
-              "type": "PATTERN",
-              "value": "[aA][sS][sS][eE][mM][bB][lL][yY]"
-            }
-          },
-          "named": false,
-          "value": "assembly"
-        }
-      ]
-    },
-    "using_target": {
-      "type": "PREC_RIGHT",
-      "value": 0,
-      "content": {
-        "type": "CHOICE",
-        "members": [
-          {
-            "type": "SYMBOL",
-            "name": "type_name"
-          },
-          {
-            "type": "SYMBOL",
-            "name": "_command_token"
-          },
-          {
-            "type": "SYMBOL",
-            "name": "string_literal"
-          }
-        ]
-      }
-    },
     "data_statement": {
       "type": "SEQ",
       "members": [
@@ -4235,10 +4162,6 @@
             },
             {
               "type": "PATTERN",
-              "value": "[uU][sS][iI][nN][gG][--]"
-            },
-            {
-              "type": "PATTERN",
               "value": "[sS][wW][iI][tT][cC][hH][--]"
             },
             {
@@ -4377,10 +4300,6 @@
             "name": "command_parameter"
           },
           {
-            "type": "SYMBOL",
-            "name": "stop_arguments"
-          },
-          {
             "type": "SEQ",
             "members": [
               {
@@ -4412,43 +4331,9 @@
         ]
       }
     },
-    "stop_arguments": {
-      "type": "PREC_RIGHT",
-      "value": 7,
-      "content": {
-        "type": "SEQ",
-        "members": [
-          {
-            "type": "TOKEN",
-            "content": {
-              "type": "PREC",
-              "value": 7,
-              "content": {
-                "type": "STRING",
-                "value": "--"
-              }
-            }
-          },
-          {
-            "type": "REPEAT",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_command_argument"
-            }
-          }
-        ]
-      }
-    },
     "stop_parsing": {
-      "type": "TOKEN",
-      "content": {
-        "type": "PREC",
-        "value": 8,
-        "content": {
-          "type": "PATTERN",
-          "value": "--%[^\\r\\n]*"
-        }
-      }
+      "type": "PATTERN",
+      "value": "--%[^\\r\\n]*"
     },
     "command_argument_sep": {
       "type": "PREC_RIGHT",
@@ -4487,8 +4372,38 @@
                 "type": "CHOICE",
                 "members": [
                   {
-                    "type": "SYMBOL",
-                    "name": "generic_token"
+                    "type": "SEQ",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "generic_token"
+                      },
+                      {
+                        "type": "REPEAT",
+                        "content": {
+                          "type": "SEQ",
+                          "members": [
+                            {
+                              "type": "STRING",
+                              "value": ","
+                            },
+                            {
+                              "type": "CHOICE",
+                              "members": [
+                                {
+                                  "type": "SYMBOL",
+                                  "name": "generic_token"
+                                },
+                                {
+                                  "type": "SYMBOL",
+                                  "name": "unary_expression"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   },
                   {
                     "type": "BLANK"
@@ -4804,25 +4719,20 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "ALIAS",
+          "type": "TOKEN",
           "content": {
-            "type": "TOKEN",
+            "type": "ALIAS",
             "content": {
-              "type": "ALIAS",
+              "type": "PREC",
+              "value": 1,
               "content": {
-                "type": "PREC",
-                "value": 1,
-                "content": {
-                  "type": "PATTERN",
-                  "value": "[cC][lL][aA][sS][sS]"
-                }
-              },
-              "named": false,
-              "value": "class"
-            }
-          },
-          "named": true,
-          "value": "class_keyword"
+                "type": "PATTERN",
+                "value": "[cC][lL][aA][sS][sS]"
+              }
+            },
+            "named": false,
+            "value": "class"
+          }
         },
         {
           "type": "SYMBOL",
@@ -4911,25 +4821,20 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "ALIAS",
+          "type": "TOKEN",
           "content": {
-            "type": "TOKEN",
+            "type": "ALIAS",
             "content": {
-              "type": "ALIAS",
+              "type": "PREC",
+              "value": 1,
               "content": {
-                "type": "PREC",
-                "value": 1,
-                "content": {
-                  "type": "PATTERN",
-                  "value": "[eE][nN][uU][mM]"
-                }
-              },
-              "named": false,
-              "value": "enum"
-            }
-          },
-          "named": true,
-          "value": "enum_keyword"
+                "type": "PATTERN",
+                "value": "[eE][nN][uU][mM]"
+              }
+            },
+            "named": false,
+            "value": "enum"
+          }
         },
         {
           "type": "SYMBOL",
@@ -6677,6 +6582,10 @@
     {
       "type": "SYMBOL",
       "name": "_statement_terminator"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_bare_dashes"
     }
   ],
   "inline": [],
