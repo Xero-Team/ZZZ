@@ -206,6 +206,12 @@ goes through `script/ensure-macos-sdk`, which resolves the newest release
 instead; both work because the bindgen step asserts `TARGET_OS_OSX` for the
 libclang builds that lack clang's `define_target_os_macros` extension.
 
+Every image also carries LLVM 23 from apt.llvm.org. bindgen picks its builtin
+include path from the `clang` it finds, and the distribution's LLVM 14 cannot
+parse the pinned SDK, so the macOS bindings would fail to generate on a Linux
+host. The same LLVM drives `clang-cl` in the Windows layer, whose MSVC STL
+refuses compilers older than 19.
+
 Windows cross builds need the `msvc-wine` layer, which downloads Microsoft's
 MSVC toolset and Windows SDK and runs `cl`, `link`, and `fxc` under wine. The
 planner asks for it by itself, so a Windows target needs no extra flag and no

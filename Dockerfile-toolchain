@@ -216,31 +216,46 @@ RUN if [ "${WITH_MSVC}" = "1" ]; then \
 # for an MSVC target. clang picks the mode from the name it is invoked as, so
 # the symlink is the whole configuration.
 #
-# The distro's llvm-14 is too old for the toolset above. MSVC's STL refuses a
-# Clang older than 19 in C++ mode (STL1000), and `libmimalloc-sys` compiles as
-# C++ because mimalloc wants the C++ atomics path there. `lld-link` 14 cannot
-# read the function-ID records in the toolset's runtime libraries either, so
-# every link warns that a PDB item index is "not a valid function ID record".
-# LLVM's own archive carries both tools. The archiver and resource compiler stay
-# on Ubuntu's llvm-14: they only read and write COFF objects, so nothing is
-# gained by moving them. Bumping `MSVC_VERSION` can raise the floor too; check
-# `yvals_core.h` in the installed toolset when it moves.
-ARG LLVM_VERSION=19
+# LLVM from apt.llvm.org is installed on every image, for two consumers.
+# MSVC's STL refuses a Clang older than 19 in C++ mode (STL1000), and
+# `libmimalloc-sys` compiles as C++ because mimalloc wants the C++ atomics path
+# there; `lld-link` 14 cannot read the function-ID records in the toolset's
+# runtime libraries either, so every link warns that a PDB item index is "not a
+# valid function ID record". bindgen needs it as well: it takes its builtin
+# include search path from the clang binary it discovers, and the distro's
+# llvm-14 cannot parse the pinned macOS SDK (`emmintrin.h` rejects the
+# `__m128i` conversions), which breaks the macOS bindings generated on Linux.
+# `CLANG_PATH` and `LIBCLANG_PATH` pin both consumers to this install instead
+# of whichever LLVM the base image also carries.
+#
+# The pin follows the newest stable release in apt.llvm.org's jammy archive, so
+# it does not sit on a branch that stopped receiving compiler fixes. Moving it
+# is one edit: `LLVM_VERSION` feeds the package names, the symlinks, and the
+# environment below.
+#
+# The archiver and resource compiler stay on Ubuntu's llvm-14: they only read
+# and write COFF objects, so nothing is gained by moving them. Bumping
+# `MSVC_VERSION` can raise the floor too; check `yvals_core.h` in the installed
+# toolset when it moves.
+ARG LLVM_VERSION=23
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl gnupg \
+    && curl --fail --silent --show-error --location \
+        https://apt.llvm.org/llvm-snapshot.gpg.key \
+        | gpg --dearmor --output /usr/share/keyrings/llvm.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION} main" \
+        > /etc/apt/sources.list.d/llvm.list \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        "clang-${LLVM_VERSION}" \
+        "libclang1-${LLVM_VERSION}" \
+        "lld-${LLVM_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
+ENV CLANG_PATH="/usr/lib/llvm-${LLVM_VERSION}/bin/clang" \
+    LIBCLANG_PATH="/usr/lib/llvm-${LLVM_VERSION}/lib"
 RUN if [ "${WITH_MSVC}" = "1" ]; then \
-        apt-get update \
-        && apt-get install --yes --no-install-recommends ca-certificates curl gnupg \
-        && curl --fail --silent --show-error --location \
-            https://apt.llvm.org/llvm-snapshot.gpg.key \
-            | gpg --dearmor --output /usr/share/keyrings/llvm.gpg \
-        && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION} main" \
-            > /etc/apt/sources.list.d/llvm.list \
-        && apt-get update \
-        && apt-get install --yes --no-install-recommends \
-            "clang-${LLVM_VERSION}" \
-            "lld-${LLVM_VERSION}" \
-        && rm -rf /var/lib/apt/lists/* \
-        && ln --symbolic --force "/usr/bin/clang-${LLVM_VERSION}" /usr/local/bin/clang-cl \
-        && ln --symbolic --force "/usr/bin/lld-link-${LLVM_VERSION}" /usr/local/bin/lld-link; \
+        ln --symbolic --force "/usr/bin/clang-${LLVM_VERSION}" /usr/local/bin/clang-cl; \
+        ln --symbolic --force "/usr/bin/lld-link-${LLVM_VERSION}" /usr/local/bin/lld-link; \
     fi
 
 # The `cmake` crate asks for a Visual Studio generator on an MSVC target and
