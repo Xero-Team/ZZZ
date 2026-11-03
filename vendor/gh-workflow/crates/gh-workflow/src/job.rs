@@ -3,13 +3,15 @@
 
 use derive_setters::Setters;
 use indexmap::IndexMap;
+use merge::Merge;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::concurrency::Concurrency;
 use crate::step::{Step, StepType, StepValue};
 use crate::{
-    Artifacts, Container, Defaults, Env, Expression, Input, Permissions, RetryStrategy, Strategy,
+    Artifacts, Container, Defaults, Env, Expression, Input, Permissions, RetryStrategy, Secrets,
+    Strategy,
 };
 
 /// Represents the environment in which a job runs.
@@ -68,13 +70,13 @@ pub struct Job {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub secrets: Option<IndexMap<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub with: Option<Input>,
+    pub secrets: Option<Secrets>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry: Option<RetryStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifacts: Option<Artifacts>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with: Option<Input>,
 }
 
 impl Default for Job {
@@ -99,9 +101,9 @@ impl Default for Job {
             steps: None,
             uses: None,
             secrets: None,
-            with: None,
             retry: None,
             artifacts: None,
+            with: None,
         }
     }
 }
@@ -160,19 +162,41 @@ impl Job {
         self
     }
 
-    /// Adds a secret to the job.
-    pub fn add_secret<K: ToString, V: Into<String>>(mut self, key: K, secret: V) -> Self {
-        let mut secrets = self.secrets.take().unwrap_or_default();
-        secrets.insert(key.to_string(), secret.into());
-        self.secrets = Some(secrets);
+    /// Adds a new input to the job.
+    pub fn add_with<I: Into<Input>>(mut self, new_with: I) -> Self {
+        let mut with = self.with.take().unwrap_or_default();
+        with.merge(new_with.into());
+        if with.0.is_empty() {
+            self.with = None;
+        } else {
+            self.with = Some(with);
+        }
+
         self
     }
 
-    /// Adds inputs to a reusable workflow job.
-    pub fn add_with<I: Into<Input>>(mut self, new_with: I) -> Self {
-        let mut with = self.with.take().unwrap_or_default();
-        with.0.extend(new_with.into().0);
-        self.with = Some(with);
+    /// Changes job to inherit secrets.
+    /// Will silently drop any secrets added.
+    /// Mutually exclusive with `add_secret`
+    pub fn inherit_secrets(mut self) -> Self {
+        self.secrets = Some(Secrets::Inherit);
+        self
+    }
+
+    /// Adds a secret to the job.
+    /// Will silently drop/override 'inherit_secrets' if previously called.
+    /// Mutually exclusive with `inherit_secrets`
+    pub fn add_secret<K: ToString, V: Into<String>>(mut self, key: K, secret: V) -> Self {
+        let mut secrets = match self
+            .secrets
+            .take()
+            .unwrap_or(Secrets::Values(IndexMap::default()))
+        {
+            Secrets::Inherit => IndexMap::default(),
+            Secrets::Values(values) => values,
+        };
+        secrets.insert(key.to_string(), secret.into());
+        self.secrets = Some(Secrets::Values(secrets));
         self
     }
 }

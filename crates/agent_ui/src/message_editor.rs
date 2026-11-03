@@ -10,7 +10,7 @@ use crate::{
 };
 use acp_thread::MentionUri;
 use agent::ThreadStore;
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use anyhow::{Context as _, Result, anyhow};
 use editor::{
     Addon, Anchor, AnchorRangeExt, ContextMenuOptions, Editor, EditorElement, EditorEvent,
@@ -2152,7 +2152,7 @@ mod tests {
 
     use acp_thread::MentionUri;
     use agent::{ThreadStore, outline};
-    use agent_client_protocol::schema::v1 as acp;
+    use agent_client_protocol::v1::schema as acp;
     use base64::Engine as _;
     use editor::{
         AnchorRangeExt as _, Editor, EditorMode, MultiBufferOffset, SelectionEffects,

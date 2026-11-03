@@ -1,6 +1,6 @@
 use crate::tr;
 use acp_thread::{Elicitation, ElicitationEntryId, ElicitationStatus};
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use collections::{HashMap, HashSet};
 use editor::Editor;
 use futures::channel::oneshot;

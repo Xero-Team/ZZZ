@@ -24,6 +24,8 @@ use crate::{
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
 use collections::FxHashMap;
+// `DeferredDraw::accessed_entities` exists in every build, so the type it needs
+// has to be imported in every build too.
 use collections::FxHashSet;
 #[cfg(target_os = "macos")]
 use core_video::pixel_buffer::CVPixelBuffer;

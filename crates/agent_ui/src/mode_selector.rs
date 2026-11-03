@@ -1,5 +1,5 @@
 use acp_thread::AgentSessionModes;
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use agent_servers::AgentServer;
 
 use fs::Fs;

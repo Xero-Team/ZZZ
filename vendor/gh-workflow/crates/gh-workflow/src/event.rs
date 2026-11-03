@@ -1,8 +1,7 @@
 #![allow(clippy::needless_update)]
 
-use std::collections::HashMap;
-
 use derive_setters::Setters;
+use indexmap::IndexMap;
 use merge::Merge;
 use serde::{Deserialize, Serialize};
 
@@ -115,7 +114,7 @@ impl Merge for Event {
             watch,
             workflow_call,
             workflow_dispatch,
-            workflow_run,
+            workflow_run
         );
     }
 }
@@ -574,6 +573,7 @@ pub enum PullRequestType {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 #[setters(strip_option, into)]
 pub struct PullRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -582,6 +582,9 @@ pub struct PullRequest {
     pub branches: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<String>,
+    /// Ignore specific file paths
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths_ignore: Vec<String>,
 }
 
 impl PullRequest {
@@ -595,8 +598,15 @@ impl PullRequest {
         self
     }
 
+    /// Adds a file path to filter on
     pub fn add_path<S: Into<String>>(mut self, path: S) -> Self {
         self.paths.push(path.into());
+        self
+    }
+
+    /// Adds a file path to not trigger on
+    pub fn add_ignored_path<S: Into<String>>(mut self, path: S) -> Self {
+        self.paths_ignore.push(path.into());
         self
     }
 }
@@ -665,6 +675,7 @@ impl PullRequestReviewComment {
 /// Configuration for pull request target events
 /// See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 #[setters(strip_option, into)]
 pub struct PullRequestTarget {
     /// Filter on specific pull request event types
@@ -673,6 +684,11 @@ pub struct PullRequestTarget {
     /// Filter on specific branch names
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub branches: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
+    /// Ignore specific file paths
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths_ignore: Vec<String>,
 }
 
 impl PullRequestTarget {
@@ -687,11 +703,24 @@ impl PullRequestTarget {
         self.branches.push(branch.into());
         self
     }
+
+    /// Adds a file path to filter on
+    pub fn add_path<S: Into<String>>(mut self, path: S) -> Self {
+        self.paths.push(path.into());
+        self
+    }
+
+    /// Adds a file path to not trigger on
+    pub fn add_ignored_path<S: Into<String>>(mut self, path: S) -> Self {
+        self.paths_ignore.push(path.into());
+        self
+    }
 }
 
 /// Configuration for push events
 /// See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#push
 #[derive(Debug, Clone, Default, Deserialize, Serialize, Setters, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 #[setters(strip_option, into)]
 pub struct Push {
     /// Filter on specific branch names
@@ -700,6 +729,9 @@ pub struct Push {
     /// Filter on specific file paths
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<String>,
+    /// Ignore specific file paths
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths_ignore: Vec<String>,
     /// Filter on specific tags
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -715,6 +747,12 @@ impl Push {
     /// Adds a file path to filter on
     pub fn add_path<S: Into<String>>(mut self, path: S) -> Self {
         self.paths.push(path.into());
+        self
+    }
+
+    /// Adds a file path to not trigger on
+    pub fn add_ignored_path<S: Into<String>>(mut self, path: S) -> Self {
+        self.paths_ignore.push(path.into());
         self
     }
 
@@ -841,14 +879,14 @@ impl Watch {
 #[setters(strip_option, into)]
 pub struct WorkflowCall {
     /// Inputs for the workflow call
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub inputs: HashMap<String, WorkflowCallInput>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub inputs: IndexMap<String, WorkflowCallInput>,
     /// Outputs from the workflow call
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub outputs: HashMap<String, WorkflowCallOutput>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub outputs: IndexMap<String, WorkflowCallOutput>,
     /// Secrets for the workflow call
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub secrets: HashMap<String, WorkflowCallSecret>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub secrets: IndexMap<String, WorkflowCallSecret>,
 }
 
 impl WorkflowCall {
@@ -896,7 +934,6 @@ pub struct WorkflowCallSecret {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub description: String,
     /// Indicates if the secret is required
-    #[serde(skip_serializing_if = "is_default")]
     pub required: bool,
 }
 
@@ -907,8 +944,8 @@ pub struct WorkflowCallSecret {
 #[setters(strip_option, into)]
 pub struct WorkflowDispatch {
     /// Inputs for the workflow dispatch
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub inputs: HashMap<String, WorkflowDispatchInput>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub inputs: IndexMap<String, WorkflowDispatchInput>,
 }
 
 impl WorkflowDispatch {
@@ -933,7 +970,28 @@ pub struct WorkflowDispatchInput {
     pub input_type: String,
     /// Default value for the input
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[setters(skip)]
     pub default: Option<String>,
+    /// The options of the dropdown list, if the type is a choice
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[setters(skip)]
+    pub options: Vec<String>,
+}
+
+impl WorkflowDispatchInput {
+    pub fn set_default(self, value: impl Into<String>) -> Self {
+        Self {
+            default: Some(value.into()),
+            ..self
+        }
+    }
+
+    pub fn options<T: ToString, I: IntoIterator<Item = T>>(self, iter: I) -> Self {
+        Self {
+            options: iter.into_iter().map(|v| v.to_string()).collect(),
+            ..self
+        }
+    }
 }
 
 /// Types of workflow run events

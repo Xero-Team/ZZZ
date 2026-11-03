@@ -1,6 +1,7 @@
 use std::{collections::HashSet, rc::Rc, sync::Arc};
 
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::Error as AcpError;
+use agent_client_protocol::v1::schema as acp;
 use agent_servers::{AcpDebugMessage, AcpDebugMessageContent, AcpDebugMessageDirection};
 use agent_ui::agent_connection_store::AgentConnectionStatus;
 use agent_ui::{Agent, AgentConnectionStore, AgentPanel};
@@ -611,7 +612,7 @@ struct WatchedConnectionMessage {
     request_id: Option<acp::RequestId>,
     direction: AcpDebugMessageDirection,
     message_type: MessageType,
-    params: Result<Option<serde_json::Value>, acp::Error>,
+    params: Result<Option<serde_json::Value>, AcpError>,
     collapsed_params_md: Option<Entity<Markdown>>,
     expanded_params_md: Option<Entity<Markdown>>,
 }

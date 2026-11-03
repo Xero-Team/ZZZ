@@ -53,13 +53,10 @@ patches = [
 [[package]]
 name = "gh-workflow"
 repository = "https://github.com/tailcallhq/gh-workflow.git"
-source_ref = "refs/tags/gh-workflow-v0.8.1"
-revision = "ef51106c4c4152f595dc6d18295d78a5ca3c54f9"
+source_ref = "refs/tags/v0.9.0"
+revision = "4073ed328d759ecc6c47c56fa794c16dde8f5573"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE", "README.md", "crates"]
-patches = [
-    "vendor/patches/gh-workflow/0001-zzz-integration.patch",
-    "vendor/patches/gh-workflow/0002-zzz-merge-derive-fix.patch",
-]
+patches = ["vendor/patches/gh-workflow/0001-zzz-integration.patch"]
 
 [[package]]
 name = "lsp-types"
@@ -114,7 +111,7 @@ patches = ["vendor/patches/nvim-rs/0001-rustfmt.patch"]
 name = "stacker"
 repository = "https://github.com/rust-lang/stacker.git"
 source_ref = "refs/heads/master"
-revision = "cdf19cf36cd0343a97c174ee6f7f8241f88b35f0"
+revision = "d3ac2df79a409c681329006e9b31c96ab9c5fcae"
 include = [
     "psm/Cargo.toml",
     "psm/LICENSE-APACHE",

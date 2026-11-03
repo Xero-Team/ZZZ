@@ -11,7 +11,7 @@ use crate::thread_metadata_store::{
 use crate::{Agent, ArchiveSelectedThread, RemoveSelectedThread, default_thread_title};
 
 use agent::ThreadStore;
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use agent_settings::AgentSettings;
 use chrono::{DateTime, Datelike as _, Local, NaiveDate, TimeDelta, Utc};
 use collections::HashMap;

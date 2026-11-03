@@ -4,7 +4,7 @@ use crate::{
     default_thread_title, entry_view_state::TERMINAL_CONTENT_TOP_PADDING, open_abs_path_at_point,
     thread_title_from_prompt,
 };
-use agent_client_protocol::schema::v1 as acp;
+use agent_client_protocol::v1::schema as acp;
 use std::cell::RefCell;
 use std::rc::Rc;
 

@@ -1,117 +1,109 @@
-; Keywords exposed as anonymous tokens by the current grammar.
-[
-  "begin"
-  "break"
-  "catch"
-  "clean"
-  "continue"
-  "data"
-  "do"
-  "dynamicparam"
-  "else"
-  "elseif"
-  "end"
-  "exit"
-  "filter"
-  "finally"
-  "for"
-  "foreach"
-  "function"
-  "if"
-  "in"
-  "inlinescript"
-  "parallel"
-  "param"
-  "process"
-  "return"
-  "sequence"
-  "switch"
-  "throw"
-  "trap"
-  "try"
-  "until"
-  "using"
-  "while"
-  "workflow"
-] @keyword
+"param" @keyword
+"dynamicparam" @keyword
+"begin" @keyword
+"process" @keyword
+"end" @keyword
+"if" @keyword
+"elseif" @keyword
+"else" @keyword
+"switch" @keyword
+"foreach" @keyword
+"for" @keyword
+"while" @keyword
+"do" @keyword
+"until" @keyword
+"function" @keyword
+"filter" @keyword
+"workflow" @keyword
+"break" @keyword
+"continue" @keyword
+"throw" @keyword
+"return" @keyword
+"exit" @keyword
+"trap" @keyword
+"try" @keyword
+"catch" @keyword
+"finally" @keyword
+"data" @keyword
+"inlinescript" @keyword
+"parallel" @keyword
+"sequence" @keyword
 
-; Operators that are exposed as plain tokens by the grammar.
-[
-  "!"
-  "&"
-  "+"
-  "-"
-  "--"
-  "."
-  "/"
-  "::"
-  "\\"
-  "|"
-  "%"
-  "*"
-  "++"
-  ".."
-] @operator
+"-as" @operator
+"-ccontains" @operator
+"-ceq" @operator
+"-cge" @operator
+"-cgt" @operator
+"-cle" @operator
+"-clike" @operator
+"-clt" @operator
+"-cmatch" @operator
+"-cne" @operator
+"-cnotcontains" @operator
+"-cnotlike" @operator
+"-cnotmatch" @operator
+"-contains" @operator
+"-creplace" @operator
+"-csplit" @operator
+"-eq" @operator
+"-ge" @operator
+"-gt" @operator
+"-icontains" @operator
+"-ieq" @operator
+"-ige" @operator
+"-igt" @operator
+"-ile" @operator
+"-ilike" @operator
+"-ilt" @operator
+"-imatch" @operator
+"-in" @operator
+"-ine" @operator
+"-inotcontains" @operator
+"-inotlike" @operator
+"-inotmatch" @operator
+"-ireplace" @operator
+"-is" @operator
+"-isnot" @operator
+"-isplit" @operator
+"-join" @operator
+"-le" @operator
+"-like" @operator
+"-lt" @operator
+"-match" @operator
+"-ne" @operator
+"-notcontains" @operator
+"-notin" @operator
+"-notlike" @operator
+"-notmatch" @operator
+"-replace" @operator
+"-shl" @operator
+"-shr" @operator
+"-split" @operator
+"-and" @operator
+"-or" @operator
+"-xor" @operator
+"-band" @operator
+"-bor" @operator
+"-bxor" @operator
+"+" @operator
+"-" @operator
+"/" @operator
+"\\" @operator
+"%" @operator
+"*" @operator
+".." @operator
+"-not" @operator
 
-(assignement_operator) @operator
-(comparison_operator) @operator
-(command_invokation_operator) @operator
-(file_redirection_operator) @operator
-(merging_redirection_operator) @operator
 
-[
-  ","
-  ";"
-] @punctuation.delimiter
+";" @delimiter
 
-[
-  "("
-  ")"
-  "["
-  "]"
-  "{"
-  "}"
-  "@("
-  "@{"
-  "$("
-] @punctuation.bracket
+(string_literal) @string
 
-[
-  (string_literal)
-  (expandable_string_literal)
-  (expandable_here_string_literal)
-  (verbatim_string_characters)
-  (verbatim_here_string_characters)
-] @string
-
-[
-  (integer_literal)
-  (decimal_integer_literal)
-  (hexadecimal_integer_literal)
-  (real_literal)
-] @number
-
-((variable) @constant.builtin
-  (#match? @constant.builtin "^\\$(?i:(true|false|null))$"))
-
-((braced_variable) @constant.builtin
-  (#match? @constant.builtin "^\\$\\{(?i:(true|false|null))\}$"))
-
-; Automatic and preference variables from the spec, plus current pwsh runtime variables.
-((variable) @variable.builtin
-  (#match?
-    @variable.builtin
-    "^\\$(?i:(\\$|\\^|\\?|_|args|consolefilename|error|event|eventargs|eventsubscriber|executioncontext|foreach|home|host|input|lastexitcode|matches|myinvocation|nestedpromptlevel|pid|profile|psboundparameters|pscmdlet|pscommandpath|psculture|psdebugcontext|pshome|psitem|psscriptroot|pssenderinfo|psuiculture|psversiontable|pwd|sender|shellid|sourceargs|sourceeventargs|stacktrace|switch|this|confirmpreference|debugpreference|erroractionpreference|errorview|formatenumerationlimit|informationpreference|logcommandhealthevent|logcommandlifecycleevent|logenginehealthevent|logenginelifecycleevent|logproviderhealthevent|logproviderlifecycleevent|maximumaliascount|maximumdrivecount|maximumerrorcount|maximumfunctioncount|maximumhistorycount|maximumvariablecount|ofs|outputencoding|progresspreference|psdefaultparametervalues|pstranscriptionpreference|verbosepreference|warningpreference|whatifpreference))$"))
-
-((braced_variable) @variable.builtin
-  (#match?
-    @variable.builtin
-    "^\\$\\{(?i:(\\$|\\^|\\?|_|args|consolefilename|error|event|eventargs|eventsubscriber|executioncontext|foreach|home|host|input|lastexitcode|matches|myinvocation|nestedpromptlevel|pid|profile|psboundparameters|pscmdlet|pscommandpath|psculture|psdebugcontext|pshome|psitem|psscriptroot|pssenderinfo|psuiculture|psversiontable|pwd|sender|shellid|sourceargs|sourceeventargs|stacktrace|switch|this|confirmpreference|debugpreference|erroractionpreference|errorview|formatenumerationlimit|informationpreference|logcommandhealthevent|logcommandlifecycleevent|logenginehealthevent|logenginelifecycleevent|logproviderhealthevent|logproviderlifecycleevent|maximumaliascount|maximumdrivecount|maximumerrorcount|maximumfunctioncount|maximumhistorycount|maximumvariablecount|ofs|outputencoding|progresspreference|psdefaultparametervalues|pstranscriptionpreference|verbosepreference|warningpreference|whatifpreference))\}$"))
+(integer_literal) @number
+(real_literal) @number
 
 (command
   command_name: (command_name) @function)
-
-(path_command_name) @function
 
 (function_statement
   (function_name) @function)
@@ -122,45 +114,15 @@
 (member_access
   (member_name) @property)
 
-(command_parameter) @parameter
-
-(block_name) @keyword
-
-(class_keyword) @keyword
-
-(class_attribute) @keyword
-
-(enum_keyword) @keyword
-
-(foreach_parameter) @keyword
-
-(switch_parameter) @keyword
-
-(script_parameter
-  (variable) @parameter)
-
-(class_method_parameter
-  (variable) @parameter)
+(command_invokation_operator) @operator
 
 (type_spec) @type
 
-(format_operator) @operator
-
-(stop_arguments
-  "--" @operator)
-
-(stop_parsing) @string.special
-
-((type_spec) @type.builtin
-  (#match? @type.builtin "^(?i:bool|byte|char|datetime|decimal|double|float|guid|hashtable|int|int16|int32|int64|long|object|ordered|pscustomobject|regex|sbyte|scriptblock|single|string|switch|timespan|type|uint|uint16|uint32|uint64|uri|version|void|xml)$"))
-
-(attribute
-  (attribute_name) @attribute)
-
-(label) @label
-
 (variable) @variable
 
-(braced_variable) @variable
-
 (comment) @comment
+
+(array_expression) @array
+
+(assignment_expression
+  value: (pipeline) @assignvalue)
