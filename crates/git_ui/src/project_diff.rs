@@ -784,7 +784,7 @@ impl ProjectDiff {
     fn button_states(&self, cx: &App) -> ButtonStates {
         let editor = self.editor.read(cx).rhs_editor().read(cx);
         let snapshot = self.multibuffer.read(cx).snapshot(cx);
-        let prev_next = snapshot.diff_hunks().nth(1).is_some();
+        let prev_next = snapshot.diff_hunks().next().is_some();
 
         let selection_ranges = editor
             .selections
