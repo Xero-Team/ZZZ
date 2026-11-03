@@ -23,7 +23,8 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow};
 #[cfg(any(feature = "inspector", debug_assertions))]
-use collections::{FxHashMap, FxHashSet};
+use collections::FxHashMap;
+use collections::FxHashSet;
 #[cfg(target_os = "macos")]
 use core_video::pixel_buffer::CVPixelBuffer;
 use derive_more::{Deref, DerefMut};
