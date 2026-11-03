@@ -106,6 +106,15 @@ impl Engine {
             .is_ok_and(|output| output.status.success())
     }
 
+    /// Name that resolves to the machine running the container, which is where
+    /// a proxy listening on the host loopback actually lives.
+    fn host_alias(self) -> &'static str {
+        match self {
+            Engine::Podman => "host.containers.internal",
+            Engine::Docker => "host.docker.internal",
+        }
+    }
+
     pub fn image_exists(self, image: &str) -> Result<bool> {
         let status = Command::new(self.binary())
             .args(["image", "exists", image])
@@ -184,6 +193,17 @@ impl ContainerSpec {
             "--tag".to_owned(),
             self.image.clone(),
         ];
+        // The build recipes download toolchains and crates, so the image build
+        // needs the same proxy the runtime does. These are predefined build
+        // arguments, which the engines accept without an `ARG` declaration.
+        let proxies = proxy_environment(self.engine);
+        if !proxies.is_empty() && self.engine == Engine::Podman {
+            arguments.push("--http-proxy=false".to_owned());
+        }
+        for (key, value) in proxies {
+            arguments.push("--build-arg".to_owned());
+            arguments.push(format!("{key}={value}"));
+        }
         // Only forwarded when the operator overrides the pin; passing the
         // default would defeat the digest in the Dockerfile.
         if let Some(base_image) = base_image_override() {
@@ -239,6 +259,24 @@ impl ContainerSpec {
 
         if self.offline {
             wrapped.push("--network=none".to_owned());
+        } else {
+            let proxies = proxy_environment(self.engine);
+            if !proxies.is_empty() {
+                // Both engines copy the host's proxy variables into the
+                // container verbatim, which leaves a proxy bound to the host
+                // loopback pointing at the container itself. Take over the
+                // forwarding so the rewritten values are the only ones set.
+                match self.engine {
+                    Engine::Podman => wrapped.push("--http-proxy=false".to_owned()),
+                    Engine::Docker => {
+                        wrapped.push("--add-host=host.docker.internal:host-gateway".to_owned())
+                    }
+                }
+                for (key, value) in proxies {
+                    wrapped.push("--env".to_owned());
+                    wrapped.push(format!("{key}={value}"));
+                }
+            }
         }
 
         wrapped.push("--env".to_owned());
@@ -306,6 +344,77 @@ pub fn image_tag(workspace: &Path, targets_need_msvc: bool) -> Result<String> {
     }
     let suffix = if msvc { "-msvc" } else { "" };
     Ok(format!("{IMAGE_REPOSITORY}:{:016x}{suffix}", hash.finish()))
+}
+
+/// Proxy variables a container build may need. The upper-case spellings matter
+/// to some downloaders, so both forms are forwarded.
+const PROXY_VARIABLES: [&str; 8] = [
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+];
+
+/// Proxy variables from the host, with loopback hosts pointed at the machine
+/// running the container. A proxy on `127.0.0.1` is not reachable from the
+/// container's network namespace, so copying its address verbatim makes every
+/// download fail; the engine's host alias is where that proxy actually listens.
+fn proxy_environment(engine: Engine) -> BTreeMap<String, String> {
+    let host = std::env::vars().collect::<BTreeMap<_, _>>();
+    forwarded_proxy_environment(&host, engine.host_alias())
+}
+
+fn forwarded_proxy_environment(
+    host: &BTreeMap<String, String>,
+    alias: &str,
+) -> BTreeMap<String, String> {
+    PROXY_VARIABLES
+        .iter()
+        .filter_map(|name| {
+            let value = host.get(*name)?;
+            if value.is_empty() {
+                return None;
+            }
+            let forwarded = if name.eq_ignore_ascii_case("no_proxy") {
+                value.clone()
+            } else {
+                rewrite_proxy_host(value, alias)
+            };
+            Some((name.to_string(), forwarded))
+        })
+        .collect()
+}
+
+/// Replaces a loopback host in a proxy URL with `alias`, keeping the scheme,
+/// any credentials, and the port. Values that already name a reachable host are
+/// returned unchanged.
+fn rewrite_proxy_host(value: &str, alias: &str) -> String {
+    let Some((scheme, rest)) = value.split_once("://") else {
+        return value.to_owned();
+    };
+    let (authority, tail) = match rest.find('/') {
+        Some(index) => rest.split_at(index),
+        None => (rest, ""),
+    };
+    let (credentials, host) = match authority.rsplit_once('@') {
+        Some((credentials, host)) => (format!("{credentials}@"), host),
+        None => (String::new(), authority),
+    };
+    let loopback = ["127.0.0.1", "localhost", "[::1]"]
+        .into_iter()
+        .find_map(|needle| {
+            host.strip_prefix(needle)
+                .filter(|remainder| remainder.is_empty() || remainder.starts_with(':'))
+                .map(|remainder| format!("{alias}{remainder}"))
+        });
+    match loopback {
+        Some(host) => format!("{scheme}://{credentials}{host}{tail}"),
+        None => value.to_owned(),
+    }
 }
 
 /// Base image override for a one-off build. Unset means the Dockerfile's
@@ -406,6 +515,66 @@ mod tests {
             .filter(|argument| argument.starts_with("CARGO_BUILD_JOBS="))
             .collect::<Vec<_>>();
         assert_eq!(job_values, vec!["CARGO_BUILD_JOBS=3"]);
+    }
+
+    #[test]
+    fn loopback_proxies_are_rewritten_to_the_host_alias() {
+        let alias = "host.containers.internal";
+
+        assert_eq!(
+            rewrite_proxy_host("http://127.0.0.1:7897", alias),
+            "http://host.containers.internal:7897"
+        );
+        assert_eq!(
+            rewrite_proxy_host("socks5://user:secret@localhost:1080", alias),
+            "socks5://user:secret@host.containers.internal:1080"
+        );
+        assert_eq!(
+            rewrite_proxy_host("http://[::1]:3128/", alias),
+            "http://host.containers.internal:3128/"
+        );
+        // A proxy that is already reachable keeps its address.
+        assert_eq!(
+            rewrite_proxy_host("http://proxy.example.com:8080", alias),
+            "http://proxy.example.com:8080"
+        );
+        // Not a URL, and not a loopback prefix.
+        assert_eq!(
+            rewrite_proxy_host("127.0.0.1:7897", alias),
+            "127.0.0.1:7897"
+        );
+        assert_eq!(
+            rewrite_proxy_host("http://127.0.0.10:7897", alias),
+            "http://127.0.0.10:7897"
+        );
+    }
+
+    #[test]
+    fn proxy_variables_are_forwarded_with_the_host_alias() {
+        let host = BTreeMap::from([
+            ("http_proxy".to_owned(), "http://127.0.0.1:7897".to_owned()),
+            ("HTTPS_PROXY".to_owned(), "http://127.0.0.1:7897".to_owned()),
+            ("no_proxy".to_owned(), "localhost,127.0.0.1".to_owned()),
+            ("UNRELATED".to_owned(), "value".to_owned()),
+        ]);
+
+        let forwarded = forwarded_proxy_environment(&host, "host.containers.internal");
+
+        assert_eq!(
+            forwarded.get("http_proxy").map(String::as_str),
+            Some("http://host.containers.internal:7897")
+        );
+        assert_eq!(
+            forwarded.get("HTTPS_PROXY").map(String::as_str),
+            Some("http://host.containers.internal:7897")
+        );
+        // Bypass lists are about names, not reachable addresses, so they pass
+        // through untouched.
+        assert_eq!(
+            forwarded.get("no_proxy").map(String::as_str),
+            Some("localhost,127.0.0.1")
+        );
+        assert_eq!(forwarded.len(), 3);
     }
 
     #[test]

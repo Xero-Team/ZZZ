@@ -185,6 +185,14 @@ Cargo does not fingerprint the C library or the linker, so pointing it at the
 host `target/` would relink stale objects built against the host glibc; mounting
 the whole cargo home would hide the toolchain binaries that live in it.
 
+A proxy configured on the host is forwarded to the container. Both engines copy
+`http_proxy` and the other proxy variables verbatim, which breaks when the proxy
+listens on the host loopback: inside the container that address is the container
+itself. `cargo xtask` rewrites those addresses to the engine's alias for the
+build machine (`host.containers.internal` for podman, `host.docker.internal` for
+Docker) and passes the rewritten values itself, so a local proxy keeps working
+for the image build and for the tasks the image runs.
+
 Rootless podman is the better engine here: it maps container root to you, so the
 artifacts it writes into the mounted tree stay yours. A rootful Docker daemon
 writes them as root instead, and removing `target/container` then needs `sudo`.
