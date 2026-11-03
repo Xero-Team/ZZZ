@@ -9,7 +9,7 @@
     reason = "manifest writes checksums over artifacts produced by this run"
 )]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -53,12 +53,17 @@ pub fn collect(workspace: &Path, plan: &Plan, since: SystemTime) -> Result<Vec<A
     // One task can be containerized while another is not, so both roots are
     // searched and the records say where each file came from.
     let roots = [workspace.join("target"), workspace.join("target/container")];
-    let mut directories = BTreeSet::new();
+    // A per-target directory can only hold that target's output, while the two
+    // `release` directories are shared by every target the plan builds.
+    let mut directories: BTreeMap<PathBuf, Option<Target>> = BTreeMap::new();
     for root in roots {
-        directories.insert(root.clone());
-        directories.insert(root.join("release"));
+        directories.insert(root.clone(), None);
+        directories.insert(root.join("release"), None);
         for target in &plan.targets {
-            directories.insert(root.join(target.target.triple()).join("release"));
+            directories.insert(
+                root.join(target.target.triple()).join("release"),
+                Some(target.target),
+            );
         }
     }
 
@@ -74,7 +79,7 @@ pub fn collect(workspace: &Path, plan: &Plan, since: SystemTime) -> Result<Vec<A
         .collect();
 
     let mut records = Vec::new();
-    for directory in directories {
+    for (directory, owner) in directories {
         let Ok(entries) = std::fs::read_dir(&directory) else {
             continue;
         };
@@ -93,15 +98,7 @@ pub fn collect(workspace: &Path, plan: &Plan, since: SystemTime) -> Result<Vec<A
             let Some(format) = format_for_name(name) else {
                 continue;
             };
-            // Two targets can share a format (both macOS architectures ship a
-            // `.dmg`), so the arch in the file name decides which one this is.
-            let target = wanted
-                .iter()
-                .find(|(target, wanted_format)| {
-                    *wanted_format == format && name.contains(target.arch().as_str())
-                })
-                .map(|(target, _)| *target);
-            let Some(target) = target else {
+            let Some(target) = artifact_target(owner, &wanted, format, name) else {
                 continue;
             };
             if !modified_since(&path, since)? {
@@ -259,6 +256,26 @@ fn relative(workspace: &Path, path: &Path) -> String {
         .to_string()
 }
 
+/// The target a discovered file belongs to. A per-target directory names it
+/// directly; a shared `release` directory needs the arch in the file name,
+/// because both architectures of a format can land there.
+fn artifact_target(
+    owner: Option<Target>,
+    wanted: &BTreeSet<(Target, Format)>,
+    format: Format,
+    name: &str,
+) -> Option<Target> {
+    match owner {
+        Some(target) => wanted.contains(&(target, format)).then_some(target),
+        None => wanted
+            .iter()
+            .find(|(target, wanted_format)| {
+                *wanted_format == format && name.contains(target.arch().as_str())
+            })
+            .map(|(target, _)| *target),
+    }
+}
+
 fn format_for_name(name: &str) -> Option<Format> {
     let lower = name.to_ascii_lowercase();
     // `.tar.gz` is the only two-part suffix here; match it before the single
@@ -295,6 +312,28 @@ mod tests {
         assert_eq!(format_for_name("zzz.AppImage"), Some(Format::AppImage));
         assert_eq!(format_for_name("zzz-x86_64.deb"), Some(Format::Deb));
         assert_eq!(format_for_name("random.txt"), None);
+    }
+
+    #[test]
+    fn a_per_target_directory_names_its_target() {
+        let wanted = BTreeSet::from([(Target::WindowsX86_64, Format::Exe)]);
+
+        // `zzz.exe` carries no arch, and only the Windows directory holds it.
+        assert_eq!(
+            artifact_target(Some(Target::WindowsX86_64), &wanted, Format::Exe, "zzz.exe"),
+            Some(Target::WindowsX86_64)
+        );
+        // In a shared directory the arch in the name is what disambiguates.
+        assert_eq!(artifact_target(None, &wanted, Format::Exe, "zzz.exe"), None);
+        assert_eq!(
+            artifact_target(None, &wanted, Format::Exe, "zzz-x86_64.exe"),
+            Some(Target::WindowsX86_64)
+        );
+        // A format the plan did not request still stays out.
+        assert_eq!(
+            artifact_target(Some(Target::WindowsX86_64), &wanted, Format::Dmg, "zzz.exe"),
+            None
+        );
     }
 
     #[test]
