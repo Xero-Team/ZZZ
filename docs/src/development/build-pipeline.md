@@ -185,6 +185,10 @@ Cargo does not fingerprint the C library or the linker, so pointing it at the
 host `target/` would relink stale objects built against the host glibc; mounting
 the whole cargo home would hide the toolchain binaries that live in it.
 
+Container builds run `cargo fetch --locked` once before the parallel tasks. The
+download caches are shared, so letting several containers unpack a cold cache at
+the same time would race on Cargo's `.cargo-ok` markers and fail the build.
+
 A proxy configured on the host is forwarded to the container. Both engines copy
 `http_proxy` and the other proxy variables verbatim, which breaks when the proxy
 listens on the host loopback: inside the container that address is the container

@@ -476,15 +476,18 @@ impl Planner<'_> {
             container: None,
         })?;
 
-        if self.container.is_some() && self.request.offline {
+        if self.container.is_some() {
             let command = vec![
                 "cargo".to_owned(),
                 "fetch".to_owned(),
                 "--locked".to_owned(),
             ];
             let environment = BTreeMap::new();
-            // Fetching is the one step that may use the network: the builds
-            // after it run offline, which is the point of passing `--offline`.
+            // One process fills the registry cache the later tasks share, so a
+            // cold cache is unpacked once instead of by four containers at the
+            // same time, which races on Cargo's `.cargo-ok` markers. When
+            // `--offline` is set, this is also the last step allowed to use the
+            // network; the builds after it run without one.
             let wrapped = match &self.container {
                 Some(spec) => ContainerSpec {
                     offline: false,
@@ -512,8 +515,6 @@ impl Planner<'_> {
             let mut dependencies = vec!["grammars".to_owned()];
             if self.container.is_some() {
                 dependencies.push("toolchain".to_owned());
-            }
-            if self.container.is_some() && self.request.offline {
                 dependencies.push("fetch".to_owned());
             }
             let mut command = vec![
@@ -607,8 +608,6 @@ impl Planner<'_> {
         let mut dependencies = vec!["grammars".to_owned(), "remote-server".to_owned()];
         if self.container.is_some() {
             dependencies.push("toolchain".to_owned());
-        }
-        if self.container.is_some() && self.request.offline {
             dependencies.push("fetch".to_owned());
         }
         if pgo_task.is_some() {
