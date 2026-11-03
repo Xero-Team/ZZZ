@@ -116,19 +116,16 @@ pub struct ImageItem {
 
 impl ImageItem {
     pub fn compute_metadata_from_bytes(image_bytes: &[u8]) -> Result<ImageMetadata> {
-        let image_format = match image::guess_format(image_bytes) {
-            Ok(format) => format,
-            Err(_) => {
-                let svg = usvg::Tree::from_data(image_bytes, &usvg::Options::default())?;
-                let size = svg.size().to_int_size();
-                return Ok(ImageMetadata {
-                    width: size.width(),
-                    height: size.height(),
-                    file_size: image_bytes.len() as u64,
-                    format: ImageFormat::Svg,
-                    colors: None,
-                });
-            }
+        let Ok(image_format) = image::guess_format(image_bytes) else {
+            let svg = usvg::Tree::from_data(image_bytes, &usvg::Options::default())?;
+            let size = svg.size().to_int_size();
+            return Ok(ImageMetadata {
+                width: size.width(),
+                height: size.height(),
+                file_size: image_bytes.len() as u64,
+                format: ImageFormat::Svg,
+                colors: None,
+            });
         };
 
         let mut image_reader = ImageReader::new(std::io::Cursor::new(image_bytes));
@@ -629,15 +626,12 @@ fn reload_image_items(
 }
 
 pub(crate) fn create_gpui_image(content: Vec<u8>) -> anyhow::Result<Arc<gpui::Image>> {
-    let format = match image::guess_format(&content) {
-        Ok(format) => format,
-        Err(_) => {
-            usvg::Tree::from_data(&content, &usvg::Options::default())?;
-            return Ok(Arc::new(gpui::Image::from_bytes(
-                gpui::ImageFormat::Svg,
-                content,
-            )));
-        }
+    let Ok(format) = image::guess_format(&content) else {
+        usvg::Tree::from_data(&content, &usvg::Options::default())?;
+        return Ok(Arc::new(gpui::Image::from_bytes(
+            gpui::ImageFormat::Svg,
+            content,
+        )));
     };
 
     Ok(Arc::new(gpui::Image::from_bytes(
