@@ -566,7 +566,7 @@ flume = "0.12"
 futures = "0.3.34"
 futures-concurrency = "7.7.1"
 futures-lite = "2.6"
-# Vendored from https://github.com/tailcallhq/gh-workflow @ ef51106c4c4152f595dc6d18295d78a5ca3c54f9
+# Vendored from https://github.com/tailcallhq/gh-workflow @ 4073ed328d759ecc6c47c56fa794c16dde8f5573
 gh-workflow = { path = "vendor/gh-workflow/crates/gh-workflow" }
 git2 = { version = "0.21.0", default-features = false, features = ["vendored-libgit2", "unstable-sha256"] }
 globset = "0.4"

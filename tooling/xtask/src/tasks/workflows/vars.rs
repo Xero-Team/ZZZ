@@ -291,6 +291,7 @@ impl WorkflowInput {
             required: self.default.is_none(),
             input_type: self.input_type.to_owned(),
             default: self.default.clone(),
+            options: Vec::new(),
         }
     }
 

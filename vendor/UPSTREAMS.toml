@@ -53,13 +53,10 @@ patches = [
 [[package]]
 name = "gh-workflow"
 repository = "https://github.com/tailcallhq/gh-workflow.git"
-source_ref = "refs/tags/gh-workflow-v0.8.1"
-revision = "ef51106c4c4152f595dc6d18295d78a5ca3c54f9"
+source_ref = "refs/tags/v0.9.0"
+revision = "4073ed328d759ecc6c47c56fa794c16dde8f5573"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE", "README.md", "crates"]
-patches = [
-    "vendor/patches/gh-workflow/0001-zzz-integration.patch",
-    "vendor/patches/gh-workflow/0002-zzz-merge-derive-fix.patch",
-]
+patches = ["vendor/patches/gh-workflow/0001-zzz-integration.patch"]
 
 [[package]]
 name = "lsp-types"

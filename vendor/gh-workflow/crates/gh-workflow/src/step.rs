@@ -180,7 +180,7 @@ impl Merge for StepValue {
             continue_on_error,
             working_directory,
             retry,
-            artifacts,
+            artifacts
         );
     }
 }
@@ -258,7 +258,7 @@ impl Step<()> {
 impl Step<Use> {
     /// Creates a step pointing to the default GitHub's Checkout Action.
     pub fn checkout() -> Self {
-        Step::new("Checkout Code").uses("actions", "checkout", "v5")
+        Step::new("Checkout Code").uses("actions", "checkout", "v7")
     }
 
     /// Adds a new input to the step.

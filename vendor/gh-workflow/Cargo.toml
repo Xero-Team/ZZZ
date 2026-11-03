@@ -14,9 +14,9 @@ merge = { version = "0.2.0", default-features = false, features = ["std"] }
 quote = "1.0.42"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-serde_yml = "0.0.12"
-strum_macros = "0.27.2"
-syn = "2.0"
+serde_yml = "0.0.13"
+strum_macros = "0.28.0"
+syn = "3.0"
 
 # Dev dependencies
 insta = "1.43.2"
