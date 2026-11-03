@@ -24,6 +24,9 @@ index out of bounds: the len is 3 but the index is 4
    4: ... Entity<EntryViewState>, ..., ConversationView>::handle_thread_event::{closure#1}
 ```
 
+Correction (2026-11-03, audit): the local commit is `7ccddd429f`; the
+`d5aa8b2838` reference in the original table was a superseded branch SHA.
+
 ## Root cause
 
 `EntryViewState::entries` is positional with `AcpThread::entries`.
@@ -50,8 +53,8 @@ and no notification on `ElicitationRequested`.
 
 | Upstream   | Class | Local commit | Disposition                                                                                              |
 | ---------- | ----- | ------------ | -------------------------------------------------------------------------------------------------------- |
-| fa66442a01 | B     | d5aa8b2838   | `Entry::Elicitation` slot, focus handle, and the entry-index regression test.                            |
-| fbceb2823b | B     | d5aa8b2838   | Flag-free test parity plus live `sync_elicitation_state_for_entry` and the pending-request notification. |
+| fa66442a01 | B     | 7ccddd429f   | `Entry::Elicitation` slot, focus handle, and the entry-index regression test.                            |
+| fbceb2823b | B     | 7ccddd429f   | Flag-free test parity plus live `sync_elicitation_state_for_entry` and the pending-request notification. |
 | c05b439174 | A     | 3f297b3c05   | Re-checked: option descriptions only, no entry-index surface.                                            |
 | 33e2058302 | A     | 3f297b3c05   | Re-checked: warnings and validation only, no entry-index surface.                                        |
 | 68ec865bfd | A     | 3f297b3c05   | Re-checked: keyboard navigation inside the card only.                                                    |
@@ -65,7 +68,7 @@ no usage of, and those SHAs are already in the rejection ledger.
 
 ## Applied work
 
-### d5aa8b2838 — `sync: keep elicitation entries in the entry view state from fa66442a01`
+### 7ccddd429f — `sync: keep elicitation entries in the entry view state from fa66442a01`
 
 `sync_entry` now materializes `Entry::Elicitation { focus_handle }` for
 `AgentThreadEntry::Elicitation`, exactly as upstream does, and every

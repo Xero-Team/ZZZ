@@ -20,13 +20,18 @@ description: Selective Zed upstream sync audit.
 The prior reviewed baseline is an ancestor of `FETCH_HEAD`. This batch stays
 fixed at twenty commits; commits added after the reviewed head remain queued.
 
+Correction (2026-11-03, audit): `e4945b5d09` and `1dd9bbfd71` were
+rejected on failure narratives that the later ports on
+`sync/upstream-2026-10-07` resolved. Both are reclassified `B` and
+landed on `main` as `70577d4138` and `c10e21c3e9`.
+
 ## Decisions
 
 | Upstream   | Class | Local commit | Disposition                                                                                                         |
 | ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
 | eca87ab896 | B     | 0c3e3dfcdf   | Removed the redundant effect-flush guard in ZZZ's divergent `App` layout.                                           |
 | ad4512a2e5 | B     | e9191bd1e1   | Routed inactive editor, Markdown preview, and SVG preview tab actions to their owning pane.                         |
-| e4945b5d09 | C     | --           | Reconnection reuse needs `RemoteConnection::remote_platform`, which ZZZ does not expose.                            |
+| e4945b5d09 | B     | 70577d4138   | Reuses the known Windows-versus-POSIX path style during SSH reconnects instead of probing the remote OS again.      |
 | 2117a376b9 | B     | 635452e8af   | Reused tab point cursor scans and fold chunks through ZZZ's current TabMap APIs.                                    |
 | 8385157b2f | A     | 3055ef2e9a   | Clean absorption of robust local Rust documentation URL handling and regression coverage.                           |
 | 2ff34954a0 | C     | --           | Native-agent terminal-tool test only; the native agent path remains absent.                                         |
@@ -41,11 +46,11 @@ fixed at twenty commits; commits added after the reviewed head remain queued.
 | 7aec07ccde | A     | 447bd88a3f   | Clean absorption of Python debug adapter `envFile` processing.                                                      |
 | d6b7f24b7  | C     | --           | Linux release and Sentry-symbol workflow change has no retained ZZZ release pipeline.                               |
 | 763287731e | A     | 9db64fbf50   | Clean absorption aligning Markdown task checkboxes to their first text line.                                        |
-| 1dd9bbfd71 | C     | --           | Global element-id caching is entangled with Zed's superseded Frame and AccessKit-writer architecture.               |
+| 1dd9bbfd71 | B     | c10e21c3e9   | Caches each `GlobalElementId` path hash and each prefix hash on the frame element stack, including deferred draws.  |
 | ed54236e41 | A     | 0a19ee17aa   | Clean absorption of DAP error-format variable interpolation.                                                        |
 | e7c03209fc | A     | 2795c1caf5   | Clean absorption preventing Rust declarative-macro completion flicker.                                              |
 
-Totals: seven `A`, six `B`, seven `C`.
+Totals: seven `A`, eight `B`, five `C`.
 
 ## Applied Work
 
@@ -72,6 +77,8 @@ already equivalent, so it creates no local code change. Each `B` commit has
 - `e4945b5d09` failed `cargo check -p remote`: the retained reconnect path
   calls upstream-only `RemoteConnection::remote_platform`. The attempted
   cherry-pick was removed completely.
+  Superseded (2026-11-03): a local port that needs no `remote_platform`
+  API landed as `70577d4138`.
 - `2ff34954a0` and `d32fa003ab` target the deliberately absent native-agent
   tool path, so they have no ACP-only caller.
 - `96dec006df` would advertise a Zed Homebrew cask rather than a package that
@@ -83,6 +90,8 @@ already equivalent, so it creates no local code change. Each `B` commit has
 - `1dd9bbfd71` conflicts across ZZZ's frame-builder and completed semantic
   snapshot boundaries. Its implementation assumes the absent upstream
   Frame/AccessKit writer path, so a partial cache port is not isolatable.
+  Superseded (2026-11-03): the port maps the cache onto ZZZ's
+  FrameBuilder element stack and landed as `c10e21c3e9`.
 
 ## Verification
 

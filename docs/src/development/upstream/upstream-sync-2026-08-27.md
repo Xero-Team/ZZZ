@@ -24,6 +24,14 @@ The reviewed baseline is now `4c7244790a075e862eeb4e5ccc12d6c8f5da6f7e`.
 Default batch was the first 20 commits after `aa3718614b`. 155 upstream commits
 remain after this head. Counts: 3 A, 6 B, 11 C.
 
+Correction (2026-11-03, audit): `eb96feb8` and `0b1bf8dc` were recorded
+as `A` with local commits that never landed on `main`, and neither
+behavior was present. They are ported now as `f3e56a7102` and
+`f603def34f`. `01acd0ee` now names the commit that actually landed,
+`06b5132ed9`. The `e3056061` port also left six git_ui `tab_content`
+overrides in place; `6fff35e31c` deletes them so those tabs inherit the
+fixed default.
+
 ## Decisions
 
 | Upstream | Class | Local commit | Disposition                                                     |
@@ -212,8 +220,8 @@ Previous baseline: `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`.
 | 49a841c7 | A     | a500682b           | Pass task-template environment to PythonLocator.                 |
 | f1d27d54 | B     | 2ddbe977, e549f89a | Prewarm Linux font-match caches on local cosmic-text paths.      |
 | 5a2039b2 | C     | --                 | Requires absent ProviderRejection APIs and native-agent changes. |
-| eb96feb8 | A     | eab14afc           | Repaint editor gutter when bookmarks change.                     |
-| 0b1bf8dc | A     | 0b7b9f2a           | Remove stray SQL statement debug output.                         |
+| eb96feb8 | A     | f3e56a7102         | Repaint editor gutter when bookmarks change.                     |
+| 0b1bf8dc | A     | f603def34f         | Remove stray SQL statement debug output.                         |
 | ff7b061d | C     | --                 | macOS provisioning-profile release metadata only.                |
 | 1747596a | C     | --                 | Extension-card layout targets a replaced local component.        |
 | 507a1b99 | B     | c7621ff4           | Skip non-selectable entries when selecting Git changes.          |
@@ -403,28 +411,28 @@ queried live head.
 
 ### Decisions
 
-| Upstream | Class | Local commit | Disposition                                                   |
-| -------- | ----- | ------------ | ------------------------------------------------------------- |
-| d5dc01f2 | B     | ec9137b8     | Localized Windows ZZZ registry-key lookup.                    |
-| 314e0902 | B     | 1b4d04fe     | Bash language-server workspace settings.                      |
-| 2936989f | C     | --           | New GPUI `LineLayout` APIs have no ZZZ caller.                |
-| 1861e58f | C     | --           | Telemetry/hang journaling violates the no-telemetry boundary. |
-| 8bbbeb3d | A     | fbea7b89     | Cherry-picked with `-x -s`.                                   |
-| e3056061 | B     | f61619c3     | Render C0 control characters in existing labels.              |
-| 30aea6ac | B     | 8612993b     | Add `in_preview` keybinding context.                          |
-| 6a37cc11 | A     | 36fd43d2     | Cherry-picked with `-x -s`.                                   |
-| 2bf9e264 | B     | 1d71f06c     | Support terminal Ctrl-Alt ASCII keys.                         |
-| 6e0a0835 | C     | --           | CI-only `gh` toolchain acquisition.                           |
-| 32a0e813 | B     | 10b6b061     | Align debugger step bindings on local contexts.               |
-| a58fff13 | A     | a70b5219     | Cherry-picked with `-x -s`.                                   |
-| cef06d35 | C     | --           | Depends on the rejected worktree streaming rewrite.           |
-| 4d1935b8 | A     | d495deb2     | Cherry-picked with `-x -s`.                                   |
-| 282f47a5 | C     | --           | cargo-shear, lockfile, and CI cleanup only.                   |
-| 1b04e4ca | B     | 6c15f1ea     | Do not bundle GLib in Linux archives.                         |
-| dbdcb310 | C     | --           | Requires the absent `lsp_locations` crate.                    |
-| 3ea4d186 | B     | bbeb5be0     | Canonicalize case-insensitive LSP paths.                      |
-| 58006060 | B     | 1b980647     | Remove rename-created directories on undo.                    |
-| 09adbb01 | B     | ebbefbbd     | Persist recent navigation history across sessions.            |
+| Upstream | Class | Local commit         | Disposition                                                                        |
+| -------- | ----- | -------------------- | ---------------------------------------------------------------------------------- |
+| d5dc01f2 | B     | ec9137b8             | Localized Windows ZZZ registry-key lookup.                                         |
+| 314e0902 | B     | 1b4d04fe             | Bash language-server workspace settings.                                           |
+| 2936989f | C     | --                   | New GPUI `LineLayout` APIs have no ZZZ caller.                                     |
+| 1861e58f | C     | --                   | Telemetry/hang journaling violates the no-telemetry boundary.                      |
+| 8bbbeb3d | A     | fbea7b89             | Cherry-picked with `-x -s`.                                                        |
+| e3056061 | B     | f61619c3, 6fff35e31c | Render C0 control characters in existing labels and drop the git_ui tab overrides. |
+| 30aea6ac | B     | 8612993b             | Add `in_preview` keybinding context.                                               |
+| 6a37cc11 | A     | 36fd43d2             | Cherry-picked with `-x -s`.                                                        |
+| 2bf9e264 | B     | 1d71f06c             | Support terminal Ctrl-Alt ASCII keys.                                              |
+| 6e0a0835 | C     | --                   | CI-only `gh` toolchain acquisition.                                                |
+| 32a0e813 | B     | 10b6b061             | Align debugger step bindings on local contexts.                                    |
+| a58fff13 | A     | a70b5219             | Cherry-picked with `-x -s`.                                                        |
+| cef06d35 | C     | --                   | Depends on the rejected worktree streaming rewrite.                                |
+| 4d1935b8 | A     | d495deb2             | Cherry-picked with `-x -s`.                                                        |
+| 282f47a5 | C     | --                   | cargo-shear, lockfile, and CI cleanup only.                                        |
+| 1b04e4ca | B     | 6c15f1ea             | Do not bundle GLib in Linux archives.                                              |
+| dbdcb310 | C     | --                   | Requires the absent `lsp_locations` crate.                                         |
+| 3ea4d186 | B     | bbeb5be0             | Canonicalize case-insensitive LSP paths.                                           |
+| 58006060 | B     | 1b980647             | Remove rename-created directories on undo.                                         |
+| 09adbb01 | B     | ebbefbbd             | Persist recent navigation history across sessions.                                 |
 
 ### Applied work
 
@@ -730,7 +738,7 @@ queried live head.
 | 797e5dc9 | C     | --                 | Bookmark-tab lifecycle rewrite requires deleted navigation and divergent editor APIs. |
 | fa8d0b77 | C     | --                 | Targets the deleted crashes/telemetry crate.                                          |
 | 4c6c4750 | B     | 7300a70e           | Port Windows PowerShell and Git Bash discovery into `util::shell`.                    |
-| 01acd0ee | B     | d565dd8a           | Port outline buffer typography and reparsed syntax highlighting; omit call hierarchy. |
+| 01acd0ee | B     | 06b5132ed9         | Port outline buffer typography and reparsed syntax highlighting; omit call hierarchy. |
 
 ### Applied work
 

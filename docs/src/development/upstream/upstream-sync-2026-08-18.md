@@ -22,9 +22,16 @@ ZZZ's local-first, no-account, ACP-only boundary, or failed isolation.
 
 The reviewed baseline is now `aa3718614b3ade75524be6f8b2e101bd1166e02c`.
 The first fetch was depth-1 and made `027cf0def7` look like a non-ancestor;
-`--shallow-since=2026-08-06` restored ancestry. Counts: 30 A, 17 B, 69 C
-(after the 2026-09-22 re-audit ported ten commits and the 2026-09-24
-correction absorbed `9bde578e`).
+`--shallow-since=2026-08-06` restored ancestry. Counts: 31 A, 19 B, 66 C
+(after the 2026-09-22 re-audit ported ten commits, the 2026-09-24
+correction absorbed `9bde578e`, and the 2026-11-03 audit ported
+`d8664715` and `d0bfe0a4`).
+
+Correction (2026-11-03, audit): `d8664715` and `d0bfe0a4` were rejected
+as renderer and deleted-module conflicts, but both are portable on the
+current tree; they landed as `a0f9c9dafd` and `72c4d7dcef`. Ten further
+rows named local commits from the superseded sync branch that no longer
+resolve; they now name the commits that landed on `main`.
 
 ## Decisions
 
@@ -54,15 +61,15 @@ correction absorbed `9bde578e`).
 | c65e08a8 | A     | c17d2ed1     | Cherry-picked with `-x -s`.                                    |
 | 9e236090 | C     | --           | Unused per-window histogram APIs.                              |
 | a1860ac1 | C     | --           | Hosted Claude pricing docs.                                    |
-| 6634c945 | B     | 2260d67f9b   | Git panel copy-path actions; ported after review.              |
-| bd1b83a4 | B     | b4c301e099   | Git panel collapsible sections; ported after review.           |
-| c6b01d8a | B     | a3c4dd2111   | Optional git stash message; ported after review.               |
+| 6634c945 | B     | ffba608b9f   | Git panel copy-path actions; ported after review.              |
+| bd1b83a4 | B     | 7b31575964   | Git panel collapsible sections; ported after review.           |
+| c6b01d8a | B     | df614fd0aa   | Optional git stash message; ported after review.               |
 | 7807e4b1 | A     | acfaeb99     | Cherry-picked with `-x -s`.                                    |
-| a4916265 | B     | 89c1511729   | OpenAI reasoning-summary separators; ported after review.      |
+| a4916265 | B     | 40a14e53c1   | OpenAI reasoning-summary separators; ported after review.      |
 | c83adb3d | C     | --           | `SymbolKind` RPC; `language_core` conflict.                    |
 | d71f1461 | C     | --           | `stacksafe` lockfile-only bump.                                |
-| 992c7d46 | B     | 4a20d45f0a   | GitHub release request timeout; ported after review.           |
-| 83dc1967 | B     | 7b4c1a46f9   | Worktree ignore-rule anchoring; ported after review.           |
+| 992c7d46 | B     | 68ae4e5bfd   | GitHub release request timeout; ported after review.           |
+| 83dc1967 | B     | 96d0d586ca   | Worktree ignore-rule anchoring; ported after review.           |
 | c0979ee0 | C     | --           | OpenAI subscribed default model.                               |
 | c7537bdf | C     | --           | Brand-writer marketing skill rename.                           |
 | daec37bd | A     | 61450f38     | Cherry-picked with `-x -s`.                                    |
@@ -94,12 +101,12 @@ correction absorbed `9bde578e`).
 | 17d71d2b | C     | --           | csv_preview filter files deleted locally.                      |
 | 0307288d | C     | --           | Unused benchmark/threaded-dispatcher API.                      |
 | cd6d7055 | C     | --           | Extension publishing docs split.                               |
-| d8664715 | C     | --           | csv_preview copy; renderer conflict.                           |
+| d8664715 | B     | a0f9c9dafd   | CSV preview cell and header copy on right click.               |
 | 0ad5441b | C     | --           | Display-position selections; editor conflict.                  |
 | 2cb57850 | A     | 9693b5d5     | Cherry-picked with `-x -s`.                                    |
-| 47825fe0 | B     | ba686f3ca0   | Measure invisible replacement width; ported after review.      |
+| 47825fe0 | B     | 821655aebe   | Measure invisible replacement width; ported after review.      |
 | 24e25552 | A     | f10fa494     | Cherry-picked with `-x -s`.                                    |
-| 30f806c4 | B     | d3dad3d954   | JetBrains CamelHump subword navigation; ported after review.   |
+| 30f806c4 | B     | 2a0ae83be4   | JetBrains CamelHump subword navigation; ported after review.   |
 | 5fa87423 | A     | ba9894c3     | Cherry-picked with `-x -s`.                                    |
 | cdc537c6 | C     | --           | csv_preview tabular rewrite.                                   |
 | a21007b7 | C     | --           | Unused profiler rewrite.                                       |
@@ -108,13 +115,13 @@ correction absorbed `9bde578e`).
 | 3cf86bed | C     | --           | OpenAI subscribed account models.                              |
 | 9f164a0d | C     | --           | Native agent Chat Completions share.                           |
 | 9bde578e | A     | dcafe24237   | Cherry-picked with `-x -s` after `spawn_dedicated` landed.     |
-| 1e3d8b5a | B     | fb304e06b8   | Share the search snapshot behind an Arc; ported after review.  |
+| 1e3d8b5a | B     | 51d2122f4a   | Share the search snapshot behind an Arc; ported after review.  |
 | 56b1e79a | A     | 4cc4126f     | Cherry-picked with `-x -s`.                                    |
 | 939d2d70 | A     | --           | Already equivalent title_bar test-support.                     |
 | f4199ae0 | A     | 7f3fc8bd     | Cherry-picked with `-x -s`.                                    |
 | bc538def | A     | 2b2f9fc5     | Cherry-picked with `-x -s`.                                    |
 | bc6095f2 | C     | --           | Buffer-header menu; `element/mouse.rs` deleted.                |
-| f543a764 | A     | 81a751b591   | Invisible-character matching; cherry-picked after review.      |
+| f543a764 | A     | f5fcc31c7b   | Invisible-character matching; cherry-picked after review.      |
 | b2d9c2e1 | C     | --           | Native agent panel rewind.                                     |
 | b47d8ac4 | A     | dcffb59d     | Cherry-picked with `-x -s`.                                    |
 | 6c706fb9 | A     | 0ab6e94d     | Cherry-picked with `-x -s`.                                    |
@@ -136,7 +143,7 @@ correction absorbed `9bde578e`).
 | a8b5f6b9 | A     | 556ff92e     | Cherry-picked with `-x -s`.                                    |
 | dfb69669 | A     | 3108a484     | Cherry-picked with `-x -s`.                                    |
 | 6dee3fc7 | C     | --           | Diagnostic related info; language proto conflict.              |
-| d0bfe0a4 | C     | --           | Single-hunk nav; staged/unstaged_diff deleted.                 |
+| d0bfe0a4 | B     | 72c4d7dcef   | Single-hunk diff navigation for the project and solo views.    |
 | eb38ea55 | C     | --           | Community champions list.                                      |
 | eb548352 | C     | --           | Markdown highlight overflow; markdown conflict.                |
 | 8b1497db | C     | --           | Unused spring animation API.                                   |

@@ -20,6 +20,10 @@ description: Selective Zed upstream sync audit, third batch.
 The previous reviewed baseline is an ancestor of `FETCH_HEAD`. The range
 contains 11 commits, so the whole remaining range fits in this batch.
 
+Correction (2026-11-03, audit): `9f305aaf88` is portable on the current
+`gpui_macos` despite the earlier cross-platform concern, and is now `B`
+with local commit `bb877c9e92`.
+
 ## Decisions
 
 | Upstream   | Class | Local commit | Disposition                                                                                                                      |
@@ -32,15 +36,16 @@ contains 11 commits, so the whole remaining range fits in this batch.
 | 91d3b962ae | C     | --           | Swaps `oo7` to an upstream-maintained git fork. Dependency-only change with no independent ZZZ behavior.                         |
 | e96ffb0fd3 | C     | --           | Shows ACP session messages through v2 session updates and the diverged transcript view; ZZZ has the simplified ACP thread model. |
 | 604a0ff023 | C     | --           | Changes OpenAI chat-completion error handling in `crates/open_ai`, which ZZZ does not carry.                                     |
-| 9f305aaf88 | C     | --           | Handles null macOS open/save panels on a diverged `gpui_macos`; cannot be verified on this Linux host.                           |
+| 9f305aaf88 | B     | bb877c9e92   | Builds macOS open/save panels through nullable retained values and reports creation failure through the result channel.          |
 | abd9b3cbd2 | C     | --           | Changes `gpui_apple` keychain behavior; the Apple platform crate is absent locally.                                              |
 | 79fe6a645f | C     | --           | Adds a macOS-only atomic credential write API with no current ZZZ caller and no Apple backend.                                   |
 
-Totals: zero `A`, one `B`, ten `C` across eleven commits.
+Totals: zero `A`, two `B`, nine `C` across eleven commits.
 
 ## Applied Work
 
 - `4f3b1bfaa8` is a `B` port of `2214d0a92e`.
+- `bb877c9e92` is a `B` port of `9f305aaf88`.
 
 ## Per-Commit Narrative
 
@@ -104,6 +109,10 @@ wrappers around it. ZZZ does not carry the `open_ai` crate.
 Adds null checks around `NSOpenPanel` and `NSSavePanel` in `gpui_macos`.
 The local macOS platform layer has diverged and this Linux host cannot
 compile or run it.
+
+Superseded (2026-11-03): the fix applies to ZZZ's `MainThreadMarker`
+guard and cross-compiles for `aarch64-apple-darwin`; it landed as
+`bb877c9e92`.
 
 #### abd9b3cbd2 — Apple keychain prompt state (C)
 

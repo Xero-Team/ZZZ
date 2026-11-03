@@ -89,7 +89,6 @@ sha	class	reason_code	note	source
 1c9cbd3b	C	philosophy	Native agent terminal shrink.	upstream-sync-2026-08-18.md
 1c9dd3e70f	C	untriaged	Moves shared agent state to ACP v2 session and tool IDs; ZZZ has no `acp_v2` usage.	upstream-sync-2026-10-10.md
 1d8a29e1e2	C	untriaged	Patches `crates/google_ai`, which ZZZ does not carry.	upstream-sync-2026-10-21.md
-1dd9bbfd71	C	unisolatable	Global element-id caching is entangled with Zed's superseded Frame and AccessKit-writer architecture.	upstream-sync-2026-10-09.md
 1de16662ee	C	untriaged	Windows-only cpal default-device fix; ZZZ's `resolve_device` has a different shape and no Windows host here.	upstream-sync-2026-10-13.md
 1e1f5d7628	C	untriaged	Changes sandboxed terminal handling, but ZZZ's `acp_thread` has no `sandbox_wrap` path.	upstream-sync-2026-10-24-c.md
 1e2e422c	C	unisolatable	Broad remote extension-host/settings rewrite is not isolatable locally.	upstream-sync-2026-08-27.md
@@ -473,7 +472,6 @@ sha	class	reason_code	note	source
 9e84b066b5	C	absent-api	Rewrites fs watcher registrations and depends on the absent `fs_watcher/diagnostics.rs`; outside ZZZ's watcher architecture.	upstream-sync-2026-10-24-b.md
 9e9b13c5	C	absent-api	Requires upstream Markdown code-chip machinery absent from ZZZ.	upstream-sync-2026-09-02.md
 9f164a0d	C	philosophy	Native agent Chat Completions share.	upstream-sync-2026-08-18.md
-9f305aaf88	C	diverged	Handles null macOS open/save panels on a diverged `gpui_macos`; cannot be verified on this Linux host.	upstream-sync-2026-10-24-c.md
 9f63850f7a	C	philosophy	Effort-specific thinking controls touch the absent `language_models`, `copilot_chat`, and `cloud_llm_client`.	upstream-sync-2026-10-16.md
 a034d870	C	diverged	Canceled worktree leak; tests conflict.	upstream-sync-2026-08-18.md
 a12e3c06	C	untriaged	Feature-flag removal is coupled to upstream project-panel flag policy.	upstream-sync-2026-08-07.md
@@ -614,7 +612,6 @@ cef06d35	C	unisolatable	Depends on the rejected worktree streaming rewrite.	upst
 cff4edce	C	untriaged	Nix/Corgi build-source plumbing with no independent ZZZ product behavior.	upstream-sync-2026-09-02.md
 d058ddbbc1	C	philosophy	Restyles the collaboration panel, which ZZZ does not ship.	upstream-sync-2026-10-10.md
 d0ae2f05	C	untriaged	Native-agent sidebar terminal-thread selection flicker.	upstream-sync-2026-09-18.md
-d0bfe0a4	C	absent-api	Single-hunk nav; staged/unstaged_diff deleted.	upstream-sync-2026-08-18.md
 d132afe9fc	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 d1dae815	C	unisolatable	ACP compaction capability and native-agent compaction rewrite.	upstream-sync-2026-09-18.md
 d2074f4e	C	untriaged	`PowerRequest` UAF fix; ZZZ `gpui_windows` has no power-request path.	upstream-sync-2026-09-18.md
@@ -642,7 +639,6 @@ d7f28899	C	untriaged	Buffer highlight cache depends on rejected `318c664e` `Reso
 d814ad6efd	C	release-metadata	Bumps the upstream app crate to v1.27.0; release metadata for the Zed package that ZZZ does not carry.	upstream-sync-2026-10-21-b.md
 d84e5d49	C	untriaged	Depends on the rejected Web IME implementation from `8fc1a8a0`.	upstream-sync-2026-08-27.md
 d85eade7	C	unisolatable	Pending-keystrokes indicator needs a GPUI timeout rewrite, unused hover API, and localized settings_ui.	upstream-sync-2026-09-04.md
-d8664715	C	diverged	csv_preview copy; renderer conflict.	upstream-sync-2026-08-18.md
 d86aa6e6b9	C	diverged	Migrates macOS application and menu bindings to objc2 on a diverged `gpui_macos`; the Linux host cannot build or verify it.	upstream-sync-2026-10-24.md
 d89e9c21	C	philosophy	Native agent elicitation tool-call IDs.	upstream-sync-2026-09-18.md
 d93bf74085	C	unisolatable	Renders ACP subagents as inline cards through a new `subagent_card.rs` and v2 session updates; the local conversation view loads subagents as separate threads, so the card layout is unisolatable.	upstream-sync-2026-10-27.md
@@ -672,7 +668,6 @@ e0f913b0	C	untriaged	Targets upstream `tabular_data_preview`, replaced locally b
 e2c4075c	C	untriaged	Community PR-board reopen handling.	upstream-sync-2026-09-06.md
 e39fb7c2e0	C	untriaged	Renames `ScrollWheelEvent` and adds iOS trackpad scrolling against `gestures.rs` and `element/mouse.rs`, files ZZZ has consolidated or removed.	upstream-sync-2026-10-20.md
 e4671f71	C	diverged	Malformed-task toast conflicts in `zzz.rs`.	upstream-sync-2026-08-18.md
-e4945b5d09	C	untriaged	Reconnection reuse needs `RemoteConnection::remote_platform`, which ZZZ does not expose.	upstream-sync-2026-10-09.md
 e4ac280d	C	philosophy	Subscription provider extraction.	upstream-sync-2026-08-07.md
 e4d73588	C	untriaged	Guild `REVIEWERS.conl` removal.	upstream-sync-2026-09-18.md
 e5221fa2	C	philosophy	Native `spawn_agent` subagent model selection; the native agent tools are absent.	upstream-sync-2026-09-24.md

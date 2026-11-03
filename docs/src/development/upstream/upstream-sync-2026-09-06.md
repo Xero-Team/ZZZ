@@ -21,30 +21,34 @@ This batch covered the first 20 commits after the previous baseline. Counts:
 `9bda6b4e0342f22680bc1e7fcd847f4697c48874`; 4 commits remain through the
 queried live head.
 
+Correction (2026-11-03, audit): twelve rows named local commits from the
+superseded sync branch that no longer resolve; they now name the commits
+that landed on `main`. No class changed.
+
 ## Decisions
 
-| Upstream | Class | Local commit       | Disposition                                                                                                       |
-| -------- | ----- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| 6c365698 | B     | 6fee47e1           | Apply heading-level styles to shaped markdown text; helper ported onto ZZZ's heading path.                        |
-| d9141a3f | B     | 36899ce8           | Boost deleted git-gutter marker width; adapt `Option<f32>` instead of `GitGutterWidth`.                           |
-| 2988a592 | B     | c9f976aa           | Opt-in cursor movement animation; omit `reduce_motion` and unlocalized Settings UI copy.                          |
-| 91c57e81 | A     | edd52c8c           | Cherry-picked with `-x -s`.                                                                                       |
-| 80ddc3af | C     | --                 | Organization menu when signed out; account/sign-in surface.                                                       |
-| ab7afbff | C     | --                 | `crates/panel` is still used locally via `panel::PanelHeader` in git_ui.                                          |
-| 81da416e | A     | a2e38698           | Cherry-picked with `-x -s`.                                                                                       |
-| c1eda3e8 | C     | --                 | Markdown preview settings grouping and auto-open rewrite on a already-diverged preview path.                      |
-| 9c3e2a07 | B     | c77e95c8           | Project panel path tooltip with `title_tooltip_delay`; Settings UI uses localized `lt()` helpers.                 |
-| 52af3dd6 | B     | 2724fbe5, d0175c0e | Continue line-comment prefixes on Vim `o`; drop the rust `/* */` assertion that needs comment overrides.          |
-| a7bc7d77 | C     | --                 | GitHub community/guild/triage helper consolidation.                                                               |
-| 35695410 | B     | b916f364           | Look up LSP paths before canonicalizing; adapt `RelPathBuf` without `push_component`.                             |
-| e2c4075c | C     | --                 | Community PR-board reopen handling.                                                                               |
-| 620efaa5 | A     | 774fc801           | Cherry-picked with `-x -s`.                                                                                       |
-| ba6b83f8 | C     | --                 | Window-title template rewrite spans collab indicators, MultiWorkspace-divergent workspace.rs, and lockfile churn. |
-| 510a624a | A     | bbe67433           | Cherry-picked with `-x -s`.                                                                                       |
-| e0ae50d1 | C     | --                 | Unused public `KeyBinding::default_visibility` with no ZZZ caller.                                                |
-| c91e24a9 | B     | 9e26873d           | Register Gemini 3.8 Flash on local google_ai APIs; omit thinking-level helpers ZZZ does not have.                 |
-| c8c07aea | C     | --                 | Native Agent Panel `disable_ai` menu wiring.                                                                      |
-| 9bda6b4e | B     | d2fe7acb           | Disable WebKit canvas touch callouts on ZZZ's per-property gpui_web style path.                                   |
+| Upstream | Class | Local commit           | Disposition                                                                                                       |
+| -------- | ----- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 6c365698 | B     | dadf8d3efa             | Apply heading-level styles to shaped markdown text; helper ported onto ZZZ's heading path.                        |
+| d9141a3f | B     | 1b0a1cf347             | Boost deleted git-gutter marker width; adapt `Option<f32>` instead of `GitGutterWidth`.                           |
+| 2988a592 | B     | 8d0f7b9cb9             | Opt-in cursor movement animation; omit `reduce_motion` and unlocalized Settings UI copy.                          |
+| 91c57e81 | A     | bf5cae020c             | Cherry-picked with `-x -s`.                                                                                       |
+| 80ddc3af | C     | --                     | Organization menu when signed out; account/sign-in surface.                                                       |
+| ab7afbff | C     | --                     | `crates/panel` is still used locally via `panel::PanelHeader` in git_ui.                                          |
+| 81da416e | A     | 58dc95e05b             | Cherry-picked with `-x -s`.                                                                                       |
+| c1eda3e8 | C     | --                     | Markdown preview settings grouping and auto-open rewrite on a already-diverged preview path.                      |
+| 9c3e2a07 | B     | 3c5e199479             | Project panel path tooltip with `title_tooltip_delay`; Settings UI uses localized `lt()` helpers.                 |
+| 52af3dd6 | B     | 5a388e8116, 0f98694b06 | Continue line-comment prefixes on Vim `o`; drop the rust `/* */` assertion that needs comment overrides.          |
+| a7bc7d77 | C     | --                     | GitHub community/guild/triage helper consolidation.                                                               |
+| 35695410 | B     | 1fcb8ed2f8             | Look up LSP paths before canonicalizing; adapt `RelPathBuf` without `push_component`.                             |
+| e2c4075c | C     | --                     | Community PR-board reopen handling.                                                                               |
+| 620efaa5 | A     | 0b344ed514             | Cherry-picked with `-x -s`.                                                                                       |
+| ba6b83f8 | C     | --                     | Window-title template rewrite spans collab indicators, MultiWorkspace-divergent workspace.rs, and lockfile churn. |
+| 510a624a | A     | e1e322c572             | Cherry-picked with `-x -s`.                                                                                       |
+| e0ae50d1 | C     | --                     | Unused public `KeyBinding::default_visibility` with no ZZZ caller.                                                |
+| c91e24a9 | B     | 68cbdae16f             | Register Gemini 3.8 Flash on local google_ai APIs; omit thinking-level helpers ZZZ does not have.                 |
+| c8c07aea | C     | --                     | Native Agent Panel `disable_ai` menu wiring.                                                                      |
+| 9bda6b4e | B     | f5b69cf392             | Disable WebKit canvas touch callouts on ZZZ's per-property gpui_web style path.                                   |
 
 ## Applied work
 
