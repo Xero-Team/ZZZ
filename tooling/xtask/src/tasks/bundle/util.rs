@@ -69,8 +69,14 @@ pub fn display(command: &Command) -> String {
 }
 
 pub fn require_tool(tool: &str, hint: &str) -> Result<()> {
+    require_tool_with_args(tool, &["--version"], hint)
+}
+
+/// `require_tool` for a tool whose version flag is not `--version`; `zig`
+/// answers the `version` subcommand and rejects the flag.
+pub fn require_tool_with_args(tool: &str, arguments: &[&str], hint: &str) -> Result<()> {
     let status = Command::new(tool)
-        .arg("--version")
+        .args(arguments)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();

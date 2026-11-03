@@ -20,7 +20,7 @@ use std::process::Command;
 
 use anyhow::{Context as _, Result, bail};
 
-use crate::tasks::build::model::{Format, Platform, Profile};
+use crate::tasks::build::model::{Channel, Format, Platform, Profile};
 use crate::tasks::bundle::{
     Context, app_identity, github_release, licenses, macos_sdk, remote_server, util,
 };
@@ -125,8 +125,9 @@ fn require_cross_tools() -> Result<()> {
     if Platform::host() != Platform::Linux {
         bail!("cross-compiling a macOS bundle is only supported from Linux");
     }
-    util::require_tool(
+    util::require_tool_with_args(
         "zig",
+        &["version"],
         "Install zig from https://ziglang.org/learn/getting-started or with zigup.",
     )?;
     util::require_tool(
@@ -202,17 +203,27 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
     let manifest = context.workspace.join("crates/zzz/Cargo.toml");
     let original = fs::read_to_string(&manifest)
         .with_context(|| format!("failed to read {}", manifest.display()))?;
-    let from = format!("package.metadata.bundle-{}", context.channel.as_str());
-    let rewritten = original.replace(&from, "package.metadata.bundle");
-    if rewritten == original {
-        bail!("{} does not declare [{from}]", manifest.display());
-    }
-    fs::write(&manifest, rewritten)
-        .with_context(|| format!("failed to update {}", manifest.display()))?;
-    let guard = ManifestGuard {
-        path: manifest,
-        contents: original,
+    // `dev` is already the default table; only the named release channels carry
+    // a `bundle-<channel>` table that has to be promoted for cargo-bundle.
+    let rewritten = if context.channel == Channel::Dev {
+        original.clone()
+    } else {
+        let from = format!("package.metadata.bundle-{}", context.channel.as_str());
+        let rewritten = original.replace(&from, "package.metadata.bundle");
+        if rewritten == original {
+            bail!("{} does not declare [{from}]", manifest.display());
+        }
+        rewritten
     };
+    let mut guard = None;
+    if rewritten != original {
+        fs::write(&manifest, rewritten)
+            .with_context(|| format!("failed to update {}", manifest.display()))?;
+        guard = Some(ManifestGuard {
+            path: manifest,
+            contents: original,
+        });
+    }
 
     let mut command = Command::new("cargo");
     command
