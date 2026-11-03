@@ -801,11 +801,11 @@ impl Platform for MacPlatform {
         options: PathPromptOptions,
     ) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
         use block2::RcBlock;
-        use objc2::MainThreadMarker;
+        use objc2::{MainThreadMarker, class, msg_send, rc::Retained};
         use objc2_app_kit::{NSModalResponse, NSModalResponseOK, NSOpenPanel};
         use objc2_foundation::NSString;
 
-        let Some(marker) = MainThreadMarker::new() else {
+        if MainThreadMarker::new().is_none() {
             log::error!("path prompts must be shown from the main thread");
             return failed_prompt(anyhow::anyhow!(
                 "path prompts must be shown from the main thread"
@@ -814,7 +814,17 @@ impl Platform for MacPlatform {
         let (done_tx, done_rx) = oneshot::channel();
         self.foreground_executor()
             .spawn(async move {
-                let panel = NSOpenPanel::openPanel(marker);
+                // AppKit can return nil despite the nonnull annotation used by objc2's
+                // generated binding. This runs on the main thread via the foreground executor.
+                let panel: Option<Retained<NSOpenPanel>> =
+                    unsafe { msg_send![class!(NSOpenPanel), openPanel] };
+                let Some(panel) = panel else {
+                    // The receiver may have been dropped while the panel was being created.
+                    done_tx
+                        .send(Err(anyhow!("macOS could not create the open dialog")))
+                        .ok();
+                    return;
+                };
                 panel.setCanChooseDirectories(options.directories);
                 panel.setCanChooseFiles(options.files);
                 panel.setAllowsMultipleSelection(options.multiple);
@@ -858,13 +868,13 @@ impl Platform for MacPlatform {
         suggested_name: Option<&str>,
     ) -> oneshot::Receiver<Result<Option<PathBuf>>> {
         use block2::RcBlock;
-        use objc2::MainThreadMarker;
+        use objc2::{MainThreadMarker, class, msg_send, rc::Retained};
         use objc2_app_kit::{NSModalResponse, NSModalResponseOK, NSSavePanel};
         use objc2_foundation::{NSString, NSURL};
 
         let url = NSURL::from_directory_path(directory);
         let suggested_name = suggested_name.map(NSString::from_str);
-        let Some(marker) = MainThreadMarker::new() else {
+        if MainThreadMarker::new().is_none() {
             log::error!("path prompts must be shown from the main thread");
             return failed_prompt(anyhow::anyhow!(
                 "path prompts must be shown from the main thread"
@@ -873,7 +883,17 @@ impl Platform for MacPlatform {
         let (done_tx, done_rx) = oneshot::channel();
         self.foreground_executor()
             .spawn(async move {
-                let panel = NSSavePanel::savePanel(marker);
+                // Like openPanel, savePanel may return nil despite its nonnull annotation.
+                // The foreground executor ensures this call runs on the main thread.
+                let panel: Option<Retained<NSSavePanel>> =
+                    unsafe { msg_send![class!(NSSavePanel), savePanel] };
+                let Some(panel) = panel else {
+                    // The receiver may have been dropped while the panel was being created.
+                    done_tx
+                        .send(Err(anyhow!("macOS could not create the save dialog")))
+                        .ok();
+                    return;
+                };
                 panel.setDirectoryURL(url.as_deref());
 
                 if let Some(suggested_name) = suggested_name {
