@@ -1,3 +1,8 @@
+---
+title: Database MCP Server
+description: Expose saved SQLite connections to agents as read-only MCP tools.
+---
+
 # 数据库 MCP server {#database-mcp-server}
 
 `database-mcp-server` 把已保存的 SQLite 连接以 MCP tools 暴露给 agent：列出连接、描述表、

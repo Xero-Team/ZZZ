@@ -1,3 +1,8 @@
+---
+title: Database Remote Runbook
+description: Evidence, steps, and risks for remote SQLite access and SSH tunnels.
+---
+
 # 远程与 SSH：实施 runbook（Phase 11，NOT RUN） {#remote-runbook}
 
 本文件是 Phase 11 的结论与可执行 runbook。当前结论是 **拒绝在本环境实施，验证状态
