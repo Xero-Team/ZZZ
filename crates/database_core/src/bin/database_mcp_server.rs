@@ -167,10 +167,7 @@ fn load_state(args: &Args) -> ServerState {
             );
             ServerState {
                 connections: Vec::new(),
-                settings_error: Some(format!(
-                    "could not read {}: {error}",
-                    settings_path.display()
-                )),
+                settings_error: Some(format!("could not read the settings file: {error}")),
                 allow_writes: args.allow_writes,
             }
         }
