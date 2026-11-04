@@ -686,6 +686,15 @@ fn main() {
         markdown_preview::init(cx);
         csv_preview::init(cx);
         database_ui::init(cx);
+        register_database_extension_drivers(cx);
+        if let Some(extension_store) = extension_host::ExtensionStore::try_global(cx) {
+            cx.subscribe(&extension_store, |_, event, cx| {
+                if matches!(event, extension_host::Event::ExtensionsUpdated) {
+                    register_database_extension_drivers(cx);
+                }
+            })
+            .detach();
+        }
         svg_preview::init(cx);
         typst_preview::init(cx);
         title_bar::init(cx);
@@ -1867,5 +1876,58 @@ fn check_for_conpty_dll() {
         }
     } else {
         log::warn!("Failed to load conpty.dll. Terminal will work with reduced functionality.");
+    }
+}
+
+/// Advertise every driver an installed extension declares. The manifest is the
+/// source of capability truth, so the UI can decide which actions to show
+/// before a connection is opened.
+fn register_database_extension_drivers(cx: &mut App) {
+    let Some(extension_store) = extension_host::ExtensionStore::try_global(cx) else {
+        return;
+    };
+    let driver_configs = extension_store.read_with(cx, |store, _cx| {
+        let mut driver_configs = Vec::new();
+        for (extension_id, entry) in store.installed_extensions() {
+            let Some(extension_dir) = store.path_to_extension_dir(extension_id) else {
+                continue;
+            };
+            for driver in &entry.manifest.database_drivers {
+                driver_configs.push(database_core::ExtensionDriverConfig {
+                    id: format!("{extension_id}.{}", driver.id),
+                    display_name: format!("{}: {}", entry.manifest.name, driver.id),
+                    command: extension_dir.join(driver.command.as_std_path()),
+                    args: driver.args.clone(),
+                    capabilities: extension_capabilities(&driver.capabilities),
+                    control_timeout: std::time::Duration::from_secs(30),
+                    execute_timeout: std::time::Duration::from_secs(300),
+                });
+            }
+        }
+        driver_configs
+    });
+    for driver_config in driver_configs {
+        database_ui::register_extension_driver(driver_config, cx);
+    }
+}
+
+fn extension_capabilities(
+    capabilities: &extension::DatabaseDriverCapabilities,
+) -> database_core::Capabilities {
+    database_core::Capabilities {
+        transactions: capabilities.transactions,
+        row_editing: capabilities.row_editing,
+        explain: capabilities.explain,
+        er_diagram: capabilities.er_diagram,
+        cancel: capabilities.cancel,
+        // Protocol v1 returns one response frame per execute, so the host cannot
+        // consume rows incrementally even when a driver claims it can stream.
+        streaming: false,
+        requires_credentials: capabilities.requires_credentials,
+        multiple_catalogs: capabilities.multiple_catalogs,
+        multiple_schemas: capabilities.multiple_schemas,
+        views: capabilities.views,
+        foreign_keys: capabilities.foreign_keys,
+        indexes: capabilities.indexes,
     }
 }

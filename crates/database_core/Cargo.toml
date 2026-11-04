@@ -7,15 +7,22 @@ edition.workspace = true
 [lib]
 path = "src/database_core.rs"
 
+[[bin]]
+name = "mock-database-driver"
+path = "src/bin/mock_database_driver.rs"
+
 [dependencies]
 anyhow.workspace = true
 async-channel.workspace = true
+async-io.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 libsqlite3-sys.workspace = true
+log.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+smol.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

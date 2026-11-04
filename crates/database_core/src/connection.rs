@@ -258,11 +258,21 @@ impl ConnectionManager {
     /// view uses this while `QuerySession` owns the query handle, so a keypress
     /// does not have to reach into the session that is awaiting rows.
     pub fn cancel_queries(&self, id: &ConnectionId) {
-        let connections = self.connections.lock();
-        if let Some(managed) = connections.get(id) {
+        let connection = {
+            let connections = self.connections.lock();
+            let Some(managed) = connections.get(id) else {
+                return;
+            };
             for query in &managed.active_queries {
                 query.cancel();
             }
+            managed.connection.clone()
+        };
+        // A driver that has not returned its query handle yet (subprocess
+        // drivers that must wait for metadata) can only be reached through the
+        // connection.
+        if let Some(connection) = connection {
+            connection.interrupt();
         }
     }
 

@@ -457,6 +457,15 @@ impl ExtensionStore {
             .map(|extension| &extension.manifest)
     }
 
+    /// Root directory of an installed extension, for resolving paths declared in
+    /// its manifest (themes, language servers, database driver executables).
+    pub fn path_to_extension_dir(&self, extension_id: &str) -> Option<PathBuf> {
+        self.extension_index
+            .extensions
+            .contains_key(extension_id)
+            .then(|| self.installed_dir.join(extension_id))
+    }
+
     /// Returns the names of themes provided by extensions.
     pub fn extension_themes<'a>(
         &'a self,

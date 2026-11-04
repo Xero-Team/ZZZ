@@ -118,6 +118,11 @@ pub struct ExtensionManifest {
     pub debug_locators: BTreeMap<Arc<str>, DebugLocatorManifestEntry>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub language_model_providers: BTreeMap<Arc<str>, LanguageModelProviderManifestEntry>,
+    /// Relational-database drivers provided by this extension. Each entry names
+    /// an executable inside the extension directory that speaks the newline
+    /// delimited JSON protocol (see `database_core::extension_driver`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub database_drivers: Vec<DatabaseDriverManifestEntry>,
 }
 
 impl ExtensionManifest {
@@ -280,6 +285,52 @@ pub struct DebugAdapterManifestEntry {
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct DebugLocatorManifestEntry {}
 
+/// A database driver executable declared by an extension.
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct DatabaseDriverManifestEntry {
+    /// Stable driver id, namespaced by the extension id when registered.
+    pub id: Arc<str>,
+    /// Executable path relative to the extension root.
+    pub command: RelPathBuf,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// SQL dialects this driver understands, for display and future routing.
+    #[serde(default)]
+    pub dialects: Vec<String>,
+    /// What the driver can do. Absent capabilities mean read-only, the safe
+    /// default: the UI must never offer an action the driver cannot perform.
+    #[serde(default)]
+    pub capabilities: DatabaseDriverCapabilities,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize, Serialize)]
+pub struct DatabaseDriverCapabilities {
+    #[serde(default)]
+    pub transactions: bool,
+    #[serde(default)]
+    pub row_editing: bool,
+    #[serde(default)]
+    pub explain: bool,
+    #[serde(default)]
+    pub er_diagram: bool,
+    #[serde(default)]
+    pub cancel: bool,
+    #[serde(default)]
+    pub streaming: bool,
+    #[serde(default)]
+    pub requires_credentials: bool,
+    #[serde(default)]
+    pub multiple_catalogs: bool,
+    #[serde(default)]
+    pub multiple_schemas: bool,
+    #[serde(default)]
+    pub views: bool,
+    #[serde(default)]
+    pub foreign_keys: bool,
+    #[serde(default)]
+    pub indexes: bool,
+}
+
 /// Manifest entry for a language model provider.
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct LanguageModelProviderManifestEntry {
@@ -360,6 +411,7 @@ fn manifest_from_old_manifest(
         debug_adapters: Default::default(),
         debug_locators: Default::default(),
         language_model_providers: Default::default(),
+        database_drivers: Vec::new(),
     }
 }
 
@@ -394,7 +446,62 @@ mod tests {
             debug_adapters: Default::default(),
             debug_locators: Default::default(),
             language_model_providers: BTreeMap::default(),
+            database_drivers: Vec::new(),
         }
+    }
+
+    #[test]
+    fn parses_database_drivers_with_conservative_defaults() {
+        let manifest: ExtensionManifest = toml::from_str(
+            r#"
+            id = "sql"
+            name = "SQL"
+            version = "1.0.0"
+            schema_version = 1
+
+            [[database_drivers]]
+            id = "mock"
+            command = "bin/mock-driver"
+            dialects = ["mock-sql"]
+
+            [database_drivers.capabilities]
+            transactions = true
+            row_editing = true
+            "#,
+        )
+        .expect("parse manifest");
+
+        assert_eq!(manifest.database_drivers.len(), 1);
+        let driver = &manifest.database_drivers[0];
+        assert_eq!(driver.id.as_ref(), "mock");
+        assert_eq!(driver.command, rel_path_buf("bin/mock-driver"));
+        assert_eq!(driver.dialects, vec!["mock-sql".to_owned()]);
+        assert!(driver.capabilities.transactions);
+        assert!(driver.capabilities.row_editing);
+        assert!(!driver.capabilities.explain);
+        assert!(!driver.capabilities.requires_credentials);
+    }
+
+    #[test]
+    fn database_drivers_default_to_read_only() {
+        let manifest: ExtensionManifest = toml::from_str(
+            r#"
+            id = "sql"
+            name = "SQL"
+            version = "1.0.0"
+            schema_version = 1
+
+            [[database_drivers]]
+            id = "minimal"
+            command = "bin/minimal"
+            "#,
+        )
+        .expect("parse manifest");
+
+        let capabilities = manifest.database_drivers[0].capabilities;
+        assert!(!capabilities.transactions);
+        assert!(!capabilities.row_editing);
+        assert!(!capabilities.cancel);
     }
 
     #[test]

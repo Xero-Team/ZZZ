@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 4 为
-  `57ff2dab1d`，Phase 3 为 `0e321d7522`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 5 为
+  `0926c5cbaf`，Phase 4 为 `57ff2dab1d`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 6`
-- Last completed phase: `Phase 5`
+- Active phase: `Phase 7`
+- Last completed phase: `Phase 6`
 - Blocking issue: `None`
-- Next action: 进入 Phase 6——扩展清单解析 `database_drivers`、子进程驱动协议、
-  mock 驱动端到端测试与能力声明驱动的 UI 可用性。
+- Next action: 进入 Phase 7——从 `TableSchema` 生成 Mermaid `erDiagram` 并接线
+  `mermaid_render` 预览；结果集/schema 的 CSV/JSON 导出与事务内导入。
 
 ## Bootstrap {#bootstrap}
 
@@ -71,6 +71,7 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 3     | 查询执行与取消           | PASS        | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
 | 4     | 结果集视图               | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
 | 5     | 编辑、事务与确认         | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
+| 6     | 扩展驱动协议             | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
 | 5     | 编辑、事务与确认         | NOT STARTED | -                                                | -                                              | -                                   |
 | 6     | 扩展驱动协议             | NOT STARTED | -                                                | -                                              | -                                   |
 | 7     | ER 图与导入导出          | NOT STARTED | -                                                | -                                              | -                                   |
@@ -186,6 +187,7 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `0e321d7522a48873306290b68a0d138fde560da2`     | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS | Phase 4 完成                    |
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS | Phase 5 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -672,6 +674,95 @@ Editor` 上下文：`enter` = Stage，`escape` = Cancel）；选中单元格高�
   （`feat(database_ui): edit rows inside explicit transactions`）。
 - **下一步**：Phase 6 —— 扩展清单 `database_drivers`、子进程协议、mock 驱动端到端、
   能力声明驱动 UI 可用性。
+
+## Phase 6 日志 {#phase-6-log}
+
+### 扩展清单与子进程驱动协议
+
+- **Baseline**：`database-explorer` @ `0926c5cbaf`（Phase 5 提交后）。
+- **改动**：
+  - `crates/extension/src/extension_manifest.rs`：新增
+    `database_drivers: Vec<DatabaseDriverManifestEntry>`（`[[database_drivers]]`），
+    条目含 `id`、`command`（扩展目录内相对路径）、可选 `args`、`dialects` 与
+    `capabilities`。能力缺省全部为 false（安全只读默认），UI 因此不会显示驱动
+    做不到的动作。新增两条解析测试：声明值生效、缺省值保守。
+  - `crates/extension_host/src/extension_host.rs`：新增
+    `path_to_extension_dir(extension_id)`，让主机把清单里的相对命令解析为已安装扩展
+    目录下的绝对路径；未新增 WIT resource。
+  - `crates/database_core/src/driver.rs`：`DatabaseDriver::id` / `display_name`
+    改为返回借用 `&str`（扩展驱动 id 是运行时字符串）；为 `ExplainPlan` /
+    `ExplainNode` 增加 serde；`DriverConnection` 增加默认空实现的 `interrupt()`，
+    供尚未返回查询句柄的子进程查询取消。
+  - `crates/database_core/src/connection.rs`：`cancel_queries` 在取消已跟踪句柄后
+    调用 `connection.interrupt()`；子进程驱动的 `execute` 在返回句柄前等待元数据，
+    只有连接级 interrupt 能中止它。
+  - `crates/database_core/src/session.rs`：驱动在返回句柄前报告 `Cancelled`
+    （或流最后一项为 `Cancelled`）时，结果集进入 `Cancelled` 且 `execute` 返回
+    `Ok(())`，与 D-08 一致，不把用户取消当失败。
+  - `crates/database_core/src/extension_driver.rs`（新）：
+    - `ExtensionDriverConfig`（id、display name、绝对命令、args、capabilities、
+      控制/执行超时）；`ExtensionDriver` 实现 `DatabaseDriver`。
+    - 每个连接一个 `smol::process::Command` 子进程；stdout 由专用线程按行解析
+      JSON 并按请求 id 分发到 `async_channel`，stderr 逐行写日志。
+    - 请求超时：控制请求 30s、`execute` 300s（可由 config 覆盖）；超时会移除挂起
+      项并向子进程发 `cancel`，返回 `DatabaseErrorKind::Timeout`。
+    - 错误按协议 `code` 映射为 typed `DatabaseErrorKind`（connection/authentication/
+      syntax/not_found/permission/cancelled/constraint/timeout/driver/other），
+      不匹配 message 文本。
+    - `close` 先发 `close` 等 2s，再关闭 stdin、轮询退出，最后 `kill`；读取线程
+      EOF 时把所有挂起请求标记为 connection 错误；`ExtensionProcess::Drop` 同样
+      终止子进程，且命令设置 `kill_on_drop(true)`，避免孤儿进程。
+    - `execute` 响应解析为列/行/影响行数；句柄的 cancel 通过 stdin 发送 cancel
+      帧，行任务观察取消标志后停止发送。
+    - 凭据只通过 `connect` 的 JSON 参数发送，要求 UTF-8；配置与错误信息不记录口令。
+  - `crates/database_core/src/bin/mock_database_driver.rs`（新）：真实子进程 mock
+    驱动，覆盖 connect/test/catalogs/describe_table/execute/begin/commit/rollback/
+    explain/cancel/close，支持 `slow` 取消、`hang` 不响应超时与 `--pid-file`。
+  - `crates/database_core/tests/extension_driver.rs`（新）：通过
+    `CARGO_BIN_EXE_mock-database-driver` 启动真实子进程，端到端覆盖全部方法、错误
+    分类、会话取消、超时与 drop 后进程退出（Linux 检查 `/proc/<pid>`）。
+  - `crates/database_ui/src/database_ui.rs`：新增
+    `register_extension_driver(config, cx)`，扩展驱动与内建 SQLite 走同一个
+    `ConnectionManager` 注册表，UI 仍只按 capabilities 决策。
+  - `crates/zzz/src/main.rs`：启动时把已安装扩展的 `database_drivers` 解析为
+    `ExtensionDriverConfig`，driver id 命名为 `<extension-id>.<manifest-id>`；
+    订阅 `ExtensionStore::ExtensionsUpdated` 以便安装/重载后重新注册。清单能力映射
+    到 `Capabilities`；协议 v1 的 `execute` 一次返回完整响应，故 `streaming` 固定为
+    false，不向 UI 虚报流式能力。
+- **验证命令与 exit status**：
+  - `cargo check -p zzz` → `EXIT=0`
+  - `cargo test -p database_core --test extension_driver` → `EXIT=0`（5 passed）
+  - `cargo test -p database_core -p database_ui -p extension -p csv_preview -p i18n`
+    → `TEST=0`（core 65 + integration 5、extension 19、ui 18、csv 16、i18n 3）
+  - `cargo clippy -p database_core -p database_ui -p extension -p extension_host
+--all-targets -- -D warnings` → `CLIPPY=0`
+  - `cargo xtask check` → `XCHECK=0`（6 checks）
+  - `cargo fmt --all -- --check` → `FMT=0`
+  - `cargo test -p extension_host --lib`：
+    `test_extension_store_with_test_extension` 首次运行超时（`timed out after 60s
+while awaiting install_dev_extension`）。原因是该测试使用真实 HTTP 客户端首次下载
+    wasi-sdk：归档 183 MB，本机实测 `curl` 耗时 144s，已远超测试自带的 60s 预算；
+    中断留下的 `target/wasi-sdk.tar.gz` 解压报 `Unexpected EOF`，确认是下载未完成而
+    非断言失败。把 sha256 匹配的 wasi-sdk（`b761e3a0…`）预置到 `target/wasi-sdk`
+    后重跑，`5 passed`。该路径属于 `crates/extension` 的既有行为，本阶段未修改
+    `extension_builder`，因此判定为环境限制而非回归。
+- **实现决策（记录）**：
+  - 协议 v1 以 `id` 关联请求/响应，允许 `cancel` 在 `execute` 等待期间插入；主机
+    不按方法名或错误文本做业务分支。
+  - 取消存在两条路径：已返回句柄走 `QueryHandle::cancel`，未返回句柄走
+    `DriverConnection::interrupt`（连接级），两者最终都让 `execute` 以 `Cancelled`
+    终态返回。
+  - `execute` 的响应在主机侧仍一次物化后再填充有界 `RowStream`；行窗口上限仍由
+    `QuerySession` 保证，但子进程内存不受主机约束。这是 v1 的限制，已把
+    `streaming` 上报为 false。
+  - 扩展驱动尚未接入连接对话框的驱动选择器；当前可在 `database.connections` 设置中
+    写 `driver = "<extension-id>.<driver-id>"`。卸载扩展后其驱动保留在运行时注册表
+    直到重启（追加注册，不主动注销）。
+- **结论**：PASS。完成定义第 6 条满足：存在真实 subprocess 的 mock 驱动端到端测试；
+  能力来自清单并驱动 UI；超时、错误分类、取消与关闭/Drop 清理都有实现与测试。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_core): run extension database drivers as subprocesses`）。
+- **下一步**：Phase 7 —— ER 图与导入导出。
 
 ## 完成定义核对 {#done-checklist}
 

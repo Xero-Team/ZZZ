@@ -86,7 +86,18 @@ impl QuerySession {
         self.applied_edits.clear();
         self.applied_statements = 0;
         self.applied_rows = 0;
-        let executed: ExecutedQuery = self.connection.execute(sql, params).await?;
+        let executed: ExecutedQuery = match self.connection.execute(sql, params).await {
+            Ok(executed) => executed,
+            Err(error) if error.is_cancelled() => {
+                // A driver that could not return a handle yet still reports a
+                // user cancellation as a successful terminal state (D-08).
+                let mut result_set = ResultSet::new(Vec::new(), sql.to_owned());
+                result_set.mark_cancelled();
+                self.result_set = Some(result_set);
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
         let query_id = executed.handle.id();
         self.manager
             .track_query(&self.connection_id, executed.handle.clone());
@@ -99,6 +110,14 @@ impl QuerySession {
         while let Some(item) = executed.rows.next().await {
             let row = match item {
                 Ok(row) => row,
+                Err(error) if error.is_cancelled() => {
+                    result_set.mark_cancelled();
+                    result_set.total_rows = Some(rows);
+                    self.manager.finish_query(&self.connection_id, query_id);
+                    self.current_query = None;
+                    self.result_set = Some(result_set);
+                    return Ok(());
+                }
                 Err(error) => {
                     // A step error is terminal. Keep the rows already read so the
                     // view can show them, but report the failure to the caller.

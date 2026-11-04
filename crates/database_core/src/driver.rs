@@ -121,14 +121,14 @@ pub struct ExecutedQuery {
 }
 
 /// A parsed EXPLAIN plan node used by Visual EXPLAIN (Phase 8).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExplainPlan {
     /// The raw detail text from `EXPLAIN QUERY PLAN`, already ordered by id.
     pub nodes: Vec<ExplainNode>,
 }
 
 /// One node in an EXPLAIN tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExplainNode {
     pub id: i64,
     pub parent: i64,
@@ -139,8 +139,8 @@ pub struct ExplainNode {
 /// `capabilities()`, never from `id()` (invariant 1).
 #[async_trait::async_trait]
 pub trait DatabaseDriver: Send + Sync + 'static {
-    fn id(&self) -> &'static str;
-    fn display_name(&self) -> &'static str;
+    fn id(&self) -> &str;
+    fn display_name(&self) -> &str;
     fn capabilities(&self) -> Capabilities;
 
     async fn connect(
@@ -174,6 +174,11 @@ pub trait DriverConnection: Send + Sync + 'static {
 
     /// Parse an EXPLAIN QUERY PLAN result into a plan tree.
     async fn explain(&self, sql: &str) -> DriverResult<ExplainPlan>;
+
+    /// Interrupt whatever this connection is currently doing. Drivers whose
+    /// queries cannot be cancelled through an already-returned handle implement
+    /// this so a request still waiting for its first response can be stopped.
+    fn interrupt(&self) {}
 
     async fn close(&self) -> DriverResult<()>;
 }

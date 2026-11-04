@@ -8,6 +8,7 @@
 pub mod connection;
 pub mod driver;
 pub mod error;
+pub mod extension_driver;
 pub mod model;
 pub mod session;
 pub mod sql;
@@ -20,6 +21,7 @@ pub use driver::{
     result_set_for,
 };
 pub use error::{DatabaseError, DatabaseErrorKind};
+pub use extension_driver::{ExtensionDriver, ExtensionDriverConfig};
 pub use model::{
     Capabilities, Catalog, Column, ColumnType, ConnectionConfig, ConnectionId, ConnectionStatus,
     DataSource, EditValueError, ForeignKey, Index, ObjectKind, PendingEdit, PrimaryKey, ResultSet,

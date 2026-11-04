@@ -7,6 +7,8 @@ use gpui::{App, AppContext as _, Context, Global, actions};
 use settings::{Settings as _, SettingsStore};
 use workspace::Workspace;
 
+pub use database_core::{ExtensionDriver, ExtensionDriverConfig};
+
 use crate::connection_panel::ConnectionPanel;
 use crate::connection_settings::DatabaseSettings;
 use crate::credentials::KeychainCredentials;
@@ -59,6 +61,12 @@ impl DatabaseState {
         let settings = DatabaseSettings::get_global(cx);
         manager.sync_configs(settings.connections.clone());
     }
+}
+
+/// Register a driver provided by an installed extension. Registration is
+/// keyed by the namespaced id, so a reload replaces the previous driver.
+pub fn register_extension_driver(config: ExtensionDriverConfig, cx: &App) {
+    DatabaseState::manager(cx).register_driver(Arc::new(ExtensionDriver::new(config)));
 }
 
 /// Register the database explorer UI with the application. Called from

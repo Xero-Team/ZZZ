@@ -3829,13 +3829,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
+ "async-io",
  "async-trait",
  "futures 0.3.34",
  "indoc",
  "libsqlite3-sys",
+ "log",
  "parking_lot 0.13.0",
  "serde",
  "serde_json",
+ "smol",
  "thiserror 2.0.21",
 ]
 
@@ -22217,6 +22220,7 @@ dependencies = [
  "crashes",
  "csv_preview",
  "dap_adapters",
+ "database_core",
  "database_ui",
  "db",
  "debug_adapter_extension",
