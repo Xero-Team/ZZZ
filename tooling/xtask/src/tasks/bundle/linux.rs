@@ -515,9 +515,10 @@ fn stage(context: &Context, ffmpeg_dir: &Path) -> Result<StagedBundle> {
     )?;
     util::copy(&artifact_dir.join("cli"), &app_dir.join("bin/zzz"))?;
 
-    // Everything the editor links has to come from the bundle except glibc and
-    // the compiler runtime: a missing or mismatched host copy of any other
-    // library makes the dynamic loader refuse to start the binary at all.
+    // Everything the editor links has to come from the bundle except glibc, the
+    // compiler runtime, the GLib family, and libxkbcommon: a missing or
+    // mismatched host copy of any other library makes the dynamic loader refuse
+    // to start the binary at all.
     let libraries = direct_libraries(&artifact_dir.join("zzz"), &ffmpeg_dir.join("lib"))?;
     if libraries.is_empty() {
         bail!(
@@ -579,12 +580,15 @@ fn copy_library(library: &Path, library_dir: &Path) -> Result<()> {
 
 /// Never bundle the GLib family or its private dependencies: host libraries
 /// that get `dlopen`ed are built against the system GLib, and resolving them
-/// against an older bundled copy fails with missing symbols. `libz` is excluded
-/// here because the editor links its own vendored zlib, but the transitive pass
-/// keeps it for libraries that expect the shared ABI.
+/// against an older bundled copy fails with missing symbols. libxkbcommon is
+/// host-provided because it parses the keymap the compositor generates at
+/// runtime, and a build-image copy cannot read newer compositor keymaps. `libz`
+/// is excluded here because the editor links its own vendored zlib, but the
+/// transitive pass keeps it for libraries that expect the shared ABI.
 fn is_direct_excluded(name: &str) -> bool {
     runtime_deps::is_glibc_library(name)
         || runtime_deps::is_host_provided_family(name)
+        || runtime_deps::is_host_keymap_library(name)
         || name.starts_with("libz.so")
 }
 
@@ -608,7 +612,9 @@ fn bundle_transitive_libraries(library_dir: &Path) -> Result<()> {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            if runtime_deps::is_glibc_library(&name) || runtime_deps::is_host_provided_family(&name)
+            if runtime_deps::is_glibc_library(&name)
+                || runtime_deps::is_host_provided_family(&name)
+                || runtime_deps::is_host_keymap_library(&name)
             {
                 continue;
             }
@@ -1073,13 +1079,20 @@ mod tests {
     }
 
     #[test]
-    fn direct_pass_drops_glibc_and_glib_but_keeps_zlib_for_transitives() {
+    fn direct_pass_drops_glibc_glib_and_keymap_but_keeps_zlib_for_transitives() {
         assert!(is_direct_excluded("libc.so.6"));
         assert!(is_direct_excluded("libglib-2.0.so.0"));
+        assert!(is_direct_excluded("libxkbcommon.so.0"));
+        assert!(is_direct_excluded("libxkbcommon-x11.so.0"));
         assert!(is_direct_excluded("libz.so.1"));
         assert!(!is_direct_excluded("libssl.so.3"));
         assert!(!runtime_deps::is_host_provided_family("libz.so.1"));
         assert!(runtime_deps::is_host_provided_family("libffi.so.8"));
+        assert!(runtime_deps::is_host_keymap_library("libxkbcommon.so.0"));
+        assert!(runtime_deps::is_host_keymap_library(
+            "libxkbcommon-x11.so.0"
+        ));
+        assert!(!runtime_deps::is_host_keymap_library("libxkbfile.so.1"));
     }
 
     #[test]

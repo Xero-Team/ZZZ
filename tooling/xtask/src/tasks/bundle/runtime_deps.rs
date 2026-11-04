@@ -2,9 +2,11 @@
 //!
 //! The dynamic loader aborts before `main` when a single `DT_NEEDED` entry
 //! cannot be resolved, so every library the editor links has to ship inside the
-//! bundle. The only exceptions are glibc, the compiler runtime, and the GLib
-//! family: binaries that get `dlopen`ed are built against the system GLib, and an
-//! older bundled copy fails with missing symbols.
+//! bundle. The exceptions are glibc, the compiler runtime, the GLib family, and
+//! libxkbcommon: binaries that get `dlopen`ed are built against the system GLib,
+//! and an older bundled copy fails with missing symbols; libxkbcommon parses the
+//! keymap the compositor generates at runtime, so a copy from an older build
+//! image cannot read keymaps from newer compositors.
 
 #![allow(
     clippy::disallowed_methods,
@@ -57,7 +59,7 @@ pub fn check(app_dir: &Path, robustness: bool) -> Result<()> {
         bail!("the bundle would resolve libraries from the host system");
     }
     println!(
-        "runtime dependencies: only glibc and the compiler runtime are resolved from the host"
+        "runtime dependencies: only glibc, the compiler runtime, the GLib family, and the host libxkbcommon are resolved from the host"
     );
     Ok(())
 }
@@ -69,7 +71,7 @@ fn check_dependencies(
 ) -> Result<Vec<String>> {
     let mut failures = Vec::new();
     for library in needed_libraries(binary)? {
-        if is_glibc_library(&library) {
+        if is_glibc_library(&library) || is_host_keymap_library(&library) {
             continue;
         }
         if allow_host_family && is_host_provided_family(&library) {
@@ -191,6 +193,14 @@ pub(crate) fn is_host_provided_family(name: &str) -> bool {
         "libselinux.so",
         "libffi.so",
     ];
+    PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+}
+
+/// libxkbcommon parses the keymap the Wayland compositor sends at runtime. The
+/// keymap follows the compositor's copy, so a version from an older build image
+/// fails on newer compositors; a graphical host always provides its own copy.
+pub(crate) fn is_host_keymap_library(name: &str) -> bool {
+    const PREFIXES: [&str; 2] = ["libxkbcommon.so", "libxkbcommon-x11.so"];
     PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
