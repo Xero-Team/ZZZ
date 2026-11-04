@@ -13,9 +13,9 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；上一提交
-  `3f42c8244c` 是工作项 2）。代码基线 `3af1429a83` 已 `merge-base --is-ancestor`
-  验证包含。
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；工作项 3 为
+  `05f659d46bfd`，工作项 2 为 `3f42c8244c`）。代码基线 `3af1429a83` 已
+  `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
 - Active phase: `Phase 1`
@@ -179,7 +179,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82`     | `docs(database): record phase 0 baseline and ledger`                  | 0     | 见 baseline-validation 表      | Phase 0 账本定稿                |
 | `812e4ae4be42401a9041e9a0768c6bc3dcae69ee`     | `feat(database_core): add domain model and sql analysis`              | 1     | check/test/clippy/fmt PASS     | 工作项 1                        |
 | `3f42c8244ca427e07c6f1604dc9631ad4e80fd21`     | `feat(database_core): add driver protocol and built-in sqlite driver` | 1     | check/test(32)/clippy/fmt PASS | 工作项 2，DB-EXP-001 PASS       |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): wire sqlite browsing panel and result view`       | 1     | check/test(41)/clippy/fmt PASS | 工作项 3，Phase 1 完成          |
+| `05f659d46bfd5b273e256a6dd37121477c2d014a`     | `feat(database_ui): wire sqlite browsing panel and result view`       | 1     | check/test(41)/clippy/fmt PASS | 工作项 3，Phase 1 完成          |
+| 本次（见 `git log -1` 于 `database-explorer`） | `fix(database_core): surface statement errors from the row stream`    | 1     | check/test(43)/clippy/fmt PASS | 工作项 3 缺陷修复               |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -331,11 +332,44 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
   外键）由 `opens_a_real_file_and_describes_schema` 与 UI schema 树共同满足。
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_ui): wire sqlite browsing panel and result view`）。
-- **遗留风险（记录，非阻塞）**：`RowStream` 目前只承载 `Row`，`sqlite3_step` 的
-  非 ROW/DONE 错误（约束冲突等）在 `stream_rows` 中被静默丢弃；Phase 3/5 的错误
-  与编辑路径需要它，故在工作项 3 提交后立即单独立项修复，不得留到 Phase 5 才发现。
+- **遗留风险（已修复）**：`RowStream` 原先只承载 `Row`，`sqlite3_step` 的非 ROW/DONE
+  错误（约束冲突等）在 `stream_rows` 中被静默丢弃；Phase 3/5 的错误与编辑路径需要
+  它，故在工作项 3 提交后立即单独立项修复（见下）。
 - **下一步**：Phase 2 —— `database.connections` 设置 schema、连接对话框、测试连接、
   凭据写入/删除与连接状态机 UI。
+
+### 工作项 3 后续缺陷修复 — 流式语句错误不再被吞掉
+
+- **Baseline**：`database-explorer` @ `05f659d46bfd`（工作项 3 提交后）。
+- **发现**：工作项 3 的验收测试要求「消费完流再发下一条语句」，由此发现
+  `stream_rows` 对 `sqlite3_step` 的其它返回码直接 `break`，`read_row` 解码失败也
+  直接 `break`。对无结果行的 DML 而言，约束冲突、只读库等失败会表现为「流正常
+  结束」，`QuerySession::execute` 返回 `Ok`，与不变量 8（typed 错误）冲突，也会
+  让 Phase 5 的编辑提交在失败时静默成功。
+- **改动**：
+  - `driver.rs`：`RowStream` 元素类型改为 `DriverResult<Row>`；错误是流的最后一项，
+    之后流结束。取消仍然是「流直接结束」，不产生错误（D-08 不变）。
+  - `sqlite.rs`：`stream_rows` 在 `read_row` 失败与非 ROW/DONE/INTERRUPT 返回码时
+    发送 classified `DatabaseError` 再结束；接收端已关闭则仅结束（无处可报）。
+  - `session.rs`：`execute` 收到错误项时 `mark_failed()`、结算 `track_query`、
+    保留已读行并返回该错误；`apply_pending_edits` 排空 DML 时用 `item?` 传播，
+    失败不再继续 commit。
+  - **同时修正错误分类**：`classify_step_error`/`classify_open_error` 先 `code & 0xff`
+    取主返回码。此前扩展码（如 `SQLITE_CONSTRAINT_PRIMARYKEY` = 1555）全部落到
+    `Other`，正是新增测试暴露的问题。
+- **验证命令与 exit status**：
+  - `cargo test -p database_core -p database_ui` → `TEST_EXIT=0`（core 42 passed、
+    ui 1 passed）。新增 `row_stream_delivers_a_terminal_error`、
+    `statement_errors_are_delivered_through_the_stream`（多行 INSERT 主键冲突 →
+    `DatabaseErrorKind::Constraint`）。
+  - `cargo clippy -p database_core -p database_ui --all-targets -- -D warnings` →
+    `CLIPPY_EXIT=0`
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+  - `cargo check -p zzz` 未重跑：本次只改 `database_core` 内部流类型，`database_ui`
+    在 clippy 中已完整编译；Phase 2 首次改动后重跑工作区检查。
+- **结论**：PASS。取消语义、窗口预算与既有 42 项测试均未回退。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`fix(database_core): surface statement errors from the row stream`）。
 - **遗留风险（记录，非阻塞）**：`close()` 与进行中 streaming 并发时存在
   use-after-free 窗口；由 Phase 2/3 的 `ConnectionManager` 保证「close 前先 cancel
   全部查询并等待其 owner 结束」来消除，driver 层不单独持有查询 task。

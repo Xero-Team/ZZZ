@@ -167,7 +167,9 @@ fn path_to_sqlite_uri(path: &Path) -> DriverResult<String> {
 }
 
 fn classify_open_error(code: c_int, message: &str) -> DatabaseError {
-    match code {
+    // SQLite may return an extended result code; the primary code is the low
+    // byte (e.g. SQLITE_IOERR_READ & 0xff == SQLITE_IOERR).
+    match code & 0xff {
         SQLITE_CANTOPEN | SQLITE_IOERR => DatabaseError::connection(message),
         SQLITE_AUTH => DatabaseError::authentication(message),
         SQLITE_PERM | SQLITE_READONLY => DatabaseError::permission(message),
@@ -230,7 +232,9 @@ fn raw_error_message(raw: *mut sqlite3) -> String {
 }
 
 fn classify_step_error(code: c_int, message: &str) -> DatabaseError {
-    match code {
+    // See `classify_open_error`: extended result codes share the low byte with
+    // their primary code.
+    match code & 0xff {
         SQLITE_INTERRUPT => DatabaseError::cancelled(),
         SQLITE_ERROR => DatabaseError::syntax(message),
         SQLITE_CONSTRAINT => DatabaseError::constraint(message),
@@ -477,7 +481,7 @@ fn stream_rows(
     raw: *mut sqlite3,
     statement: *mut sqlite3_stmt,
     column_count: usize,
-    sender: &async_channel::Sender<Row>,
+    sender: &async_channel::Sender<DriverResult<Row>>,
     flag: &AtomicBool,
 ) {
     loop {
@@ -486,22 +490,31 @@ fn stream_rows(
         }
         let code = unsafe { sqlite3_step(statement) };
         match code {
-            SQLITE_ROW => {
-                let Ok(row) = read_row(statement, column_count) else {
-                    break;
-                };
-                if sender.send_blocking(row).is_err() {
-                    // Receiver dropped: the query was cancelled or the view
-                    // closed. Interrupt so a blocked step returns promptly.
-                    unsafe {
-                        sqlite3_interrupt(raw);
+            SQLITE_ROW => match read_row(statement, column_count) {
+                Ok(row) => {
+                    if sender.send_blocking(Ok(row)).is_err() {
+                        // Receiver dropped: the query was cancelled or the view
+                        // closed. Interrupt so a blocked step returns promptly.
+                        unsafe {
+                            sqlite3_interrupt(raw);
+                        }
+                        break;
                     }
+                }
+                Err(error) => {
+                    // The receiver may already be gone; either way a row that
+                    // cannot be decoded ends the stream.
+                    let _delivered = sender.send_blocking(Err(error));
                     break;
                 }
-            }
+            },
             SQLITE_DONE => break,
             SQLITE_INTERRUPT => break,
-            _ => break,
+            _ => {
+                let error = classify_step_error(code, &raw_error_message(raw));
+                let _delivered = sender.send_blocking(Err(error));
+                break;
+            }
         }
     }
 }
@@ -818,7 +831,7 @@ mod tests {
             assert_eq!(query.metadata.columns.len(), 4);
             let mut rows = Vec::new();
             while let Some(row) = query.rows.next().await {
-                rows.push(row);
+                rows.push(row.expect("decode row"));
             }
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].get(0), Some(&Value::Integer(1)));
@@ -828,6 +841,30 @@ mod tests {
                 Some(&Value::Blob(vec![0xde, 0xad, 0xbe, 0xef]))
             );
             assert_eq!(rows[0].get(3), Some(&Value::Null));
+        });
+    }
+
+    #[test]
+    fn statement_errors_are_delivered_through_the_stream() {
+        futures::executor::block_on(async {
+            let config = in_memory_config();
+            let handle = open_connection(&config).expect("open");
+            let connection = SqliteConnection { handle };
+            connection
+                .exec_simple("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+                .expect("create");
+            let query = connection
+                .execute("INSERT INTO t VALUES (1), (1)", &[])
+                .await
+                .expect("execute");
+            let mut failure = None;
+            while let Some(item) = query.rows.next().await {
+                if let Err(error) = item {
+                    failure = Some(error);
+                }
+            }
+            let failure = failure.expect("constraint error should reach the caller");
+            assert_eq!(failure.kind, DatabaseErrorKind::Constraint);
         });
     }
 
@@ -915,7 +952,8 @@ mod tests {
     async fn count_rows(connection: &SqliteConnection, sql: &str) -> usize {
         let query = connection.execute(sql, &[]).await.expect("execute");
         let mut count = 0usize;
-        while query.rows.next().await.is_some() {
+        while let Some(item) = query.rows.next().await {
+            item.expect("row");
             count += 1;
         }
         count
@@ -938,14 +976,16 @@ mod tests {
                 )
                 .await
                 .expect("execute");
-            while query.rows.next().await.is_some() {}
+            while let Some(item) = query.rows.next().await {
+                item.expect("insert");
+            }
             let query = connection
                 .execute("SELECT value FROM t", &[])
                 .await
                 .expect("select");
             let mut rows = Vec::new();
             while let Some(row) = query.rows.next().await {
-                rows.push(row);
+                rows.push(row.expect("decode row"));
             }
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].get(0), Some(&Value::Text(malicious.into())));

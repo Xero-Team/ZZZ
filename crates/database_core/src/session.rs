@@ -76,7 +76,20 @@ impl QuerySession {
         let mut result_set = crate::driver::result_set_for(&executed.metadata, sql);
         result_set.total_rows = executed.metadata.affected_rows;
         let mut rows = 0usize;
-        while let Some(row) = executed.rows.next().await {
+        while let Some(item) = executed.rows.next().await {
+            let row = match item {
+                Ok(row) => row,
+                Err(error) => {
+                    // A step error is terminal. Keep the rows already read so the
+                    // view can show them, but report the failure to the caller.
+                    result_set.mark_failed();
+                    result_set.total_rows = Some(rows);
+                    self.manager.finish_query(&self.connection_id, query_id);
+                    self.current_query = None;
+                    self.result_set = Some(result_set);
+                    return Err(error);
+                }
+            };
             if !result_set.push_row(row, DEFAULT_WINDOW_LIMIT) {
                 // Window budget reached: cancel the still-running stream so the
                 // driver stops stepping and no orphan task remains.
@@ -201,8 +214,11 @@ impl QuerySession {
         for (sql, params) in statements {
             let executed = self.connection.execute(&sql, &params).await?;
             // Drain DML (no rows expected) so the streaming task is owned and
-            // finishes before the next statement.
-            while executed.rows.next().await.is_some() {}
+            // finishes before the next statement. A constraint failure surfaces
+            // here as the stream's final item and aborts the commit.
+            while let Some(item) = executed.rows.next().await {
+                item?;
+            }
             applied += 1;
         }
         self.connection.commit(transaction).await?;

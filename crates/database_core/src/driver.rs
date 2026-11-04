@@ -82,20 +82,24 @@ impl QueryHandle {
 
 /// A bounded stream of typed rows. The producer stops when the receiver is
 /// dropped, which cancels the underlying query without an orphan task.
+///
+/// A step error (constraint violation, out-of-memory, ...) is delivered as the
+/// stream's final item and then the stream ends; it must not be silently
+/// dropped, because statements that return no rows have no other error channel.
 #[derive(Debug)]
 pub struct RowStream {
-    pub receiver: Receiver<Row>,
+    pub receiver: Receiver<DriverResult<Row>>,
 }
 
 impl RowStream {
-    pub fn new(capacity: usize) -> (Sender<Row>, Self) {
+    pub fn new(capacity: usize) -> (Sender<DriverResult<Row>>, Self) {
         let (sender, receiver) = bounded(capacity);
         (sender, Self { receiver })
     }
 
     /// Pull the next row. A closed channel means the producer finished (or was
     /// cancelled); that is a normal terminal condition, not an error.
-    pub async fn next(&self) -> Option<Row> {
+    pub async fn next(&self) -> Option<DriverResult<Row>> {
         self.receiver.recv().await.ok()
     }
 }
@@ -223,11 +227,24 @@ mod tests {
     fn row_stream_delivers_rows_and_closes() {
         futures::executor::block_on(async {
             let (sender, stream) = RowStream::new(4);
-            assert!(sender.send(Row(vec![Value::Integer(1)])).await.is_ok());
-            assert!(sender.send(Row(vec![Value::Integer(2)])).await.is_ok());
+            assert!(sender.send(Ok(Row(vec![Value::Integer(1)]))).await.is_ok());
+            assert!(sender.send(Ok(Row(vec![Value::Integer(2)]))).await.is_ok());
             drop(sender);
-            assert_eq!(stream.next().await, Some(Row(vec![Value::Integer(1)])));
-            assert_eq!(stream.next().await, Some(Row(vec![Value::Integer(2)])));
+            assert_eq!(stream.next().await, Some(Ok(Row(vec![Value::Integer(1)]))));
+            assert_eq!(stream.next().await, Some(Ok(Row(vec![Value::Integer(2)]))));
+            assert_eq!(stream.next().await, None);
+        });
+    }
+
+    #[test]
+    fn row_stream_delivers_a_terminal_error() {
+        futures::executor::block_on(async {
+            let (sender, stream) = RowStream::new(4);
+            let error = DatabaseError::constraint("duplicate key");
+            sender.send(Err(error.clone())).await.expect("send error");
+            drop(sender);
+            let item = stream.next().await.expect("error item");
+            assert_eq!(item.expect_err("error").kind, error.kind);
             assert_eq!(stream.next().await, None);
         });
     }
