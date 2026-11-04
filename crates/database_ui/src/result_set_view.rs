@@ -1,5 +1,6 @@
 //! The database browser `Item`: schema tree, SQL editor, and result sets.
 
+use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -229,7 +230,9 @@ pub struct ResultSetView {
     history_error: Option<String>,
     import_running: bool,
     status_text: SharedString,
-    session: Option<QuerySession>,
+    /// Interior mutability lets `on_removed` take the session for a background
+    /// rollback; `Item::on_removed` only receives `&self`.
+    session: RefCell<Option<QuerySession>>,
     query_running: bool,
     tabs: Vec<QueryTab>,
     active_tab: usize,
@@ -363,7 +366,7 @@ impl ResultSetView {
             history_error: None,
             import_running: false,
             status_text: SharedString::from(tr(cx, "database.status.connecting", "Connecting…")),
-            session: None,
+            session: RefCell::new(None),
             query_running: false,
             tabs: vec![QueryTab {
                 sql: String::new(),
@@ -416,7 +419,7 @@ impl ResultSetView {
             view.update(cx, |view, cx| match result {
                 Ok((catalogs, connection)) => {
                     view.catalogs = catalogs;
-                    view.session = Some(QuerySession::new(
+                    *view.session.borrow_mut() = Some(QuerySession::new(
                         connection_id,
                         connection,
                         manager,
@@ -670,7 +673,7 @@ impl ResultSetView {
             multiple: false,
             prompt: Some(prompt),
         });
-        let Some(mut session) = self.session.take() else {
+        let Some(mut session) = self.session.borrow_mut().take() else {
             self.set_message(
                 QueryMessage::Error(tr(
                     cx,
@@ -688,7 +691,7 @@ impl ResultSetView {
                 Ok(Ok(paths)) => paths.and_then(|mut paths| paths.pop()),
                 Ok(Err(error)) => {
                     view.update(cx, |view, cx| {
-                        view.session = Some(session);
+                        *view.session.borrow_mut() = Some(session);
                         view.import_running = false;
                         view.set_message(
                             QueryMessage::Error(
@@ -715,7 +718,7 @@ impl ResultSetView {
             };
             let Some(path) = chosen else {
                 view.update(cx, |view, cx| {
-                    view.session = Some(session);
+                    *view.session.borrow_mut() = Some(session);
                     view.import_running = false;
                     cx.notify();
                 })
@@ -731,7 +734,7 @@ impl ResultSetView {
                 },
             };
             view.update(cx, |view, cx| {
-                view.session = Some(session);
+                *view.session.borrow_mut() = Some(session);
                 view.import_running = false;
                 let message = match attempt {
                     ImportAttempt::Parsed(Ok(outcome)) => QueryMessage::Info(
@@ -877,7 +880,7 @@ impl ResultSetView {
                 return;
             }
         };
-        let Some(mut session) = self.session.take() else {
+        let Some(mut session) = self.session.borrow_mut().take() else {
             self.set_message(
                 QueryMessage::Error(tr(
                     cx,
@@ -893,7 +896,7 @@ impl ResultSetView {
         let task = cx.spawn(async move |view, cx| {
             let outcome = session.explain(&sql).await;
             view.update(cx, |view, cx| {
-                view.session = Some(session);
+                *view.session.borrow_mut() = Some(session);
                 view.query_running = false;
                 match outcome {
                     Ok(plan) if plan.nodes.is_empty() => view.set_message(
@@ -1232,7 +1235,7 @@ impl ResultSetView {
         if self.query_running || self.edit_running {
             return;
         }
-        let Some(mut session) = self.session.take() else {
+        let Some(mut session) = self.session.borrow_mut().take() else {
             self.set_message(
                 QueryMessage::Error(tr(
                     cx,
@@ -1247,7 +1250,7 @@ impl ResultSetView {
         // applied edits, so those edits would become invisible. Make the user
         // settle them first rather than silently dropping or orphaning them.
         if session.has_pending_edits() || session.applied_edit_count() > 0 {
-            self.session = Some(session);
+            *self.session.borrow_mut() = Some(session);
             self.set_message(
                 QueryMessage::Info(tr(
                     cx,
@@ -1312,7 +1315,7 @@ impl ResultSetView {
             let schema_may_have_changed =
                 result.is_ok() && !matches!(classify(&sql), StatementKind::Select);
             view.update(cx, |view, cx| {
-                view.session = Some(session);
+                *view.session.borrow_mut() = Some(session);
                 view.query_running = false;
                 if schema_may_have_changed {
                     view.described_schemas.clear();
@@ -1391,6 +1394,7 @@ impl ResultSetView {
     fn refresh_active_result(&mut self, cx: &mut Context<Self>) {
         let result = self
             .session
+            .borrow()
             .as_ref()
             .and_then(|session| session.result_set().cloned())
             .map(Arc::new);
@@ -1482,10 +1486,14 @@ impl ResultSetView {
                 return;
             }
         };
-        let Some(session) = self.session.as_mut() else {
-            return;
+        let staged = {
+            let mut session = self.session.borrow_mut();
+            let Some(session) = session.as_mut() else {
+                return;
+            };
+            session.stage_edit(row_index, column_index, value)
         };
-        if !session.stage_edit(row_index, column_index, value) {
+        if !staged {
             self.set_message(
                 QueryMessage::Error(tr(
                     cx,
@@ -1511,10 +1519,14 @@ impl ResultSetView {
     }
 
     fn discard_pending_edits(&mut self, cx: &mut Context<Self>) {
-        let Some(session) = self.session.as_mut() else {
-            return;
+        let discarded = {
+            let mut session = self.session.borrow_mut();
+            let Some(session) = session.as_mut() else {
+                return;
+            };
+            session.discard_pending_edits()
         };
-        if !session.discard_pending_edits() {
+        if !discarded {
             self.set_message(
                 QueryMessage::Info(tr(
                     cx,
@@ -1548,7 +1560,7 @@ impl ResultSetView {
         if self.edit_running || self.query_running {
             return;
         }
-        let Some(mut session) = self.session.take() else {
+        let Some(mut session) = self.session.borrow_mut().take() else {
             self.set_message(
                 QueryMessage::Error(tr(
                     cx,
@@ -1568,7 +1580,7 @@ impl ResultSetView {
                 EditOperation::Rollback => session.rollback_edits().await.map(|()| 0usize),
             };
             view.update(cx, |view, cx| {
-                view.session = Some(session);
+                *view.session.borrow_mut() = Some(session);
                 view.edit_running = false;
                 view.refresh_active_result(cx);
                 match outcome {
@@ -1608,14 +1620,19 @@ impl ResultSetView {
     }
 
     fn render_edit_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let session = self.session.as_ref()?;
-        let pending = session
-            .result_set()
-            .map_or(0, |set| set.pending_edit_count());
-        let applied = session.applied_edit_count();
-        let applied_statements = session.applied_statement_count();
-        let affected_rows = session.applied_row_count();
-        let open = session.has_open_transaction();
+        let (pending, applied, applied_statements, affected_rows, open) = {
+            let session = self.session.borrow();
+            let session = session.as_ref()?;
+            (
+                session
+                    .result_set()
+                    .map_or(0, |set| set.pending_edit_count()),
+                session.applied_edit_count(),
+                session.applied_statement_count(),
+                session.applied_row_count(),
+                session.has_open_transaction(),
+            )
+        };
         // An import can open a transaction before the view has any result set,
         // so the bar must not depend on one.
         let result = self.active_result();
@@ -2430,6 +2447,7 @@ impl Item for ResultSetView {
     /// already written to a transaction, or a transaction the user opened.
     fn is_dirty(&self, _cx: &App) -> bool {
         self.session
+            .borrow()
             .as_ref()
             .is_some_and(|session| session.has_uncommitted_changes())
     }
@@ -2446,7 +2464,7 @@ impl Item for ResultSetView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        let Some(mut session) = self.session.take() else {
+        let Some(mut session) = self.session.borrow_mut().take() else {
             return Task::ready(Ok(()));
         };
         self.edit_running = true;
@@ -2454,7 +2472,7 @@ impl Item for ResultSetView {
         cx.spawn(async move |view, cx| {
             let outcome = session.commit_edits().await;
             view.update(cx, |view, cx| {
-                view.session = Some(session);
+                *view.session.borrow_mut() = Some(session);
                 view.edit_running = false;
                 view.refresh_active_result(cx);
                 let message = match &outcome {
@@ -2477,15 +2495,48 @@ impl Item for ResultSetView {
         })
     }
 
+    /// Discarding changes in the close prompt has no file to reload: it means
+    /// rolling back the open transaction. The pane awaits this task before
+    /// removing the item, so the session must come back afterwards for
+    /// `on_removed` to release it.
+    fn reload(
+        &mut self,
+        _project: Entity<Project>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        let Some(mut session) = self.session.borrow_mut().take() else {
+            return Task::ready(Ok(()));
+        };
+        self.edit_running = true;
+        cx.notify();
+        cx.spawn(async move |view, cx| {
+            let outcome = session.rollback_edits().await;
+            view.update(cx, |view, cx| {
+                *view.session.borrow_mut() = Some(session);
+                view.edit_running = false;
+                view.refresh_active_result(cx);
+                let message = match &outcome {
+                    Ok(()) => {
+                        QueryMessage::Info(tr(cx, "database.edit.rolled_back", "Rolled back."))
+                    }
+                    Err(error) => QueryMessage::Error(describe_error(cx, error)),
+                };
+                view.set_message(message, cx);
+            })
+            .ok();
+            outcome.map_err(|error| anyhow::anyhow!(error.to_string()))
+        })
+    }
+
     /// Closing without saving must not leave the connection inside a
-    /// transaction. The session is rolled back independently of this entity so
-    /// the task survives the view being dropped.
-    fn deactivated(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mut session) = self.session.take() else {
+    /// transaction. `on_removed` runs only when the item leaves its pane, unlike
+    /// `deactivated`, which also fires on a tab switch. The rollback runs on the
+    /// background executor so dropping the view does not cancel it.
+    fn on_removed(&self, cx: &mut Context<Self>) {
+        let Some(mut session) = self.session.borrow_mut().take() else {
             return;
         };
-        // Run on the background executor so dropping the view does not cancel
-        // the rollback. A connection must never outlive its transaction owner.
         cx.background_spawn(async move {
             if let Err(error) = session.rollback_edits().await {
                 log::warn!("failed to roll back database edits while closing: {error}");

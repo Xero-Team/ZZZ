@@ -701,9 +701,10 @@ impl Item for DatabaseNotebook {
         Task::ready(Ok(()))
     }
 
-    /// Closing the notebook stops in-flight cells; their sessions are dropped
-    /// with the tasks, so no query outlives its owner.
-    fn deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+    /// Closing the notebook stops in-flight cells. The canceller is enough
+    /// here because the sessions are owned by the run tasks and drop with them;
+    /// switching tabs does not call `on_removed`, so those queries keep running.
+    fn on_removed(&self, _cx: &mut Context<Self>) {
         for cell in &self.cells {
             cell.canceller.cancel();
         }
