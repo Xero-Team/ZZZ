@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use database_core::{ConnectionManager, SqliteDriver};
-use gpui::{App, AppContext as _, Context, Global, actions};
+use editor::{Editor, MultiBufferOffset};
+use gpui::{App, AppContext as _, Context, Entity, Global, actions};
 use settings::{Settings as _, SettingsStore};
 use workspace::Workspace;
 
@@ -69,6 +70,31 @@ impl DatabaseState {
 /// keyed by the namespaced id, so a reload replaces the previous driver.
 pub fn register_extension_driver(config: ExtensionDriverConfig, cx: &App) {
     DatabaseState::manager(cx).register_driver(Arc::new(ExtensionDriver::new(config)));
+}
+
+/// Selected text in an SQL editor, plus the cursor offset used to resolve the
+/// statement when nothing is selected. The display snapshot keeps the offsets
+/// correct when the buffer is folded.
+pub(crate) fn selected_sql_text(editor: &Entity<Editor>, cx: &mut App) -> (String, usize) {
+    let display_snapshot = editor.update(cx, |editor, cx| editor.display_snapshot(cx));
+    let editor = editor.read(cx);
+    let buffer = editor.buffer().read(cx).read(cx);
+    let selections = editor
+        .selections
+        .all::<MultiBufferOffset>(&display_snapshot);
+    let mut parts = Vec::new();
+    let mut cursor = 0usize;
+    for selection in &selections {
+        cursor = selection.head().0;
+        if selection.start != selection.end {
+            parts.push(
+                buffer
+                    .text_for_range(selection.start..selection.end)
+                    .collect::<String>(),
+            );
+        }
+    }
+    (parts.join("\n"), cursor)
 }
 
 /// Register the database explorer UI with the application. Called from

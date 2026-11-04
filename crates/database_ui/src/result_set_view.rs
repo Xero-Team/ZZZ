@@ -11,7 +11,7 @@ use database_core::{
     export_result_set, export_schema, flatten_plan, parse_edited_value, statement_at,
 };
 use db::query_history::{QueryHistoryDb, QueryHistoryEntry};
-use editor::{Editor, EditorElement, EditorEvent, EditorStyle, MultiBufferOffset};
+use editor::{Editor, EditorElement, EditorEvent, EditorStyle};
 use gpui::*;
 use i18n::tr;
 use project::Project;
@@ -762,27 +762,7 @@ impl ResultSetView {
     }
 
     fn selected_sql(&self, cx: &mut Context<Self>) -> (String, usize) {
-        let display_snapshot = self
-            .editor
-            .update(cx, |editor, cx| editor.display_snapshot(cx));
-        let editor = self.editor.read(cx);
-        let buffer = editor.buffer().read(cx).read(cx);
-        let selections = editor
-            .selections
-            .all::<MultiBufferOffset>(&display_snapshot);
-        let mut parts = Vec::new();
-        let mut cursor = 0usize;
-        for selection in &selections {
-            cursor = selection.head().0;
-            if selection.start != selection.end {
-                parts.push(
-                    buffer
-                        .text_for_range(selection.start..selection.end)
-                        .collect::<String>(),
-                );
-            }
-        }
-        (parts.join("\n"), cursor)
+        crate::selected_sql_text(&self.editor, cx)
     }
 
     fn run(&mut self, mode: RunMode, window: &mut Window, cx: &mut Context<Self>) {

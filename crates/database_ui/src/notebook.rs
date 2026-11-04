@@ -12,7 +12,7 @@ use database_core::{
     Capabilities, ConnectionConfig, ConnectionId, ConnectionManager, QueryCanceller, QuerySession,
     ResultSet, ResultSetState, Value,
 };
-use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
+use editor::{Editor, EditorElement, EditorStyle};
 use gpui::*;
 use i18n::tr;
 use project::Project;
@@ -224,21 +224,7 @@ impl DatabaseNotebook {
             return String::new();
         };
         if mode == RunCellMode::Selection {
-            let selection = cell.editor.update(cx, |editor, cx| {
-                let snapshot = editor.display_snapshot(cx);
-                let buffer = editor.buffer().read(cx).read(cx);
-                let mut parts = Vec::new();
-                for selection in editor.selections.all::<MultiBufferOffset>(&snapshot) {
-                    if selection.start != selection.end {
-                        parts.push(
-                            buffer
-                                .text_for_range(selection.start..selection.end)
-                                .collect::<String>(),
-                        );
-                    }
-                }
-                parts.join("\n")
-            });
+            let (selection, _) = crate::selected_sql_text(&cell.editor, cx);
             if !selection.trim().is_empty() {
                 return selection;
             }
