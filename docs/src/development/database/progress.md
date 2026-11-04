@@ -20,9 +20,9 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 - Active phase: `Phase 1`
 - Last completed phase: `Phase 0`
 - Blocking issue: `None`
-- Next action: 执行 Phase 1 工作项 2——实现 `driver.rs`（`DatabaseDriver` /
-  `DriverConnection` / `QueryHandle` / `RowStream`）与 `sqlite/` 内建驱动
-  （`sqlite3_interrupt` 取消、schema 实查、流式行读取），并为其实查能力补单测。
+- Next action: 执行 Phase 1 工作项 3——`ConnectionManager`（凭据注入、状态机、
+  连接生命周期 owner）与 `QuerySession`（执行/取消/事务/pending edits），随后
+  `database_ui` 的 Item/Panel 接线、`.db` 打开入口与 `main.rs` 的 `init` 注册。
 
 ## Bootstrap {#bootstrap}
 
@@ -156,11 +156,11 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 
 格式：`DB-EXP-NNN`、目的、命令、baseline 结果、改动后结果、结论（PASS/FAIL/REJECTED）。
 
-| ID         | 目的                                           | 命令                                                                                                                                                       | Baseline                                                                                                                         | After                                     | 结论            | Phase |
-| ---------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------- | ----- |
-| DB-EXP-001 | SQLite 连接并发与 `sqlite3_interrupt` 线程模型 | 源码复核 `sqlez/connection.rs:18`（Connection 仅 Send 非 Sync）、`libsqlite3-sys` `sqlite3_interrupt` 契约；单连接以互斥串行化，`interrupt` 从控制线程调用 | `sqlez::Connection` 非 Sync；`sqlite3_interrupt` 允许从与目标连接不同线程调用并使进行中的 `sqlite3_step` 返回 `SQLITE_INTERRUPT` | 待 Phase 1 落地后以真实长查询取消测试复核 | 见 Phase 1 结论 | 1     |
-| DB-EXP-002 | 大结果集窗口化拉取的内存上限                   | 待定                                                                                                                                                       |                                                                                                                                  |                                           |                 | 4     |
-| DB-EXP-003 | 扩展子进程协议跨平台换行/编码/超时             | 待定                                                                                                                                                       |                                                                                                                                  |                                           |                 | 6     |
+| ID         | 目的                                           | 命令                                                            | Baseline                                                                               | After                                                                                                          | 结论 | Phase |
+| ---------- | ---------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---- | ----- |
+| DB-EXP-001 | SQLite 连接并发与 `sqlite3_interrupt` 线程模型 | `cargo test -p database_core cancel_stops_a_long_running_query` | `sqlez::Connection` 非 Sync；`sqlite3_interrupt` 允许跨线程中断进行中的 `sqlite3_step` | `Mutex` 串行化单连接，控制线程 interrupt 后 1 亿行递归 CTE 的 stream 在 5s 内关闭，取消状态 `Cancelled` 非错误 | PASS | 1     |
+| DB-EXP-002 | 大结果集窗口化拉取的内存上限                   | 待定                                                            |                                                                                        |                                                                                                                |      | 4     |
+| DB-EXP-003 | 扩展子进程协议跨平台换行/编码/超时             | 待定                                                            |                                                                                        |                                                                                                                |      | 6     |
 
 ## 决策变更记录 {#decision-changes}
 
@@ -173,10 +173,12 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 
 ## 提交记录 {#commits}
 
-| SHA                                        | 提交信息                                             | Phase | 验证                      | 备注                            |
-| ------------------------------------------ | ---------------------------------------------------- | ----- | ------------------------- | ------------------------------- |
-| `f2a037d404cc396581e24822d34cf2a885b02bc4` | `docs: add database explorer plan`                   | 0     | prettier PASS             | 在 `main` 上，worktree 前置条件 |
-| `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82` | `docs(database): record phase 0 baseline and ledger` | 0     | 见 baseline-validation 表 | Phase 0 账本定稿                |
+| SHA                                            | 提交信息                                                              | Phase | 验证                           | 备注                            |
+| ---------------------------------------------- | --------------------------------------------------------------------- | ----- | ------------------------------ | ------------------------------- |
+| `f2a037d404cc396581e24822d34cf2a885b02bc4`     | `docs: add database explorer plan`                                    | 0     | prettier PASS                  | 在 `main` 上，worktree 前置条件 |
+| `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82`     | `docs(database): record phase 0 baseline and ledger`                  | 0     | 见 baseline-validation 表      | Phase 0 账本定稿                |
+| `812e4ae4be42401a9041e9a0768c6bc3dcae69ee`     | `feat(database_core): add domain model and sql analysis`              | 1     | check/test/clippy/fmt PASS     | 工作项 1                        |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_core): add driver protocol and built-in sqlite driver` | 1     | check/test(32)/clippy/fmt PASS | 工作项 2，DB-EXP-001 PASS       |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -215,9 +217,63 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
     （修了 `format!` 无参、`range_plus_one`、`useless_vec` 三处 lint）
   - `cargo fmt --all -- --check` → `FMT_EXIT=0`
 - **结论**：PASS（核心领域逻辑）。
-- **提交 SHA**：见 `git log -1` 于 `database-explorer`（`feat(database_core): add domain model and sql analysis`）。
-- **下一步**：工作项 2 —— `driver.rs` trait 定义 + `sqlite/` 内建驱动（含
-  `sqlite3_interrupt` 取消与 schema 实查），`DB-EXP-001` 用真实长查询取消测试落结论。
+- **提交 SHA**：`812e4ae4be42401a9041e9a0768c6bc3dcae69ee`
+  （`feat(database_core): add domain model and sql analysis`）。
+- **下一步**：工作项 2（已完成，见下）。
+
+### 工作项 2 — driver 协议与内建 SQLite 驱动
+
+- **Baseline**：`database-explorer` @ `812e4ae4be`（工作项 1 提交后）。
+- **改动**：
+  - `crates/database_core/src/driver.rs`：
+    - `DatabaseDriver` / `DriverConnection` trait（`#[async_trait::async_trait]`），
+      `capabilities()` 是 UI 动作可用性唯一来源，禁止按 `id()` 分支（不变量 1）。
+    - `QueryHandle::cancel()` **同步**且幂等（D-08），`Interrupt` trait 让 SQLite 走
+      `sqlite3_interrupt`、扩展驱动走 `cancel` 帧；取消是 `Cancelled` 状态非错误。
+    - `RowStream`：`async-channel::bounded(256)` 有界流式行，接收端 drop 即取消、
+      不留孤儿任务（不变量 9）。
+    - `ExecutedQuery` / `QueryMetadata` / `ExplainPlan` / `ExplainNode` /
+      `TransactionId` / `DriverResult`。
+  - `crates/database_core/src/sqlite.rs`（内建驱动，D-02 修订后的 FFI 自建封装）：
+    - `SqliteHandle`：`Mutex<*mut sqlite3>` 串行化访问 + `unsafe impl Send/Sync`，
+      `interrupt_ptr: usize` 供跨线程 `sqlite3_interrupt`；`Drop` 关闭连接。
+    - `sqlite3_open_v2` 用 READWRITE|URI|NOMUTEX（**不 CREATE**），文件不存在返回
+      `Connection` 分类错误，不静默建空库（修正 `sqlez::open_file` 的问题）。
+    - schema 实查：`sqlite_master` 列表 + `PRAGMA table_info` / `foreign_key_list` /
+      `index_list` / `index_info`，`quote_identifier` 防注入，列声明类型映射
+      `ColumnType`，主键/索引/外键组装为 `TableSchema`。
+    - `execute`：prepare + 参数绑定（`?N` 占位杜绝注入）+ 运行时 `Value` 列读取
+      （`sqlite3_column_type` → Integer/Real/Text/Blob/Null），在 `std::thread` 上
+      持连接锁循环 `sqlite3_step` 填充有界 channel；接收端关闭或取消标志触发
+      `sqlite3_interrupt` 让 step 迅速返回。
+    - `begin`/`commit`/`rollback`（事务）、`explain`（`EXPLAIN QUERY PLAN` →
+      `ExplainPlan` 节点树）、`test`、`close`（`closed` 标志防 double-close）。
+    - `classify_open_error` / `classify_step_error` 把 SQLite 错误码映射为
+      `DatabaseErrorKind`（不按文本匹配，不变量 8）。
+  - `Cargo.toml` 增 `async-trait` / `futures` 依赖；`database_core.rs` 导出 sqlite 类型。
+  - 测试：schema 实查（列/类型/主键/索引）、类型化流行、参数绑定防注入、
+    事务 commit/rollback、EXPLAIN、`cancel_stops_a_long_running_query`（DB-EXP-001）。
+- **验证命令与 exit status**：
+  - `cargo check -p database_core` → `CHECK_EXIT=0`
+  - `cargo test -p database_core` → `TEST_EXIT=0`（32 passed; 0 failed）
+  - `cargo clippy -p database_core --all-targets -- -D warnings` → `CLIPPY_EXIT=0`
+    （修了 `multiple_unsafe_ops_per_block` 拆分、`manual_let_else`、
+    `needless_lifetimes`、`redundant_clone`、`panic_in_if`、unreachable pattern、
+    `Debug` derive 等 lint）
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+- **DB-EXP-001 结论（PASS）**：SQLite 单连接以 `Mutex` 串行化；`sqlite3_interrupt`
+  可从控制线程调用并使 streaming 线程上的 `sqlite3_step` 返回 `SQLITE_INTERRUPT`。
+  测试用 1 亿行递归 CTE，等到首行产出后 cancel，stream 在 5s 内关闭且状态为
+  `Cancelled` 非错误。取消标志 + interrupt 双路径覆盖（线程未启动 vs 已 step）。
+- **结论**：PASS（协议 + 内建 SQLite 驱动，纯逻辑可单测）。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_core): add driver protocol and built-in sqlite driver`）。
+- **下一步**：工作项 3 —— `ConnectionManager`（凭据注入、状态机、连接生命周期
+  owner）+ `QuerySession`（执行/取消/事务/pending edits），随后 `database_ui` 的
+  Item/Panel 接线与 `main.rs` 的 `init` 注册（Phase 1 验收要求能打开真实 `.db` 文件）。
+- **遗留风险（记录，非阻塞）**：`close()` 与进行中 streaming 并发时存在
+  use-after-free 窗口；由 Phase 2/3 的 `ConnectionManager` 保证「close 前先 cancel
+  全部查询并等待其 owner 结束」来消除，driver 层不单独持有查询 task。
 
 ## 完成定义核对 {#done-checklist}
 

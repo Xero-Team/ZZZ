@@ -3829,6 +3829,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
+ "async-trait",
+ "futures 0.3.34",
  "indoc",
  "libsqlite3-sys",
  "parking_lot 0.13.0",

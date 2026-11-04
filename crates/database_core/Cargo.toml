@@ -10,6 +10,8 @@ path = "src/database_core.rs"
 [dependencies]
 anyhow.workspace = true
 async-channel.workspace = true
+async-trait.workspace = true
+futures.workspace = true
 libsqlite3-sys.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
