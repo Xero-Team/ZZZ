@@ -505,7 +505,9 @@ fn stream_rows(
                 Err(error) => {
                     // The receiver may already be gone; either way a row that
                     // cannot be decoded ends the stream.
-                    let _delivered = sender.send_blocking(Err(error));
+                    if sender.send_blocking(Err(error)).is_err() {
+                        log::debug!("the row stream closed before the decode error was delivered");
+                    }
                     break;
                 }
             },
@@ -513,7 +515,9 @@ fn stream_rows(
             SQLITE_INTERRUPT => break,
             _ => {
                 let error = classify_step_error(code, &raw_error_message(raw));
-                let _delivered = sender.send_blocking(Err(error));
+                if sender.send_blocking(Err(error)).is_err() {
+                    log::debug!("the row stream closed before the step error was delivered");
+                }
                 break;
             }
         }
