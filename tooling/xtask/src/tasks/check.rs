@@ -24,6 +24,7 @@ use anyhow::{Context as _, Result, bail};
 use clap::{Args, Subcommand, ValueEnum};
 
 mod keymaps;
+mod scroll_handlers;
 
 #[derive(Args)]
 pub struct CheckArgs {
@@ -33,13 +34,15 @@ pub struct CheckArgs {
 
 #[derive(Subcommand)]
 enum CheckCommand {
-    /// Every gate CI runs: markers, keymaps, licenses, philosophy, ledger,
-    /// workflows.
+    /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
+    /// philosophy, ledger, workflows.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
     /// Reject macOS-only modifiers in shared keymaps and duplicate bindings.
     Keys,
+    /// Reject re-entrant entity/ListState access inside scroll handlers.
+    ScrollHandlers,
     /// Require a `LICENSE-AGPL` symlink in every crate directory.
     Licenses,
     /// Run ShellCheck over the scripts in the repository root's `script/`.
@@ -88,6 +91,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::All => run_all(),
         CheckCommand::Todos => check_todos(),
         CheckCommand::Keys => keymaps::check(),
+        CheckCommand::ScrollHandlers => scroll_handlers::check(),
         CheckCommand::Licenses => check_licenses(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
         CheckCommand::Vendor => run_script(&["script/vendor-sync", "check"], "vendor check"),
@@ -105,6 +109,7 @@ fn run_all() -> Result<()> {
     let checks: &[(&str, fn() -> Result<()>)] = &[
         ("unfinished-work markers", check_todos),
         ("keymaps", keymaps::check),
+        ("scroll handlers", scroll_handlers::check),
         ("crate licenses", check_licenses),
         ("philosophy boundary", check_philosophy),
         ("upstream rejection ledger", check_upstream_ledger),

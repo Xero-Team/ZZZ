@@ -2678,8 +2678,11 @@ impl Interactivity {
                     return;
                 }
 
-                let mut pending_mouse_down = pending_mouse_down.borrow_mut();
-                if let Some(mouse_down) = pending_mouse_down.clone()
+                // Read the pending mouse down before invoking the drag
+                // listener. The listener is user code and must not run while
+                // this RefCell is borrowed, or a re-entrant borrow panics.
+                let mouse_down = (*pending_mouse_down.borrow()).clone();
+                if let Some(mouse_down) = mouse_down
                     && !cx.has_active_drag()
                     && (event.position - mouse_down.position).magnitude() > DRAG_THRESHOLD
                     && let Some((drag_value, drag_listener)) = drag_listener.take()
@@ -2694,7 +2697,7 @@ impl Interactivity {
                         cursor_offset,
                         cursor_style: drag_cursor_style,
                     });
-                    pending_mouse_down.take();
+                    pending_mouse_down.borrow_mut().take();
                     window.refresh();
                     cx.stop_propagation();
                 }

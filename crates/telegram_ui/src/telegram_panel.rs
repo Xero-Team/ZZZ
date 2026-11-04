@@ -474,9 +474,15 @@ impl TelegramPanel {
                             .log_err();
                     });
                 }
-                panel
-                    .update(cx, |panel, cx| panel.report_viewing(window, cx))
-                    .log_err();
+                // The scroll handler runs while ListState's RefCell is mutably
+                // borrowed, so report_viewing (which reads is_following_tail)
+                // must be deferred until the borrow is released.
+                let panel = panel.clone();
+                window.defer(cx, move |window, cx| {
+                    panel
+                        .update(cx, |panel, cx| panel.report_viewing(window, cx))
+                        .log_err();
+                });
             });
         // Adopt the state the engine already has. A panel is created after the
         // engine has connected in every window after the first, and the engine

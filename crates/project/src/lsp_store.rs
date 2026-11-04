@@ -4791,11 +4791,17 @@ impl SymbolLocation {
     }
 }
 
+/// Whether an LSP request failed for a benign, transient reason rather than a
+/// real error. rust-analyzer replies with these when the buffer version the
+/// request was based on is already stale, or the request was cancelled.
+fn is_transient_lsp_request_failure(message: &str) -> bool {
+    message.ends_with("content modified") || message.ends_with("server cancelled the request")
+}
+
 fn should_log_lsp_request_failure(message: &str) -> bool {
-    // "content modified" and "server cancelled the request" are noisy failure
-    // modes of rust-analyzer where requests are denied before it has loaded a
-    // project.
-    !(message.ends_with("content modified") || message.ends_with("server cancelled the request"))
+    // Transient failures are noisy modes of rust-analyzer where requests are
+    // denied before it has loaded a project.
+    !is_transient_lsp_request_failure(message)
 }
 
 impl LspStore {
@@ -6048,18 +6054,27 @@ impl LspStore {
 
             let result = lsp_request.await.into_response();
 
-            let response = result.map_err(|err| {
-                let message = format!(
-                    "{} via {} failed: {}",
-                    request.display_name(),
-                    language_server.name(),
-                    err
-                );
-                if should_log_lsp_request_failure(&message) {
+            let response = match result {
+                Ok(response) => response,
+                Err(err) => {
+                    let message = format!(
+                        "{} via {} failed: {}",
+                        request.display_name(),
+                        language_server.name(),
+                        err
+                    );
+                    if is_transient_lsp_request_failure(&message) {
+                        // The buffer changed while the request was in flight, so
+                        // its answer is already stale. Return an empty result
+                        // instead of an error: consumers treat these as "no
+                        // answer yet", and propagating the error only produces
+                        // noisy ERROR logs on both sides of the RPC boundary.
+                        return Ok(R::Response::default());
+                    }
                     log::warn!("{message}");
+                    return Err(anyhow!(message));
                 }
-                anyhow::anyhow!(message)
-            })?;
+            };
 
             request
                 .response_from_lsp(
@@ -8384,7 +8399,7 @@ impl LspStore {
                         match server_task.await {
                             Ok(response) => responses.push((server_id, response)),
                             // rust-analyzer likes to error with this when its still loading up
-                            Err(e) if format!("{e:#}").ends_with("content modified") => (),
+                            Err(e) if is_transient_lsp_request_failure(&format!("{e:#}")) => (),
                             Err(e) => log::error!(
                                 "Error handling response for inlay hints request: {e:#}"
                             ),
@@ -9969,7 +9984,7 @@ impl LspStore {
                 match response_result {
                     Ok(response) => responses.push((server_id, response)),
                     // rust-analyzer likes to error with this when its still loading up
-                    Err(e) if format!("{e:#}").ends_with("content modified") => (),
+                    Err(e) if is_transient_lsp_request_failure(&format!("{e:#}")) => (),
                     Err(e) => log::error!("Error handling response for request {request:?}: {e:#}"),
                 }
             }
@@ -14450,7 +14465,7 @@ impl LspStore {
                         match server_task.await {
                             Ok(response) => responses.push((server_id, response)),
                             // rust-analyzer likes to error with this when its still loading up
-                            Err(e) if format!("{e:#}").ends_with("content modified") => (),
+                            Err(e) if is_transient_lsp_request_failure(&format!("{e:#}")) => (),
                             Err(e) => log::error!(
                                 "Error handling response for request {request:?}: {e:#}"
                             ),
@@ -16383,12 +16398,12 @@ mod tests {
 
     #[test]
     fn should_log_lsp_request_failure_suppresses_known_noise() {
-        assert!(!should_log_lsp_request_failure(
-            "Get diagnostics via rust-analyzer failed: content modified"
-        ));
-        assert!(!should_log_lsp_request_failure(
-            "Get diagnostics via rust-analyzer failed: server cancelled the request"
-        ));
+        let content_modified = "Get diagnostics via rust-analyzer failed: content modified";
+        let cancelled = "Get diagnostics via rust-analyzer failed: server cancelled the request";
+        assert!(is_transient_lsp_request_failure(content_modified));
+        assert!(is_transient_lsp_request_failure(cancelled));
+        assert!(!should_log_lsp_request_failure(content_modified));
+        assert!(!should_log_lsp_request_failure(cancelled));
 
         assert!(should_log_lsp_request_failure(
             "Get diagnostics via rust-analyzer failed: server shut down"
