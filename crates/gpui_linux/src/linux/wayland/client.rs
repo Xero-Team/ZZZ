@@ -1760,19 +1760,19 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
             } => {
                 let focused_window = state.keyboard_focused_window.clone();
 
-                let keymap_state = state
-                    .keymap_state
-                    .as_mut()
-                    .expect("value should have the expected type");
+                // The compositor can send modifiers before a keymap that
+                // libxkbcommon rejects; there is no state to update then.
+                let Some(keymap_state) = state.keymap_state.as_mut() else {
+                    log::debug!("Ignoring modifier event without a compiled keymap");
+                    return;
+                };
                 let old_layout =
                     keymap_state.serialize_layout(xkbcommon::xkb::STATE_LAYOUT_EFFECTIVE);
                 keymap_state.update_mask(mods_depressed, mods_latched, mods_locked, 0, 0, group);
-                state.modifiers = modifiers_from_xkb(keymap_state);
-                let keymap_state = state
-                    .keymap_state
-                    .as_mut()
-                    .expect("value should have the expected type");
-                state.capslock = capslock_from_xkb(keymap_state);
+                let modifiers = modifiers_from_xkb(keymap_state);
+                let capslock = capslock_from_xkb(keymap_state);
+                state.modifiers = modifiers;
+                state.capslock = capslock;
 
                 let input = PlatformInput::ModifiersChanged(ModifiersChangedEvent {
                     modifiers: state.modifiers,
@@ -1809,10 +1809,10 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                     return;
                 };
 
-                let keymap_state = state
-                    .keymap_state
-                    .as_ref()
-                    .expect("value should have the expected type");
+                let Some(keymap_state) = state.keymap_state.as_ref() else {
+                    log::debug!("Ignoring key event without a compiled keymap");
+                    return;
+                };
                 let keycode = Keycode::from(key + MIN_KEYCODE);
                 let keysym = keymap_state.key_get_one_sym(keycode);
 
