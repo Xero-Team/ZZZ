@@ -1,8 +1,9 @@
 //! Converts Telegram message entities into a CommonMark whitelist.
 //!
-//! Anything that has no clean CommonMark mapping (spoilers, custom emoji,
-//! unknown entities) makes the whole conversion fail so the caller can fall
-//! back to plain text instead of rendering the message wrong.
+//! Entities with no clean CommonMark mapping (spoilers, custom emoji, unknown
+//! entities) are skipped so the rest of the message keeps its formatting. A
+//! rendered entity whose offset cannot be mapped still makes the whole
+//! conversion fail, so the caller can fall back to plain text.
 
 use grammers_tl_types as tl;
 use std::collections::HashSet;
@@ -28,14 +29,15 @@ enum EntityKind {
 
 /// Converts a message body plus its Telegram entities into CommonMark.
 ///
-/// Returns `None` when an entity cannot be represented, when any entity offset
-/// is out of range, or when two formatting spans cross. A code block entity that
-/// ends one unit past the text is clamped, because clients strip a trailing
-/// code block's newline after measuring the entity. Mentions, URLs, emails,
-/// phone numbers, hashtags, bot commands, cashtags, and underlines are treated
-/// as plain text because CommonMark has no equivalent. Nested spans are kept.
-/// Literal ASCII punctuation outside code spans is backslash-escaped, so the
-/// returned markdown parses back to the same text.
+/// Returns `None` when a rendered entity's offset is out of range or when two
+/// formatting spans cross, because either would render the message wrong.
+/// Entities with no CommonMark representation are dropped individually. A code
+/// block entity that ends one unit past the text is clamped, because clients
+/// strip a trailing code block's newline after measuring the entity. Mentions,
+/// URLs, emails, phone numbers, hashtags, bot commands, cashtags, underlines,
+/// and spoilers are treated as plain text because CommonMark has no equivalent.
+/// Nested spans are kept. Literal ASCII punctuation outside code spans is
+/// backslash-escaped, so the returned markdown parses back to the same text.
 pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -> Option<String> {
     if entities.is_empty() {
         return None;
@@ -83,7 +85,10 @@ pub fn entities_to_markdown(text: &str, entities: &[tl::enums::MessageEntity]) -
             | tl::enums::MessageEntity::Hashtag(_)
             | tl::enums::MessageEntity::BotCommand(_)
             | tl::enums::MessageEntity::Cashtag(_) => continue,
-            _ => return None,
+            // Spoilers, custom emoji, and entities added by newer layers have
+            // no CommonMark equivalent. Skip them rather than discarding the
+            // formatting the message does carry.
+            _ => continue,
         };
 
         let start_byte = utf16_offset_to_byte(text, offset)?;
@@ -491,8 +496,9 @@ mod tests {
     }
 
     #[test]
-    fn unmappable_entity_falls_back() {
-        assert!(entities_to_markdown("secret", &[spoiler(0, 6)]).is_none());
+    fn unmappable_entity_is_skipped() {
+        let result = entities_to_markdown("bold secret", &[bold(0, 4), spoiler(5, 6)]).unwrap();
+        assert_eq!(result, "**bold** secret");
     }
 
     #[test]

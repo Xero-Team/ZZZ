@@ -104,16 +104,24 @@ pub struct WebPageSnapshot {
 /// A poll shown in a message.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PollSnapshot {
+    /// Telegram's poll id, used to match `updateMessagePoll` updates.
+    pub id: i64,
     pub question: String,
     pub options: Vec<PollOptionSnapshot>,
     pub closed: bool,
     pub multiple_choice: bool,
+    pub quiz: bool,
+    pub total_voters: i32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PollOptionSnapshot {
     pub text: String,
     pub voters: i32,
+    pub chosen: bool,
+    pub correct: bool,
+    /// The opaque option bytes required by `messages.sendVote`.
+    pub option: Vec<u8>,
 }
 
 /// A shared contact card.
@@ -181,7 +189,11 @@ impl MediaSnapshot {
     pub fn is_previewable(&self) -> bool {
         matches!(
             self.kind,
-            MediaKind::Photo | MediaKind::Sticker | MediaKind::Video | MediaKind::Animation
+            MediaKind::Photo
+                | MediaKind::Sticker
+                | MediaKind::Video
+                | MediaKind::Animation
+                | MediaKind::VideoNote
         )
     }
 
@@ -293,6 +305,11 @@ pub struct MessageSnapshot {
     pub reply_to: Option<Box<ReplySnapshot>>,
     pub forwarded_from: Option<String>,
     pub grouped_id: Option<i64>,
+    /// The forum topic this message belongs to. In forums this is the id of the
+    /// topic's top message.
+    pub topic_id: Option<i32>,
+    /// For channel comment threads, the id of the post the message replies under.
+    pub thread_root_id: Option<i32>,
     pub views: Option<i32>,
     pub action: Option<MessageAction>,
     pub reactions: Vec<ReactionSnapshot>,
@@ -344,6 +361,8 @@ pub struct ChatSnapshot {
     pub username: Option<String>,
     pub kind: ChatKind,
     pub preview: String,
+    /// Whether this supergroup uses forum topics.
+    pub is_forum: bool,
     /// The kind of the last message when its text is empty, so the panel can
     /// localize a media-only preview instead of showing a blank line.
     pub preview_media: Option<MediaKind>,
@@ -365,6 +384,20 @@ pub struct ChatSnapshot {
     pub typing: Option<TypingSnapshot>,
     pub pinned_message: Option<Box<MessageSnapshot>>,
     pub presence: Presence,
+}
+
+/// A forum topic row in a supergroup.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TopicSnapshot {
+    /// The id of the topic's top message.
+    pub id: i32,
+    pub title: String,
+    pub unread_count: i32,
+    pub unread_mentions: i32,
+    pub closed: bool,
+    pub pinned: bool,
+    /// The server-side draft for this topic, if any.
+    pub draft: Option<String>,
 }
 
 /// A search result that can be jumped to.
@@ -415,6 +448,11 @@ pub struct ViewModel {
     pub selected_folder: FolderSelection,
     pub selected_chat: Option<i64>,
     pub history: Vec<MessageSnapshot>,
+    /// Forum topics of the selected chat, when it is a forum.
+    pub topics: Vec<TopicSnapshot>,
+    pub loading_topics: bool,
+    /// The forum topic whose replies are shown, or `None` for the General topic.
+    pub selected_topic: Option<i32>,
     pub draft: String,
     /// A structured error. The engine never builds user-facing strings; the
     /// panel localizes this value.
@@ -577,6 +615,8 @@ mod tests {
             reply_to: None,
             forwarded_from: None,
             grouped_id: None,
+            topic_id: None,
+            thread_root_id: None,
             views: None,
             action: None,
             reactions: Vec::new(),

@@ -15,7 +15,7 @@ use git::{BuildPermalinkParams, GitHostingProviderRegistry, parse_git_remote_url
 use gpui::{
     Action, AnyElement, App, Bounds, ClickEvent, ClipboardEntry, ClipboardItem, Context, ElementId,
     Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, FollowMode, Global, Hsla, Image,
-    IntoElement, ListAlignment, ListState, ParentElement, Pixels, Render, RenderImage,
+    IntoElement, ListAlignment, ListState, ObjectFit, ParentElement, Pixels, Render, RenderImage,
     SharedString, Styled, Subscription, Task, TextStyleRefinement, WeakEntity, Window, actions,
     canvas, div, fill, img, list, point, px, relative, size,
 };
@@ -66,11 +66,16 @@ actions!(
 
 const PANEL_KEY: &str = "TelegramPanel";
 const SAME_SENDER_GROUP_SECONDS: i64 = 5 * 60;
+/// The id of the General topic in a forum supergroup. It is not always part of
+/// `messages.getForumTopics`, so the panel adds it as a leading chip.
+const GENERAL_TOPIC_ID: i32 = 1;
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(150);
 const HISTORY_AUTOLOAD_THRESHOLD: usize = 3;
 /// Height cap for a photo or video preview before it is allowed to shrink the
 /// bubble; taller media is scaled down to this height.
 const MEDIA_MAX_HEIGHT: f32 = 320.;
+/// The fixed height of one tile in an album grid.
+const ALBUM_TILE_HEIGHT: f32 = 160.;
 /// Stickers are small by nature and get a much shorter cap.
 const STICKER_MAX_HEIGHT: f32 = 120.;
 /// Very tall media is widened to this floor so a portrait photo never becomes
@@ -131,6 +136,24 @@ enum ViewMode {
 struct MessageLayout {
     day_separator: Option<String>,
     show_sender: bool,
+}
+
+/// One transcript row. Album items that Telegram created together share a row
+/// so they can be laid out as a grid instead of separate bubbles.
+#[derive(Clone, Debug)]
+struct HistoryRow {
+    messages: Vec<MessageSnapshot>,
+    /// The index of the first message in the underlying history, used to look
+    /// up its [`MessageLayout`].
+    start_index: usize,
+}
+
+impl HistoryRow {
+    fn key(&self) -> MessageKey {
+        self.messages
+            .first()
+            .map_or(MessageKey::Remote(0, 0), MessageKey::for_message)
+    }
 }
 
 /// Identifies a message's cached Markdown entity. Optimistic sends share id `0`,
@@ -198,7 +221,8 @@ pub struct TelegramPanel {
     search_list_state: ListState,
     chat_count: usize,
     search_count: usize,
-    history_ids: Vec<MessageKey>,
+    history_row_ids: Vec<MessageKey>,
+    history_rows: Arc<Vec<HistoryRow>>,
     history_layout: Arc<Vec<MessageLayout>>,
     markdown_cache: HashMap<MessageKey, Entity<Markdown>>,
     composer: Entity<Editor>,
@@ -233,9 +257,14 @@ pub struct TelegramPanel {
     pending_voice: Option<(i64, i32)>,
     /// Media attachments whose card is expanded, keyed by chat and message.
     expanded_media: HashSet<(i64, i32)>,
+    /// Album messages whose thumbnail was already requested, so a missing or
+    /// failed preview does not retry on every snapshot.
+    requested_thumbnails: HashSet<(i64, i32)>,
     last_unread_total: u32,
-    /// The selected chat of the previous snapshot, to detect chat switches.
+    /// The selected chat and topic of the previous snapshot, to detect
+    /// conversation switches and reload the matching draft.
     selected_chat: Option<i64>,
+    selected_topic: Option<i32>,
     /// A message to reveal once its chat history has loaded.
     pending_scroll: Option<PendingScroll>,
     notification_windows: NotificationWindowManager,
@@ -332,6 +361,7 @@ impl TelegramPanel {
                         let draft = composer_draft_text(&text, &this.composer_items);
                         this.engine.send(Command::SetDraft {
                             chat_id,
+                            topic_id: this.view_model.selected_topic,
                             text: draft,
                         });
                         this.engine.send(Command::SetTyping {
@@ -387,7 +417,8 @@ impl TelegramPanel {
             search_list_state: ListState::new(0, ListAlignment::Top, px(100.)),
             chat_count: 0,
             search_count: 0,
-            history_ids: Vec::new(),
+            history_row_ids: Vec::new(),
+            history_rows: Arc::new(Vec::new()),
             history_layout: Arc::new(Vec::new()),
             markdown_cache: HashMap::new(),
             composer,
@@ -414,8 +445,10 @@ impl TelegramPanel {
             _flood_task: None,
             pending_voice: None,
             expanded_media: HashSet::new(),
+            requested_thumbnails: HashSet::new(),
             last_unread_total: 0,
             selected_chat: None,
+            selected_topic: None,
             pending_scroll: None,
             notification_windows: NotificationWindowManager::default(),
             reply_to: None,
@@ -446,6 +479,7 @@ impl TelegramPanel {
         // leave this panel looking unconfigured.
         this.sync_chat_list();
         this.sync_history();
+        this.request_album_thumbnails();
         this.rebuild_markdown(cx);
         this.sync_draft(window, cx);
         this.sync_flood_wait(cx);
@@ -472,6 +506,7 @@ impl TelegramPanel {
         self.notify_new_messages(&previous_chats, window, cx);
         self.sync_chat_list();
         self.sync_history();
+        self.request_album_thumbnails();
         self.rebuild_markdown(cx);
         self.prune_expanded_media();
         self.sync_draft(window, cx);
@@ -520,20 +555,28 @@ impl TelegramPanel {
         });
     }
 
-    /// Loads the stored draft into the composer when the chat changes, so text
-    /// never leaks from one chat into another.
+    /// Loads the stored draft into the composer when the chat or forum topic
+    /// changes, so text never leaks from one conversation into another.
     fn sync_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let selected = self.view_model.selected_chat;
-        if selected == self.selected_chat {
+        let selected_topic = self.view_model.selected_topic;
+        if selected == self.selected_chat && selected_topic == self.selected_topic {
             return;
         }
+        let chat_changed = selected != self.selected_chat;
         self.selected_chat = selected;
+        self.selected_topic = selected_topic;
         self.reply_to = None;
         self.editing = None;
         self.selection.clear();
-        self.unread_divider = self.view_model.selected_chat_snapshot().and_then(|chat| {
-            (chat.unread_count > 0).then_some((chat.id, chat.read_inbox_message_id))
-        });
+        if chat_changed {
+            self.unread_divider = self.view_model.selected_chat_snapshot().and_then(|chat| {
+                (chat.unread_count > 0).then_some((chat.id, chat.read_inbox_message_id))
+            });
+        }
+        // Staged attachments belong to the conversation they were added in;
+        // like the text draft, they must not follow into a different chat or
+        // forum topic.
         self.clear_composer_items(cx);
         let draft = self.view_model.draft.clone();
         if self.composer.read(cx).text(cx) != draft {
@@ -580,9 +623,11 @@ impl TelegramPanel {
         if self.view_model.selected_chat != Some(pending.conversation_chat_id) {
             return;
         }
-        if let Some(index) = self.view_model.history.iter().position(|message| {
-            message.chat_id == pending.message_chat_id && message.id == pending.message_id
-        }) {
+        if let Some(index) = history_row_index(
+            &self.history_rows,
+            pending.message_chat_id,
+            pending.message_id,
+        ) {
             self.history_list_state.scroll_to_reveal_item(index);
             self.pending_scroll = None;
         }
@@ -669,16 +714,13 @@ impl TelegramPanel {
     }
 
     fn sync_history(&mut self) {
-        let new_ids: Vec<MessageKey> = self
-            .view_model
-            .history
-            .iter()
-            .map(MessageKey::for_message)
-            .collect();
-        let previous = std::mem::replace(&mut self.history_ids, new_ids.clone());
+        let rows = build_history_rows(&self.view_model.history);
+        let new_ids: Vec<MessageKey> = rows.iter().map(HistoryRow::key).collect();
+        let previous = std::mem::replace(&mut self.history_row_ids, new_ids.clone());
+        self.history_rows = Arc::new(rows);
+        self.history_layout = Arc::new(build_history_layout(&self.view_model.history));
         if previous == new_ids {
             self.history_list_state.remeasure_items(0..new_ids.len());
-            self.history_layout = Arc::new(build_history_layout(&self.view_model.history));
             return;
         }
         let previous_len = previous.len();
@@ -694,7 +736,41 @@ impl TelegramPanel {
             self.history_list_state.splice(0..previous_len, new_len);
         }
         self.history_list_state.remeasure_items(0..new_len);
-        self.history_layout = Arc::new(build_history_layout(&self.view_model.history));
+    }
+
+    /// Requests thumbnails for album tiles, which have no expandable media card
+    /// to trigger the usual on-demand preview. The set of requested messages
+    /// prevents a retry on every snapshot when Telegram has no thumbnail.
+    fn request_album_thumbnails(&mut self) {
+        let mut requests = Vec::new();
+        for message in &self.view_model.history {
+            if message.grouped_id.is_none() {
+                continue;
+            }
+            let Some(media) = &message.media else {
+                continue;
+            };
+            if !media.is_previewable()
+                || (media.downloaded_path.is_some() && !uses_thumbnail_only(media))
+                || media.thumbnail_state == DownloadState::Downloading
+                || media
+                    .thumbnail_path
+                    .as_deref()
+                    .is_some_and(|path| path.is_file())
+            {
+                continue;
+            }
+            let key = (message.chat_id, message.id);
+            if self.requested_thumbnails.insert(key) {
+                requests.push(key);
+            }
+        }
+        for (chat_id, message_id) in requests {
+            self.engine.send(Command::DownloadThumbnail {
+                chat_id,
+                message_id,
+            });
+        }
     }
 
     /// Keeps the markdown entity for each formatted message in sync with its
@@ -803,6 +879,7 @@ impl TelegramPanel {
         self.reply_to = None;
         self.editing = None;
         self.selection.clear();
+        self.requested_thumbnails.clear();
         window.focus(&self.focus_handle, cx);
         self.engine.send(Command::SelectChat { chat_id });
         self.history_list_state.set_follow_mode(FollowMode::Tail);
@@ -831,6 +908,7 @@ impl TelegramPanel {
         self.reply_to = None;
         self.editing = None;
         self.selection.clear();
+        self.requested_thumbnails.clear();
         window.focus(&self.focus_handle, cx);
         self.engine.send(Command::SelectChatAt { chat_id, message });
         self.history_list_state.set_follow_mode(FollowMode::Tail);
@@ -938,12 +1016,7 @@ impl TelegramPanel {
 
     /// Scrolls to a message in the loaded history, e.g. from a reply preview.
     fn scroll_to_message(&mut self, message_chat_id: i64, message_id: i32, cx: &mut Context<Self>) {
-        if let Some(index) = self
-            .view_model
-            .history
-            .iter()
-            .position(|message| message.chat_id == message_chat_id && message.id == message_id)
-        {
+        if let Some(index) = history_row_index(&self.history_rows, message_chat_id, message_id) {
             self.history_list_state.scroll_to_reveal_item(index);
             cx.notify();
         }
@@ -1040,6 +1113,7 @@ impl TelegramPanel {
             .view_model
             .selected_chat_snapshot()
             .is_some_and(|chat| !chat.can_send)
+            || self.selected_topic_closed()
         {
             return;
         }
@@ -1631,10 +1705,10 @@ impl TelegramPanel {
             .find(|message| message.chat_id == chat_id && message.id == message_id)
             .and_then(|message| message.media.as_ref())
             .is_some_and(|media| {
-                matches!(
-                    media.kind,
-                    MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
-                ) && media.downloaded_path.is_none()
+                media.is_previewable()
+                    // A video-like file is never rendered inline, so its poster
+                    // is still worth fetching after the original arrives.
+                    && (media.downloaded_path.is_none() || uses_thumbnail_only(media))
                     && media
                         .thumbnail_path
                         .as_deref()
@@ -2104,6 +2178,13 @@ impl TelegramPanel {
                         .child(CountBadge::new(chat.unread_count.max(0) as usize)),
                 );
             }
+            if chat.unread_mentions > 0 {
+                end_slot = end_slot.child(
+                    Label::new(format!("@{}", chat.unread_mentions))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Accent),
+                );
+            }
 
             let panel_for_menu = panel.clone();
             let row = ListItem::new(ElementId::Name(format!("telegram-chat-{chat_id}").into()))
@@ -2222,6 +2303,94 @@ impl TelegramPanel {
         row.into_any_element()
     }
 
+    /// The forum topic selector for a supergroup. The General chip is always
+    /// present so a topic view can be left without going back to the chat list.
+    fn render_topic_bar(&self, chat: &ChatSnapshot, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !chat.is_forum {
+            return None;
+        }
+        let selected = self.view_model.selected_topic;
+        let panel = cx.entity().downgrade();
+        let listed_unread: i32 = self
+            .view_model
+            .topics
+            .iter()
+            .filter(|topic| topic.id != GENERAL_TOPIC_ID)
+            .map(|topic| topic.unread_count.max(0))
+            .sum();
+        let general_unread = if self.view_model.loading_topics && self.view_model.topics.is_empty()
+        {
+            // Until the topic list arrives, the chat total cannot be split.
+            0
+        } else {
+            self.view_model
+                .topics
+                .iter()
+                .find(|topic| topic.id == GENERAL_TOPIC_ID)
+                .map_or_else(
+                    || chat.unread_count.max(0).saturating_sub(listed_unread),
+                    |topic| topic.unread_count.max(0),
+                )
+        };
+        let general_title = if general_unread > 0 {
+            format!(
+                "{}  {general_unread}",
+                tr(cx, "telegram_panel.topics.general", "General")
+            )
+        } else {
+            tr(cx, "telegram_panel.topics.general", "General")
+        };
+        let mut bar = h_flex()
+            .id("telegram-topic-bar")
+            .w_full()
+            .flex_none()
+            .px_2()
+            .py_1()
+            .gap_1()
+            .border_b_1()
+            .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().panel_background)
+            .overflow_x_scroll();
+        bar = bar.child(render_topic_chip(
+            panel.clone(),
+            "telegram-topic-general".to_owned(),
+            general_title,
+            selected.is_none(),
+            Command::SelectTopic {
+                chat_id: chat.id,
+                topic_id: None,
+            },
+            cx,
+        ));
+        for topic in &self.view_model.topics {
+            // The General topic can be part of the server response; the
+            // synthetic chip above already represents it.
+            if topic.id == GENERAL_TOPIC_ID {
+                continue;
+            }
+            let title = if topic.unread_count > 0 {
+                format!("{}  {}", topic.title, topic.unread_count)
+            } else {
+                topic.title.clone()
+            };
+            bar = bar.child(render_topic_chip(
+                panel.clone(),
+                format!("telegram-topic-{}", topic.id),
+                title,
+                selected == Some(topic.id),
+                Command::SelectTopic {
+                    chat_id: chat.id,
+                    topic_id: Some(topic.id),
+                },
+                cx,
+            ));
+        }
+        if self.view_model.loading_topics {
+            bar = bar.child(Icon::new(IconName::LoadCircle).size(IconSize::XSmall));
+        }
+        Some(bar.into_any_element())
+    }
+
     fn render_conversation(
         &mut self,
         narrow: bool,
@@ -2236,7 +2405,7 @@ impl TelegramPanel {
             ));
         };
 
-        let history = Arc::new(self.view_model.history.clone());
+        let rows = self.history_rows.clone();
         let layout = self.history_layout.clone();
         let markdown = Arc::new(self.markdown_cache.clone());
         let panel = cx.entity().downgrade();
@@ -2247,22 +2416,33 @@ impl TelegramPanel {
         let max_content_width = TelegramPanelSettings::get_global(cx).max_content_width;
         let selection_mode = !self.selection.is_empty();
         let selection = Arc::new(self.selection.clone());
+        // Broadcast channels report view counts instead of delivery ticks; the
+        // outbox read position is not a per-post read receipt there.
+        let read_outbox_message_id =
+            (chat.kind != telegram::ChatKind::Channel).then_some(chat.read_outbox_message_id);
         let unread_divider = self
             .unread_divider
             .filter(|(chat_id, _)| *chat_id == chat.id)
             .map(|(_, after_message_id)| after_message_id);
 
         let transcript = list(self.history_list_state.clone(), move |index, window, cx| {
-            let Some(message) = history.get(index).cloned() else {
+            let Some(row) = rows.get(index).cloned() else {
                 return div().into_any_element();
             };
-            let message_layout = layout.get(index).cloned().unwrap_or_default();
-            let selected = selection.contains(&message.id);
-            let mut row = v_flex();
-            if unread_divider.is_some_and(|after| {
-                message.id > after && (index == 0 || history[index - 1].id <= after)
-            }) {
-                row = row.child(
+            let Some(first) = row.messages.first().cloned() else {
+                return div().into_any_element();
+            };
+            let first_layout = layout.get(row.start_index).cloned().unwrap_or_default();
+            let previous_id = index
+                .checked_sub(1)
+                .and_then(|index| rows.get(index))
+                .and_then(|row| row.messages.last())
+                .map(|message| message.id);
+            let mut column = v_flex();
+            if unread_divider
+                .is_some_and(|after| first.id > after && previous_id.is_none_or(|id| id <= after))
+            {
+                column = column.child(
                     h_flex().w_full().justify_center().py_1().child(
                         Label::new(tr(
                             cx,
@@ -2274,46 +2454,80 @@ impl TelegramPanel {
                     ),
                 );
             }
-            let message_element = render_message(
-                &message,
-                &message_layout,
-                &markdown,
-                &panel,
-                colors,
-                selection_mode,
-                selected,
-                window,
-                cx,
-            );
-            let message_element = if selection_mode {
-                let panel = panel.clone();
-                let message_id = message.id;
-                div()
-                    .id(ElementId::Name(
-                        format!("telegram-message-select-{}", message.id).into(),
-                    ))
-                    .w_full()
-                    .cursor_pointer()
-                    .on_click(move |_, _, cx| {
-                        panel
-                            .update(cx, |panel, cx| panel.toggle_selection(message_id, cx))
-                            .log_err();
-                    })
-                    .child(message_element)
-                    .into_any_element()
+            let content = if selection_mode {
+                let mut stack = v_flex().w_full();
+                for (offset, message) in row.messages.iter().cloned().enumerate() {
+                    let message_layout = layout
+                        .get(row.start_index + offset)
+                        .cloned()
+                        .unwrap_or_default();
+                    let selected = selection.contains(&message.id);
+                    let message_id = message.id;
+                    let panel = panel.clone();
+                    let element = render_message(
+                        &message,
+                        &message_layout,
+                        &markdown,
+                        &panel,
+                        colors,
+                        true,
+                        selected,
+                        read_outbox_message_id,
+                        window,
+                        cx,
+                    );
+                    stack = stack.child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("telegram-message-select-{}", message.id).into(),
+                            ))
+                            .w_full()
+                            .cursor_pointer()
+                            .on_click(move |_, _, cx| {
+                                panel
+                                    .update(cx, |panel, cx| panel.toggle_selection(message_id, cx))
+                                    .log_err();
+                            })
+                            .child(element),
+                    );
+                }
+                stack.into_any_element()
+            } else if row.messages.len() > 1 {
+                render_album_row(
+                    &row,
+                    &first_layout,
+                    &markdown,
+                    &panel,
+                    colors,
+                    read_outbox_message_id,
+                    window,
+                    cx,
+                )
             } else {
-                message_element
+                render_message(
+                    &first,
+                    &first_layout,
+                    &markdown,
+                    &panel,
+                    colors,
+                    false,
+                    false,
+                    read_outbox_message_id,
+                    window,
+                    cx,
+                )
             };
-            row.child(
-                h_flex().w_full().justify_center().child(
-                    div()
-                        .when_some(max_content_width, |this, max| this.max_w(max))
-                        .w_full()
-                        .min_w_0()
-                        .child(message_element),
-                ),
-            )
-            .into_any_element()
+            column
+                .child(
+                    h_flex().w_full().justify_center().child(
+                        div()
+                            .when_some(max_content_width, |this, max| this.max_w(max))
+                            .w_full()
+                            .min_w_0()
+                            .child(content),
+                    ),
+                )
+                .into_any_element()
         })
         .size_full();
 
@@ -2466,6 +2680,7 @@ impl TelegramPanel {
         });
 
         let show_jump_to_bottom = !self.history_list_state.is_following_tail();
+        let topic_bar = self.render_topic_bar(&chat, cx);
 
         let conversation = v_flex()
             .size_full()
@@ -2479,6 +2694,7 @@ impl TelegramPanel {
                     .border_color(cx.theme().colors().border)
                     .child(self.render_centered(header, cx)),
             )
+            .when_some(topic_bar, |this, bar| this.child(bar))
             .when_some(pinned, |this, pinned| this.child(pinned))
             .child(div().flex_1().min_h_0().child(transcript))
             .child(composer)
@@ -2524,10 +2740,26 @@ impl TelegramPanel {
             .bg(cx.theme().colors().panel_background);
         let mut has_content = false;
 
-        if let Some(chat) = self.view_model.selected_chat_snapshot()
-            && !chat.can_send
-        {
+        let chat_read_only = self
+            .view_model
+            .selected_chat_snapshot()
+            .is_some_and(|chat| !chat.can_send);
+        let topic_closed = self.selected_topic_closed();
+        if chat_read_only || topic_closed {
             has_content = true;
+            let message = if chat_read_only {
+                tr(
+                    cx,
+                    "telegram_panel.composer.read_only",
+                    "You cannot send messages in this chat",
+                )
+            } else {
+                tr(
+                    cx,
+                    "telegram_panel.composer.topic_closed",
+                    "This topic is closed",
+                )
+            };
             banner = banner.child(
                 h_flex()
                     .w_full()
@@ -2537,13 +2769,9 @@ impl TelegramPanel {
                     .items_center()
                     .child(Icon::new(IconName::FileLock).size(IconSize::XSmall))
                     .child(
-                        Label::new(tr(
-                            cx,
-                            "telegram_panel.composer.read_only",
-                            "You cannot send messages in this chat",
-                        ))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
+                        Label::new(message)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted),
                     ),
             );
         }
@@ -2658,13 +2886,27 @@ impl TelegramPanel {
         has_content.then(|| banner.into_any_element())
     }
 
+    /// Whether the open forum topic no longer accepts replies. The chat-level
+    /// `can_send` stays true for a forum even when one topic is closed.
+    fn selected_topic_closed(&self) -> bool {
+        let Some(topic_id) = self.view_model.selected_topic else {
+            return false;
+        };
+        self.view_model
+            .topics
+            .iter()
+            .find(|topic| topic.id == topic_id)
+            .is_some_and(|topic| topic.closed)
+    }
+
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let expanded = self.composer_expanded;
         let text = self.composer.read(cx).text(cx);
         let can_send = self
             .view_model
             .selected_chat_snapshot()
-            .is_none_or(|chat| chat.can_send);
+            .is_none_or(|chat| chat.can_send)
+            && !self.selected_topic_closed();
         let composer_empty = text.trim().is_empty() && self.composer_items.is_empty() || !can_send;
         let message_count = if composer_empty {
             0
@@ -3303,6 +3545,7 @@ fn render_message(
     colors: MessageBubbleColors,
     selection_mode: bool,
     selected: bool,
+    read_outbox_message_id: Option<i32>,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -3388,56 +3631,12 @@ fn render_message(
         bubble = bubble.child(render_reactions(message, panel, cx));
     }
 
-    bubble = bubble.child(
-        h_flex()
-            .justify_end()
-            .gap_1()
-            .when_some(message.views, |this, views| {
-                this.child(
-                    Label::new(format!("👁 {views}"))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                )
-            })
-            .child(
-                Label::new(clock_time(message.timestamp_unix))
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted),
-            )
-            .when(message.edited, |this| {
-                this.child(
-                    Label::new(tr(cx, "telegram_panel.message.edited", "edited"))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                )
-            })
-            .when(message.send_state == telegram::SendState::Sending, |this| {
-                this.child(Icon::new(IconName::LoadCircle).size(IconSize::XSmall))
-            })
-            .when(message.send_state == telegram::SendState::Failed, |this| {
-                let panel = panel.clone();
-                let chat_id = message.chat_id;
-                let local_id = message.local_id;
-                this.child(
-                    Button::new(
-                        ElementId::Name(
-                            format!("telegram-retry-{}", message.local_id.unwrap_or(0)).into(),
-                        ),
-                        tr(cx, "telegram_panel.message.retry", "Retry"),
-                    )
-                    .label_size(LabelSize::XSmall)
-                    .on_click(move |_, _, cx| {
-                        if let Some(local_id) = local_id {
-                            panel
-                                .update(cx, |panel, cx| {
-                                    panel.dispatch(Command::RetrySend { chat_id, local_id }, cx)
-                                })
-                                .log_err();
-                        }
-                    }),
-                )
-            }),
-    );
+    bubble = bubble.child(render_message_footer(
+        message,
+        read_outbox_message_id,
+        panel,
+        cx,
+    ));
 
     let bubble = wrap_in_context_menu(message, bubble.into_any_element(), panel);
     let mut item = h_flex().min_w_0().gap_1().items_end();
@@ -3464,6 +3663,323 @@ fn render_message(
     }
 
     column.into_any_element()
+}
+
+/// The trailing footer of a bubble: views, time, delivery ticks, edits, and the
+/// retry button for a failed send.
+fn render_message_footer(
+    message: &MessageSnapshot,
+    read_outbox_message_id: Option<i32>,
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
+    h_flex()
+        .justify_end()
+        .gap_1()
+        .when_some(message.views, |this, views| {
+            this.child(
+                Label::new(format!("👁 {views}"))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted),
+            )
+        })
+        .child(
+            Label::new(clock_time(message.timestamp_unix))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        )
+        .when_some(read_outbox_message_id, |this, read_outbox_message_id| {
+            this.when(
+                message.outgoing
+                    && message.send_state == telegram::SendState::Sent
+                    && message.local_id.is_none(),
+                |this| {
+                    let read = message.id != 0 && message.id <= read_outbox_message_id;
+                    this.child(
+                        Icon::new(if read {
+                            IconName::CheckDouble
+                        } else {
+                            IconName::Check
+                        })
+                        .size(IconSize::XSmall)
+                        .color(if read {
+                            Color::Accent
+                        } else {
+                            Color::Muted
+                        }),
+                    )
+                },
+            )
+        })
+        .when(message.edited, |this| {
+            this.child(
+                Label::new(tr(cx, "telegram_panel.message.edited", "edited"))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted),
+            )
+        })
+        .when(message.send_state == telegram::SendState::Sending, |this| {
+            this.child(Icon::new(IconName::LoadCircle).size(IconSize::XSmall))
+        })
+        .when(message.send_state == telegram::SendState::Failed, |this| {
+            let panel = panel.clone();
+            let chat_id = message.chat_id;
+            let local_id = message.local_id;
+            this.child(
+                Button::new(
+                    ElementId::Name(
+                        format!("telegram-retry-{}", message.local_id.unwrap_or(0)).into(),
+                    ),
+                    tr(cx, "telegram_panel.message.retry", "Retry"),
+                )
+                .label_size(LabelSize::XSmall)
+                .on_click(move |_, _, cx| {
+                    if let Some(local_id) = local_id {
+                        panel
+                            .update(cx, |panel, cx| {
+                                panel.dispatch(Command::RetrySend { chat_id, local_id }, cx)
+                            })
+                            .log_err();
+                    }
+                }),
+            )
+        })
+        .into_any_element()
+}
+
+/// Renders an album as one bubble with a compact grid, so a set of photos reads
+/// as a single message instead of a stack of cards.
+fn render_album_row(
+    row: &HistoryRow,
+    layout: &MessageLayout,
+    markdown: &HashMap<MessageKey, Entity<Markdown>>,
+    panel: &WeakEntity<TelegramPanel>,
+    colors: MessageBubbleColors,
+    read_outbox_message_id: Option<i32>,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    let first = &row.messages[0];
+    let last = row.messages.last().unwrap_or(first);
+    let mut column = v_flex().w_full().px_3().py_1().gap_1();
+    if let Some(day) = &layout.day_separator {
+        column = column.child(
+            h_flex().w_full().justify_center().py_1().child(
+                Label::new(day.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted),
+            ),
+        );
+    }
+    let background = if first.outgoing {
+        colors.outgoing
+    } else {
+        colors.incoming
+    };
+    let mut bubble = v_flex()
+        .min_w_0()
+        .gap_1()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().colors().border)
+        .overflow_hidden()
+        .bg(background);
+    if let Some(forwarded_from) = &first.forwarded_from {
+        bubble = bubble.child(
+            Label::new(
+                tr(
+                    cx,
+                    "telegram_panel.message.forwarded_from",
+                    "Forwarded from {sender}",
+                )
+                .replace("{sender}", forwarded_from),
+            )
+            .size(LabelSize::XSmall)
+            .color(Color::Muted),
+        );
+    }
+    if layout.show_sender && !first.outgoing && !first.sender_name.is_empty() {
+        bubble = bubble.child(
+            Label::new(first.sender_name.clone())
+                .size(LabelSize::XSmall)
+                .weight(gpui::FontWeight::MEDIUM),
+        );
+    }
+    if let Some(reply) = &first.reply_to {
+        bubble = bubble.child(render_reply_preview(first, reply, panel, cx));
+    }
+    bubble = bubble.child(render_album_grid(&row.messages, panel, cx));
+    if let Some(caption) = row.messages.iter().find(|message| !message.text.is_empty()) {
+        bubble = bubble.child(render_body_text(caption, markdown, panel, window, cx));
+    }
+    if let Some(reactions) = row
+        .messages
+        .iter()
+        .find(|message| !message.reactions.is_empty())
+    {
+        bubble = bubble.child(render_reactions(reactions, panel, cx));
+    }
+    bubble = bubble.child(render_message_footer(
+        last,
+        read_outbox_message_id,
+        panel,
+        cx,
+    ));
+    let bubble = wrap_in_context_menu(first, bubble.into_any_element(), panel);
+    let item = h_flex().min_w_0().gap_1().items_end().child(bubble);
+    if first.outgoing {
+        column = column.items_end().child(item);
+    } else {
+        column = column.items_start().child(item);
+    }
+    column.into_any_element()
+}
+
+/// Two tiles per line, with the last odd tile filling the line. Each tile is
+/// cropped to a fixed height so mixed portrait and landscape items keep a
+/// stable grid.
+fn render_album_grid(
+    messages: &[MessageSnapshot],
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
+    let mut grid = v_flex().w_full().min_w_0().gap_1();
+    for chunk in messages.chunks(2) {
+        let mut line = h_flex().w_full().min_w_0().gap_1();
+        for message in chunk {
+            line = line.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(ALBUM_TILE_HEIGHT))
+                    .child(render_album_tile(message, panel, cx)),
+            );
+        }
+        grid = grid.child(line);
+    }
+    grid.into_any_element()
+}
+
+fn render_album_tile(
+    message: &MessageSnapshot,
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
+    let Some(media) = message.media.as_ref() else {
+        return div().into_any_element();
+    };
+    let mut media = media.clone();
+    media.forget_missing_cache_files();
+    let video_like = is_video_like(media.kind);
+    let thumbnail_only = uses_thumbnail_only(&media);
+    let previewable = media.is_previewable();
+    let preview_path = if !previewable {
+        None
+    } else if thumbnail_only {
+        media.thumbnail_path.clone()
+    } else {
+        media
+            .downloaded_path
+            .clone()
+            .or_else(|| media.thumbnail_path.clone())
+    };
+    let chat_id = message.chat_id;
+    let message_id = message.id;
+    let tile = if let Some(path) = preview_path {
+        let image = img(path)
+            .size_full()
+            .object_fit(ObjectFit::Cover)
+            .rounded_sm();
+        if video_like {
+            let open_path = media.downloaded_path.clone();
+            let panel = panel.clone();
+            div()
+                .id(ElementId::Name(
+                    format!("telegram-album-tile-{chat_id}-{message_id}").into(),
+                ))
+                .relative()
+                .size_full()
+                .cursor_pointer()
+                .child(image)
+                .child(video_play_overlay(media.duration_seconds))
+                .on_click(move |_, _, cx| {
+                    if let Some(path) = open_path.clone().filter(|path| path.is_file()) {
+                        cx.open_with_system(&path);
+                    } else {
+                        panel
+                            .update(cx, |panel, cx| {
+                                panel.dispatch(
+                                    Command::DownloadMedia {
+                                        chat_id,
+                                        message_id,
+                                    },
+                                    cx,
+                                )
+                            })
+                            .log_err();
+                    }
+                })
+                .into_any_element()
+        } else {
+            image.into_any_element()
+        }
+    } else {
+        let panel = panel.clone();
+        let downloaded_path = media.downloaded_path.clone();
+        let downloadable = media.is_downloadable();
+        let icon = match media.kind {
+            MediaKind::Photo | MediaKind::Animation | MediaKind::VideoNote => IconName::Image,
+            MediaKind::Video => IconName::PlayFilled,
+            MediaKind::Voice | MediaKind::Audio => IconName::Mic,
+            MediaKind::Sticker => IconName::Sparkle,
+            _ => IconName::FileGeneric,
+        };
+        div()
+            .id(ElementId::Name(
+                format!("telegram-album-tile-{chat_id}-{message_id}").into(),
+            ))
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap_1()
+            .rounded_sm()
+            .bg(cx.theme().colors().editor_background)
+            .cursor_pointer()
+            .on_click(move |_, _, cx| {
+                if let Some(path) = downloaded_path.clone().filter(|path| path.is_file()) {
+                    cx.open_with_system(&path);
+                    return;
+                }
+                panel
+                    .update(cx, |panel, cx| {
+                        if previewable {
+                            panel.maybe_download_preview(chat_id, message_id);
+                        } else if downloadable {
+                            panel.dispatch(
+                                Command::DownloadMedia {
+                                    chat_id,
+                                    message_id,
+                                },
+                                cx,
+                            );
+                        }
+                        cx.notify();
+                    })
+                    .log_err();
+            })
+            .child(Icon::new(icon).size(IconSize::Small))
+            .child(
+                Label::new(media_display_name(&media, cx))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+            .into_any_element()
+    };
+    wrap_in_context_menu(message, tile, panel)
 }
 
 /// The localized one-line description of a service message.
@@ -4134,7 +4650,7 @@ fn render_media(
         return render_webpage(media, chat_id, message_id, cx);
     }
     match media.kind {
-        MediaKind::Poll => return render_poll(media, cx),
+        MediaKind::Poll => return render_poll(message, media, panel, cx),
         MediaKind::Contact => return render_contact(media, cx),
         MediaKind::Geo => return render_geo(media, cx),
         _ => {}
@@ -4255,13 +4771,36 @@ fn render_media_content(
     let mut media = media.clone();
     media.forget_missing_cache_files();
     match media.kind {
-        MediaKind::Photo | MediaKind::Sticker | MediaKind::Video => {
+        MediaKind::Photo
+        | MediaKind::Sticker
+        | MediaKind::Video
+        | MediaKind::Animation
+        | MediaKind::VideoNote => {
             render_media_preview(&media, chat_id, message_id, display_size, panel, cx)
         }
         MediaKind::Voice => render_voice_action(&media, chat_id, message_id, panel, cx),
         _ if media.is_downloadable() => render_media_action(&media, chat_id, message_id, panel, cx),
         _ => div().into_any_element(),
     }
+}
+
+/// Kinds whose downloaded file is a video container rather than a cacheable
+/// still image, so only their thumbnail can be shown inline.
+fn is_video_like(kind: MediaKind) -> bool {
+    matches!(
+        kind,
+        MediaKind::Video | MediaKind::Animation | MediaKind::VideoNote
+    )
+}
+
+/// Media whose original file is not a still image: videos and animated
+/// stickers. Only their thumbnail can be rendered inline.
+fn uses_thumbnail_only(media: &MediaSnapshot) -> bool {
+    is_video_like(media.kind)
+        || (media.kind == MediaKind::Sticker
+            && media.mime_type.as_deref().is_some_and(|mime| {
+                mime == "application/x-tgsticker" || mime.starts_with("video/")
+            }))
 }
 
 /// Renders a photo, sticker, or video poster, with a play overlay for videos.
@@ -4278,9 +4817,11 @@ fn render_media_preview(
     } else {
         rems_from_px(MEDIA_MAX_HEIGHT)
     };
+    let video_like = is_video_like(media.kind);
+    let thumbnail_only = uses_thumbnail_only(media);
     let mut column = v_flex().w_full().min_w_0().gap_1();
     // A downloaded video is not an image, so only its thumbnail can be shown.
-    let preview_path = if media.kind == MediaKind::Video {
+    let preview_path = if thumbnail_only {
         media.thumbnail_path.as_ref()
     } else {
         media
@@ -4295,7 +4836,7 @@ fn render_media_preview(
         } else {
             image.max_h(max_height)
         };
-        let preview = if media.kind == MediaKind::Video {
+        let preview = if video_like {
             let panel = panel.clone();
             let open_path = media.downloaded_path.clone();
             v_flex()
@@ -4339,7 +4880,7 @@ fn render_media_preview(
             .size(LabelSize::XSmall)
             .color(Color::Muted),
         );
-    } else if media.downloaded_path.is_none() || media.kind == MediaKind::Video {
+    } else if media.downloaded_path.is_none() || thumbnail_only {
         column = column.child(render_media_action(media, chat_id, message_id, panel, cx));
     }
     column.into_any_element()
@@ -4637,10 +5178,25 @@ fn media_display_size(media: &MediaSnapshot) -> Option<(Pixels, Pixels)> {
     Some((px(display_width), px(display_height)))
 }
 
-fn render_poll(media: &MediaSnapshot, cx: &mut App) -> AnyElement {
+fn render_poll(
+    message: &MessageSnapshot,
+    media: &MediaSnapshot,
+    panel: &WeakEntity<TelegramPanel>,
+    cx: &mut App,
+) -> AnyElement {
     let Some(poll) = &media.poll else {
         return div().into_any_element();
     };
+    let chat_id = message.chat_id;
+    let message_id = message.id;
+    let quiz_answered = poll.quiz && poll.options.iter().any(|option| option.chosen);
+    let can_vote = !poll.closed && !quiz_answered && message.id != 0 && message.local_id.is_none();
+    let chosen: Vec<Vec<u8>> = poll
+        .options
+        .iter()
+        .filter(|option| option.chosen)
+        .map(|option| option.option.clone())
+        .collect();
     let mut card = v_flex()
         .w_full()
         .min_w_0()
@@ -4655,26 +5211,121 @@ fn render_poll(media: &MediaSnapshot, cx: &mut App) -> AnyElement {
                 .size(LabelSize::Small)
                 .weight(gpui::FontWeight::MEDIUM),
         );
-    for option in &poll.options {
-        card = card.child(
-            h_flex()
-                .w_full()
-                .gap_2()
-                .items_center()
-                .child(
-                    Label::new(option.text.clone())
-                        .size(LabelSize::XSmall)
-                        .flex_1()
-                        .truncate(),
-                )
-                .child(
-                    Label::new(option.voters.to_string())
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
+    for (index, option) in poll.options.iter().enumerate() {
+        let ratio = if poll.total_voters > 0 {
+            option.voters as f32 / poll.total_voters as f32
+        } else {
+            0.0
+        };
+        let option_bytes = option.option.clone();
+        let mut row = div()
+            .id(ElementId::Name(
+                format!("telegram-poll-option-{chat_id}-{message_id}-{index}").into(),
+            ))
+            .relative()
+            .w_full()
+            .min_w_0()
+            .rounded_sm()
+            .overflow_hidden();
+        if ratio > 0.0 {
+            row = row.child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left_0()
+                    .w(relative(ratio))
+                    .bg(cx.theme().colors().element_active.opacity(0.5)),
+            );
+        }
+        let label_color = if option.correct && (poll.closed || quiz_answered) {
+            Color::Success
+        } else if option.chosen {
+            Color::Accent
+        } else {
+            Color::Default
+        };
+        let mut content = h_flex()
+            .w_full()
+            .min_w_0()
+            .px_2()
+            .py_1()
+            .gap_2()
+            .items_center()
+            .child(
+                div().flex_none().child(
+                    Icon::new(if option.chosen {
+                        IconName::Check
+                    } else {
+                        IconName::Circle
+                    })
+                    .size(IconSize::XSmall)
+                    .color(label_color),
                 ),
-        );
+            )
+            .child(
+                Label::new(option.text.clone())
+                    .size(LabelSize::XSmall)
+                    .flex_1()
+                    .truncate(),
+            );
+        if let Some(voters) = (option.voters > 0).then_some(option.voters) {
+            content = content.child(
+                Label::new(voters.to_string())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted),
+            );
+        }
+        row = row.child(content);
+        if can_vote && !option_bytes.is_empty() {
+            let panel = panel.clone();
+            let selected = if poll.multiple_choice {
+                let mut selected = chosen.clone();
+                if option.chosen {
+                    selected.retain(|chosen| chosen != &option_bytes);
+                } else {
+                    selected.push(option_bytes);
+                }
+                selected
+            } else if option.chosen {
+                // Clicking the current single-choice answer retracts the vote.
+                Vec::new()
+            } else {
+                vec![option_bytes]
+            };
+            row = row.cursor_pointer().on_click(move |_, _, cx| {
+                panel
+                    .update(cx, |panel, cx| {
+                        panel.dispatch(
+                            Command::VotePoll {
+                                chat_id,
+                                message_id,
+                                options: selected.clone(),
+                            },
+                            cx,
+                        )
+                    })
+                    .log_err();
+            });
+        }
+        card = card.child(row);
     }
     let mut footer = h_flex().gap_2();
+    footer = footer.child(
+        Label::new(
+            tr(cx, "telegram_panel.poll.votes", "{count} votes")
+                .replace("{count}", &poll.total_voters.to_string()),
+        )
+        .size(LabelSize::XSmall)
+        .color(Color::Muted),
+    );
+    if poll.quiz {
+        footer = footer.child(
+            Label::new(tr(cx, "telegram_panel.poll.quiz", "Quiz"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        );
+    }
     if poll.closed {
         footer = footer.child(
             Label::new(tr(cx, "telegram_panel.poll.closed", "Closed"))
@@ -4844,6 +5495,76 @@ fn duration_label(duration: Option<f64>) -> String {
         .unwrap_or(0.0)
         .max(0.0);
     util::time::format_media_duration(std::time::Duration::from_secs_f64(seconds))
+}
+
+fn render_topic_chip(
+    panel: WeakEntity<TelegramPanel>,
+    id: String,
+    title: String,
+    is_selected: bool,
+    command: Command,
+    cx: &mut App,
+) -> AnyElement {
+    div()
+        .id(ElementId::Name(id.into()))
+        .flex_none()
+        .px_2()
+        .py_0p5()
+        .rounded_md()
+        .cursor_pointer()
+        .when(is_selected, |this| {
+            this.bg(cx.theme().colors().element_selected)
+        })
+        .hover(|this| this.bg(cx.theme().colors().element_hover))
+        .on_click(move |_, _, cx| {
+            panel
+                .update(cx, |panel, cx| panel.dispatch(command.clone(), cx))
+                .log_err();
+        })
+        .child(
+            Label::new(title)
+                .size(LabelSize::XSmall)
+                .color(if is_selected {
+                    Color::Default
+                } else {
+                    Color::Muted
+                }),
+        )
+        .into_any_element()
+}
+
+/// Groups consecutive messages that Telegram delivered as one album. Service
+/// messages never share a group, and a group must stay within one sender and
+/// direction so its bubble has a single author.
+fn build_history_rows(history: &[MessageSnapshot]) -> Vec<HistoryRow> {
+    let mut rows: Vec<HistoryRow> = Vec::with_capacity(history.len());
+    for (index, message) in history.iter().enumerate() {
+        if let Some(grouped_id) = message.grouped_id
+            && let Some(row) = rows.last_mut()
+            && row.messages.last().is_some_and(|last| {
+                last.grouped_id == Some(grouped_id)
+                    && last.chat_id == message.chat_id
+                    && last.outgoing == message.outgoing
+                    && last.sender_name == message.sender_name
+            })
+        {
+            row.messages.push(message.clone());
+            continue;
+        }
+        rows.push(HistoryRow {
+            messages: vec![message.clone()],
+            start_index: index,
+        });
+    }
+    rows
+}
+
+fn history_row_index(rows: &[HistoryRow], chat_id: i64, message_id: i32) -> Option<usize> {
+    rows.iter().position(|row| {
+        row.messages
+            .iter()
+            .any(|message| message.chat_id == chat_id && message.id == message_id)
+    })
 }
 
 fn build_history_layout(history: &[MessageSnapshot]) -> Vec<MessageLayout> {
@@ -5939,9 +6660,9 @@ fn with_panel(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_history_layout, chat_subtitle, duration_label, error_text, media_display_size,
-        media_kind_label, next_search_filter, search_filter_label, service_message_text,
-        voice_waveform_samples,
+        build_history_layout, build_history_rows, chat_subtitle, duration_label, error_text,
+        media_display_size, media_kind_label, next_search_filter, search_filter_label,
+        service_message_text, voice_waveform_samples,
     };
     use gpui::{TestAppContext, px};
     use settings::SettingsStore;
@@ -5964,6 +6685,8 @@ mod tests {
             reply_to: None,
             forwarded_from: None,
             grouped_id: None,
+            topic_id: None,
+            thread_root_id: None,
             views: None,
             action: None,
             reactions: Vec::new(),
@@ -6048,6 +6771,25 @@ mod tests {
         assert!(!layout[2].show_sender);
         assert!(layout[3].day_separator.is_some());
         assert!(layout[3].show_sender);
+    }
+
+    #[test]
+    fn history_rows_group_only_consecutive_album_items() {
+        let mut first = message(1, "Ada", 0);
+        first.grouped_id = Some(7);
+        let mut second = message(2, "Ada", 1);
+        second.grouped_id = Some(7);
+        let standalone = message(3, "Ada", 2);
+        let mut third = message(4, "Ada", 3);
+        third.grouped_id = Some(7);
+        let rows = build_history_rows(&[first, second, standalone, third]);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].messages.len(), 2);
+        assert_eq!(rows[0].start_index, 0);
+        assert_eq!(rows[1].messages.len(), 1);
+        assert_eq!(rows[1].start_index, 2);
+        assert_eq!(rows[2].messages.len(), 1);
+        assert_eq!(rows[2].start_index, 3);
     }
 
     fn init_i18n(cx: &mut TestAppContext) {

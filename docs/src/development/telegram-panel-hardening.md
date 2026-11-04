@@ -23,12 +23,12 @@ still cover only the pure helpers (layout, media labels, error mapping), not the
 network-facing flows. Remaining known gaps are listed in the feature overview's
 [Not implemented](./telegram-panel.md#not-implemented) section:
 
-- Received albums are not visually merged.
-- Offline history and drafts are not persisted; only the session survives a
-  restart.
-- Profile avatars, bot inline keyboards, forum topics, TGS sticker animation,
-  in-panel video playback, outgoing voice notes, calls, multi-account, and
-  per-message read receipts are still out of scope.
+- Offline history and drafts are not persisted locally; only the session
+  survives a restart.
+- Profile avatars, bot inline keyboards, TGS sticker animation, in-panel video
+  playback, outgoing voice notes, calls, and multi-account are still out of
+  scope.
+- Channel comment threads are not opened as a separate thread view.
 
 The locked decisions below remain in force. Media is still a disposable cache,
 the session is still persistent state, and the engine still reports structured
@@ -184,15 +184,19 @@ message.
 
 ### WS5: Per-chat drafts (P0) {#ws5}
 
-The engine tracks `view.draft` but the UI never reads it, and the
-composer is not reset on chat switch, so drafts leak between chats
+The original engine tracked `view.draft` without the UI reading it, and the
+composer was not reset on chat switch, so drafts leaked between chats
 (`engine.rs:861`, `telegram_panel.rs:392-398`).
 
 - On chat switch, load the stored draft into the composer.
 - On send, clear both the composer and the stored draft.
 
-Acceptance: switching chats shows the correct draft and never carries
-text across chats.
+Implemented: drafts are keyed by chat and forum topic, loaded when the
+conversation changes, cleared on send, and saved with a debounced
+`messages.saveDraft`. Topic drafts are seeded from `messages.getForumTopics`.
+
+Acceptance: switching chats or topics shows the correct draft and never
+carries text across conversations.
 
 ### WS6: Errors and i18n (P1) {#ws6}
 
@@ -288,8 +292,8 @@ detect duplicate bindings, since it cannot today.
 ## Out of scope {#out-of-scope}
 
 - In-panel video playback, outgoing voice notes, multi-account, calls, inline
-  bots, TGS sticker animation, and per-message read receipts. Keep them listed
-  as limitations.
+  bots, TGS sticker animation, per-message read participants, and channel
+  comment threads. Keep them listed as limitations.
 - The rodio codec expansion (`symphonia-libopus` and the native
   `opusic-sys` build dependency) and the grammers DNS/root-certificate
   additions. These belong in a separate dependency review, not this fix.

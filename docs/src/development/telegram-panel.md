@@ -95,8 +95,15 @@ Read updates from other devices arrive as raw `updateReadHistoryInbox`,
 `updateReadChannelInbox`, `updateReadHistoryOutbox`, and
 `updateReadChannelOutbox` updates. The engine maps their peer to the chat id and
 syncs `unread_count` and `read_outbox_message_id`, ignoring peers that are not
-in the loaded list. The conversation header shows the outbox read position for
-the account's own messages.
+in the loaded list. Each outgoing bubble shows a single check until the peer has
+read it and the accent-colored double check afterwards. Broadcast channels show
+view counts instead, because the channel outbox position is not a per-post read
+receipt.
+
+Forum topics track read state per topic. Opening a topic calls
+`messages.readDiscussion` with the topic's top message and clears only that
+topic's share of the chat counters. The General topic uses the channel read
+call; its unread share is the chat total minus the listed topics.
 
 ### Conversations {#conversations}
 
@@ -122,6 +129,25 @@ The panel supports the common message actions without leaving the keyboard:
   pinned message. Pinning a chat moves it to the top of its folder.
 - **Service messages.** Joins, leaves, title and photo changes, pinned-message
   notices, and calls render as centered one-line notices.
+- **Drafts.** Composer text is saved with `messages.saveDraft` after a short
+  debounce, per chat and per forum topic. Switching chats or topics loads the
+  matching draft instead of carrying text across conversations.
+
+### Forum topics {#topics}
+
+A forum supergroup shows a topic strip above the transcript. The General topic
+is always present as a leading chip; the server's topic list supplies the rest
+(`messages.getForumTopics`, first 100 topics); a General row in that list is
+folded into the leading chip.
+Selecting a topic loads its replies with `messages.getReplies`, paged with the
+oldest loaded id; a search jump loads the page ending at the hit instead of the
+tail. A reply sent from a topic view without an explicit reply target is
+attached to the topic's top message, so it stays in that topic. Topic replies
+and the General history are cached separately, and drafts are keyed by chat and
+topic. A closed topic disables the composer and shows a notice instead.
+
+Channel comment threads expose a `thread_root_id` on their messages, but the
+panel does not open them as separate threads.
 
 ### Folders and the archive {#folders}
 
@@ -163,24 +189,30 @@ cards. The header shows an icon, the name, and metadata (duration, dimensions,
 size, MIME type), with a `Disclosure` chevron. The body is built only when the
 card is expanded.
 
-- Photos and stickers show a thumbnail first. Expanding the card requests a
-  small preview through `Command::DownloadThumbnail`: the engine prefers an
-  embedded thumbnail, otherwise it requests the smallest server-side size, and
-  caches the bytes under the Telegram thumbnail cache. Only the Download button
-  fetches the original.
+- Photos, stickers, video posters, animations, and round video messages show a
+  thumbnail first. Expanding the card requests a small preview through
+  `Command::DownloadThumbnail`: the engine prefers an embedded thumbnail,
+  otherwise it requests the smallest server-side size, and caches the bytes
+  under the Telegram thumbnail cache. Animated stickers (TGS and WebM) always
+  use their thumbnail because the original file is not a still image. Only the
+  Download button fetches the original.
 - Voice messages play through the existing `audio` crate once downloaded.
-- Video, audio, document, photo, and sticker cards expose a Download button;
-  once downloaded, the button becomes Open and hands the file to the system
-  player. Clicking a video poster does the same as its button: it starts the
-  download, then opens the file. Contacts, polls, geolocations, and link
-  previews have no file content and do not offer a Download.
+- Video, animation, round video, audio, document, photo, and sticker cards
+  expose a Download button; once downloaded, the button becomes Open and hands
+  the file to the system player. Clicking a video poster does the same as its
+  button: it starts the download, then opens the file. Contacts, polls,
+  geolocations, and link previews have no file content and do not offer a
+  Download.
 - Polls render their question, options, voter counts, and closed or
-  multiple-choice state. Contacts show the name and phone number. Locations and
-  venues show a title, address, coordinates, and live-location state.
-  Animations and round video messages get their own media kinds.
+  multiple-choice state. Clicking an open option sends `messages.sendVote`;
+  multiple-choice polls toggle the clicked option against the current
+  selection, and a quiz becomes read-only after it has an answer. Contacts show
+  the name and phone number. Locations and venues show a title, address,
+  coordinates, and live-location state.
 - Albums are sent as one `messages.sendMedia` batch when the composer contains
-  several consecutive attachments. Received albums keep their `grouped_id`, but
-  each message still renders as its own card.
+  several consecutive attachments, and a reply is attached to the first item.
+  Received albums that share a `grouped_id` render as one bubble with a
+  two-column grid; each tile still has its own context menu.
 - Link previews render as a compact card that opens the URL.
 - Media-only messages show a localized attachment name in the chat list
   preview instead of a blank line.
@@ -300,18 +332,20 @@ User-facing strings are localized through `i18n::tr` under the
 
 ## Not implemented {#not-implemented}
 
-- Received albums keep their `grouped_id` but are not visually merged into a
-  grid; each message renders as its own media card.
 - Chat avatars use initials. Profile photos are not downloaded.
 - Bot inline keyboards, callback buttons, and inline bots are not rendered.
-- Forum topics and message threads are not modeled.
+- Channel comment threads expose their root id but are not opened as a separate
+  thread view.
 - There is no in-panel video playback. Videos are cards that open in the system
   player.
 - Outgoing voice notes are not implemented.
-- Multi-account, calls, and per-message read receipts are out of scope.
-- Received TGS sticker animation and message effects are not rendered.
-- Offline chat history and drafts are not persisted across restarts. Only the
-  encrypted session survives; message history is refetched after reconnecting.
+- Multi-account and calls are out of scope. Read receipts use the chat-level
+  outbox position rather than per-message read participants.
+- Received TGS sticker animation and message effects are not rendered; animated
+  stickers show their static thumbnail.
+- Offline chat history and drafts are not persisted locally. Server-side drafts
+  are fetched with the dialog and topic lists, and message history is refetched
+  after reconnecting. Only the encrypted session survives a restart.
 - Muted chats do not raise notifications and do not count toward the unread
   badge. They still count toward the per-chat unread count.
 

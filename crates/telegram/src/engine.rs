@@ -33,7 +33,7 @@ use crate::model::{
     AuthState, ChatFolderSnapshot, ChatKind, ChatSnapshot, ConnectionState, ContactSnapshot,
     DownloadState, FolderSelection, GeoSnapshot, MediaKind, MediaSnapshot, MessageAction,
     MessageSnapshot, PollOptionSnapshot, PollSnapshot, Presence, ReactionSnapshot, ReplySnapshot,
-    SearchFilter, SearchHit, SendState, TypingSnapshot, ViewModel, WebPageSnapshot,
+    SearchFilter, SearchHit, SendState, TopicSnapshot, TypingSnapshot, ViewModel, WebPageSnapshot,
     avatar_initials,
 };
 use crate::proxy::socks5_url;
@@ -48,6 +48,8 @@ const SEARCH_LIMIT: usize = 50;
 const SEARCH_MIN_QUERY_CHARS: usize = 2;
 /// Telegram's reserved folder id for the archive.
 const ARCHIVE_FOLDER_ID: i32 = 1;
+/// The id of the General topic in a forum supergroup.
+const GENERAL_TOPIC_ID: i32 = 1;
 /// How many pages of archived dialogs are fetched at most. The archive is
 /// normally small; the bound only prevents an unbounded loop on a broken server.
 const ARCHIVE_PAGE_LIMIT: usize = 20;
@@ -56,6 +58,9 @@ const TYPING_TTL: Duration = Duration::from_secs(6);
 /// The engine does not resend the typing action more often than this; Telegram
 /// itself expires it after roughly five seconds.
 const TYPING_REFRESH_INTERVAL: Duration = Duration::from_secs(4);
+/// How long to wait after the last keystroke before syncing a draft to the
+/// server, so typing does not issue one request per character.
+const DRAFT_SYNC_DELAY: Duration = Duration::from_millis(600);
 /// Upper bound for the on-disk media cache. Older entries are evicted first.
 const MEDIA_CACHE_MAX_BYTES: u64 = 512 * 1024 * 1024;
 /// Maximum age for on-disk media before it is evicted.
@@ -115,7 +120,14 @@ pub enum Command {
     },
     SetDraft {
         chat_id: i64,
+        /// The forum topic the draft belongs to; `None` is the General topic.
+        topic_id: Option<i32>,
         text: String,
+    },
+    /// Shows the General topic, or the replies of one forum topic.
+    SelectTopic {
+        chat_id: i64,
+        topic_id: Option<i32>,
     },
     MarkRead {
         chat_id: i64,
@@ -179,6 +191,13 @@ pub enum Command {
         message_id: i32,
         /// The emoji to set, or `None` to remove the account's reaction.
         emoji: Option<String>,
+    },
+    /// Casts or updates the account's vote on a poll message.
+    VotePoll {
+        chat_id: i64,
+        message_id: i32,
+        /// Opaque option bytes from [`crate::model::PollOptionSnapshot::option`].
+        options: Vec<Vec<u8>>,
     },
     SetMuted {
         chat_id: i64,
@@ -256,10 +275,18 @@ impl fmt::Debug for Command {
                 .field("message_id", message_id)
                 .field("text", &"<redacted>")
                 .finish(),
-            Self::SetDraft { chat_id, .. } => formatter
+            Self::SetDraft {
+                chat_id, topic_id, ..
+            } => formatter
                 .debug_struct("SetDraft")
                 .field("chat_id", chat_id)
+                .field("topic_id", topic_id)
                 .field("text", &"<redacted>")
+                .finish(),
+            Self::SelectTopic { chat_id, topic_id } => formatter
+                .debug_struct("SelectTopic")
+                .field("chat_id", chat_id)
+                .field("topic_id", topic_id)
                 .finish(),
             Self::MarkRead {
                 chat_id,
@@ -358,6 +385,16 @@ impl fmt::Debug for Command {
                 .field("chat_id", chat_id)
                 .field("message_id", message_id)
                 .field("emoji", emoji)
+                .finish(),
+            Self::VotePoll {
+                chat_id,
+                message_id,
+                options,
+            } => formatter
+                .debug_struct("VotePoll")
+                .field("chat_id", chat_id)
+                .field("message_id", message_id)
+                .field("option_count", &options.len())
                 .finish(),
             Self::SetMuted { chat_id, muted } => formatter
                 .debug_struct("SetMuted")
@@ -568,6 +605,26 @@ enum EngineEvent {
     QrError(EngineError),
     /// A debounced request to reload the chat list.
     RefreshChats,
+    /// A debounced draft save for a chat.
+    DraftSync {
+        chat_id: i64,
+        topic_id: Option<i32>,
+        epoch: u64,
+        text: String,
+    },
+    /// The topic list of a forum supergroup finished loading.
+    TopicsLoaded {
+        chat_id: i64,
+        result: Result<Vec<TopicSnapshot>, EngineError>,
+    },
+    /// A page of replies in one forum topic finished loading.
+    TopicHistoryLoaded {
+        chat_id: i64,
+        topic_id: i32,
+        epoch: u64,
+        offset_id: i32,
+        result: Result<(Vec<MessageSnapshot>, bool), EngineError>,
+    },
     /// A scheduled reconnection attempt after a drop.
     Reconnect,
     /// Fetch the messages between two known ids for the selected chat.
@@ -648,6 +705,8 @@ struct PendingOutgoing {
     chat_id: i64,
     item: OutgoingItem,
     reply_to: Option<i32>,
+    /// The forum topic the message was composed in, so a retry posts there too.
+    topic_id: Option<i32>,
 }
 
 /// What the panel reports about its own visibility. Messages are only reported
@@ -711,6 +770,15 @@ struct CachedHistory {
     loaded: bool,
 }
 
+/// The reply cache for one forum topic. Topic pages are paged by the oldest
+/// loaded message id rather than by a chat-level cursor.
+#[derive(Clone, Default)]
+struct TopicHistoryCache {
+    messages: Vec<MessageSnapshot>,
+    next_offset: Option<i32>,
+    loaded: bool,
+}
+
 struct EngineState {
     config: EngineConfig,
     view: ViewModel,
@@ -740,7 +808,15 @@ struct EngineState {
     migrated_to: HashMap<i64, i64>,
     /// Visible supergroup chat id to its old basic-group chat id.
     migrated_from: HashMap<i64, i64>,
-    drafts: HashMap<i64, String>,
+    /// Drafts keyed by chat and forum topic; `None` is the General topic.
+    drafts: HashMap<(i64, Option<i32>), String>,
+    /// The latest scheduled draft-save generation per conversation, so only
+    /// the last keystroke in a burst reaches the server.
+    draft_epochs: HashMap<(i64, Option<i32>), u64>,
+    /// The last draft text confirmed by the server, to skip redundant saves.
+    saved_drafts: HashMap<(i64, Option<i32>), String>,
+    /// Per-forum-topic reply cache, keyed by chat and topic id.
+    topic_histories: HashMap<(i64, i32), TopicHistoryCache>,
     /// Per-chat history cache, so switching chats does not refetch.
     histories: HashMap<i64, CachedHistory>,
     /// Bumped whenever the displayed chat changes, so stale page loads are dropped.
@@ -810,6 +886,9 @@ impl EngineState {
             migrated_to: HashMap::new(),
             migrated_from: HashMap::new(),
             drafts: HashMap::new(),
+            draft_epochs: HashMap::new(),
+            saved_drafts: HashMap::new(),
+            topic_histories: HashMap::new(),
             histories: HashMap::new(),
             history_epoch: 0,
             search_epoch: 0,
@@ -860,6 +939,93 @@ impl EngineState {
         let peer_ref = self.peer_refs.get(&chat_id).copied()?;
         let client = self.client.clone()?;
         Some((peer_ref, client))
+    }
+
+    /// Schedules a server-side draft save after the typing burst settles. The
+    /// panel sends one `SetDraft` per keystroke, so the delay collapses a burst
+    /// into a single request.
+    fn schedule_draft_sync(&mut self, chat_id: i64, topic_id: Option<i32>, text: &str) {
+        let key = (chat_id, topic_id);
+        if self
+            .saved_drafts
+            .get(&key)
+            .is_some_and(|saved| saved == text)
+        {
+            return;
+        }
+        let epoch = self.draft_epochs.entry(key).or_default();
+        *epoch = epoch.wrapping_add(1);
+        let epoch = *epoch;
+        let text = text.to_owned();
+        let event_tx = self.event_tx.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(DRAFT_SYNC_DELAY).await;
+            let event = EngineEvent::DraftSync {
+                chat_id,
+                topic_id,
+                epoch,
+                text,
+            };
+            if event_tx.send(event).is_err() {
+                log::debug!("telegram event receiver has been dropped");
+            }
+        });
+    }
+
+    async fn apply_draft_sync(
+        &mut self,
+        chat_id: i64,
+        topic_id: Option<i32>,
+        epoch: u64,
+        text: String,
+    ) {
+        let key = (chat_id, topic_id);
+        if self.draft_epochs.get(&key) != Some(&epoch) {
+            return;
+        }
+        // An empty draft only needs a request when there is something server
+        // side to clear. The epoch bump above still invalidates a pending save
+        // for text the user already deleted.
+        if text.is_empty() && !self.saved_drafts.contains_key(&key) {
+            return;
+        }
+        if self.saved_drafts.get(&key) == Some(&text) {
+            return;
+        }
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
+            return;
+        };
+        let reply_to = topic_id.map(|topic_id| {
+            tl::enums::InputReplyTo::Message(tl::types::InputReplyToMessage {
+                reply_to_msg_id: 0,
+                top_msg_id: Some(topic_id),
+                reply_to_peer_id: None,
+                quote_text: None,
+                quote_entities: None,
+                quote_offset: None,
+                monoforum_peer_id: None,
+                todo_item_id: None,
+                poll_option: None,
+            })
+        });
+        let request = tl::functions::messages::SaveDraft {
+            no_webpage: false,
+            invert_media: false,
+            reply_to,
+            peer: peer_ref.into(),
+            message: text.clone(),
+            entities: None,
+            media: None,
+            effect: None,
+            suggested_post: None,
+            rich_message: None,
+        };
+        match client.invoke(&request).await {
+            Ok(_) => {
+                self.saved_drafts.insert(key, text);
+            }
+            Err(error) => log::debug!("failed to save a Telegram draft: {error}"),
+        }
     }
 
     /// Like [`Self::chat_context`], but reports the missing half to the panel as
@@ -926,28 +1092,33 @@ impl EngineState {
                 message_id,
                 text,
             } => self.edit_message(chat_id, message_id, text).await,
-            Command::SetDraft { chat_id, text } => {
+            Command::SetDraft {
+                chat_id,
+                topic_id,
+                text,
+            } => {
                 let chat_id = self.canonical_chat_id(chat_id);
-                let was_empty = self
-                    .drafts
-                    .get(&chat_id)
-                    .is_none_or(|draft| draft.is_empty());
-                self.drafts.insert(chat_id, text.clone());
+                let key = (chat_id, topic_id);
+                let was_empty = self.drafts.get(&key).is_none_or(|draft| draft.is_empty());
+                self.drafts.insert(key, text.clone());
+                let preview_draft = self.chat_draft(chat_id);
                 if let Some(chat) = self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
-                    chat.draft = (!text.is_empty()).then(|| text.clone());
+                    chat.draft = preview_draft;
                 }
-                if self.view.selected_chat == Some(chat_id) {
+                if self.view.selected_chat == Some(chat_id) && self.view.selected_topic == topic_id
+                {
                     // The panel keeps its own copy while typing, so publishing on
                     // every keystroke would clone the whole view model for no
                     // visible change. Only the empty/non-empty transition matters
                     // to other consumers, such as a second window.
-                    let is_empty = text.is_empty();
-                    self.view.draft = text;
-                    if was_empty != is_empty {
-                        self.publish();
-                    }
+                    self.view.draft = text.clone();
                 }
+                if was_empty != text.is_empty() {
+                    self.publish();
+                }
+                self.schedule_draft_sync(chat_id, topic_id, &text);
             }
+            Command::SelectTopic { chat_id, topic_id } => self.select_topic(chat_id, topic_id),
             Command::MarkRead {
                 chat_id,
                 max_message_id,
@@ -1006,6 +1177,11 @@ impl EngineState {
                 message_id,
                 emoji,
             } => self.set_reaction(chat_id, message_id, emoji).await,
+            Command::VotePoll {
+                chat_id,
+                message_id,
+                options,
+            } => self.vote_poll(chat_id, message_id, options).await,
             Command::SetMuted { chat_id, muted } => self.set_muted(chat_id, muted).await,
             Command::SetArchived { chat_id, archived } => {
                 self.set_archived(chat_id, archived).await
@@ -1396,7 +1572,10 @@ impl EngineState {
         self.migrated_to.clear();
         self.migrated_from.clear();
         self.drafts.clear();
+        self.draft_epochs.clear();
+        self.saved_drafts.clear();
         self.histories.clear();
+        self.topic_histories.clear();
         self.pending_outgoing.clear();
         self.typing_sent_at.clear();
         self.known_names.clear();
@@ -1477,7 +1656,10 @@ impl EngineState {
                 // the user typed while the list was loading.
                 for chat in &self.all_chats {
                     if let Some(draft) = chat.draft.clone().filter(|draft| !draft.is_empty()) {
-                        self.drafts.entry(chat.id).or_insert(draft);
+                        self.drafts
+                            .entry((chat.id, None))
+                            .or_insert_with(|| draft.clone());
+                        self.saved_drafts.entry((chat.id, None)).or_insert(draft);
                     }
                 }
                 self.apply_known_drafts();
@@ -1500,6 +1682,9 @@ impl EngineState {
                         self.view.selected_chat = None;
                         self.view.history.clear();
                         self.view.draft.clear();
+                        self.view.topics.clear();
+                        self.view.loading_topics = false;
+                        self.view.selected_topic = None;
                         self.view.has_more_history = false;
                         self.history_epoch = self.history_epoch.wrapping_add(1);
                     }
@@ -1513,11 +1698,35 @@ impl EngineState {
     /// Copies the in-memory drafts onto the freshly loaded chat snapshots so a
     /// reload does not drop an unsent composer.
     fn apply_known_drafts(&mut self) {
-        for chat in &mut self.all_chats {
-            if let Some(draft) = self.drafts.get(&chat.id).filter(|draft| !draft.is_empty()) {
-                chat.draft = Some(draft.clone());
+        let drafts: Vec<(i64, Option<String>)> = self
+            .all_chats
+            .iter()
+            .map(|chat| (chat.id, self.chat_draft(chat.id)))
+            .collect();
+        for (chat_id, draft) in drafts {
+            if let Some(draft) = draft
+                && let Some(chat) = self.all_chats.iter_mut().find(|chat| chat.id == chat_id)
+            {
+                chat.draft = Some(draft);
             }
         }
+    }
+
+    /// The draft the chat list should preview: the General topic first, then
+    /// the lowest topic id with text. The fallback is stable across snapshots,
+    /// unlike iterating the hash map directly.
+    fn chat_draft(&self, chat_id: i64) -> Option<String> {
+        self.drafts
+            .get(&(chat_id, None))
+            .filter(|draft| !draft.is_empty())
+            .cloned()
+            .or_else(|| {
+                self.drafts
+                    .iter()
+                    .filter(|((id, _), draft)| *id == chat_id && !draft.is_empty())
+                    .min_by_key(|((_, topic), _)| topic.unwrap_or(i32::MAX))
+                    .map(|(_, draft)| draft.clone())
+            })
     }
 
     fn select_folder(&mut self, folder: FolderSelection) {
@@ -1574,8 +1783,8 @@ impl EngineState {
             .map(|(&source_chat_id, &target_chat_id)| (source_chat_id, target_chat_id))
             .collect();
         for (source_chat_id, target_chat_id) in migrations {
-            if let Some(draft) = self.drafts.remove(&source_chat_id) {
-                self.drafts.entry(target_chat_id).or_insert(draft);
+            if let Some(draft) = self.drafts.remove(&(source_chat_id, None)) {
+                self.drafts.entry((target_chat_id, None)).or_insert(draft);
             }
 
             let Some(source_history) = self.histories.remove(&source_chat_id) else {
@@ -1631,14 +1840,26 @@ impl EngineState {
         }
         if self.view.selected_chat == Some(chat_id) {
             // Selecting the already-open chat means "show the newest messages",
-            // which is how the panel returns from a search jump.
-            self.refresh_tail(chat_id);
+            // which is how the panel returns from a search jump. A topic stays
+            // open and refreshes its own replies.
+            if self.view.selected_topic.is_some() {
+                self.refresh_topic_tail(chat_id);
+            } else {
+                self.refresh_tail(chat_id);
+            }
             return;
         }
         self.history_epoch = self.history_epoch.wrapping_add(1);
         let epoch = self.history_epoch;
         self.view.selected_chat = Some(chat_id);
-        self.view.draft = self.drafts.get(&chat_id).cloned().unwrap_or_default();
+        self.view.topics.clear();
+        self.view.loading_topics = false;
+        self.view.selected_topic = None;
+        self.view.draft = self
+            .drafts
+            .get(&(chat_id, None))
+            .cloned()
+            .unwrap_or_default();
         self.view.search_results.clear();
         self.view.searching = false;
         self.search_next_offset = None;
@@ -1673,6 +1894,9 @@ impl EngineState {
         self.publish();
 
         self.spawn_history_page(chat_id, epoch, request);
+        if self.chat_is_forum(chat_id) {
+            self.load_topics(chat_id);
+        }
     }
 
     /// Reloads the newest page of the selected chat without dropping older
@@ -1688,21 +1912,366 @@ impl EngineState {
         );
     }
 
+    /// Fetches the topic list for a forum supergroup. The list is only kept for
+    /// the selected chat, because the panel shows one chat at a time.
+    fn load_topics(&mut self, chat_id: i64) {
+        let chat_id = self.canonical_chat_id(chat_id);
+        if self.view.selected_chat != Some(chat_id) || !self.chat_is_forum(chat_id) {
+            return;
+        }
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
+            return;
+        };
+        self.view.topics.clear();
+        self.view.loading_topics = true;
+        self.publish();
+        let event_tx = self.event_tx.clone();
+        tokio::spawn(async move {
+            let request = tl::functions::messages::GetForumTopics {
+                peer: peer_ref.into(),
+                q: None,
+                offset_date: 0,
+                offset_id: 0,
+                offset_topic: 0,
+                limit: 100,
+            };
+            let result = match client.invoke(&request).await {
+                Ok(tl::enums::messages::ForumTopics::Topics(topics)) => Ok(topics
+                    .topics
+                    .into_iter()
+                    .filter_map(|topic| {
+                        let tl::enums::ForumTopic::Topic(topic) = topic else {
+                            return None;
+                        };
+                        Some(TopicSnapshot {
+                            id: topic.id,
+                            title: topic.title,
+                            unread_count: topic.unread_count.max(0),
+                            unread_mentions: topic.unread_mentions_count.max(0),
+                            closed: topic.closed,
+                            pinned: topic.pinned,
+                            draft: match topic.draft.as_ref() {
+                                Some(tl::enums::DraftMessage::Message(draft))
+                                    if !draft.message.is_empty() =>
+                                {
+                                    Some(draft.message.clone())
+                                }
+                                _ => None,
+                            },
+                        })
+                    })
+                    .collect()),
+                Err(error) => {
+                    log::warn!("failed to load Telegram forum topics: {error}");
+                    Err(EngineError::from_invocation(&error))
+                }
+            };
+            let event = EngineEvent::TopicsLoaded { chat_id, result };
+            if event_tx.send(event).is_err() {
+                log::debug!("telegram event receiver has been dropped");
+            }
+        });
+    }
+
+    fn apply_topics_loaded(
+        &mut self,
+        chat_id: i64,
+        result: Result<Vec<TopicSnapshot>, EngineError>,
+    ) {
+        if self.view.selected_chat != Some(chat_id) {
+            return;
+        }
+        self.view.loading_topics = false;
+        match result {
+            Ok(topics) => {
+                for topic in &topics {
+                    if let Some(draft) = topic.draft.as_ref().filter(|draft| !draft.is_empty()) {
+                        // The General topic uses the chat-level draft, which is
+                        // the same key the composer sends for it.
+                        let key = if topic.id == GENERAL_TOPIC_ID {
+                            (chat_id, None)
+                        } else {
+                            (chat_id, Some(topic.id))
+                        };
+                        self.drafts.entry(key).or_insert_with(|| draft.clone());
+                        self.saved_drafts
+                            .entry(key)
+                            .or_insert_with(|| draft.clone());
+                    }
+                }
+                self.view.topics = topics;
+                self.view.draft = self
+                    .drafts
+                    .get(&(chat_id, self.view.selected_topic))
+                    .cloned()
+                    .unwrap_or_default();
+                self.publish();
+                self.maybe_mark_read();
+            }
+            // A topic list is supplementary; a failure must not replace the
+            // conversation with an error banner, but the spinner must stop.
+            Err(error) => {
+                log::warn!("failed to load Telegram forum topics: {error:?}");
+                self.publish();
+                self.maybe_mark_read();
+            }
+        }
+    }
+
+    fn chat_is_forum(&self, chat_id: i64) -> bool {
+        self.all_chats
+            .iter()
+            .any(|chat| chat.id == chat_id && chat.is_forum)
+    }
+
+    /// Switches between the General topic and one forum topic, keeping the
+    /// previous history in its cache so returning is instant.
+    fn select_topic(&mut self, chat_id: i64, topic_id: Option<i32>) {
+        self.open_topic(chat_id, topic_id, None);
+    }
+
+    /// Opens a topic at one of its replies, so a search hit below the tail is
+    /// fetched instead of waiting for the user to page up to it.
+    fn select_topic_at(&mut self, chat_id: i64, topic_id: i32, message_id: i32) {
+        self.open_topic(chat_id, Some(topic_id), Some(message_id));
+    }
+
+    fn open_topic(&mut self, chat_id: i64, topic_id: Option<i32>, anchor: Option<i32>) {
+        let chat_id = self.canonical_chat_id(chat_id);
+        if self.view.selected_chat != Some(chat_id) || self.view.selected_topic == topic_id {
+            return;
+        }
+        self.cache_selected_history();
+        self.history_epoch = self.history_epoch.wrapping_add(1);
+        let epoch = self.history_epoch;
+        self.view.selected_topic = topic_id;
+        self.view.draft = self
+            .drafts
+            .get(&(chat_id, topic_id))
+            .cloned()
+            .unwrap_or_default();
+        self.view.search_results.clear();
+        self.view.searching = false;
+        self.search_next_offset = None;
+        match topic_id {
+            None => self.restore_general_history(chat_id, epoch),
+            Some(topic_id) => self.restore_topic_history(chat_id, topic_id, epoch, anchor),
+        }
+        self.publish();
+    }
+
+    fn restore_general_history(&mut self, chat_id: i64, epoch: u64) {
+        let loaded = self.histories.get_mut(&chat_id).and_then(|cached| {
+            if !cached.loaded {
+                return None;
+            }
+            forget_missing_cached_media(&mut cached.messages);
+            Some((cached.messages.clone(), cached.next_page))
+        });
+        if let Some((messages, next_page)) = loaded {
+            self.view.history = messages;
+            self.view.has_more_history = next_page.is_some();
+            self.view.loading_history = false;
+            let request = match next_page {
+                Some(cursor) if cursor.is_initial_for(chat_id) => HistoryRequest::Page(cursor),
+                _ => HistoryRequest::RefreshTail {
+                    source_chat_id: chat_id,
+                },
+            };
+            self.spawn_history_page(chat_id, epoch, request);
+        } else {
+            self.view.history.clear();
+            self.view.has_more_history = true;
+            let cursor = HistoryCursor {
+                source_chat_id: chat_id,
+                before_message_id: None,
+            };
+            self.histories.entry(chat_id).or_default().next_page = Some(cursor);
+            self.spawn_history_page(chat_id, epoch, HistoryRequest::Page(cursor));
+        }
+    }
+
+    fn restore_topic_history(
+        &mut self,
+        chat_id: i64,
+        topic_id: i32,
+        epoch: u64,
+        anchor: Option<i32>,
+    ) {
+        let loaded = self
+            .topic_histories
+            .get_mut(&(chat_id, topic_id))
+            .and_then(|cached| {
+                if !cached.loaded {
+                    return None;
+                }
+                forget_missing_cached_media(&mut cached.messages);
+                Some((cached.messages.clone(), cached.next_offset))
+            });
+        if let Some((messages, next_offset)) = loaded {
+            self.view.history = messages;
+            self.view.has_more_history = next_offset.is_some();
+            self.view.loading_history = false;
+        } else {
+            self.view.history.clear();
+            self.view.has_more_history = false;
+        }
+        // A search jump fetches the page ending at the hit. Otherwise refresh
+        // the newest page even for a cached topic, so replies that arrived while
+        // another topic was open appear without reopening.
+        let offset_id = anchor.map_or(0, |message_id| message_id.saturating_add(1));
+        self.spawn_topic_history_page(chat_id, topic_id, epoch, offset_id);
+    }
+
+    fn refresh_topic_tail(&mut self, chat_id: i64) {
+        let Some(topic_id) = self.view.selected_topic else {
+            return;
+        };
+        let epoch = self.history_epoch;
+        self.spawn_topic_history_page(chat_id, topic_id, epoch, 0);
+    }
+
+    fn spawn_topic_history_page(
+        &mut self,
+        chat_id: i64,
+        topic_id: i32,
+        epoch: u64,
+        offset_id: i32,
+    ) {
+        let Some(client) = self.client.clone() else {
+            self.view.loading_history = false;
+            self.publish();
+            return;
+        };
+        let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
+            self.view.loading_history = false;
+            self.set_error(EngineError::ChatUnavailableOffline);
+            return;
+        };
+        self.view.loading_history = true;
+        self.publish();
+        let event_tx = self.event_tx.clone();
+        tokio::spawn(async move {
+            let result = fetch_topic_page(&client, peer_ref, chat_id, topic_id, offset_id).await;
+            let event = EngineEvent::TopicHistoryLoaded {
+                chat_id,
+                topic_id,
+                epoch,
+                offset_id,
+                result,
+            };
+            if event_tx.send(event).is_err() {
+                log::debug!("telegram event receiver has been dropped");
+            }
+        });
+    }
+
+    fn apply_topic_history_loaded(
+        &mut self,
+        chat_id: i64,
+        topic_id: i32,
+        epoch: u64,
+        offset_id: i32,
+        result: Result<(Vec<MessageSnapshot>, bool), EngineError>,
+    ) {
+        if epoch != self.history_epoch
+            || self.view.selected_chat != Some(chat_id)
+            || self.view.selected_topic != Some(topic_id)
+        {
+            return;
+        }
+        match result {
+            Ok((page, has_more)) => {
+                let previous_next = self
+                    .topic_histories
+                    .get(&(chat_id, topic_id))
+                    .and_then(|history| history.next_offset);
+                let previous_newest = self
+                    .view
+                    .history
+                    .iter()
+                    .filter(|message| message.id != 0)
+                    .map(|message| message.id)
+                    .max();
+                let page_oldest = page
+                    .iter()
+                    .filter(|message| message.id != 0)
+                    .map(|message| message.id)
+                    .min();
+                // A tail refresh that starts above the cached newest leaves a
+                // hole. Drop the stale page and page down from the fresh tail,
+                // because the reply endpoint has no gap-fill request.
+                let has_gap = offset_id == 0
+                    && previous_newest
+                        .zip(page_oldest)
+                        .is_some_and(|(previous, oldest)| oldest > previous.saturating_add(1));
+                if has_gap {
+                    self.view.history = page;
+                } else {
+                    self.view.history = merge_history(&self.view.history, page, chat_id, None);
+                }
+                self.view.loading_history = false;
+                self.enrich_reply_previews();
+                let oldest = self
+                    .view
+                    .history
+                    .iter()
+                    .find(|message| message.id != 0)
+                    .map(|message| message.id);
+                let next_offset = if offset_id == 0 {
+                    if has_gap {
+                        has_more.then_some(page_oldest).flatten()
+                    } else {
+                        previous_next.or_else(|| has_more.then_some(oldest).flatten())
+                    }
+                } else if has_more {
+                    oldest
+                } else {
+                    None
+                };
+                self.view.has_more_history = next_offset.is_some();
+                let entry = self.topic_histories.entry((chat_id, topic_id)).or_default();
+                entry.messages = self.view.history.clone();
+                entry.loaded = true;
+                entry.next_offset = next_offset;
+                self.publish();
+                self.maybe_mark_read();
+            }
+            Err(error) => {
+                self.view.loading_history = false;
+                if offset_id == 0 {
+                    self.set_error(error);
+                } else {
+                    log::warn!("failed to load older topic replies: {error:?}");
+                    self.publish();
+                }
+            }
+        }
+    }
+
     fn select_chat_at(&mut self, chat_id: i64, message: MessageSnapshot) {
         let chat_id = self.canonical_chat_id(chat_id);
         self.select_chat(chat_id);
         if self.view.selected_chat != Some(chat_id) {
             return;
         }
-        // A search hit usually lives outside the loaded tail. Fetch the page
-        // that ends at the hit so the panel scrolls into a real conversation
-        // instead of a single isolated message.
-        let cursor = HistoryCursor {
-            source_chat_id: message.chat_id,
-            before_message_id: Some(message.id.saturating_add(1)),
-        };
-        let epoch = self.history_epoch;
-        self.spawn_history_page(chat_id, epoch, HistoryRequest::Page(cursor));
+        match message.topic_id {
+            Some(topic_id) => self.select_topic_at(chat_id, topic_id, message.id),
+            // A General hit must leave any open topic, or the message would be
+            // inserted into another topic's history.
+            None => self.select_topic(chat_id, None),
+        }
+        if self.view.selected_topic.is_none() {
+            // A search hit usually lives outside the loaded tail. Fetch the page
+            // that ends at the hit so the panel scrolls into a real conversation
+            // instead of a single isolated message.
+            let cursor = HistoryCursor {
+                source_chat_id: message.chat_id,
+                before_message_id: Some(message.id.saturating_add(1)),
+            };
+            let epoch = self.history_epoch;
+            self.spawn_history_page(chat_id, epoch, HistoryRequest::Page(cursor));
+        }
         self.upsert_history_message(message);
         self.sort_history();
         self.cache_selected_history();
@@ -1801,6 +2370,7 @@ impl EngineState {
                 }
                 self.view.loading_history = false;
                 self.publish();
+                self.maybe_mark_read();
             }
             Err(error) => {
                 self.view.loading_history = false;
@@ -1819,6 +2389,20 @@ impl EngineState {
         {
             return;
         }
+        if let Some(topic_id) = self.view.selected_topic {
+            let next = self
+                .topic_histories
+                .get(&(chat_id, topic_id))
+                .and_then(|history| history.next_offset);
+            if let Some(offset_id) = next {
+                let epoch = self.history_epoch;
+                self.spawn_topic_history_page(chat_id, topic_id, epoch, offset_id);
+            } else {
+                self.view.has_more_history = false;
+                self.publish();
+            }
+            return;
+        }
         let Some(cursor) = self
             .histories
             .get(&chat_id)
@@ -1835,7 +2419,9 @@ impl EngineState {
     /// Fetches the messages between two known ids for the selected chat and
     /// merges them into history, closing an out-of-order gap.
     fn load_gap(&mut self, chat_id: i64, after_id: i32, before_id: i32) {
-        if self.view.selected_chat != Some(self.canonical_chat_id(chat_id)) {
+        if self.view.selected_topic.is_some()
+            || self.view.selected_chat != Some(self.canonical_chat_id(chat_id))
+        {
             return;
         }
         let Some(peer_ref) = self.peer_refs.get(&chat_id).copied() else {
@@ -1863,6 +2449,7 @@ impl EngineState {
 
     fn apply_gap_loaded(&mut self, chat_id: i64, epoch: u64, messages: Vec<MessageSnapshot>) {
         if epoch != self.history_epoch
+            || self.view.selected_topic.is_some()
             || self.view.selected_chat != Some(self.canonical_chat_id(chat_id))
         {
             return;
@@ -1876,11 +2463,17 @@ impl EngineState {
         self.publish();
     }
 
-    /// Stores the displayed history in the per-chat cache.
+    /// Stores the displayed history in the per-chat or per-topic cache.
     fn cache_selected_history(&mut self) {
         let Some(chat_id) = self.view.selected_chat else {
             return;
         };
+        if let Some(topic_id) = self.view.selected_topic {
+            let entry = self.topic_histories.entry((chat_id, topic_id)).or_default();
+            entry.messages = self.view.history.clone();
+            entry.loaded = true;
+            return;
+        }
         let entry = self.histories.entry(chat_id).or_default();
         entry.messages = self.view.history.clone();
         entry.loaded = true;
@@ -2005,9 +2598,14 @@ impl EngineState {
             return;
         }
         self.view.draft.clear();
-        self.drafts.remove(&chat_id);
+        let topic_id = self.view.selected_topic;
+        let cleared_draft = self.drafts.remove(&(chat_id, topic_id));
+        let remaining_draft = self.chat_draft(chat_id);
         if let Some(chat) = self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
-            chat.draft = None;
+            chat.draft = remaining_draft;
+        }
+        if cleared_draft.is_some() {
+            self.schedule_draft_sync(chat_id, topic_id, "");
         }
 
         let mut local_ids = Vec::with_capacity(items.len());
@@ -2023,6 +2621,7 @@ impl EngineState {
                     chat_id,
                     item,
                     reply_to,
+                    topic_id,
                 },
             );
             local_ids.push(local_id);
@@ -2041,18 +2640,24 @@ impl EngineState {
             self.publish();
             return;
         };
-        let batch: Vec<(u64, OutgoingItem, Option<i32>)> = local_ids
+        let batch: Vec<(u64, OutgoingItem, Option<i32>, Option<i32>)> = local_ids
             .iter()
             .filter_map(|local_id| {
-                self.pending_outgoing
-                    .get(local_id)
-                    .map(|pending| (*local_id, pending.item.clone(), pending.reply_to))
+                self.pending_outgoing.get(local_id).map(|pending| {
+                    (
+                        *local_id,
+                        pending.item.clone(),
+                        pending.reply_to,
+                        pending.topic_id,
+                    )
+                })
             })
             .collect();
         let event_tx = self.event_tx.clone();
         tokio::spawn(async move {
-            for (local_id, item, reply_to) in batch {
-                let result = perform_send(&client, peer_ref, chat_id, item, reply_to).await;
+            for (local_id, item, reply_to, topic_id) in batch {
+                let result =
+                    perform_send(&client, peer_ref, chat_id, item, reply_to, topic_id).await;
                 let event = EngineEvent::SendFinished {
                     chat_id,
                     local_id,
@@ -2072,9 +2677,9 @@ impl EngineState {
         local_id: u64,
         result: Result<Vec<MessageSnapshot>, EngineError>,
     ) {
-        self.pending_outgoing.remove(&local_id);
         match result {
             Ok(messages) => {
+                let pending = self.pending_outgoing.remove(&local_id);
                 let preview_source = messages
                     .last()
                     .map(|message| (snapshot_preview(message), message.timestamp_unix));
@@ -2083,7 +2688,10 @@ impl EngineState {
                 }
                 let conversation_chat_id = self.canonical_chat_id(chat_id);
                 let migrated_from_chat_id = self.migrated_from.get(&conversation_chat_id).copied();
-                if self.view.selected_chat == Some(conversation_chat_id) {
+                let pending_topic = pending.as_ref().and_then(|pending| pending.topic_id);
+                if self.view.selected_chat == Some(conversation_chat_id)
+                    && self.view.selected_topic == pending_topic
+                {
                     replace_sent_messages(
                         &mut self.view.history,
                         local_id,
@@ -2093,6 +2701,19 @@ impl EngineState {
                     );
                     self.enrich_reply_previews();
                     self.cache_selected_history();
+                } else if let Some(topic_id) = pending_topic {
+                    if let Some(entry) = self
+                        .topic_histories
+                        .get_mut(&(conversation_chat_id, topic_id))
+                    {
+                        replace_sent_messages(
+                            &mut entry.messages,
+                            local_id,
+                            messages,
+                            conversation_chat_id,
+                            migrated_from_chat_id,
+                        );
+                    }
                 } else {
                     let entry = self.histories.entry(conversation_chat_id).or_default();
                     replace_sent_messages(
@@ -2105,6 +2726,9 @@ impl EngineState {
                 }
                 if let Some((preview, timestamp_unix)) = preview_source {
                     self.update_chat_preview(chat_id, preview, timestamp_unix);
+                }
+                if let Some(chat) = self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
+                    chat.slow_mode_seconds = 0;
                 }
                 self.persist_session();
                 self.publish();
@@ -2119,19 +2743,26 @@ impl EngineState {
     /// Marks one optimistic message as failed and keeps its planned item so the
     /// panel can retry without re-staging the attachment.
     fn fail_send(&mut self, local_id: u64, error: EngineError) {
-        let Some(chat_id) = self
-            .pending_outgoing
-            .get(&local_id)
-            .map(|pending| pending.chat_id)
-        else {
+        let Some(pending) = self.pending_outgoing.get(&local_id).cloned() else {
             self.set_error(error);
             return;
         };
-        if self.view.selected_chat == Some(chat_id) {
+        let chat_id = pending.chat_id;
+        if self.view.selected_chat == Some(chat_id) && self.view.selected_topic == pending.topic_id
+        {
             if let Some(index) = self.message_index(local_id) {
                 self.view.history[index].send_state = SendState::Failed;
             }
             self.cache_selected_history();
+        } else if let Some(topic_id) = pending.topic_id {
+            if let Some(entry) = self.topic_histories.get_mut(&(chat_id, topic_id))
+                && let Some(message) = entry
+                    .messages
+                    .iter_mut()
+                    .find(|message| message.local_id == Some(local_id))
+            {
+                message.send_state = SendState::Failed;
+            }
         } else if let Some(entry) = self.histories.get_mut(&chat_id) {
             if let Some(message) = entry
                 .messages
@@ -2141,22 +2772,39 @@ impl EngineState {
                 message.send_state = SendState::Failed;
             }
         }
+        if let EngineError::SlowMode { seconds } = &error {
+            let seconds = (*seconds).min(u64::from(u32::MAX)) as u32;
+            if let Some(chat) = self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
+                chat.slow_mode_seconds = seconds;
+            }
+            self.refresh_visible_chats();
+        }
         self.set_error(error);
     }
 
     fn retry_send(&mut self, chat_id: i64, local_id: u64) {
         let chat_id = self.canonical_chat_id(chat_id);
-        let Some(pending) = self.pending_outgoing.get(&local_id) else {
+        let Some(pending) = self.pending_outgoing.get(&local_id).cloned() else {
             return;
         };
         if pending.chat_id != chat_id {
             return;
         }
-        if self.view.selected_chat == Some(chat_id) {
+        if self.view.selected_chat == Some(chat_id) && self.view.selected_topic == pending.topic_id
+        {
             if let Some(index) = self.message_index(local_id) {
                 self.view.history[index].send_state = SendState::Sending;
             }
             self.cache_selected_history();
+        } else if let Some(topic_id) = pending.topic_id {
+            if let Some(entry) = self.topic_histories.get_mut(&(chat_id, topic_id))
+                && let Some(message) = entry
+                    .messages
+                    .iter_mut()
+                    .find(|message| message.local_id == Some(local_id))
+            {
+                message.send_state = SendState::Sending;
+            }
         } else if let Some(entry) = self.histories.get_mut(&chat_id)
             && let Some(message) = entry
                 .messages
@@ -2213,6 +2861,8 @@ impl EngineState {
             reply_to,
             forwarded_from: None,
             grouped_id: None,
+            topic_id: self.view.selected_topic,
+            thread_root_id: None,
             views: None,
             action: None,
             reactions: Vec::new(),
@@ -2442,14 +3092,17 @@ impl EngineState {
                 .map(|message| message.id)
                 .max()
         });
+        // Without a loaded message there is nothing to report as read; the
+        // history load calls back once it has a real position.
+        let Some(newest) = newest else {
+            return;
+        };
         let changed = match self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
             Some(chat) => {
                 let changed = chat.unread_count != 0 || chat.unread_mentions != 0;
                 chat.unread_count = 0;
                 chat.unread_mentions = 0;
-                if let Some(newest) = newest {
-                    chat.read_inbox_message_id = chat.read_inbox_message_id.max(newest);
-                }
+                chat.read_inbox_message_id = chat.read_inbox_message_id.max(newest);
                 changed
             }
             None => false,
@@ -2462,7 +3115,7 @@ impl EngineState {
         let Some(client) = self.client.clone() else {
             return;
         };
-        let max_id = newest.unwrap_or(0);
+        let max_id = newest;
         tokio::spawn(async move {
             for peer_ref in peer_refs {
                 let result = if peer_ref.id.kind() == PeerKind::Channel {
@@ -2548,14 +3201,203 @@ impl EngineState {
         if self.view.selected_chat != Some(chat_id) {
             return;
         }
-        let unread = self
-            .all_chats
-            .iter()
-            .find(|chat| chat.id == chat_id)
-            .is_some_and(|chat| chat.unread_count > 0 || chat.unread_mentions > 0);
-        if unread {
+        if let Some(topic_id) = self.view.selected_topic {
+            let unread = self
+                .view
+                .topics
+                .iter()
+                .find(|topic| topic.id == topic_id)
+                .map_or_else(
+                    || self.chat_has_unread(chat_id),
+                    |topic| topic.unread_count > 0 || topic.unread_mentions > 0,
+                );
+            if unread {
+                self.mark_topic_read(chat_id, topic_id, true);
+            }
+            return;
+        }
+        // The General topic of a forum has its own read position. Clearing the
+        // chat-wide counter would also hide unread replies in other topics.
+        if self.chat_is_forum(chat_id) {
+            // Wait for the topic list so the General share can be separated
+            // from the other topics.
+            if self.view.loading_topics {
+                return;
+            }
+            if self.view.topics.is_empty() {
+                // A forum without listed topics, or a failed topic request;
+                // the chat-wide position is the only available information.
+                if self.chat_has_unread(chat_id) {
+                    self.mark_read(chat_id, None);
+                }
+                return;
+            }
+            if let Some(general) = self
+                .view
+                .topics
+                .iter()
+                .find(|topic| topic.id == GENERAL_TOPIC_ID)
+            {
+                if general.unread_count > 0 || general.unread_mentions > 0 {
+                    self.mark_topic_read(chat_id, GENERAL_TOPIC_ID, false);
+                }
+                return;
+            }
+            // `messages.getForumTopics` may omit the General topic; the
+            // remainder after the listed topics is its unread share.
+            let other_unread: i32 = self
+                .view
+                .topics
+                .iter()
+                .map(|topic| topic.unread_count.max(0))
+                .sum();
+            let other_mentions: i32 = self
+                .view
+                .topics
+                .iter()
+                .map(|topic| topic.unread_mentions.max(0))
+                .sum();
+            let general_unread = self
+                .all_chats
+                .iter()
+                .find(|chat| chat.id == chat_id)
+                .is_some_and(|chat| {
+                    chat.unread_count > other_unread || chat.unread_mentions > other_mentions
+                });
+            if general_unread {
+                self.mark_general_topic_read(chat_id, other_unread, other_mentions);
+            }
+            return;
+        }
+        if self.chat_has_unread(chat_id) {
             self.mark_read(chat_id, None);
         }
+    }
+
+    /// Clears the General topic's share of a forum's unread counters while
+    /// keeping the listed topics' badges intact.
+    fn mark_general_topic_read(&mut self, chat_id: i64, other_unread: i32, other_mentions: i32) {
+        let chat_id = self.canonical_chat_id(chat_id);
+        let Some(newest) = self
+            .view
+            .history
+            .iter()
+            .filter(|message| message.chat_id == chat_id && message.id != 0)
+            .map(|message| message.id)
+            .max()
+        else {
+            return;
+        };
+        let changed = match self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
+            Some(chat) => {
+                let general_unread = chat.unread_count.saturating_sub(other_unread);
+                let general_mentions = chat.unread_mentions.saturating_sub(other_mentions);
+                chat.unread_count = chat.unread_count.saturating_sub(general_unread);
+                chat.unread_mentions = chat.unread_mentions.saturating_sub(general_mentions);
+                chat.read_inbox_message_id = chat.read_inbox_message_id.max(newest);
+                general_unread > 0 || general_mentions > 0
+            }
+            None => false,
+        };
+        if changed {
+            self.refresh_visible_chats();
+            self.recompute_unread();
+        }
+        self.publish();
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
+            return;
+        };
+        tokio::spawn(async move {
+            let result = client
+                .invoke(&tl::functions::channels::ReadHistory {
+                    channel: peer_ref.into(),
+                    max_id: newest,
+                })
+                .await
+                .map(drop);
+            if let Err(error) = result {
+                log::debug!("failed to mark a Telegram topic as read: {error}");
+            }
+        });
+    }
+
+    fn chat_has_unread(&self, chat_id: i64) -> bool {
+        self.all_chats
+            .iter()
+            .find(|chat| chat.id == chat_id)
+            .is_some_and(|chat| chat.unread_count > 0 || chat.unread_mentions > 0)
+    }
+
+    /// Marks one forum topic as read. The chat-wide counters lose only this
+    /// topic's share, so other topics keep their badges. `discussion` selects
+    /// `messages.readDiscussion`; the General topic uses the channel read call
+    /// instead.
+    fn mark_topic_read(&mut self, chat_id: i64, topic_id: i32, discussion: bool) {
+        let chat_id = self.canonical_chat_id(chat_id);
+        let Some(newest) = self
+            .view
+            .history
+            .iter()
+            .filter(|message| message.chat_id == chat_id && message.id != 0)
+            .map(|message| message.id)
+            .max()
+        else {
+            return;
+        };
+        let topic_unread = self
+            .view
+            .topics
+            .iter_mut()
+            .find(|topic| topic.id == topic_id)
+            .map(|topic| {
+                let unread = (topic.unread_count, topic.unread_mentions);
+                topic.unread_count = 0;
+                topic.unread_mentions = 0;
+                unread
+            });
+        let changed = match self.all_chats.iter_mut().find(|chat| chat.id == chat_id) {
+            Some(chat) => {
+                let (unread, mentions) =
+                    topic_unread.unwrap_or((chat.unread_count, chat.unread_mentions));
+                let changed = unread > 0 || mentions > 0;
+                chat.unread_count = chat.unread_count.saturating_sub(unread);
+                chat.unread_mentions = chat.unread_mentions.saturating_sub(mentions);
+                chat.read_inbox_message_id = chat.read_inbox_message_id.max(newest);
+                changed
+            }
+            None => false,
+        };
+        if changed {
+            self.refresh_visible_chats();
+            self.recompute_unread();
+        }
+        self.publish();
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
+            return;
+        };
+        tokio::spawn(async move {
+            let result = if discussion {
+                client
+                    .invoke(&tl::functions::messages::ReadDiscussion {
+                        peer: peer_ref.into(),
+                        msg_id: topic_id,
+                        read_max_id: newest,
+                    })
+                    .await
+                    .map(drop)
+            } else {
+                client
+                    .invoke(&tl::functions::channels::ReadHistory {
+                        channel: peer_ref.into(),
+                        max_id: newest,
+                    })
+                    .await
+                    .map(drop)
+            };
+            if let Err(error) = result {
+                log::debug!("failed to mark a Telegram topic as read: {error}");
+            }
+        });
     }
 
     fn set_typing(&mut self, chat_id: i64, typing: bool) {
@@ -2880,6 +3722,14 @@ impl EngineState {
         {
             update(media);
         }
+        for cached in self.topic_histories.values_mut() {
+            if let Some(message) = cached.messages.iter_mut().find(|message| {
+                message.chat_id == chat_id && message.id == message_id && message.id != 0
+            }) && let Some(media) = message.media.as_mut()
+            {
+                update(media);
+            }
+        }
     }
 
     fn current_message_index(&self, chat_id: i64, message_id: i32) -> Option<usize> {
@@ -2948,6 +3798,11 @@ impl EngineState {
             .history
             .retain(|message| message.chat_id != chat_id || !message_ids.contains(&message.id));
         if let Some(cached) = self.histories.get_mut(&chat_id) {
+            cached
+                .messages
+                .retain(|message| message.chat_id != chat_id || !message_ids.contains(&message.id));
+        }
+        for cached in self.topic_histories.values_mut() {
             cached
                 .messages
                 .retain(|message| message.chat_id != chat_id || !message_ids.contains(&message.id));
@@ -3117,6 +3972,115 @@ impl EngineState {
         }
     }
 
+    async fn vote_poll(&mut self, chat_id: i64, message_id: i32, options: Vec<Vec<u8>>) {
+        let Some((peer_ref, client)) = self.chat_context(chat_id) else {
+            return;
+        };
+        let request = tl::functions::messages::SendVote {
+            peer: peer_ref.into(),
+            msg_id: message_id,
+            options: options.clone(),
+        };
+        match client.invoke(&request).await {
+            Ok(updates) => {
+                // The RPC result usually carries the authoritative poll counts;
+                // fall back to local chosen flags when it does not.
+                if self.apply_poll_updates(updates) {
+                    self.cache_selected_history();
+                } else {
+                    self.apply_local_vote(chat_id, message_id, &options);
+                }
+                self.publish();
+            }
+            Err(error) => {
+                log::warn!("failed to vote in a Telegram poll: {error}");
+                self.set_error(EngineError::from_invocation_with(
+                    &error,
+                    EngineError::ReactionFailed,
+                ));
+            }
+        }
+    }
+
+    /// Applies every `updateMessagePoll` in an RPC response. Returns whether any
+    /// cached poll matched.
+    fn apply_poll_updates(&mut self, updates: tl::enums::Updates) -> bool {
+        let updates = match updates {
+            tl::enums::Updates::Updates(updates) => updates.updates,
+            tl::enums::Updates::Combined(updates) => updates.updates,
+            tl::enums::Updates::UpdateShort(update) => vec![update.update],
+            // Short-message variants describe a sent message, not a poll.
+            _ => Vec::new(),
+        };
+        let mut applied = false;
+        for update in updates {
+            if let tl::enums::Update::MessagePoll(raw) = update {
+                let tl::enums::PollResults::Results(results) = &raw.results;
+                applied |= self.apply_poll_update(raw.poll_id, results);
+            }
+        }
+        applied
+    }
+
+    /// Applies authoritative poll results to every cached copy of the poll.
+    fn apply_poll_update(&mut self, poll_id: i64, results: &tl::types::PollResults) -> bool {
+        let mut changed = false;
+        let update = |message: &mut MessageSnapshot| -> bool {
+            let Some(poll) = message.media.as_mut().and_then(|media| media.poll.as_mut()) else {
+                return false;
+            };
+            if poll.id != poll_id {
+                return false;
+            }
+            apply_poll_results(poll, results);
+            true
+        };
+        for message in &mut self.view.history {
+            changed |= update(message);
+        }
+        for entry in self.histories.values_mut() {
+            for message in &mut entry.messages {
+                changed |= update(message);
+            }
+        }
+        for entry in self.topic_histories.values_mut() {
+            for message in &mut entry.messages {
+                changed |= update(message);
+            }
+        }
+        changed
+    }
+
+    /// Updates the chosen flags locally so the poll reacts immediately; the
+    /// server echoes `updateMessagePoll` with authoritative counts.
+    fn apply_local_vote(&mut self, chat_id: i64, message_id: i32, options: &[Vec<u8>]) {
+        let update = |message: &mut MessageSnapshot| {
+            if message.chat_id != chat_id || message.id != message_id {
+                return;
+            }
+            let Some(poll) = message.media.as_mut().and_then(|media| media.poll.as_mut()) else {
+                return;
+            };
+            for option in &mut poll.options {
+                option.chosen = options.iter().any(|chosen| chosen == &option.option);
+            }
+        };
+        for message in &mut self.view.history {
+            update(message);
+        }
+        let conversation_chat_id = self.canonical_chat_id(chat_id);
+        if let Some(entry) = self.histories.get_mut(&conversation_chat_id) {
+            for message in &mut entry.messages {
+                update(message);
+            }
+        }
+        for entry in self.topic_histories.values_mut() {
+            for message in &mut entry.messages {
+                update(message);
+            }
+        }
+    }
+
     /// Applies a reaction optimistically. The server echoes
     /// `updateMessageReactions`, which reconciles counts shortly after.
     fn apply_local_reaction(&mut self, chat_id: i64, message_id: i32, emoji: Option<&str>) {
@@ -3258,6 +4222,7 @@ impl EngineState {
                 if let Some(cached) = self.histories.get_mut(&chat_id) {
                     cached.messages.clear();
                 }
+                self.topic_histories.retain(|(id, _), _| *id != chat_id);
                 if self.view.selected_chat == Some(chat_id) {
                     self.view.history.clear();
                 }
@@ -3290,11 +4255,17 @@ impl EngineState {
                 self.folder_membership.remove(&chat_id);
                 self.all_chats.retain(|chat| chat.id != chat_id);
                 self.histories.remove(&chat_id);
-                self.drafts.remove(&chat_id);
+                self.drafts.retain(|(id, _), _| *id != chat_id);
+                self.draft_epochs.retain(|(id, _), _| *id != chat_id);
+                self.saved_drafts.retain(|(id, _), _| *id != chat_id);
+                self.topic_histories.retain(|(id, _), _| *id != chat_id);
                 if self.view.selected_chat == Some(chat_id) {
                     self.view.selected_chat = None;
                     self.view.history.clear();
                     self.view.draft.clear();
+                    self.view.topics.clear();
+                    self.view.loading_topics = false;
+                    self.view.selected_topic = None;
                     self.history_epoch = self.history_epoch.wrapping_add(1);
                 }
                 self.refresh_visible_chats();
@@ -3333,6 +4304,22 @@ impl EngineState {
                 self.chats_refresh_scheduled = false;
                 self.spawn_load_chats();
             }
+            EngineEvent::DraftSync {
+                chat_id,
+                topic_id,
+                epoch,
+                text,
+            } => self.apply_draft_sync(chat_id, topic_id, epoch, text).await,
+            EngineEvent::TopicsLoaded { chat_id, result } => {
+                self.apply_topics_loaded(chat_id, result)
+            }
+            EngineEvent::TopicHistoryLoaded {
+                chat_id,
+                topic_id,
+                epoch,
+                offset_id,
+                result,
+            } => self.apply_topic_history_loaded(chat_id, topic_id, epoch, offset_id, result),
             EngineEvent::FillGap {
                 chat_id,
                 after_id,
@@ -3397,6 +4384,7 @@ impl EngineState {
                         self.view.history.retain(|message| {
                             message.chat_id != chat_id || !ids.contains(&message.id)
                         });
+                        self.cache_selected_history();
                     }
                     self.publish();
                 } else {
@@ -3430,8 +4418,15 @@ impl EngineState {
         let outgoing = snapshot.outgoing;
         self.remember_sender(&snapshot);
         let selected = self.view.selected_chat == Some(conversation_chat_id);
-        let actively_viewing = self.is_actively_viewing(conversation_chat_id);
+        let topic_matches = match self.view.selected_topic {
+            Some(topic_id) => snapshot.topic_id == Some(topic_id),
+            None => snapshot
+                .topic_id
+                .is_none_or(|topic_id| topic_id == GENERAL_TOPIC_ID),
+        };
+        let actively_viewing = topic_matches && self.is_actively_viewing(conversation_chat_id);
         let mentioned = matches!(&message.raw, tl::enums::Message::Message(raw) if raw.mentioned);
+        let message_topic_id = snapshot.topic_id.unwrap_or(GENERAL_TOPIC_ID);
 
         if let Some(chat) = self
             .all_chats
@@ -3458,7 +4453,21 @@ impl EngineState {
             self.schedule_chats_refresh();
         }
 
-        if selected && snapshot.id != 0 {
+        if selected && !outgoing && !actively_viewing && !self.view.topics.is_empty() {
+            if let Some(topic) = self
+                .view
+                .topics
+                .iter_mut()
+                .find(|topic| topic.id == message_topic_id)
+            {
+                topic.unread_count = topic.unread_count.saturating_add(1);
+                if mentioned {
+                    topic.unread_mentions = topic.unread_mentions.saturating_add(1);
+                }
+            }
+        }
+
+        if selected && snapshot.id != 0 && topic_matches {
             let newest_known = self
                 .view
                 .history
@@ -3480,7 +4489,7 @@ impl EngineState {
         self.recompute_unread();
         self.publish();
 
-        if selected && !outgoing {
+        if selected && topic_matches && !outgoing {
             self.maybe_mark_read();
         }
     }
@@ -3516,7 +4525,17 @@ impl EngineState {
                 if snapshot.chat_id == updated_for_cache.chat_id
                     && snapshot.id == updated_for_cache.id
                 {
-                    *snapshot = updated_for_cache;
+                    *snapshot = updated_for_cache.clone();
+                    break;
+                }
+            }
+        }
+        for cached in self.topic_histories.values_mut() {
+            for snapshot in &mut cached.messages {
+                if snapshot.chat_id == updated_for_cache.chat_id
+                    && snapshot.id == updated_for_cache.id
+                {
+                    *snapshot = updated_for_cache.clone();
                     break;
                 }
             }
@@ -3588,6 +4607,14 @@ impl EngineState {
                         }
                     }
                 }
+                for cached in self.topic_histories.values_mut() {
+                    for message in &mut cached.messages {
+                        if message.chat_id == chat_id && message.id == raw.msg_id {
+                            message.reactions = reactions.clone();
+                            changed = true;
+                        }
+                    }
+                }
                 if changed {
                     if self.view.selected_chat == Some(conversation_chat_id) {
                         self.cache_selected_history();
@@ -3629,6 +4656,29 @@ impl EngineState {
                 }
                 self.refresh_visible_chats();
                 self.publish();
+            }
+            tl::enums::Update::UserStatus(raw) => {
+                let Some(chat_id) = PeerId::user(raw.user_id).and_then(PeerId::bot_api_dialog_id)
+                else {
+                    return;
+                };
+                let presence = presence_from_status(&raw.status);
+                let Some(chat) = self.all_chats.iter_mut().find(|chat| chat.id == chat_id) else {
+                    return;
+                };
+                if chat.presence == presence {
+                    return;
+                }
+                chat.presence = presence;
+                self.refresh_visible_chats();
+                self.publish();
+            }
+            tl::enums::Update::MessagePoll(raw) => {
+                let tl::enums::PollResults::Results(results) = &raw.results;
+                if self.apply_poll_update(raw.poll_id, results) {
+                    self.cache_selected_history();
+                    self.publish();
+                }
             }
             _ => {}
         }
@@ -3699,6 +4749,67 @@ async fn fetch_history_page(
     // oldest-first, so normalize the page before storing it.
     let has_more = page.len() == HISTORY_PAGE_SIZE;
     page.reverse();
+    Ok((page, has_more))
+}
+
+/// Fetches a page of replies in a forum topic. `messages.getReplies` returns
+/// raw message envelopes, so their ids are resolved through the client's peer
+/// cache to get sender names and media.
+async fn fetch_topic_page(
+    client: &Client,
+    peer_ref: PeerRef,
+    chat_id: i64,
+    topic_id: i32,
+    offset_id: i32,
+) -> Result<(Vec<MessageSnapshot>, bool), EngineError> {
+    let request = tl::functions::messages::GetReplies {
+        peer: peer_ref.into(),
+        msg_id: topic_id,
+        offset_id,
+        offset_date: 0,
+        add_offset: 0,
+        limit: HISTORY_PAGE_SIZE as i32,
+        max_id: 0,
+        min_id: 0,
+        hash: 0,
+    };
+    let response = client.invoke(&request).await.map_err(|error| {
+        log::warn!("failed to load Telegram topic replies: {error}");
+        EngineError::from_invocation_with(&error, EngineError::LoadMessagesFailed)
+    })?;
+    let raw_messages = match response {
+        tl::enums::messages::Messages::ChannelMessages(messages) => messages.messages,
+        tl::enums::messages::Messages::Messages(messages) => messages.messages,
+        tl::enums::messages::Messages::Slice(messages) => messages.messages,
+        tl::enums::messages::Messages::NotModified(_) => Vec::new(),
+    };
+    let ids: Vec<i32> = raw_messages
+        .into_iter()
+        .filter_map(|message| match message {
+            tl::enums::Message::Message(message) => Some(message.id),
+            tl::enums::Message::Service(message) => Some(message.id),
+            tl::enums::Message::Empty(_) => None,
+        })
+        .collect();
+    if ids.is_empty() {
+        return Ok((Vec::new(), false));
+    }
+    // Pagination is based on how many replies the server returned, not on how
+    // many of them resolved to full messages.
+    let has_more = ids.len() >= HISTORY_PAGE_SIZE;
+    let fetched = client
+        .get_messages_by_id(peer_ref, &ids)
+        .await
+        .map_err(|error| {
+            log::warn!("failed to resolve Telegram topic replies: {error}");
+            EngineError::from_invocation_with(&error, EngineError::LoadMessagesFailed)
+        })?;
+    let mut page: Vec<MessageSnapshot> = fetched
+        .into_iter()
+        .flatten()
+        .map(|message| message_to_snapshot(&message, chat_id))
+        .collect();
+    page.sort_by_key(|message| message.id);
     Ok((page, has_more))
 }
 
@@ -3908,6 +5019,7 @@ fn dialog_to_snapshot(dialog: &Dialog) -> Option<ChatSnapshot> {
         username: peer.username().map(ToOwned::to_owned),
         kind: peer_chat_kind(peer),
         preview,
+        is_forum: peer_is_forum(peer),
         preview_media,
         timestamp_unix,
         unread_count,
@@ -3940,13 +5052,23 @@ fn peer_chat_kind(peer: &Peer) -> ChatKind {
 }
 
 /// Whether the account may post in a chat. Channels are read-only unless the
-/// account created or administers them.
+/// account created or administers them. Basic groups also honor the default
+/// banned rights, so a restricted member does not get a composer that cannot
+/// send.
 fn peer_can_send(peer: &Peer) -> bool {
     match peer {
         Peer::User(_) => true,
         Peer::Group(group) => match &group.raw {
-            tl::enums::Chat::Chat(chat) => !chat.left,
+            tl::enums::Chat::Chat(chat) => {
+                !chat.left && !banned_from_sending(chat.default_banned_rights.as_ref())
+            }
             tl::enums::Chat::Forbidden(_) => false,
+            tl::enums::Chat::Channel(channel) => {
+                !channel.left
+                    && (!channel.broadcast || channel.creator || channel.admin_rights.is_some())
+                    && !banned_from_sending(channel.banned_rights.as_ref())
+            }
+            tl::enums::Chat::ChannelForbidden(_) => false,
             _ => true,
         },
         Peer::Channel(channel) => {
@@ -3954,8 +5076,29 @@ fn peer_can_send(peer: &Peer) -> bool {
                 && (!channel.raw.broadcast
                     || channel.raw.creator
                     || channel.raw.admin_rights.is_some())
+                && !banned_from_sending(channel.raw.banned_rights.as_ref())
         }
         Peer::Community(_) => false,
+    }
+}
+
+/// Whether a banned-rights mask forbids sending regular messages.
+fn banned_from_sending(rights: Option<&tl::enums::ChatBannedRights>) -> bool {
+    matches!(
+        rights,
+        Some(tl::enums::ChatBannedRights::Rights(rights)) if rights.send_messages
+    )
+}
+
+/// Whether a peer is a forum supergroup.
+fn peer_is_forum(peer: &Peer) -> bool {
+    match peer {
+        Peer::Channel(channel) => channel.raw.forum,
+        Peer::Group(group) => match &group.raw {
+            tl::enums::Chat::Channel(channel) => channel.forum,
+            _ => false,
+        },
+        Peer::User(_) | Peer::Community(_) => false,
     }
 }
 
@@ -3963,13 +5106,17 @@ fn peer_presence(peer: &Peer) -> Presence {
     let Peer::User(user) = peer else {
         return Presence::Unknown;
     };
-    match user.status() {
+    presence_from_status(user.status())
+}
+
+fn presence_from_status(status: &tl::enums::UserStatus) -> Presence {
+    match status {
         tl::enums::UserStatus::Online(_) => Presence::Online,
         tl::enums::UserStatus::Recently(_) => Presence::Recently,
         tl::enums::UserStatus::Offline(status) => Presence::LastSeen(i64::from(status.was_online)),
         tl::enums::UserStatus::LastWeek(_) => Presence::Recently,
         tl::enums::UserStatus::LastMonth(_) => Presence::Recently,
-        _ => Presence::Unknown,
+        tl::enums::UserStatus::Empty => Presence::Unknown,
     }
 }
 
@@ -4031,14 +5178,22 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
     let sender_id = message
         .sender_id()
         .and_then(|sender_id| sender_id.bot_api_dialog_id());
-    let raw = match &message.raw {
-        tl::enums::Message::Message(raw) => Some(raw),
-        _ => None,
+    let (raw, service) = match &message.raw {
+        tl::enums::Message::Message(raw) => (Some(raw), None),
+        tl::enums::Message::Service(service) => (None, Some(service)),
+        tl::enums::Message::Empty(_) => (None, None),
     };
-    let reply_to = raw
+    let reply_header = raw
         .and_then(|raw| raw.reply_to.as_ref())
-        .and_then(reply_header_snapshot)
-        .map(Box::new);
+        .or_else(|| service.and_then(|service| service.reply_to.as_ref()));
+    let reply_to = reply_header.and_then(reply_header_snapshot).map(Box::new);
+    let (topic_id, thread_root_id) = reply_header.map_or((None, None), |header| match header {
+        tl::enums::MessageReplyHeader::Header(header) if header.forum_topic => {
+            (header.reply_to_top_id.or(header.reply_to_msg_id), None)
+        }
+        tl::enums::MessageReplyHeader::Header(header) => (None, header.reply_to_top_id),
+        tl::enums::MessageReplyHeader::MessageReplyStoryHeader(_) => (None, None),
+    });
     let forwarded_from =
         raw.and_then(|raw| raw.fwd_from.as_ref())
             .and_then(|header| match header {
@@ -4054,6 +5209,7 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
         .and_then(|action| message_action(action, &sender_name));
     let reactions = raw
         .and_then(|raw| raw.reactions.as_ref())
+        .or_else(|| service.and_then(|service| service.reactions.as_ref()))
         .map(message_reactions)
         .unwrap_or_default();
 
@@ -4070,6 +5226,8 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
         reply_to,
         forwarded_from,
         grouped_id,
+        topic_id,
+        thread_root_id,
         views,
         action,
         reactions,
@@ -4080,10 +5238,23 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
 }
 
 fn reply_header_snapshot(header: &tl::enums::MessageReplyHeader) -> Option<ReplySnapshot> {
-    let message_id = match header {
-        tl::enums::MessageReplyHeader::Header(header) => header.reply_to_msg_id?,
+    let header = match header {
+        tl::enums::MessageReplyHeader::Header(header) => header,
         tl::enums::MessageReplyHeader::MessageReplyStoryHeader(_) => return None,
     };
+    // A message posted into a forum topic carries the topic id in its reply
+    // header. That is routing metadata, not a visible reply to another message.
+    // A direct post leaves `reply_to_top_id` empty and puts the topic id in
+    // `reply_to_msg_id`; a reply to the topic itself repeats the same id in both.
+    if header.forum_topic {
+        let Some(top_id) = header.reply_to_top_id else {
+            return None;
+        };
+        if header.reply_to_msg_id == Some(top_id) {
+            return None;
+        }
+    }
+    let message_id = header.reply_to_msg_id?;
     Some(ReplySnapshot {
         message_id,
         sender_name: String::new(),
@@ -4179,7 +5350,11 @@ impl DownloadTarget {
             Self::Thumbnail => {
                 matches!(
                     media.kind,
-                    MediaKind::Photo | MediaKind::Sticker | MediaKind::Video
+                    MediaKind::Photo
+                        | MediaKind::Sticker
+                        | MediaKind::Video
+                        | MediaKind::Animation
+                        | MediaKind::VideoNote
                 ) && media.thumbnail_state != DownloadState::Downloading
                     && media
                         .thumbnail_path
@@ -4275,6 +5450,13 @@ fn media_to_snapshot(media: &Media) -> MediaSnapshot {
         Media::Sticker(sticker) => {
             snapshot.kind = MediaKind::Sticker;
             snapshot.size = sticker.document.size().map(|size| size as u64);
+            snapshot.mime_type = sticker.document.mime_type().map(ToOwned::to_owned);
+            snapshot.file_name = sticker.document.name().map(ToOwned::to_owned);
+            snapshot.duration_seconds = sticker.document.duration();
+            if let Some((width, height)) = sticker.document.resolution() {
+                snapshot.width = Some(width);
+                snapshot.height = Some(height);
+            }
         }
         Media::WebPage(page) => {
             snapshot.kind = MediaKind::WebPage;
@@ -4316,13 +5498,34 @@ fn media_to_snapshot(media: &Media) -> MediaSnapshot {
     snapshot
 }
 
+fn apply_poll_results(poll: &mut PollSnapshot, results: &tl::types::PollResults) {
+    poll.total_voters = results.total_voters.unwrap_or(poll.total_voters);
+    let Some(results) = results.results.as_ref() else {
+        return;
+    };
+    for (index, result) in results.iter().enumerate() {
+        let tl::enums::PollAnswerVoters::Voters(result) = result;
+        let Some(option) = poll.options.get_mut(index) else {
+            continue;
+        };
+        option.voters = result.voters.unwrap_or(0);
+        option.chosen = result.chosen;
+        option.correct = result.correct;
+        // Results normally repeat the opaque option bytes; the poll media is
+        // authoritative when they do not.
+        if !result.option.is_empty() {
+            option.option = result.option.clone();
+        }
+    }
+}
+
 fn poll_snapshot(poll: &grammers_client::media::Poll) -> Option<PollSnapshot> {
     let raw = &poll.raw;
-    let voters: Vec<i32> = match poll.raw_results.results.as_ref() {
+    let results: Vec<&tl::types::PollAnswerVoters> = match poll.raw_results.results.as_ref() {
         Some(results) => results
             .iter()
             .map(|voters| match voters {
-                tl::enums::PollAnswerVoters::Voters(voters) => voters.voters.unwrap_or(0),
+                tl::enums::PollAnswerVoters::Voters(voters) => voters,
             })
             .collect(),
         None => Vec::new(),
@@ -4331,16 +5534,32 @@ fn poll_snapshot(poll: &grammers_client::media::Poll) -> Option<PollSnapshot> {
         .answers
         .iter()
         .enumerate()
-        .map(|(index, answer)| PollOptionSnapshot {
-            text: text_with_entities(&answer.text()),
-            voters: voters.get(index).copied().unwrap_or(0),
+        .map(|(index, answer)| {
+            let result = results.get(index);
+            let answer_option = match answer {
+                tl::enums::PollAnswer::Answer(answer) => Some(answer.option.clone()),
+                tl::enums::PollAnswer::InputPollAnswer(_) => None,
+            };
+            PollOptionSnapshot {
+                text: text_with_entities(&answer.text()),
+                voters: result.and_then(|result| result.voters).unwrap_or(0),
+                chosen: result.is_some_and(|result| result.chosen),
+                correct: result.is_some_and(|result| result.correct),
+                option: answer_option
+                    .filter(|option| !option.is_empty())
+                    .or_else(|| result.map(|result| result.option.clone()))
+                    .unwrap_or_default(),
+            }
         })
         .collect();
     Some(PollSnapshot {
+        id: raw.id,
         question: text_with_entities(&raw.question),
         options,
         closed: raw.closed,
         multiple_choice: raw.multiple_choice,
+        quiz: raw.quiz,
+        total_voters: poll.raw_results.total_voters.unwrap_or(0),
     })
 }
 
@@ -4623,7 +5842,8 @@ fn archived_dialog_snapshot(
     chats: &[tl::enums::Chat],
 ) -> Option<ChatSnapshot> {
     let id = PeerId::from(&raw.peer).bot_api_dialog_id()?;
-    let (title, username, kind, can_send) = raw_peer_display(&raw.peer, users, chats)?;
+    let display = raw_peer_display(&raw.peer, users, chats)?;
+    let title = display.title;
     let (preview, preview_media) =
         raw_message_preview(messages, &raw.peer, raw.top_message).unwrap_or_default();
     let timestamp_unix = raw_message_date(messages, &raw.peer, raw.top_message).unwrap_or_default();
@@ -4639,9 +5859,10 @@ fn archived_dialog_snapshot(
     Some(ChatSnapshot {
         id,
         title: title.clone(),
-        username,
-        kind,
+        username: display.username,
+        kind: display.kind,
         preview,
+        is_forum: display.is_forum,
         preview_media,
         timestamp_unix,
         unread_count: raw.unread_count.max(0),
@@ -4649,7 +5870,7 @@ fn archived_dialog_snapshot(
         pinned: raw.pinned,
         muted,
         archived: true,
-        can_send,
+        can_send: display.can_send,
         slow_mode_seconds: 0,
         read_inbox_message_id: raw.read_inbox_max_id,
         read_outbox_message_id: raw.read_outbox_max_id,
@@ -4661,11 +5882,19 @@ fn archived_dialog_snapshot(
     })
 }
 
+struct RawPeerDisplay {
+    title: String,
+    username: Option<String>,
+    kind: ChatKind,
+    can_send: bool,
+    is_forum: bool,
+}
+
 fn raw_peer_display(
     peer: &tl::enums::Peer,
     users: &[tl::enums::User],
     chats: &[tl::enums::Chat],
-) -> Option<(String, Option<String>, ChatKind, bool)> {
+) -> Option<RawPeerDisplay> {
     match peer {
         tl::enums::Peer::User(peer) => {
             let user = users.iter().find_map(|user| match user {
@@ -4678,50 +5907,64 @@ fn raw_peer_display(
                 user.last_name.as_deref().unwrap_or_default()
             );
             let name = name.trim().to_owned();
-            Some((
-                if name.is_empty() {
+            Some(RawPeerDisplay {
+                title: if name.is_empty() {
                     user.username
                         .clone()
                         .unwrap_or_else(|| "Unknown".to_owned())
                 } else {
                     name
                 },
-                user.username.clone(),
-                ChatKind::User,
-                true,
-            ))
+                username: user.username.clone(),
+                kind: ChatKind::User,
+                can_send: true,
+                is_forum: false,
+            })
         }
         tl::enums::Peer::Chat(peer) => chats.iter().find_map(|chat| match chat {
-            tl::enums::Chat::Chat(chat) if chat.id == peer.chat_id => {
-                Some((chat.title.clone(), None, ChatKind::Group, !chat.left))
-            }
-            tl::enums::Chat::Forbidden(chat) if chat.id == peer.chat_id => {
-                Some((chat.title.clone(), None, ChatKind::Group, false))
-            }
+            tl::enums::Chat::Chat(chat) if chat.id == peer.chat_id => Some(RawPeerDisplay {
+                title: chat.title.clone(),
+                username: None,
+                kind: ChatKind::Group,
+                can_send: !chat.left && !banned_from_sending(chat.default_banned_rights.as_ref()),
+                is_forum: false,
+            }),
+            tl::enums::Chat::Forbidden(chat) if chat.id == peer.chat_id => Some(RawPeerDisplay {
+                title: chat.title.clone(),
+                username: None,
+                kind: ChatKind::Group,
+                can_send: false,
+                is_forum: false,
+            }),
             _ => None,
         }),
         tl::enums::Peer::Channel(peer) => {
-            let (title, username, broadcast, left, creator, admin) =
-                chats.iter().find_map(|chat| match chat {
-                    tl::enums::Chat::Channel(chat) if chat.id == peer.channel_id => Some((
-                        chat.title.clone(),
-                        chat.username.clone(),
-                        chat.broadcast,
-                        chat.left,
-                        chat.creator,
-                        chat.admin_rights.is_some(),
-                    )),
-                    tl::enums::Chat::ChannelForbidden(chat) if chat.id == peer.channel_id => {
-                        Some((chat.title.clone(), None, chat.broadcast, true, false, false))
-                    }
-                    _ => None,
-                })?;
-            Some((
-                title,
-                username,
-                ChatKind::Channel,
-                !left && (!broadcast || creator || admin),
-            ))
+            if let Some(chat) = chats.iter().find_map(|chat| match chat {
+                tl::enums::Chat::Channel(chat) if chat.id == peer.channel_id => Some(chat),
+                _ => None,
+            }) {
+                return Some(RawPeerDisplay {
+                    title: chat.title.clone(),
+                    username: chat.username.clone(),
+                    kind: ChatKind::Channel,
+                    can_send: !chat.left
+                        && (!chat.broadcast || chat.creator || chat.admin_rights.is_some())
+                        && !banned_from_sending(chat.banned_rights.as_ref()),
+                    is_forum: chat.forum,
+                });
+            }
+            chats.iter().find_map(|chat| match chat {
+                tl::enums::Chat::ChannelForbidden(chat) if chat.id == peer.channel_id => {
+                    Some(RawPeerDisplay {
+                        title: chat.title.clone(),
+                        username: None,
+                        kind: ChatKind::Channel,
+                        can_send: false,
+                        is_forum: false,
+                    })
+                }
+                _ => None,
+            })
         }
     }
 }
@@ -4954,7 +6197,11 @@ async fn perform_send(
     chat_id: i64,
     item: OutgoingItem,
     reply_to: Option<i32>,
+    topic_id: Option<i32>,
 ) -> Result<Vec<MessageSnapshot>, EngineError> {
+    // A topic post without an explicit reply is routed by replying to the
+    // topic's top message.
+    let reply_to = reply_to.or(topic_id);
     match item {
         OutgoingItem::Text(text) => {
             let text = text.trim_end().to_owned();
@@ -5013,8 +6260,12 @@ async fn perform_send(
                 };
                 medias.push(input);
             }
-            // `send_album` has no reply parameter in grammers, so an album is
-            // never attached as a reply.
+            // `send_album` derives the reply target from the first media item.
+            if let Some(reply_to) = reply_to
+                && let Some(first) = medias.first_mut()
+            {
+                *first = std::mem::take(first).reply_to(Some(reply_to));
+            }
             client
                 .send_album(peer_ref, medias)
                 .await
@@ -5270,6 +6521,7 @@ fn mime_extension(mime: &str, kind: MediaKind) -> Option<String> {
         "x-rar-compressed" => "rar",
         "x-tar" => "tar",
         "x-gzip" => "gz",
+        "x-tgsticker" => "tgs",
         "mpeg" if kind == MediaKind::Video => "mpg",
         "mpeg" => "mp3",
         "plain" => "txt",
@@ -5430,15 +6682,18 @@ fn current_unix_timestamp() -> i64 {
 mod tests {
     use super::{
         DownloadState, DownloadTarget, EngineConfig, EngineState, HistoryCursor, LoadedDialog,
-        MediaKind, MediaSnapshot, MessageSnapshot, SendState, ViewModel, avatar_initials,
-        current_unix_timestamp, evict_cache_with, media_extension, media_file_path, merge_history,
-        next_history_page, normalize_loaded_dialogs, normalize_phone, replace_sent_messages,
-        thumbnail_extension, thumbnail_file_path, upload_failure,
+        MediaKind, MediaSnapshot, MessageSnapshot, SendState, ViewModel, apply_poll_results,
+        avatar_initials, current_unix_timestamp, evict_cache_with, media_extension,
+        media_file_path, merge_history, next_history_page, normalize_loaded_dialogs,
+        normalize_phone, replace_sent_messages, reply_header_snapshot, thumbnail_extension,
+        thumbnail_file_path, upload_failure,
     };
     use crate::error::EngineError;
+    use crate::model::{PollOptionSnapshot, PollSnapshot};
     use grammers_client::InvocationError;
     use grammers_client::sender::RpcError;
     use grammers_client::session::types::PeerId;
+    use grammers_client::tl;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Duration;
@@ -5461,6 +6716,8 @@ mod tests {
             reply_to: None,
             forwarded_from: None,
             grouped_id: None,
+            topic_id: None,
+            thread_root_id: None,
             views: None,
             action: None,
             reactions: Vec::new(),
@@ -5876,5 +7133,104 @@ mod tests {
     fn upload_failure_without_an_rpc_error_is_a_send_failure() {
         let plain = std::io::Error::other("disk full");
         assert_eq!(upload_failure(&plain), EngineError::SendFailed);
+    }
+
+    fn forum_reply_header(
+        reply_to_msg_id: Option<i32>,
+        reply_to_top_id: Option<i32>,
+    ) -> grammers_client::tl::enums::MessageReplyHeader {
+        grammers_client::tl::enums::MessageReplyHeader::Header(
+            grammers_client::tl::types::MessageReplyHeader {
+                reply_to_scheduled: false,
+                forum_topic: true,
+                quote: false,
+                reply_to_ephemeral: false,
+                reply_to_msg_id,
+                reply_to_peer_id: None,
+                reply_from: None,
+                reply_media: None,
+                reply_to_top_id,
+                quote_text: None,
+                quote_entities: None,
+                quote_offset: None,
+                todo_item_id: None,
+                poll_option: None,
+            },
+        )
+    }
+
+    #[test]
+    fn topic_routing_is_not_rendered_as_a_reply_preview() {
+        assert!(reply_header_snapshot(&forum_reply_header(Some(1), Some(1))).is_none());
+        // A direct post routes through the topic id and has no top id.
+        assert!(reply_header_snapshot(&forum_reply_header(Some(1), None)).is_none());
+        let reply = reply_header_snapshot(&forum_reply_header(Some(42), Some(1)))
+            .expect("a reply inside the topic");
+        assert_eq!(reply.message_id, 42);
+    }
+
+    fn poll_with_options() -> PollSnapshot {
+        PollSnapshot {
+            id: 9,
+            question: "Pick one".to_owned(),
+            options: vec![
+                PollOptionSnapshot {
+                    text: "A".to_owned(),
+                    option: vec![1, 2],
+                    ..Default::default()
+                },
+                PollOptionSnapshot {
+                    text: "B".to_owned(),
+                    option: vec![3, 4],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
+    fn poll_results(results: Option<Vec<tl::enums::PollAnswerVoters>>) -> tl::types::PollResults {
+        tl::types::PollResults {
+            min: false,
+            has_unread_votes: false,
+            can_view_stats: false,
+            results,
+            total_voters: Some(4),
+            recent_voters: None,
+            solution: None,
+            solution_entities: None,
+            solution_media: None,
+        }
+    }
+
+    #[test]
+    fn poll_results_without_answers_keep_the_vote_option_bytes() {
+        // Anonymous polls omit per-answer results, but `sendVote` still needs
+        // the opaque option bytes from the poll media.
+        let mut poll = poll_with_options();
+        apply_poll_results(&mut poll, &poll_results(None));
+        assert_eq!(poll.total_voters, 4);
+        assert_eq!(poll.options[0].option, vec![1, 2]);
+        assert_eq!(poll.options[1].option, vec![3, 4]);
+    }
+
+    #[test]
+    fn poll_results_update_chosen_and_correct_flags() {
+        let mut poll = poll_with_options();
+        let results = poll_results(Some(vec![tl::enums::PollAnswerVoters::Voters(
+            tl::types::PollAnswerVoters {
+                chosen: true,
+                correct: true,
+                option: vec![1, 2],
+                voters: Some(3),
+                recent_voters: None,
+            },
+        )]));
+        apply_poll_results(&mut poll, &results);
+        assert!(poll.options[0].chosen);
+        assert!(poll.options[0].correct);
+        assert_eq!(poll.options[0].voters, 3);
+        assert!(!poll.options[1].chosen);
+        assert_eq!(poll.options[1].option, vec![3, 4]);
     }
 }
