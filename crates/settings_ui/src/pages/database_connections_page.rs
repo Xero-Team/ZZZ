@@ -39,8 +39,7 @@ pub(crate) fn render_database_connections_page(
     for connection in connections {
         let target = connection
             .path
-            .as_ref()
-            .map(|path| path.clone())
+            .clone()
             .or_else(|| match (connection.host.as_ref(), connection.port) {
                 (Some(host), Some(port)) => Some(format!("{host}:{port}")),
                 (Some(host), None) => Some(host.clone()),
