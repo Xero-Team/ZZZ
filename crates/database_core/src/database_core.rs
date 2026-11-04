@@ -9,6 +9,7 @@ pub mod connection;
 pub mod driver;
 pub mod er_diagram;
 pub mod error;
+pub mod explain;
 pub mod export;
 pub mod extension_driver;
 pub mod import;
@@ -25,6 +26,7 @@ pub use driver::{
 };
 pub use er_diagram::{diagrammable, er_diagram};
 pub use error::{DatabaseError, DatabaseErrorKind};
+pub use explain::{ExplainLine, flatten_plan};
 pub use export::{ExportFormat, SchemaExportFormat, export_csv, export_result_set, export_schema};
 pub use extension_driver::{ExtensionDriver, ExtensionDriverConfig};
 pub use import::{

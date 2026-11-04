@@ -974,6 +974,49 @@ mod tests {
                 .expect("explain");
             assert!(!plan.nodes.is_empty(), "EXPLAIN QUERY PLAN produces nodes");
             assert!(plan.nodes.iter().any(|node| !node.detail.is_empty()));
+            // A primary-key lookup must be reported as a search on the index,
+            // not a full scan: that is what makes the plan worth showing.
+            assert!(
+                plan.nodes
+                    .iter()
+                    .any(|node| node.detail.to_uppercase().contains("SEARCH")),
+                "expected a search node, got {:?}",
+                plan.nodes
+            );
+        });
+    }
+
+    #[test]
+    fn explain_of_a_join_nests_the_inner_loop() {
+        futures::executor::block_on(async {
+            let config = in_memory_config();
+            let handle = open_connection(&config).expect("open");
+            let connection = SqliteConnection { handle };
+            connection
+                .exec_simple("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+                .expect("create users");
+            connection
+                .exec_simple(
+                    "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, total REAL)",
+                )
+                .expect("create orders");
+            let plan = connection
+                .explain(
+                    "SELECT users.name, orders.total FROM users \
+                     JOIN orders ON orders.user_id = users.id ORDER BY users.name",
+                )
+                .await
+                .expect("explain");
+
+            let lines = crate::explain::flatten_plan(&plan);
+            assert!(lines.len() >= 2, "join plans have more than one node");
+            let text = lines
+                .iter()
+                .map(|line| line.detail.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(text.contains("users"), "plan mentions users: {text}");
+            assert!(text.contains("orders"), "plan mentions orders: {text}");
         });
     }
 

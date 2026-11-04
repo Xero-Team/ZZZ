@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use database_core::{
     Capabilities, Catalog, ColumnType, ConnectionConfig, ConnectionId, ConnectionManager,
-    EditValueError, ExportFormat, ImportError, ImportFailure, QuerySession, ResultSet,
+    EditValueError, ExplainPlan, ExportFormat, ImportError, ImportFailure, QuerySession, ResultSet,
     SchemaExportFormat, StatementKind, TableRef, TableSchema, classify, er_diagram,
-    export_result_set, export_schema, parse_edited_value, statement_at,
+    export_result_set, export_schema, flatten_plan, parse_edited_value, statement_at,
 };
 use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use gpui::*;
@@ -189,6 +189,8 @@ pub struct ResultSetView {
     described_schemas: Vec<TableSchema>,
     er_diagram: Option<ErDiagram>,
     show_er_diagram: bool,
+    explain_plan: Option<ExplainPlan>,
+    show_explain: bool,
     import_running: bool,
     status_text: SharedString,
     session: Option<QuerySession>,
@@ -302,6 +304,8 @@ impl ResultSetView {
             described_schemas: Vec::new(),
             er_diagram: None,
             show_er_diagram: false,
+            explain_plan: None,
+            show_explain: false,
             import_running: false,
             status_text: SharedString::from(tr(cx, "database.status.connecting", "Connecting…")),
             session: None,
@@ -569,6 +573,7 @@ impl ResultSetView {
             self.start_diagram_render(source, cx);
         }
         self.show_er_diagram = true;
+        self.show_explain = false;
         cx.notify();
     }
 
@@ -786,6 +791,147 @@ impl ResultSetView {
         self.start_query(sql, cx);
     }
 
+    /// Explain the statement under the cursor. The action is only offered when
+    /// the driver declares `explain`, so this does not degrade into an error
+    /// message for drivers that cannot do it.
+    fn explain_statement(&mut self, cx: &mut Context<Self>) {
+        if !self.capabilities.explain || self.query_running || self.edit_running {
+            return;
+        }
+        let (selection, cursor) = self.selected_sql(cx);
+        let text = self.editor.read(cx).text(cx);
+        let sql = match sql_to_run(RunMode::Statement, &text, &selection, cursor) {
+            Ok(sql) => sql,
+            Err(RunError::NoSelection) => {
+                self.set_message(
+                    QueryMessage::Info(tr(
+                        cx,
+                        "database.query.select_first",
+                        "Select the SQL to run.",
+                    )),
+                    cx,
+                );
+                return;
+            }
+            Err(RunError::EmptySql) => {
+                self.set_message(
+                    QueryMessage::Info(tr(cx, "database.query.empty", "Nothing to run.")),
+                    cx,
+                );
+                return;
+            }
+        };
+        let Some(mut session) = self.session.take() else {
+            self.set_message(
+                QueryMessage::Error(tr(
+                    cx,
+                    "database.query.not_connected",
+                    "Not connected to the database.",
+                )),
+                cx,
+            );
+            return;
+        };
+        self.query_running = true;
+        cx.notify();
+        let task = cx.spawn(async move |view, cx| {
+            let outcome = session.explain(&sql).await;
+            view.update(cx, |view, cx| {
+                view.session = Some(session);
+                view.query_running = false;
+                match outcome {
+                    Ok(plan) if plan.nodes.is_empty() => view.set_message(
+                        QueryMessage::Info(tr(
+                            cx,
+                            "database.explain.empty",
+                            "The driver returned no plan for this statement.",
+                        )),
+                        cx,
+                    ),
+                    Ok(plan) => {
+                        view.explain_plan = Some(plan);
+                        view.show_explain = true;
+                        view.show_er_diagram = false;
+                        if let Some(tab) = view.tabs.get_mut(view.active_tab) {
+                            tab.message = None;
+                        }
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        view.set_message(QueryMessage::Error(describe_error(cx, &error)), cx);
+                    }
+                }
+            })
+            .ok();
+        });
+        self._query_task = Some(task);
+    }
+
+    fn close_explain(&mut self, cx: &mut Context<Self>) {
+        self.show_explain = false;
+        cx.notify();
+    }
+
+    fn render_explain(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let plan = self.explain_plan.as_ref()?;
+        let lines = flatten_plan(plan);
+        let muted = cx.theme().colors().text_muted;
+        let text = cx.theme().colors().text;
+        let mut rows = v_flex().gap_0p5();
+        for line in &lines {
+            rows = rows.child(
+                h_flex()
+                    .gap_2()
+                    .items_start()
+                    .pl(px(12.0 * line.depth as f32))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(format!("#{}", line.id)),
+                    )
+                    .child(div().text_sm().text_color(text).child(line.detail.clone())),
+            );
+        }
+        Some(
+            v_flex()
+                .id("database-explain-plan")
+                .flex_1()
+                .min_h_0()
+                .gap_2()
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .items_center()
+                        .child(
+                            Button::new(
+                                "database-explain-back",
+                                tr(cx, "database.explain.back", "Back to Query"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(|this, _, _, cx| this.close_explain(cx))),
+                        )
+                        .child(div().text_xs().text_color(muted).child(
+                            tr(cx, "database.explain.rows", "{} plan steps").replacen(
+                                "{}",
+                                &lines.len().to_string(),
+                                1,
+                            ),
+                        )),
+                )
+                .child(
+                    v_flex()
+                        .id("database-explain-rows")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .py_1()
+                        .child(rows),
+                )
+                .into_any_element(),
+        )
+    }
+
     fn start_query(&mut self, sql: String, cx: &mut Context<Self>) {
         if self.query_running || self.edit_running {
             return;
@@ -821,6 +967,7 @@ impl ResultSetView {
         self.query_running = true;
         self.selected_cell = None;
         self.show_er_diagram = false;
+        self.show_explain = false;
         if let Some(tab) = self.tabs.get_mut(tab_index) {
             tab.sql = sql.clone();
             tab.message = Some(QueryMessage::Info(tr(
@@ -1419,6 +1566,16 @@ impl ResultSetView {
                         .disabled(!self.query_running)
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_query(cx))),
                     )
+                    .when(self.capabilities.explain, |buttons| {
+                        buttons.child(
+                            Button::new(
+                                "database-explain-statement",
+                                tr(cx, "database.explain.show", "Explain"),
+                            )
+                            .disabled(self.query_running || self.edit_running)
+                            .on_click(cx.listener(|this, _, _, cx| this.explain_statement(cx))),
+                        )
+                    })
                     .when(self.capabilities.er_diagram, |buttons| {
                         buttons.child(
                             Button::new(
@@ -2018,6 +2175,11 @@ impl Render for ResultSetView {
         } else {
             None
         };
+        let explain = if self.show_explain {
+            self.render_explain(cx)
+        } else {
+            None
+        };
 
         v_flex()
             .size_full()
@@ -2068,7 +2230,8 @@ impl Render for ResultSetView {
                             .gap_2()
                             .child(toolbar)
                             .children(er_diagram)
-                            .when(!self.show_er_diagram, |this| {
+                            .children(explain)
+                            .when(!self.show_er_diagram && !self.show_explain, |this| {
                                 this.child(
                                     div()
                                         .key_context("DatabaseEditor")

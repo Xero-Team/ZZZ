@@ -3978,6 +3978,10 @@
     "database.import.missing_column": "CSV 文件缺少必需列 {} 的值。",
     "database.import.bad_value": "第 {} 行第 {} 列的值与列类型不匹配。",
     "database.import.binary_column": "二进制列 {} 无法从 CSV 导入。",
-    "database.grid.copy_json": "复制 JSON"
+    "database.grid.copy_json": "复制 JSON",
+    "database.explain.show": "解释计划",
+    "database.explain.back": "返回查询",
+    "database.explain.rows": "{} 个计划步骤",
+    "database.explain.empty": "该驱动没有为此语句返回计划。"
   }
 }

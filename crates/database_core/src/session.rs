@@ -10,7 +10,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::connection::ConnectionManager;
-use crate::driver::{DriverConnection, DriverResult, ExecutedQuery, QueryHandle};
+use crate::driver::{DriverConnection, DriverResult, ExecutedQuery, ExplainPlan, QueryHandle};
 use crate::error::DatabaseError;
 use crate::import::{ImportError, insert_statement, parse_csv, prepare_import};
 use crate::model::{
@@ -540,6 +540,16 @@ impl QuerySession {
         Ok(ImportOutcome { rows: inserted })
     }
 
+    /// Explain a statement without running it. The UI only offers this when the
+    /// driver declares `explain`, but the check is repeated here so a caller
+    /// cannot get a driver-specific error instead of a clear refusal.
+    pub async fn explain(&mut self, sql: &str) -> DriverResult<ExplainPlan> {
+        if !self.capabilities.explain {
+            return Err(DatabaseError::driver("explain is not supported"));
+        }
+        self.connection.explain(sql).await
+    }
+
     /// Execute a statement for its side effect, draining any row stream so the
     /// driver releases its connection and the query handle is always finished,
     /// even when the statement fails.
@@ -668,6 +678,10 @@ mod tests {
     use crate::sqlite::{SQLITE_DRIVER_ID, SqliteDriver};
 
     async fn new_session() -> QuerySession {
+        new_session_with_capabilities(Capabilities::sqlite()).await
+    }
+
+    async fn new_session_with_capabilities(capabilities: Capabilities) -> QuerySession {
         static NEXT_DATABASE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let name = format!(
             "session-test-{}",
@@ -675,13 +689,14 @@ mod tests {
         );
         let display_name = name.clone();
         let source = DataSource::InMemory { name };
-        new_session_with_source(display_name.clone(), display_name, source).await
+        new_session_with_source(display_name.clone(), display_name, source, capabilities).await
     }
 
     async fn new_session_with_source(
         id: String,
         display_name: String,
         source: DataSource,
+        capabilities: Capabilities,
     ) -> QuerySession {
         let manager = Arc::new(ConnectionManager::new());
         manager.register_driver(Arc::new(SqliteDriver));
@@ -698,7 +713,7 @@ mod tests {
             options: Default::default(),
         });
         let connection = manager.connect(&id, None).await.expect("connect");
-        QuerySession::new(id, connection, manager, Capabilities::sqlite())
+        QuerySession::new(id, connection, manager, capabilities)
     }
 
     fn temporary_database_path(label: &str) -> std::path::PathBuf {
@@ -719,6 +734,7 @@ mod tests {
             DataSource::File {
                 path: path.to_path_buf(),
             },
+            Capabilities::sqlite(),
         )
         .await
     }
@@ -1186,6 +1202,34 @@ mod tests {
                 2
             );
             std::fs::remove_file(&path).expect("remove database");
+        });
+    }
+
+    #[test]
+    fn explain_is_refused_when_the_capability_is_absent() {
+        futures::executor::block_on(async {
+            let mut session = new_session_with_capabilities(Capabilities::read_only()).await;
+            let error = session
+                .explain("SELECT 1")
+                .await
+                .expect_err("explain is not supported");
+            assert_eq!(error.kind, DatabaseErrorKind::Driver);
+        });
+    }
+
+    #[test]
+    fn explain_runs_through_the_session_for_a_capable_driver() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+            session
+                .execute("CREATE TABLE t (id INTEGER PRIMARY KEY, value TEXT)", &[])
+                .await
+                .expect("create");
+            let plan = session
+                .explain("SELECT * FROM t WHERE id = 1")
+                .await
+                .expect("explain");
+            assert!(!plan.nodes.is_empty());
         });
     }
 

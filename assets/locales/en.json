@@ -3978,6 +3978,10 @@
     "database.import.missing_column": "The CSV file has no value for the required column {}.",
     "database.import.bad_value": "Row {} column {} does not match the column type.",
     "database.import.binary_column": "Binary column {} cannot be imported from CSV.",
-    "database.grid.copy_json": "Copy JSON"
+    "database.grid.copy_json": "Copy JSON",
+    "database.explain.show": "Explain",
+    "database.explain.back": "Back to Query",
+    "database.explain.rows": "{} plan steps",
+    "database.explain.empty": "The driver returned no plan for this statement."
   }
 }

@@ -13,16 +13,15 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 6 为
-  `10756066b8`，Phase 5 为 `0926c5cbaf`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 7 为
+  `d90e2ff59c`，Phase 6 为 `10756066b8`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 8`
-- Last completed phase: `Phase 7`
+- Active phase: `Phase 9`
+- Last completed phase: `Phase 8`
 - Blocking issue: `None`
-- Next action: 进入 Phase 8——`EXPLAIN QUERY PLAN` 解析为 `ExplainPlan` 并做
-  树状展示；无 `capabilities.explain` 的驱动隐藏该动作。
+- Next action: 进入 Phase 9——查询历史持久化与检索、历史重跑，且不记录结果集与凭据。
 
 ## Bootstrap {#bootstrap}
 
@@ -72,7 +71,8 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 4     | 结果集视图               | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
 | 5     | 编辑、事务与确认         | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
 | 6     | 扩展驱动协议             | PASS        | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
-| 7     | ER 图与导入导出          | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
+| 7     | ER 图与导入导出          | PASS        | `d90e2ff59c`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
+| 8     | Visual EXPLAIN           | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
 | 8     | Visual EXPLAIN           | NOT STARTED | -                                                | -                                              | -                                   |
 | 9     | 查询历史                 | NOT STARTED | -                                                | -                                              | -                                   |
 | 10    | Notebook 式 SQL          | NOT STARTED | -                                                | -                                              | -                                   |
@@ -186,7 +186,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS | Phase 4 完成                    |
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS | Phase 5 完成                    |
 | `10756066b89a478da5e6bc768518b082a5bd4fa8`     | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
+| `d90e2ff59c7fa12eb4f6e9e2df189ece12fafa9f`     | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS | Phase 8 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -846,6 +847,48 @@ while awaiting install_dev_extension`）。原因是该测试使用真实 HTTP �
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_ui): diagram schemas and import csv in transactions`）。
 - **下一步**：Phase 8 —— Visual EXPLAIN。
+
+## Phase 8 日志 {#phase-8-log}
+
+### Visual EXPLAIN
+
+- **Baseline**：`database-explorer` @ `d90e2ff59c`（Phase 7 提交后）。
+- **改动**：
+  - `crates/database_core/src/explain.rs`（新）：`flatten_plan(&ExplainPlan)` 把驱动的
+    扁平 `(id, parent, detail)` 行重建为深度优先顺序，父节点总在子节点之前。父 id
+    不存在、`parent == id`、`parent == 0` 都按根处理；环只输出一次，未到达的节点在末尾
+    以深度 0 补上，因此畸形计划既不会丢失也不会无限递归。
+  - `crates/database_core/src/session.rs`：新增 `QuerySession::explain(sql)`，先检查
+    `capabilities.explain` 再委托驱动，避免调用方拿到驱动特定错误。
+  - `crates/database_core/src/sqlite.rs`：已有 `EXPLAIN QUERY PLAN` 解析保持不变，新增
+    两项真实计划测试（主键查找必须是 `SEARCH` 而非全表扫描；JOIN + ORDER BY 产生多节点
+    且包含两张表名）。
+  - `crates/database_ui/src/result_set_view.rs`：工具栏新增 `Explain`（仅
+    `capabilities.explain` 时出现，因此无该能力的驱动根本不显示动作）；计划以缩进树
+    展示（每行显示驱动节点 id 与 detail），可 `Back to Query`。`show_explain` 与
+    `show_er_diagram` 互斥，运行新查询或打开 ER 图都会退出计划视图；空计划给出
+    「驱动未返回计划」提示而不是空白面板。
+- **验证命令与 exit status**：
+  - `cargo test -p database_core -p database_ui --all-targets` → `TEST=0`
+    （core 91 + integration 5、ui 20）
+  - `cargo clippy -p database_core -p database_ui --all-targets -- -D warnings`
+    → `CLIPPY=0`
+  - `cargo check -p zzz` → `ZCHECK=0`
+  - `cargo xtask check` → `XCHECK=0`
+  - `cargo fmt --all -- --check` → `FMT=0`
+  - `cd docs && npx prettier --check src/` → PASS
+  - i18n fallback 脚本比对 126 处 `tr(...)` → 0 mismatch；en/zh 各 3983 条且 key 一致
+- **新增测试**：计划嵌套顺序、父 id 缺失按根、环只输出一次且深度正确、空计划；
+  SQLite 主键查找报告 `SEARCH`、JOIN 计划多节点并包含表名；能力缺失时
+  `QuerySession::explain` 返回 `DatabaseErrorKind::Driver`，有能力时返回节点。
+- **实现决策（记录）**：
+  - 计划视图复用结果区而不是新增标签页：它描述的是「当前语句」，与结果集互斥。
+  - 计划文本保持驱动原文，只做缩进与 id 标注；不做语句重写或成本估算，因为不同方言的
+    计划字段含义不同，D-01 要求能力而非方言分支。
+- **结论**：PASS。典型查询计划可读；能力缺失时动作不出现。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): show the query plan as a tree`）。
+- **下一步**：Phase 9 —— 查询历史。
 
 ## 完成定义核对 {#done-checklist}
 
