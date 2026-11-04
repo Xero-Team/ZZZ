@@ -96,7 +96,11 @@ impl DatabaseDriver for SqliteDriver {
         Capabilities::sqlite()
     }
 
-    async fn connect(&self, config: &ConnectionConfig) -> DriverResult<Arc<dyn DriverConnection>> {
+    async fn connect(
+        &self,
+        config: &ConnectionConfig,
+        _secret: Option<&[u8]>,
+    ) -> DriverResult<Arc<dyn DriverConnection>> {
         let handle = open_connection(config)?;
         Ok(Arc::new(SqliteConnection { handle }))
     }

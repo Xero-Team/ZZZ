@@ -6,7 +6,7 @@
 //! materialized in one allocation.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use async_channel::{Receiver, Sender, bounded};
 
@@ -28,6 +28,7 @@ pub const ROW_STREAM_CAPACITY: usize = 256;
 /// Cancellation is never reported as an error (D-08).
 #[derive(Clone)]
 pub struct QueryHandle {
+    id: u64,
     cancelled: Arc<AtomicBool>,
     interrupt: Option<Arc<dyn Interrupt>>,
 }
@@ -36,6 +37,7 @@ impl std::fmt::Debug for QueryHandle {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("QueryHandle")
+            .field("id", &self.id)
             .field("cancelled", &self.is_cancelled())
             .field("has_interrupt", &self.interrupt.is_some())
             .finish()
@@ -48,12 +50,19 @@ pub trait Interrupt: Send + Sync + 'static {
     fn interrupt(&self);
 }
 
+static NEXT_QUERY_ID: AtomicU64 = AtomicU64::new(1);
+
 impl QueryHandle {
     pub fn new(cancelled: Arc<AtomicBool>, interrupt: Option<Arc<dyn Interrupt>>) -> Self {
         Self {
+            id: NEXT_QUERY_ID.fetch_add(1, Ordering::SeqCst),
             cancelled,
             interrupt,
         }
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// Request cancellation. Idempotent: repeated calls are harmless.
@@ -130,7 +139,11 @@ pub trait DatabaseDriver: Send + Sync + 'static {
     fn display_name(&self) -> &'static str;
     fn capabilities(&self) -> Capabilities;
 
-    async fn connect(&self, config: &ConnectionConfig) -> DriverResult<Arc<dyn DriverConnection>>;
+    async fn connect(
+        &self,
+        config: &ConnectionConfig,
+        secret: Option<&[u8]>,
+    ) -> DriverResult<Arc<dyn DriverConnection>>;
 }
 
 /// A live connection. All methods are async so subprocess drivers and remote

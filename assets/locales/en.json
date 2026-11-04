@@ -3849,6 +3849,16 @@
     "terminal_mode.monitor.swap": "Swap",
     "terminal_mode.monitor.disk": "Disk",
     "terminal_mode.monitor.load": "Load",
-    "terminal_mode.monitor.uptime": "Uptime"
+    "terminal_mode.monitor.uptime": "Uptime",
+    "database.panel.title": "Databases",
+    "database.panel.empty": "No connections. Open a .db file to start.",
+    "database.tab.title": "Database: {}",
+    "database.tree.catalog": "Catalog: {}",
+    "database.tree.columns": "Columns",
+    "database.status.connecting": "Connecting…",
+    "database.status.connected": "Connected",
+    "database.status.capabilities": "Editing: {}",
+    "database.capability.yes": "yes",
+    "database.capability.no": "no"
   }
 }

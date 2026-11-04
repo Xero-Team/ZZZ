@@ -3849,6 +3849,16 @@
     "terminal_mode.monitor.swap": "交换分区",
     "terminal_mode.monitor.disk": "磁盘",
     "terminal_mode.monitor.load": "负载",
-    "terminal_mode.monitor.uptime": "运行"
+    "terminal_mode.monitor.uptime": "运行",
+    "database.panel.title": "数据库",
+    "database.panel.empty": "暂无连接。打开一个 .db 文件开始。",
+    "database.tab.title": "数据库：{}",
+    "database.tree.catalog": "目录：{}",
+    "database.tree.columns": "列",
+    "database.status.connecting": "正在连接…",
+    "database.status.connected": "已连接",
+    "database.status.capabilities": "可编辑：{}",
+    "database.capability.yes": "是",
+    "database.capability.no": "否"
   }
 }

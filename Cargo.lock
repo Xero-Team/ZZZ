@@ -3844,9 +3844,13 @@ name = "database_ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "client",
+ "credentials_provider",
  "database_core",
  "gpui",
  "i18n",
+ "log",
  "ui",
  "workspace",
 ]
@@ -22207,6 +22211,7 @@ dependencies = [
  "crashes",
  "csv_preview",
  "dap_adapters",
+ "database_ui",
  "db",
  "debug_adapter_extension",
  "debugger_tools",

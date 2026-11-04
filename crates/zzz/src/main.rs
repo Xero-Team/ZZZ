@@ -685,6 +685,7 @@ fn main() {
         feedback::init(cx);
         markdown_preview::init(cx);
         csv_preview::init(cx);
+        database_ui::init(cx);
         svg_preview::init(cx);
         typst_preview::init(cx);
         title_bar::init(cx);

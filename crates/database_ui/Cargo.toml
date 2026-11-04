@@ -9,9 +9,13 @@ path = "src/database_ui.rs"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+client.workspace = true
+credentials_provider.workspace = true
 database_core.workspace = true
 gpui.workspace = true
 i18n.workspace = true
+log.workspace = true
 ui.workspace = true
 workspace.workspace = true
 

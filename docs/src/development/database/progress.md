@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ `f2a037d404`（文档基线；代码基线 `3af1429a83`
-  已 `merge-base --is-ancestor` 验证包含）
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；上一提交
+  `3f42c8244c` 是工作项 2）。代码基线 `3af1429a83` 已 `merge-base --is-ancestor`
+  验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
 - Active phase: `Phase 1`
 - Last completed phase: `Phase 0`
 - Blocking issue: `None`
-- Next action: 执行 Phase 1 工作项 3——`ConnectionManager`（凭据注入、状态机、
-  连接生命周期 owner）与 `QuerySession`（执行/取消/事务/pending edits），随后
-  `database_ui` 的 Item/Panel 接线、`.db` 打开入口与 `main.rs` 的 `init` 注册。
+- Next action: 进入 Phase 2——`database.connections` 设置 schema、连接对话框、
+  测试连接与凭据写入/删除（D-09），沿用工作项 3 的 `ConnectionManager` 凭据注入接口。
 
 ## Bootstrap {#bootstrap}
 
@@ -66,7 +66,7 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | Phase | Result                   | Status      | Commit                                           | Validation                                     | Notes                               |
 | ----- | ------------------------ | ----------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
 | 0     | 账本校准、worktree、基线 | PASS        | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
-| 1     | 骨架与 SQLite 只读浏览   | NOT STARTED | -                                                | -                                              | Next action                         |
+| 1     | 骨架与 SQLite 只读浏览   | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
 | 2     | 连接管理与凭据           | NOT STARTED | -                                                | -                                              | -                                   |
 | 3     | 查询执行与取消           | NOT STARTED | -                                                | -                                              | -                                   |
 | 4     | 结果集视图               | NOT STARTED | -                                                | -                                              | -                                   |
@@ -178,7 +178,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `f2a037d404cc396581e24822d34cf2a885b02bc4`     | `docs: add database explorer plan`                                    | 0     | prettier PASS                  | 在 `main` 上，worktree 前置条件 |
 | `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82`     | `docs(database): record phase 0 baseline and ledger`                  | 0     | 见 baseline-validation 表      | Phase 0 账本定稿                |
 | `812e4ae4be42401a9041e9a0768c6bc3dcae69ee`     | `feat(database_core): add domain model and sql analysis`              | 1     | check/test/clippy/fmt PASS     | 工作项 1                        |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_core): add driver protocol and built-in sqlite driver` | 1     | check/test(32)/clippy/fmt PASS | 工作项 2，DB-EXP-001 PASS       |
+| `3f42c8244ca427e07c6f1604dc9631ad4e80fd21`     | `feat(database_core): add driver protocol and built-in sqlite driver` | 1     | check/test(32)/clippy/fmt PASS | 工作项 2，DB-EXP-001 PASS       |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): wire sqlite browsing panel and result view`       | 1     | check/test(41)/clippy/fmt PASS | 工作项 3，Phase 1 完成          |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -268,9 +269,73 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 - **结论**：PASS（协议 + 内建 SQLite 驱动，纯逻辑可单测）。
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_core): add driver protocol and built-in sqlite driver`）。
-- **下一步**：工作项 3 —— `ConnectionManager`（凭据注入、状态机、连接生命周期
-  owner）+ `QuerySession`（执行/取消/事务/pending edits），随后 `database_ui` 的
-  Item/Panel 接线与 `main.rs` 的 `init` 注册（Phase 1 验收要求能打开真实 `.db` 文件）。
+- **下一步**：工作项 3（已完成，见下）。
+
+### 工作项 3 — 连接管理、查询会话与 GPUI 接线
+
+- **Baseline**：`database-explorer` @ `3f42c8244c`（工作项 2 提交后）。
+- **改动**：
+  - `crates/database_core/src/driver.rs`：`QueryHandle` 增稳定 `id`（`NEXT_QUERY_ID`），
+    供 `ConnectionManager` 跟踪进行中的查询；`DatabaseDriver::connect` 增
+    `secret: Option<&[u8]>` 参数，凭据由调用方按次注入，不进入 `ConnectionConfig`
+    （不变量 3、D-09）。
+  - `crates/database_core/src/connection.rs`（`ConnectionManager`）：
+    - 驱动注册表按 `driver.id()` 存 `capabilities`，UI 能力来源是声明而非 id 分支
+      （不变量 1）；`capabilities_for` 返回 `Option<Capabilities>`。
+    - `upsert_config`/`configs`/`status` 只保存非敏感字段；状态机
+      Disconnected/Connecting/Connected/Querying/Disconnected 为运行时状态，不持久化
+      （不变量 4）。
+    - `connect(id, secret)` 幂等：已连接直接复用；失败回落到 Disconnected 并返回
+      typed `DatabaseError`（不按文本匹配）。`test_connection` 仅连接后调用 `test()`。
+    - `track_query`/`finish_query` 记录进行中查询；`disconnect` 先取出并 `cancel`
+      全部在飞查询，再 `close` 原生连接，消除工作项 2 记录的 close/step 竞态。
+  - `crates/database_core/src/session.rs`（`QuerySession`）：`execute` 把
+    `RowStream` 填进有界窗口（`DEFAULT_WINDOW_LIMIT`），窗口满即 `cancel` 并标记
+    Cancelled（D-08，取消不是错误）；`begin_transaction_async`/`commit`/`rollback`
+    由会话独占事务生命周期；`build_update_statements` 用 `?N` 占位从 pending edits
+    生成参数化 DML（防注入）；`export_csv` 复用 `Value::display`。
+  - `crates/database_ui`：
+    - `database_ui.rs`：`DatabaseState` 全局（`ConnectionManager` + keychain helper），
+      `DatabaseState::manager/credentials`；`init` 注册 `SqliteDriver`、`OpenDatabase`/
+      `ToggleDatabasePanel` action、`ConnectionPanel` 与 `main.rs` 接线。
+    - `connection_panel.rs`：`Panel` 列出已保存连接及状态；`OpenDatabase` 经
+      `cx.prompt_for_paths` 选文件，`config_for_path` 生成非敏感配置
+      （id = `file:<path>`，`DataSource::File`），再在该连接上开 `ResultSetView`。
+    - `result_set_view.rs`：`Item` 从实查 `sqlite_master` 的 schema 树渲染 catalog/
+      schema/table，点击表再查 `PRAGMA table_info`/`index_list`/`foreign_key_list`
+      展示列、主键、索引、外键；头部显示连接状态与是否可编辑（能力声明）。
+    - `credentials.rs`：`KeychainCredentials` 只持 `Arc<dyn CredentialsProvider>`
+      （`Send + Sync`），每次 `read/write/delete` 由调用方传入 `AsyncApp`；口令
+      不写入配置、日志或错误信息。
+  - `crates/zzz`：`main.rs` 增 `database_ui::init(cx)`，`Cargo.toml` 增
+    `database_ui.workspace = true`；根 `Cargo.lock` 随新依赖更新。
+  - i18n：`database.*` 共 15 键加入 `assets/locales/en.json` 与 `zh-CN.json`
+    （各 3860 条，key 集合一致，fallback 与 en 文案相同）。
+- **验证命令与 exit status**：
+  - `cargo check -p database_ui` → `CHECK_EXIT=0`
+  - `cargo clippy -p database_core -p database_ui --all-targets -- -D warnings` →
+    `CLIPPY_EXIT=0`（修了 `arc_with_non_send_sync`——helper 改为只持 provider；
+    `manual_let_else`/`map_or_else`；`empty_line_after_doc_comment`）
+  - `cargo test -p database_core -p database_ui` → `TEST_EXIT=0`（core 40 passed、
+    ui 1 passed）。新增 `connection::tests::opens_a_real_file_and_describes_schema`：
+    在临时目录建真实 `.db`，经 `ConnectionManager` 连接、建表/索引/外键，断言
+    catalogs、主键、索引、外键与断开后的状态，覆盖 Phase 1 验收路径。
+  - `cargo check -p zzz` → `CHECK_EXIT=0`（1m12s，验证 `init` 与依赖接线）
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+- **实现决策（记录）**：本 fork 没有「路径 → 视图」注册表（`ProjectItemKind`
+  仅用于预览标签恢复，项目条目类型只有文本），`image_viewer` 也只注册
+  `ProjectItem` 而无按扩展名的双击路由。因此 `.db` 入口按既有 `csv_preview`
+  的 action 模式实现（命令面板 `database: open database`），而不是拦截双击；
+  若后续阶段需要双击，须先引入路径-视图注册机制并单独立项。
+- **结论**：PASS。Phase 1 验收（打开真实 SQLite 文件并浏览表、列、主键、索引、
+  外键）由 `opens_a_real_file_and_describes_schema` 与 UI schema 树共同满足。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): wire sqlite browsing panel and result view`）。
+- **遗留风险（记录，非阻塞）**：`RowStream` 目前只承载 `Row`，`sqlite3_step` 的
+  非 ROW/DONE 错误（约束冲突等）在 `stream_rows` 中被静默丢弃；Phase 3/5 的错误
+  与编辑路径需要它，故在工作项 3 提交后立即单独立项修复，不得留到 Phase 5 才发现。
+- **下一步**：Phase 2 —— `database.connections` 设置 schema、连接对话框、测试连接、
+  凭据写入/删除与连接状态机 UI。
 - **遗留风险（记录，非阻塞）**：`close()` 与进行中 streaming 并发时存在
   use-after-free 窗口；由 Phase 2/3 的 `ConnectionManager` 保证「close 前先 cancel
   全部查询并等待其 owner 结束」来消除，driver 层不单独持有查询 task。
