@@ -688,13 +688,20 @@ impl TelegramPanel {
             move |this, event, window, cx| match event {
                 ui::NotificationWindowEvent::Accepted => {
                     cx.activate(true);
-                    window.activate_window();
-                    if let Some(workspace) = workspace_handle.upgrade() {
+                    // This callback runs with the panel already on the update
+                    // stack, so revealing it here would re-enter its own update
+                    // through `PanelHandle::set_active`.
+                    let workspace_handle = workspace_handle.clone();
+                    cx.defer_in(window, move |_, window, cx| {
+                        window.activate_window();
+                        let Some(workspace) = workspace_handle.upgrade() else {
+                            return;
+                        };
                         workspace.update(cx, |workspace, cx| {
                             workspace.reveal_panel::<TelegramPanel>(window, cx);
                             workspace.focus_panel::<TelegramPanel>(window, cx);
                         });
-                    }
+                    });
                     this.notification_windows.dismiss_all(cx);
                 }
                 ui::NotificationWindowEvent::Dismissed => {
