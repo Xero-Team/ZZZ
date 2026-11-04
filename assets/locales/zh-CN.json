@@ -3992,6 +3992,27 @@
     "database.history.rows_and_duration": "{} 行 · {} 毫秒",
     "database.history.rows": "{} 行",
     "database.history.duration": "{} 毫秒",
-    "database.history.failed": "失败"
+    "database.history.failed": "失败",
+    "database.notebook.open": "Notebook",
+    "database.notebook.tab_title": "SQL Notebook：{}",
+    "database.notebook.cell_placeholder": "SELECT …",
+    "database.notebook.add_cell": "添加单元",
+    "database.notebook.add_below": "在下方添加单元",
+    "database.notebook.run": "运行",
+    "database.notebook.cancel": "取消",
+    "database.notebook.delete": "删除",
+    "database.notebook.move_up": "上移",
+    "database.notebook.move_down": "下移",
+    "database.notebook.running": "正在运行…",
+    "database.notebook.cancelling": "正在取消…",
+    "database.notebook.cell_cancelled": "已取消。",
+    "database.notebook.cell_failed": "查询失败。",
+    "database.notebook.empty_cell": "此单元没有可执行内容。",
+    "database.notebook.caption": "每个 Notebook 使用一个连接",
+    "database.notebook.rows_affected": "影响 {} 行",
+    "database.notebook.statement_done": "语句已执行。",
+    "database.notebook.result_rows": "{} 行",
+    "database.notebook.preview_truncated": "只显示前 {} 行，共 {} 行。",
+    "database.notebook.connect_failed": "无法连接：{}"
   }
 }

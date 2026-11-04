@@ -1717,4 +1717,14 @@
       "escape": "database::CancelCellEdit",
     },
   },
+  {
+    // Notebook cells run one cell at a time; the chord is the same as the SQL
+    // editor so muscle memory carries over.
+    "context": "DatabaseNotebook",
+    "bindings": {
+      "cmd-enter": "database::RunStatement",
+      "cmd-shift-enter": "database::RunSelection",
+      "cmd-shift-c": "database::CancelQuery",
+    },
+  },
 ]

@@ -13,15 +13,15 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 8 为
-  `63985c28cf`，Phase 7 为 `d90e2ff59c`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 9 为
+  `526bb15203`，Phase 8 为 `63985c28cf`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 10`
-- Last completed phase: `Phase 9`
+- Active phase: `Phase 11`
+- Last completed phase: `Phase 10`
 - Blocking issue: `None`
-- Next action: 进入 Phase 10——Notebook 式 SQL（单元格、按序执行、结果并存）。
+- Next action: 进入 Phase 11——评估远程项目中的 SQLite 文件访问与 SSH 隧道；可实施则实施，不可用则写 runbook 并标 `NOT RUN`。
 
 ## Bootstrap {#bootstrap}
 
@@ -73,7 +73,8 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 6     | 扩展驱动协议             | PASS        | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
 | 7     | ER 图与导入导出          | PASS        | `d90e2ff59c`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
 | 8     | Visual EXPLAIN           | PASS        | `63985c28cf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
-| 9     | 查询历史                 | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
+| 9     | 查询历史                 | PASS        | `526bb15203`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
+| 10    | Notebook 式 SQL          | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 10 日志](#phase-10-log)   |
 | 10    | Notebook 式 SQL          | NOT STARTED | -                                                | -                                              | -                                   |
 | 11    | 远程与 SSH（条件项）     | NOT STARTED | -                                                | -                                              | -                                   |
 | 12    | MCP 只读暴露             | NOT STARTED | -                                                | -                                              | -                                   |
@@ -187,7 +188,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `10756066b89a478da5e6bc768518b082a5bd4fa8`     | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
 | `d90e2ff59c7fa12eb4f6e9e2df189ece12fafa9f`     | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
 | `63985c28cf4f86490b04b75082752ac967569942`     | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS | Phase 8 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS | Phase 9 完成                    |
+| `526bb152031e3a48064fdd9c7e55d9944fb1e275`     | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS | Phase 9 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): run sql notebooks one cell at a time`               | 10    | check/test/clippy/xtask/fmt PASS | Phase 10 完成                   |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -959,6 +961,79 @@ while awaiting install_dev_extension`）。原因是该测试使用真实 HTTP �
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_ui): keep a local query history`）。
 - **下一步**：Phase 10 —— Notebook 式 SQL。
+
+## Phase 10 日志 {#phase-10-log}
+
+### Notebook 式 SQL
+
+- **Baseline**：`database-explorer` @ `526bb15203`（Phase 9 提交后）。
+- **改动**：
+  - `crates/database_core/src/driver.rs`：新增 `QueryCanceller`。它是可克隆的取消
+    槽位：`QuerySession` 拿到驱动的 `QueryHandle` 后 `attach` 进去，持有者即使不拥有
+    session（notebook 的 session 在任务里）也能只取消这一条查询。`cancel` 先设置标志
+    再取句柄，`attach` 存完句柄后再检查标志，因此「取消早于句柄到达」的竞态也会被
+    补上取消；`reset` 在每次运行前清空，`clear` 在结束时丢弃句柄但保留标志。
+  - `crates/database_core/src/session.rs`：`execute_cancellable(sql, params, Option<&
+QueryCanceller>)`，`execute` 变成它不带 canceller 的包装。取消、step 错误与正常
+    结束三条路径都 `clear` 槽位，避免陈旧句柄被后续取消误触。
+  - `crates/database_ui/src/notebook.rs`（新）：`DatabaseNotebook` 是一个 `Item`。
+    每个 cell 有自己的 `Entity<Editor>`、`QuerySession`（首次运行时创建）、
+    `QueryCanceller`、结果与任务：
+    - 运行（按钮或 `ctrl/cmd-enter`）只把该 cell 的 session 移入自己的 `cx.spawn`
+      任务，结束后放回该 cell；其他 cell 的编辑与运行不受影响。
+    - 取消（按钮或 `ctrl/cmd-shift-c`）通过该 cell 的 `QueryCanceller` 取消，只
+      影响该查询；被取消的结果状态是 `Cancelled`，不是错误。
+    - 结果内嵌在 cell 内：列名 + 前 100 行预览（NULL 显示为 `NULL`，BLOB 用
+      `to_export_text` 的摘要），超出时注明「只显示前 N 行」。完整结果仍在浏览器
+      标签页里排序/导出。
+    - 单元可上移/下移/删除/在其后新增；至少保留一个 cell，删除时取消其运行中的查询。
+    - 关闭 Notebook 时取消所有仍在运行的 cell；任务随 cell 一起 drop，查询不越过
+      其 owner。
+  - `crates/database_ui/src/result_set_view.rs`：工具栏新增 `Notebook`，通过
+    `WeakEntity<Workspace>` 在活动 pane 打开该连接的 notebook；为此
+    `ConnectionPanel::open_view` 传入 workspace 句柄。
+  - `crates/database_ui/src/database_ui.rs`：注册 `mod notebook;`。
+  - 键位：三个默认 keymap 增加 `DatabaseNotebook` 上下文，绑定与 `DatabaseEditor`
+    相同的运行/取消键（macOS 用 `cmd-*`）。
+  - i18n：新增 21 个 `database.notebook.*` 键；en/zh 各 4014 条且 key 集合一致。
+- **验证命令与 exit status**：
+  - `cargo test -p database_core -p database_ui -p db --all-targets` → `TEST=0`
+    （core 94 + integration 5、ui 26、db 11）
+  - `cargo clippy -p database_core -p database_ui -p db --all-targets -- -D warnings`
+    → `CLIPPY=0`
+  - `cargo check -p zzz` → `ZCHECK=0`
+  - `cargo xtask check` → `XCHECK=0`（6 checks）
+  - `cargo fmt --all -- --check` → `FMT=0`
+  - keymap JSONC 用 `npx prettier --parser json5` 解析三个默认 keymap 均 OK
+  - i18n fallback 脚本比对 158 处 `tr(...)` → 0 mismatch
+- **新增测试**：
+  - `QueryCanceller`：取消早于句柄到达时，`attach` 立即取消新句柄；`reset` 清除上一次
+    取消标志。
+  - `cancelling_one_session_leaves_the_other_session_usable`：同一连接上的两个
+    `QuerySession`，第一个用 `execute_cancellable` 跑长查询并被另一线程取消，结果为
+    `Cancelled`；第二个 session 未被取消，仍能执行并得到 `Ready` 与正确结果。
+  - Notebook：上移/下移的边界（首尾不可移动）与交换结果；预览行数上限常量。
+- **实现决策（记录）**：
+  - 每个 cell 一个 `QuerySession` 而不是共享一个：session 是「一次查询的 owner」，
+    共享会让取消变成连接级。
+  - 取消走 `QueryCanceller` 而不是 `ConnectionManager::cancel_queries`：后者会取消
+    该连接的全部查询，违反「取消单个单元不影响其他单元」。
+  - cell 结果只做前 100 行预览：主结果网格已有排序/导出/虚拟滚动，Notebook 只负责
+    「语句与结果的绑定」；这避免在 Item 内复制一套网格与编辑逻辑。
+  - Notebook 打开时保持第一个空 cell，添加/删除后仍有可输入位置；不持久化 cell 内容
+    （计划未要求，且 D-11 只覆盖历史）。
+- **验证边界（明确记录）**：本环境无图形显示，cell 按钮、键位分发、上移/下移的视觉
+  效果未在真实窗口中手动操作；已通过编译、clippy 与上述单元测试覆盖数据/取消语义。
+  结论仍标 PASS 的依据是：执行与取消路径在 core 层有测试，UI 只是把这些 API 接到
+  每个 cell 自己的 session 与任务上。
+- **SQLite 取消语义说明**：`sqlite3_interrupt` 是连接级的，但同一连接的语句由
+  `Mutex` 串行化，任意时刻只有一个语句在 step；因此取消 cell A 时不会打断另一个
+  「尚未开始 step」的 cell B。若未来驱动允许真正并发的同连接语句，需要把取消下沉到
+  语句级（记录在案）。
+- **结论**：PASS。单元执行各自独立、结果与单元绑定、取消只影响目标单元。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): run sql notebooks one cell at a time`）。
+- **下一步**：Phase 11 —— 远程与 SSH（条件项）。
 
 ## 完成定义核对 {#done-checklist}
 

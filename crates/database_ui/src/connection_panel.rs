@@ -116,7 +116,10 @@ impl ConnectionPanel {
         let manager = DatabaseState::manager(cx);
         let credentials = DatabaseState::credentials(cx);
         let config = config.clone();
-        let view = cx.new(|cx| ResultSetView::new(manager, credentials, config, window, cx));
+        let workspace_handle = cx.entity().downgrade();
+        let view = cx.new(|cx| {
+            ResultSetView::new(manager, credentials, config, workspace_handle, window, cx)
+        });
         workspace.add_item_to_active_pane(Box::new(view), None, true, window, cx);
     }
 

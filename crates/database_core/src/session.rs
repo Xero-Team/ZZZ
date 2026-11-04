@@ -10,7 +10,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::connection::ConnectionManager;
-use crate::driver::{DriverConnection, DriverResult, ExecutedQuery, ExplainPlan, QueryHandle};
+use crate::driver::{
+    DriverConnection, DriverResult, ExecutedQuery, ExplainPlan, QueryCanceller, QueryHandle,
+};
 use crate::error::DatabaseError;
 use crate::import::{ImportError, insert_statement, parse_csv, prepare_import};
 use crate::model::{
@@ -119,6 +121,18 @@ impl QuerySession {
     /// is tracked by the manager so disconnect can cancel it, and is finished
     /// here once the stream closes.
     pub async fn execute(&mut self, sql: &str, params: &[Value]) -> DriverResult<()> {
+        self.execute_cancellable(sql, params, None).await
+    }
+
+    /// Like [`QuerySession::execute`], but publishes the query handle to
+    /// `canceller` while it runs. An owner that does not hold the session (a
+    /// notebook cell awaiting inside a task) can then cancel this query alone.
+    pub async fn execute_cancellable(
+        &mut self,
+        sql: &str,
+        params: &[Value],
+        canceller: Option<&QueryCanceller>,
+    ) -> DriverResult<()> {
         self.cancel_current();
         // A result set owns its staged edits. A new query replaces the rows, so
         // the old edit bookkeeping cannot describe the new result.
@@ -139,6 +153,9 @@ impl QuerySession {
             Err(error) => return Err(error),
         };
         let query_id = executed.handle.id();
+        if let Some(canceller) = canceller {
+            canceller.attach(executed.handle.clone());
+        }
         self.manager
             .track_query(&self.connection_id, executed.handle.clone());
         self.current_query = Some(executed.handle.clone());
@@ -155,6 +172,9 @@ impl QuerySession {
                     result_set.total_rows = Some(rows);
                     self.manager.finish_query(&self.connection_id, query_id);
                     self.current_query = None;
+                    if let Some(canceller) = canceller {
+                        canceller.clear();
+                    }
                     self.result_set = Some(result_set);
                     return Ok(());
                 }
@@ -165,6 +185,9 @@ impl QuerySession {
                     result_set.total_rows = Some(rows);
                     self.manager.finish_query(&self.connection_id, query_id);
                     self.current_query = None;
+                    if let Some(canceller) = canceller {
+                        canceller.clear();
+                    }
                     self.result_set = Some(result_set);
                     return Err(error);
                 }
@@ -191,6 +214,9 @@ impl QuerySession {
         result_set.total_rows = Some(rows);
         self.manager.finish_query(&self.connection_id, query_id);
         self.current_query = None;
+        if let Some(canceller) = canceller {
+            canceller.clear();
+        }
         self.result_set = Some(result_set);
         Ok(())
     }
@@ -676,6 +702,7 @@ mod tests {
     use crate::import::ImportError;
     use crate::model::{ColumnType, ConnectionConfig, DataSource, Row};
     use crate::sqlite::{SQLITE_DRIVER_ID, SqliteDriver};
+    use std::time::Duration;
 
     async fn new_session() -> QuerySession {
         new_session_with_capabilities(Capabilities::sqlite()).await
@@ -714,6 +741,37 @@ mod tests {
         });
         let connection = manager.connect(&id, None).await.expect("connect");
         QuerySession::new(id, connection, manager, capabilities)
+    }
+
+    /// Two sessions that share one driver connection, the way two notebook
+    /// cells do.
+    async fn session_pair(name: &str) -> (QuerySession, QuerySession) {
+        let manager = Arc::new(ConnectionManager::new());
+        manager.register_driver(Arc::new(SqliteDriver));
+        let id = ConnectionId(name.to_owned());
+        manager.upsert_config(ConnectionConfig {
+            id: id.clone(),
+            display_name: name.to_owned(),
+            driver_id: SQLITE_DRIVER_ID.to_owned(),
+            source: DataSource::InMemory {
+                name: name.to_owned(),
+            },
+            host: None,
+            port: None,
+            user: None,
+            database: None,
+            options: Default::default(),
+        });
+        let connection = manager.connect(&id, None).await.expect("connect");
+        (
+            QuerySession::new(
+                id.clone(),
+                connection.clone(),
+                manager.clone(),
+                Capabilities::sqlite(),
+            ),
+            QuerySession::new(id, connection, manager, Capabilities::sqlite()),
+        )
     }
 
     fn temporary_database_path(label: &str) -> std::path::PathBuf {
@@ -1202,6 +1260,76 @@ mod tests {
                 2
             );
             std::fs::remove_file(&path).expect("remove database");
+        });
+    }
+
+    #[test]
+    fn a_cancel_that_races_the_query_handle_is_honoured() {
+        let canceller = QueryCanceller::new();
+        // The user cancels before the driver returned a handle.
+        canceller.cancel();
+        let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let handle = QueryHandle::new(flag.clone(), None);
+        canceller.attach(handle);
+        assert!(flag.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(canceller.is_cancelled());
+    }
+
+    #[test]
+    fn reset_clears_a_previous_cancellation() {
+        let canceller = QueryCanceller::new();
+        canceller.cancel();
+        canceller.reset();
+        assert!(!canceller.is_cancelled());
+        let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        canceller.attach(QueryHandle::new(flag.clone(), None));
+        assert!(!flag.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn cancelling_one_session_leaves_the_other_session_usable() {
+        futures::executor::block_on(async {
+            let (mut first, mut second) = session_pair("notebook-cancel").await;
+            let canceller = QueryCanceller::new();
+            let cancel = canceller.clone();
+            // Cancel from another thread: the test thread is polling the
+            // query that has to stop.
+            let canceller_thread = std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(50));
+                cancel.cancel();
+            });
+            let outcome = first
+                .execute_cancellable(
+                    "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n \
+                     WHERE x < 100000000) SELECT sum(x) FROM n",
+                    &[],
+                    Some(&canceller),
+                )
+                .await;
+            canceller_thread.join().expect("cancel thread");
+
+            outcome.expect("cancellation is not an error");
+            assert!(first.is_cancelled());
+            assert_eq!(
+                first.result_set().map(|set| set.state),
+                Some(ResultSetState::Cancelled)
+            );
+
+            // The second session points at the same connection and was not
+            // cancelled by the first session's cancel.
+            second.execute("SELECT 1", &[]).await.expect("second query");
+            assert!(!second.is_cancelled());
+            assert_eq!(
+                second.result_set().map(|set| set.state),
+                Some(ResultSetState::Ready)
+            );
+            assert_eq!(
+                second
+                    .result_set()
+                    .and_then(|set| set.rows.first())
+                    .and_then(|row| row.get(0)),
+                Some(&Value::Integer(1))
+            );
         });
     }
 

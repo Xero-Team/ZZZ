@@ -21,11 +21,13 @@ use ui::{
     with_copy_on_right_click,
 };
 use workspace::Item;
+use workspace::Workspace;
 use workspace::item::SaveOptions;
 
 use crate::connection_dialog::describe_error;
 use crate::credentials::KeychainCredentials;
 use crate::er_diagram::{ErDiagram, mermaid_theme, render_diagram};
+use crate::notebook::DatabaseNotebook;
 use crate::result_grid::{CellClass, CellPresentation, ResultGridState, SortDirection};
 use crate::{CancelCellEdit, CancelQuery, RunSelection, RunStatement, StageCellEdit};
 
@@ -205,6 +207,7 @@ fn edit_value_error_message(cx: &App, error: EditValueError) -> String {
 /// A browser tab for one database connection.
 pub struct ResultSetView {
     focus_handle: FocusHandle,
+    workspace: WeakEntity<Workspace>,
     manager: Arc<ConnectionManager>,
     credentials: Arc<KeychainCredentials>,
     connection_id: ConnectionId,
@@ -250,6 +253,7 @@ impl ResultSetView {
         manager: Arc<ConnectionManager>,
         credentials: Arc<KeychainCredentials>,
         config: ConnectionConfig,
+        workspace: WeakEntity<Workspace>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -339,6 +343,7 @@ impl ResultSetView {
 
         let mut view = Self {
             focus_handle,
+            workspace,
             manager,
             credentials,
             connection_id,
@@ -992,6 +997,17 @@ impl ResultSetView {
         if matches!(event, EditorEvent::Edited { .. }) {
             self.refresh_history(cx);
         }
+    }
+
+    /// Open a notebook tab for this connection. The notebook gets its own
+    /// sessions so its cells do not share this view's query or transaction.
+    fn open_notebook(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let config = self.config.clone();
+        self.workspace
+            .update(cx, |workspace, cx| {
+                DatabaseNotebook::deploy(workspace, config.clone(), window, cx);
+            })
+            .ok();
     }
 
     fn open_history(&mut self, cx: &mut Context<Self>) {
@@ -1897,6 +1913,15 @@ impl ResultSetView {
                         )
                         .disabled(self.show_history)
                         .on_click(cx.listener(|this, _, _, cx| this.open_history(cx))),
+                    )
+                    .child(
+                        Button::new(
+                            "database-open-notebook",
+                            tr(cx, "database.notebook.open", "Notebook"),
+                        )
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_notebook(window, cx)),
+                        ),
                     ),
             )
             .into_any_element()

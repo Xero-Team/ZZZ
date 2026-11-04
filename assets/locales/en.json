@@ -3992,6 +3992,27 @@
     "database.history.rows_and_duration": "{} rows · {} ms",
     "database.history.rows": "{} rows",
     "database.history.duration": "{} ms",
-    "database.history.failed": "failed"
+    "database.history.failed": "failed",
+    "database.notebook.open": "Notebook",
+    "database.notebook.tab_title": "SQL Notebook: {}",
+    "database.notebook.cell_placeholder": "SELECT …",
+    "database.notebook.add_cell": "Add Cell",
+    "database.notebook.add_below": "Add Cell Below",
+    "database.notebook.run": "Run",
+    "database.notebook.cancel": "Cancel",
+    "database.notebook.delete": "Delete",
+    "database.notebook.move_up": "Up",
+    "database.notebook.move_down": "Down",
+    "database.notebook.running": "Running…",
+    "database.notebook.cancelling": "Cancelling…",
+    "database.notebook.cell_cancelled": "Cancelled.",
+    "database.notebook.cell_failed": "The query failed.",
+    "database.notebook.empty_cell": "This cell has nothing to run.",
+    "database.notebook.caption": "One connection per notebook",
+    "database.notebook.rows_affected": "{} rows affected",
+    "database.notebook.statement_done": "Statement executed.",
+    "database.notebook.result_rows": "{} rows",
+    "database.notebook.preview_truncated": "Showing the first {} of {} rows.",
+    "database.notebook.connect_failed": "Could not connect: {}"
   }
 }

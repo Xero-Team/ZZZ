@@ -8,6 +8,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use parking_lot::Mutex;
+
 use async_channel::{Receiver, Sender, bounded};
 
 use crate::error::DatabaseError;
@@ -73,6 +75,60 @@ impl QueryHandle {
         if let Some(interrupt) = &self.interrupt {
             interrupt.interrupt();
         }
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+/// A cloneable cancel slot for one query run.
+///
+/// A `QuerySession` publishes the driver's [`QueryHandle`] here as soon as it
+/// exists, so an owner that does not hold the session while it awaits (a
+/// notebook cell, whose session is inside a task) can cancel exactly that one
+/// query instead of every query on the connection (D-08).
+#[derive(Clone, Default)]
+pub struct QueryCanceller {
+    cancelled: Arc<AtomicBool>,
+    handle: Arc<Mutex<Option<QueryHandle>>>,
+}
+
+impl QueryCanceller {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Publish the handle of the query that is starting. A cancel that raced
+    /// the driver (arriving before the handle existed) is honoured here.
+    pub fn attach(&self, handle: QueryHandle) {
+        *self.handle.lock() = Some(handle);
+        if self.cancelled.load(Ordering::SeqCst)
+            && let Some(handle) = self.handle.lock().take()
+        {
+            handle.cancel();
+        }
+    }
+
+    /// Cancel the attached query, or the next one if the driver has not
+    /// returned a handle yet. Idempotent.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        if let Some(handle) = self.handle.lock().take() {
+            handle.cancel();
+        }
+    }
+
+    /// Drop the finished handle without cancelling it. The cancelled flag stays
+    /// until [`QueryCanceller::reset`] so a late `attach` still sees it.
+    pub fn clear(&self) {
+        self.handle.lock().take();
+    }
+
+    /// Prepare the slot for a new run.
+    pub fn reset(&self) {
+        self.cancelled.store(false, Ordering::SeqCst);
+        self.handle.lock().take();
     }
 
     pub fn is_cancelled(&self) -> bool {

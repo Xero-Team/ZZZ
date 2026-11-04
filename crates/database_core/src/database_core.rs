@@ -21,8 +21,8 @@ pub mod sqlite;
 pub use connection::ConnectionManager;
 pub use driver::{
     DatabaseDriver, DriverConnection, DriverResult, ExecutedQuery, ExplainNode, ExplainPlan,
-    Interrupt, QueryHandle, QueryMetadata, ROW_STREAM_CAPACITY, RowStream, TransactionId,
-    result_set_for,
+    Interrupt, QueryCanceller, QueryHandle, QueryMetadata, ROW_STREAM_CAPACITY, RowStream,
+    TransactionId, result_set_for,
 };
 pub use er_diagram::{diagrammable, er_diagram};
 pub use error::{DatabaseError, DatabaseErrorKind};
