@@ -17,6 +17,7 @@ The rejection ledger lives at
 
 | Date       | Report                                            |
 | ---------- | ------------------------------------------------- |
+| 2026-11-04 | [Sync](./upstream-sync-2026-11-04.md)             |
 | 2026-11-03 | [Re-audit](./upstream-sync-audit-2026-11-03.md)   |
 | 2026-11-02 | [Sync](./upstream-sync-2026-11-02.md)             |
 | 2026-11-02 | [Sync (batch B)](./upstream-sync-2026-11-02-b.md) |
