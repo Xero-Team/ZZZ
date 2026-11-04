@@ -811,10 +811,13 @@ impl ResultSetView {
             };
             let run_label = tr(cx, "database.query.run", "Run");
             let cancel_label = tr(cx, "database.query.cancel_prompt", "Cancel");
+            // Show the statement so the user can see which object is touched,
+            // not only that it is broad.
+            let detail = single_line_preview(&sql);
             let answer = window.prompt(
                 PromptLevel::Warning,
                 &message,
-                None,
+                Some(&detail),
                 &[run_label.as_str(), cancel_label.as_str()],
                 cx,
             );
