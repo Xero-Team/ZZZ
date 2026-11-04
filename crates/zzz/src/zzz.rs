@@ -5702,6 +5702,7 @@ mod tests {
                 "console",
                 "context_server",
                 "csv",
+                "database",
                 "debug_panel",
                 "debugger",
                 "dev",
