@@ -11,18 +11,17 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 ## 当前状态 {#current-status}
 
-- Goal status: `IN PROGRESS`
+- Goal status: `COMPLETE`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 11 为
-  `50bdb7409d`，Phase 10 为 `6cda3ca5e2`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次文档提交（见 `git log -1`；Phase 13 最后一个
+  代码提交为 `334d0e3ff8`，Phase 12 为 `f4acccd79c`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 13`
-- Last completed phase: `Phase 12`
+- Active phase: `None`
+- Last completed phase: `Phase 13`
 - Blocking issue: `None`
-- Next action: 进入 Phase 13——用户文档、完成定义 12 条核对、全量门禁
-  （`cargo test --workspace`、`cargo xtask clippy`、`mdbook build docs`）。
+- Next action: 无。分支未 push、未开 PR；合并回 `main` 前等待用户确认。
 
 ## Bootstrap {#bootstrap}
 
@@ -63,22 +62,22 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                   | Status          | Commit                                           | Validation                                     | Notes                               |
-| ----- | ------------------------ | --------------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
-| 0     | 账本校准、worktree、基线 | PASS            | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
-| 1     | 骨架与 SQLite 只读浏览   | PASS            | `05f659d46bfd` + `9e00c0cbb7`                    | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
-| 2     | 连接管理与凭据           | PASS            | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
-| 3     | 查询执行与取消           | PASS            | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
-| 4     | 结果集视图               | PASS            | `57ff2dab1d`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
-| 5     | 编辑、事务与确认         | PASS            | `0926c5cbaf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
-| 6     | 扩展驱动协议             | PASS            | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
-| 7     | ER 图与导入导出          | PASS            | `d90e2ff59c`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
-| 8     | Visual EXPLAIN           | PASS            | `63985c28cf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
-| 9     | 查询历史                 | PASS            | `526bb15203`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
-| 10    | Notebook 式 SQL          | PASS            | `6cda3ca5e2`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 10 日志](#phase-10-log)   |
-| 11    | 远程与 SSH（条件项）     | NOT RUN（拒绝） | -                                                | 见 [remote-runbook](./remote-runbook.md)       | 拒绝实施并附证据，见 Phase 11 日志  |
-| 12    | MCP 只读暴露             | PASS            | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 12 日志](#phase-12-log)   |
-| 13    | 文档、门禁与收尾         | NOT STARTED     | -                                                | -                                              | -                                   |
+| Phase | Result                   | Status          | Commit                                                       | Validation                                     | Notes                               |
+| ----- | ------------------------ | --------------- | ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
+| 0     | 账本校准、worktree、基线 | PASS            | `f2a037d404`（bootstrap 文档提交）+ `9a1e9179af`（账本定稿） | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
+| 1     | 骨架与 SQLite 只读浏览   | PASS            | `05f659d46bfd` + `9e00c0cbb7`                                | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
+| 2     | 连接管理与凭据           | PASS            | `9322d438571e`                                               | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
+| 3     | 查询执行与取消           | PASS            | `0e321d7522`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
+| 4     | 结果集视图               | PASS            | `57ff2dab1d`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
+| 5     | 编辑、事务与确认         | PASS            | `0926c5cbaf`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
+| 6     | 扩展驱动协议             | PASS            | `10756066b8`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
+| 7     | ER 图与导入导出          | PASS            | `d90e2ff59c`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
+| 8     | Visual EXPLAIN           | PASS            | `63985c28cf`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
+| 9     | 查询历史                 | PASS            | `526bb15203`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
+| 10    | Notebook 式 SQL          | PASS            | `6cda3ca5e2`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 10 日志](#phase-10-log)   |
+| 11    | 远程与 SSH（条件项）     | NOT RUN（拒绝） | -                                                            | 见 [remote-runbook](./remote-runbook.md)       | 拒绝实施并附证据，见 Phase 11 日志  |
+| 12    | MCP 只读暴露             | PASS            | `f4acccd79c`                                                 | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 12 日志](#phase-12-log)   |
+| 13    | 文档、门禁与收尾         | PASS            | `334d0e3ff8` + 8 个收尾提交 + 本次文档提交                   | 全量门禁 PASS；3 项既有失败已登记              | 见 [Phase 13 日志](#phase-13-log)   |
 
 ## 现成件复核 {#reuse-review}
 
@@ -191,7 +190,16 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `526bb152031e3a48064fdd9c7e55d9944fb1e275`     | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS       | Phase 9 完成                    |
 | `6cda3ca5e293736243398fed4ce56225f30d5f9c`     | `feat(database_ui): run sql notebooks one cell at a time`               | 10    | check/test/clippy/xtask/fmt PASS       | Phase 10 完成                   |
 | `50bdb7409d829383cd8679442bbca391b8bd5de2`     | `docs(database): record the remote and ssh runbook`                     | 11    | 文档检查 PASS；远程验证 NOT RUN        | Phase 11 拒绝并记录             |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_core): expose read-only queries over mcp`                | 12    | check/test/clippy/xtask check/fmt PASS | Phase 12 完成                   |
+| `f4acccd79c94be2767fbf7f440a9a178cd30dd2a`     | `feat(database_core): expose read-only queries over mcp`                | 12    | check/test/clippy/xtask check/fmt PASS | Phase 12 完成                   |
+| `9ba036bd5738b54dd1ce62882a6a76a4aad5ad79`     | `fix(settings_ui): clone the saved path directly`                       | 13    | clippy PASS                            | 审查修复：`useless_asref`       |
+| `c0650fb3d9a3e2ad08ff6491565645edd57406bc`     | `test(zzz): register the database action namespace`                     | 13    | `-p zzz --bin zzz` 76 passed           | 审查修复：namespace 检查        |
+| `bca1a92db3d75c7ffcd526eb5003d8c991f7a810`     | `fix(database_core): release an in-flight query when its session drops` | 13    | test(96)/clippy PASS                   | 审查修复：`Drop` 取消与清理     |
+| `c9b276480e591b3fa0378f1bd9ce328f004d5e56`     | `refactor(database_core): log undeliverable row stream errors`          | 13    | test/clippy PASS                       | 审查修复：去掉 `let _`          |
+| `38805507d4b6073f026fee36409767cac58f88fd`     | `fix(database_core): keep the settings path out of mcp errors`          | 13    | test(5 mcp)/clippy PASS                | 审查修复：错误不含路径          |
+| `3c8323af09f016e49656f8a69eddcbf73b44c419`     | `fix(database_ui): keep sessions alive across tab switches`             | 13    | test(26)/clippy PASS                   | 审查修复：`on_removed`/`reload` |
+| `630a9e417b0adc60c9d7a7a8418d76f0b29af37b`     | `refactor(database_ui): share the selected sql helper`                  | 13    | test(26)/clippy PASS                   | 审查修复：重复实现去重          |
+| `334d0e3ff86224315c87cd54457514628635f051`     | `fix(database_ui): show the statement in the write confirmation`        | 13    | check/clippy PASS                      | 审查修复：D-05 对象名           |
+| 本次（见 `git log -1` 于 `database-explorer`） | `docs(database): document the explorer and close out the goal`          | 13    | prettier/mdbook PASS                   | Phase 13 完成                   |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -1150,22 +1158,114 @@ crates/database_ui/src` 无匹配：数据库代码与隧道/远程通道尚未�
   （`feat(database_core): expose read-only queries over mcp`）。
 - **下一步**：Phase 13 —— 用户文档、完成定义核对与全量门禁。
 
+## Phase 13 日志 {#phase-13-log}
+
+### 文档、门禁与收尾
+
+- **Baseline**：`database-explorer` @ `f4acccd79c`（Phase 12 提交后）。
+- **改动**：
+  - `docs/src/database.md`（新）：用户侧文档。只写已实现行为——打开数据库、连接与
+    keychain、schema 浏览与 ER 图、SQL 运行与取消键位、结果窗口与导出、编辑与事务、
+    查询历史、CSV 导入、Notebook、扩展驱动、MCP，以及已知限制。
+  - `docs/src/SUMMARY.md`：在用户章节加 `[Database](./database.md)`；开发侧此前已加
+    MCP server 与 remote runbook 条目。
+  - `docs/src/development/database/mcp-server.md`、`remote-runbook.md`：补 frontmatter
+    （`title` / `description`），使 `docs_preprocessor` 不再报缺少 meta description。
+  - 代码审查修复 9 项，按独立变化提交（8 个提交，SHA 见下）：`useless_asref`、action namespace
+    测试、`QuerySession::Drop`、`let _` 消除、MCP 错误不含设置路径、tab 切换不释放
+    session、选择文本逻辑去重、写确认显示语句。
+- **`hunting-code-smells` 审查结论与修复**：
+  1. `crates/settings_ui/src/pages/database_connections_page.rs:40`：`as_ref().map(clone)`
+     是同义重复，且阻断 `cargo xtask clippy`。改为 `.clone()`。
+  2. `crates/zzz/src/zzz.rs` 的 action namespace 断言缺少 `"database"`：`DatabaseEditor`
+     与 `DatabaseNotebook` 是本次新增的键位上下文，测试必须登记。补齐预期列表。
+  3. `QuerySession` 没有 `Drop`：视图或 cell 关闭时，session 可能是运行中查询的唯一
+     owner，导致查询继续读取且 `ConnectionManager` 永久显示 "Running query"。新增
+     `Drop` 调用 `cancel_current()`（内部会 `finish_query`），并加测试
+     `dropping_a_session_cancels_and_untracks_its_query`。
+  4. `crates/database_core/src/sqlite.rs` 的流式线程用 `let _delivered` 丢弃
+     `send_blocking` 结果，既隐藏失败也违反「不以 `let _ =` 丢弃 fallible 结果」。
+     改为显式 `log::debug!`。
+  5. `database_mcp_server` 在设置读取失败时把设置文件的绝对路径写进 tool 输出；外部
+     agent 不需要该路径。改为只说明「the settings file」。
+  6. **生命周期缺陷（最严重）**：`ResultSetView` 与 `DatabaseNotebook` 在
+     `Item::deactivated` 中释放资源，但 `deactivated` 在切 tab 时也会触发
+     （`crates/workspace/src/pane.rs:1522`）。原实现会在用户切走标签页时回滚未提交
+     事务、取消所有 notebook cell。改为在 `on_removed`（仅关闭时调用）中释放；
+     `ResultSetView::session` 改为 `RefCell<Option<QuerySession>>`，因为
+     `Item::on_removed` 只接收 `&self`，而回滚需要把 session 取出并移入后台任务。
+  7. `Item::reload` 没有实现，"Don't Save" 在关闭对话框中实际不会回滚。实现为回滚并
+     把 session 放回，交给随后的 `on_removed` 释放。
+  8. `selected_sql` 与 notebook 的选择文本收集重复实现，且 notebook 版本丢弃了光标
+     偏移。提取 `database_ui::selected_sql_text`。
+  9. 写操作二次确认只说明「影响所有行 / 是 schema 变更」，没有显示语句，无法核对
+     对象；D-05 要求确认文案说明影响对象。把语句作为 prompt 的 detail 传入。
+- **验证命令与 exit status**：
+
+  | 命令                                                                            | Exit | 结果                                                                                    |
+  | ------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------- |
+  | `cargo check -p database_core -p database_ui --all-targets`                     | 0    | 无 warning                                                                              |
+  | `cargo test -p database_core -p database_ui -p csv_preview -p db --all-targets` | 0    | core lib 96、core bin 3、extension_driver 5、mcp_server 5、ui 26、db 11、csv_preview 16 |
+  | `cargo xtask clippy`                                                            | 0    | 全量 workspace PASS                                                                     |
+  | `cargo test --workspace`                                                        | 101  | 3 项既有失败，见下表                                                                    |
+  | `cargo test --workspace --exclude gpui --exclude language --exclude ui`         | 0    | 其余全部 PASS（含 doctests）                                                            |
+  | `cargo xtask check`                                                             | 0    | all 6 repository checks passed                                                          |
+  | `cargo fmt --all -- --check`                                                    | 0    | 无 diff                                                                                 |
+  | `cd docs && npx prettier --check src/`                                          | 0    | All matched files use Prettier code style                                               |
+  | `cd docs && mdbook build`                                                       | 0    | 构建成功；4 个既有 `No meta description` 警告                                           |
+
+- **既有失败登记（与本次 diff 无关，已在 `main` 或独立 crate 上复现）**：
+
+  | 测试                                                                                                                            | 现象                                        | 证据                                                                                                                                                                                                                             |
+  | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `gpui` `elements::deferred::tests::test_cached_reuse_keeps_entity_subscriptions`                                                | workspace 并发下 `left: 2, right: 1`        | `git diff --stat 3af1429a83..HEAD -- crates/gpui` 为空；`cargo test -p gpui --lib` → 289 passed；单独运行 3/3 通过。并发敏感，非本分支引入。                                                                                     |
+  | `language` `syntax_map::syntax_map_tests::test_dynamic_language_injection` / `test_empty_combined_injections_inside_injections` | 语法树多出 `info_string:` 字段              | `main` @ `f2a037d404` 上 `cargo test -p language --lib syntax_map::syntax_map_tests::test_dynamic_language_injection` 同样 FAILED；`crates/language` 零 diff。                                                                   |
+  | `ui` `components_emit_roles_labels_and_state`（`--features accessibility`）                                                     | `Some("Project sunrise")` vs `Some("Item")` | `main` @ `f2a037d404` 上 `cargo test -p ui --features accessibility --test accessibility components_emit_roles_labels_and_state` 同样 FAILED；`crates/ui/tests/accessibility.rs` 零 diff；`cargo test -p ui --lib` → 77 passed。 |
+
+- **验证边界（明确记录）**：
+  - 本环境无图形界面，未手动操作 GPUI 界面；UI 行为由 26 项 `database_ui` 单元测试与
+    代码路径核对覆盖。切 tab 与关闭标签页的差异由 `pane.rs` 调用点确认，未做手工 GUI
+    回归。
+  - 远程项目与 SSH 隧道仍是 `NOT RUN`（Phase 11 拒绝实施，见
+    [remote-runbook](./remote-runbook.md)）。
+  - 扩展驱动只验证了内置 mock 子进程；没有真实的第三方驱动扩展可测。
+- **结论**：PASS。12 条完成定义与 10 条不变量逐条核对通过（见下），全量门禁通过，
+  3 项既有失败已登记且不在本次改动范围内。
+- **提交 SHA**：`9ba036bd57`、`c0650fb3d9`、`bca1a92db3`、`c9b276480e`、`38805507d4`、
+  `3c8323af09`、`630a9e417b`、`334d0e3ff8`，以及本次文档提交（见 `git log -1`）。
+- **下一步**：无。分支未 push、未开 PR；等待用户确认后合并回 `main`。
+
 ## 完成定义核对 {#done-checklist}
 
-收尾（Phase 13）时逐条核对[实现计划第 3 节](./implementation-plan.md#done)的 12 条与
-第 7 节的 10 条不变量，记录证据位置。
+Phase 13 逐条核对[实现计划第 3 节](./implementation-plan.md#done)的 12 条完成定义与
+第 7 节的 10 条不变量；证据均指向本仓库文件或本账本记录。
 
-| #   | 完成定义                         | 状态 | 证据 |
-| --- | -------------------------------- | ---- | ---- |
-| 1   | 阶段全完成、条件项有结论         |      |      |
-| 2   | SQLite schema 实查浏览           |      |      |
-| 3   | 查询执行/取消/结果集导出         |      |      |
-| 4   | 编辑/事务/二次确认               |      |      |
-| 5   | 凭据与连接配置                   |      |      |
-| 6   | trait + 非 SQLite 扩展驱动演示   |      |      |
-| 7   | ER/EXPLAIN/历史/Notebook/MCP     |      |      |
-| 8   | csv_preview 抽取无回归、依赖方向 |      |      |
-| 9   | i18n 双 catalog 一致             |      |      |
-| 10  | 无坏味道与重复实现               |      |      |
-| 11  | 全量门禁通过或已登记既有失败     |      |      |
-| 12  | 账本完整                         |      |      |
+| #   | 完成定义                         | 状态 | 证据                                                                                                                                                                                                                                                                                  |
+| --- | -------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 阶段全完成、条件项有结论         | PASS | Phase 0–12 全部 PASS；Phase 11 为条件项，结论是拒绝实施并附证据，见 [remote-runbook](./remote-runbook.md) 与 [Phase 11 日志](#phase-11-log)。                                                                                                                                         |
+| 2   | SQLite schema 实查浏览           | PASS | `crates/database_core/src/sqlite.rs:369` `catalogs`、`:535` 查 `sqlite_master`；`describe_table` 读 `PRAGMA table_info` / `foreign_key_list` / `index_list`。测试 `declared_type_mapping_is_used_for_columns`（`:785`）。                                                             |
+| 3   | 查询执行/取消/结果集导出         | PASS | `session.rs:130` `execute_cancellable` + `sqlite.rs:481` `stream_rows`（阻塞线程 + `sqlite3_interrupt`）；测试 `cancel_stops_a_long_running_query`（`:904`）、`window_budget_truncates_without_reporting_a_user_cancel`；导出在 `export.rs` 与 `export_result_set`。                  |
+| 4   | 编辑/事务/二次确认               | PASS | `session.rs:373` `apply_pending_edits` 在 `SAVEPOINT zzz_edit_batch` 内；`result_set_view.rs:799` 对无 `WHERE` 的写与 DDL 二次确认并显示语句。测试 `apply_writes_inside_the_transaction_and_commit_persists_it`、`failing_batch_reverts_to_the_savepoint_and_keeps_the_transaction`。 |
+| 5   | 凭据与连接配置                   | PASS | `database_ui/src/credentials.rs` 走 keychain；`connection_settings.rs` 只写 `database.connections`；`settings_content/src/database.rs` 无口令字段。MCP 输出不含凭据由 `tests/mcp_server.rs` 逐行断言。                                                                                |
+| 6   | trait + 非 SQLite 扩展驱动演示   | PASS | `driver.rs` `DriverConnection` trait；`extension_driver.rs` + `bin/mock_database_driver.rs`；`tests/extension_driver.rs` 5 项真实子进程测试（连接、目录、describe、execute、事务、explain、分类错误）。                                                                               |
+| 7   | ER/EXPLAIN/历史/Notebook/MCP     | PASS | `database_core/src/er_diagram.rs`、`explain.rs`；`crates/db/src/query_history.rs`；`database_ui/src/notebook.rs`；`bin/database_mcp_server.rs` + `tests/mcp_server.rs` 5 项。                                                                                                         |
+| 8   | csv_preview 抽取无回归、依赖方向 | PASS | 共享表格交互移到 `crates/ui/src/components/table_cell.rs` / `table_header.rs`，`csv_preview` 改用它们（净减代码）；`cargo test -p csv_preview` 16 passed；`csv_preview/Cargo.toml` 无 `database_core`，`database_core` 不依赖 `csv_preview`/`database_ui`。                           |
+| 9   | i18n 双 catalog 一致             | PASS | `assets/locales/en.json` 与 `zh-CN.json` 各 4014 条、key 集合完全相同；`database_ui` / `settings_ui` 的 243 处 `tr(...)` fallback 与 `en.json` 逐条比对 0 mismatch。                                                                                                                  |
+| 10  | 无坏味道与重复实现               | PASS | 见 [Phase 13 日志](#phase-13-log)的 9 项修复：生命周期、`Drop`、`let _`、重复选择文本、确认文案、`useless_asref`、namespace、MCP 路径。                                                                                                                                               |
+| 11  | 全量门禁通过或已登记既有失败     | PASS | `cargo test --workspace --exclude gpui --exclude language --exclude ui` = 0，`cargo xtask clippy` = 0，`cargo xtask check` = 0，fmt/prettier/mdbook = 0；3 项既有失败含基线复现证据。                                                                                                 |
+| 12  | 账本完整                         | PASS | 本文件记录每个阶段的 baseline、改动、验证命令与 exit status、结论与提交 SHA；Phase 13 的审查修复逐项登记。                                                                                                                                                                            |
+
+## 不变量核对 {#invariant-checklist}
+
+| #   | 不变量                 | 状态                          | 证据                                                                                                                                                                                                                     |
+| --- | ---------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | 能力决定能否           | PASS                          | UI 动作只查 `capabilities`：`result_set_view.rs:594`（ER）、`:840`（Explain）、`:1405`/`:1642`（编辑）、`:1887`/`:1897`（按钮）、`:2309`（导入）。仓库无 `driver_id == "sqlite"` 分支，driver id 只出现在常量与测试。    |
+| 2   | 结果集与静态表格分离   | PASS                          | `ResultSet` 定义在 `database_core/src/model.rs`，`csv_preview` 不依赖 `database_core`；两者只共享 `ui` 的展示组件。                                                                                                      |
+| 3   | 凭据单一来源           | PASS                          | 口令只经 `CredentialsProvider`（`database_ui/src/credentials.rs`）；不入 `settings_content`（无字段）、日志、错误、历史（`db/src/query_history.rs` 只存 SQL/时间/行数/耗时）与 MCP 输出。                                |
+| 4   | 状态与配置分离         | PASS                          | `ConnectionManager` 的状态、`QuerySession` 的事务、行缓存都在内存；持久化的只有 `database.connections` 与 `query_history` 表。                                                                                           |
+| 5   | 取消是一等公民         | PASS                          | 每次 `execute` 返回 `QueryHandle`；`DatabaseErrorKind::Cancelled` 是独立分类，UI 显示 "Query cancelled." 而非错误（`result_set_view.rs:1316`）；`QuerySession::Drop` 也会取消。                                          |
+| 6   | 同一事实只有一个 owner | PASS                          | 连接归 `ConnectionManager`，事务归 `QuerySession`，行缓存归 `ResultSet`；视图只保留渲染快照（`refresh_active_result`）。                                                                                                 |
+| 7   | 路径不假设本地         | PASS（本地）/ NOT RUN（远程） | 连接目标是 `DataSource::File { path: PathBuf }`，不做 `to_str()` 往返；远程项目文件与 SSH 隧道按 Phase 11 结论拒绝实施并记录为 `NOT RUN`，未声称支持。                                                                   |
+| 8   | 错误分类化             | PASS                          | `database_core/src/error.rs` 定义 8 类 `DatabaseErrorKind`，UI 经 `describe_error` 映射到 i18n 文案，不匹配错误文本。                                                                                                    |
+| 9   | 无孤儿                 | PASS                          | `cx.spawn` 结果存入 `_task` 字段或显式 `detach`（`result_set_view.rs` 的 `_query_task`/`_load_task`/`_diagram_task`/`_history_task`）；扩展驱动子进程 `kill_on_drop` 且实现 `Drop`；关闭标签页在 `on_removed` 回滚事务。 |
+| 10  | 不可逆操作有确认       | PASS                          | D-05：`result_set_view.rs:799` 对无 `WHERE` 的 `UPDATE`/`DELETE` 与 DDL 弹出确认并显示语句；关闭有未提交更改的标签页时提供 Save（提交）/ Don't Save（回滚）/ Cancel。                                                    |

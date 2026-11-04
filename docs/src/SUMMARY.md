@@ -44,6 +44,7 @@
   - [REPL](./repl.md)
 - [Git](./git.md)
 - [Modelines](./modelines.md)
+- [Database](./database.md)
 
 # Remote Development
 
