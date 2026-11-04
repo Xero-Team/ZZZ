@@ -226,6 +226,44 @@ pub fn classify(sql: &str) -> StatementKind {
     }
 }
 
+/// Whether a statement only reads.
+///
+/// This is a guard for the read-only surfaces (MCP, previews), not a SQL
+/// parser: `WITH` is allowed as long as the main statement at depth zero is
+/// not a write, because CTE bodies cannot contain DML. Callers must still
+/// enforce read-only at the driver level (`PRAGMA query_only`), since a
+/// classification can never be complete.
+pub fn is_read_only(sql: &str) -> bool {
+    let tokens = significant_tokens(sql);
+    let Some(first) = tokens.first() else {
+        return false;
+    };
+    match first.text.to_ascii_uppercase().as_str() {
+        "SELECT" | "VALUES" | "TABLE" => true,
+        // EXPLAIN compiles the statement without running it, including writes.
+        "EXPLAIN" => true,
+        "WITH" => !tokens.iter().any(|token| {
+            token.depth == 0
+                && matches!(
+                    token.text.to_ascii_uppercase().as_str(),
+                    "INSERT"
+                        | "REPLACE"
+                        | "UPDATE"
+                        | "DELETE"
+                        | "CREATE"
+                        | "DROP"
+                        | "ALTER"
+                        | "RENAME"
+                        | "PRAGMA"
+                        | "ATTACH"
+                        | "DETACH"
+                        | "VACUUM"
+                )
+        }),
+        _ => false,
+    }
+}
+
 /// The single table an `SELECT ... FROM <table>` reads from, when the shape is
 /// simple enough that each result row maps to exactly one table row.
 ///
@@ -593,6 +631,33 @@ mod tests {
             "SELECT id FROM a, b WHERE a.id = b.id",
         ] {
             assert_eq!(editable_target(sql), None, "{sql}");
+        }
+    }
+
+    #[test]
+    fn read_only_covers_queries_and_rejects_writes() {
+        for sql in [
+            "SELECT 1",
+            "VALUES (1)",
+            "TABLE users",
+            "EXPLAIN QUERY PLAN SELECT 1",
+            "WITH x AS (SELECT 1) SELECT * FROM x",
+            "SELECT 'delete from users'",
+            "-- delete from users\nSELECT 1",
+        ] {
+            assert!(is_read_only(sql), "{sql}");
+        }
+        for sql in [
+            "",
+            "INSERT INTO users (id) VALUES (1)",
+            "UPDATE users SET id = 2",
+            "DELETE FROM users",
+            "CREATE TABLE t (id INTEGER)",
+            "PRAGMA journal_mode = WAL",
+            "ATTACH DATABASE 'x' AS y",
+            "WITH x AS (SELECT 1) DELETE FROM users",
+        ] {
+            assert!(!is_read_only(sql), "{sql}");
         }
     }
 

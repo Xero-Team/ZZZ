@@ -228,6 +228,7 @@
     - [Database Explorer Decisions](./development/database/decisions.md)
     - [Database Explorer Goal](./development/database/goal.md)
     - [Database Explorer Progress](./development/database/progress.md)
+    - [Database MCP Server](./development/database/mcp-server.md)
     - [Database Explorer Remote Runbook](./development/database/remote-runbook.md)
   - [Feature Development Process](./development/feature-process.md)
   - [Upstream Sync Archive](./development/upstream/index.md)

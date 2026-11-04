@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 10 为
-  `6cda3ca5e2`，Phase 9 为 `526bb15203`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 11 为
+  `50bdb7409d`，Phase 10 为 `6cda3ca5e2`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 12`
-- Last completed phase: `Phase 11`（条件项，结论为拒绝实施并附证据；验证 `NOT RUN`）
+- Active phase: `Phase 13`
+- Last completed phase: `Phase 12`
 - Blocking issue: `None`
-- Next action: 进入 Phase 12——MCP 只读暴露（查询、schema、结果集），凭据不进入 tool
-  输出。
+- Next action: 进入 Phase 13——用户文档、完成定义 12 条核对、全量门禁
+  （`cargo test --workspace`、`cargo xtask clippy`、`mdbook build docs`）。
 
 ## Bootstrap {#bootstrap}
 
@@ -77,9 +77,7 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 9     | 查询历史                 | PASS            | `526bb15203`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
 | 10    | Notebook 式 SQL          | PASS            | `6cda3ca5e2`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 10 日志](#phase-10-log)   |
 | 11    | 远程与 SSH（条件项）     | NOT RUN（拒绝） | -                                                | 见 [remote-runbook](./remote-runbook.md)       | 拒绝实施并附证据，见 Phase 11 日志  |
-| 10    | Notebook 式 SQL          | NOT STARTED     | -                                                | -                                              | -                                   |
-| 11    | 远程与 SSH（条件项）     | NOT STARTED     | -                                                | -                                              | -                                   |
-| 12    | MCP 只读暴露             | NOT STARTED     | -                                                | -                                              | -                                   |
+| 12    | MCP 只读暴露             | PASS            | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 12 日志](#phase-12-log)   |
 | 13    | 文档、门禁与收尾         | NOT STARTED     | -                                                | -                                              | -                                   |
 
 ## 现成件复核 {#reuse-review}
@@ -175,24 +173,25 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 
 ## 提交记录 {#commits}
 
-| SHA                                            | 提交信息                                                                | Phase | 验证                             | 备注                            |
-| ---------------------------------------------- | ----------------------------------------------------------------------- | ----- | -------------------------------- | ------------------------------- |
-| `f2a037d404cc396581e24822d34cf2a885b02bc4`     | `docs: add database explorer plan`                                      | 0     | prettier PASS                    | 在 `main` 上，worktree 前置条件 |
-| `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82`     | `docs(database): record phase 0 baseline and ledger`                    | 0     | 见 baseline-validation 表        | Phase 0 账本定稿                |
-| `812e4ae4be42401a9041e9a0768c6bc3dcae69ee`     | `feat(database_core): add domain model and sql analysis`                | 1     | check/test/clippy/fmt PASS       | 工作项 1                        |
-| `3f42c8244ca427e07c6f1604dc9631ad4e80fd21`     | `feat(database_core): add driver protocol and built-in sqlite driver`   | 1     | check/test(32)/clippy/fmt PASS   | 工作项 2，DB-EXP-001 PASS       |
-| `05f659d46bfd5b273e256a6dd37121477c2d014a`     | `feat(database_ui): wire sqlite browsing panel and result view`         | 1     | check/test(41)/clippy/fmt PASS   | 工作项 3，Phase 1 完成          |
-| `9e00c0cbb78d84bdd99324f87cbe324590497502`     | `fix(database_core): surface statement errors from the row stream`      | 1     | check/test(43)/clippy/fmt PASS   | 工作项 3 缺陷修复               |
-| `9322d438571e5deaef8a6bb229e7bcfc07c14b3b`     | `feat(database_ui): save connections in settings with keychain secrets` | 2     | check/test/clippy/xtask/fmt PASS | Phase 2 完成                    |
-| `0e321d7522a48873306290b68a0d138fde560da2`     | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS | Phase 4 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS | Phase 5 完成                    |
-| `10756066b89a478da5e6bc768518b082a5bd4fa8`     | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
-| `d90e2ff59c7fa12eb4f6e9e2df189ece12fafa9f`     | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
-| `63985c28cf4f86490b04b75082752ac967569942`     | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS | Phase 8 完成                    |
-| `526bb152031e3a48064fdd9c7e55d9944fb1e275`     | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS | Phase 9 完成                    |
-| `6cda3ca5e293736243398fed4ce56225f30d5f9c`     | `feat(database_ui): run sql notebooks one cell at a time`               | 10    | check/test/clippy/xtask/fmt PASS | Phase 10 完成                   |
-| 本次（见 `git log -1` 于 `database-explorer`） | `docs(database): record the remote and ssh runbook`                     | 11    | 文档检查 PASS；远程验证 NOT RUN  | Phase 11 拒绝并记录             |
+| SHA                                            | 提交信息                                                                | Phase | 验证                                   | 备注                            |
+| ---------------------------------------------- | ----------------------------------------------------------------------- | ----- | -------------------------------------- | ------------------------------- |
+| `f2a037d404cc396581e24822d34cf2a885b02bc4`     | `docs: add database explorer plan`                                      | 0     | prettier PASS                          | 在 `main` 上，worktree 前置条件 |
+| `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82`     | `docs(database): record phase 0 baseline and ledger`                    | 0     | 见 baseline-validation 表              | Phase 0 账本定稿                |
+| `812e4ae4be42401a9041e9a0768c6bc3dcae69ee`     | `feat(database_core): add domain model and sql analysis`                | 1     | check/test/clippy/fmt PASS             | 工作项 1                        |
+| `3f42c8244ca427e07c6f1604dc9631ad4e80fd21`     | `feat(database_core): add driver protocol and built-in sqlite driver`   | 1     | check/test(32)/clippy/fmt PASS         | 工作项 2，DB-EXP-001 PASS       |
+| `05f659d46bfd5b273e256a6dd37121477c2d014a`     | `feat(database_ui): wire sqlite browsing panel and result view`         | 1     | check/test(41)/clippy/fmt PASS         | 工作项 3，Phase 1 完成          |
+| `9e00c0cbb78d84bdd99324f87cbe324590497502`     | `fix(database_core): surface statement errors from the row stream`      | 1     | check/test(43)/clippy/fmt PASS         | 工作项 3 缺陷修复               |
+| `9322d438571e5deaef8a6bb229e7bcfc07c14b3b`     | `feat(database_ui): save connections in settings with keychain secrets` | 2     | check/test/clippy/xtask/fmt PASS       | Phase 2 完成                    |
+| `0e321d7522a48873306290b68a0d138fde560da2`     | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS       | Phase 3 完成                    |
+| `57ff2dab1d80a7fd53f4fed7516569683c4536c9`     | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS       | Phase 4 完成                    |
+| `0926c5cbaf117df4d1a79e1a4c8b76eb3cb55e25`     | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS       | Phase 5 完成                    |
+| `10756066b89a478da5e6bc768518b082a5bd4fa8`     | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS       | Phase 6 完成                    |
+| `d90e2ff59c7fa12eb4f6e9e2df189ece12fafa9f`     | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS       | Phase 7 完成                    |
+| `63985c28cf4f86490b04b75082752ac967569942`     | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS       | Phase 8 完成                    |
+| `526bb152031e3a48064fdd9c7e55d9944fb1e275`     | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS       | Phase 9 完成                    |
+| `6cda3ca5e293736243398fed4ce56225f30d5f9c`     | `feat(database_ui): run sql notebooks one cell at a time`               | 10    | check/test/clippy/xtask/fmt PASS       | Phase 10 完成                   |
+| `50bdb7409d829383cd8679442bbca391b8bd5de2`     | `docs(database): record the remote and ssh runbook`                     | 11    | 文档检查 PASS；远程验证 NOT RUN        | Phase 11 拒绝并记录             |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_core): expose read-only queries over mcp`                | 12    | check/test/clippy/xtask check/fmt PASS | Phase 12 完成                   |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -1071,6 +1070,85 @@ crates/database_ui/src` 无匹配：数据库代码与隧道/远程通道尚未�
     `cargo xtask check` → `XCHECK=0`；
     `cd docs && npx prettier --check src/` → PASS。
 - **下一步**：Phase 12 —— MCP 只读暴露。
+
+## Phase 12 日志 {#phase-12-log}
+
+### MCP 只读暴露
+
+- **Baseline**：`database-explorer` @ `50bdb7409d`（Phase 11 提交后）。
+- **改动**：
+  - `crates/database_core/src/sql.rs`：新增 `is_read_only`。它按顶层 token 判断单条语句
+    是否只读，放行 `SELECT` / `VALUES` / `TABLE` / `EXPLAIN`，以及主语句不是写操作的
+    `WITH`；注释明确它是防误用分类器、不是完整解析器，调用方必须另外在驱动层限制。
+  - `crates/database_core/src/bin/database_mcp_server.rs`（新）：MCP stdio server。
+    - 传输：stdin 逐行读 JSON-RPC 2.0，stdout 逐行写响应；无 `id` 的通知不回复。
+    - 方法：`initialize`、`tools/list`、`tools/call`、`ping`。
+    - tools：`list_connections`、`describe_table`、`run_read_query`；只有
+      `--allow-writes` 时 `tools/list` 才包含 `run_write_query`，否则调用也会被拒绝。
+    - 连接来源：读取 `paths::config_dir()/settings.json`（可用 `--settings` 覆盖），
+      用 `settings_json::parse_json_with_comments` 解析 JSONC。`SavedConnection` 只声明
+      `id` / `name` / `driver` / `path`，设置中的口令字段不会被读入响应。
+    - 只读双保险：`is_read_only` 拒绝非读语句；打开连接后先执行
+      `PRAGMA query_only = 1`，即使分类器误判 SQLite 也不会写。连接在每次 tool 调用
+      内打开并在结束时关闭，`query_only` 不会影响浏览器里的连接。
+    - 结果：列名与声明类型、行数组；`NULL` 保持 JSON `null`，BLOB 用
+      `Value::to_json` 的摘要字符串（D-07）；`limit` 默认 500、上限 5000，达到上限时
+      `truncated = true` 并取消剩余行流。
+    - `describe_table` 对空列结果报 `table not found`：SQLite 对不存在的表返回空
+      `table_info`，若原样返回会看起来像一张没有列的有效表。
+    - `run_write_query` 拒绝空语句与事务控制语句，返回 `changes()` 得到的
+      `affected_rows`。
+  - `crates/database_core/Cargo.toml`：新增 `[[bin]] database-mcp-server`、
+    `paths` / `settings_json` 依赖（两者都不依赖 GPUI），以及测试用的 `tempfile`。
+  - `crates/database_core/tests/mcp_server.rs`（新）：启动真实二进制，用
+    `smol::process::Command` + `futures::io::BufReader` 走 stdin/stdout 协议。
+  - `docs/src/development/database/mcp-server.md`（新）与 `docs/src/SUMMARY.md`：构建、
+    ZZZ `context_servers` 配置、四个 tools、只读保证、安全边界与已知限制。
+- **验证命令与 exit status**：
+  - `cargo test -p database_core --all-targets` → `TEST=0`
+    （lib 95、bin 3、`extension_driver` 5、`mcp_server` 5）
+  - `cargo clippy -p database_core --all-targets -- -D warnings` → `CLIPPY=0`
+  - `cargo test -p database_ui -p db --all-targets` → PASS（无回归）
+  - `cargo check -p zzz` → `ZCHECK=0`
+  - `cargo xtask check` → `XCHECK=0`（6 checks）
+  - `cargo fmt --all -- --check` → `FMT=0`
+  - `cd docs && npx prettier --check src/` → PASS
+- **新增测试**：
+  - `sql::tests::read_only_covers_queries_and_rejects_writes`：读语句、含写关键字的字符串
+    与注释、`WITH ... SELECT` 放行；INSERT/UPDATE/DELETE/DDL/PRAGMA/ATTACH 与
+    `WITH ... DELETE` 拒绝。
+  - bin 内单元测试：参数解析（含未知参数）、JSONC 设置解析且未知字段被忽略、限定表名
+    拆分。
+  - `tests/mcp_server.rs` 5 项：
+    1. `initialize` 回显协议版本并声明 tools 能力；`tools/list` 只含三个只读工具。
+    2. `list_connections` 不含路径；不支持的驱动标记 `available:false`；stdout 全文
+       不含设置里的假口令。
+    3. `describe_table` 返回列、主键与外键；不存在的表返回 tool error。
+    4. `run_read_query` 返回 BLOB 摘要与 JSON `null`；拒绝 `DELETE` 与多语句；随后
+       `count(*)` 证明数据未变；stdout 全文不含假口令。
+    5. `--allow-writes` 时工具列表包含 `run_write_query`，INSERT 报告 1 行，再读回新行。
+- **实现决策（记录）**：
+  - server 作为 `database_core` 的第二个 bin，而不是新 crate：它只依赖
+    `database_core` + `paths` + `settings_json`，没有 GPUI；新 crate 只会增加 workspace
+    噪音。
+  - 请求同步处理（`smol::block_on`）：MCP 客户端通常串行调用 tools，同步循环让取消与
+    连接关闭的语义保持简单；并发需求由客户端启动多个进程满足。
+  - 只读以「分类器 + `PRAGMA query_only`」两层实现：分类器负责给出清晰拒绝信息，
+    SQLite 负责最终兜底；两者都在 server 侧，浏览器不受影响。
+  - 不自动把 server 写进用户的 `context_servers`：未经用户同意修改 agent 配置会扩大
+    tool 暴露面；文档给出显式配置片段。
+- **验证边界（明确记录）**：
+  - 本环境没有图形界面，未在 ZZZ Agent Panel 中手动添加该 server 并观察 tool 列表；
+    协议层由真实 subprocess 测试覆盖。
+  - 发行包不包含该二进制，文档已注明需要自行构建并指向绝对路径。这属于打包范围，
+    不改动 `cargo xtask dist`。
+  - 只验证了文件型 SQLite；其他驱动在 `list_connections` 中不可打开，符合 D-03 与
+    Phase 12 的范围。
+- **结论**：PASS。agent 可通过 MCP 查询并收到结构化结果；tool 输出不含凭据；只读在
+  分类器与 SQLite 两层生效。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_core): expose read-only queries over mcp`）。
+- **下一步**：Phase 13 —— 用户文档、完成定义核对与全量门禁。
 
 ## 完成定义核对 {#done-checklist}
 

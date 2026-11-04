@@ -43,7 +43,7 @@ pub use session::{
     column_label,
 };
 pub use sql::{
-    SqlStatement, StatementKind, classify, editable_target, quote_identifier, quote_table,
-    split_statements, statement_at,
+    SqlStatement, StatementKind, classify, editable_target, is_read_only, quote_identifier,
+    quote_table, split_statements, statement_at,
 };
 pub use sqlite::{SQLITE_DRIVER_ID, SqliteConnection, SqliteDriver};

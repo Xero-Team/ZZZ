@@ -3836,9 +3836,12 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "parking_lot 0.13.0",
+ "paths",
  "serde",
  "serde_json",
+ "settings_json",
  "smol",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
