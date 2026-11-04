@@ -34,6 +34,29 @@ struct ManagedConnection {
     active_queries: Vec<crate::driver::QueryHandle>,
 }
 
+impl ManagedConnection {
+    fn new(config: ConnectionConfig) -> Self {
+        Self {
+            config,
+            status: ConnectionStatus::Disconnected,
+            connection: None,
+            active_queries: Vec::new(),
+        }
+    }
+
+    /// Drop the live connection after cancelling everything running on it. The
+    /// driver's native handle is released by `Drop`; `disconnect` is preferred
+    /// when the caller can await `close`.
+    fn reset(&mut self, config: ConnectionConfig) {
+        for query in std::mem::take(&mut self.active_queries) {
+            query.cancel();
+        }
+        self.connection = None;
+        self.status = ConnectionStatus::Disconnected;
+        self.config = config;
+    }
+}
+
 /// Owns driver registration and connection state. Secrets are injected per
 /// connect call by the UI layer.
 pub struct ConnectionManager {
@@ -72,15 +95,33 @@ impl ConnectionManager {
     /// Save (or replace) a non-sensitive connection configuration. Credentials
     /// are stored separately under `ConnectionConfig::credential_key()`.
     pub fn upsert_config(&self, config: ConnectionConfig) {
-        self.connections.lock().insert(
-            config.id.clone(),
-            ManagedConnection {
-                config,
-                status: ConnectionStatus::Disconnected,
-                connection: None,
-                active_queries: Vec::new(),
-            },
-        );
+        self.connections
+            .lock()
+            .insert(config.id.clone(), ManagedConnection::new(config));
+    }
+
+    /// Apply the durable configuration set (from settings) to the runtime
+    /// registry: remove connections that are gone, add new ones, and reset any
+    /// connection whose configuration changed so the next use reconnects to the
+    /// new target. Unchanged live connections keep their status and queries.
+    pub fn sync_configs(&self, configs: Vec<ConnectionConfig>) {
+        let mut connections = self.connections.lock();
+        let configured: std::collections::BTreeSet<ConnectionId> =
+            configs.iter().map(|config| config.id.clone()).collect();
+        connections.retain(|id, _| configured.contains(id));
+        for config in configs {
+            match connections.entry(config.id.clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(ManagedConnection::new(config));
+                }
+                std::collections::btree_map::Entry::Occupied(mut entry) => {
+                    let managed = entry.get_mut();
+                    if managed.config != config {
+                        managed.reset(config);
+                    }
+                }
+            }
+        }
     }
 
     pub fn remove_config(&self, id: &ConnectionId) {
@@ -160,6 +201,28 @@ impl ConnectionManager {
     ) -> DriverResult<()> {
         let connection = self.connect(id, secret).await?;
         connection.test().await
+    }
+
+    /// Verify a configuration without registering or saving it. The dialog uses
+    /// this before the user commits a new connection, so a failed test cannot
+    /// leave a stale entry in the manager.
+    pub async fn test_config(
+        &self,
+        config: &ConnectionConfig,
+        secret: Option<&[u8]>,
+    ) -> DriverResult<()> {
+        let driver = self
+            .drivers
+            .lock()
+            .get(&config.driver_id)
+            .cloned()
+            .ok_or_else(|| {
+                DatabaseError::driver(format!("no driver registered for {}", config.driver_id))
+            })?;
+        let connection = driver.driver.connect(config, secret).await?;
+        let test_result = connection.test().await;
+        let close_result = connection.close().await;
+        test_result.and(close_result)
     }
 
     /// Disconnect: cancel every in-flight query, then close the native
@@ -313,6 +376,153 @@ mod tests {
             manager.disconnect(&id).await.expect("disconnect");
             assert_eq!(manager.status(&id), Some(ConnectionStatus::Disconnected));
             std::fs::remove_file(&path).expect("remove database file");
+        });
+    }
+
+    #[test]
+    fn sync_configs_adds_removes_and_resets_changed_connections() {
+        futures::executor::block_on(async {
+            let manager = ConnectionManager::new();
+            manager.register_driver(Arc::new(SqliteDriver));
+            manager.sync_configs(vec![config("a"), config("b")]);
+            assert_eq!(manager.configs().len(), 2);
+
+            let id = ConnectionId("a".into());
+            manager.connect(&id, None).await.expect("connect");
+            assert_eq!(manager.status(&id), Some(ConnectionStatus::Connected));
+
+            let mut renamed = config("a");
+            renamed.display_name = "renamed".into();
+            manager.sync_configs(vec![renamed.clone()]);
+            assert_eq!(manager.configs(), vec![renamed]);
+            assert_eq!(manager.status(&id), Some(ConnectionStatus::Disconnected));
+
+            manager.sync_configs(Vec::new());
+            assert!(manager.configs().is_empty());
+            assert_eq!(manager.status(&id), None);
+        });
+    }
+
+    struct PasswordDriver;
+
+    struct PasswordConnection;
+
+    #[async_trait::async_trait]
+    impl DatabaseDriver for PasswordDriver {
+        fn id(&self) -> &'static str {
+            "password-test"
+        }
+
+        fn display_name(&self) -> &'static str {
+            "Password Test"
+        }
+
+        fn capabilities(&self) -> Capabilities {
+            let mut capabilities = Capabilities::read_only();
+            capabilities.requires_credentials = true;
+            capabilities
+        }
+
+        async fn connect(
+            &self,
+            _config: &ConnectionConfig,
+            secret: Option<&[u8]>,
+        ) -> DriverResult<Arc<dyn DriverConnection>> {
+            if secret == Some(b"secret".as_slice()) {
+                Ok(Arc::new(PasswordConnection))
+            } else {
+                Err(DatabaseError::authentication("bad password"))
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl DriverConnection for PasswordConnection {
+        async fn test(&self) -> DriverResult<()> {
+            Ok(())
+        }
+
+        async fn catalogs(&self) -> DriverResult<Vec<crate::model::Catalog>> {
+            Ok(Vec::new())
+        }
+
+        async fn describe_table(
+            &self,
+            _table: &TableRef,
+        ) -> DriverResult<crate::model::TableSchema> {
+            Err(DatabaseError::driver("not used"))
+        }
+
+        async fn execute(
+            &self,
+            _sql: &str,
+            _params: &[crate::model::Value],
+        ) -> DriverResult<crate::driver::ExecutedQuery> {
+            Err(DatabaseError::driver("not used"))
+        }
+
+        async fn begin(&self) -> DriverResult<crate::driver::TransactionId> {
+            Err(DatabaseError::driver("not used"))
+        }
+
+        async fn commit(&self, _transaction: crate::driver::TransactionId) -> DriverResult<()> {
+            Err(DatabaseError::driver("not used"))
+        }
+
+        async fn rollback(&self, _transaction: crate::driver::TransactionId) -> DriverResult<()> {
+            Err(DatabaseError::driver("not used"))
+        }
+
+        async fn explain(&self, _sql: &str) -> DriverResult<crate::driver::ExplainPlan> {
+            Err(DatabaseError::driver("not used"))
+        }
+
+        async fn close(&self) -> DriverResult<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_config_leaves_the_registry_untouched() {
+        futures::executor::block_on(async {
+            let manager = ConnectionManager::new();
+            manager.register_driver(Arc::new(SqliteDriver));
+            let config = config("transient");
+            manager
+                .test_config(&config, None)
+                .await
+                .expect("test config");
+            assert!(manager.configs().is_empty());
+            assert_eq!(manager.status(&config.id), None);
+        });
+    }
+
+    #[test]
+    fn rejected_credentials_are_classified_and_never_stored() {
+        futures::executor::block_on(async {
+            let manager = ConnectionManager::new();
+            manager.register_driver(Arc::new(PasswordDriver));
+            let id = ConnectionId("auth".into());
+            let mut password_config = config("auth");
+            password_config.driver_id = PasswordDriver.id().to_owned();
+            manager.upsert_config(password_config);
+
+            let error = manager
+                .connect(&id, Some(b"wrong"))
+                .await
+                .err()
+                .expect("authentication error");
+            assert_eq!(error.kind, DatabaseErrorKind::Authentication);
+            assert_eq!(manager.status(&id), Some(ConnectionStatus::Disconnected));
+
+            manager
+                .test_connection(&id, Some(b"secret"))
+                .await
+                .expect("valid secret");
+
+            let rendered = format!("{:?}", manager.configs());
+            assert!(!rendered.contains("wrong"));
+            assert!(!rendered.contains("secret"));
         });
     }
 

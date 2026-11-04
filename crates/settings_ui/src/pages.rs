@@ -1,4 +1,5 @@
 mod audio_input_output_setup;
+mod database_connections_page;
 mod feature_flags;
 mod mcp_servers_page;
 mod tool_permissions_setup;
@@ -6,6 +7,7 @@ mod tool_permissions_setup;
 pub(crate) use audio_input_output_setup::{
     render_input_audio_device_dropdown, render_output_audio_device_dropdown,
 };
+pub(crate) use database_connections_page::render_database_connections_page;
 pub(crate) use feature_flags::render_feature_flags_page;
 pub(crate) use mcp_servers_page::render_mcp_servers_page;
 pub(crate) use tool_permissions_setup::render_tool_permissions_setup_page;

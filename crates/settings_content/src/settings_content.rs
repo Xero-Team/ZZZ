@@ -1,5 +1,6 @@
 mod action;
 mod agent;
+mod database;
 mod editor;
 mod extension;
 mod fallible_options;
@@ -14,6 +15,7 @@ mod workspace;
 
 pub use action::{ActionName, ActionWithArguments, CommandAliasTarget};
 pub use agent::*;
+pub use database::*;
 pub use editor::*;
 pub use extension::*;
 pub use fallible_options::*;
@@ -167,6 +169,10 @@ pub struct SettingsContent {
     pub base_keymap: Option<BaseKeymapContent>,
 
     pub debugger: Option<DebuggerSettingsContent>,
+
+    /// Saved database connections. Passwords and tokens are never stored here;
+    /// they are kept in the platform keychain.
+    pub database: Option<DatabaseSettingsContent>,
 
     /// Configuration for Diagnostics-related features.
     pub diagnostics: Option<DiagnosticsSettingsContent>,

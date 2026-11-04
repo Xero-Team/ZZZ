@@ -10,7 +10,10 @@ use util::ResultExt as _;
 use crate::{
     ActionLink, DynamicItem, PROJECT, SettingField, SettingItem, SettingsFieldMetadata,
     SettingsPage, SettingsPageItem, SubPageLink, USER, UiText, active_language, all_language_names,
-    pages::{render_mcp_servers_page, render_tool_permissions_setup_page},
+    pages::{
+        render_database_connections_page, render_mcp_servers_page,
+        render_tool_permissions_setup_page,
+    },
 };
 
 const DEFAULT_STRING: String = String::new();
@@ -9957,7 +9960,7 @@ fn ai_page(cx: &App) -> SettingsPage {
 }
 
 fn network_page() -> SettingsPage {
-    fn network_section() -> [SettingsPageItem; 3] {
+    fn network_section() -> [SettingsPageItem; 4] {
         [
             SettingsPageItem::SectionHeader(lt("settings_ui.page_data.section.network", "Network")),
             SettingsPageItem::SettingItem(SettingItem {
@@ -9997,6 +10000,25 @@ fn network_page() -> SettingsPage {
                     ..Default::default()
                 })),
                 files: USER,
+            }),
+            SettingsPageItem::SubPageLink(SubPageLink {
+                title: lt("database.settings.title", "Database Connections"),
+                r#type: Default::default(),
+                search_aliases: &[
+                    "database",
+                    "databases",
+                    "sqlite",
+                    "connection",
+                    "connections",
+                ],
+                json_path: Some("database.connections"),
+                description: Some(lt(
+                    "database.settings.description",
+                    "Manage saved database connections. Passwords are stored in the system keychain; the connection list can be edited in JSON.",
+                )),
+                in_json: true,
+                files: USER,
+                render: render_database_connections_page,
             }),
         ]
     }

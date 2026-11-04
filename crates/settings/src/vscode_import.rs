@@ -179,6 +179,7 @@ impl VsCodeSettings {
             base_keymap: Some(BaseKeymapContent::VSCode),
 
             credentials_url: None,
+            database: None,
             debugger: None,
             diagnostics: None,
             editor: self.editor_settings_content(),

@@ -71,7 +71,13 @@ impl ResultSetView {
         let credential_key = self.config.credential_key();
         let task = cx.spawn(async move |view, cx| {
             let result = async {
-                let secret = credentials.read(&credential_key, cx).await.ok().flatten();
+                let secret = match credentials.read(&credential_key, cx).await {
+                    Ok(secret) => secret,
+                    Err(error) => {
+                        log::warn!("failed to read database credentials: {error:#}");
+                        None
+                    }
+                };
                 let connection = manager.connect(&connection_id, secret.as_deref()).await?;
                 connection.catalogs().await
             }
@@ -109,7 +115,13 @@ impl ResultSetView {
         let credential_key = self.config.credential_key();
         let task = cx.spawn(async move |view, cx| {
             let result = async {
-                let secret = credentials.read(&credential_key, cx).await.ok().flatten();
+                let secret = match credentials.read(&credential_key, cx).await {
+                    Ok(secret) => secret,
+                    Err(error) => {
+                        log::warn!("failed to read database credentials: {error:#}");
+                        None
+                    }
+                };
                 let connection = manager.connect(&connection_id, secret.as_deref()).await?;
                 connection.describe_table(&table).await
             }

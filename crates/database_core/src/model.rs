@@ -357,6 +357,10 @@ pub struct Capabilities {
     pub er_diagram: bool,
     pub cancel: bool,
     pub streaming: bool,
+    /// The driver authenticates connections, so the UI must collect a secret
+    /// and store it in the keychain rather than in settings.
+    #[serde(default)]
+    pub requires_credentials: bool,
     pub multiple_catalogs: bool,
     pub multiple_schemas: bool,
     pub views: bool,
@@ -374,6 +378,7 @@ impl Capabilities {
             er_diagram: true,
             cancel: true,
             streaming: true,
+            requires_credentials: false,
             multiple_catalogs: false,
             multiple_schemas: false,
             views: true,
@@ -391,6 +396,7 @@ impl Capabilities {
             er_diagram: false,
             cancel: false,
             streaming: false,
+            requires_credentials: false,
             multiple_catalogs: false,
             multiple_schemas: false,
             views: false,
