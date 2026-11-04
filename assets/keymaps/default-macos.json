@@ -1700,4 +1700,14 @@
       "alt-shift-e": "recent_files::Toggle",
     },
   },
+  {
+    // The database SQL editor owns run/cancel, so the same chords keep their
+    // usual meaning in ordinary editors.
+    "context": "DatabaseEditor",
+    "bindings": {
+      "cmd-enter": "database::RunStatement",
+      "cmd-shift-enter": "database::RunSelection",
+      "cmd-shift-c": "database::CancelQuery",
+    },
+  },
 ]

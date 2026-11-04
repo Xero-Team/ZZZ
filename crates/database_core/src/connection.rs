@@ -254,6 +254,18 @@ impl ConnectionManager {
         }
     }
 
+    /// Cancel every in-flight query on `id` without disconnecting. The result
+    /// view uses this while `QuerySession` owns the query handle, so a keypress
+    /// does not have to reach into the session that is awaiting rows.
+    pub fn cancel_queries(&self, id: &ConnectionId) {
+        let connections = self.connections.lock();
+        if let Some(managed) = connections.get(id) {
+            for query in &managed.active_queries {
+                query.cancel();
+            }
+        }
+    }
+
     pub fn finish_query(&self, id: &ConnectionId, query_id: u64) {
         if let Some(managed) = self.connections.lock().get_mut(id) {
             managed
@@ -480,6 +492,34 @@ mod tests {
         async fn close(&self) -> DriverResult<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn cancel_queries_stops_tracked_queries_without_disconnecting() {
+        futures::executor::block_on(async {
+            let manager = ConnectionManager::new();
+            manager.register_driver(Arc::new(SqliteDriver));
+            let id = ConnectionId("cancel".into());
+            manager.upsert_config(config("cancel"));
+            let connection = manager.connect(&id, None).await.expect("connect");
+            let query = connection
+                .execute(
+                    "WITH RECURSIVE counter(value) AS (
+                        VALUES(1) UNION ALL SELECT value + 1 FROM counter WHERE value < 100000000
+                    ) SELECT value FROM counter",
+                    &[],
+                )
+                .await
+                .expect("execute");
+            manager.track_query(&id, query.handle.clone());
+            assert!(query.rows.next().await.is_some(), "stream started");
+            manager.cancel_queries(&id);
+            assert!(query.handle.is_cancelled());
+            while query.rows.next().await.is_some() {}
+            manager.finish_query(&id, query.handle.id());
+            assert_eq!(manager.status(&id), Some(ConnectionStatus::Connected));
+            manager.disconnect(&id).await.expect("disconnect");
+        });
     }
 
     #[test]

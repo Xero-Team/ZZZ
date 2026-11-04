@@ -19,7 +19,14 @@ mod result_set_view;
 
 actions!(
     database,
-    [OpenDatabase, AddDatabaseConnection, ToggleDatabasePanel]
+    [
+        OpenDatabase,
+        AddDatabaseConnection,
+        ToggleDatabasePanel,
+        RunStatement,
+        RunSelection,
+        CancelQuery
+    ]
 );
 
 /// Application-global database state. The manager is the sole owner of

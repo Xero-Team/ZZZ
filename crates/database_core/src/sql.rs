@@ -137,6 +137,23 @@ pub fn split_statements(sql: &str) -> Vec<SqlStatement> {
     statements
 }
 
+/// Pick the statement under the cursor. When the cursor sits after a statement
+/// terminator (or in the whitespace between statements), the preceding statement
+/// wins so "run" still means the statement the user just typed.
+pub fn statement_at(sql: &str, cursor_byte: usize) -> Option<SqlStatement> {
+    let statements = split_statements(sql);
+    let cursor = cursor_byte.min(sql.len());
+    if let Some(statement) = statements
+        .iter()
+        .find(|statement| statement.start_byte <= cursor && cursor <= statement.end_byte)
+    {
+        return Some(statement.clone());
+    }
+    statements
+        .into_iter()
+        .rfind(|statement| statement.end_byte <= cursor)
+}
+
 fn leading_whitespace_len(text: &str) -> usize {
     text.len() - text.trim_start().len()
 }
@@ -269,6 +286,30 @@ mod tests {
         assert_eq!(statements.len(), 3);
         assert_eq!(statements[0].text, "SELECT 1");
         assert_eq!(statements[2].text, "SELECT 3");
+    }
+
+    #[test]
+    fn statement_at_prefers_the_statement_under_the_cursor() {
+        let sql = "SELECT 1;\nSELECT 2;";
+        let second = sql.rfind("SELECT 2").expect("second statement");
+        assert_eq!(
+            statement_at(sql, second + 3).map(|statement| statement.text),
+            Some("SELECT 2".to_owned())
+        );
+    }
+
+    #[test]
+    fn statement_at_falls_back_to_the_previous_statement() {
+        let sql = "SELECT 1;\n\nSELECT 2";
+        let between = sql.find("\n\n").expect("gap") + 1;
+        assert_eq!(
+            statement_at(sql, between).map(|statement| statement.text),
+            Some("SELECT 1".to_owned())
+        );
+        assert_eq!(
+            statement_at("-- only a comment", 5).map(|statement| statement.text),
+            None
+        );
     }
 
     #[test]

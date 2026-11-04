@@ -3901,6 +3901,21 @@
     "database.error.other": "Database error.",
     "database.settings.title": "Database Connections",
     "database.settings.description": "Manage saved database connections. Passwords are stored in the system keychain; the connection list can be edited in JSON.",
-    "database.settings.empty": "No connections are saved yet."
+    "database.settings.empty": "No connections are saved yet.",
+    "database.query.placeholder": "SELECT * FROM …",
+    "database.query.tab": "Query {}",
+    "database.query.run": "Run",
+    "database.query.run_selection": "Run Selection",
+    "database.query.cancel": "Cancel Query",
+    "database.query.cancelling": "Cancelling…",
+    "database.query.new_tab": "New query",
+    "database.query.rows": "{} rows",
+    "database.query.result_shape": "{} rows × {} columns",
+    "database.query.cancelled": "Query cancelled.",
+    "database.query.not_connected": "Not connected to the database.",
+    "database.query.select_first": "Select the SQL to run.",
+    "database.query.empty": "Nothing to run.",
+    "database.query.running": "Running…",
+    "database.query.showing_limited": "Showing the first {} rows; the rest are still available in the result window."
   }
 }

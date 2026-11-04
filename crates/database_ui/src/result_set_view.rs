@@ -1,20 +1,76 @@
-//! The database browser `Item`.
-//!
-//! Phase 1 renders the real schema tree (catalogs, tables, columns, keys,
-//! indexes, foreign keys) queried from the driver through `ConnectionManager`.
-//! Query execution and the virtualized result grid are added in later phases.
+//! The database browser `Item`: schema tree, SQL editor, and result sets.
 
 use std::sync::Arc;
 
 use database_core::{
-    Capabilities, Catalog, ConnectionConfig, ConnectionId, ConnectionManager, TableRef, TableSchema,
+    Capabilities, Catalog, ConnectionConfig, ConnectionId, ConnectionManager, QuerySession,
+    ResultSet, TableRef, TableSchema, Value, statement_at,
 };
+use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use gpui::*;
 use i18n::tr;
 use ui::prelude::*;
+use ui::{Button, ButtonStyle, IconButton, Tooltip};
 use workspace::Item;
 
+use crate::connection_dialog::describe_error;
 use crate::credentials::KeychainCredentials;
+use crate::{CancelQuery, RunSelection, RunStatement};
+
+/// How much of a result set the simple table renders. Phase 4 replaces this with
+/// the virtualized grid; the window itself is already bounded by the session.
+const MAX_RENDERED_ROWS: usize = 200;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RunMode {
+    Statement,
+    Selection,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum RunError {
+    NoSelection,
+    EmptySql,
+}
+
+/// Resolve the SQL a run action should execute. Pure so the selection and
+/// current-statement rules are unit tested without an editor.
+pub(crate) fn sql_to_run(
+    mode: RunMode,
+    text: &str,
+    selection: &str,
+    cursor_byte: usize,
+) -> Result<String, RunError> {
+    let selection = selection.trim();
+    match mode {
+        RunMode::Selection => {
+            if selection.is_empty() {
+                Err(RunError::NoSelection)
+            } else {
+                Ok(selection.to_owned())
+            }
+        }
+        RunMode::Statement => {
+            if !selection.is_empty() {
+                return Ok(selection.to_owned());
+            }
+            statement_at(text, cursor_byte)
+                .map(|statement| statement.text)
+                .ok_or(RunError::EmptySql)
+        }
+    }
+}
+
+struct QueryTab {
+    sql: String,
+    result: Option<ResultSet>,
+    message: Option<QueryMessage>,
+}
+
+enum QueryMessage {
+    Info(String),
+    Error(String),
+}
 
 /// A browser tab for one database connection.
 pub struct ResultSetView {
@@ -28,7 +84,13 @@ pub struct ResultSetView {
     expanded_table: Option<TableRef>,
     table_schema: Option<TableSchema>,
     status_text: SharedString,
+    session: Option<QuerySession>,
+    query_running: bool,
+    tabs: Vec<QueryTab>,
+    active_tab: usize,
+    editor: Entity<Editor>,
     _load_task: Option<Task<()>>,
+    _query_task: Option<Task<()>>,
 }
 
 impl ResultSetView {
@@ -36,7 +98,7 @@ impl ResultSetView {
         manager: Arc<ConnectionManager>,
         credentials: Arc<KeychainCredentials>,
         config: ConnectionConfig,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let connection_id = config.id.clone();
@@ -45,6 +107,44 @@ impl ResultSetView {
             .unwrap_or_else(Capabilities::read_only);
         manager.upsert_config(config.clone());
         let focus_handle = cx.focus_handle();
+        let editor = cx.new(|cx| {
+            let mut editor = Editor::multi_line(window, cx);
+            editor.set_placeholder_text(
+                &tr(cx, "database.query.placeholder", "SELECT * FROM …"),
+                window,
+                cx,
+            );
+            editor
+        });
+
+        let view_handle = cx.entity().downgrade();
+        editor.update(cx, |editor, _cx| {
+            let run_handle = view_handle.clone();
+            editor
+                .register_action(move |_: &RunStatement, _, cx| {
+                    run_handle
+                        .update(cx, |view, cx| view.run(RunMode::Statement, cx))
+                        .ok();
+                })
+                .detach();
+            let selection_handle = view_handle.clone();
+            editor
+                .register_action(move |_: &RunSelection, _, cx| {
+                    selection_handle
+                        .update(cx, |view, cx| view.run(RunMode::Selection, cx))
+                        .ok();
+                })
+                .detach();
+            let cancel_handle = view_handle.clone();
+            editor
+                .register_action(move |_: &CancelQuery, _, cx| {
+                    cancel_handle
+                        .update(cx, |view, cx| view.cancel_query(cx))
+                        .ok();
+                })
+                .detach();
+        });
+
         let mut view = Self {
             focus_handle,
             manager,
@@ -56,21 +156,36 @@ impl ResultSetView {
             expanded_table: None,
             table_schema: None,
             status_text: SharedString::from(tr(cx, "database.status.connecting", "Connecting…")),
+            session: None,
+            query_running: false,
+            tabs: vec![QueryTab {
+                sql: String::new(),
+                result: None,
+                message: None,
+            }],
+            active_tab: 0,
+            editor,
             _load_task: None,
+            _query_task: None,
         };
         view.load_schema(cx);
         view
     }
 
-    /// Query the schema tree over the live connection. The task is stored on the
+    /// Query the schema tree over the live connection and keep the connection as
+    /// a session so the editor can run statements. The task is stored on the
     /// view so dropping the view cancels it (invariant 9).
     fn load_schema(&mut self, cx: &mut Context<Self>) {
         let manager = self.manager.clone();
         let credentials = self.credentials.clone();
         let connection_id = self.connection_id.clone();
         let credential_key = self.config.credential_key();
+        let capabilities = self.capabilities.clone();
         let task = cx.spawn(async move |view, cx| {
-            let result = async {
+            let result: database_core::DriverResult<(
+                Vec<Catalog>,
+                Arc<dyn database_core::DriverConnection>,
+            )> = async {
                 let secret = match credentials.read(&credential_key, cx).await {
                     Ok(secret) => secret,
                     Err(error) => {
@@ -79,12 +194,19 @@ impl ResultSetView {
                     }
                 };
                 let connection = manager.connect(&connection_id, secret.as_deref()).await?;
-                connection.catalogs().await
+                let catalogs = connection.catalogs().await?;
+                Ok((catalogs, connection))
             }
             .await;
             view.update(cx, |view, cx| match result {
-                Ok(catalogs) => {
+                Ok((catalogs, connection)) => {
                     view.catalogs = catalogs;
+                    view.session = Some(QuerySession::new(
+                        connection_id,
+                        connection,
+                        manager,
+                        capabilities,
+                    ));
                     view.status_text =
                         SharedString::from(tr(cx, "database.status.connected", "Connected"));
                     cx.notify();
@@ -137,8 +259,313 @@ impl ResultSetView {
         self._load_task = Some(task);
     }
 
+    fn selected_sql(&self, cx: &mut Context<Self>) -> (String, usize) {
+        let display_snapshot = self
+            .editor
+            .update(cx, |editor, cx| editor.display_snapshot(cx));
+        let editor = self.editor.read(cx);
+        let buffer = editor.buffer().read(cx).read(cx);
+        let selections = editor
+            .selections
+            .all::<MultiBufferOffset>(&display_snapshot);
+        let mut parts = Vec::new();
+        let mut cursor = 0usize;
+        for selection in &selections {
+            cursor = selection.head().0;
+            if selection.start != selection.end {
+                parts.push(
+                    buffer
+                        .text_for_range(selection.start..selection.end)
+                        .collect::<String>(),
+                );
+            }
+        }
+        (parts.join("\n"), cursor)
+    }
+
+    fn run(&mut self, mode: RunMode, cx: &mut Context<Self>) {
+        if self.query_running {
+            return;
+        }
+        let (selection, cursor) = self.selected_sql(cx);
+        let text = self.editor.read(cx).text(cx);
+        let sql = match sql_to_run(mode, &text, &selection, cursor) {
+            Ok(sql) => sql,
+            Err(RunError::NoSelection) => {
+                self.set_message(
+                    QueryMessage::Info(tr(
+                        cx,
+                        "database.query.select_first",
+                        "Select the SQL to run.",
+                    )),
+                    cx,
+                );
+                return;
+            }
+            Err(RunError::EmptySql) => {
+                self.set_message(
+                    QueryMessage::Info(tr(cx, "database.query.empty", "Nothing to run.")),
+                    cx,
+                );
+                return;
+            }
+        };
+        let Some(mut session) = self.session.take() else {
+            self.set_message(
+                QueryMessage::Error(tr(
+                    cx,
+                    "database.query.not_connected",
+                    "Not connected to the database.",
+                )),
+                cx,
+            );
+            return;
+        };
+
+        let tab_index = self.active_tab;
+        self.query_running = true;
+        if let Some(tab) = self.tabs.get_mut(tab_index) {
+            tab.sql = text;
+            tab.message = Some(QueryMessage::Info(tr(
+                cx,
+                "database.query.running",
+                "Running…",
+            )));
+        }
+        cx.notify();
+        let task = cx.spawn(async move |view, cx| {
+            let result = session.execute(&sql, &[]).await;
+            let cancelled = session.is_cancelled();
+            let result_set = session.result_set().cloned();
+            view.update(cx, |view, cx| {
+                view.session = Some(session);
+                view.query_running = false;
+                let row_count = result_set.as_ref().map_or(0, |set| set.rows.len());
+                if let Some(tab) = view.tabs.get_mut(tab_index) {
+                    tab.result = result_set;
+                    tab.message = Some(match result {
+                        Ok(()) if cancelled => QueryMessage::Info(tr(
+                            cx,
+                            "database.query.cancelled",
+                            "Query cancelled.",
+                        )),
+                        Ok(()) => {
+                            QueryMessage::Info(tr(cx, "database.query.rows", "{} rows").replacen(
+                                "{}",
+                                &row_count.to_string(),
+                                1,
+                            ))
+                        }
+                        Err(error) => QueryMessage::Error(describe_error(cx, &error)),
+                    });
+                }
+                cx.notify();
+            })
+            .ok();
+        });
+        self._query_task = Some(task);
+    }
+
+    fn cancel_query(&mut self, cx: &mut Context<Self>) {
+        self.manager.cancel_queries(&self.connection_id);
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.message = Some(QueryMessage::Info(tr(
+                cx,
+                "database.query.cancelling",
+                "Cancelling…",
+            )));
+        }
+        cx.notify();
+    }
+
+    fn set_message(&mut self, message: QueryMessage, cx: &mut Context<Self>) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.message = Some(message);
+        }
+        cx.notify();
+    }
+
+    fn switch_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index == self.active_tab || index >= self.tabs.len() {
+            return;
+        }
+        let current_text = self.editor.read(cx).text(cx);
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.sql = current_text;
+        }
+        self.active_tab = index;
+        let text = self.tabs[index].sql.clone();
+        self.editor.update(cx, |editor, cx| {
+            editor.set_text(text, window, cx);
+        });
+        cx.notify();
+    }
+
+    fn add_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current_text = self.editor.read(cx).text(cx);
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.sql = current_text;
+        }
+        self.tabs.push(QueryTab {
+            sql: String::new(),
+            result: None,
+            message: None,
+        });
+        self.active_tab = self.tabs.len() - 1;
+        self.editor.update(cx, |editor, cx| {
+            editor.set_text(String::new(), window, cx);
+        });
+        cx.notify();
+    }
+
+    fn render_toolbar(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let mut tabs = h_flex().gap_1();
+        for index in 0..self.tabs.len() {
+            let active = index == self.active_tab;
+            let mut button = Button::new(
+                ElementId::Name(format!("database-query-tab-{index}").into()),
+                tr(cx, "database.query.tab", "Query {}").replacen(
+                    "{}",
+                    &(index + 1).to_string(),
+                    1,
+                ),
+            )
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.switch_tab(index, window, cx);
+            }));
+            if active {
+                button = button.style(ButtonStyle::Filled);
+            }
+            tabs = tabs.child(button);
+        }
+        tabs = tabs.child(
+            IconButton::new("database-query-new-tab", IconName::Plus)
+                .tooltip(Tooltip::text(tr(cx, "database.query.new_tab", "New query")))
+                .on_click(cx.listener(|this, _, window, cx| this.add_tab(window, cx))),
+        );
+
+        h_flex()
+            .w_full()
+            .gap_2()
+            .justify_between()
+            .child(tabs)
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new(
+                            "database-run-statement",
+                            tr(cx, "database.query.run", "Run"),
+                        )
+                        .style(ButtonStyle::Filled)
+                        .disabled(self.query_running)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.run(RunMode::Statement, cx);
+                        })),
+                    )
+                    .child(
+                        Button::new(
+                            "database-run-selection",
+                            tr(cx, "database.query.run_selection", "Run Selection"),
+                        )
+                        .disabled(self.query_running)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.run(RunMode::Selection, cx);
+                        })),
+                    )
+                    .child(
+                        Button::new(
+                            "database-cancel-query",
+                            tr(cx, "database.query.cancel", "Cancel Query"),
+                        )
+                        .disabled(!self.query_running)
+                        .on_click(cx.listener(|this, _, _, cx| this.cancel_query(cx))),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn render_message(&self, cx: &App) -> Option<AnyElement> {
+        let tab = self.tabs.get(self.active_tab)?;
+        let message = tab.message.as_ref()?;
+        let (text, color) = match message {
+            QueryMessage::Info(text) => (text.clone(), cx.theme().colors().text_muted),
+            QueryMessage::Error(text) => (text.clone(), cx.theme().status().error),
+        };
+        Some(
+            div()
+                .text_sm()
+                .text_color(color)
+                .child(text)
+                .into_any_element(),
+        )
+    }
+
+    fn render_result(&self, cx: &App) -> AnyElement {
+        let Some(tab) = self.tabs.get(self.active_tab) else {
+            return v_flex().into_any_element();
+        };
+        let Some(result) = &tab.result else {
+            return v_flex().into_any_element();
+        };
+
+        let mut header = h_flex().gap_4().child(
+            div()
+                .text_xs()
+                .text_color(cx.theme().colors().text_muted)
+                .child(
+                    tr(cx, "database.query.result_shape", "{} rows × {} columns")
+                        .replacen("{}", &result.rows.len().to_string(), 1)
+                        .replacen("{}", &result.columns.len().to_string(), 1),
+                ),
+        );
+        let mut column_header = h_flex().gap_4();
+        for column in &result.columns {
+            column_header = column_header.child(
+                div()
+                    .font_weight(FontWeight::BOLD)
+                    .child(column.name.clone()),
+            );
+        }
+
+        let mut rows = v_flex().gap_0p5();
+        for row in result.rows.iter().take(MAX_RENDERED_ROWS) {
+            let mut cells = h_flex().gap_4();
+            for index in 0..result.columns.len() {
+                let text = row.get(index).map(Value::display).unwrap_or_default();
+                cells = cells.child(div().text_sm().child(text));
+            }
+            rows = rows.child(cells);
+        }
+        if result.rows.len() > MAX_RENDERED_ROWS {
+            header = header.child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().colors().text_muted)
+                    .child(
+                        tr(
+                            cx,
+                            "database.query.showing_limited",
+                            "Showing the first {} rows; the rest are still available in the result window.",
+                        )
+                        .replacen("{}", &MAX_RENDERED_ROWS.to_string(), 1),
+                    ),
+            );
+        }
+
+        v_flex()
+            .id("database-query-result")
+            .size_full()
+            .gap_1()
+            .overflow_y_scroll()
+            .child(header)
+            .child(column_header)
+            .child(rows)
+            .into_any_element()
+    }
+
     fn render_schema_tree(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
+        let hover = cx.theme().colors().element_hover;
         let mut column = v_flex().gap_1().p_2();
         for catalog in &self.catalogs {
             let catalog_label =
@@ -159,7 +586,7 @@ impl ResultSetView {
                                 format!("db-table-{}", table.reference.name).into(),
                             ))
                             .pl_4()
-                            .hover(|style| style.bg(theme.colors().element_hover))
+                            .hover(|style| style.bg(hover))
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.toggle_table(table_ref.clone(), cx);
                             }))
@@ -243,6 +670,10 @@ impl Render for ResultSetView {
         let muted = cx.theme().colors().text_muted;
         let schema_tree = self.render_schema_tree(cx);
         let table_details = self.render_table_details(cx);
+        let toolbar = self.render_toolbar(cx);
+        let message = self.render_message(cx);
+        let result = self.render_result(cx);
+
         v_flex()
             .size_full()
             .bg(background)
@@ -275,8 +706,81 @@ impl Render for ResultSetView {
             .child(
                 h_flex()
                     .size_full()
-                    .child(v_flex().w(px(320.)).child(schema_tree))
-                    .child(v_flex().flex_1().child(table_details)),
+                    .child(
+                        v_flex()
+                            .id("database-schema-tree")
+                            .w(px(280.))
+                            .h_full()
+                            .overflow_y_scroll()
+                            .child(schema_tree)
+                            .child(table_details),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .h_full()
+                            .p_2()
+                            .gap_2()
+                            .child(toolbar)
+                            .child(
+                                div()
+                                    .key_context("DatabaseEditor")
+                                    .h(px(180.))
+                                    .w_full()
+                                    .border_1()
+                                    .rounded_md()
+                                    .border_color(cx.theme().colors().border)
+                                    .child(EditorElement::new(
+                                        &self.editor,
+                                        EditorStyle::default(),
+                                    )),
+                            )
+                            .children(message)
+                            .child(div().flex_1().child(result)),
+                    ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RunError, RunMode, sql_to_run};
+
+    #[test]
+    fn run_statement_prefers_the_selection() {
+        assert_eq!(
+            sql_to_run(RunMode::Statement, "SELECT 1; SELECT 2;", "SELECT 2", 0),
+            Ok("SELECT 2".to_owned())
+        );
+    }
+
+    #[test]
+    fn run_statement_falls_back_to_the_statement_under_the_cursor() {
+        let sql = "SELECT 1;\nSELECT 2;";
+        let cursor = sql.rfind("SELECT 2").expect("second statement");
+        assert_eq!(
+            sql_to_run(RunMode::Statement, sql, "", cursor + 2),
+            Ok("SELECT 2".to_owned())
+        );
+    }
+
+    #[test]
+    fn run_selection_requires_a_selection() {
+        assert_eq!(
+            sql_to_run(RunMode::Selection, "SELECT 1", "   ", 0),
+            Err(RunError::NoSelection)
+        );
+        assert_eq!(
+            sql_to_run(RunMode::Selection, "SELECT 1", "SELECT 1", 0),
+            Ok("SELECT 1".to_owned())
+        );
+    }
+
+    #[test]
+    fn empty_text_is_not_runnable() {
+        assert_eq!(
+            sql_to_run(RunMode::Statement, "  -- nothing\n", "", 0),
+            Err(RunError::EmptySql)
+        );
     }
 }

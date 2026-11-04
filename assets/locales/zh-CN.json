@@ -3901,6 +3901,21 @@
     "database.error.other": "数据库错误。",
     "database.settings.title": "数据库连接",
     "database.settings.description": "管理已保存的数据库连接。密码保存在系统钥匙串中；连接列表可在 JSON 中编辑。",
-    "database.settings.empty": "还没有保存的连接。"
+    "database.settings.empty": "还没有保存的连接。",
+    "database.query.placeholder": "SELECT * FROM …",
+    "database.query.tab": "查询 {}",
+    "database.query.run": "运行",
+    "database.query.run_selection": "运行选中内容",
+    "database.query.cancel": "取消查询",
+    "database.query.cancelling": "正在取消…",
+    "database.query.new_tab": "新建查询",
+    "database.query.rows": "{} 行",
+    "database.query.result_shape": "{} 行 × {} 列",
+    "database.query.cancelled": "查询已取消。",
+    "database.query.not_connected": "未连接到数据库。",
+    "database.query.select_first": "请选择要运行的 SQL。",
+    "database.query.empty": "没有可运行的语句。",
+    "database.query.running": "正在运行…",
+    "database.query.showing_limited": "仅显示前 {} 行；其余行仍在结果窗口中。"
   }
 }

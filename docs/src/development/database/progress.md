@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；工作项 3 为
-  `05f659d46bfd`，工作项 2 为 `3f42c8244c`）。代码基线 `3af1429a83` 已
-  `merge-base --is-ancestor` 验证包含。
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 2 为
+  `9322d438571e`，Phase 1 为 `05f659d46bfd` + `9e00c0cbb7`）。代码基线
+  `3af1429a83` 已 `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 2`
-- Last completed phase: `Phase 1`
+- Active phase: `Phase 3`
+- Last completed phase: `Phase 2`
 - Blocking issue: `None`
-- Next action: 进入 Phase 3——SQL 编辑器 action（run statement / run selection）与默认键位、
-  语句切分、`QuerySession` 执行/取消/错误文案、多查询标签页接线。
+- Next action: 进入 Phase 4——虚拟化结果网格（窗口拉取、滚动、类型化渲染、截断诊断），
+  替换 Phase 3 的简单表格渲染。
 
 ## Bootstrap {#bootstrap}
 
@@ -67,7 +67,8 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | ----- | ------------------------ | ----------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
 | 0     | 账本校准、worktree、基线 | PASS        | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
 | 1     | 骨架与 SQLite 只读浏览   | PASS        | `05f659d46bfd` + `9e00c0cbb7`                    | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
-| 2     | 连接管理与凭据           | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
+| 2     | 连接管理与凭据           | PASS        | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
+| 3     | 查询执行与取消           | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
 | 3     | 查询执行与取消           | NOT STARTED | -                                                | -                                              | -                                   |
 | 4     | 结果集视图               | NOT STARTED | -                                                | -                                              | -                                   |
 | 5     | 编辑、事务与确认         | NOT STARTED | -                                                | -                                              | -                                   |
@@ -181,7 +182,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `3f42c8244ca427e07c6f1604dc9631ad4e80fd21`     | `feat(database_core): add driver protocol and built-in sqlite driver`   | 1     | check/test(32)/clippy/fmt PASS   | 工作项 2，DB-EXP-001 PASS       |
 | `05f659d46bfd5b273e256a6dd37121477c2d014a`     | `feat(database_ui): wire sqlite browsing panel and result view`         | 1     | check/test(41)/clippy/fmt PASS   | 工作项 3，Phase 1 完成          |
 | `9e00c0cbb78d84bdd99324f87cbe324590497502`     | `fix(database_core): surface statement errors from the row stream`      | 1     | check/test(43)/clippy/fmt PASS   | 工作项 3 缺陷修复               |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): save connections in settings with keychain secrets` | 2     | check/test/clippy/xtask/fmt PASS | Phase 2 完成                    |
+| `9322d438571e5deaef8a6bb229e7bcfc07c14b3b`     | `feat(database_ui): save connections in settings with keychain secrets` | 2     | check/test/clippy/xtask/fmt PASS | Phase 2 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -449,6 +451,64 @@ port?, user?, database? }`，派生 `JsonSchema`/`MergeFrom`；字段有文档�
   （`feat(database_ui): save connections in settings with keychain secrets`）。
 - **下一步**：Phase 3 —— SQL 编辑器 action（run statement / run selection）与默认键位、
   语句切分、`QuerySession` 执行/取消/错误文案、多查询标签页接线。
+
+## Phase 3 日志 {#phase-3-log}
+
+### SQL 执行、取消与查询标签页
+
+- **Baseline**：`database-explorer` @ `9322d438571e`（Phase 2 提交后）。
+- **改动**：
+  - `crates/database_core/src/sql.rs`：新增 `statement_at(sql, cursor)`——优先返回光标
+    所在的语句，光标落在语句之间的空白时回退到其前面的语句；纯函数，含单元测试。
+  - `crates/database_core/src/connection.rs`：新增
+    `ConnectionManager::cancel_queries(id)`，取消该连接所有已跟踪的查询但不断开连接；
+    这样结果视图在 `QuerySession` 持有查询句柄、正在 await 行流时仍能响应用户取消。
+    附 1 亿行递归 CTE 的取消测试（恢复 `Connected` 状态）。
+  - `crates/database_core/src/session.rs`：新增三条执行路径测试——
+    `execute_fills_a_ready_result_set`（Ready + 行值）、
+    `execute_surfaces_classified_errors`（约束冲突 → `Constraint`，结果集 `Failed`）、
+    `window_budget_marks_the_result_cancelled`（超窗口预算 → `Cancelled`，
+    行数 = `DEFAULT_WINDOW_LIMIT`）。
+  - `crates/database_ui/src/result_set_view.rs`：
+    - 新增多行 `editor::Editor`（key context `DatabaseEditor`，占位提示），连接成功后
+      创建并保存 `QuerySession`。
+    - `database::RunStatement` / `RunSelection` / `CancelQuery` 注册在编辑器实体上，
+      避免动作落到其它编辑器；`sql_to_run` 是纯函数（Statement 选中优先、否则当前
+      语句；Selection 必须有选中内容），在 UI crate 内单测。
+    - 查询标签页：每个标签保存 SQL、结果集与状态消息；切换标签把当前编辑器文本存回
+      旧标签，支持新增标签；头部提供 Run / Run Selection / Cancel Query。
+    - 结果先以简单表格渲染（最多 200 行并给出 `行 × 列` 形状与截断提示），Phase 4 用
+      虚拟化网格替换；错误文案统一走 `describe_error`（typed kind → i18n）。
+    - 取消按钮调用 `manager.cancel_queries(connection_id)`；结果状态仍由
+      `ResultSetState` 决定，`Cancelled` 不显示为错误（D-08）。
+  - 默认键位（`assets/keymaps/default-{linux,windows,macos}.json`）：
+    `DatabaseEditor` 上下文内 `ctrl-enter`（macOS `cmd-enter`）运行当前语句、
+    `ctrl-shift-enter` 运行选中、`ctrl-shift-c` 取消查询。该上下文比 `Editor` 更具体，
+    不影响普通编辑器 `ctrl-enter = editor::Newline`；`cargo xtask check` 的 keymaps
+    检查通过。
+  - i18n：新增 15 个 `database.query.*` 键（en/zh 各 3917 条，key 集合一致）。
+- **验证命令与 exit status**：
+  - `cargo check -p database_ui` → `CHECK_EXIT=0`
+  - `cargo test -p database_core -p database_ui` → `TEST_EXIT=0`（core 51、ui 8）
+  - `cargo clippy -p database_core -p database_ui --all-targets -- -D warnings` →
+    `CLIPPY_EXIT=0`
+  - `cargo xtask check` → `XCHECK_EXIT=0`（含 keymaps 校验）
+  - `cargo check -p zzz` → `ZCHECK_EXIT=0`
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+- **实现决策（记录）**：
+  - SQL 编辑器是普通多行编辑器（未接 SQL 语言/高亮）；Phase 3 只要求执行与取消，
+    高亮属于后续可选项，不阻塞验收。
+  - 窗口预算由 `QuerySession` 在 10 000 行处主动取消并标记 `Cancelled`，这是
+    “取消状态而非错误”的一个真实例子；用户取消走 `manager.cancel_queries`。
+  - 已知分类限制：SQLite 对「表/列不存在」与语法错误都返回 `SQLITE_ERROR`，当前统一
+    映射为 `Syntax`。Phase 5 编辑/确认路径前需在 SQLite 驱动层用 `sqlite3_error_offset`
+    或扩展错误码进一步区分（属驱动适配，不是 UI 文本匹配）。
+- **结论**：PASS。执行、错误、取消三条路径均有测试；长查询可在 handle 跟踪后取消且
+  状态为 `Cancelled`；默认键位与既有键位不冲突。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): run sql from the database editor`）。
+- **下一步**：Phase 4 —— 虚拟化结果网格（窗口拉取、虚拟滚动、类型化渲染、截断诊断），
+  替换当前的简单表格。
 
 ## 完成定义核对 {#done-checklist}
 

@@ -28,5 +28,5 @@ pub use model::{
 pub use session::{
     DEFAULT_WINDOW_LIMIT, QuerySession, build_update_statements, column_label, export_csv,
 };
-pub use sql::{SqlStatement, StatementKind, classify, split_statements};
+pub use sql::{SqlStatement, StatementKind, classify, split_statements, statement_at};
 pub use sqlite::{SQLITE_DRIVER_ID, SqliteConnection, SqliteDriver};

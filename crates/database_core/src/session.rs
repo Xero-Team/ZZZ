@@ -375,7 +375,87 @@ pub fn column_label(column: &Column) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ColumnType, Row};
+    use crate::error::DatabaseErrorKind;
+    use crate::model::{ColumnType, ConnectionConfig, DataSource, Row};
+    use crate::sqlite::{SQLITE_DRIVER_ID, SqliteDriver};
+
+    async fn new_session() -> QuerySession {
+        static NEXT_DATABASE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let manager = Arc::new(ConnectionManager::new());
+        manager.register_driver(Arc::new(SqliteDriver));
+        let id = ConnectionId(format!(
+            "session-test-{}",
+            NEXT_DATABASE.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        manager.upsert_config(ConnectionConfig {
+            id: id.clone(),
+            display_name: id.0.clone(),
+            driver_id: SQLITE_DRIVER_ID.to_owned(),
+            source: DataSource::InMemory { name: id.0.clone() },
+            host: None,
+            port: None,
+            user: None,
+            database: None,
+            options: Default::default(),
+        });
+        let connection = manager.connect(&id, None).await.expect("connect");
+        QuerySession::new(id, connection, manager, Capabilities::sqlite())
+    }
+
+    #[test]
+    fn execute_fills_a_ready_result_set() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+            session
+                .execute("SELECT 1 AS value", &[])
+                .await
+                .expect("execute");
+            let result = session.result_set().expect("result");
+            assert_eq!(result.state, ResultSetState::Ready);
+            assert_eq!(result.rows.len(), 1);
+            assert_eq!(result.rows[0].get(0), Some(&Value::Integer(1)));
+        });
+    }
+
+    #[test]
+    fn execute_surfaces_classified_errors() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+            session
+                .execute("CREATE TABLE t (id INTEGER PRIMARY KEY)", &[])
+                .await
+                .expect("create");
+            let error = session
+                .execute("INSERT INTO t VALUES (1), (1)", &[])
+                .await
+                .expect_err("constraint violation");
+            assert_eq!(error.kind, DatabaseErrorKind::Constraint);
+            assert_eq!(
+                session.result_set().map(|result| result.state),
+                Some(ResultSetState::Failed)
+            );
+        });
+    }
+
+    #[test]
+    fn window_budget_marks_the_result_cancelled() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+            session
+                .execute(
+                    "WITH RECURSIVE counter(value) AS (
+                        VALUES(1) UNION ALL SELECT value + 1 FROM counter WHERE value < 1000000
+                    ) SELECT value FROM counter",
+                    &[],
+                )
+                .await
+                .expect("execute");
+            let result = session.result_set().expect("result");
+            assert_eq!(result.state, ResultSetState::Cancelled);
+            assert_eq!(result.rows.len(), DEFAULT_WINDOW_LIMIT);
+            assert!(session.is_cancelled());
+        });
+    }
 
     fn editable_set() -> ResultSet {
         let mut primary_key_column = Column::new("id", ColumnType::Integer);
