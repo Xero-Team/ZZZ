@@ -3858,8 +3858,11 @@ dependencies = [
  "i18n",
  "log",
  "menu",
+ "mermaid_render",
  "project",
  "settings",
+ "smol",
+ "theme",
  "ui",
  "workspace",
 ]

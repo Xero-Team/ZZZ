@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 5 为
-  `0926c5cbaf`，Phase 4 为 `57ff2dab1d`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 6 为
+  `10756066b8`，Phase 5 为 `0926c5cbaf`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 7`
-- Last completed phase: `Phase 6`
+- Active phase: `Phase 8`
+- Last completed phase: `Phase 7`
 - Blocking issue: `None`
-- Next action: 进入 Phase 7——从 `TableSchema` 生成 Mermaid `erDiagram` 并接线
-  `mermaid_render` 预览；结果集/schema 的 CSV/JSON 导出与事务内导入。
+- Next action: 进入 Phase 8——`EXPLAIN QUERY PLAN` 解析为 `ExplainPlan` 并做
+  树状展示；无 `capabilities.explain` 的驱动隐藏该动作。
 
 ## Bootstrap {#bootstrap}
 
@@ -71,10 +71,8 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 3     | 查询执行与取消           | PASS        | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
 | 4     | 结果集视图               | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
 | 5     | 编辑、事务与确认         | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
-| 6     | 扩展驱动协议             | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
-| 5     | 编辑、事务与确认         | NOT STARTED | -                                                | -                                              | -                                   |
-| 6     | 扩展驱动协议             | NOT STARTED | -                                                | -                                              | -                                   |
-| 7     | ER 图与导入导出          | NOT STARTED | -                                                | -                                              | -                                   |
+| 6     | 扩展驱动协议             | PASS        | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
+| 7     | ER 图与导入导出          | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
 | 8     | Visual EXPLAIN           | NOT STARTED | -                                                | -                                              | -                                   |
 | 9     | 查询历史                 | NOT STARTED | -                                                | -                                              | -                                   |
 | 10    | Notebook 式 SQL          | NOT STARTED | -                                                | -                                              | -                                   |
@@ -187,7 +185,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `0e321d7522a48873306290b68a0d138fde560da2`     | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS | Phase 4 完成                    |
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS | Phase 5 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
+| `10756066b89a478da5e6bc768518b082a5bd4fa8`     | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -763,6 +762,90 @@ while awaiting install_dev_extension`）。原因是该测试使用真实 HTTP �
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_core): run extension database drivers as subprocesses`）。
 - **下一步**：Phase 7 —— ER 图与导入导出。
+
+## Phase 7 日志 {#phase-7-log}
+
+### ER 图、导出与导入
+
+- **Baseline**：`database-explorer` @ `10756066b8`（Phase 6 提交后）。
+- **改动**：
+  - `crates/database_core/src/er_diagram.rs`（新）：`er_diagram(&[TableSchema])`
+    生成 Mermaid `erDiagram`。实体为 `type name [PK|FK]` 块，外键生成
+    `parent ||--o{ child : "columns"` 关系；只在两端都被描述时输出关系，避免悬空实体。
+    标识符按 Mermaid 词法归一（保留 Unicode 字母，因而 CJK 可用；空格、点号、引号、
+    花括号变成 `_`），归一后重名追加 `_2`。`diagrammable` 过滤空列的表/视图。
+  - `crates/database_core/src/export.rs`（新）：把 Phase 4 的导出实现从 `session.rs`
+    平移过来并按职责归类；新增 `ExportFormat::Json`（对象数组，保留数值/NULL/布尔类型，
+    `Numeric` 仍为字符串以免精度丢失，BLOB 仍是摘要字符串）与
+    `export_schema(&[TableSchema], SchemaExportFormat::{Csv, Json})`（CSV 每列一行并标注
+    PK/FK，JSON 每表一个对象含列、主键、外键）。
+  - `crates/database_core/src/import.rs`（新）：RFC 4180 解析（引号内逗号/换行、双引号
+    转义、`\r\n`、UTF-8 BOM、末尾空行）、`prepare_import` 把单元格按列类型转换并校验
+    表头（未知列、缺少非空列、类型不匹配、二进制列都给出 typed `ImportError`）、
+    `insert_statement` 只生成占位符 `INSERT`。
+  - `crates/database_core/src/session.rs`：`import_csv(&TableRef, &str)` 先
+    `describe_table` 再解析；在事务内用 `SAVEPOINT zzz_import_batch` 逐行参数化插入，
+    成功则把语句/行数计入 `applied_*` 并保持事务打开（由 Commit/Rollback 收尾）；失败
+    回滚到 savepoint，若事务是本调用开启的还会整笔回滚。导出代码移出后新增
+    `ImportOutcome` 与 `ImportFailure::{Parse, Database}`。
+  - `crates/database_core/src/sql.rs`：`quote_identifier` / `quote_table` 成为唯一实现，
+    `session.rs` 与 `sqlite.rs` 的重复副本删除（sqlite 的引号测试随之移除，改为由
+    `sql.rs` 的用法覆盖）。
+  - `crates/database_core/src/model.rs`：`Value::to_json()`（BLOB 摘要、`Json` 列能解析
+    则输出 JSON 否则字符串、非有限浮点退回字符串）；`TableRef::qualified_name()`
+    统一 `catalog.schema.name` 的文本形式。
+  - `crates/database_ui/src/er_diagram.rs`（新）：把当前主题映射为
+    `mermaid_render::MermaidTheme`，`render_diagram` 在后台线程把 SVG 栅格化为
+    `RenderImage`；`ErDiagram` 保存 source 与渲染结果。
+  - `crates/database_ui/src/result_set_view.rs`：
+    - schema 树顶部新增 `Schema CSV` / `Schema JSON`（复制到剪贴板），展开表时缓存
+      `TableSchema`，`describe_all_tables` 只补描述缺失的表，ER 图与 schema 导出共用。
+    - 工具栏新增 `ER Diagram`（仅 `capabilities.er_diagram`），面板显示渲染图，可
+      `Copy Mermaid` 或 `Back to Query`；无能力/无表/渲染失败都有明确文案。
+    - 表详情新增 `Import CSV…`（`row_editing` + `transactions` + 表而非视图时），
+      走平台文件选择器，读完文件后调用 `import_csv`。
+    - 结果集复制按钮新增 `Copy JSON`；非 SELECT 语句成功后清空 schema 缓存与 ER 图，
+      避免 DDL 后展示过期结构。
+    - 编辑栏不再要求已有结果集（导入会先开事务），因此导入后可直接 Commit/Rollback。
+  - i18n：新增 25 个 `database.er.*` / `database.import.*` / `database.schema.*` /
+    `database.grid.copy_json` 键；en/zh 各 3979 条且 key 集合一致，代码 fallback 与
+    `en.json` 完全一致。
+- **验证命令与 exit status**：
+  - `cargo test -p database_core -p database_ui --all-targets` → `TEST=0`
+    （core 84 + integration 5、ui 20）
+  - `cargo clippy -p database_core -p database_ui --all-targets -- -D warnings`
+    → `CLIPPY=0`
+  - `cargo check -p zzz` → `ZCHECK=0`
+  - `cargo xtask check` → `XCHECK=0`（6 checks）
+  - `cargo fmt --all -- --check` → `FMT=0`
+  - `cd docs && npx prettier --check src/` → PASS
+  - i18n fallback 脚本比对 `crates/database_ui/src` 的 119 处 `tr(...)` → 0 mismatch
+- **新增测试**：
+  - `er_diagram`：表/列/PK/FK 输出、CJK 表名与列名的 PK/FK 标记与自引用关系、标点归一
+    与重名后缀、未描述目标的 FK 被省略、schema 限定名保留在实体名中。
+  - `database_ui::er_diagram`：CJK schema 生成的源码交给真实 Mermaid 解析器渲染成功
+    （`render_to_svg` 返回 SVG），并覆盖无外键的情形。
+  - `export`：JSON 保留类型与 NULL、按显示顺序导出、schema CSV 的列/键标注、schema
+    JSON 的主外键结构；`session` 保留原有的「导出使用暂存值」测试。
+  - `import`：引号/BOM/内嵌换行、参差行报错、未闭合引号、空文档、按表列顺序绑定、
+    未知列/缺列/类型错误、可空列可缺省、`INSERT` 仅含占位符。
+  - `session::import_csv`（文件数据库双连接）：导入后第二连接读不到，Commit 后可见；
+    Rollback 后行消失；批次中途违反 UNIQUE 时整笔不留且本调用开启的事务关闭；
+    未知列返回 `ImportFailure::Parse` 且不开启事务。
+- **实现决策（记录）**：
+  - 导出走剪贴板（结果集 CSV/JSON/Markdown/HTML，schema CSV/JSON），不新增保存对话框：
+    计划验收只要求内容正确，文件对话框在无显示环境下无法验证，留到用户文档阶段再定。
+  - 导入的「影响行数」按成功执行的 `INSERT` 条数计：SQLite 在 step 之前就返回元数据，
+    驱动无法在此路径报告 `sqlite3_changes`。
+  - 导入要求 `transactions && row_editing`，因为回滚能力是验收条件；只读驱动直接拒绝
+    而不降级为自动提交。
+  - ER 图按需描述所有表并跳过描述失败的表（视图或权限不足不应让整张图失败）；
+    schema 缓存以表引用为键，DDL 成功后整体失效。
+- **结论**：PASS。CJK 表名经真实 Mermaid 渲染器验证；导入在事务内且可回滚（含批次
+  中途失败）；结果集与 schema 都有 CSV/JSON 导出。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): diagram schemas and import csv in transactions`）。
+- **下一步**：Phase 8 —— Visual EXPLAIN。
 
 ## 完成定义核对 {#done-checklist}
 

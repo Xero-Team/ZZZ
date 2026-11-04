@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use database_core::{
     Capabilities, Catalog, ColumnType, ConnectionConfig, ConnectionId, ConnectionManager,
-    EditValueError, ExportFormat, QuerySession, ResultSet, StatementKind, TableRef, TableSchema,
-    classify, export_result_set, parse_edited_value, statement_at,
+    EditValueError, ExportFormat, ImportError, ImportFailure, QuerySession, ResultSet,
+    SchemaExportFormat, StatementKind, TableRef, TableSchema, classify, er_diagram,
+    export_result_set, export_schema, parse_edited_value, statement_at,
 };
 use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use gpui::*;
@@ -23,6 +24,7 @@ use workspace::item::SaveOptions;
 
 use crate::connection_dialog::describe_error;
 use crate::credentials::KeychainCredentials;
+use crate::er_diagram::{ErDiagram, mermaid_theme, render_diagram};
 use crate::result_grid::{CellClass, CellPresentation, ResultGridState, SortDirection};
 use crate::{CancelCellEdit, CancelQuery, RunSelection, RunStatement, StageCellEdit};
 
@@ -85,6 +87,75 @@ enum EditOperation {
     Rollback,
 }
 
+/// The result of trying to import a file, keeping a read failure separate from
+/// a rejected document.
+enum ImportAttempt {
+    Parsed(Result<database_core::ImportOutcome, ImportFailure>),
+    Unreadable { path: String, error: String },
+}
+
+/// What to do once every table has been described.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SchemaAction {
+    ErDiagram,
+    Export(SchemaExportFormat),
+}
+
+fn import_failure_message(cx: &App, failure: &ImportFailure) -> String {
+    match failure {
+        ImportFailure::Database(error) => describe_error(cx, error),
+        ImportFailure::Parse(error) => match error {
+            ImportError::Empty => tr(
+                cx,
+                "database.import.empty",
+                "The CSV file has no header row.",
+            ),
+            ImportError::UnterminatedQuote => tr(
+                cx,
+                "database.import.unterminated_quote",
+                "A quoted field in the CSV file is not terminated.",
+            ),
+            ImportError::FieldCount {
+                row,
+                expected,
+                found,
+            } => tr(
+                cx,
+                "database.import.field_count",
+                "Row {} has {} fields but the header has {}.",
+            )
+            .replacen("{}", &row.to_string(), 1)
+            .replacen("{}", &found.to_string(), 1)
+            .replacen("{}", &expected.to_string(), 1),
+            ImportError::UnknownColumn(column) => tr(
+                cx,
+                "database.import.unknown_column",
+                "The table has no column named {}.",
+            )
+            .replacen("{}", column, 1),
+            ImportError::MissingColumn(column) => tr(
+                cx,
+                "database.import.missing_column",
+                "The CSV file has no value for the required column {}.",
+            )
+            .replacen("{}", column, 1),
+            ImportError::Value { row, column, .. } => tr(
+                cx,
+                "database.import.bad_value",
+                "Row {} column {} does not match the column type.",
+            )
+            .replacen("{}", &row.to_string(), 1)
+            .replacen("{}", column, 1),
+            ImportError::BinaryColumn(column) => tr(
+                cx,
+                "database.import.binary_column",
+                "Binary column {} cannot be imported from CSV.",
+            )
+            .replacen("{}", column, 1),
+        },
+    }
+}
+
 fn edit_value_error_message(cx: &App, error: EditValueError) -> String {
     match error {
         EditValueError::BinaryNotEditable => tr(
@@ -113,6 +184,12 @@ pub struct ResultSetView {
     catalogs: Vec<Catalog>,
     expanded_table: Option<TableRef>,
     table_schema: Option<TableSchema>,
+    /// Described schemas, cached so the ER diagram and schema export do not
+    /// describe the same table twice.
+    described_schemas: Vec<TableSchema>,
+    er_diagram: Option<ErDiagram>,
+    show_er_diagram: bool,
+    import_running: bool,
     status_text: SharedString,
     session: Option<QuerySession>,
     query_running: bool,
@@ -127,6 +204,9 @@ pub struct ResultSetView {
     grid: ResultGridState,
     _load_task: Option<Task<()>>,
     _query_task: Option<Task<()>>,
+    _schema_task: Option<Task<()>>,
+    _diagram_task: Option<Task<()>>,
+    _import_task: Option<Task<()>>,
 }
 
 impl ResultSetView {
@@ -219,6 +299,10 @@ impl ResultSetView {
             catalogs: Vec::new(),
             expanded_table: None,
             table_schema: None,
+            described_schemas: Vec::new(),
+            er_diagram: None,
+            show_er_diagram: false,
+            import_running: false,
             status_text: SharedString::from(tr(cx, "database.status.connecting", "Connecting…")),
             session: None,
             query_running: false,
@@ -235,6 +319,9 @@ impl ResultSetView {
             grid: ResultGridState::new(cx),
             _load_task: None,
             _query_task: None,
+            _schema_task: None,
+            _diagram_task: None,
+            _import_task: None,
         };
         view.load_schema(cx);
         view
@@ -317,6 +404,9 @@ impl ResultSetView {
             }
             .await;
             view.update(cx, |view, cx| {
+                if let Ok(schema) = &result {
+                    view.cache_schema(schema.clone());
+                }
                 view.table_schema = result.ok();
                 cx.notify();
             })
@@ -325,6 +415,286 @@ impl ResultSetView {
             });
         });
         self._load_task = Some(task);
+    }
+
+    fn cache_schema(&mut self, schema: TableSchema) {
+        let reference = schema.reference.clone();
+        match self
+            .described_schemas
+            .iter_mut()
+            .find(|cached| cached.reference == reference)
+        {
+            Some(cached) => *cached = schema,
+            None => self.described_schemas.push(schema),
+        }
+    }
+
+    fn cached_schema(&self, table: &TableRef) -> Option<&TableSchema> {
+        self.described_schemas
+            .iter()
+            .find(|cached| &cached.reference == table)
+    }
+
+    /// Every table in the schema tree, in tree order.
+    fn tables(&self) -> Vec<TableRef> {
+        self.catalogs
+            .iter()
+            .flat_map(|catalog| catalog.schemas.iter())
+            .flat_map(|schema| schema.tables.iter())
+            .map(|table| table.reference.clone())
+            .collect()
+    }
+
+    /// Describe any table that has not been described yet, then run `action`.
+    /// Both the ER diagram and schema export need every table, and describing is
+    /// the only slow step, so they share this path.
+    fn describe_all_tables(&mut self, action: SchemaAction, cx: &mut Context<Self>) {
+        let missing: Vec<TableRef> = self
+            .tables()
+            .into_iter()
+            .filter(|table| self.cached_schema(table).is_none())
+            .collect();
+        if missing.is_empty() {
+            self.run_schema_action(action, cx);
+            return;
+        }
+
+        let manager = self.manager.clone();
+        let credentials = self.credentials.clone();
+        let connection_id = self.connection_id.clone();
+        let credential_key = self.config.credential_key();
+        self.status_text =
+            SharedString::from(tr(cx, "database.status.describing", "Describing tables…"));
+        let task = cx.spawn(async move |view, cx| {
+            let result = async {
+                let secret = match credentials.read(&credential_key, cx).await {
+                    Ok(secret) => secret,
+                    Err(error) => {
+                        log::warn!("failed to read database credentials: {error:#}");
+                        None
+                    }
+                };
+                let connection = manager.connect(&connection_id, secret.as_deref()).await?;
+                let mut described = Vec::with_capacity(missing.len());
+                for table in missing {
+                    match connection.describe_table(&table).await {
+                        Ok(schema) => described.push(schema),
+                        // A view or a table the user cannot see should not block
+                        // the diagram for the rest of the schema.
+                        Err(error) => {
+                            log::warn!("failed to describe {}: {error}", table.qualified_name())
+                        }
+                    }
+                }
+                Ok(described)
+            }
+            .await;
+            view.update(cx, |view, cx| match result {
+                Ok(described) => {
+                    for schema in described {
+                        view.cache_schema(schema);
+                    }
+                    view.status_text =
+                        SharedString::from(tr(cx, "database.status.connected", "Connected"));
+                    view.run_schema_action(action, cx);
+                }
+                Err(error) => {
+                    view.set_message(QueryMessage::Error(describe_error(cx, &error)), cx);
+                }
+            })
+            .unwrap_or_else(|error| {
+                log::error!("failed to describe database tables: {error:#}");
+            });
+        });
+        self._schema_task = Some(task);
+    }
+
+    fn run_schema_action(&mut self, action: SchemaAction, cx: &mut Context<Self>) {
+        match action {
+            SchemaAction::ErDiagram => self.open_er_diagram(cx),
+            SchemaAction::Export(format) => {
+                let text = export_schema(&self.described_schemas, format);
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+                let key = match format {
+                    SchemaExportFormat::Csv => "database.schema.copied_csv",
+                    SchemaExportFormat::Json => "database.schema.copied_json",
+                };
+                self.set_message(
+                    QueryMessage::Info(tr(cx, key, "Schema copied to the clipboard.")),
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn open_er_diagram(&mut self, cx: &mut Context<Self>) {
+        if !self.capabilities.er_diagram {
+            self.set_message(
+                QueryMessage::Info(tr(
+                    cx,
+                    "database.er.unsupported",
+                    "This connection cannot describe tables for a diagram.",
+                )),
+                cx,
+            );
+            return;
+        }
+        let described: Vec<TableSchema> = self
+            .tables()
+            .iter()
+            .filter_map(|table| self.cached_schema(table).cloned())
+            .filter(database_core::diagrammable)
+            .collect();
+        if described.is_empty() {
+            self.set_message(
+                QueryMessage::Info(tr(
+                    cx,
+                    "database.er.no_tables",
+                    "There are no described tables to diagram.",
+                )),
+                cx,
+            );
+            return;
+        }
+        // Regenerate every time: the cached schemas may have gained a table.
+        // Re-rendering is skipped when the source is unchanged so reopening the
+        // panel is instant.
+        let source = er_diagram(&described);
+        let unchanged = self
+            .er_diagram
+            .as_ref()
+            .is_some_and(|diagram| diagram.source == source);
+        if !unchanged {
+            self.er_diagram = Some(ErDiagram::new(source.clone()));
+            self.start_diagram_render(source, cx);
+        }
+        self.show_er_diagram = true;
+        cx.notify();
+    }
+
+    fn start_diagram_render(&mut self, source: String, cx: &mut Context<Self>) {
+        let theme = mermaid_theme(cx);
+        let renderer = cx.svg_renderer();
+        let render = cx.background_spawn(render_diagram(source, theme, renderer));
+        let task = cx.spawn(async move |view, cx| {
+            let image = render.await;
+            view.update(cx, |view, cx| {
+                if let Some(diagram) = &mut view.er_diagram {
+                    diagram.image = Some(image.clone());
+                }
+                if let Err(error) = &image {
+                    log::warn!("failed to render the database ER diagram: {error}");
+                }
+                cx.notify();
+            })
+            .ok();
+        });
+        self._diagram_task = Some(task);
+    }
+
+    fn close_er_diagram(&mut self, cx: &mut Context<Self>) {
+        self.show_er_diagram = false;
+        cx.notify();
+    }
+
+    /// Prompt for a CSV file and import it into `table` inside a transaction.
+    fn import_table(&mut self, table: TableRef, cx: &mut Context<Self>) {
+        if self.import_running || self.edit_running || self.query_running {
+            return;
+        }
+        let prompt = SharedString::from(tr(cx, "database.import.pick_file", "Import CSV file"));
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(prompt),
+        });
+        let Some(mut session) = self.session.take() else {
+            self.set_message(
+                QueryMessage::Error(tr(
+                    cx,
+                    "database.query.not_connected",
+                    "Not connected to the database.",
+                )),
+                cx,
+            );
+            return;
+        };
+        self.import_running = true;
+        cx.notify();
+        let task = cx.spawn(async move |view, cx| {
+            let chosen = match receiver.await {
+                Ok(Ok(paths)) => paths.and_then(|mut paths| paths.pop()),
+                Ok(Err(error)) => {
+                    view.update(cx, |view, cx| {
+                        view.session = Some(session);
+                        view.import_running = false;
+                        view.set_message(
+                            QueryMessage::Error(
+                                tr(
+                                    cx,
+                                    "database.import.picker_failed",
+                                    "The file picker could not be opened: {}",
+                                )
+                                .replacen(
+                                    "{}",
+                                    &error.to_string(),
+                                    1,
+                                ),
+                            ),
+                            cx,
+                        );
+                    })
+                    .ok();
+                    return;
+                }
+                // The channel closed without an answer, which is the same as
+                // the user cancelling the picker.
+                Err(_) => None,
+            };
+            let Some(path) = chosen else {
+                view.update(cx, |view, cx| {
+                    view.session = Some(session);
+                    view.import_running = false;
+                    cx.notify();
+                })
+                .ok();
+                return;
+            };
+
+            let attempt = match smol::fs::read_to_string(&path).await {
+                Ok(text) => ImportAttempt::Parsed(session.import_csv(&table, &text).await),
+                Err(error) => ImportAttempt::Unreadable {
+                    path: path.display().to_string(),
+                    error: error.to_string(),
+                },
+            };
+            view.update(cx, |view, cx| {
+                view.session = Some(session);
+                view.import_running = false;
+                let message = match attempt {
+                    ImportAttempt::Parsed(Ok(outcome)) => QueryMessage::Info(
+                        tr(
+                            cx,
+                            "database.import.done",
+                            "Imported {} rows into the transaction. Commit to keep them.",
+                        )
+                        .replacen("{}", &outcome.rows.to_string(), 1),
+                    ),
+                    ImportAttempt::Parsed(Err(failure)) => {
+                        QueryMessage::Error(import_failure_message(cx, &failure))
+                    }
+                    ImportAttempt::Unreadable { path, error } => QueryMessage::Error(
+                        tr(cx, "database.import.unreadable", "Could not read {}: {}")
+                            .replacen("{}", &path, 1)
+                            .replacen("{}", &error, 1),
+                    ),
+                };
+                view.set_message(message, cx);
+            })
+            .ok();
+        });
+        self._import_task = Some(task);
     }
 
     fn selected_sql(&self, cx: &mut Context<Self>) -> (String, usize) {
@@ -450,6 +820,7 @@ impl ResultSetView {
         let tab_index = self.active_tab;
         self.query_running = true;
         self.selected_cell = None;
+        self.show_er_diagram = false;
         if let Some(tab) = self.tabs.get_mut(tab_index) {
             tab.sql = sql.clone();
             tab.message = Some(QueryMessage::Info(tr(
@@ -470,9 +841,19 @@ impl ResultSetView {
                 }
             }
             let result_set = session.result_set().cloned().map(Arc::new);
+            // A statement that is not a plain SELECT may change the schema, and
+            // cached descriptions (and the diagram built from them) would then
+            // describe tables that no longer exist.
+            let schema_may_have_changed =
+                result.is_ok() && !matches!(classify(&sql), StatementKind::Select);
             view.update(cx, |view, cx| {
                 view.session = Some(session);
                 view.query_running = false;
+                if schema_may_have_changed {
+                    view.described_schemas.clear();
+                    view.er_diagram = None;
+                    view.show_er_diagram = false;
+                }
                 view.grid.sync(result_set.as_deref(), &mut *cx);
                 let row_count = result_set.as_ref().map_or(0, |set| set.rows.len());
                 let truncation = result_set.as_ref().and_then(|set| set.truncation);
@@ -762,7 +1143,6 @@ impl ResultSetView {
     }
 
     fn render_edit_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let result = self.active_result()?;
         let session = self.session.as_ref()?;
         let pending = session
             .result_set()
@@ -771,13 +1151,12 @@ impl ResultSetView {
         let applied_statements = session.applied_statement_count();
         let affected_rows = session.applied_row_count();
         let open = session.has_open_transaction();
-        let editable = result.editable;
-        if result.columns.is_empty() {
-            // A DML result has no cells to edit; only a transaction bar would
-            // make sense, and that is handled below.
-            if pending == 0 && applied == 0 && !open {
-                return None;
-            }
+        // An import can open a transaction before the view has any result set,
+        // so the bar must not depend on one.
+        let result = self.active_result();
+        let editable = result.as_ref().is_some_and(|result| result.editable);
+        if pending == 0 && applied == 0 && !open {
+            return None;
         }
 
         let muted = cx.theme().colors().text_muted;
@@ -811,7 +1190,7 @@ impl ResultSetView {
             bar = bar.child(div().text_color(muted).child(reason));
         }
 
-        if editable {
+        if let Some(result) = result.as_ref().filter(|result| result.editable) {
             match self.selected_cell {
                 Some((row_index, column_index)) => {
                     let column_name = result
@@ -1039,9 +1418,89 @@ impl ResultSetView {
                         )
                         .disabled(!self.query_running)
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_query(cx))),
-                    ),
+                    )
+                    .when(self.capabilities.er_diagram, |buttons| {
+                        buttons.child(
+                            Button::new(
+                                "database-show-er-diagram",
+                                tr(cx, "database.er.show", "ER Diagram"),
+                            )
+                            .disabled(self.show_er_diagram || self.query_running)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.describe_all_tables(SchemaAction::ErDiagram, cx);
+                            })),
+                        )
+                    }),
             )
             .into_any_element()
+    }
+
+    fn render_er_diagram(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let diagram = self.er_diagram.as_ref()?;
+        let muted = cx.theme().colors().text_muted;
+        let body = match &diagram.image {
+            Some(Ok(image)) => v_flex()
+                .id("database-er-diagram-image")
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .overflow_scroll()
+                .child(img(image.clone()).max_w_full())
+                .into_any_element(),
+            Some(Err(error)) => div()
+                .text_sm()
+                .text_color(cx.theme().status().error)
+                .child(
+                    tr(
+                        cx,
+                        "database.er.render_failed",
+                        "The diagram could not be rendered: {}",
+                    )
+                    .replacen("{}", error, 1),
+                )
+                .into_any_element(),
+            None => div()
+                .text_sm()
+                .text_color(muted)
+                .child(tr(cx, "database.er.rendering", "Rendering the diagram…"))
+                .into_any_element(),
+        };
+        let source = diagram.source.clone();
+        Some(
+            v_flex()
+                .id("database-er-diagram")
+                .flex_1()
+                .min_h_0()
+                .gap_2()
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            Button::new(
+                                "database-er-back",
+                                tr(cx, "database.er.back", "Back to Query"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(|this, _, _, cx| this.close_er_diagram(cx))),
+                        )
+                        .child(
+                            Button::new(
+                                "database-er-copy-source",
+                                tr(cx, "database.er.copy", "Copy Mermaid"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(
+                                move |_, _, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        source.clone(),
+                                    ));
+                                },
+                            )),
+                        ),
+                )
+                .child(body)
+                .into_any_element(),
+        )
     }
 
     fn render_message(&self, cx: &App) -> Option<AnyElement> {
@@ -1232,6 +1691,7 @@ impl ResultSetView {
         let mut copy_buttons = h_flex().gap_1();
         for (format, key, fallback) in [
             (ExportFormat::Csv, "database.grid.copy_csv", "Copy CSV"),
+            (ExportFormat::Json, "database.grid.copy_json", "Copy JSON"),
             (
                 ExportFormat::Markdown,
                 "database.grid.copy_markdown",
@@ -1281,6 +1741,38 @@ impl ResultSetView {
     fn render_schema_tree(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let hover = cx.theme().colors().element_hover;
         let mut column = v_flex().gap_1().p_2();
+        if !self.catalogs.is_empty() {
+            column = column.child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new(
+                            "database-copy-schema-csv",
+                            tr(cx, "database.schema.copy_csv", "Schema CSV"),
+                        )
+                        .size(ButtonSize::Compact)
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.describe_all_tables(
+                                SchemaAction::Export(SchemaExportFormat::Csv),
+                                cx,
+                            );
+                        })),
+                    )
+                    .child(
+                        Button::new(
+                            "database-copy-schema-json",
+                            tr(cx, "database.schema.copy_json", "Schema JSON"),
+                        )
+                        .size(ButtonSize::Compact)
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.describe_all_tables(
+                                SchemaAction::Export(SchemaExportFormat::Json),
+                                cx,
+                            );
+                        })),
+                    ),
+            );
+        }
         for catalog in &self.catalogs {
             let catalog_label =
                 tr(cx, "database.tree.catalog", "Catalog: {}").replacen("{}", &catalog.name, 1);
@@ -1312,8 +1804,8 @@ impl ResultSetView {
         column.into_any_element()
     }
 
-    fn render_table_details(&self, cx: &App) -> AnyElement {
-        let Some(schema) = &self.table_schema else {
+    fn render_table_details(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(schema) = self.table_schema.clone() else {
             return v_flex().into_any_element();
         };
         let mut column = v_flex().gap_1().p_2();
@@ -1322,6 +1814,24 @@ impl ResultSetView {
             "database.tree.columns",
             "Columns",
         )));
+        if self.capabilities.row_editing
+            && self.capabilities.transactions
+            && schema.kind == database_core::ObjectKind::Table
+        {
+            let table = schema.reference.clone();
+            let busy = self.import_running || self.edit_running || self.query_running;
+            column = column.child(
+                Button::new(
+                    "database-import-csv",
+                    tr(cx, "database.import.button", "Import CSV…"),
+                )
+                .size(ButtonSize::Compact)
+                .disabled(busy)
+                .on_click(cx.listener(move |view, _, _, cx| {
+                    view.import_table(table.clone(), cx);
+                })),
+            );
+        }
         for column_meta in &schema.columns {
             let suffix = if column_meta.primary_key { " (PK)" } else { "" };
             column = column.child(div().pl_2().child(format!(
@@ -1503,6 +2013,11 @@ impl Render for ResultSetView {
         let message = self.render_message(cx);
         let edit_bar = self.render_edit_bar(cx);
         let result = self.render_result(cx);
+        let er_diagram = if self.show_er_diagram {
+            self.render_er_diagram(cx)
+        } else {
+            None
+        };
 
         v_flex()
             .size_full()
@@ -1552,22 +2067,25 @@ impl Render for ResultSetView {
                             .p_2()
                             .gap_2()
                             .child(toolbar)
-                            .child(
-                                div()
-                                    .key_context("DatabaseEditor")
-                                    .h(px(180.))
-                                    .w_full()
-                                    .border_1()
-                                    .rounded_md()
-                                    .border_color(cx.theme().colors().border)
-                                    .child(EditorElement::new(
-                                        &self.editor,
-                                        EditorStyle::default(),
-                                    )),
-                            )
-                            .children(message)
-                            .children(edit_bar)
-                            .child(div().flex_1().child(result)),
+                            .children(er_diagram)
+                            .when(!self.show_er_diagram, |this| {
+                                this.child(
+                                    div()
+                                        .key_context("DatabaseEditor")
+                                        .h(px(180.))
+                                        .w_full()
+                                        .border_1()
+                                        .rounded_md()
+                                        .border_color(cx.theme().colors().border)
+                                        .child(EditorElement::new(
+                                            &self.editor,
+                                            EditorStyle::default(),
+                                        )),
+                                )
+                                .children(message)
+                                .children(edit_bar)
+                                .child(div().flex_1().child(result))
+                            }),
                     ),
             )
     }

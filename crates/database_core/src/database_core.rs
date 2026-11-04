@@ -7,8 +7,11 @@
 
 pub mod connection;
 pub mod driver;
+pub mod er_diagram;
 pub mod error;
+pub mod export;
 pub mod extension_driver;
+pub mod import;
 pub mod model;
 pub mod session;
 pub mod sql;
@@ -20,8 +23,13 @@ pub use driver::{
     Interrupt, QueryHandle, QueryMetadata, ROW_STREAM_CAPACITY, RowStream, TransactionId,
     result_set_for,
 };
+pub use er_diagram::{diagrammable, er_diagram};
 pub use error::{DatabaseError, DatabaseErrorKind};
+pub use export::{ExportFormat, SchemaExportFormat, export_csv, export_result_set, export_schema};
 pub use extension_driver::{ExtensionDriver, ExtensionDriverConfig};
+pub use import::{
+    CsvTable, ImportError, PreparedImport, insert_statement, parse_csv, prepare_import,
+};
 pub use model::{
     Capabilities, Catalog, Column, ColumnType, ConnectionConfig, ConnectionId, ConnectionStatus,
     DataSource, EditValueError, ForeignKey, Index, ObjectKind, PendingEdit, PrimaryKey, ResultSet,
@@ -29,10 +37,11 @@ pub use model::{
     parse_edited_value,
 };
 pub use session::{
-    DEFAULT_WINDOW_LIMIT, ExportFormat, QuerySession, build_update_statements, column_label,
-    export_csv, export_result_set,
+    DEFAULT_WINDOW_LIMIT, ImportFailure, ImportOutcome, QuerySession, build_update_statements,
+    column_label,
 };
 pub use sql::{
-    SqlStatement, StatementKind, classify, editable_target, split_statements, statement_at,
+    SqlStatement, StatementKind, classify, editable_target, quote_identifier, quote_table,
+    split_statements, statement_at,
 };
 pub use sqlite::{SQLITE_DRIVER_ID, SqliteConnection, SqliteDriver};

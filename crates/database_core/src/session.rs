@@ -6,19 +6,59 @@
 //! DML for edits so SQL injection is impossible (D-05).
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::Arc;
 
 use crate::connection::ConnectionManager;
 use crate::driver::{DriverConnection, DriverResult, ExecutedQuery, QueryHandle};
 use crate::error::DatabaseError;
+use crate::import::{ImportError, insert_statement, parse_csv, prepare_import};
 use crate::model::{
     Capabilities, Column, ConnectionId, ResultSet, ResultSetState, TableRef, Value,
 };
-use crate::sql::editable_target;
+use crate::sql::{editable_target, quote_identifier, quote_table};
 
 /// The maximum number of rows materialized in a result window. Beyond this the
 /// stream is cancelled and a truncation diagnostic is attached (Phase 4 / D-06).
 pub const DEFAULT_WINDOW_LIMIT: usize = 10_000;
+
+/// Result of a successful CSV import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImportOutcome {
+    /// Rows inserted into the open transaction.
+    pub rows: usize,
+}
+
+/// Why an import did not happen. Keeping parsing and driver failures separate
+/// lets the UI point at a bad row or column instead of showing a driver message.
+#[derive(Debug)]
+pub enum ImportFailure {
+    Parse(ImportError),
+    Database(DatabaseError),
+}
+
+impl fmt::Display for ImportFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ImportFailure::Parse(error) => write!(formatter, "{error}"),
+            ImportFailure::Database(error) => write!(formatter, "{error:?}"),
+        }
+    }
+}
+
+impl std::error::Error for ImportFailure {}
+
+impl From<ImportError> for ImportFailure {
+    fn from(error: ImportError) -> Self {
+        ImportFailure::Parse(error)
+    }
+}
+
+impl From<DatabaseError> for ImportFailure {
+    fn from(error: DatabaseError) -> Self {
+        ImportFailure::Database(error)
+    }
+}
 
 /// One query session. There is one session per result-set view (or per
 /// notebook cell); a cell cancelling its query does not affect other cells.
@@ -431,6 +471,75 @@ impl QuerySession {
         Ok(true)
     }
 
+    /// Import CSV text into `table` inside a transaction. Values are converted
+    /// per column type and written with parameterized `INSERT`s inside
+    /// `SAVEPOINT zzz_import_batch`, so a failure part-way leaves the database
+    /// untouched and the caller can still roll the whole import back.
+    ///
+    /// When this call opens the transaction itself, a failed batch also closes
+    /// it again; an already open transaction stays open so surrounding work is
+    /// not discarded.
+    pub async fn import_csv(
+        &mut self,
+        table: &TableRef,
+        csv_text: &str,
+    ) -> Result<ImportOutcome, ImportFailure> {
+        if !self.capabilities.transactions {
+            return Err(ImportFailure::Database(DatabaseError::driver(
+                "import requires transaction support",
+            )));
+        }
+        if !self.capabilities.row_editing {
+            return Err(ImportFailure::Database(DatabaseError::driver(
+                "this connection is read-only",
+            )));
+        }
+        let schema = self.connection.describe_table(table).await?;
+        let csv = parse_csv(csv_text)?;
+        let prepared = prepare_import(&schema, &csv)?;
+        if prepared.rows.is_empty() {
+            return Ok(ImportOutcome { rows: 0 });
+        }
+
+        let statement = insert_statement(&quote_table(table), &prepared.columns);
+        let started_transaction = self.transaction.is_none();
+        if started_transaction {
+            self.transaction = Some(self.connection.begin().await?);
+        }
+        if let Err(error) = self.execute_simple("SAVEPOINT zzz_import_batch", &[]).await {
+            if started_transaction {
+                self.transaction = None;
+            }
+            return Err(error.into());
+        }
+
+        let mut inserted = 0usize;
+        for params in &prepared.rows {
+            match self.execute_simple(&statement, params).await {
+                Ok(_) => inserted += 1,
+                Err(error) => {
+                    // Restore the database to the state before this import.
+                    self.execute_simple("ROLLBACK TO SAVEPOINT zzz_import_batch", &[])
+                        .await?;
+                    self.execute_simple("RELEASE SAVEPOINT zzz_import_batch", &[])
+                        .await?;
+                    if started_transaction && let Some(transaction) = self.transaction.take() {
+                        self.connection.rollback(transaction).await?;
+                    }
+                    return Err(error.into());
+                }
+            }
+        }
+        self.execute_simple("RELEASE SAVEPOINT zzz_import_batch", &[])
+            .await?;
+        // One INSERT per row, so each successful statement changed one row. The
+        // driver cannot report that here: SQLite returns its metadata before the
+        // statement is stepped.
+        self.applied_statements += inserted;
+        self.applied_rows += inserted;
+        Ok(ImportOutcome { rows: inserted })
+    }
+
     /// Execute a statement for its side effect, draining any row stream so the
     /// driver releases its connection and the query handle is always finished,
     /// even when the statement fails.
@@ -544,161 +653,6 @@ pub fn build_update_statements_for_edits(
     Ok(statements)
 }
 
-fn quote_identifier(name: &str) -> String {
-    format!("\"{}\"", name.replace('"', "\"\""))
-}
-
-fn quote_table(table: &TableRef) -> String {
-    let mut quoted = String::new();
-    for part in [&table.catalog, &table.schema]
-        .into_iter()
-        .flatten()
-        .chain(std::iter::once(&table.name))
-    {
-        if !quoted.is_empty() {
-            quoted.push('.');
-        }
-        quoted.push_str(&quote_identifier(part));
-    }
-    quoted
-}
-
-/// Clipboard export formats offered by the result grid.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExportFormat {
-    Csv,
-    Markdown,
-    Html,
-}
-
-/// Export the effective (staged-edit-aware) rows as CSV text. Values are quoted
-/// per RFC 4180; BLOBs use their digest, NULL is empty.
-pub fn export_csv(result_set: &ResultSet) -> String {
-    export_result_set(
-        result_set,
-        ExportFormat::Csv,
-        &(0..result_set.rows.len()).collect::<Vec<_>>(),
-    )
-}
-
-/// Export the rows in `order` (indices into `result_set.rows`). The order is the
-/// display order, so what is copied matches what the user sees after sorting.
-pub fn export_result_set(result_set: &ResultSet, format: ExportFormat, order: &[usize]) -> String {
-    match format {
-        ExportFormat::Csv => export_csv_rows(result_set, order),
-        ExportFormat::Markdown => export_markdown_rows(result_set, order),
-        ExportFormat::Html => export_html_rows(result_set, order),
-    }
-}
-
-fn export_csv_rows(result_set: &ResultSet, order: &[usize]) -> String {
-    let mut output = String::new();
-    output.push_str(
-        &result_set
-            .columns
-            .iter()
-            .map(|column| csv_escape(&column.name))
-            .collect::<Vec<_>>()
-            .join(","),
-    );
-    output.push('\n');
-    for row_index in order {
-        let cells: Vec<String> = (0..result_set.columns.len())
-            .map(|column_index| {
-                result_set
-                    .value_at(*row_index, column_index)
-                    .map(|value| csv_escape(&value.to_export_text()))
-                    .unwrap_or_default()
-            })
-            .collect();
-        output.push_str(&cells.join(","));
-        output.push('\n');
-    }
-    output
-}
-
-fn export_markdown_rows(result_set: &ResultSet, order: &[usize]) -> String {
-    let mut output = String::new();
-    output.push('|');
-    for column in &result_set.columns {
-        output.push(' ');
-        output.push_str(&markdown_escape(&column.name));
-        output.push_str(" |");
-    }
-    output.push('\n');
-    output.push('|');
-    for _ in &result_set.columns {
-        output.push_str(" --- |");
-    }
-    output.push('\n');
-    for row_index in order {
-        output.push('|');
-        for column_index in 0..result_set.columns.len() {
-            output.push(' ');
-            if let Some(value) = result_set.value_at(*row_index, column_index) {
-                output.push_str(&markdown_escape(&value.to_export_text()));
-            }
-            output.push_str(" |");
-        }
-        output.push('\n');
-    }
-    output
-}
-
-fn export_html_rows(result_set: &ResultSet, order: &[usize]) -> String {
-    let mut output = String::from("<table>\n<thead><tr>");
-    for column in &result_set.columns {
-        output.push_str("<th>");
-        output.push_str(&html_escape(&column.name));
-        output.push_str("</th>");
-    }
-    output.push_str("</tr></thead>\n<tbody>\n");
-    for row_index in order {
-        output.push_str("<tr>");
-        for column_index in 0..result_set.columns.len() {
-            output.push_str("<td>");
-            if let Some(value) = result_set.value_at(*row_index, column_index) {
-                output.push_str(&html_escape(&value.to_export_text()));
-            }
-            output.push_str("</td>");
-        }
-        output.push_str("</tr>\n");
-    }
-    output.push_str("</tbody>\n</table>\n");
-    output
-}
-
-fn markdown_escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('|', "\\|")
-        .replace("\r\n", "<br>")
-        .replace(['\n', '\r'], "<br>")
-}
-
-fn html_escape(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len());
-    for character in value.chars() {
-        match character {
-            '&' => escaped.push_str("&amp;"),
-            '<' => escaped.push_str("&lt;"),
-            '>' => escaped.push_str("&gt;"),
-            '"' => escaped.push_str("&quot;"),
-            '\'' => escaped.push_str("&#39;"),
-            other => escaped.push(other),
-        }
-    }
-    escaped
-}
-
-fn csv_escape(value: &str) -> String {
-    if value.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_owned()
-    }
-}
-
 /// A small helper used by the UI to describe a column without a driver call.
 pub fn column_label(column: &Column) -> String {
     format!("{} ({:?})", column.name, column.declared_type)
@@ -708,6 +662,8 @@ pub fn column_label(column: &Column) -> String {
 mod tests {
     use super::*;
     use crate::error::DatabaseErrorKind;
+    use crate::export::{ExportFormat, export_csv, export_result_set};
+    use crate::import::ImportError;
     use crate::model::{ColumnType, ConnectionConfig, DataSource, Row};
     use crate::sqlite::{SQLITE_DRIVER_ID, SqliteDriver};
 
@@ -881,6 +837,19 @@ mod tests {
             .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')", &[])
             .await
             .expect("insert rows");
+    }
+
+    async fn row_count(session: &mut QuerySession, sql: &str) -> i64 {
+        session.execute(sql, &[]).await.expect("count query");
+        session
+            .result_set()
+            .and_then(|result| result.rows.first())
+            .and_then(|row| row.get(0))
+            .and_then(|value| match value {
+                Value::Integer(count) => Some(*count),
+                _ => None,
+            })
+            .expect("count value")
     }
 
     async fn stored_name(session: &mut QuerySession, id: i64) -> Value {
@@ -1134,6 +1103,105 @@ mod tests {
             assert!(!session.discard_pending_edits());
             assert!(session.has_pending_edits());
             session.rollback_edits().await.expect("rollback");
+        });
+    }
+
+    #[test]
+    fn imported_rows_stay_uncommitted_until_commit() {
+        futures::executor::block_on(async {
+            let path = temporary_database_path("import");
+            let mut writer = file_session(&path, "writer").await;
+            create_users_table(&mut writer).await;
+            let mut observer = file_session(&path, "observer").await;
+
+            let outcome = writer
+                .import_csv(&TableRef::new("users"), "id,name\n3,Carol\n4,\"Dan, Jr\"\n")
+                .await
+                .expect("import");
+            assert_eq!(outcome.rows, 2);
+            assert!(writer.has_open_transaction());
+            assert!(!writer.has_pending_edits());
+            assert_eq!(writer.applied_statement_count(), 2);
+            assert_eq!(writer.applied_row_count(), 2);
+            // The other connection cannot see uncommitted rows.
+            assert_eq!(
+                row_count(&mut observer, "SELECT COUNT(*) FROM users").await,
+                2
+            );
+
+            writer.commit_edits().await.expect("commit");
+            assert_eq!(
+                row_count(&mut observer, "SELECT COUNT(*) FROM users").await,
+                4
+            );
+            std::fs::remove_file(&path).expect("remove database");
+        });
+    }
+
+    #[test]
+    fn rolling_back_an_import_removes_the_inserted_rows() {
+        futures::executor::block_on(async {
+            let path = temporary_database_path("import-rollback");
+            let mut writer = file_session(&path, "writer").await;
+            create_users_table(&mut writer).await;
+            let mut observer = file_session(&path, "observer").await;
+
+            writer
+                .import_csv(&TableRef::new("users"), "id,name\n3,Carol\n")
+                .await
+                .expect("import");
+            writer.rollback_edits().await.expect("rollback");
+
+            assert!(!writer.has_open_transaction());
+            assert_eq!(writer.applied_statement_count(), 0);
+            assert_eq!(
+                row_count(&mut observer, "SELECT COUNT(*) FROM users").await,
+                2
+            );
+            std::fs::remove_file(&path).expect("remove database");
+        });
+    }
+
+    #[test]
+    fn a_failing_import_leaves_no_rows_and_closes_the_transaction_it_opened() {
+        futures::executor::block_on(async {
+            let path = temporary_database_path("import-failure");
+            let mut writer = file_session(&path, "writer").await;
+            create_users_table(&mut writer).await;
+            let mut observer = file_session(&path, "observer").await;
+
+            // The first row is fine, the second violates the UNIQUE index on
+            // `name`. Neither may survive.
+            let failure = writer
+                .import_csv(&TableRef::new("users"), "id,name\n3,Alice\n4,Alice\n")
+                .await;
+            let ImportFailure::Database(error) = failure.expect_err("unique violation") else {
+                panic!("expected a database failure");
+            };
+            assert_eq!(error.kind, DatabaseErrorKind::Constraint);
+            assert!(!writer.has_open_transaction());
+            assert_eq!(writer.applied_statement_count(), 0);
+            assert_eq!(
+                row_count(&mut observer, "SELECT COUNT(*) FROM users").await,
+                2
+            );
+            std::fs::remove_file(&path).expect("remove database");
+        });
+    }
+
+    #[test]
+    fn import_refuses_columns_the_table_does_not_have() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+            create_users_table(&mut session).await;
+            let failure = session
+                .import_csv(&TableRef::new("users"), "id,email\n3,carol@example.com\n")
+                .await;
+            assert!(matches!(
+                failure,
+                Err(ImportFailure::Parse(ImportError::UnknownColumn(column))) if column == "email"
+            ));
+            assert!(!session.has_open_transaction());
         });
     }
 

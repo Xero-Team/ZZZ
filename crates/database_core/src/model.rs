@@ -63,6 +63,29 @@ impl Value {
         }
     }
 
+    /// Render as JSON for export. BLOBs stay a digest string (D-07): binary data
+    /// is never inlined. Numeric text is emitted as a string to preserve
+    /// precision that a JSON number would round.
+    pub fn to_json(&self) -> serde_json::Value {
+        use serde_json::Value as Json;
+        match self {
+            Value::Null => Json::Null,
+            Value::Integer(number) => Json::from(*number),
+            Value::Real(number) => serde_json::Number::from_f64(*number)
+                .map_or_else(|| Json::String(self.display()), Json::Number),
+            Value::Text(text) => Json::String(text.clone()),
+            Value::Blob(bytes) => Json::String(blob_digest(bytes)),
+            Value::Date(value) | Value::DateTime(value) | Value::Time(value) => {
+                Json::String(value.clone())
+            }
+            Value::Bool(value) => Json::Bool(*value),
+            Value::Numeric(value) => Json::String(value.clone()),
+            Value::Json(text) => {
+                serde_json::from_str(text).unwrap_or_else(|_| Json::String(text.clone()))
+            }
+        }
+    }
+
     /// Ordering key used by client-side sorting. NULLs sort first, then numbers,
     /// booleans, and finally text (by Unicode scalar order).
     pub fn sort_key(&self) -> (u8, String) {
@@ -550,6 +573,20 @@ impl TableRef {
             schema: None,
             name: name.into(),
         }
+    }
+
+    /// `catalog.schema.name`, omitting the parts that are not set. Used for
+    /// display and export; SQL identifiers go through the driver's quoting.
+    pub fn qualified_name(&self) -> String {
+        let mut parts: Vec<&str> = Vec::with_capacity(3);
+        parts.extend(
+            [&self.catalog, &self.schema]
+                .into_iter()
+                .flatten()
+                .map(String::as_str),
+        );
+        parts.push(&self.name);
+        parts.join(".")
     }
 }
 

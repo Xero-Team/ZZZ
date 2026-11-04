@@ -345,6 +345,29 @@ fn is_clause_keyword(word: &str) -> bool {
     .any(|keyword| word.eq_ignore_ascii_case(keyword))
 }
 
+/// Quote one SQL identifier so a table or column name can be used in generated
+/// SQL. Embedded double quotes are doubled, which is the SQL standard escape and
+/// what SQLite, PostgreSQL and MySQL accept; user values never take this path.
+pub fn quote_identifier(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}
+
+/// Quote a possibly schema- or catalog-qualified table reference.
+pub fn quote_table(table: &TableRef) -> String {
+    let mut quoted = String::new();
+    for part in [&table.catalog, &table.schema]
+        .into_iter()
+        .flatten()
+        .chain(std::iter::once(&table.name))
+    {
+        if !quoted.is_empty() {
+            quoted.push('.');
+        }
+        quoted.push_str(&quote_identifier(part));
+    }
+    quoted
+}
+
 /// A word token with its parenthesis nesting depth at the point it appears.
 struct SqlToken {
     text: String,

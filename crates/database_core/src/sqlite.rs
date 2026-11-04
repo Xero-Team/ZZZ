@@ -29,6 +29,7 @@ use crate::model::{
     Capabilities, Catalog, Column, ColumnType, ConnectionConfig, DataSource, ForeignKey, Index,
     ObjectKind, PrimaryKey, Row, Schema, Table, TableRef, TableSchema, Value,
 };
+use crate::sql::quote_identifier;
 
 /// The built-in driver's stable id. The UI must never branch on this string.
 pub const SQLITE_DRIVER_ID: &str = "sqlite";
@@ -734,10 +735,6 @@ impl SqliteConnection {
     }
 }
 
-fn quote_identifier(name: &str) -> String {
-    format!("\"{}\"", name.replace('"', "\"\""))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -778,12 +775,6 @@ mod tests {
             result.err().map(|error| error.kind),
             Some(DatabaseErrorKind::Connection)
         );
-    }
-
-    #[test]
-    fn quote_identifier_escapes_quotes() {
-        assert_eq!(quote_identifier("users"), "\"users\"");
-        assert_eq!(quote_identifier("a\"b"), "\"a\"\"b\"");
     }
 
     #[test]
