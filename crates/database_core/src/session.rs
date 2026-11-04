@@ -689,6 +689,15 @@ pub fn build_update_statements_for_edits(
     Ok(statements)
 }
 
+impl Drop for QuerySession {
+    fn drop(&mut self) {
+        // A dropped session can be the only owner of an in-flight query when
+        // the view or notebook cell closes. Cancel it and clear the manager's
+        // tracking so disconnect and status do not see a ghost query.
+        self.cancel_current();
+    }
+}
+
 /// A small helper used by the UI to describe a column without a driver call.
 pub fn column_label(column: &Column) -> String {
     format!("{} ({:?})", column.name, column.declared_type)
@@ -1260,6 +1269,33 @@ mod tests {
                 2
             );
             std::fs::remove_file(&path).expect("remove database");
+        });
+    }
+
+    #[test]
+    fn dropping_a_session_cancels_and_untracks_its_query() {
+        futures::executor::block_on(async {
+            let session = new_session().await;
+            let manager = session.manager.clone();
+            let connection_id = session.connection_id.clone();
+            let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let handle = QueryHandle::new(flag.clone(), None);
+            manager.track_query(&connection_id, handle.clone());
+            assert_eq!(
+                manager.status(&connection_id),
+                Some(crate::model::ConnectionStatus::Querying)
+            );
+
+            // Simulate a query still in flight when its owner goes away.
+            let mut session = session;
+            session.current_query = Some(handle);
+            drop(session);
+
+            assert!(flag.load(std::sync::atomic::Ordering::SeqCst));
+            assert_eq!(
+                manager.status(&connection_id),
+                Some(crate::model::ConnectionStatus::Connected)
+            );
         });
     }
 
