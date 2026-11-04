@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 2 为
-  `9322d438571e`，Phase 1 为 `05f659d46bfd` + `9e00c0cbb7`）。代码基线
-  `3af1429a83` 已 `merge-base --is-ancestor` 验证包含。
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 3 为
+  `0e321d7522`，Phase 2 为 `9322d438571e`）。代码基线 `3af1429a83` 已
+  `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 3`
-- Last completed phase: `Phase 2`
+- Active phase: `Phase 5`
+- Last completed phase: `Phase 4`
 - Blocking issue: `None`
-- Next action: 进入 Phase 4——虚拟化结果网格（窗口拉取、滚动、类型化渲染、截断诊断），
-  替换 Phase 3 的简单表格渲染。
+- Next action: 进入 Phase 5——pending edit 模型、参数化 DML、显式 Commit/Rollback、
+  无 WHERE 的 UPDATE/DELETE 与 DDL 二次确认、事务未提交关闭提示。
 
 ## Bootstrap {#bootstrap}
 
@@ -68,9 +68,8 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 0     | 账本校准、worktree、基线 | PASS        | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
 | 1     | 骨架与 SQLite 只读浏览   | PASS        | `05f659d46bfd` + `9e00c0cbb7`                    | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
 | 2     | 连接管理与凭据           | PASS        | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
-| 3     | 查询执行与取消           | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
-| 3     | 查询执行与取消           | NOT STARTED | -                                                | -                                              | -                                   |
-| 4     | 结果集视图               | NOT STARTED | -                                                | -                                              | -                                   |
+| 3     | 查询执行与取消           | PASS        | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
+| 4     | 结果集视图               | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
 | 5     | 编辑、事务与确认         | NOT STARTED | -                                                | -                                              | -                                   |
 | 6     | 扩展驱动协议             | NOT STARTED | -                                                | -                                              | -                                   |
 | 7     | ER 图与导入导出          | NOT STARTED | -                                                | -                                              | -                                   |
@@ -183,7 +182,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `05f659d46bfd5b273e256a6dd37121477c2d014a`     | `feat(database_ui): wire sqlite browsing panel and result view`         | 1     | check/test(41)/clippy/fmt PASS   | 工作项 3，Phase 1 完成          |
 | `9e00c0cbb78d84bdd99324f87cbe324590497502`     | `fix(database_core): surface statement errors from the row stream`      | 1     | check/test(43)/clippy/fmt PASS   | 工作项 3 缺陷修复               |
 | `9322d438571e5deaef8a6bb229e7bcfc07c14b3b`     | `feat(database_ui): save connections in settings with keychain secrets` | 2     | check/test/clippy/xtask/fmt PASS | Phase 2 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
+| `0e321d7522a48873306290b68a0d138fde560da2`     | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS | Phase 4 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -509,6 +509,82 @@ port?, user?, database? }`，派生 `JsonSchema`/`MergeFrom`；字段有文档�
   （`feat(database_ui): run sql from the database editor`）。
 - **下一步**：Phase 4 —— 虚拟化结果网格（窗口拉取、虚拟滚动、类型化渲染、截断诊断），
   替换当前的简单表格。
+
+## Phase 4 日志 {#phase-4-log}
+
+### 虚拟化结果网格与共享单元格交互
+
+- **Baseline**：`database-explorer` @ `0e321d7522`（Phase 3 提交后）。
+- **改动**：
+  - `crates/ui/src/components/table_cell.rs`（新）：共享的
+    `CopyableTableCell` 构建器（内边距、换行、横向对齐、文本颜色、右键复制）与
+    `with_copy_on_right_click`。把原本只存在于 `csv_preview` 的单元格与复制交互抽到
+    `ui` 层，两处渲染由此共用同一实现。
+  - `crates/ui/src/components/table_header.rs`（新）：共享的
+    `table_sort_button` 与 `TableSortDirection`（紧凑按钮、三个状态、i18n 提示）。
+    `csv_preview` 的排序按钮改为调用它，排序状态机仍由各自表格拥有。
+  - `crates/csv_preview/src/renderer/table_cell.rs`、`table_header.rs`：删除本地重复
+    实现，改用 `ui` 的共享组件；`csv_preview` 的全部 16 项测试通过，无回归。
+  - `crates/database_core/src/model.rs`：`ResultSet::truncation_note: Option<String>`
+    改为 typed `truncation: Option<Truncation { row_limit }>`，让 UI 用 i18n 渲染截断
+    文案，避免把英文诊断直接显示给用户。
+  - `crates/database_core/src/session.rs`：
+    - 区分「用户取消」与「触达行窗口预算」：预算触发时先 `cancel()` 停流，但结果集
+      标记为 `Ready` + `truncation`，不再误报 `Cancelled`（D-08 仍适用于用户取消）。
+      原 `window_budget_marks_the_result_cancelled` 测试改写为
+      `window_budget_truncates_without_reporting_a_user_cancel`。
+    - 新增 `ExportFormat { Csv, Markdown, Html }` 与
+      `export_result_set(result_set, format, order)`：按显示顺序导出，Markdown 转义
+      `|`/换行、HTML 转义 `&<>"'`，NULL 导出为空字段；`export_csv` 保留为恒等顺序的
+      包装。新增 3 项导出测试。
+  - `crates/database_ui/src/result_grid.rs`（新）：结果网格状态——可拖拽列宽
+    （`ResizableColumnsState`，按列名与前 200 行估算初始宽度）、滚动/交互状态
+    （`TableInteractionState`）、以及客户端排序（`Value::sort_key` 保留类型；NULL 升序
+    在前、降序在后；同值保持原顺序）。`CellPresentation` 把 NULL/数值/BLOB/文本分类
+    成可测试的展示规则，BLOB 只显示摘要而不内联二进制。
+  - `crates/database_ui/src/result_set_view.rs`：用 `ui::Table` 的 `uniform_list`
+    虚拟滚动替换 Phase 3 的 200 行静态表格；表头带排序按钮与右键复制列名，单元格
+    右键复制（NULL 复制为空）；`TableAccessibility` 提供表名、列头与每个单元格的
+    可访问标签；`Copy CSV` / `Copy Markdown` / `Copy HTML` 按当前显示顺序写入剪贴板；
+    结果区显示形状、截断提示与「排序仅覆盖已加载行」的说明。
+  - i18n：新增 12 个键（`database.grid.*`、`database.query.truncated`、
+    `table.sort.*`），删除 4 个不再使用的键；en/zh 各 3925 条且 key 集合一致。
+- **验证命令与 exit status**：
+  - `cargo check -p database_core` → `CORE_EXIT=0`；`cargo check -p ui` →
+    `UI_EXIT=0`；`cargo check -p csv_preview` → `CSV_EXIT=0`；
+    `cargo check -p database_ui` → `DBUI_EXIT=0`
+  - `cargo test -p database_core -p database_ui` → `TEST_EXIT=0`（core 54、ui 18）。
+    新增：排序（数值/降序/NULL/同值）、排序状态循环、列宽边界、单元格分类
+    （数值、NULL、BLOB 摘要、文本/日期）、三种导出与顺序。
+  - `cargo test -p csv_preview` → `CSV_TEST_EXIT=0`（16 passed）
+  - `cargo test -p ui` → `UI_TEST_EXIT=0`（77 + 41 passed）
+  - `cargo test -p i18n` → `I18N_EXIT=0`（3 passed，两个 locale key 集合一致）
+  - `cargo clippy -p database_core -p database_ui -p csv_preview -p ui --all-targets
+-- -D warnings` → `CLIPPY_EXIT=0`
+  - `cargo xtask check` → `XCHECK_EXIT=0`（6 checks）
+  - `cargo check -p zzz` → `ZCHECK_EXIT=0`
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+- **实现决策（记录）**：
+  - **「窗口化拉取」的边界**：当前驱动在 `sqlite3_step` 流式期间持有连接锁，若在
+    两次拉取之间保留未消费的 `RowStream`，连接会被阻塞到下一次滚动，其它查询与
+    `disconnect` 都无法进行。因此 `QuerySession` 在一次操作内拉满
+    `DEFAULT_WINDOW_LIMIT`（10 000 行）后取消停流并释放连接；内存上限由该窗口保证，
+    UI 用虚拟滚动只渲染可见行。若将来需要真正的分页，必须先把驱动改为分批
+    prepare/step 并释放锁，不能只改 UI。
+  - **排序范围**：排序在已加载窗口内进行，界面显式说明「在已加载的 N 行内排序」。
+    不生成 `ORDER BY` 重新查询，因为列名可能重复/别名不确定，且换序会改变用户看到
+    的语义。
+  - 单元格复制 `display()` 所示文本；NULL 与导出一样复制为空字符串。数值右对齐，
+    NULL 与 BLOB 用弱化颜色，BLOB 不展开二进制（D-07）。
+  - 结果集以 `Arc<ResultSet>` 存放在标签页，渲染与可访问性闭包只克隆指针，避免每帧
+    复制整窗数据。
+- **结论**：PASS。大结果集内存有上限（10 000 行窗口 + 截断提示），结果集具备
+  虚拟滚动、列宽拖拽、排序、单元格复制与三种格式导出；`csv_preview` 无回归；
+  `csv_preview` 仍不依赖 `database_core`，共享代码只在 `ui`。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): virtualize the result grid`）。
+- **下一步**：Phase 5 —— pending edit 模型、参数化 DML、显式 `Commit`/`Rollback`、
+  无 `WHERE` 的 `UPDATE`/`DELETE` 与 DDL 二次确认、事务未提交关闭提示。
 
 ## 完成定义核对 {#done-checklist}
 

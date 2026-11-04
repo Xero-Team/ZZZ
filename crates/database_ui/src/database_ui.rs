@@ -15,6 +15,7 @@ mod connection_dialog;
 mod connection_panel;
 mod connection_settings;
 mod credentials;
+mod result_grid;
 mod result_set_view;
 
 actions!(

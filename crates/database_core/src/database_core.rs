@@ -23,10 +23,11 @@ pub use error::{DatabaseError, DatabaseErrorKind};
 pub use model::{
     Capabilities, Catalog, Column, ColumnType, ConnectionConfig, ConnectionId, ConnectionStatus,
     DataSource, ForeignKey, Index, ObjectKind, PendingEdit, PrimaryKey, ResultSet, ResultSetState,
-    Row, Schema, Table, TableRef, TableSchema, Value,
+    Row, Schema, Table, TableRef, TableSchema, Truncation, Value,
 };
 pub use session::{
-    DEFAULT_WINDOW_LIMIT, QuerySession, build_update_statements, column_label, export_csv,
+    DEFAULT_WINDOW_LIMIT, ExportFormat, QuerySession, build_update_statements, column_label,
+    export_csv, export_result_set,
 };
 pub use sql::{SqlStatement, StatementKind, classify, split_statements, statement_at};
 pub use sqlite::{SQLITE_DRIVER_ID, SqliteConnection, SqliteDriver};

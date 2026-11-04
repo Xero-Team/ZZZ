@@ -2093,9 +2093,6 @@
     "csv_preview.performance_metrics.rendered_none": "- 已渲染：无",
     "csv_preview.performance_metrics.rendered_rows": "- 已渲染：{} 行",
     "csv_preview.performance_metrics.title": "性能指标：",
-    "csv_preview.sort.not_sorted_click_asc": "未排序。点击按 A-Z 排序",
-    "csv_preview.sort.sorted_asc_click_desc": "已按 A-Z 排序。点击改为按 Z-A 排序",
-    "csv_preview.sort.sorted_desc_click_disable": "已按 Z-A 排序。点击关闭排序",
     "csv_preview.tab_title": "分隔文本预览",
     "git_ui.git_panel.create_pull_request": "创建拉取请求",
     "git_graph.custom_git_commands": "自定义 Git 命令",
@@ -3916,6 +3913,17 @@
     "database.query.select_first": "请选择要运行的 SQL。",
     "database.query.empty": "没有可运行的语句。",
     "database.query.running": "正在运行…",
-    "database.query.showing_limited": "仅显示前 {} 行；其余行仍在结果窗口中。"
+    "database.grid.copy_column_hint": "右键复制列名",
+    "database.grid.copy_cell_hint": "右键复制单元格内容",
+    "database.grid.label": "查询结果",
+    "database.grid.sorted_note": "已按 {} 在已加载的 {} 行内排序。",
+    "database.grid.copy_csv": "复制 CSV",
+    "database.grid.copy_markdown": "复制 Markdown",
+    "database.grid.copy_html": "复制 HTML",
+    "database.grid.unavailable": "无法显示结果表格。",
+    "database.query.truncated": "仅显示前 {} 行；结果更大。",
+    "table.sort.sorted_asc_click_desc": "已按 A-Z 排序。点击按 Z-A 排序",
+    "table.sort.sorted_desc_click_disable": "已按 Z-A 排序。点击取消排序",
+    "table.sort.not_sorted_click_asc": "未排序。点击按 A-Z 排序"
   }
 }

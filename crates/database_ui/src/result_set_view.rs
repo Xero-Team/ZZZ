@@ -1,25 +1,27 @@
 //! The database browser `Item`: schema tree, SQL editor, and result sets.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use database_core::{
-    Capabilities, Catalog, ConnectionConfig, ConnectionId, ConnectionManager, QuerySession,
-    ResultSet, TableRef, TableSchema, Value, statement_at,
+    Capabilities, Catalog, ConnectionConfig, ConnectionId, ConnectionManager, ExportFormat,
+    QuerySession, ResultSet, TableRef, TableSchema, export_result_set, statement_at,
 };
 use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use gpui::*;
 use i18n::tr;
 use ui::prelude::*;
-use ui::{Button, ButtonStyle, IconButton, Tooltip};
+use ui::{
+    Button, ButtonSize, ButtonStyle, ColumnWidthConfig, CopyableTableCell, IconButton, Table,
+    TableAccessibility, TableCellTextAlignment, TableSortDirection, Tooltip, table_sort_button,
+    with_copy_on_right_click,
+};
 use workspace::Item;
 
 use crate::connection_dialog::describe_error;
 use crate::credentials::KeychainCredentials;
+use crate::result_grid::{CellClass, CellPresentation, ResultGridState, SortDirection};
 use crate::{CancelQuery, RunSelection, RunStatement};
-
-/// How much of a result set the simple table renders. Phase 4 replaces this with
-/// the virtualized grid; the window itself is already bounded by the session.
-const MAX_RENDERED_ROWS: usize = 200;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RunMode {
@@ -63,7 +65,8 @@ pub(crate) fn sql_to_run(
 
 struct QueryTab {
     sql: String,
-    result: Option<ResultSet>,
+    /// Shared so the render path does not clone every row on each frame.
+    result: Option<Arc<ResultSet>>,
     message: Option<QueryMessage>,
 }
 
@@ -89,6 +92,7 @@ pub struct ResultSetView {
     tabs: Vec<QueryTab>,
     active_tab: usize,
     editor: Entity<Editor>,
+    grid: ResultGridState,
     _load_task: Option<Task<()>>,
     _query_task: Option<Task<()>>,
 }
@@ -165,6 +169,7 @@ impl ResultSetView {
             }],
             active_tab: 0,
             editor,
+            grid: ResultGridState::new(cx),
             _load_task: None,
             _query_task: None,
         };
@@ -336,11 +341,13 @@ impl ResultSetView {
         let task = cx.spawn(async move |view, cx| {
             let result = session.execute(&sql, &[]).await;
             let cancelled = session.is_cancelled();
-            let result_set = session.result_set().cloned();
+            let result_set = session.result_set().cloned().map(Arc::new);
             view.update(cx, |view, cx| {
                 view.session = Some(session);
                 view.query_running = false;
+                view.grid.sync(result_set.as_deref(), &mut *cx);
                 let row_count = result_set.as_ref().map_or(0, |set| set.rows.len());
+                let truncation = result_set.as_ref().and_then(|set| set.truncation);
                 if let Some(tab) = view.tabs.get_mut(tab_index) {
                     tab.result = result_set;
                     tab.message = Some(match result {
@@ -349,13 +356,27 @@ impl ResultSetView {
                             "database.query.cancelled",
                             "Query cancelled.",
                         )),
-                        Ok(()) => {
-                            QueryMessage::Info(tr(cx, "database.query.rows", "{} rows").replacen(
-                                "{}",
-                                &row_count.to_string(),
-                                1,
-                            ))
-                        }
+                        Ok(()) => match truncation {
+                            Some(truncation) => QueryMessage::Info(
+                                tr(
+                                    cx,
+                                    "database.query.truncated",
+                                    "Showing the first {} rows; the result is larger.",
+                                )
+                                .replacen(
+                                    "{}",
+                                    &truncation.row_limit.to_string(),
+                                    1,
+                                ),
+                            ),
+                            None => QueryMessage::Info(
+                                tr(cx, "database.query.rows", "{} rows").replacen(
+                                    "{}",
+                                    &row_count.to_string(),
+                                    1,
+                                ),
+                            ),
+                        },
                         Err(error) => QueryMessage::Error(describe_error(cx, &error)),
                     });
                 }
@@ -395,9 +416,11 @@ impl ResultSetView {
         }
         self.active_tab = index;
         let text = self.tabs[index].sql.clone();
+        let result = self.tabs[index].result.clone();
         self.editor.update(cx, |editor, cx| {
             editor.set_text(text, window, cx);
         });
+        self.grid.sync(result.as_deref(), &mut *cx);
         cx.notify();
     }
 
@@ -415,6 +438,7 @@ impl ResultSetView {
         self.editor.update(cx, |editor, cx| {
             editor.set_text(String::new(), window, cx);
         });
+        self.grid.sync(None, &mut *cx);
         cx.notify();
     }
 
@@ -501,55 +525,189 @@ impl ResultSetView {
         )
     }
 
-    fn render_result(&self, cx: &App) -> AnyElement {
-        let Some(tab) = self.tabs.get(self.active_tab) else {
+    fn render_result(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(result) = self
+            .tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.result.clone())
+        else {
             return v_flex().into_any_element();
         };
-        let Some(result) = &tab.result else {
+        if result.columns.is_empty() {
             return v_flex().into_any_element();
-        };
+        }
 
-        let mut header = h_flex().gap_4().child(
-            div()
-                .text_xs()
-                .text_color(cx.theme().colors().text_muted)
-                .child(
-                    tr(cx, "database.query.result_shape", "{} rows × {} columns")
-                        .replacen("{}", &result.rows.len().to_string(), 1)
-                        .replacen("{}", &result.columns.len().to_string(), 1),
-                ),
-        );
-        let mut column_header = h_flex().gap_4();
-        for column in &result.columns {
-            column_header = column_header.child(
-                div()
+        let muted = cx.theme().colors().text_muted;
+        let cols = result.columns.len();
+        // If the grid has not adopted this result yet, show physical order rather
+        // than silently hiding rows.
+        let order = if self.grid.order().len() == result.rows.len() {
+            Arc::new(self.grid.order().to_vec())
+        } else {
+            Arc::new((0..result.rows.len()).collect::<Vec<_>>())
+        };
+        let row_count = order.len();
+        let sort = self.grid.sort();
+
+        let mut headers = Vec::with_capacity(cols);
+        for (index, column) in result.columns.iter().enumerate() {
+            let active = sort
+                .filter(|(sorted, _)| *sorted == index)
+                .map(|(_, direction)| match direction {
+                    SortDirection::Ascending => TableSortDirection::Ascending,
+                    SortDirection::Descending => TableSortDirection::Descending,
+                });
+            let header_text = div()
+                .id(ElementId::Name(
+                    format!("database-column-header-{index}").into(),
+                ))
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .child(column.name.clone());
+            headers.push(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .w_full()
                     .font_weight(FontWeight::BOLD)
-                    .child(column.name.clone()),
+                    .child(with_copy_on_right_click(
+                        header_text,
+                        SharedString::from(column.name.clone()),
+                        "database.grid.copy_column_hint",
+                        "Right click to copy column name",
+                    ))
+                    .child(table_sort_button(
+                        ElementId::Name(format!("database-sort-{index}").into()),
+                        active,
+                        cx.listener(move |view, _, _, cx| view.toggle_sort(index, cx)),
+                        cx,
+                    ))
+                    .into_any_element(),
             );
         }
 
-        let mut rows = v_flex().gap_0p5();
-        for row in result.rows.iter().take(MAX_RENDERED_ROWS) {
-            let mut cells = h_flex().gap_4();
-            for index in 0..result.columns.len() {
-                let text = row.get(index).map(Value::display).unwrap_or_default();
-                cells = cells.child(div().text_sm().child(text));
+        let accessibility_result = result.clone();
+        let accessibility_order = order.clone();
+        let accessibility = TableAccessibility::new(
+            "database-result-table",
+            tr(cx, "database.grid.label", "Query result"),
+            result
+                .columns
+                .iter()
+                .map(|column| SharedString::from(column.name.clone())),
+            move |row, column, _cx| {
+                accessibility_order
+                    .get(row)
+                    .and_then(|index| accessibility_result.rows.get(*index))
+                    .and_then(|row| row.get(column))
+                    .map_or_else(
+                        || SharedString::from("NULL"),
+                        |value| SharedString::from(value.display()),
+                    )
+            },
+        );
+
+        let table = Table::new(cols)
+            .interactable(&self.grid.interaction)
+            .striped()
+            .disable_base_style()
+            .width_config(ColumnWidthConfig::Resizable(
+                self.grid.column_widths.clone(),
+            ))
+            .header(headers);
+        let table = match table.with_accessibility(accessibility) {
+            Ok(table) => table,
+            Err(error) => {
+                // The headers come from the same column list, so a mismatch is a
+                // programming error rather than something the user can fix.
+                log::error!("database result table accessibility mismatch: {error}");
+                return div()
+                    .child(tr(
+                        cx,
+                        "database.grid.unavailable",
+                        "The result table could not be displayed.",
+                    ))
+                    .into_any_element();
             }
-            rows = rows.child(cells);
+        };
+
+        let cells_result = result.clone();
+        let cells_order = order.clone();
+        let table = table.uniform_list(
+            "database-result-rows",
+            row_count,
+            cx.processor(move |_view, range: Range<usize>, _window, cx| {
+                range
+                    .filter_map(|display_index| {
+                        let row_index = *cells_order.get(display_index)?;
+                        let row = cells_result.rows.get(row_index)?;
+                        Some(Self::render_result_row(row, display_index, cols, cx))
+                    })
+                    .collect()
+            }),
+        );
+
+        let mut summary = h_flex().gap_3().items_center().child(
+            div().text_xs().text_color(muted).child(
+                tr(cx, "database.query.result_shape", "{} rows × {} columns")
+                    .replacen("{}", &row_count.to_string(), 1)
+                    .replacen("{}", &cols.to_string(), 1),
+            ),
+        );
+        if let Some(truncation) = result.truncation {
+            summary = summary.child(
+                div().text_xs().text_color(muted).child(
+                    tr(
+                        cx,
+                        "database.query.truncated",
+                        "Showing the first {} rows; the result is larger.",
+                    )
+                    .replacen("{}", &truncation.row_limit.to_string(), 1),
+                ),
+            );
         }
-        if result.rows.len() > MAX_RENDERED_ROWS {
-            header = header.child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().colors().text_muted)
-                    .child(
-                        tr(
-                            cx,
-                            "database.query.showing_limited",
-                            "Showing the first {} rows; the rest are still available in the result window.",
-                        )
-                        .replacen("{}", &MAX_RENDERED_ROWS.to_string(), 1),
-                    ),
+        if let (Some((column, _)), Some(_)) = (sort, result.truncation) {
+            let column_name = result
+                .columns
+                .get(column)
+                .map_or_else(String::new, |column| column.name.clone());
+            summary = summary.child(
+                div().text_xs().text_color(muted).child(
+                    tr(
+                        cx,
+                        "database.grid.sorted_note",
+                        "Sorted by {} within the {} loaded rows.",
+                    )
+                    .replacen("{}", &column_name, 1)
+                    .replacen("{}", &row_count.to_string(), 1),
+                ),
+            );
+        }
+
+        let mut copy_buttons = h_flex().gap_1();
+        for (format, key, fallback) in [
+            (ExportFormat::Csv, "database.grid.copy_csv", "Copy CSV"),
+            (
+                ExportFormat::Markdown,
+                "database.grid.copy_markdown",
+                "Copy Markdown",
+            ),
+            (ExportFormat::Html, "database.grid.copy_html", "Copy HTML"),
+        ] {
+            let export_result = result.clone();
+            let export_order = order.clone();
+            copy_buttons = copy_buttons.child(
+                Button::new(
+                    ElementId::Name(format!("database-copy-{key}").into()),
+                    tr(cx, key, fallback),
+                )
+                .size(ButtonSize::Compact)
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    let text = export_result_set(&export_result, format, export_order.as_slice());
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                })),
             );
         }
 
@@ -557,11 +715,24 @@ impl ResultSetView {
             .id("database-query-result")
             .size_full()
             .gap_1()
-            .overflow_y_scroll()
-            .child(header)
-            .child(column_header)
-            .child(rows)
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .child(summary)
+                    .child(copy_buttons),
+            )
+            .child(div().flex_1().min_h_0().child(table))
             .into_any_element()
+    }
+
+    fn toggle_sort(&mut self, column: usize, cx: &mut Context<Self>) {
+        let result = self
+            .tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.result.clone());
+        self.grid.toggle_sort(column, result.as_deref());
+        cx.notify();
     }
 
     fn render_schema_tree(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -639,6 +810,36 @@ impl ResultSetView {
             )));
         }
         column.into_any_element()
+    }
+
+    fn render_result_row(
+        row: &database_core::Row,
+        display_index: usize,
+        columns: usize,
+        cx: &App,
+    ) -> Vec<AnyElement> {
+        (0..columns)
+            .map(|column| {
+                let presentation = CellPresentation::for_value(row.get(column));
+                let (color, alignment) = match presentation.class {
+                    CellClass::Number => (Color::Default, TableCellTextAlignment::Right),
+                    CellClass::Null | CellClass::Binary => {
+                        (Color::Muted, TableCellTextAlignment::Left)
+                    }
+                    CellClass::Text => (Color::Default, TableCellTextAlignment::Left),
+                };
+                CopyableTableCell::new(
+                    ElementId::Name(format!("database-cell-{display_index}-{column}").into()),
+                    SharedString::from(presentation.text),
+                )
+                .copy_text(SharedString::from(presentation.copy_text))
+                .text_alignment(alignment)
+                .text_color(color)
+                .copy_hint("database.grid.copy_cell_hint", "Right click to copy cell")
+                .render(cx)
+                .into_any_element()
+            })
+            .collect()
     }
 }
 

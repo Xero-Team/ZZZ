@@ -76,6 +76,7 @@ impl QuerySession {
         let mut result_set = crate::driver::result_set_for(&executed.metadata, sql);
         result_set.total_rows = executed.metadata.affected_rows;
         let mut rows = 0usize;
+        let mut budget_reached = false;
         while let Some(item) = executed.rows.next().await {
             let row = match item {
                 Ok(row) => row,
@@ -93,12 +94,18 @@ impl QuerySession {
             if !result_set.push_row(row, DEFAULT_WINDOW_LIMIT) {
                 // Window budget reached: cancel the still-running stream so the
                 // driver stops stepping and no orphan task remains.
+                budget_reached = true;
                 executed.handle.cancel();
                 break;
             }
             rows += 1;
         }
-        if executed.handle.is_cancelled() {
+        if budget_reached {
+            // We stopped the stream ourselves. The rows we kept are valid, so
+            // this is a truncation; reporting `Cancelled` would make a large
+            // result look like a user action (D-08 covers user cancellation).
+            result_set.mark_ready(&self.capabilities);
+        } else if executed.handle.is_cancelled() {
             result_set.mark_cancelled();
         } else {
             result_set.mark_ready(&self.capabilities);
@@ -331,9 +338,35 @@ fn quote_identifier(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-/// Export the effective (staged-edit-aware) rows as CSV text (Phase 4 / D-06).
-/// Values are quoted per RFC 4180; BLOBs use their digest, NULL is empty.
+/// Clipboard export formats offered by the result grid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExportFormat {
+    Csv,
+    Markdown,
+    Html,
+}
+
+/// Export the effective (staged-edit-aware) rows as CSV text. Values are quoted
+/// per RFC 4180; BLOBs use their digest, NULL is empty.
 pub fn export_csv(result_set: &ResultSet) -> String {
+    export_result_set(
+        result_set,
+        ExportFormat::Csv,
+        &(0..result_set.rows.len()).collect::<Vec<_>>(),
+    )
+}
+
+/// Export the rows in `order` (indices into `result_set.rows`). The order is the
+/// display order, so what is copied matches what the user sees after sorting.
+pub fn export_result_set(result_set: &ResultSet, format: ExportFormat, order: &[usize]) -> String {
+    match format {
+        ExportFormat::Csv => export_csv_rows(result_set, order),
+        ExportFormat::Markdown => export_markdown_rows(result_set, order),
+        ExportFormat::Html => export_html_rows(result_set, order),
+    }
+}
+
+fn export_csv_rows(result_set: &ResultSet, order: &[usize]) -> String {
     let mut output = String::new();
     output.push_str(
         &result_set
@@ -344,11 +377,11 @@ pub fn export_csv(result_set: &ResultSet) -> String {
             .join(","),
     );
     output.push('\n');
-    for row_index in 0..result_set.rows.len() {
+    for row_index in order {
         let cells: Vec<String> = (0..result_set.columns.len())
             .map(|column_index| {
                 result_set
-                    .value_at(row_index, column_index)
+                    .value_at(*row_index, column_index)
                     .map(|value| csv_escape(&value.to_export_text()))
                     .unwrap_or_default()
             })
@@ -357,6 +390,80 @@ pub fn export_csv(result_set: &ResultSet) -> String {
         output.push('\n');
     }
     output
+}
+
+fn export_markdown_rows(result_set: &ResultSet, order: &[usize]) -> String {
+    let mut output = String::new();
+    output.push('|');
+    for column in &result_set.columns {
+        output.push(' ');
+        output.push_str(&markdown_escape(&column.name));
+        output.push_str(" |");
+    }
+    output.push('\n');
+    output.push('|');
+    for _ in &result_set.columns {
+        output.push_str(" --- |");
+    }
+    output.push('\n');
+    for row_index in order {
+        output.push('|');
+        for column_index in 0..result_set.columns.len() {
+            output.push(' ');
+            if let Some(value) = result_set.value_at(*row_index, column_index) {
+                output.push_str(&markdown_escape(&value.to_export_text()));
+            }
+            output.push_str(" |");
+        }
+        output.push('\n');
+    }
+    output
+}
+
+fn export_html_rows(result_set: &ResultSet, order: &[usize]) -> String {
+    let mut output = String::from("<table>\n<thead><tr>");
+    for column in &result_set.columns {
+        output.push_str("<th>");
+        output.push_str(&html_escape(&column.name));
+        output.push_str("</th>");
+    }
+    output.push_str("</tr></thead>\n<tbody>\n");
+    for row_index in order {
+        output.push_str("<tr>");
+        for column_index in 0..result_set.columns.len() {
+            output.push_str("<td>");
+            if let Some(value) = result_set.value_at(*row_index, column_index) {
+                output.push_str(&html_escape(&value.to_export_text()));
+            }
+            output.push_str("</td>");
+        }
+        output.push_str("</tr>\n");
+    }
+    output.push_str("</tbody>\n</table>\n");
+    output
+}
+
+fn markdown_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('|', "\\|")
+        .replace("\r\n", "<br>")
+        .replace(['\n', '\r'], "<br>")
+}
+
+fn html_escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            other => escaped.push(other),
+        }
+    }
+    escaped
 }
 
 fn csv_escape(value: &str) -> String {
@@ -438,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn window_budget_marks_the_result_cancelled() {
+    fn window_budget_truncates_without_reporting_a_user_cancel() {
         futures::executor::block_on(async {
             let mut session = new_session().await;
             session
@@ -451,9 +558,15 @@ mod tests {
                 .await
                 .expect("execute");
             let result = session.result_set().expect("result");
-            assert_eq!(result.state, ResultSetState::Cancelled);
+            assert_eq!(result.state, ResultSetState::Ready);
             assert_eq!(result.rows.len(), DEFAULT_WINDOW_LIMIT);
-            assert!(session.is_cancelled());
+            assert_eq!(
+                result.truncation,
+                Some(crate::model::Truncation {
+                    row_limit: DEFAULT_WINDOW_LIMIT
+                })
+            );
+            assert!(!session.is_cancelled());
         });
     }
 
@@ -506,6 +619,32 @@ mod tests {
         assert!(csv.starts_with("id,name\n"));
         assert!(csv.contains("1,Alice\n"));
         assert!(csv.contains("\"Bob, Jr\n\"\"B\"\"\""));
+    }
+
+    #[test]
+    fn markdown_export_escapes_pipes_and_newlines() {
+        let mut set = editable_set();
+        set.stage_edit(0, 1, Value::Text("A|B\nC".into()));
+        let markdown = export_result_set(&set, ExportFormat::Markdown, &[0, 1]);
+        assert!(markdown.starts_with("| id | name |\n| --- | --- |\n"));
+        assert!(markdown.contains("A\\|B<br>C"));
+    }
+
+    #[test]
+    fn html_export_escapes_markup() {
+        let mut set = editable_set();
+        set.stage_edit(0, 1, Value::Text("<b>&\"'</b>".into()));
+        let html = export_result_set(&set, ExportFormat::Html, &[0, 1]);
+        assert!(html.contains("<td>&lt;b&gt;&amp;&quot;&#39;&lt;/b&gt;</td>"));
+    }
+
+    #[test]
+    fn export_follows_the_display_order() {
+        let set = editable_set();
+        let csv = export_result_set(&set, ExportFormat::Csv, &[1, 0]);
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(lines[1], "2,Bob");
+        assert_eq!(lines[2], "1,Alice");
     }
 
     #[test]

@@ -2093,9 +2093,6 @@
     "csv_preview.performance_metrics.rendered_none": "- Rendered: none",
     "csv_preview.performance_metrics.rendered_rows": "- Rendered: {} rows",
     "csv_preview.performance_metrics.title": "Performance metrics:",
-    "csv_preview.sort.not_sorted_click_asc": "Not sorted. Click to sort A-Z",
-    "csv_preview.sort.sorted_asc_click_desc": "Sorted A-Z. Click to sort Z-A",
-    "csv_preview.sort.sorted_desc_click_disable": "Sorted Z-A. Click to disable sorting",
     "csv_preview.tab_title": "Delimited Text Preview",
     "git_ui.git_panel.create_pull_request": "Create Pull Request",
     "git_graph.custom_git_commands": "Custom Git Commands",
@@ -3916,6 +3913,17 @@
     "database.query.select_first": "Select the SQL to run.",
     "database.query.empty": "Nothing to run.",
     "database.query.running": "Running…",
-    "database.query.showing_limited": "Showing the first {} rows; the rest are still available in the result window."
+    "database.grid.copy_column_hint": "Right click to copy column name",
+    "database.grid.copy_cell_hint": "Right click to copy cell",
+    "database.grid.label": "Query result",
+    "database.grid.sorted_note": "Sorted by {} within the {} loaded rows.",
+    "database.grid.copy_csv": "Copy CSV",
+    "database.grid.copy_markdown": "Copy Markdown",
+    "database.grid.copy_html": "Copy HTML",
+    "database.grid.unavailable": "The result table could not be displayed.",
+    "database.query.truncated": "Showing the first {} rows; the result is larger.",
+    "table.sort.sorted_asc_click_desc": "Sorted A-Z. Click to sort Z-A",
+    "table.sort.sorted_desc_click_disable": "Sorted Z-A. Click to disable sorting",
+    "table.sort.not_sorted_click_asc": "Not sorted. Click to sort A-Z"
   }
 }

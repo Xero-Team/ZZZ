@@ -239,6 +239,14 @@ pub struct PendingEdit {
     pub value: Value,
 }
 
+/// Why a row stream stopped before reaching its end. The UI turns this into a
+/// localized message; the model keeps only the numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Truncation {
+    /// The row budget that stopped the pull.
+    pub row_limit: usize,
+}
+
 /// An independent, stateful result set (D-06). Rows are cached by window; the
 /// bounded stream fills that cache without materializing the whole query result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -258,8 +266,9 @@ pub struct ResultSet {
     pub pending_edits: BTreeMap<(usize, usize), Value>,
     /// Whether more rows can be pulled from the stream.
     pub exhausted: bool,
-    /// Diagnostic shown when a row or memory budget truncates the result.
-    pub truncation_note: Option<String>,
+    /// Set when the row budget stopped the pull before the stream ended. The UI
+    /// localizes this, so the model stores the limit rather than a message.
+    pub truncation: Option<Truncation>,
     /// The SQL that produced this result, for history and re-run.
     pub sql: String,
 }
@@ -281,7 +290,7 @@ impl ResultSet {
             total_rows: None,
             pending_edits: BTreeMap::new(),
             exhausted: false,
-            truncation_note: None,
+            truncation: None,
             sql: sql.into(),
         }
     }
@@ -291,9 +300,9 @@ impl ResultSet {
     pub fn push_row(&mut self, row: Row, max_rows: usize) -> bool {
         if self.rows.len() >= max_rows {
             self.exhausted = true;
-            self.truncation_note = Some(format!(
-                "Result truncated at {max_rows} rows to bound memory"
-            ));
+            self.truncation = Some(Truncation {
+                row_limit: max_rows,
+            });
             return false;
         }
         self.rows.push(row);
@@ -592,7 +601,7 @@ mod tests {
         let mut set = ResultSet::new(vec![Column::new("id", ColumnType::Integer)], "SELECT 1");
         assert!(set.push_row(Row(vec![Value::Integer(1)]), 1));
         assert!(!set.push_row(Row(vec![Value::Integer(2)]), 1));
-        assert!(set.truncation_note.is_some());
+        assert_eq!(set.truncation, Some(Truncation { row_limit: 1 }));
         assert_eq!(set.rows.len(), 1);
     }
 
