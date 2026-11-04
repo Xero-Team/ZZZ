@@ -122,7 +122,9 @@ macro_rules! query {
         $vis async fn $id(&self, $($arg: $arg_type),+) -> $crate::anyhow::Result<Vec<$return_type>> {
             use $crate::anyhow::Context;
 
-            self.write(|connection| {
+            // `write` needs a `'static` callback, so the closure must own the
+            // arguments instead of borrowing them.
+            self.write(move |connection| {
                 let sql_stmt = $crate::sqlez_macros::sql!($($sql)+);
 
                 connection.select_bound::<($($arg_type),+), $return_type>(sql_stmt)?(($($arg),+))

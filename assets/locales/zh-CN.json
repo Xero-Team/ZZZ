@@ -3982,6 +3982,16 @@
     "database.explain.show": "解释计划",
     "database.explain.back": "返回查询",
     "database.explain.rows": "{} 个计划步骤",
-    "database.explain.empty": "该驱动没有为此语句返回计划。"
+    "database.explain.empty": "该驱动没有为此语句返回计划。",
+    "database.history.show": "历史",
+    "database.history.search_placeholder": "搜索历史",
+    "database.history.back": "返回查询",
+    "database.history.empty": "此连接还没有执行过语句。",
+    "database.history.read_failed": "无法读取查询历史：{}",
+    "database.history.run": "运行",
+    "database.history.rows_and_duration": "{} 行 · {} 毫秒",
+    "database.history.rows": "{} 行",
+    "database.history.duration": "{} 毫秒",
+    "database.history.failed": "失败"
   }
 }

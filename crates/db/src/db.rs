@@ -1,5 +1,6 @@
 pub mod kvp;
 pub mod query;
+pub mod query_history;
 
 // Re-export
 pub use anyhow;

@@ -3982,6 +3982,16 @@
     "database.explain.show": "Explain",
     "database.explain.back": "Back to Query",
     "database.explain.rows": "{} plan steps",
-    "database.explain.empty": "The driver returned no plan for this statement."
+    "database.explain.empty": "The driver returned no plan for this statement.",
+    "database.history.show": "History",
+    "database.history.search_placeholder": "Search history",
+    "database.history.back": "Back to Query",
+    "database.history.empty": "No statements have run on this connection yet.",
+    "database.history.read_failed": "Could not read the query history: {}",
+    "database.history.run": "Run",
+    "database.history.rows_and_duration": "{} rows · {} ms",
+    "database.history.rows": "{} rows",
+    "database.history.duration": "{} ms",
+    "database.history.failed": "failed"
   }
 }

@@ -13,15 +13,15 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 7 为
-  `d90e2ff59c`，Phase 6 为 `10756066b8`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 8 为
+  `63985c28cf`，Phase 7 为 `d90e2ff59c`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 9`
-- Last completed phase: `Phase 8`
+- Active phase: `Phase 10`
+- Last completed phase: `Phase 9`
 - Blocking issue: `None`
-- Next action: 进入 Phase 9——查询历史持久化与检索、历史重跑，且不记录结果集与凭据。
+- Next action: 进入 Phase 10——Notebook 式 SQL（单元格、按序执行、结果并存）。
 
 ## Bootstrap {#bootstrap}
 
@@ -68,13 +68,12 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 1     | 骨架与 SQLite 只读浏览   | PASS        | `05f659d46bfd` + `9e00c0cbb7`                    | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
 | 2     | 连接管理与凭据           | PASS        | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
 | 3     | 查询执行与取消           | PASS        | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
-| 4     | 结果集视图               | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
-| 5     | 编辑、事务与确认         | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
+| 4     | 结果集视图               | PASS        | `57ff2dab1d`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
+| 5     | 编辑、事务与确认         | PASS        | `0926c5cbaf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
 | 6     | 扩展驱动协议             | PASS        | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
 | 7     | ER 图与导入导出          | PASS        | `d90e2ff59c`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
-| 8     | Visual EXPLAIN           | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
-| 8     | Visual EXPLAIN           | NOT STARTED | -                                                | -                                              | -                                   |
-| 9     | 查询历史                 | NOT STARTED | -                                                | -                                              | -                                   |
+| 8     | Visual EXPLAIN           | PASS        | `63985c28cf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
+| 9     | 查询历史                 | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
 | 10    | Notebook 式 SQL          | NOT STARTED | -                                                | -                                              | -                                   |
 | 11    | 远程与 SSH（条件项）     | NOT STARTED | -                                                | -                                              | -                                   |
 | 12    | MCP 只读暴露             | NOT STARTED | -                                                | -                                              | -                                   |
@@ -187,7 +186,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS | Phase 5 完成                    |
 | `10756066b89a478da5e6bc768518b082a5bd4fa8`     | `feat(database_core): run extension database drivers as subprocesses`   | 6     | check/test/clippy/xtask/fmt PASS | Phase 6 完成                    |
 | `d90e2ff59c7fa12eb4f6e9e2df189ece12fafa9f`     | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS | Phase 8 完成                    |
+| `63985c28cf4f86490b04b75082752ac967569942`     | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS | Phase 8 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS | Phase 9 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -889,6 +889,76 @@ while awaiting install_dev_extension`）。原因是该测试使用真实 HTTP �
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_ui): show the query plan as a tree`）。
 - **下一步**：Phase 9 —— 查询历史。
+
+## Phase 9 日志 {#phase-9-log}
+
+### 查询历史
+
+- **Baseline**：`database-explorer` @ `63985c28cf`（Phase 8 提交后）。
+- **改动**：
+  - `crates/db/src/query_history.rs`（新）：`QueryHistoryDb` 是一个 `crates/db` 域，
+    migration 建 `query_history` 表（`connection_id`、`statement`、`executed_at`、
+    `row_count`、`duration_ms`、`success`，`STRICT`）与
+    `query_history(connection_id, executed_at DESC)` 索引。只存这些元数据，不存结果集
+    内容、BLOB 或凭据（D-11）。
+  - 写入：`record` 插入一行后调用 `prune`，每个连接只保留最新
+    `MAX_ENTRIES_PER_CONNECTION = 500` 条，表不会无限增长。`prune` 手写为双占位符
+    语句（`exec_bound::<(String, String)>`），因为外层删除与内层保留子查询都要按
+    `connection_id` 过滤，而单值 `Bind` 只会填第一个 `?`，第二个留 NULL 会把该连接的
+    全部历史删光。
+  - 读取：`entries` 按连接过滤、`id DESC` 排序，`needle` 用 `instr(statement, ?) > 0`
+    做字面匹配，因此用户输入的 `%` / `_` 仍是普通字符；空 needle 走单独的
+    `recent_entries`，避免用 `? IS NULL` 让 SQLite 无法使用索引。
+  - `crates/db/src/query.rs`：给多参数 `async fn ... -> Result<Vec<_>>` 的
+    `query!` 分支补上 `move`。`ThreadSafeConnection::write` 要求 `'static` 回调，
+    原实现按引用捕获参数（`i64` 之类 `Copy` 参数会被借用），该分支此前无法编译通过；
+    新历史查询是第一个调用它的人。
+  - `crates/db/src/db.rs`：注册 `pub mod query_history;`，使 migration 进入
+    `inventory` 收集的域列表。
+  - `crates/database_ui/src/result_set_view.rs`：
+    - `start_query` 在语句执行后把 SQL、连接 id、Unix 秒时间、返回行数、
+      耗时与是否成功写入历史；取消或执行失败记为 `success = false`，但仍保留条目。
+      结果行本身不写入。
+    - 工具栏新增 `History`（不依赖驱动能力），面板内是单行检索框（订阅
+      `EditorEvent::Edited` 即时重查）、时间、单行 SQL 摘要、行数/耗时、失败标记。
+    - 点击 SQL 摘要把语句载入编辑器但不运行；`Run` 直接重跑该语句并关闭面板。
+    - 面板与 ER 图、EXPLAIN 视图互斥；打开面板时刷新，替换旧任务以取消过期查询。
+  - `crates/database_ui/Cargo.toml`：新增 `db`、`chrono`。时间显示用 `chrono::Local`
+    转本地时区（`time` 的 `current_local_offset` 在多线程进程里可能失败）。
+- **验证命令与 exit status**：
+  - `cargo test -p database_core -p database_ui -p db --all-targets` → `TEST=0`
+    （core 91 + integration 5、ui 23、db 11）
+  - `cargo clippy -p database_core -p database_ui -p db --all-targets -- -D warnings`
+    → `CLIPPY=0`
+  - `cargo check -p zzz` → `ZCHECK=0`
+  - `cargo xtask check` → `XCHECK=0`（6 checks）
+  - `cargo fmt --all -- --check` → `FMT=0`
+  - `cd docs && npx prettier --check src/` → PASS
+  - i18n fallback 脚本比对 `crates/database_ui/src` 的 136 处 `tr(...)` → 0 mismatch；
+    en/zh 各 3993 条且 key 集合一致
+- **新增测试**：
+  - `db::query_history`（3 个 `#[gpui::test]`）：记录后可读回且连接隔离；检索为字面
+    匹配、最新在前、失败条目标记正确；超过上限后按连接裁剪到 500 条且保留最新。
+  - `database_ui::result_set_view`：历史摘要折叠空白为单行；超长语句截断到 120 字符
+    加省略号；超范围时间戳不显示（本地时区无关）。
+- **实现决策（记录）**：
+  - 历史在 `start_query` 完成时记录，不记录 EXPLAIN 与 CSV 导入：前者不是用户提交的
+    语句，后者已在事务 UI 中有明确结果提示。
+  - 取消的语句记为失败条目而非丢弃：用户需要看到自己中断过什么。`Cancelled` 仍然不是
+    错误，只是历史里的 `success = false`。
+  - 面板一次最多加载 200 条而存储上限为 500：面板是快速选择器，完整历史留在表中。
+  - 检索走 `instr` 而不是 `LIKE`：避免用户输入的模式字符被当成通配符，也避免为此
+    对语句文本做转义。
+- **验收说明**：
+  - 「历史表无口令/BLOB」由表结构与写入路径保证：`QueryHistoryEntry` 只有 SQL、
+    连接 id、时间、行数与耗时，写入方只传这些字段，测试逐字段断言。
+  - 「重启后历史可查」依赖 `QueryHistoryDb` 与应用其他 `crates/db` 域相同的持久化
+    机制（`AppDatabase` 的文件数据库 + `inventory` migration），未在真实进程重启中
+    手工验证；测试覆盖同一域实例内的写入与读回、按连接隔离与裁剪。
+- **结论**：PASS。历史可检索、可重跑；表中不含结果内容与凭据。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): keep a local query history`）。
+- **下一步**：Phase 10 —— Notebook 式 SQL。
 
 ## 完成定义核对 {#done-checklist}
 

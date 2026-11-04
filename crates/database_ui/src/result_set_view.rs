@@ -9,7 +9,8 @@ use database_core::{
     SchemaExportFormat, StatementKind, TableRef, TableSchema, classify, er_diagram,
     export_result_set, export_schema, flatten_plan, parse_edited_value, statement_at,
 };
-use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
+use db::query_history::{QueryHistoryDb, QueryHistoryEntry};
+use editor::{Editor, EditorElement, EditorEvent, EditorStyle, MultiBufferOffset};
 use gpui::*;
 use i18n::tr;
 use project::Project;
@@ -99,6 +100,34 @@ enum ImportAttempt {
 enum SchemaAction {
     ErDiagram,
     Export(SchemaExportFormat),
+}
+
+/// How many entries the history panel loads. The domain keeps more per
+/// connection, but the panel is a quick picker, not an archive.
+const HISTORY_PANEL_LIMIT: i64 = 200;
+
+/// Collapse a statement onto one line so a row in the history list keeps its
+/// height regardless of how the SQL was formatted.
+fn single_line_preview(sql: &str) -> String {
+    const MAX_CHARACTERS: usize = 120;
+    let collapsed = sql.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() <= MAX_CHARACTERS {
+        return collapsed;
+    }
+    let mut preview: String = collapsed.chars().take(MAX_CHARACTERS).collect();
+    preview.push('…');
+    preview
+}
+
+/// Local wall-clock time, because a user reading their own history thinks in
+/// local time and the stored value is UTC seconds.
+fn format_history_time(executed_at: i64) -> String {
+    use chrono::TimeZone as _;
+    chrono::Local
+        .timestamp_opt(executed_at, 0)
+        .single()
+        .map(|time| time.format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_default()
 }
 
 fn import_failure_message(cx: &App, failure: &ImportFailure) -> String {
@@ -191,6 +220,10 @@ pub struct ResultSetView {
     show_er_diagram: bool,
     explain_plan: Option<ExplainPlan>,
     show_explain: bool,
+    show_history: bool,
+    history_search: Entity<Editor>,
+    history_entries: Vec<QueryHistoryEntry>,
+    history_error: Option<String>,
     import_running: bool,
     status_text: SharedString,
     session: Option<QuerySession>,
@@ -209,6 +242,7 @@ pub struct ResultSetView {
     _schema_task: Option<Task<()>>,
     _diagram_task: Option<Task<()>>,
     _import_task: Option<Task<()>>,
+    _history_task: Option<Task<()>>,
 }
 
 impl ResultSetView {
@@ -244,6 +278,18 @@ impl ResultSetView {
             );
             editor
         });
+
+        let history_search = cx.new(|cx| {
+            let mut editor = Editor::single_line(window, cx);
+            editor.set_placeholder_text(
+                &tr(cx, "database.history.search_placeholder", "Search history"),
+                window,
+                cx,
+            );
+            editor
+        });
+        cx.subscribe(&history_search, Self::on_history_search_change)
+            .detach();
 
         let view_handle = cx.entity().downgrade();
         editor.update(cx, |editor, _cx| {
@@ -306,6 +352,10 @@ impl ResultSetView {
             show_er_diagram: false,
             explain_plan: None,
             show_explain: false,
+            show_history: false,
+            history_search,
+            history_entries: Vec::new(),
+            history_error: None,
             import_running: false,
             status_text: SharedString::from(tr(cx, "database.status.connecting", "Connecting…")),
             session: None,
@@ -326,6 +376,7 @@ impl ResultSetView {
             _schema_task: None,
             _diagram_task: None,
             _import_task: None,
+            _history_task: None,
         };
         view.load_schema(cx);
         view
@@ -932,6 +983,235 @@ impl ResultSetView {
         )
     }
 
+    fn on_history_search_change(
+        &mut self,
+        _: Entity<Editor>,
+        event: &EditorEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(event, EditorEvent::Edited { .. }) {
+            self.refresh_history(cx);
+        }
+    }
+
+    fn open_history(&mut self, cx: &mut Context<Self>) {
+        self.show_history = true;
+        self.show_er_diagram = false;
+        self.show_explain = false;
+        self.refresh_history(cx);
+    }
+
+    fn close_history(&mut self, cx: &mut Context<Self>) {
+        self.show_history = false;
+        cx.notify();
+    }
+
+    /// Reload the entries for the current connection, filtered by the search
+    /// box. A previous load is cancelled because its task is replaced.
+    fn refresh_history(&mut self, cx: &mut Context<Self>) {
+        let history = QueryHistoryDb::global(cx);
+        let connection_id = self.connection_id.0.clone();
+        let needle = self.history_search.read(cx).text(cx);
+        let needle = if needle.trim().is_empty() {
+            None
+        } else {
+            Some(needle)
+        };
+        let task = cx.spawn(async move |view, cx| {
+            let outcome = history
+                .entries(connection_id, needle, HISTORY_PANEL_LIMIT)
+                .await;
+            view.update(cx, |view, cx| {
+                match outcome {
+                    Ok(entries) => {
+                        view.history_entries = entries;
+                        view.history_error = None;
+                    }
+                    Err(error) => {
+                        log::warn!("failed to read the query history: {error:#}");
+                        view.history_error = Some(error.to_string());
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        });
+        self._history_task = Some(task);
+    }
+
+    /// Put a past statement back in the editor without running it.
+    fn load_history_entry(&mut self, sql: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_text(sql, window, cx));
+        self.editor
+            .update(cx, |editor, cx| editor.focus_handle(cx))
+            .focus(window, cx);
+        self.show_history = false;
+        cx.notify();
+    }
+
+    /// Load a past statement and run it immediately.
+    fn run_history_entry(&mut self, sql: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, cx| {
+            editor.set_text(sql.clone(), window, cx);
+        });
+        self.show_history = false;
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.sql = sql.clone();
+        }
+        self.start_query(sql, cx);
+    }
+
+    fn render_history(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.show_history {
+            return None;
+        }
+        let muted = cx.theme().colors().text_muted;
+        let border = cx.theme().colors().border;
+        let entries = self.history_entries.clone();
+        let error = self.history_error.clone();
+
+        let mut body = v_flex().gap_1();
+        if let Some(error) = error {
+            body = body.child(
+                div().text_sm().text_color(cx.theme().status().error).child(
+                    tr(
+                        cx,
+                        "database.history.read_failed",
+                        "Could not read the query history: {}",
+                    )
+                    .replacen("{}", &error, 1),
+                ),
+            );
+        } else if entries.is_empty() {
+            body = body.child(div().text_sm().text_color(muted).child(tr(
+                cx,
+                "database.history.empty",
+                "No statements have run on this connection yet.",
+            )));
+        }
+        for entry in entries {
+            let sql = entry.statement.clone();
+            let load_sql = sql.clone();
+            let run_sql = sql.clone();
+            let label = single_line_preview(&sql);
+            let timestamp = format_history_time(entry.executed_at);
+            let meta = match (entry.row_count, entry.duration_ms) {
+                (Some(rows), Some(duration)) => Some(
+                    tr(cx, "database.history.rows_and_duration", "{} rows · {} ms")
+                        .replacen("{}", &rows.to_string(), 1)
+                        .replacen("{}", &duration.to_string(), 1),
+                ),
+                (Some(rows), None) => Some(tr(cx, "database.history.rows", "{} rows").replacen(
+                    "{}",
+                    &rows.to_string(),
+                    1,
+                )),
+                (None, Some(duration)) => {
+                    Some(tr(cx, "database.history.duration", "{} ms").replacen(
+                        "{}",
+                        &duration.to_string(),
+                        1,
+                    ))
+                }
+                (None, None) => None,
+            };
+            let mut stats = h_flex().gap_2().items_center();
+            stats = stats.child(div().text_xs().text_color(muted).child(timestamp));
+            if !entry.success {
+                stats = stats.child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().status().error)
+                        .child(tr(cx, "database.history.failed", "failed")),
+                );
+            }
+            if let Some(meta) = meta {
+                stats = stats.child(div().text_xs().text_color(muted).child(meta));
+            }
+            body = body.child(
+                h_flex()
+                    .id(ElementId::Name(
+                        format!("database-history-{}", entry.id).into(),
+                    ))
+                    .w_full()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("database-history-load-{}", entry.id).into(),
+                            ))
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_sm()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(cx.theme().colors().element_hover))
+                            .child(label)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.load_history_entry(load_sql.clone(), window, cx);
+                            })),
+                    )
+                    .child(stats)
+                    .child(
+                        Button::new(
+                            ElementId::Name(format!("database-history-run-{}", entry.id).into()),
+                            tr(cx, "database.history.run", "Run"),
+                        )
+                        .size(ButtonSize::Compact)
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                this.run_history_entry(run_sql.clone(), window, cx);
+                            },
+                        )),
+                    ),
+            );
+        }
+
+        Some(
+            v_flex()
+                .id("database-history")
+                .flex_1()
+                .min_h_0()
+                .gap_2()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            Button::new(
+                                "database-history-back",
+                                tr(cx, "database.history.back", "Back to Query"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(|this, _, _, cx| this.close_history(cx))),
+                        )
+                        .child(
+                            div()
+                                .w(px(280.))
+                                .border_1()
+                                .rounded_md()
+                                .border_color(border)
+                                .child(EditorElement::new(
+                                    &self.history_search,
+                                    EditorStyle::default(),
+                                )),
+                        ),
+                )
+                .child(
+                    v_flex()
+                        .id("database-history-entries")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .child(body),
+                )
+                .into_any_element(),
+        )
+    }
+
     fn start_query(&mut self, sql: String, cx: &mut Context<Self>) {
         if self.query_running || self.edit_running {
             return;
@@ -977,9 +1257,13 @@ impl ResultSetView {
             )));
         }
         cx.notify();
+        let history = QueryHistoryDb::global(cx);
+        let history_connection_id = self.connection_id.0.clone();
         let task = cx.spawn(async move |view, cx| {
+            let started = std::time::Instant::now();
             let result = session.execute(&sql, &[]).await;
             let cancelled = session.is_cancelled();
+            let duration_ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
             if result.is_ok() && matches!(classify(&sql), StatementKind::Select) {
                 // Editability depends on the real primary key, so ask the driver
                 // instead of guessing from the column names.
@@ -988,6 +1272,24 @@ impl ResultSetView {
                 }
             }
             let result_set = session.result_set().cloned().map(Arc::new);
+            // Only the statement, its size and timing are stored. The rows and
+            // anything typed into them stay in the view (D-11).
+            let row_count = result_set
+                .as_ref()
+                .map(|set| i64::try_from(set.rows.len()).unwrap_or(i64::MAX));
+            if let Err(error) = history
+                .record(
+                    history_connection_id,
+                    sql.clone(),
+                    chrono::Utc::now().timestamp(),
+                    row_count,
+                    Some(duration_ms),
+                    result.is_ok() && !cancelled,
+                )
+                .await
+            {
+                log::warn!("failed to record the query in history: {error:#}");
+            }
             // A statement that is not a plain SELECT may change the schema, and
             // cached descriptions (and the diagram built from them) would then
             // describe tables that no longer exist.
@@ -1587,7 +1889,15 @@ impl ResultSetView {
                                 this.describe_all_tables(SchemaAction::ErDiagram, cx);
                             })),
                         )
-                    }),
+                    })
+                    .child(
+                        Button::new(
+                            "database-show-history",
+                            tr(cx, "database.history.show", "History"),
+                        )
+                        .disabled(self.show_history)
+                        .on_click(cx.listener(|this, _, _, cx| this.open_history(cx))),
+                    ),
             )
             .into_any_element()
     }
@@ -2180,6 +2490,7 @@ impl Render for ResultSetView {
         } else {
             None
         };
+        let history = self.render_history(cx);
 
         v_flex()
             .size_full()
@@ -2231,24 +2542,28 @@ impl Render for ResultSetView {
                             .child(toolbar)
                             .children(er_diagram)
                             .children(explain)
-                            .when(!self.show_er_diagram && !self.show_explain, |this| {
-                                this.child(
-                                    div()
-                                        .key_context("DatabaseEditor")
-                                        .h(px(180.))
-                                        .w_full()
-                                        .border_1()
-                                        .rounded_md()
-                                        .border_color(cx.theme().colors().border)
-                                        .child(EditorElement::new(
-                                            &self.editor,
-                                            EditorStyle::default(),
-                                        )),
-                                )
-                                .children(message)
-                                .children(edit_bar)
-                                .child(div().flex_1().child(result))
-                            }),
+                            .children(history)
+                            .when(
+                                !self.show_er_diagram && !self.show_explain && !self.show_history,
+                                |this| {
+                                    this.child(
+                                        div()
+                                            .key_context("DatabaseEditor")
+                                            .h(px(180.))
+                                            .w_full()
+                                            .border_1()
+                                            .rounded_md()
+                                            .border_color(cx.theme().colors().border)
+                                            .child(EditorElement::new(
+                                                &self.editor,
+                                                EditorStyle::default(),
+                                            )),
+                                    )
+                                    .children(message)
+                                    .children(edit_bar)
+                                    .child(div().flex_1().child(result))
+                                },
+                            ),
                     ),
             )
     }
@@ -2256,7 +2571,7 @@ impl Render for ResultSetView {
 
 #[cfg(test)]
 mod tests {
-    use super::{RunError, RunMode, sql_to_run};
+    use super::{RunError, RunMode, format_history_time, single_line_preview, sql_to_run};
 
     #[test]
     fn run_statement_prefers_the_selection() {
@@ -2294,5 +2609,28 @@ mod tests {
             sql_to_run(RunMode::Statement, "  -- nothing\n", "", 0),
             Err(RunError::EmptySql)
         );
+    }
+
+    #[test]
+    fn history_preview_collapses_whitespace_into_one_line() {
+        assert_eq!(
+            single_line_preview("SELECT *\n  FROM\tusers"),
+            "SELECT * FROM users"
+        );
+    }
+
+    #[test]
+    fn history_preview_truncates_long_statements() {
+        let sql = "SELECT ".to_owned() + &"a".repeat(400);
+        let preview = single_line_preview(&sql);
+        assert_eq!(preview.chars().count(), 121);
+        assert!(preview.ends_with('…'));
+    }
+
+    #[test]
+    fn an_out_of_range_timestamp_has_no_display() {
+        // Local timezone differs per machine, so only the invalid case is
+        // asserted exactly.
+        assert_eq!(format_history_time(i64::MAX), "");
     }
 }
