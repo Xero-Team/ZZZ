@@ -20,9 +20,9 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 - Active phase: `Phase 1`
 - Last completed phase: `Phase 0`
 - Blocking issue: `None`
-- Next action: 执行 Phase 1 第 1 步——在根 `Cargo.toml` 登记
-  `crates/database_core` 与 `crates/database_ui`，落地两个 crate 的最小骨架与
-  `main.rs` 的 `init` 注册，随后实现内建 SQLite 驱动与 schema 实查。
+- Next action: 执行 Phase 1 工作项 2——实现 `driver.rs`（`DatabaseDriver` /
+  `DriverConnection` / `QueryHandle` / `RowStream`）与 `sqlite/` 内建驱动
+  （`sqlite3_interrupt` 取消、schema 实查、流式行读取），并为其实查能力补单测。
 
 ## Bootstrap {#bootstrap}
 
@@ -167,16 +167,57 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 执行期若需变更 [decisions.md](./decisions.md) 的冻结决策，先在此登记理由与影响，
 再修改 decisions.md，最后改实现。
 
-| 决策 | 原结论 | 新结论 | 理由 | 影响阶段 | 日期 |
-| ---- | ------ | ------ | ---- | -------- | ---- |
-|      |        |        |      |          |      |
+| 决策                 | 原结论                                     | 新结论                                                                                                                                                        | 理由                                                                                                                                                                                                                                                                                       | 影响阶段      | 日期       |
+| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- | ---------- |
+| D-02（事实前提修正） | 内建 SQLite 复用 `crates/sqlez` 的连接封装 | 复用其底层 bundled `libsqlite3-sys` FFI，在 `database_core` 自建专用连接封装；仍不新增第三方 SQLite crate、不复用/不改动 `crates/db`、`crates/sqlez` 保持不变 | Phase 0/1 源码复核：`sqlez::Connection` 非 Sync、`open` 是 `pub(crate)`、`open_file` 失败静默回退内存库、`step` 把 `SQLITE_INTERRUPT` 当错误、`map` 全量物化、`Column` 是编译期静态映射。与 D-07 运行时 `Value`、D-08 取消非错误、窗口化 `RowStream`、测试连接错误分类、显式事务结构性冲突 | 1（及 3/4/5） | 2026-11-04 |
 
 ## 提交记录 {#commits}
 
-| SHA                                            | 提交信息                                             | Phase | 验证                      | 备注                            |
-| ---------------------------------------------- | ---------------------------------------------------- | ----- | ------------------------- | ------------------------------- |
-| `f2a037d404cc396581e24822d34cf2a885b02bc4`     | `docs: add database explorer plan`                   | 0     | prettier PASS             | 在 `main` 上，worktree 前置条件 |
-| 本次（见 `git log -1` 于 `database-explorer`） | `docs(database): record phase 0 baseline and ledger` | 0     | 见 baseline-validation 表 | Phase 0 账本定稿                |
+| SHA                                        | 提交信息                                             | Phase | 验证                      | 备注                            |
+| ------------------------------------------ | ---------------------------------------------------- | ----- | ------------------------- | ------------------------------- |
+| `f2a037d404cc396581e24822d34cf2a885b02bc4` | `docs: add database explorer plan`                   | 0     | prettier PASS             | 在 `main` 上，worktree 前置条件 |
+| `9a1e9179af1d6ac8e51c2905dfed88dc2420cb82` | `docs(database): record phase 0 baseline and ledger` | 0     | 见 baseline-validation 表 | Phase 0 账本定稿                |
+
+## Phase 1 工作项日志 {#phase-1-log}
+
+每个工作项即时记录：baseline、改动、验证命令与 exit status、结论、提交 SHA、下一步。
+
+### 工作项 1 — crate 骨架、领域模型、SQL 分析、错误分类
+
+- **Baseline**：`database-explorer` @ `9a1e9179af`（Phase 0 账本定稿后）。
+- **改动**：
+  - 根 `Cargo.toml`：`members` 与 `[workspace.dependencies]` 新增
+    `database_core` / `database_ui`（按字母序，不改其它行）。
+  - 新建 `crates/database_core`（`[lib] path = "src/database_core.rs"`，无 `mod.rs`）：
+    - `error.rs`：`DatabaseErrorKind`（connection/authentication/syntax/not_found/
+      permission/cancelled/constraint/timeout/driver/other）+ `DatabaseError`，
+      供 UI 按 kind 选 i18n 文案，不按错误文本匹配（不变量 8）。
+    - `model.rs`：`Value` 全类型（D-07，BLOB 十六进制摘要 + 长度、NULL 与类型化数值
+      区分、类型化排序键与导出文本）、`ColumnType::from_declared`（SQLite 亲和规则）、
+      `Column`/`Row`、独立 `ResultSet`（状态机 Running/Ready/Cancelled/Failed/Closed、
+      窗口行预算、pending edits、可编辑性需 capability + 主键，D-06）、`Capabilities`
+      （能力声明，sqlite()/read_only()，不变量 1）、schema 树类型
+      （`Catalog`/`Schema`/`Table`/`TableSchema`/`PrimaryKey`/`Index`/`ForeignKey`/
+      `TableRef`/`ObjectKind`）、`ConnectionConfig`（仅非敏感字段 + `credential_key()`）、
+      `DataSource`（`File`/`Server`/`InMemory`，路径为 `PathBuf` 不假设本地，D-10）、
+      `ConnectionStatus`（运行时状态，不持久化，D-09）。
+    - `sql.rs`：`split_statements`（顶层分号切分，跳过字符串/引号标识符/`--`/`/* */`
+      注释、转义引号、保留 byte 偏移）+ `classify`（带括号深度的顶层 WHERE 检测、
+      DDL/无 WHERE UPDATE/DELETE 二次确认分类，D-05）。
+  - 新建 `crates/database_ui` 最小骨架（Cargo.toml + 空 `init`），使 workspace 可解析；
+    Panel/Item 接线留待后续工作项。
+  - `decisions.md`：D-02 事实前提修正（见决策变更记录），理由与影响已登记。
+- **验证命令与 exit status**：
+  - `cargo check -p database_core` → `CHECK_EXIT=0`
+  - `cargo test -p database_core` → `TEST_EXIT=0`（21 passed；初版 1 例断言写错，修正后
+    全绿：`ignores_semicolons_in_strings_and_comments` 前导注释是 trivia，不属于语句文本）
+  - `cargo clippy -p database_core --all-targets -- -D warnings` → `CLIPPY_EXIT=0`
+    （修了 `format!` 无参、`range_plus_one`、`useless_vec` 三处 lint）
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+- **结论**：PASS（核心领域逻辑）。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`（`feat(database_core): add domain model and sql analysis`）。
+- **下一步**：工作项 2 —— `driver.rs` trait 定义 + `sqlite/` 内建驱动（含
+  `sqlite3_interrupt` 取消与 schema 实查），`DB-EXP-001` 用真实长查询取消测试落结论。
 
 ## 完成定义核对 {#done-checklist}
 

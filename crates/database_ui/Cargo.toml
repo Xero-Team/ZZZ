@@ -1,0 +1,25 @@
+[package]
+name = "database_ui"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lib]
+path = "src/database_ui.rs"
+
+[dependencies]
+anyhow.workspace = true
+database_core.workspace = true
+gpui.workspace = true
+i18n.workspace = true
+ui.workspace = true
+workspace.workspace = true
+
+[features]
+test-support = []
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

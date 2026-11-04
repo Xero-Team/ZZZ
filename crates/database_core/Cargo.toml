@@ -1,0 +1,23 @@
+[package]
+name = "database_core"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lib]
+path = "src/database_core.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-channel.workspace = true
+libsqlite3-sys.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+indoc.workspace = true
+
+[lints]
+workspace = true

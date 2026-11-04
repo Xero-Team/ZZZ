@@ -25,9 +25,25 @@ MySQL、DuckDB、ClickHouse 等由扩展提供，主仓库不引入重量级驱�
 `cargo build` 时间与发布体积可控，符合 [Keeping ZZZ Lean](../../development/bloat.md)
 与 `script/check-philosophy` 的本地优先约束。
 
-内建 SQLite 复用 workspace 已 bundled 的 `libsqlite3-sys`（`Cargo.toml:618`）与
-`crates/sqlez` 的连接封装，不新增第三方 SQLite crate。`crates/db` 是应用自身状态库
-（`AppDatabase` / `AppMigrator`），不得复用其连接，也不得改动它。
+内建 SQLite 复用 workspace 已 bundled 的 `libsqlite3-sys`（`Cargo.toml:618`）的
+FFI（在 `crates/database_core` 内自建专用连接封装），不新增第三方 SQLite crate。
+`crates/db` 是应用自身状态库（`AppDatabase` / `AppMigrator`），不得复用其连接，
+也不得改动它。
+
+> **执行期修订 2026-11-04（D-02 事实前提修正，产品语义不变）：** 原文要求"复用
+> `crates/sqlez` 的连接封装"。Phase 0/1 源码复核（`crates/sqlez/src/connection.rs`、
+> `statement.rs`）证明该前提不成立：`sqlez::Connection` 是 `unsafe impl Send` 但**非
+> Sync**（每线程连接模型，含 `RefCell`），`Connection::open` 是 `pub(crate)`，唯一的
+> `open_file` 在打开失败时静默回退到内存库（`connection.rs:69-76`），`Statement::step`
+> 把 `SQLITE_INTERRUPT` 当通用错误（`statement.rs:275-291`），`Statement::map` 一次性
+> 物化全部行（`statement.rs:304-319`），`Column` trait 是编译期静态类型映射
+> （`bindable.rs:23`）。这些与 D-07（运行时 `Value` 类型系统）、D-08（`sqlite3_interrupt`
+> 取消非错误）、窗口化 `RowStream`、测试连接的错误分类、显式事务生命周期存在结构性
+> 冲突。因此"复用 sqlez 连接封装"不可行，改为复用其底层已 bundled 的
+> `libsqlite3-sys` FFI 并自建满足上述不变量的专用连接封装。仍**不新增**任何第三方
+> SQLite crate，仍**不复用也不改动** `crates/db`/`AppDatabase`，`crates/sqlez` 本身
+> 保持不变。D-02 的核心约束（SQLite 内建、其余走扩展、无重量级依赖、不动自身状态库）
+> 全部保留。详见 [progress.md](./progress.md) 的现成件复核与决策变更记录。
 
 ## D-03 MCP 只做读取，不做数据库驱动 {#d-03}
 
