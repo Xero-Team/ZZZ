@@ -302,12 +302,17 @@ impl TelegramPanel {
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
         let fs = workspace.app_state().fs.clone();
-        cx.new(|cx| Self::new_inner(workspace.weak_handle(), fs, window, cx))
+        // Read through the borrowed workspace: `load` runs inside
+        // `Workspace::update`, and re-entering the workspace's entity from the
+        // constructor would panic while it is leased.
+        let language_registry = workspace.project().read(cx).languages().clone();
+        cx.new(|cx| Self::new_inner(workspace.weak_handle(), fs, language_registry, window, cx))
     }
 
     fn new_inner(
         workspace: WeakEntity<Workspace>,
         fs: Arc<dyn fs::Fs>,
+        language_registry: Arc<language::LanguageRegistry>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -480,7 +485,7 @@ impl TelegramPanel {
         this.sync_chat_list();
         this.sync_history();
         this.request_album_thumbnails();
-        this.rebuild_markdown(cx);
+        this.rebuild_markdown_with(Some(language_registry), cx);
         this.sync_draft(window, cx);
         this.sync_flood_wait(cx);
         this.last_unread_total = this.view_model.unread_total;
@@ -790,6 +795,14 @@ impl TelegramPanel {
             .workspace
             .upgrade()
             .map(|workspace| workspace.read(cx).project().read(cx).languages().clone());
+        self.rebuild_markdown_with(language_registry, cx);
+    }
+
+    fn rebuild_markdown_with(
+        &mut self,
+        language_registry: Option<Arc<language::LanguageRegistry>>,
+        cx: &mut Context<Self>,
+    ) {
         let sources: Vec<(MessageKey, SharedString)> = self
             .view_model
             .history
