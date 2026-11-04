@@ -13,15 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 9 为
-  `526bb15203`，Phase 8 为 `63985c28cf`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 10 为
+  `6cda3ca5e2`，Phase 9 为 `526bb15203`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 11`
-- Last completed phase: `Phase 10`
+- Active phase: `Phase 12`
+- Last completed phase: `Phase 11`（条件项，结论为拒绝实施并附证据；验证 `NOT RUN`）
 - Blocking issue: `None`
-- Next action: 进入 Phase 11——评估远程项目中的 SQLite 文件访问与 SSH 隧道；可实施则实施，不可用则写 runbook 并标 `NOT RUN`。
+- Next action: 进入 Phase 12——MCP 只读暴露（查询、schema、结果集），凭据不进入 tool
+  输出。
 
 ## Bootstrap {#bootstrap}
 
@@ -62,23 +63,24 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                   | Status      | Commit                                           | Validation                                     | Notes                               |
-| ----- | ------------------------ | ----------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
-| 0     | 账本校准、worktree、基线 | PASS        | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
-| 1     | 骨架与 SQLite 只读浏览   | PASS        | `05f659d46bfd` + `9e00c0cbb7`                    | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
-| 2     | 连接管理与凭据           | PASS        | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
-| 3     | 查询执行与取消           | PASS        | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
-| 4     | 结果集视图               | PASS        | `57ff2dab1d`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
-| 5     | 编辑、事务与确认         | PASS        | `0926c5cbaf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
-| 6     | 扩展驱动协议             | PASS        | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
-| 7     | ER 图与导入导出          | PASS        | `d90e2ff59c`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
-| 8     | Visual EXPLAIN           | PASS        | `63985c28cf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
-| 9     | 查询历史                 | PASS        | `526bb15203`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
-| 10    | Notebook 式 SQL          | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 10 日志](#phase-10-log)   |
-| 10    | Notebook 式 SQL          | NOT STARTED | -                                                | -                                              | -                                   |
-| 11    | 远程与 SSH（条件项）     | NOT STARTED | -                                                | -                                              | -                                   |
-| 12    | MCP 只读暴露             | NOT STARTED | -                                                | -                                              | -                                   |
-| 13    | 文档、门禁与收尾         | NOT STARTED | -                                                | -                                              | -                                   |
+| Phase | Result                   | Status          | Commit                                           | Validation                                     | Notes                               |
+| ----- | ------------------------ | --------------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
+| 0     | 账本校准、worktree、基线 | PASS            | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
+| 1     | 骨架与 SQLite 只读浏览   | PASS            | `05f659d46bfd` + `9e00c0cbb7`                    | check/test/clippy/fmt/main.rs check PASS       | 见 [Phase 1 日志](#phase-1-log)     |
+| 2     | 连接管理与凭据           | PASS            | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
+| 3     | 查询执行与取消           | PASS            | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
+| 4     | 结果集视图               | PASS            | `57ff2dab1d`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
+| 5     | 编辑、事务与确认         | PASS            | `0926c5cbaf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
+| 6     | 扩展驱动协议             | PASS            | `10756066b8`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 6 日志](#phase-6-log)     |
+| 7     | ER 图与导入导出          | PASS            | `d90e2ff59c`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 7 日志](#phase-7-log)     |
+| 8     | Visual EXPLAIN           | PASS            | `63985c28cf`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 8 日志](#phase-8-log)     |
+| 9     | 查询历史                 | PASS            | `526bb15203`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 9 日志](#phase-9-log)     |
+| 10    | Notebook 式 SQL          | PASS            | `6cda3ca5e2`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 10 日志](#phase-10-log)   |
+| 11    | 远程与 SSH（条件项）     | NOT RUN（拒绝） | -                                                | 见 [remote-runbook](./remote-runbook.md)       | 拒绝实施并附证据，见 Phase 11 日志  |
+| 10    | Notebook 式 SQL          | NOT STARTED     | -                                                | -                                              | -                                   |
+| 11    | 远程与 SSH（条件项）     | NOT STARTED     | -                                                | -                                              | -                                   |
+| 12    | MCP 只读暴露             | NOT STARTED     | -                                                | -                                              | -                                   |
+| 13    | 文档、门禁与收尾         | NOT STARTED     | -                                                | -                                              | -                                   |
 
 ## 现成件复核 {#reuse-review}
 
@@ -189,7 +191,8 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `d90e2ff59c7fa12eb4f6e9e2df189ece12fafa9f`     | `feat(database_ui): diagram schemas and import csv in transactions`     | 7     | check/test/clippy/xtask/fmt PASS | Phase 7 完成                    |
 | `63985c28cf4f86490b04b75082752ac967569942`     | `feat(database_ui): show the query plan as a tree`                      | 8     | check/test/clippy/xtask/fmt PASS | Phase 8 完成                    |
 | `526bb152031e3a48064fdd9c7e55d9944fb1e275`     | `feat(database_ui): keep a local query history`                         | 9     | check/test/clippy/xtask/fmt PASS | Phase 9 完成                    |
-| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): run sql notebooks one cell at a time`               | 10    | check/test/clippy/xtask/fmt PASS | Phase 10 完成                   |
+| `6cda3ca5e293736243398fed4ce56225f30d5f9c`     | `feat(database_ui): run sql notebooks one cell at a time`               | 10    | check/test/clippy/xtask/fmt PASS | Phase 10 完成                   |
+| 本次（见 `git log -1` 于 `database-explorer`） | `docs(database): record the remote and ssh runbook`                     | 11    | 文档检查 PASS；远程验证 NOT RUN  | Phase 11 拒绝并记录             |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -1034,6 +1037,40 @@ QueryCanceller>)`，`execute` 变成它不带 canceller 的包装。取消、ste
 - **提交 SHA**：见 `git log -1` 于 `database-explorer`
   （`feat(database_ui): run sql notebooks one cell at a time`）。
 - **下一步**：Phase 11 —— 远程与 SSH（条件项）。
+
+## Phase 11 日志 {#phase-11-log}
+
+### 远程与 SSH（条件项）
+
+- **Baseline**：`database-explorer` @ `6cda3ca5e2`（Phase 10 提交后）。
+- **结论**：**拒绝在本环境实施**，验证状态 `NOT RUN`（不是 PASS）。可执行步骤、现状
+  证据、验证清单与风险记录在
+  [remote-runbook.md](./remote-runbook.md)。
+- **证据**：
+  - `crates/database_core/src/sqlite.rs:112` 与 `:160`：`DataSource::File` 直接由
+    `libsqlite3-sys` 在本进程打开，没有经过 `crates/fs` / `remote_connection` / RPC。
+  - `crates/database_core/src/model.rs:660-664`：`DataSource::File { path: PathBuf }`
+    不携带项目或远端来源，驱动无法区分本地与远程路径。
+  - `crates/database_ui/src/connection_dialog.rs:208-219`：对话框把输入路径原样变成
+    `DataSource::File`，从不查询 `Project`；远程路径会被静默当作本地路径。
+  - `grep -rn "remote_connection\|ssh_kernel" crates/database_core/src
+crates/database_ui/src` 无匹配：数据库代码与隧道/远程通道尚未接线。
+  - `crates/repl/src/kernels/ssh_kernel.rs:116-133` 与 `:345` 证明可复用的隧道机制：
+    `RemoteClient::build_forward_ports_command` 生成并持有 `ssh` 子进程。
+- **为什么不在本阶段实施**：
+  - 仓库没有数据库的远程项目测试夹具，当前环境无法在 clean baseline 下复现远程
+    验证；计划明确允许在这种情况下写 runbook 并标 `NOT RUN`。
+  - 内建驱动只有文件型 SQLite；没有网络驱动就没有可验证的 SSH 隧道目标，先写隧道
+    代码会成为死代码。
+  - 把远端 SQLite 复制到本地再打开会在写入、锁与 WAL 上产生静默分歧，违反 Phase 5
+    的事务语义，因此明确拒绝这条捷径。
+- **验证命令与 exit status**：
+  - 本阶段无功能代码改动，远程验证 `NOT RUN`（无远程项目夹具/测试主机）；
+    拒绝理由与替代方案见 runbook 第 4 节。
+  - 文档改动后：`cargo fmt --all -- --check` → `FMT=0`；
+    `cargo xtask check` → `XCHECK=0`；
+    `cd docs && npx prettier --check src/` → PASS。
+- **下一步**：Phase 12 —— MCP 只读暴露。
 
 ## 完成定义核对 {#done-checklist}
 
